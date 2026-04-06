@@ -29,6 +29,15 @@ public sealed class ExpressionTransformer(SemanticModel model)
                 ret.Expression is not null ? TransformExpression(ret.Expression) : null
             ),
 
+            YieldStatementSyntax yieldReturn
+                when yieldReturn.IsKind(SyntaxKind.YieldReturnStatement)
+                    && yieldReturn.Expression is not null =>
+                new TsYieldStatement(TransformExpression(yieldReturn.Expression)),
+
+            YieldStatementSyntax yieldBreak
+                when yieldBreak.IsKind(SyntaxKind.YieldBreakStatement) =>
+                new TsYieldBreakStatement(),
+
             IfStatementSyntax ifStmt => TransformIf(ifStmt),
 
             ThrowStatementSyntax throwStmt => new TsThrowStatement(

@@ -145,6 +145,29 @@ public static class TypeMapper
     }
 
     /// <summary>
+    /// Maps return types for methods/functions that use C# iterator syntax (yield).
+    /// For iterator methods, IEnumerable&lt;T&gt;/IEnumerator&lt;T&gt; should become Generator&lt;T&gt;.
+    /// Falls back to default mapping for all other types.
+    /// </summary>
+    public static TsType MapForGeneratorReturn(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol named)
+        {
+            var fullName = named.ToDisplayString();
+            if (
+                (fullName.StartsWith("System.Collections.Generic.IEnumerable")
+                    || fullName.StartsWith("System.Collections.Generic.IEnumerator"))
+                && named.TypeArguments.Length > 0
+            )
+            {
+                return new TsNamedType("Generator", [Map(named.TypeArguments[0])]);
+            }
+        }
+
+        return Map(type);
+    }
+
+    /// <summary>
     /// Wraps a type as T | null. Avoids double-wrapping if already nullable.
     /// </summary>
     private static TsType MakeNullable(TsType inner)

@@ -114,7 +114,7 @@ public sealed class Printer(string indent = "  ")
     {
         if (func.Exported) _sb.Write("export ");
         if (func.Async) _sb.Write("async ");
-        _sb.Write("function ");
+        _sb.Write(func.Generator ? "function* " : "function ");
         _sb.Write(func.Name);
         PrintTypeParameters(func.TypeParameters);
         _sb.Write("(");
@@ -324,6 +324,7 @@ public sealed class Printer(string indent = "  ")
                 PrintAccessibility(method.Accessibility);
                 if (method.Static) _sb.Write("static ");
                 if (method.Async) _sb.Write("async ");
+                if (method.Generator) _sb.Write("*");
                 _sb.Write(method.Name);
                 PrintTypeParameters(method.TypeParameters);
                 _sb.Write("(");
@@ -440,6 +441,16 @@ public sealed class Printer(string indent = "  ")
             case TsExpressionStatement exprStmt:
                 PrintExpression(exprStmt.Expression);
                 _sb.Write(";");
+                break;
+
+            case TsYieldStatement yieldStmt:
+                _sb.Write("yield ");
+                PrintExpression(yieldStmt.Expression);
+                _sb.Write(";");
+                break;
+
+            case TsYieldBreakStatement:
+                _sb.Write("return;");
                 break;
 
             case TsSwitchStatement switchStmt:

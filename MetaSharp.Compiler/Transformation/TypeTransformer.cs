@@ -507,8 +507,11 @@ public sealed class TypeTransformer(Compilation compilation)
         if (syntaxNode is null) return null;
 
         var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
-        var returnType = TypeMapper.Map(method.ReturnType);
-        var isAsync = method.IsAsync;
+        var hasYield = syntaxNode.DescendantNodes().OfType<YieldStatementSyntax>().Any();
+        var returnType = hasYield
+            ? TypeMapper.MapForGeneratorReturn(method.ReturnType)
+            : TypeMapper.Map(method.ReturnType);
+        var isAsync = hasYield ? false : method.IsAsync;
 
         var parameters = method.Parameters
             .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
@@ -526,6 +529,7 @@ public sealed class TypeTransformer(Compilation compilation)
             return null;
 
         return new TsFunction(name, parameters, returnType, body, Exported: true, Async: isAsync,
+            Generator: hasYield,
             TypeParameters: ExtractMethodTypeParameters(method));
     }
 
@@ -911,8 +915,11 @@ public sealed class TypeTransformer(Compilation compilation)
             return null;
 
         var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
-        var returnType = TypeMapper.Map(method.ReturnType);
-        var isAsync = method.IsAsync;
+        var hasYield = syntax.DescendantNodes().OfType<YieldStatementSyntax>().Any();
+        var returnType = hasYield
+            ? TypeMapper.MapForGeneratorReturn(method.ReturnType)
+            : TypeMapper.Map(method.ReturnType);
+        var isAsync = hasYield ? false : method.IsAsync;
 
         var parameters = method
             .Parameters.Select(p => new TsParameter(
@@ -937,6 +944,7 @@ public sealed class TypeTransformer(Compilation compilation)
             body,
             Static: method.IsStatic,
             Async: isAsync,
+            Generator: hasYield,
             Accessibility: MapAccessibility(method.DeclaredAccessibility),
             TypeParameters: ExtractMethodTypeParameters(method)
         );

@@ -7,5 +7,6 @@ public sealed record TsFunction(
     IReadOnlyList<TsStatement> Body,
     bool Exported = true,
     bool Async = false,
+    bool Generator = false,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null
 ) : TsTopLevel;

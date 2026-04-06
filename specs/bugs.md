@@ -98,4 +98,61 @@
 ## Features Faltantes
 
 ### F1. `yield return` / `yield break` → TypeScript generators
-- **Status:** [ ] Pendente
+- **Impacto:** Métodos que retornam `IEnumerable<T>` com yield
+- **Requer:** AST nodes (TsYieldExpression), flag isGenerator, mapeamento IEnumerable→Generator
+- **Status:** [x] Corrigido
+- **Andamento (2026-04-06):** Implementação concluída e validada na suíte .NET (`169/169`).
+
+#### Plano de ataque (F1)
+
+1. **AST + Printer**
+   - Adicionar nodes para `yield`:
+     - `TsYieldStatement` (`yield expr;`)
+     - `TsYieldBreakStatement` (`return;` dentro de generator)
+   - Adicionar flag `Generator` em:
+     - `TsMethodMember`
+     - `TsFunction`
+   - Atualizar `Printer` para emitir `*` em métodos/funções generator e imprimir os novos statements.
+
+2. **Expression/Statement Transformer**
+   - Em `ExpressionTransformer.TransformStatement`, suportar:
+     - `YieldStatementSyntax` com expressão → `TsYieldStatement`
+     - `YieldStatementSyntax` sem expressão (`yield break`) → `TsYieldBreakStatement`
+   - Garantir que `TransformBody` preserve semântica para methods block-bodied com yield.
+
+3. **Detecção de generator no TypeTransformer**
+   - Em `TransformClassMethod` e `TransformModuleFunction`, detectar `yield` no syntax tree (`YieldStatementSyntax`).
+   - Quando detectar:
+     - marcar `Generator: true`
+     - forçar `Async: false` (C# não permite `yield` + `async` no mesmo método)
+   - Manter comportamento atual para métodos sem yield.
+
+4. **TypeMapper: IEnumerable<T> para Generator<T> (contexto de yield)**
+   - Hoje `IEnumerable<T>` cai em `T[]` via `IsCollectionLike`.
+   - Ajustar mapeamento para permitir retorno `Generator<T>` quando método usa `yield`.
+   - Estratégia sugerida:
+     - adicionar API contextual no mapper (ex.: `MapForGeneratorReturn(ITypeSymbol)`), evitando quebrar usos existentes de `IEnumerable<T>` em parâmetros/propriedades.
+
+5. **Cobertura de testes**
+   - Adicionar testes em `MetaSharp.Tests` para:
+     - método simples com `yield return`
+     - método com `yield return` + `yield break`
+     - método em módulo estático (`[ExportedAsModule]`) com yield
+     - validação do return type (`Generator<T>`) e `function*` / `*method`.
+
+6. **Validação fim-a-fim**
+   - Rodar:
+     - `dotnet run --project MetaSharp.Tests/`
+     - `dotnet build`
+   - Se houver cenário no sample, regenerar e validar build Bun.
+
+#### Checklist de execução (F1)
+
+- [x] Leitura e diagnóstico inicial no código atual
+- [x] Plano técnico definido
+- [x] Implementar AST + Printer
+- [x] Implementar transformação de `yield` statements
+- [x] Implementar detecção de generator em métodos/funções
+- [x] Implementar mapeamento contextual `IEnumerable<T>` → `Generator<T>`
+- [x] Adicionar/atualizar testes
+- [x] Executar suíte e ajustar regressões

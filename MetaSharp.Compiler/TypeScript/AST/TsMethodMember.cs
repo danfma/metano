@@ -7,6 +7,7 @@ public sealed record TsMethodMember(
     IReadOnlyList<TsStatement> Body,
     bool Static = false,
     bool Async = false,
+    bool Generator = false,
     TsAccessibility Accessibility = TsAccessibility.Public,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null,
     IReadOnlyList<TsMethodOverload>? Overloads = null
