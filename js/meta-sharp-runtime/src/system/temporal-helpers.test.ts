@@ -63,4 +63,48 @@ describe("dayNumber", () => {
     expect(dayNumber(feb29) - dayNumber(feb28)).toBe(1);
     expect(dayNumber(mar01) - dayNumber(feb29)).toBe(1);
   });
+
+  // ─── PlainDate constructed from components ──────────────
+
+  test("PlainDate from year/month/day components", () => {
+    const date = new Temporal.PlainDate(2024, 3, 15);
+    expect(dayNumber(date)).toBe(738959);
+  });
+
+  test("PlainDate from object fields", () => {
+    const date = Temporal.PlainDate.from({ year: 2000, month: 1, day: 1 });
+    expect(dayNumber(date)).toBe(730119);
+  });
+
+  test("PlainDate from another PlainDate", () => {
+    const original = new Temporal.PlainDate(1970, 1, 1);
+    const copy = Temporal.PlainDate.from(original);
+    expect(dayNumber(copy)).toBe(719162);
+  });
+
+  test("PlainDate after arithmetic (.add)", () => {
+    const base = new Temporal.PlainDate(2026, 1, 1);
+    const later = base.add({ days: 95 }); // 2026-04-06
+    expect(dayNumber(later)).toBe(739711);
+  });
+
+  test("PlainDate after arithmetic (.subtract)", () => {
+    const base = new Temporal.PlainDate(2026, 4, 6);
+    const earlier = base.subtract({ days: 95 }); // 2026-01-01
+    expect(dayNumber(earlier)).toBe(739616);
+  });
+
+  // ─── Fallback: object with toString() ───────────────────
+
+  test("accepts object with toString() returning ISO date", () => {
+    const datelike = { toString: () => "2024-03-15" };
+    expect(dayNumber(datelike)).toBe(738959);
+  });
+
+  test("PlainDateTime extracts date via toString fallback", () => {
+    // PlainDateTime.toString() returns "2024-03-15T10:30:00"
+    // PlainDate.from() should parse the date portion
+    const dt = new Temporal.PlainDateTime(2024, 3, 15, 10, 30, 0);
+    expect(dayNumber(dt)).toBe(738959);
+  });
 });
