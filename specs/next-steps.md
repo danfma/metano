@@ -283,11 +283,12 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
   singleOrDefault, any, all, count, sum, average, min, max, minBy, maxBy, contains, aggregate
 - [x] Detecção automática: `IsLinqExtensionMethod` vs `IsCollectionType` via Roslyn semantic model
 - [x] Anti-double-wrapping: `IsAlreadyLinqChain()` para chains compostas
-- [ ] `Queue<T>`, `Stack<T>` → arrays com helpers
+- [x] `Queue<T>` → `T[]` (Enqueue→push, Dequeue→shift, Peek→[0])
+- [x] `Stack<T>` → `T[]` (Push→push, Pop→pop, Peek→[arr.length-1])
 
-### ~~Enums Avançados~~ ✅ (parcial)
+### ~~Enums Avançados~~ ✅
 
-- [ ] Enum com métodos de extensão → funções auxiliares
+- [x] Enum com métodos de extensão → funções auxiliares (via TransformAsModule)
 - [x] `[Flags]` enum → numeric enum TS (bitwise nativo)
 - [x] `HasFlag()` → `(value & flag) === flag`
 - [x] `Enum.Parse<T>()` → `T[text as keyof typeof T]`
