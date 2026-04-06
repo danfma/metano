@@ -1,6 +1,9 @@
+using MetaSharp;
+
 namespace SampleIssueTracker.Issues.Domain;
 
-public record IssueId(string Value)
+[InlineWrapper]
+public readonly record struct IssueId(string Value)
 {
     public static IssueId New() => new(Guid.NewGuid().ToString("N"));
 

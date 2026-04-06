@@ -1,6 +1,9 @@
+using MetaSharp;
+
 namespace SampleIssueTracker.SharedKernel;
 
-public record UserId(string Value)
+[InlineWrapper]
+public readonly record struct UserId(string Value)
 {
     public static UserId New() => new(Guid.NewGuid().ToString("N"));
 

@@ -8,7 +8,7 @@ import { IssueType } from "../Domain/IssueType";
 import { OperationResult } from "../../SharedKernel/OperationResult";
 import type { PageRequest } from "../../SharedKernel/PageRequest";
 import type { PageResult } from "../../SharedKernel/PageResult";
-import { UserId } from "../../SharedKernel/UserId";
+import type { UserId } from "../../SharedKernel/UserId";
 export class IssueService {
   constructor(repository: IIssueRepository) {
     this._repository = repository;
@@ -65,7 +65,7 @@ export class IssueService {
   addCommentAsync(issueId: IssueId, authorId: UserId, message: string): Promise<OperationResult<Issue>>;
   addCommentAsync(issue: Issue, authorId: UserId, message: string): Promise<OperationResult<Issue>>;
   async addCommentAsync(...args: unknown[]): Promise<unknown> {
-    if (args.length === 3 && args[0] instanceof IssueId && args[1] instanceof UserId && isString(args[2])) {
+    if (args.length === 3 && typeof args[0] === "string" && typeof args[1] === "string" && isString(args[2])) {
       const issueId = args[0] as IssueId;
       const authorId = args[1] as UserId;
       const message = args[2] as string;
@@ -75,7 +75,7 @@ export class IssueService {
       }
       return await this.addCommentAsync(loadResult.value, authorId, message);
     }
-    if (args.length === 3 && args[0] instanceof Issue && args[1] instanceof UserId && isString(args[2])) {
+    if (args.length === 3 && args[0] instanceof Issue && typeof args[1] === "string" && isString(args[2])) {
       const issue = args[0] as Issue;
       const authorId = args[1] as UserId;
       const message = args[2] as string;

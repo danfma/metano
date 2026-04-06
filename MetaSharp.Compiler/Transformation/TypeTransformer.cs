@@ -1630,6 +1630,22 @@ public sealed class TypeTransformer(Compilation compilation)
     /// <summary>
     /// Generates an exhaustive check for StringEnum values: (v === "a" || v === "b" || v === "c")
     /// </summary>
+    private static TsExpression GenerateInlineWrapperCheck(TsType primitiveType, TsExpression argAccess)
+    {
+        var jsType = primitiveType switch
+        {
+            TsStringType => "string",
+            TsNumberType => "number",
+            TsBooleanType => "boolean",
+            TsBigIntType => "bigint",
+            _ => "object",
+        };
+        return new TsBinaryExpression(
+            new TsUnaryExpression("typeof ", argAccess),
+            "===",
+            new TsStringLiteral(jsType));
+    }
+
     private static TsExpression GenerateStringEnumCheck(INamedTypeSymbol enumType, TsExpression argAccess)
     {
         var members = enumType.GetMembers().OfType<IFieldSymbol>()
@@ -1689,6 +1705,12 @@ public sealed class TypeTransformer(Compilation compilation)
                 new TsBinaryExpression(
                     new TsUnaryExpression("typeof ", argAccess),
                     "===", new TsStringLiteral("object")),
+
+            // InlineWrapper structs → typeof check on the underlying primitive
+            _ when csharpType is INamedTypeSymbol inlineType
+                && SymbolHelper.HasInlineWrapper(inlineType)
+                && TryGetInlineWrapperPrimitiveType(inlineType, out var primType) =>
+                GenerateInlineWrapperCheck(primType, argAccess),
 
             // Classes/records → instanceof
             _ when csharpType is INamedTypeSymbol named
