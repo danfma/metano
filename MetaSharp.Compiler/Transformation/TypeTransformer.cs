@@ -887,6 +887,12 @@ public sealed class TypeTransformer(Compilation compilation)
                 var exprTransformer = CreateExpressionTransformer(semanticModel); exprTransformer.SelfParameterName = "this";
                 initializer = exprTransformer.TransformExpression(syntax.Initializer.Value);
             }
+            else if (prop.Type.NullableAnnotation == NullableAnnotation.Annotated
+                     || prop.Type.IsValueType && prop.Type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+            {
+                // Nullable properties without explicit initializer → = null
+                initializer = new TsLiteral("null");
+            }
 
             results.Add(new TsFieldMember(name, tsType, initializer, isReadonly, accessibility));
         }
@@ -935,7 +941,7 @@ public sealed class TypeTransformer(Compilation compilation)
         if (!method.IsStatic)
             exprTransformer.SelfParameterName = "this";
 
-        var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody);
+        var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody, isVoid: method.ReturnsVoid);
 
         return new TsMethodMember(
             name,
@@ -964,14 +970,50 @@ public sealed class TypeTransformer(Compilation compilation)
 
     private IReadOnlyList<TsTypeParameter>? ExtractMethodTypeParameters(IMethodSymbol method)
     {
-        if (method.TypeParameters.Length == 0) return null;
-        return method.TypeParameters.Select(tp =>
+        // Method has its own type parameters
+        if (method.TypeParameters.Length > 0)
         {
-            TsType? constraint = null;
-            if (tp.ConstraintTypes.Length > 0)
-                constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
-            return new TsTypeParameter(tp.Name, constraint);
-        }).ToList();
+            return method.TypeParameters.Select(tp =>
+            {
+                TsType? constraint = null;
+                if (tp.ConstraintTypes.Length > 0)
+                    constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
+                return new TsTypeParameter(tp.Name, constraint);
+            }).ToList();
+        }
+
+        // Static methods in generic classes: promote class type params to method level
+        // In TS, static members cannot reference class type parameters
+        if (method.IsStatic && method.ContainingType?.TypeParameters.Length > 0)
+        {
+            var classTypeParams = method.ContainingType.TypeParameters;
+            // Check if the method actually uses any class type params
+            var usedParams = classTypeParams.Where(tp =>
+                ReferencesTypeParam(method.ReturnType, tp)
+                || method.Parameters.Any(p => ReferencesTypeParam(p.Type, tp))
+            ).ToList();
+
+            if (usedParams.Count > 0)
+            {
+                return usedParams.Select(tp =>
+                {
+                    TsType? constraint = null;
+                    if (tp.ConstraintTypes.Length > 0)
+                        constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
+                    return new TsTypeParameter(tp.Name, constraint);
+                }).ToList();
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ReferencesTypeParam(ITypeSymbol type, ITypeParameterSymbol typeParam)
+    {
+        if (SymbolEqualityComparer.Default.Equals(type, typeParam)) return true;
+        if (type is INamedTypeSymbol named)
+            return named.TypeArguments.Any(arg => ReferencesTypeParam(arg, typeParam));
+        return false;
     }
 
     private static TsAccessibility MapAccessibility(Accessibility accessibility) => accessibility switch
@@ -1303,7 +1345,20 @@ public sealed class TypeTransformer(Compilation compilation)
 
         // Determine a common return type (use unknown if they differ)
         var returnTypes = sorted.Select(m => TypeMapper.Map(m.ReturnType)).ToList();
-        var commonReturn = returnTypes.All(t => t == returnTypes[0]) ? returnTypes[0] : new TsAnyType();
+        TsType commonReturn;
+        if (returnTypes.All(t => t == returnTypes[0]))
+        {
+            commonReturn = returnTypes[0];
+        }
+        else if (isAsync)
+        {
+            // Async methods must return Promise<T> — use Promise<unknown> as fallback
+            commonReturn = new TsNamedType("Promise", [new TsNamedType("unknown")]);
+        }
+        else
+        {
+            commonReturn = new TsAnyType();
+        }
 
         // Generate overload signatures
         var overloads = sorted.Select(m =>
@@ -1757,8 +1812,14 @@ public sealed class TypeTransformer(Compilation compilation)
             imports.Add(new TsImport(["Enumerable"], "@meta-sharp/runtime"));
         }
 
+        // LINQ Grouping type import
+        if (referencedTypes.Contains("Grouping"))
+        {
+            imports.Add(new TsImport(["Grouping"], "@meta-sharp/runtime", TypeOnly: true));
+        }
+
         // Track what we've already imported to avoid duplicates
-        var importedNames = new HashSet<string>(runtimeTypeChecks) { "Enumerable" };
+        var importedNames = new HashSet<string>(runtimeTypeChecks) { "Enumerable", "Grouping" };
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
         {
@@ -1809,7 +1870,9 @@ public sealed class TypeTransformer(Compilation compilation)
             var targetNs = GetNamespace(referencedSymbol);
             var targetTsName = GetTsTypeName(referencedSymbol);
             var importPath = ComputeRelativeImportPath(currentNs, targetNs, targetTsName);
-            var typeOnly = !valueTypes.Contains(typeName);
+            // StringEnums generate const objects — always import as value
+            var isStringEnum = SymbolHelper.HasStringEnum(referencedSymbol);
+            var typeOnly = !valueTypes.Contains(typeName) && !isStringEnum;
             imports.Add(new TsImport([targetTsName], importPath, TypeOnly: typeOnly));
         }
 

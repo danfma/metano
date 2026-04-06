@@ -22,7 +22,7 @@ export class Sprint {
   }
 
   rename(newName: string): void {
-    return this.name = newName;
+    this.name = newName;
   }
 
   reschedule(newStartDate: Temporal.PlainDate, newEndDate: Temporal.PlainDate): void {
@@ -31,10 +31,10 @@ export class Sprint {
   }
 
   plan(issueId: IssueId): void {
-    return this._plannedIssues.add(issueId);
+    this._plannedIssues.add(issueId);
   }
 
   unplan(issueId: IssueId): void {
-    return this._plannedIssues.delete(issueId);
+    this._plannedIssues.delete(issueId);
   }
 }

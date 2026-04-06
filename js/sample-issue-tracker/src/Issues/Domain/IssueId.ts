@@ -3,7 +3,7 @@ export class IssueId {
   constructor(readonly value: string) { }
 
   static new(): IssueId {
-    return new IssueId(Guid.newGuid().toString("N"));
+    return new IssueId(crypto.randomUUID().toString("N"));
   }
 
   toString(): string {

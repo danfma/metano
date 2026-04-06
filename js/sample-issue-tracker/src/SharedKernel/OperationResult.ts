@@ -6,11 +6,11 @@ export class OperationResult<T> {
     return this.success && !(this.value === null);
   }
 
-  static ok(value: T): OperationResult<T> {
+  static ok<T>(value: T): OperationResult<T> {
     return new OperationResult(true, value);
   }
 
-  static fail(errorCode: string, errorMessage: string): OperationResult<T> {
+  static fail<T>(errorCode: string, errorMessage: string): OperationResult<T> {
     return new OperationResult(false, undefined, errorCode, errorMessage);
   }
 

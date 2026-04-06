@@ -118,6 +118,10 @@ public static class TypeMapper
                 && named.TypeArguments.Length > 0)
                 return new TsTupleType(named.TypeArguments.Select(Map).ToList());
 
+            // IGrouping<K,V> → Grouping<K,V> (from @meta-sharp/runtime)
+            if (fullName.StartsWith("System.Linq.IGrouping") && named.TypeArguments.Length >= 2)
+                return new TsNamedType("Grouping", [Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]);
+
             // Collections → T[]
             if (IsCollectionLike(named) && named.TypeArguments.Length > 0)
                 return new TsArrayType(Map(named.TypeArguments[0]));

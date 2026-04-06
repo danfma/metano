@@ -1,6 +1,6 @@
 import { Enumerable } from "@meta-sharp/runtime";
 import type { Issue } from "./Issue";
-import type { IssueStatus } from "./IssueStatus";
+import { IssueStatus } from "./IssueStatus";
 export class IssueWorkflow {
   constructor() { }
 

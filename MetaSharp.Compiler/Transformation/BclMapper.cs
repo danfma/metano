@@ -236,6 +236,12 @@ public static class BclMapper
                 args
             );
 
+        // Guid.NewGuid() → crypto.randomUUID()
+        if (containing == "System.Guid" && name == "NewGuid")
+            return new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("crypto"), "randomUUID"),
+                []);
+
         // Task.FromResult(x) → Promise.resolve(x), Task.CompletedTask → Promise.resolve()
         if (containing is "System.Threading.Tasks.Task" && name == "FromResult")
             return new TsCallExpression(

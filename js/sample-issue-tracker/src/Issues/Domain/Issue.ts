@@ -2,9 +2,9 @@ import { Temporal } from "@js-temporal/polyfill";
 import { isString } from "@meta-sharp/runtime";
 import { Comment } from "./Comment";
 import type { IssueId } from "./IssueId";
-import type { IssuePriority } from "./IssuePriority";
-import type { IssueStatus } from "./IssueStatus";
-import type { IssueType } from "./IssueType";
+import { IssuePriority } from "./IssuePriority";
+import { IssueStatus } from "./IssueStatus";
+import { IssueType } from "./IssueType";
 import { IssueWorkflow } from "./IssueWorkflow";
 import { UserId } from "../../SharedKernel/UserId";
 export class Issue {
@@ -12,9 +12,9 @@ export class Issue {
 
   status: IssueStatus = IssueStatus.Backlog;
 
-  assigneeId: UserId | null;
+  assigneeId: UserId | null = null;
 
-  sprintKey: string | null;
+  sprintKey: string | null = null;
 
   readonly createdAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
 
@@ -119,6 +119,6 @@ export class Issue {
   }
 
   private touch(updatedAt: Temporal.ZonedDateTime): void {
-    return this.updatedAt = updatedAt;
+    this.updatedAt = updatedAt;
   }
 }

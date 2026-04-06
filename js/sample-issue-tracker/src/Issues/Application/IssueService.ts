@@ -1,9 +1,9 @@
 import { isString } from "@meta-sharp/runtime";
 import { Issue } from "../Domain/Issue";
 import { IssueId } from "../Domain/IssueId";
-import type { IssuePriority } from "../Domain/IssuePriority";
-import type { IssueStatus } from "../Domain/IssueStatus";
-import type { IssueType } from "../Domain/IssueType";
+import { IssuePriority } from "../Domain/IssuePriority";
+import { IssueStatus } from "../Domain/IssueStatus";
+import { IssueType } from "../Domain/IssueType";
 import { OperationResult } from "../../SharedKernel/OperationResult";
 import type { PageRequest } from "../../SharedKernel/PageRequest";
 import type { PageResult } from "../../SharedKernel/PageResult";
@@ -15,7 +15,7 @@ export class IssueService {
 
   createAsync(title: string, description: string, type: IssueType, priority: IssuePriority): Promise<OperationResult<Issue>>;
   createAsync(title: string, description: string, type: IssueType): Promise<OperationResult<Issue>>;
-  async createAsync(...args: unknown[]): any {
+  async createAsync(...args: unknown[]): Promise<unknown> {
     if (args.length === 4 && isString(args[0]) && isString(args[1]) && (args[2] === "story" || args[2] === "bug" || args[2] === "chore" || args[2] === "spike") && (args[3] === "low" || args[3] === "medium" || args[3] === "high" || args[3] === "urgent")) {
       const title = args[0] as string;
       const description = args[1] as string;
@@ -61,7 +61,7 @@ export class IssueService {
 
   addCommentAsync(issueId: IssueId, authorId: UserId, message: string): Promise<OperationResult<Issue>>;
   addCommentAsync(issue: Issue, authorId: UserId, message: string): Promise<OperationResult<Issue>>;
-  async addCommentAsync(...args: unknown[]): any {
+  async addCommentAsync(...args: unknown[]): Promise<unknown> {
     if (args.length === 3 && args[0] instanceof IssueId && args[1] instanceof UserId && isString(args[2])) {
       const issueId = args[0] as IssueId;
       const authorId = args[1] as UserId;

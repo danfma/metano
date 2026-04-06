@@ -3,7 +3,7 @@ export class UserId {
   constructor(readonly value: string) { }
 
   static new(): UserId {
-    return new UserId(Guid.newGuid().toString("N"));
+    return new UserId(crypto.randomUUID().toString("N"));
   }
 
   static system(): UserId {

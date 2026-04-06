@@ -71,11 +71,17 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
     public IReadOnlyList<TsStatement> TransformBody(
         BlockSyntax? block,
-        ArrowExpressionClauseSyntax? arrow
+        ArrowExpressionClauseSyntax? arrow,
+        bool isVoid = false
     )
     {
         if (arrow is not null)
-            return [new TsReturnStatement(TransformExpression(arrow.Expression))];
+        {
+            var expr = TransformExpression(arrow.Expression);
+            return isVoid
+                ? [new TsExpressionStatement(expr)]
+                : [new TsReturnStatement(expr)];
+        }
 
         if (block is not null)
             return block.Statements.Select(TransformStatement).ToList();
