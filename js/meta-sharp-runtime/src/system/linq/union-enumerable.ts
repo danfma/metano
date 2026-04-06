@@ -1,4 +1,5 @@
 import { EnumerableBase } from "./enumerable-base.ts";
+import { HashSet } from "../collections/hash-set.ts";
 
 /** Produces the set union of two sequences. Equivalent to C# .Union() */
 export class UnionEnumerable<T> extends EnumerableBase<T> {
@@ -10,7 +11,7 @@ export class UnionEnumerable<T> extends EnumerableBase<T> {
   }
 
   *[Symbol.iterator](): Iterator<T> {
-    const seen = new Set<T>();
+    const seen = new HashSet<T>();
     for (const item of this.source) {
       if (!seen.has(item)) {
         seen.add(item);

@@ -149,7 +149,7 @@ public class TypeMappingTranspileTests
         );
 
         var output = result["Tags.ts"];
-        await Assert.That(output).Contains("items: Set<string>");
+        await Assert.That(output).Contains("items: HashSet<string>");
     }
 
     // ─── Tuple → [T1, T2] ──────────────────────────────────

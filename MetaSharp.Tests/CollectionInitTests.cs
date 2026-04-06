@@ -22,7 +22,7 @@ public class CollectionInitTests
         );
 
         var output = result["Container.ts"];
-        await Assert.That(output).Contains("new Set()");
+        await Assert.That(output).Contains("new HashSet()");
         await Assert.That(output).DoesNotContain("[]");
     }
 
@@ -45,6 +45,6 @@ public class CollectionInitTests
 
         var output = result["Container.ts"];
         await Assert.That(output).Contains("[]");
-        await Assert.That(output).DoesNotContain("new Set()");
+        await Assert.That(output).DoesNotContain("new HashSet()");
     }
 }

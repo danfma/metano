@@ -1902,6 +1902,18 @@ public sealed class TypeTransformer(Compilation compilation)
             imports.Add(new TsImport(["Enumerable"], "@meta-sharp/runtime"));
         }
 
+        // Runtime helper imports (dayNumber, etc.)
+        if (referencedTypes.Contains("dayNumber"))
+        {
+            imports.Add(new TsImport(["dayNumber"], "@meta-sharp/runtime"));
+        }
+
+        // HashSet import (from runtime collections)
+        if (referencedTypes.Contains("HashSet"))
+        {
+            imports.Add(new TsImport(["HashSet"], "@meta-sharp/runtime"));
+        }
+
         // LINQ Grouping type import
         if (referencedTypes.Contains("Grouping"))
         {
@@ -1909,7 +1921,7 @@ public sealed class TypeTransformer(Compilation compilation)
         }
 
         // Track what we've already imported to avoid duplicates
-        var importedNames = new HashSet<string>(runtimeTypeChecks) { "Enumerable", "Grouping" };
+        var importedNames = new HashSet<string>(runtimeTypeChecks) { "Enumerable", "Grouping", "HashSet", "dayNumber" };
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
         {
@@ -2044,6 +2056,11 @@ public sealed class TypeTransformer(Compilation compilation)
                         case TsGetterMember g:
                             CollectFromType(g.ReturnType, names);
                             CollectFromStatements(g.Body, names, valueNames);
+                            break;
+                        case TsFieldMember f:
+                            CollectFromType(f.Type, names);
+                            if (f.Initializer is not null)
+                                CollectFromExpression(f.Initializer, names, valueNames);
                             break;
                     }
                 }

@@ -41,6 +41,12 @@ public static class BclMapper
                 new TsPropertyAccess(new TsIdentifier("Promise"), "resolve"),
                 []);
 
+        // DateOnly.DayNumber → dayNumber(date) helper from runtime
+        if (containing == "System.DateOnly" && symbol.Name == "DayNumber")
+            return new TsCallExpression(
+                new TsIdentifier("dayNumber"),
+                [obj]);
+
         // DateTimeOffset.UtcNow → Temporal.Now.zonedDateTimeISO()
         if (containing == "System.DateTimeOffset" && symbol.Name == "UtcNow")
             return new TsCallExpression(

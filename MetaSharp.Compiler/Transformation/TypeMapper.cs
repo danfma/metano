@@ -103,9 +103,9 @@ public static class TypeMapper
             if (IsDictionaryLike(named) && named.TypeArguments.Length >= 2)
                 return new TsNamedType("Map", [Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]);
 
-            // HashSet / ISet → Set<T>
+            // HashSet / ISet → HashSet<T> (from @meta-sharp/runtime, respects equals/hashCode)
             if (IsSetLike(named) && named.TypeArguments.Length > 0)
-                return new TsNamedType("Set", [Map(named.TypeArguments[0])]);
+                return new TsNamedType("HashSet", [Map(named.TypeArguments[0])]);
 
             // KeyValuePair<K,V> → [K, V]
             if (fullName.StartsWith("System.Collections.Generic.KeyValuePair") && named.TypeArguments.Length >= 2)
@@ -121,6 +121,10 @@ public static class TypeMapper
             // IGrouping<K,V> → Grouping<K,V> (from @meta-sharp/runtime)
             if (fullName.StartsWith("System.Linq.IGrouping") && named.TypeArguments.Length >= 2)
                 return new TsNamedType("Grouping", [Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]);
+
+            // IReadOnlyCollection<T> → Iterable<T> (compatible with both Array and HashSet)
+            if (fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection") && named.TypeArguments.Length > 0)
+                return new TsNamedType("Iterable", [Map(named.TypeArguments[0])]);
 
             // Collections → T[]
             if (IsCollectionLike(named) && named.TypeArguments.Length > 0)
@@ -225,7 +229,7 @@ public static class TypeMapper
         return fullName.StartsWith("System.Collections.Generic.List")
             || fullName.StartsWith("System.Collections.Generic.IList")
             || fullName.StartsWith("System.Collections.Generic.IReadOnlyList")
-            || fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection")
+            // IReadOnlyCollection mapped separately to Iterable<T>
             || fullName.StartsWith("System.Collections.Generic.IEnumerable")
             || fullName.StartsWith("System.Collections.Generic.ICollection")
             || fullName.StartsWith("System.Collections.Immutable.ImmutableList")

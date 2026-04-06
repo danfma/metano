@@ -1,11 +1,13 @@
 import { Temporal } from "@js-temporal/polyfill";
+import { dayNumber } from "@meta-sharp/runtime";
+import { HashSet } from "@meta-sharp/runtime";
 import type { IssueId } from "../../Issues/Domain/IssueId";
 export class Sprint {
   constructor(readonly key: string, public name: string, public startDate: Temporal.PlainDate, public endDate: Temporal.PlainDate) { }
 
-  private readonly _plannedIssues: Set<IssueId> = new Set();
+  private readonly _plannedIssues: HashSet<IssueId> = new HashSet();
 
-  get plannedIssues(): IssueId[] {
+  get plannedIssues(): Iterable<IssueId> {
     return this._plannedIssues;
   }
 
@@ -14,7 +16,7 @@ export class Sprint {
   }
 
   get durationDays(): number {
-    return this.endDate.dayNumber - this.startDate.dayNumber + 1;
+    return dayNumber(this.endDate) - dayNumber(this.startDate) + 1;
   }
 
   isActiveOn(date: Temporal.PlainDate): boolean {

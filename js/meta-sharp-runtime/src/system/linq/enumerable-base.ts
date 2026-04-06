@@ -1,3 +1,5 @@
+import { HashSet } from "../collections/hash-set.ts";
+
 /**
  * Abstract base for all LINQ enumerable operations.
  * Each subclass represents a node in the query composition tree.
@@ -111,8 +113,8 @@ export abstract class EnumerableBase<T> implements Iterable<T> {
     return map;
   }
 
-  toSet(): Set<T> {
-    return new Set(this);
+  toSet(): HashSet<T> {
+    return new HashSet(this);
   }
 
   first(predicate?: (item: T) => boolean): T {

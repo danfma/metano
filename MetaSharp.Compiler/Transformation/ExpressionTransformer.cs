@@ -796,7 +796,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
         if (collExpr.Elements.Count == 0)
             return isSetType
-                ? new TsNewExpression(new TsIdentifier("Set"), [])
+                ? new TsNewExpression(new TsIdentifier("HashSet"), [])
                 : new TsLiteral("[]");
 
         var elements = collExpr.Elements
@@ -805,7 +805,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             .ToList();
 
         if (isSetType)
-            return new TsNewExpression(new TsIdentifier("Set"), [new TsArrayLiteral(elements)]);
+            return new TsNewExpression(new TsIdentifier("HashSet"), [new TsArrayLiteral(elements)]);
 
         return new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("Array"), "of"),
