@@ -47,15 +47,16 @@
 
 ## Alta Prioridade
 
-### Value Wrappers — `[Inline]` attribute
-
+### ~~Value Wrappers — `[InlineWrapper]` attribute~~ ✅
 > Structs que encapsulam um único valor primitivo (ex: `UserId`, `IssueId`) geram classes
 > completas com equals/hashCode/with, mas no TS isso é overhead desnecessário.
 >
-> **Proposta:** `[Inline]` (ou `[Wrapper]`) marca a struct para gerar um **branded type + companion namespace**:
+> **Naming recomendado:** `[InlineWrapper]`.
+>
+> **Proposta:** `[InlineWrapper]` marca a struct para gerar um **branded type + companion namespace**:
 >
 > ```csharp
-> [Transpile, Inline]
+> [Transpile, InlineWrapper]
 > public readonly struct UserId
 > {
 >     public string Value { get; }
@@ -79,15 +80,15 @@
 > **Vantagens:** Type safety via branded types (UserId ≠ IssueId), zero overhead em runtime,
 > tree-shakeable, idiomático em TS.
 >
-> **Detecção:** Struct com `[Inline]` e exatamente 1 campo primitivo.
-
-- [ ] Definir atributo `[Inline]` no MetaSharp.Annotations
-- [ ] Detectar no TypeTransformer: struct com [Inline] + 1 campo → branded type
+> **Detecção:** Struct com `[InlineWrapper]` e exatamente 1 campo primitivo.
+- [x] Definir atributo `[InlineWrapper]` no MetaSharp.Annotations
+- [x] Detectar no TypeTransformer: struct com `[InlineWrapper]` + 1 campo → branded type
 - [ ] Gerar `type X = primitive & { readonly __brand: "X" }` + namespace com static methods
 - [ ] Constructor → `create()` function no namespace
 - [ ] Static methods → funções no namespace
 - [ ] `instanceof` checks → substituir por type guard customizado (opcional)
-- [ ] Testes inline + SampleIssueTracker validation
+- [ ] Testes com `[InlineWrapper]` + SampleIssueTracker validation
+- [ ] Plano detalhado: `specs/value-wrappers-plan.md`
 
 ### ~~Generics~~ ✅
 

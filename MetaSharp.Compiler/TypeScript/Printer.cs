@@ -380,6 +380,10 @@ public sealed class Printer(string indent = "  ")
                 _sb.WriteList(union.Types, PrintType, " | ");
                 break;
 
+            case TsIntersectionType intersection:
+                _sb.WriteList(intersection.Types, PrintType, " & ");
+                break;
+
             case TsTupleType tuple:
                 _sb.Write("[");
                 _sb.WriteList(tuple.Elements, PrintType);

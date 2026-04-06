@@ -188,6 +188,10 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             TransformAsModule(type, statements);
         }
+        else if (TransformInlineWrapper(type, statements))
+        {
+            // InlineWrapper handled by specialized pipeline.
+        }
         else if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
         {
             TransformRecordOrClass(type, statements);
@@ -417,6 +421,95 @@ public sealed class TypeTransformer(Compilation compilation)
     }
 
     // ─── ExportedAsModule (static class → top-level functions) ─
+
+    private bool TransformInlineWrapper(INamedTypeSymbol type, List<TsTopLevel> statements)
+    {
+        if (!SymbolHelper.HasInlineWrapper(type))
+            return false;
+        if (type.TypeKind != TypeKind.Struct)
+            return false;
+
+        var tsTypeName = GetTsTypeName(type);
+        if (!TryGetInlineWrapperPrimitiveType(type, out var primitiveType))
+            return false;
+
+        var brandType = new TsNamedType($"{{ readonly __brand: \"{tsTypeName}\" }}");
+        statements.Add(new TsTypeAlias(tsTypeName, new TsIntersectionType([primitiveType, brandType])));
+
+        var entries = new List<(string Key, TsExpression Value)>
+        {
+            (
+                "create",
+                new TsArrowFunction(
+                    [new TsParameter("value", primitiveType)],
+                    [new TsReturnStatement(new TsCastExpression(new TsIdentifier("value"), new TsNamedType(tsTypeName)))]
+                )
+            ),
+        };
+
+        foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
+        {
+            if (method.MethodKind != MethodKind.Ordinary) continue;
+            if (!method.IsStatic) continue;
+            if (method.IsImplicitlyDeclared) continue;
+            if (method.DeclaredAccessibility != Accessibility.Public) continue;
+            if (SymbolHelper.HasIgnore(method)) continue;
+            if (SymbolHelper.HasEmit(method)) continue;
+
+            var methodSyntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
+            if (methodSyntax is null) continue;
+
+            var semanticModel = compilation.GetSemanticModel(methodSyntax.SyntaxTree);
+            var exprTransformer = CreateExpressionTransformer(semanticModel);
+            var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody);
+            var parameters = method.Parameters
+                .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+                .ToList();
+
+            var key = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+            entries.Add((key, new TsArrowFunction(parameters, body, Async: method.IsAsync)));
+        }
+
+        statements.Add(new TsConstObject(tsTypeName, entries));
+        return true;
+    }
+
+    private static bool TryGetInlineWrapperPrimitiveType(INamedTypeSymbol type, out TsType primitiveType)
+    {
+        primitiveType = new TsAnyType();
+
+        var valueMembers = new List<ITypeSymbol>();
+
+        foreach (var member in type.GetMembers())
+        {
+            if (member.IsImplicitlyDeclared) continue;
+            if (member.IsStatic) continue;
+            if (member.DeclaredAccessibility != Accessibility.Public) continue;
+            if (SymbolHelper.HasIgnore(member)) continue;
+
+            switch (member)
+            {
+                case IPropertySymbol prop when prop.GetMethod is not null && prop.Parameters.Length == 0:
+                    valueMembers.Add(prop.Type);
+                    break;
+                case IFieldSymbol field:
+                    valueMembers.Add(field.Type);
+                    break;
+            }
+        }
+
+        if (valueMembers.Count != 1)
+            return false;
+
+        var mapped = TypeMapper.Map(valueMembers[0]);
+        if (mapped is TsStringType or TsNumberType or TsBooleanType or TsBigIntType)
+        {
+            primitiveType = mapped;
+            return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Checks if a static class contains extension methods (classic or C# 14 blocks).
@@ -2017,6 +2110,10 @@ public sealed class TypeTransformer(Compilation compilation)
                 CollectFromType(func.ReturnType, names);
                 CollectFromStatements(func.Body, names, valueNames);
                 break;
+            case TsConstObject constObj:
+                foreach (var (_, value) in constObj.Entries)
+                    CollectFromExpression(value, names, valueNames);
+                break;
             case TsClass cls:
                 CollectFromTypeParameters(cls.TypeParameters, names);
                 if (cls.Extends is not null)
@@ -2096,6 +2193,10 @@ public sealed class TypeTransformer(Compilation compilation)
                 break;
             case TsUnionType union:
                 foreach (var t in union.Types)
+                    CollectFromType(t, names);
+                break;
+            case TsIntersectionType intersection:
+                foreach (var t in intersection.Types)
                     CollectFromType(t, names);
                 break;
         }

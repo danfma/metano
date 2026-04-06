@@ -45,6 +45,8 @@ public static class SymbolHelper
 
     public static bool HasNoTranspile(ISymbol symbol) => HasAttribute(symbol, "NoTranspile");
 
+    public static bool HasInlineWrapper(ISymbol symbol) => HasAttribute(symbol, "InlineWrapper");
+
     /// <summary>
     /// Determines if a type should be transpiled, considering:
     /// 1. [NoTranspile] → always excluded

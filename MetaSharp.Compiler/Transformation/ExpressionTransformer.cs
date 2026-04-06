@@ -332,6 +332,18 @@ public sealed class ExpressionTransformer(SemanticModel model)
         var typeInfo = model.GetTypeInfo(creation);
         var type = typeInfo.Type;
 
+        // Inline wrapper structs are emitted as companion objects, not classes:
+        // new UserId(v) -> UserId.create(v)
+        if (type is INamedTypeSymbol inlineWrapperType && SymbolHelper.HasInlineWrapper(inlineWrapperType))
+        {
+            var args = ResolveArguments(creation.ArgumentList, creation);
+            var tsTypeName = SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
+            return new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
+                args
+            );
+        }
+
         // Record struct/record → new Type(args)
         if (type is INamedTypeSymbol { IsRecord: true } recordType)
             return CreateNewFromArgs(recordType, creation.ArgumentList);
@@ -451,6 +463,18 @@ public sealed class ExpressionTransformer(SemanticModel model)
     {
         var typeInfo = model.GetTypeInfo(creation);
         var type = typeInfo.ConvertedType;
+
+        if (type is INamedTypeSymbol inlineWrapperType && SymbolHelper.HasInlineWrapper(inlineWrapperType))
+        {
+            var inlineArgs = creation
+                .ArgumentList.Arguments.Select(a => TransformExpression(a.Expression))
+                .ToList();
+            var tsTypeName = SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
+            return new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
+                inlineArgs
+            );
+        }
 
         if (type is INamedTypeSymbol { IsRecord: true } recordType)
             return CreateNewFromArgs(recordType, creation.ArgumentList);
