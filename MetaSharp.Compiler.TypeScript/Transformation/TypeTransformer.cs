@@ -934,9 +934,9 @@ public sealed class TypeTransformer(Compilation compilation)
         // Generate equals, hashCode, with for records (using ALL params including inherited)
         if (type.IsRecord)
         {
-            classMembers.Add(GenerateEquals(type, allParams));
-            classMembers.Add(GenerateHashCode(allParams));
-            classMembers.Add(GenerateWith(type, allParams));
+            classMembers.Add(RecordSynthesizer.GenerateEquals(type, allParams));
+            classMembers.Add(RecordSynthesizer.GenerateHashCode(allParams));
+            classMembers.Add(RecordSynthesizer.GenerateWith(type, allParams));
         }
 
         var implementsList = GetImplementedInterfaces(type);
@@ -1444,102 +1444,6 @@ public sealed class TypeTransformer(Compilation compilation)
 
     // ─── Record generated members ───────────────────────────
 
-    private static TsMethodMember GenerateEquals(
-        INamedTypeSymbol type,
-        IReadOnlyList<TsConstructorParam> ctorParams
-    )
-    {
-        // equals(other: any): boolean {
-        //   return other instanceof Type && this.x === other.x && ...
-        // }
-        TsExpression condition = new TsBinaryExpression(
-            new TsIdentifier("other"),
-            "instanceof",
-            new TsIdentifier(type.Name)
-        );
-
-        foreach (var param in ctorParams)
-        {
-            condition = new TsBinaryExpression(
-                condition,
-                "&&",
-                new TsBinaryExpression(
-                    new TsPropertyAccess(new TsIdentifier("this"), param.Name),
-                    "===",
-                    new TsPropertyAccess(new TsIdentifier("other"), param.Name)
-                )
-            );
-        }
-
-        return new TsMethodMember(
-            "equals",
-            [new TsParameter("other", new TsAnyType())],
-            new TsBooleanType(),
-            [new TsReturnStatement(condition)]
-        );
-    }
-
-    private static TsMethodMember GenerateHashCode(IReadOnlyList<TsConstructorParam> ctorParams)
-    {
-        // hashCode(): number {
-        //   const hc = new HashCode();
-        //   hc.add(this.x);
-        //   hc.add(this.y);
-        //   return hc.toHashCode();
-        // }
-        var body = new List<TsStatement>();
-
-        body.Add(
-            new TsVariableDeclaration("hc", new TsNewExpression(new TsIdentifier("HashCode"), []))
-        );
-
-        foreach (var param in ctorParams)
-        {
-            body.Add(
-                new TsExpressionStatement(
-                    new TsCallExpression(
-                        new TsPropertyAccess(new TsIdentifier("hc"), "add"),
-                        [new TsPropertyAccess(new TsIdentifier("this"), param.Name)]
-                    )
-                )
-            );
-        }
-
-        body.Add(
-            new TsReturnStatement(
-                new TsCallExpression(new TsPropertyAccess(new TsIdentifier("hc"), "toHashCode"), [])
-            )
-        );
-
-        return new TsMethodMember("hashCode", [], new TsNumberType(), body);
-    }
-
-    private static TsMethodMember GenerateWith(
-        INamedTypeSymbol type,
-        IReadOnlyList<TsConstructorParam> ctorParams
-    )
-    {
-        var selfType = MakeSelfType(type);
-        var args = ctorParams
-            .Select<TsConstructorParam, TsExpression>(p => new TsBinaryExpression(
-                new TsPropertyAccess(new TsIdentifier("overrides?"), p.Name),
-                "??",
-                new TsPropertyAccess(new TsIdentifier("this"), p.Name)
-            ))
-            .ToList();
-
-        return new TsMethodMember(
-            "with",
-            [new TsParameter("overrides?", new TsNamedType("Partial", [selfType]))],
-            selfType,
-            [new TsReturnStatement(new TsNewExpression(new TsIdentifier(type.Name), args))]
-        );
-    }
-
-    /// <summary>
-    /// Creates a TsNamedType for the type including its type parameters.
-    /// e.g., Pair with K,V → TsNamedType("Pair", [TsNamedType("K"), TsNamedType("V")])
-    /// </summary>
     /// <summary>
     /// Resolves the actual arguments passed to the base constructor.
     /// For `record Ok(T Value) : Result(Value, true)`, returns [Identifier("value"), Literal("true")].
@@ -1572,18 +1476,6 @@ public sealed class TypeTransformer(Compilation compilation)
         return baseParams
             .Select<TsConstructorParam, TsExpression>(p => new TsIdentifier(p.Name))
             .ToList();
-    }
-
-    private static TsNamedType MakeSelfType(INamedTypeSymbol type)
-    {
-        if (type.TypeParameters.Length == 0)
-            return new TsNamedType(type.Name);
-
-        var args = type.TypeParameters
-            .Select<Microsoft.CodeAnalysis.ITypeParameterSymbol, TsType>(tp => new TsNamedType(tp.Name))
-            .ToList();
-
-        return new TsNamedType(type.Name, args);
     }
 
     // ─── Constructor/Method Overload Dispatch ─────────────
