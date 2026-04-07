@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="MetaSharp.Annotations/MetaSharp.Annotations.csproj" />
-    <Project Path="MetaSharp.Compiler/MetaSharp.Compiler.csproj" />
+    <Project Path="MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="MetaSharp.Tests/MetaSharp.Tests.csproj" />

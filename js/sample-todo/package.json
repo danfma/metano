@@ -18,7 +18,7 @@
     "@typescript/native-preview": "^7.0.0-dev.20260225.1"
   },
   "scripts": {
-    "generate": "dotnet run --project ../../MetaSharp.Compiler/MetaSharp.Compiler.csproj -- -p ../../SampleTodo/SampleTodo.csproj -o ./src --clean --time",
+    "generate": "dotnet run --project ../../MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj -- -p ../../SampleTodo/SampleTodo.csproj -o ./src --clean --time",
     "build": "tsgo -b .",
     "test": "bun test"
   },

@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../MetaSharp.Annotations/MetaSharp.Annotations.csproj" />
-    <ProjectReference Include="../MetaSharp.Compiler/MetaSharp.Compiler.csproj" />
+    <ProjectReference Include="../MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj" />
   </ItemGroup>
 
   <ItemGroup>
