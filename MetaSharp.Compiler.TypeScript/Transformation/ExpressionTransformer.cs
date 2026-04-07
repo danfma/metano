@@ -47,6 +47,12 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private GenericNameHandler? _genericNames;
     private GenericNameHandler GenericNames => _genericNames ??= new GenericNameHandler(this);
 
+    private MemberAccessHandler? _memberAccess;
+    private MemberAccessHandler MemberAccess => _memberAccess ??= new MemberAccessHandler(this);
+
+    private InvocationHandler? _invocations;
+    private InvocationHandler Invocations => _invocations ??= new InvocationHandler(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -194,9 +200,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
                 TransformExpression(bin.Right)
             ),
 
-            MemberAccessExpressionSyntax member => TransformMemberAccess(member),
+            MemberAccessExpressionSyntax member => MemberAccess.Transform(member),
 
-            InvocationExpressionSyntax invocation => TransformInvocation(invocation),
+            InvocationExpressionSyntax invocation => Invocations.Transform(invocation),
 
             ObjectCreationExpressionSyntax creation => ObjectCreation.TransformObjectCreation(creation),
             ImplicitObjectCreationExpressionSyntax implicitCreation =>
@@ -275,56 +281,6 @@ public sealed class ExpressionTransformer(SemanticModel model)
         };
     }
 
-
-    private TsExpression TransformMemberAccess(MemberAccessExpressionSyntax member)
-    {
-        // Check for BCL mappings
-        var symbol = model.GetSymbolInfo(member).Symbol;
-        if (symbol is not null)
-        {
-            var mapped = BclMapper.TryMap(symbol, member, this);
-            if (mapped is not null)
-                return mapped;
-        }
-
-        var obj = TransformExpression(member.Expression);
-
-        // Enum members and constants → keep PascalCase
-        var memberName = symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum }
-            ? member.Name.Identifier.Text
-            : TypeScriptNaming.ToCamelCase(member.Name.Identifier.Text);
-
-        return new TsPropertyAccess(obj, memberName);
-    }
-
-    private TsExpression TransformInvocation(InvocationExpressionSyntax invocation)
-    {
-        // Check for BCL method mappings
-        var symbol = model.GetSymbolInfo(invocation).Symbol;
-        if (symbol is IMethodSymbol methodSymbol)
-        {
-            // [Emit] — inline JS expression with $0, $1 placeholders
-            var emit = TypeScriptNaming.GetEmit(methodSymbol);
-            if (emit is not null)
-            {
-                var emitArgs = invocation.ArgumentList.Arguments
-                    .Select(a => TransformExpression(a.Expression))
-                    .ToList();
-                return ExpandEmit(emit, emitArgs);
-            }
-
-            var mapped = BclMapper.TryMapMethod(methodSymbol, invocation, this);
-            if (mapped is not null)
-                return mapped;
-        }
-
-        var callee = TransformExpression(invocation.Expression);
-        var args = invocation
-            .ArgumentList.Arguments.Select(a => TransformExpression(a.Expression))
-            .ToList();
-
-        return new TsCallExpression(callee, args);
-    }
 
     /// <summary>
     /// Resolves arguments (including named arguments) to positional order,
@@ -536,31 +492,4 @@ public sealed class ExpressionTransformer(SemanticModel model)
             elements);
     }
 
-    // ─── Emit ───────────────────────────────────────────────
-
-    private static TsExpression ExpandEmit(string template, IReadOnlyList<TsExpression> args)
-    {
-        var result = template;
-        for (var i = 0; i < args.Count; i++)
-        {
-            var argText = args[i] switch
-            {
-                TsIdentifier id => id.Name,
-                TsStringLiteral str => $"\"{str.Value}\"",
-                TsLiteral lit => lit.Raw,
-                TsPropertyAccess access => $"{ExprToString(access.Object)}.{access.Property}",
-                _ => $"/* arg{i} */"
-            };
-            result = result.Replace($"${i}", argText);
-        }
-
-        return new TsLiteral(result);
-    }
-
-    private static string ExprToString(TsExpression expr) => expr switch
-    {
-        TsIdentifier id => id.Name,
-        TsPropertyAccess access => $"{ExprToString(access.Object)}.{access.Property}",
-        _ => "unknown"
-    };
 }
