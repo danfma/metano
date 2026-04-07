@@ -17,6 +17,10 @@
      "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true,
 
+    "paths": {
+      "#/*": ["./src/*"]
+    },
+
     // Best practices
     "strict": true,
     "skipLibCheck": true,

@@ -1,8 +1,11 @@
 {
   "name": "sample-todo",
-  "module": "index.ts",
   "type": "module",
   "private": true,
+  "sideEffects": false,
+  "imports": {
+    "#/*": "./src/*"
+  },
   "dependencies": {
     "@meta-sharp/runtime": "workspace:*"
   },
