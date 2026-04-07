@@ -12,8 +12,8 @@ public class AttributeTranspileTests
             public record struct Visible(int Y);
             """);
 
-        await Assert.That(result).DoesNotContainKey("Hidden.ts");
-        await Assert.That(result).ContainsKey("Visible.ts");
+        await Assert.That(result).DoesNotContainKey("hidden.ts");
+        await Assert.That(result).ContainsKey("visible.ts");
     }
 
     [Test]
@@ -30,7 +30,7 @@ public class AttributeTranspileTests
             }
             """);
 
-        await Assert.That(result["Foo.ts"]).DoesNotContain("secret");
-        await Assert.That(result["Foo.ts"]).Contains("visible");
+        await Assert.That(result["foo.ts"]).DoesNotContain("secret");
+        await Assert.That(result["foo.ts"]).Contains("visible");
     }
 }

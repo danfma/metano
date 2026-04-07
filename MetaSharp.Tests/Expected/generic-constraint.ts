@@ -1,5 +1,5 @@
 import { HashCode } from "@meta-sharp/runtime";
-import type { IEntity } from "./IEntity";
+import type { IEntity } from "./i-entity";
 export class Repo<T extends IEntity> {
   constructor(readonly item: T) { }
 

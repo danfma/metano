@@ -12,8 +12,8 @@ public class ExceptionTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("CustomException.ts");
-        await Assert.That(result["InvalidAmountError.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("custom-exception.ts");
+        await Assert.That(result["invalid-amount-error.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -27,8 +27,8 @@ public class ExceptionTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("PrimaryCtorException.ts");
-        await Assert.That(result["DuplicateEntryException.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("primary-ctor-exception.ts");
+        await Assert.That(result["duplicate-entry-exception.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -54,7 +54,7 @@ public class ExceptionTranspileTests
             """
         );
 
-        var validatorTs = result["Validator.ts"];
+        var validatorTs = result["validator.ts"];
         // Should use the transpiled exception class, not generic Error
         await Assert.That(validatorTs).Contains("new BadValueError(\"negative\")");
         await Assert.That(validatorTs).DoesNotContain("new Error(");
@@ -77,7 +77,7 @@ public class ExceptionTranspileTests
             """
         );
 
-        var output = result["Guard.ts"];
+        var output = result["guard.ts"];
         // Non-transpiled exception → Error
         await Assert.That(output).Contains("new Error(\"bad\")");
     }
@@ -92,7 +92,7 @@ public class ExceptionTranspileTests
             """
         );
 
-        var output = result["MyError.ts"];
+        var output = result["my-error.ts"];
         // Exceptions should not have equals/hashCode/with
         await Assert.That(output).DoesNotContain("equals");
         await Assert.That(output).DoesNotContain("hashCode");

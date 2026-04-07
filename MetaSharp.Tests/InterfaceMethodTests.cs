@@ -16,7 +16,7 @@ public class InterfaceMethodTests
             """
         );
 
-        var output = result["IRepository.ts"];
+        var output = result["i-repository.ts"];
         await Assert.That(output).Contains("getById(id: number): string;");
         await Assert.That(output).Contains("save(name: string): void;");
     }
@@ -35,7 +35,7 @@ public class InterfaceMethodTests
             """
         );
 
-        var output = result["IEntity.ts"];
+        var output = result["i-entity.ts"];
         await Assert.That(output).Contains("readonly id: number;");
         await Assert.That(output).Contains("getName(): string;");
     }
@@ -56,7 +56,7 @@ public class InterfaceMethodTests
             """
         );
 
-        var output = result["IAsyncRepo.ts"];
+        var output = result["i-async-repo.ts"];
         await Assert.That(output).Contains("findAsync(id: number): Promise<string>;");
         await Assert.That(output).Contains("saveAsync(name: string): Promise<void>;");
     }

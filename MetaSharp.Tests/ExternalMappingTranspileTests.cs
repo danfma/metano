@@ -16,7 +16,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["Price.ts"];
+        var output = result["price.ts"];
         await Assert.That(output).Contains("amount: Decimal");
         await Assert.That(output).Contains("from \"decimal.js\"");
     }
@@ -31,7 +31,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["Price.ts"];
+        var output = result["price.ts"];
         // Without [ExportFromBcl], decimal falls back to number
         await Assert.That(output).Contains("amount: number");
     }
@@ -54,8 +54,8 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        await Assert.That(result).DoesNotContainKey("ExternalDecimal.ts");
-        await Assert.That(result).ContainsKey("Price.ts");
+        await Assert.That(result).DoesNotContainKey("external-decimal.ts");
+        await Assert.That(result).ContainsKey("price.ts");
     }
 
     [Test]
@@ -74,7 +74,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["Event.ts"];
+        var output = result["event.ts"];
         await Assert.That(output).Contains("from \"moment\"");
         await Assert.That(output).Contains("when: Moment");
     }
@@ -97,7 +97,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["Helpers.ts"];
+        var output = result["helpers.ts"];
         await Assert.That(output).DoesNotContain("toFixed");
         await Assert.That(output).Contains("double");
     }
@@ -121,7 +121,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["Utils.ts"];
+        var output = result["utils.ts"];
         await Assert.That(output).Contains("typeof x");
     }
 
@@ -144,7 +144,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["Fmt.ts"];
+        var output = result["fmt.ts"];
         await Assert.That(output).Contains("s.slice(1, 3)");
     }
 }

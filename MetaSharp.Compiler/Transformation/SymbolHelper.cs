@@ -99,6 +99,34 @@ public static class SymbolHelper
     }
 
     /// <summary>
+    /// Converts PascalCase to kebab-case for file paths.
+    /// Examples: "UserId" → "user-id", "InMemoryIssueRepository" → "in-memory-issue-repository",
+    /// "IIssueRepository" → "i-issue-repository", "PageRequest" → "page-request".
+    /// </summary>
+    public static string ToKebabCase(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        var sb = new System.Text.StringBuilder(name.Length + 4);
+        for (var i = 0; i < name.Length; i++)
+        {
+            var c = name[i];
+            if (char.IsUpper(c) && i > 0)
+            {
+                // Insert hyphen before any uppercase that follows a lowercase or digit,
+                // OR before an uppercase that is followed by a lowercase (acronym boundary).
+                var prev = name[i - 1];
+                var next = i + 1 < name.Length ? name[i + 1] : '\0';
+                var prevIsLowerOrDigit = char.IsLower(prev) || char.IsDigit(prev);
+                var nextIsLower = char.IsLower(next);
+                if (prevIsLowerOrDigit || (char.IsUpper(prev) && nextIsLower))
+                    sb.Append('-');
+            }
+            sb.Append(char.ToLowerInvariant(c));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Converts PascalCase to camelCase for TS output.
     /// </summary>
     public static string ToCamelCase(string name)

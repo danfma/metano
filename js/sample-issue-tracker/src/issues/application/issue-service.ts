@@ -1,14 +1,14 @@
 import { isString } from "@meta-sharp/runtime";
-import type { IIssueRepository } from "./IIssueRepository";
-import { Issue } from "../Domain/Issue";
-import { IssueId } from "../Domain/IssueId";
-import { IssuePriority } from "../Domain/IssuePriority";
-import { IssueStatus } from "../Domain/IssueStatus";
-import { IssueType } from "../Domain/IssueType";
-import { OperationResult } from "../../SharedKernel/OperationResult";
-import type { PageRequest } from "../../SharedKernel/PageRequest";
-import type { PageResult } from "../../SharedKernel/PageResult";
-import type { UserId } from "../../SharedKernel/UserId";
+import type { IIssueRepository } from "./i-issue-repository";
+import { Issue } from "../domain/issue";
+import { IssueId } from "../domain/issue-id";
+import { IssuePriority } from "../domain/issue-priority";
+import { IssueStatus } from "../domain/issue-status";
+import { IssueType } from "../domain/issue-type";
+import { OperationResult } from "../../shared-kernel/operation-result";
+import type { PageRequest } from "../../shared-kernel/page-request";
+import type { PageResult } from "../../shared-kernel/page-result";
+import type { UserId } from "../../shared-kernel/user-id";
 export class IssueService {
   constructor(repository: IIssueRepository) {
     this._repository = repository;

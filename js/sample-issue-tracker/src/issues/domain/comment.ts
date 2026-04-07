@@ -1,6 +1,6 @@
 import { HashCode } from "@meta-sharp/runtime";
 import { Temporal } from "@js-temporal/polyfill";
-import { UserId } from "../../SharedKernel/UserId";
+import { UserId } from "../../shared-kernel/user-id";
 export class Comment {
   constructor(readonly authorId: UserId, readonly message: string, readonly createdAt: Temporal.ZonedDateTime, readonly isSystem: boolean = false) { }
 

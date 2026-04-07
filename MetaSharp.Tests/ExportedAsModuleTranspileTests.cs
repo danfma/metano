@@ -17,8 +17,8 @@ public class ExportedAsModuleTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("ExportedAsModule.ts");
-        await Assert.That(result["MathUtils.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("exported-as-module.ts");
+        await Assert.That(result["math-utils.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -34,7 +34,7 @@ public class ExportedAsModuleTranspileTests
             """
         );
 
-        var output = result["Helpers.ts"];
+        var output = result["helpers.ts"];
         await Assert.That(output).DoesNotContain("class Helpers");
         await Assert.That(output).Contains("export function");
     }
@@ -55,8 +55,8 @@ public class ExportedAsModuleTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("ExportedAsModuleAsync.ts");
-        await Assert.That(result["Api.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("exported-as-module-async.ts");
+        await Assert.That(result["api.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -75,7 +75,7 @@ public class ExportedAsModuleTranspileTests
             """
         );
 
-        var output = result["Utils.ts"];
+        var output = result["utils.ts"];
         await Assert.That(output).Contains("visible");
         await Assert.That(output).DoesNotContain("hidden");
     }
@@ -94,7 +94,7 @@ public class ExportedAsModuleTranspileTests
             """
         );
 
-        var output = result["Ops.ts"];
+        var output = result["ops.ts"];
         await Assert.That(output).Contains("export function sum(");
         await Assert.That(output).DoesNotContain("export function add(");
     }
@@ -112,7 +112,7 @@ public class ExportedAsModuleTranspileTests
             """
         );
 
-        var output = result["Pure.ts"];
+        var output = result["pure.ts"];
         await Assert.That(output).DoesNotContain("equals");
         await Assert.That(output).DoesNotContain("hashCode");
         await Assert.That(output).DoesNotContain("with");

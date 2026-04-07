@@ -17,7 +17,7 @@ public class ExtensionTranspileTests
             """
         );
 
-        var output = result["StringExt.ts"];
+        var output = result["string-ext.ts"];
         await Assert.That(output).Contains("export function upper(s: string): string");
     }
 
@@ -34,7 +34,7 @@ public class ExtensionTranspileTests
             """
         );
 
-        var output = result["MathExt.ts"];
+        var output = result["math-ext.ts"];
         await Assert.That(output).Contains("export function add(x: number, y: number): number");
     }
 
@@ -52,7 +52,7 @@ public class ExtensionTranspileTests
             """
         );
 
-        var output = result["Helpers.ts"];
+        var output = result["helpers.ts"];
         // Should be module-style (top-level functions), not a class
         await Assert.That(output).DoesNotContain("class Helpers");
         await Assert.That(output).Contains("export function");
@@ -74,7 +74,7 @@ public class ExtensionTranspileTests
             """
         );
 
-        var output = result["EnumerableExt.ts"];
+        var output = result["enumerable-ext.ts"];
         await Assert.That(output).Contains("function isEmpty<T>(source: T[]): boolean");
     }
 
@@ -96,7 +96,7 @@ public class ExtensionTranspileTests
             """
         );
 
-        var output = result["IntExtensions.ts"];
+        var output = result["int-extensions.ts"];
         await Assert.That(output).Contains("export function squared(value: number): number");
         await Assert.That(output).Contains("value * value");
     }
@@ -117,7 +117,7 @@ public class ExtensionTranspileTests
             """
         );
 
-        var output = result["IntExtensions.ts"];
+        var output = result["int-extensions.ts"];
         await Assert.That(output).Contains("export function isEven(value: number): boolean");
         await Assert.That(output).Contains("value % 2 === 0");
     }
@@ -139,7 +139,7 @@ public class ExtensionTranspileTests
             """
         );
 
-        var output = result["StringExtensions.ts"];
+        var output = result["string-extensions.ts"];
         await Assert.That(output).Contains("export function isBlank(text: string): boolean");
         await Assert.That(output).Contains("export function repeat(text: string, times: number): string");
     }

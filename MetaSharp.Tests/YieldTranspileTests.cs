@@ -20,7 +20,7 @@ public class YieldTranspileTests
             """
         );
 
-        var output = result["SequenceFactory.ts"];
+        var output = result["sequence-factory.ts"];
         await Assert.That(output).Contains("*values(x: number): Generator<number>");
         await Assert.That(output).Contains("yield 1;");
         await Assert.That(output).Contains("yield x;");
@@ -44,7 +44,7 @@ public class YieldTranspileTests
             """
         );
 
-        var output = result["SequenceModule.ts"];
+        var output = result["sequence-module.ts"];
         await Assert.That(output).Contains("export function* names(): Generator<string>");
         await Assert.That(output).Contains("yield \"alpha\";");
         await Assert.That(output).Contains("yield \"beta\";");
@@ -63,7 +63,7 @@ public class YieldTranspileTests
             """
         );
 
-        var output = result["SnapshotProvider.ts"];
+        var output = result["snapshot-provider.ts"];
         await Assert.That(output).Contains("snapshot(): number[]");
         await Assert.That(output).DoesNotContain("*snapshot(");
     }

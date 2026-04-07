@@ -1,8 +1,11 @@
 {
   "name": "sample-issue-tracker",
-  "module": "index.ts",
   "type": "module",
   "private": true,
+  "sideEffects": false,
+  "imports": {
+    "#/*": "./dist/*"
+  },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
     "@meta-sharp/runtime": "workspace:*"

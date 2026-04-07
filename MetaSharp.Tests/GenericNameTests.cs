@@ -34,7 +34,7 @@ public class GenericNameTests
             """
         );
 
-        var output = result["Service.ts"];
+        var output = result["service.ts"];
         await Assert.That(output).DoesNotContain("unsupported");
         await Assert.That(output).DoesNotContain("GenericName");
         await Assert.That(output).Contains("Result.ok(input)");

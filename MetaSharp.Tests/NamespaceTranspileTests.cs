@@ -19,8 +19,8 @@ public class NamespaceTranspileTests
         );
 
         // Root namespace is App.Domain → both at root
-        await Assert.That(result).ContainsKey("Status.ts");
-        await Assert.That(result).ContainsKey("User.ts");
+        await Assert.That(result).ContainsKey("status.ts");
+        await Assert.That(result).ContainsKey("user.ts");
     }
 
     [Test]
@@ -44,8 +44,8 @@ public class NamespaceTranspileTests
 
         // Root namespace is App.Domain
         // Currency → root, Price → Models/
-        await Assert.That(result).ContainsKey("Currency.ts");
-        await Assert.That(result).ContainsKey("Models/Price.ts");
+        await Assert.That(result).ContainsKey("currency.ts");
+        await Assert.That(result).ContainsKey("models/price.ts");
     }
 
     [Test]
@@ -67,9 +67,9 @@ public class NamespaceTranspileTests
             """
         );
 
-        var priceTs = result["Models/Price.ts"];
+        var priceTs = result["models/price.ts"];
         // Import should go up one level to find Currency
-        await Assert.That(priceTs).Contains("from \"../Currency\"");
+        await Assert.That(priceTs).Contains("from \"../currency\"");
     }
 
     [Test]
@@ -91,20 +91,21 @@ public class NamespaceTranspileTests
             """
         );
 
-        // Root index should re-export Currency and sub-namespace
+        // Root index should re-export Currency (StringEnum is a value, not type-only)
         await Assert.That(result).ContainsKey("index.ts");
         var rootIndex = result["index.ts"];
-        await Assert.That(rootIndex).Contains("export type { Currency } from \"./Currency\"");
+        await Assert.That(rootIndex).Contains("export { Currency } from \"./currency\"");
 
         // Models index should re-export Price
-        await Assert.That(result).ContainsKey("Models/index.ts");
-        var modelsIndex = result["Models/index.ts"];
-        await Assert.That(modelsIndex).Contains("export { Price } from \"./Price\"");
+        await Assert.That(result).ContainsKey("models/index.ts");
+        var modelsIndex = result["models/index.ts"];
+        await Assert.That(modelsIndex).Contains("export { Price } from \"./price\"");
     }
 
     [Test]
-    public async Task RootIndex_ReExportsSubDirectories()
+    public async Task RootIndex_DoesNotReExportSubDirectories()
     {
+        // Leaf-only barrels: parent index does NOT re-export subdirectories.
         var result = TranspileHelper.Transpile(
             """
             namespace App.Domain
@@ -122,7 +123,7 @@ public class NamespaceTranspileTests
         );
 
         var rootIndex = result["index.ts"];
-        await Assert.That(rootIndex).Contains("export * from \"./Models\"");
+        await Assert.That(rootIndex).DoesNotContain("export * from \"./models\"");
     }
 
     [Test]
@@ -141,7 +142,7 @@ public class NamespaceTranspileTests
             """
         );
 
-        var moneyTs = result["Money.ts"];
-        await Assert.That(moneyTs).Contains("from \"./Currency\"");
+        var moneyTs = result["money.ts"];
+        await Assert.That(moneyTs).Contains("from \"./currency\"");
     }
 }

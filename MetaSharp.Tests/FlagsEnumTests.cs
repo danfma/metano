@@ -20,7 +20,7 @@ public class FlagsEnumTests
             """
         );
 
-        var output = result["FilePermissions.ts"];
+        var output = result["file-permissions.ts"];
         await Assert.That(output).Contains("export enum FilePermissions");
         await Assert.That(output).Contains("None = 0,");
         await Assert.That(output).Contains("Read = 1,");
@@ -51,7 +51,7 @@ public class FlagsEnumTests
             """
         );
 
-        var output = result["Checker.ts"];
+        var output = result["checker.ts"];
         await Assert.That(output).Contains("&");
         await Assert.That(output).Contains("===");
         await Assert.That(output).Contains("Permissions.Read");
@@ -78,7 +78,7 @@ public class FlagsEnumTests
             """
         );
 
-        var output = result["Parser.ts"];
+        var output = result["parser.ts"];
         await Assert.That(output).Contains("Color[text as keyof typeof Color]");
     }
 }

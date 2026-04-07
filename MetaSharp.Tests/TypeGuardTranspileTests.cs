@@ -12,7 +12,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["Point.ts"];
+        var output = result["point.ts"];
         await Assert.That(output).Contains("export function isPoint(value: unknown): value is Point");
         await Assert.That(output).Contains("value instanceof Point");
         await Assert.That(output).Contains("typeof v.x === \"number\"");
@@ -34,7 +34,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["Currency.ts"];
+        var output = result["currency.ts"];
         await Assert.That(output).Contains("export function isCurrency(value: unknown): value is Currency");
         await Assert.That(output).Contains("value === \"BRL\"");
         await Assert.That(output).Contains("value === \"USD\"");
@@ -51,7 +51,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["Status.ts"];
+        var output = result["status.ts"];
         await Assert.That(output).Contains("export function isStatus(value: unknown): value is Status");
         await Assert.That(output).Contains("typeof value === \"number\"");
         await Assert.That(output).Contains("value === 0");
@@ -72,7 +72,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["IEntity.ts"];
+        var output = result["i-entity.ts"];
         await Assert.That(output).Contains("export function isIEntity(value: unknown): value is IEntity");
         await Assert.That(output).DoesNotContain("instanceof");
         await Assert.That(output).Contains("typeof v.id === \"string\"");
@@ -95,7 +95,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var moneyOutput = result["Money.ts"];
+        var moneyOutput = result["money.ts"];
         await Assert.That(moneyOutput).Contains("isCurrency(v.currency)");
         await Assert.That(moneyOutput).Contains("isCurrency");
     }
@@ -111,7 +111,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["Profile.ts"];
+        var output = result["profile.ts"];
         await Assert.That(output).Contains("isProfile");
         await Assert.That(output).Contains("v.bio == null");
     }
@@ -132,7 +132,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var childOutput = result["Child.ts"];
+        var childOutput = result["child.ts"];
         await Assert.That(childOutput).Contains("isChild");
         await Assert.That(childOutput).Contains("typeof v.id === \"number\"");
         await Assert.That(childOutput).Contains("typeof v.name === \"string\"");
@@ -148,7 +148,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["MyError.ts"];
+        var output = result["my-error.ts"];
         await Assert.That(output).DoesNotContain("isMyError");
     }
 
@@ -162,7 +162,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["Item.ts"];
+        var output = result["item.ts"];
         await Assert.That(output).DoesNotContain("isItem");
     }
 
@@ -176,7 +176,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["Item.ts"];
+        var output = result["item.ts"];
         await Assert.That(output).Contains("): value is Item");
     }
 }

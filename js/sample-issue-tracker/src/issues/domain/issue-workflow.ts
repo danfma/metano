@@ -1,7 +1,7 @@
 import { Enumerable } from "@meta-sharp/runtime";
-import type { Issue } from "./Issue";
-import { IssuePriority } from "./IssuePriority";
-import { IssueStatus } from "./IssueStatus";
+import type { Issue } from "./issue";
+import { IssuePriority } from "./issue-priority";
+import { IssueStatus } from "./issue-status";
 export class IssueWorkflow {
   constructor() { }
 

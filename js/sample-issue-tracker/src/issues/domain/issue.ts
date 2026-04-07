@@ -1,12 +1,12 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { isString } from "@meta-sharp/runtime";
-import { Comment } from "./Comment";
-import type { IssueId } from "./IssueId";
-import { IssuePriority } from "./IssuePriority";
-import { IssueStatus } from "./IssueStatus";
-import { IssueType } from "./IssueType";
-import { IssueWorkflow } from "./IssueWorkflow";
-import type { UserId } from "../../SharedKernel/UserId";
+import { Comment } from "./comment";
+import type { IssueId } from "./issue-id";
+import { IssuePriority } from "./issue-priority";
+import { IssueStatus } from "./issue-status";
+import { IssueType } from "./issue-type";
+import { IssueWorkflow } from "./issue-workflow";
+import type { UserId } from "../../shared-kernel/user-id";
 export class Issue {
   constructor(readonly id: IssueId, public title: string, public description: string, readonly type: IssueType, public priority: IssuePriority = "medium") { }
 

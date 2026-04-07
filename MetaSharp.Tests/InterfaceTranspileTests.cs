@@ -17,7 +17,7 @@ public class InterfaceTranspileTests
         );
 
         // Without [Name], keeps the C# name including I prefix
-        var output = result["IShape.ts"];
+        var output = result["i-shape.ts"];
         await Assert.That(output).Contains("export interface IShape");
         await Assert.That(output).Contains("readonly area: number;");
         await Assert.That(output).Contains("readonly name: string;");
@@ -37,9 +37,9 @@ public class InterfaceTranspileTests
         );
 
         // [Name("Readable")] overrides → file is Readable.ts
-        await Assert.That(result).ContainsKey("Readable.ts");
-        await Assert.That(result).DoesNotContainKey("IReadable.ts");
-        await Assert.That(result["Readable.ts"]).Contains("export interface Readable");
+        await Assert.That(result).ContainsKey("readable.ts");
+        await Assert.That(result).DoesNotContainKey("i-readable.ts");
+        await Assert.That(result["readable.ts"]).Contains("export interface Readable");
     }
 
     [Test]
@@ -61,9 +61,9 @@ public class InterfaceTranspileTests
             """
         );
 
-        var userTs = result["User.ts"];
+        var userTs = result["user.ts"];
         await Assert.That(userTs).Contains("implements IEntity");
-        await Assert.That(userTs).Contains("import type { IEntity } from \"./IEntity\"");
+        await Assert.That(userTs).Contains("import type { IEntity } from \"./i-entity\"");
     }
 
     [Test]
@@ -85,9 +85,9 @@ public class InterfaceTranspileTests
             """
         );
 
-        var userTs = result["User.ts"];
+        var userTs = result["user.ts"];
         await Assert.That(userTs).Contains("implements Entity");
-        await Assert.That(userTs).Contains("import type { Entity } from \"./Entity\"");
+        await Assert.That(userTs).Contains("import type { Entity } from \"./entity\"");
     }
 
     [Test]
@@ -109,7 +109,7 @@ public class InterfaceTranspileTests
             """
         );
 
-        var itemTs = result["Item.ts"];
+        var itemTs = result["item.ts"];
         await Assert.That(itemTs).Contains("implements INamed, ITagged");
     }
 
@@ -132,7 +132,7 @@ public class InterfaceTranspileTests
             """
         );
 
-        var childTs = result["Child.ts"];
+        var childTs = result["child.ts"];
         await Assert.That(childTs).Contains("extends Base");
         await Assert.That(childTs).Contains("implements ILabeled");
     }
@@ -149,7 +149,7 @@ public class InterfaceTranspileTests
             """
         );
 
-        var output = result["Visible.ts"];
+        var output = result["visible.ts"];
         await Assert.That(output).DoesNotContain("implements");
     }
 }

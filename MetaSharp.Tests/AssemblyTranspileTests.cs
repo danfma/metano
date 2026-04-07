@@ -15,9 +15,9 @@ public class AssemblyTranspileTests
             """
         );
 
-        await Assert.That(result).ContainsKey("Point.ts");
-        await Assert.That(result).ContainsKey("Color.ts");
-        await Assert.That(result).ContainsKey("Service.ts");
+        await Assert.That(result).ContainsKey("point.ts");
+        await Assert.That(result).ContainsKey("color.ts");
+        await Assert.That(result).ContainsKey("service.ts");
     }
 
     [Test]
@@ -32,8 +32,8 @@ public class AssemblyTranspileTests
             """
         );
 
-        await Assert.That(result).ContainsKey("Visible.ts");
-        await Assert.That(result).DoesNotContainKey("Hidden.ts");
+        await Assert.That(result).ContainsKey("visible.ts");
+        await Assert.That(result).DoesNotContainKey("hidden.ts");
     }
 
     [Test]
@@ -50,8 +50,8 @@ public class AssemblyTranspileTests
             """
         );
 
-        await Assert.That(result).ContainsKey("Included.ts");
-        await Assert.That(result).DoesNotContainKey("Excluded.ts");
+        await Assert.That(result).ContainsKey("included.ts");
+        await Assert.That(result).DoesNotContainKey("excluded.ts");
     }
 
     [Test]
@@ -64,7 +64,7 @@ public class AssemblyTranspileTests
             """
         );
 
-        await Assert.That(result).ContainsKey("Item.ts");
+        await Assert.That(result).ContainsKey("item.ts");
     }
 
     [Test]
@@ -77,7 +77,7 @@ public class AssemblyTranspileTests
             """
         );
 
-        await Assert.That(result).DoesNotContainKey("Conflicted.ts");
+        await Assert.That(result).DoesNotContainKey("conflicted.ts");
     }
 
     [Test]
@@ -95,7 +95,7 @@ public class AssemblyTranspileTests
             """
         );
 
-        var childTs = result["Child.ts"];
+        var childTs = result["child.ts"];
         await Assert.That(childTs).Contains("extends Base");
     }
 
@@ -114,7 +114,7 @@ public class AssemblyTranspileTests
             """
         );
 
-        var userTs = result["User.ts"];
+        var userTs = result["user.ts"];
         await Assert.That(userTs).Contains("implements IEntity");
     }
 
@@ -133,8 +133,8 @@ public class AssemblyTranspileTests
         );
 
         // Point has guard (explicit [GenerateGuard])
-        await Assert.That(result["Point.ts"]).Contains("isPoint");
+        await Assert.That(result["point.ts"]).Contains("isPoint");
         // Line does NOT have guard (no [GenerateGuard])
-        await Assert.That(result["Line.ts"]).DoesNotContain("isLine");
+        await Assert.That(result["line.ts"]).DoesNotContain("isLine");
     }
 }

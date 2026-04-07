@@ -25,7 +25,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Mapper.ts"];
+        var output = result["mapper.ts"];
         await Assert.That(output).Contains("switch (code)");
         await Assert.That(output).Contains("case 1:");
         await Assert.That(output).Contains("case 2:");
@@ -54,7 +54,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Grader.ts"];
+        var output = result["grader.ts"];
         await Assert.That(output).Contains("score === 100 ? \"perfect\" : \"other\"");
     }
 
@@ -77,7 +77,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Checker.ts"];
+        var output = result["checker.ts"];
         await Assert.That(output).Contains("value === null");
     }
 
@@ -98,7 +98,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Checker.ts"];
+        var output = result["checker.ts"];
         await Assert.That(output).Contains("!(value === null)");
     }
 
@@ -118,7 +118,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Checker.ts"];
+        var output = result["checker.ts"];
         await Assert.That(output).Contains("x === 0");
     }
 
@@ -144,7 +144,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Checker.ts"];
+        var output = result["checker.ts"];
         await Assert.That(output).Contains("value instanceof Money");
     }
 
@@ -164,7 +164,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Validator.ts"];
+        var output = result["validator.ts"];
         await Assert.That(output).Contains("x > 0");
     }
 
@@ -184,7 +184,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Range.ts"];
+        var output = result["range.ts"];
         await Assert.That(output).Contains("x >= 0 && x < 100");
     }
 
@@ -204,7 +204,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["StatusCheck.ts"];
+        var output = result["status-check.ts"];
         await Assert.That(output).Contains("x === 0 || x === 1");
     }
 
@@ -231,7 +231,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["Grader.ts"];
+        var output = result["grader.ts"];
         await Assert.That(output).Contains("score >= 90 ? \"A\"");
         await Assert.That(output).Contains("score >= 80 ? \"B\"");
         await Assert.That(output).Contains("\"F\"");

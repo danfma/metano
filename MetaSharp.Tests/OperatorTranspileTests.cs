@@ -17,8 +17,8 @@ public class OperatorTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("OperatorWithName.ts");
-        await Assert.That(result["Vec2.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("operator-with-name.ts");
+        await Assert.That(result["vec2.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -36,8 +36,8 @@ public class OperatorTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("UnaryOperator.ts");
-        await Assert.That(result["Vec2.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("unary-operator.ts");
+        await Assert.That(result["vec2.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -57,7 +57,7 @@ public class OperatorTranspileTests
             """
         );
 
-        var output = result["Num.ts"];
+        var output = result["num.ts"];
         // Both operators should have static + instance
         await Assert.That(output).Contains("static __add(");
         await Assert.That(output).Contains("$add(b: Num): Num");
@@ -78,7 +78,7 @@ public class OperatorTranspileTests
             """
         );
 
-        var output = result["Num.ts"];
+        var output = result["num.ts"];
         await Assert.That(output).DoesNotContain("__");
         await Assert.That(output).DoesNotContain("$");
     }

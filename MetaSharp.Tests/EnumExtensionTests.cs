@@ -21,7 +21,7 @@ public class EnumExtensionTests
             """
         );
 
-        var output = result["PriorityExtensions.ts"];
+        var output = result["priority-extensions.ts"];
         await Assert.That(output).Contains("export function isElevated(priority: Priority): boolean");
         await Assert.That(output).Contains("Priority.High");
         await Assert.That(output).Contains("Priority.Urgent");
@@ -57,7 +57,7 @@ public class EnumExtensionTests
             """
         );
 
-        var output = result["LevelExtensions.ts"];
+        var output = result["level-extensions.ts"];
         await Assert.That(output).Contains("export function isCritical(level: Level): boolean");
         await Assert.That(output).Contains("export function label(level: Level): string");
     }

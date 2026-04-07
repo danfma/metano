@@ -14,8 +14,8 @@ public class ExpressionTranspileTests
             }
             """);
 
-        var expected = TranspileHelper.ReadExpected("WithExpression.ts");
-        await Assert.That(result["Coord.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("with-expression.ts");
+        await Assert.That(result["coord.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -33,7 +33,7 @@ public class ExpressionTranspileTests
             }
             """);
 
-        var expected = TranspileHelper.ReadExpected("IfElseThrow.ts");
-        await Assert.That(result["Pair.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("if-else-throw.ts");
+        await Assert.That(result["pair.ts"]).IsEqualTo(expected);
     }
 }

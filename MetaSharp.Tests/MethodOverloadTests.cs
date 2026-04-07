@@ -15,7 +15,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["Calculator.ts"];
+        var output = result["calculator.ts"];
         await Assert.That(output).DoesNotContain("...args");
         await Assert.That(output).Contains("add(a: number, b: number): number");
     }
@@ -34,7 +34,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["Formatter.ts"];
+        var output = result["formatter.ts"];
         // Overload signatures
         await Assert.That(output).Contains("format(value: number): string;");
         await Assert.That(output).Contains("format(text: string): string;");
@@ -59,7 +59,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["MathHelper.ts"];
+        var output = result["math-helper.ts"];
         // Overload signatures should be static
         await Assert.That(output).Contains("static max(a: number, b: number, c: number): number;");
         await Assert.That(output).Contains("static max(a: number, b: number): number;");
@@ -81,7 +81,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["Logger.ts"];
+        var output = result["logger.ts"];
         // Overload signatures
         await Assert.That(output).Contains("log(message: string, level: number): void;");
         await Assert.That(output).Contains("log(message: string): void;");
@@ -105,7 +105,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["Parser.ts"];
+        var output = result["parser.ts"];
         // Individual overload signatures keep their own return types
         await Assert.That(output).Contains("parse(value: number): number;");
         await Assert.That(output).Contains("parse(text: string): string;");
@@ -136,7 +136,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["Geometry.ts"];
+        var output = result["geometry.ts"];
         // Overload signatures
         await Assert.That(output).Contains("distance(x: number, y: number): number;");
         await Assert.That(output).Contains("distance(p: Point): number;");
@@ -160,7 +160,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["Builder.ts"];
+        var output = result["builder.ts"];
         // All three overload signatures
         await Assert.That(output).Contains("build(name: string, count: number, flag: boolean): string;");
         await Assert.That(output).Contains("build(name: string, count: number): string;");
@@ -189,7 +189,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["Repository.ts"];
+        var output = result["repository.ts"];
         // Dispatcher should be async
         await Assert.That(output).Contains("async findAsync(...args: unknown[])");
     }

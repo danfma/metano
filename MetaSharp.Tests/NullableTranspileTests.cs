@@ -14,7 +14,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Score.ts"];
+        var output = result["score.ts"];
         await Assert.That(output).Contains("value: number | null");
     }
 
@@ -28,7 +28,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Flag.ts"];
+        var output = result["flag.ts"];
         await Assert.That(output).Contains("active: boolean | null");
     }
 
@@ -45,7 +45,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Person.ts"];
+        var output = result["person.ts"];
         await Assert.That(output).Contains("name: string");
         await Assert.That(output).Contains("nickname: string | null");
     }
@@ -67,7 +67,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Person.ts"];
+        var output = result["person.ts"];
         await Assert.That(output).Contains("address: Address | null");
     }
 
@@ -90,7 +90,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Finder.ts"];
+        var output = result["finder.ts"];
         await Assert.That(output).Contains("): string | null");
     }
 
@@ -111,7 +111,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Formatter.ts"];
+        var output = result["formatter.ts"];
         await Assert.That(output).Contains("input: string | null");
     }
 
@@ -134,7 +134,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Utils.ts"];
+        var output = result["utils.ts"];
         await Assert.That(output).Contains("value ?? \"fallback\"");
     }
 
@@ -157,7 +157,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Helper.ts"];
+        var output = result["helper.ts"];
         await Assert.That(output).Contains("value?.length");
     }
 
@@ -174,7 +174,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["Container.ts"];
+        var output = result["container.ts"];
         await Assert.That(output).Contains("value: T");
         await Assert.That(output).Contains("optional: T | null");
     }

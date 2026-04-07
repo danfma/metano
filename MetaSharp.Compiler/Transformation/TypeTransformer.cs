@@ -2569,12 +2569,13 @@ public sealed class TypeTransformer(Compilation compilation)
     {
         var relative = StripRootNamespace(ns);
         var segments = relative.Length > 0
-            ? relative.Split('.')
+            ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
             : [];
 
+        var fileName = SymbolHelper.ToKebabCase(typeName);
         var path = segments.Length > 0
-            ? string.Join("/", segments) + "/" + typeName + ".ts"
-            : typeName + ".ts";
+            ? string.Join("/", segments) + "/" + fileName + ".ts"
+            : fileName + ".ts";
 
         return path;
     }
@@ -2597,8 +2598,12 @@ public sealed class TypeTransformer(Compilation compilation)
         var fromRelative = StripRootNamespace(fromNs);
         var toRelative = StripRootNamespace(toNs);
 
-        var fromParts = fromRelative.Length > 0 ? fromRelative.Split('.') : [];
-        var toParts = toRelative.Length > 0 ? toRelative.Split('.') : [];
+        var fromParts = fromRelative.Length > 0
+            ? fromRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
+            : [];
+        var toParts = toRelative.Length > 0
+            ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
+            : [];
 
         // Find common prefix length
         var common = 0;
@@ -2627,7 +2632,7 @@ public sealed class TypeTransformer(Compilation compilation)
         for (var i = common; i < toParts.Length; i++)
             parts.Add(toParts[i]);
 
-        parts.Add(typeName);
+        parts.Add(SymbolHelper.ToKebabCase(typeName));
         return string.Join("/", parts);
     }
 
@@ -2661,7 +2666,9 @@ public sealed class TypeTransformer(Compilation compilation)
     }
 
     /// <summary>
-    /// Generates index.ts barrel files for each namespace directory.
+    /// Generates leaf-only index.ts barrel files for each namespace directory that contains
+    /// type files. Parent aggregator barrels (re-exporting subdirectories) are NOT generated —
+    /// consumers must use full paths to access nested namespaces.
     /// </summary>
     private IReadOnlyList<TsSourceFile> GenerateIndexFiles(IReadOnlyList<TsSourceFile> typeFiles)
     {
@@ -2690,9 +2697,11 @@ public sealed class TypeTransformer(Compilation compilation)
             {
                 var moduleName = Path.GetFileNameWithoutExtension(file.FileName);
 
-                // Separate type-only exports from value exports
-                var typeOnlyNames = new List<string>();
-                var valueNames = new List<string>();
+                // Collect all exported names from this file. If a name has BOTH a value and a
+                // type form (e.g., StringEnum: const + type alias, InlineWrapper: namespace + type),
+                // re-export as value (declaration merging on the import side).
+                var valueNames = new HashSet<string>(StringComparer.Ordinal);
+                var typeOnlyNames = new HashSet<string>(StringComparer.Ordinal);
 
                 foreach (var stmt in file.Statements)
                 {
@@ -2705,24 +2714,27 @@ public sealed class TypeTransformer(Compilation compilation)
                         valueNames.Add(name);
                 }
 
+                // A name that's both a value and a type → only emit as value (the import
+                // pulls both via TS declaration merging).
+                typeOnlyNames.ExceptWith(valueNames);
+
                 if (valueNames.Count > 0)
-                    exports.Add(new TsReExport([.. valueNames], $"./{moduleName}"));
+                    exports.Add(new TsReExport([.. valueNames.OrderBy(n => n)], $"./{moduleName}"));
 
                 if (typeOnlyNames.Count > 0)
-                    exports.Add(new TsReExport([.. typeOnlyNames], $"./{moduleName}", TypeOnly: true));
+                    exports.Add(new TsReExport([.. typeOnlyNames.OrderBy(n => n)], $"./{moduleName}", TypeOnly: true));
             }
 
-            // Also re-export subdirectories
-            var currentDirPrefix = dir.Length > 0 ? dir + "/" : "";
-            foreach (var subDir in dirToFiles.Keys.Where(d => d.StartsWith(currentDirPrefix) && d != dir))
-            {
-                // Only immediate children
-                var relative = dir.Length > 0 ? subDir[(dir.Length + 1)..] : subDir;
-                if (!relative.Contains('/'))
-                {
-                    exports.Add(new TsReExport(["*"], $"./{relative}"));
-                }
-            }
+            // Leaf-only barrels: do NOT re-export subdirectories. Consumers must use full
+            // paths (e.g., `import { Issue } from "package/issues/domain/issue"`) or import
+            // from the leaf barrel (`from "package/issues/domain"`).
+
+            // Skip barrel generation if a user-defined type would collide with the barrel
+            // file name (e.g., a type named "Index" produces "index.ts" already).
+            var hasIndexCollision = files.Any(f =>
+                Path.GetFileName(f.FileName).Equals("index.ts", StringComparison.OrdinalIgnoreCase));
+            if (hasIndexCollision)
+                continue;
 
             if (exports.Count > 0)
             {
@@ -2741,12 +2753,15 @@ public sealed class TypeTransformer(Compilation compilation)
         TsEnum { Exported: true } e => e.Name,
         TsTypeAlias { Exported: true } t => t.Name,
         TsInterface { Exported: true } i => i.Name,
+        TsConstObject { Exported: true } co => co.Name,
+        TsNamespaceDeclaration { Exported: true } ns => ns.Name,
         _ => null
     };
 
     /// <summary>
     /// Returns true if the export is type-only (no runtime value).
-    /// Type aliases and interfaces are type-only. Classes, functions, and enums are values.
+    /// Type aliases and interfaces are type-only. Classes, functions, enums, const objects,
+    /// and namespaces are values.
     /// </summary>
     private static bool IsTypeOnlyExport(TsTopLevel node) => node is TsTypeAlias or TsInterface;
 }

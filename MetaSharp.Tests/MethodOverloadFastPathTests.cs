@@ -16,7 +16,7 @@ public class MethodOverloadFastPathTests
             """
         );
 
-        var output = result["Calculator.ts"];
+        var output = result["calculator.ts"];
         // Fast-path methods are private with name + capitalized param names
         await Assert.That(output).Contains("private addXY(x: number, y: number): number");
         await Assert.That(output).Contains("private addXYZ(x: number, y: number, z: number): number");
@@ -44,7 +44,7 @@ public class MethodOverloadFastPathTests
             """
         );
 
-        var output = result["Greeter.ts"];
+        var output = result["greeter.ts"];
         // The body "Hello, " + name should appear ONLY once (in the fast path)
         var helloOccurrences = output.Split("\"Hello, \"").Length - 1;
         await Assert.That(helloOccurrences).IsEqualTo(1);
@@ -64,7 +64,7 @@ public class MethodOverloadFastPathTests
             """
         );
 
-        var output = result["MathHelper.ts"];
+        var output = result["math-helper.ts"];
         // Static dispatcher uses ClassName.fastPath instead of this.fastPath
         await Assert.That(output).Contains("private static addXY");
         await Assert.That(output).Contains("MathHelper.addXY(args[0] as number, args[1] as number)");
@@ -84,7 +84,7 @@ public class MethodOverloadFastPathTests
             """
         );
 
-        var output = result["Logger.ts"];
+        var output = result["logger.ts"];
         await Assert.That(output).Contains("private logMsg(msg: string): void");
         await Assert.That(output).Contains("private logMsgLevel(msg: string, level: number): void");
         // Void dispatcher branches: call fast-path then return

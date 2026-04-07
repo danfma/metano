@@ -14,7 +14,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Event.ts"];
+        var output = result["event.ts"];
         await Assert.That(output).Contains("startedAt: Temporal.PlainDateTime");
         await Assert.That(output).Contains("from \"@js-temporal/polyfill\"");
     }
@@ -29,7 +29,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Birthday.ts"];
+        var output = result["birthday.ts"];
         await Assert.That(output).Contains("date: Temporal.PlainDate");
     }
 
@@ -43,7 +43,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Alarm.ts"];
+        var output = result["alarm.ts"];
         await Assert.That(output).Contains("time: Temporal.PlainTime");
     }
 
@@ -57,7 +57,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Log.ts"];
+        var output = result["log.ts"];
         await Assert.That(output).Contains("timestamp: Temporal.ZonedDateTime");
     }
 
@@ -71,7 +71,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Timer.ts"];
+        var output = result["timer.ts"];
         await Assert.That(output).Contains("elapsed: Temporal.Duration");
     }
 
@@ -85,7 +85,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Schedule.ts"];
+        var output = result["schedule.ts"];
         var count = output.Split("@js-temporal/polyfill").Length - 1;
         await Assert.That(count).IsEqualTo(1);
     }
@@ -102,7 +102,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Entity.ts"];
+        var output = result["entity.ts"];
         await Assert.That(output).Contains("id: string");
     }
 
@@ -118,7 +118,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Config.ts"];
+        var output = result["config.ts"];
         await Assert.That(output).Contains("settings: Map<string, number>");
     }
 
@@ -132,7 +132,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Index.ts"];
+        var output = result["index.ts"];
         await Assert.That(output).Contains("data: Map<string, string>");
     }
 
@@ -148,7 +148,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Tags.ts"];
+        var output = result["tags.ts"];
         await Assert.That(output).Contains("items: HashSet<string>");
     }
 
@@ -164,7 +164,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Pair.ts"];
+        var output = result["pair.ts"];
         await Assert.That(output).Contains("value: [number, string]");
     }
 
@@ -178,7 +178,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Triple.ts"];
+        var output = result["triple.ts"];
         await Assert.That(output).Contains("value: [number, string, boolean]");
     }
 
@@ -197,7 +197,7 @@ public class TypeMappingTranspileTests
             """
         );
 
-        var output = result["Data.ts"];
+        var output = result["data.ts"];
         // Map and Set are global — no import should be generated for them
         // (HashCode import is expected for records)
         await Assert.That(output).DoesNotContain("from \"Map\"");

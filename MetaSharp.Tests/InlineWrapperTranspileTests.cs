@@ -15,7 +15,7 @@ public class InlineWrapperTranspileTests
             """
         );
 
-        var output = result["UserId.ts"];
+        var output = result["user-id.ts"];
         await Assert.That(output).Contains("export type UserId = string & { readonly __brand: \"UserId\" };");
         await Assert.That(output).Contains("export namespace UserId");
         await Assert.That(output).Contains("function create(value: string): UserId");
@@ -35,7 +35,7 @@ public class InlineWrapperTranspileTests
             """
         );
 
-        var output = result["Amount.ts"];
+        var output = result["amount.ts"];
         await Assert.That(output).Contains("export type Amount = number & { readonly __brand: \"Amount\" };");
         await Assert.That(output).Contains("function create(value: number): Amount");
         await Assert.That(output).Contains("function toString(value: Amount): string");
@@ -57,7 +57,7 @@ public class InlineWrapperTranspileTests
             """
         );
 
-        var output = result["UserFactory.ts"];
+        var output = result["user-factory.ts"];
         await Assert.That(output).Contains("return UserId.create(value);");
         await Assert.That(output).Contains("import { UserId }");
     }
@@ -72,7 +72,7 @@ public class InlineWrapperTranspileTests
             """
         );
 
-        var output = result["CompositeId.ts"];
+        var output = result["composite-id.ts"];
         await Assert.That(output).Contains("class CompositeId");
         await Assert.That(output).DoesNotContain("export namespace CompositeId");
     }

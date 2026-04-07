@@ -16,7 +16,7 @@ public class ConstructorOverloadTests
             """
         );
 
-        var output = result["Simple.ts"];
+        var output = result["simple.ts"];
         // Single constructor should NOT have overload signatures or ...args
         await Assert.That(output).DoesNotContain("...args");
         await Assert.That(output).Contains("constructor(");
@@ -39,7 +39,7 @@ public class ConstructorOverloadTests
             """
         );
 
-        var output = result["Point.ts"];
+        var output = result["point.ts"];
         // Should have overload signatures
         await Assert.That(output).Contains("constructor(public x: number, public y: number);");
         await Assert.That(output).Contains("constructor();");
@@ -65,7 +65,7 @@ public class ConstructorOverloadTests
             """
         );
 
-        var output = result["Vec.ts"];
+        var output = result["vec.ts"];
         await Assert.That(output).Contains("instanceof Vec");
     }
 
@@ -85,7 +85,7 @@ public class ConstructorOverloadTests
             """
         );
 
-        var output = result["Converter.ts"];
+        var output = result["converter.ts"];
         await Assert.That(output).Contains("isInt32");
         await Assert.That(output).Contains("isString");
     }
@@ -108,7 +108,7 @@ public class ConstructorOverloadTests
             """
         );
 
-        var output = result["Config.ts"];
+        var output = result["config.ts"];
         // Three overload signatures
         await Assert.That(output).Contains("constructor(public name: string, public value: number);");
         await Assert.That(output).Contains("constructor(public name: string);");

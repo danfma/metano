@@ -5,7 +5,7 @@
     "module": "Preserve",
     "moduleDetection": "force",
     "allowJs": true,
-    "rootDir": "./src",
+    "rootDir": ".",
     "outDir": "./dist",
     "types": ["bun"],
 
@@ -13,6 +13,10 @@
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true,
+
+    "paths": {
+      "#/*": ["./src/*"]
+    },
 
     "strict": true,
     "skipLibCheck": true,
@@ -24,6 +28,6 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["tests", "node_modules", "dist"]
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

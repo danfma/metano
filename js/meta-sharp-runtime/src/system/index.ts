@@ -2,5 +2,3 @@ export * from "./hash-code.ts";
 export * from "./temporal-helpers.ts";
 export * from "./collections/index.ts";
 export * from "./linq/index.ts";
-export * as Linq from "./linq/index.ts";
-export * as Collections from "./collections/index.ts";

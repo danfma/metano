@@ -15,7 +15,7 @@ public class FieldTranspileTests
             """
         );
 
-        var output = result["Counter.ts"];
+        var output = result["counter.ts"];
         await Assert.That(output).Contains("private");
         await Assert.That(output).Contains("count");
     }
@@ -35,7 +35,7 @@ public class FieldTranspileTests
             """
         );
 
-        var output = result["TodoList.ts"];
+        var output = result["todo-list.ts"];
         await Assert.That(output).Contains("private");
         await Assert.That(output).Contains("readonly");
         await Assert.That(output).Contains("items");
@@ -54,7 +54,7 @@ public class FieldTranspileTests
             """
         );
 
-        var output = result["State.ts"];
+        var output = result["state.ts"];
         await Assert.That(output).Contains("private");
         await Assert.That(output).Contains("status");
         await Assert.That(output).Contains("\"idle\"");
@@ -73,7 +73,7 @@ public class FieldTranspileTests
             """
         );
 
-        var output = result["Base.ts"];
+        var output = result["base.ts"];
         await Assert.That(output).Contains("protected");
         await Assert.That(output).Contains("value");
     }
@@ -91,7 +91,7 @@ public class FieldTranspileTests
             """
         );
 
-        var output = result["Config.ts"];
+        var output = result["config.ts"];
         await Assert.That(output).Contains("maxRetries: number = 3");
         // public is default in TS, shouldn't be printed
         await Assert.That(output).DoesNotContain("public maxRetries");
@@ -107,7 +107,7 @@ public class FieldTranspileTests
             """
         );
 
-        var output = result["Simple.ts"];
+        var output = result["simple.ts"];
         // Auto-property backing fields should NOT appear as separate fields
         // Only the constructor param should exist
         var fieldCount = output.Split("x:").Length - 1;

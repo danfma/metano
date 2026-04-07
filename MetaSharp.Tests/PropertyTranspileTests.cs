@@ -15,7 +15,7 @@ public class PropertyTranspileTests
             """
         );
 
-        var output = result["Rect.ts"];
+        var output = result["rect.ts"];
         await Assert.That(output).Contains("get area(): number");
         await Assert.That(output).Contains("this.width * this.height");
     }
@@ -36,7 +36,7 @@ public class PropertyTranspileTests
             """
         );
 
-        var output = result["Value.ts"];
+        var output = result["value.ts"];
         await Assert.That(output).Contains("get abs(): number");
         await Assert.That(output).Contains("this.x < 0");
     }
@@ -60,7 +60,7 @@ public class PropertyTranspileTests
             """
         );
 
-        var output = result["Counter.ts"];
+        var output = result["counter.ts"];
         await Assert.That(output).Contains("get count(): number");
         await Assert.That(output).Contains("set count(value: number)");
     }
@@ -78,7 +78,7 @@ public class PropertyTranspileTests
             """
         );
 
-        var output = result["Item.ts"];
+        var output = result["item.ts"];
         await Assert.That(output).Contains("quantity: number");
         // Should not be in constructor params
         await Assert.That(output).DoesNotContain("constructor(readonly name: string, ");
@@ -97,7 +97,7 @@ public class PropertyTranspileTests
             """
         );
 
-        var output = result["Config.ts"];
+        var output = result["config.ts"];
         await Assert.That(output).Contains("retries: number = 3");
     }
 
@@ -114,7 +114,7 @@ public class PropertyTranspileTests
             """
         );
 
-        var output = result["Point.ts"];
+        var output = result["point.ts"];
         await Assert.That(output).Contains("readonly sum: number");
     }
 
@@ -131,7 +131,7 @@ public class PropertyTranspileTests
             """
         );
 
-        var output = result["State.ts"];
+        var output = result["state.ts"];
         // Auto-property with private setter → field (not getter/setter pair)
         await Assert.That(output).Contains("status: string");
     }

@@ -20,7 +20,7 @@ public class AssignmentTests
             """
         );
 
-        var output = result["Counter.ts"];
+        var output = result["counter.ts"];
         await Assert.That(output).DoesNotContain("unsupported");
         await Assert.That(output).Contains("this._count = this._count + 1");
     }
@@ -45,7 +45,7 @@ public class AssignmentTests
             """
         );
 
-        var output = result["Item.ts"];
+        var output = result["item.ts"];
         await Assert.That(output).DoesNotContain("unsupported");
         await Assert.That(output).Contains("this.name = newName");
     }
@@ -68,7 +68,7 @@ public class AssignmentTests
             """
         );
 
-        var output = result["Accumulator.ts"];
+        var output = result["accumulator.ts"];
         await Assert.That(output).DoesNotContain("unsupported");
         await Assert.That(output).Contains("this._total += value");
     }

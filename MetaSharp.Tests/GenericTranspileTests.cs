@@ -12,8 +12,8 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("GenericRecord.ts");
-        await Assert.That(result["Result.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("generic-record.ts");
+        await Assert.That(result["result.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -26,8 +26,8 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("GenericMultiParam.ts");
-        await Assert.That(result["Pair.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("generic-multi-param.ts");
+        await Assert.That(result["pair.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -46,8 +46,8 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("GenericConstraint.ts");
-        await Assert.That(result["Repo.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("generic-constraint.ts");
+        await Assert.That(result["repo.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -63,8 +63,8 @@ public class GenericTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("GenericInterface.ts");
-        await Assert.That(result["IRepository.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("generic-interface.ts");
+        await Assert.That(result["i-repository.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class GenericTranspileTests
             """
         );
 
-        var okTs = result["Ok.ts"];
+        var okTs = result["ok.ts"];
         await Assert.That(okTs).Contains("class Ok<T> extends Result<T>");
         await Assert.That(okTs).Contains("super(value, true)");
     }
@@ -101,7 +101,7 @@ public class GenericTranspileTests
             """
         );
 
-        var output = result["Parser.ts"];
+        var output = result["parser.ts"];
         await Assert.That(output).Contains("function identity<T>(value: T): T");
     }
 
@@ -127,7 +127,7 @@ public class GenericTranspileTests
             """
         );
 
-        var output = result["Finder.ts"];
+        var output = result["finder.ts"];
         await Assert.That(output).Contains("function find<T extends IEntity>(items: T[], id: string): T");
     }
 
@@ -141,7 +141,7 @@ public class GenericTranspileTests
             """
         );
 
-        var output = result["Wrapper.ts"];
+        var output = result["wrapper.ts"];
         // List<int> → number[] (already handled by TypeMapper)
         await Assert.That(output).Contains("numbers: number[]");
     }
@@ -156,7 +156,7 @@ public class GenericTranspileTests
             """
         );
 
-        var output = result["Box.ts"];
+        var output = result["box.ts"];
         // Partial<Box<T>> should be structural, not a string hack
         await Assert.That(output).Contains("Partial<Box<T>>");
         await Assert.That(output).Contains("Box<T>");
@@ -178,7 +178,7 @@ public class GenericTranspileTests
             """
         );
 
-        var boxTs = result["Box.ts"];
+        var boxTs = result["box.ts"];
         await Assert.That(boxTs).Contains("implements IContainer<T>");
     }
 }

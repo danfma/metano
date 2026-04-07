@@ -17,8 +17,8 @@ public class EnumTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("StringEnum.ts");
-        await Assert.That(result["Color.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("string-enum.ts");
+        await Assert.That(result["color.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -36,8 +36,8 @@ public class EnumTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("StringEnumNoAliases.ts");
-        await Assert.That(result["Priority.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("string-enum-no-aliases.ts");
+        await Assert.That(result["priority.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -55,7 +55,7 @@ public class EnumTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("NumericEnum.ts");
-        await Assert.That(result["Priority.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("numeric-enum.ts");
+        await Assert.That(result["priority.ts"]).IsEqualTo(expected);
     }
 }

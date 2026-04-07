@@ -300,27 +300,63 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 
 ### Convenções de Output e Imports
 
-> **Decisões:** kebab-case para arquivos, full-path imports, sem barrels artificiais,
-> subpath imports `#/` para acesso interno.
+> **Decisões:** kebab-case para arquivos, 1 tipo = 1 arquivo, barrels folha por namespace (sem
+> agregadores pai), full-path imports disponíveis como alternativa, subpath imports `#/` para
+> acesso interno, ciclic references não suportadas.
 
+#### File names e estrutura
 - [ ] **kebab-case file names**: arquivos gerados em kebab-case (`UserId.cs` → `user-id.ts`)
 - [ ] Atualizar `Printer.Print` / file writing para converter PascalCase → kebab-case
 - [ ] Atualizar `ComputeRelativeImportPath` para gerar paths kebab-case
-- [ ] **Eliminar barrels artificiais**: parar de gerar `index.ts` em pastas pais
-- [ ] **Full-path imports**: cada import referencia o arquivo final diretamente
+- [ ] 1 tipo = 1 arquivo (manter padrão atual)
+
+#### Barrels (folha apenas)
+- [ ] **Barrel folha**: gerar `index.ts` em cada pasta de namespace, re-exportando os tipos
+  da própria pasta (`issues/domain/index.ts` → `export * from "./issue"; export * from "./comment";`)
+- [ ] **NÃO gerar barrels agregadores pai**: nenhum `issues/index.ts` re-exportando de subpastas
+- [ ] Marcar `"sideEffects": false` no `package.json` gerado para tree-shaking eficaz
+- [ ] Consumer pode importar do barrel (`from "sample/issues/domain"`) OU do arquivo direto
+  (`from "sample/issues/domain/issue"`) — ambos válidos
+
+#### Imports
 - [ ] **Subpath imports `#/`**: configurar `package.json#imports` e `tsconfig.compilerOptions.paths`
   para `"#/*": "./src/*"`
 - [ ] Imports internos do mesmo módulo usam sempre `#/` (consistência, não relative)
-- [ ] **Geração automática do `package.json` exports**: o transpiler emite `exports` field
-  baseado nos arquivos gerados
-- [ ] **Cache incremental** (necessário para regenerar só o que mudou):
-  - Hash dos arquivos C# de entrada + dependências semânticas
-  - Pular regeração de arquivos cujos hashes não mudaram
-  - Atualizar `package.json#exports` apenas com diffs
-- [ ] **Estrutura de testes**: testes em pasta `test/` espelhando estrutura de `src/`
+- [ ] **Geração automática do `package.json#exports`**: o transpiler emite `exports` field
+  baseado nos arquivos e barrels gerados
+
+#### Cache incremental
+- [ ] Hash dos arquivos C# de entrada + dependências semânticas
+- [ ] Pular regeração de arquivos cujos hashes não mudaram
+- [ ] Atualizar `package.json#exports` e barrels apenas com diffs
+
+#### Estrutura de testes
+- [ ] Testes em pasta `test/` espelhando estrutura de `src/`
   (ex: `src/issues/domain/issue.ts` → `test/issues/domain/issue.test.ts`)
 - [ ] Imports nos testes usam `#/issues/domain/issue` (subpath imports)
 - [ ] Migrar SampleIssueTracker existente para o novo padrão
+
+#### Restrições intencionais
+- [ ] **Cyclic references entre tipos: não suportadas**. Detectar no transpiler e emitir
+  warning/error claro com a cadeia de imports problemática.
+
+### Nested Types
+
+> Tipos aninhados em C# (`class Outer { class Inner { ... } }`) atualmente não são suportados.
+> No TS, podemos representá-los de algumas formas:
+>
+> 1. **Flatten para arquivos separados**: `outer.ts` e `outer-inner.ts`, com Inner exportado
+>    no namespace folha (`outer/index.ts`).
+> 2. **Nested no mesmo arquivo**: `outer.ts` contém ambos, `Outer.Inner` no consumer.
+> 3. **Companion namespace**: `outer.ts` define `class Outer` + `namespace Outer { export class Inner }`.
+>
+> Opção 3 é a mais idiomática TS e preserva a sintaxe de acesso `Outer.Inner` igual ao C#.
+
+- [ ] Detectar nested types no TypeTransformer (`type.GetTypeMembers()`)
+- [ ] Avaliar abordagem (provavelmente companion namespace via declaration merging)
+- [ ] Suportar acesso ao tipo nested via `Outer.Inner` no call site
+- [ ] Considerar nested enums, nested records, nested classes
+- [ ] Testes inline cobrindo cada caso
 
 ### Compiler Architecture (recomendações Gemini)
 

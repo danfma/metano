@@ -18,7 +18,7 @@ public class StaticReferenceTests
             """
         );
 
-        var output = result["Item.ts"];
+        var output = result["item.ts"];
         await Assert.That(output).Contains("Status.Active");
         await Assert.That(output).DoesNotContain("status.active");
     }
@@ -42,7 +42,7 @@ public class StaticReferenceTests
             """
         );
 
-        var output = result["Consumer.ts"];
+        var output = result["consumer.ts"];
         await Assert.That(output).Contains("Factory.create()");
         await Assert.That(output).DoesNotContain("factory.create()");
     }
@@ -61,7 +61,7 @@ public class StaticReferenceTests
             """
         );
 
-        var output = result["MyService.ts"];
+        var output = result["my-service.ts"];
         // Type references in constructor should stay PascalCase
         await Assert.That(output).Contains("MyService");
         await Assert.That(output).DoesNotContain("myService");

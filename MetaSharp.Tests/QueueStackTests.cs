@@ -18,7 +18,7 @@ public class QueueStackTests
             """
         );
 
-        var output = result["Buffer.ts"];
+        var output = result["buffer.ts"];
         await Assert.That(output).Contains("_items: string[]");
     }
 
@@ -44,7 +44,7 @@ public class QueueStackTests
             """
         );
 
-        var output = result["MessageQueue.ts"];
+        var output = result["message-queue.ts"];
         await Assert.That(output).Contains(".push(msg)");
         await Assert.That(output).Contains(".shift()");
         await Assert.That(output).Contains("[0]");
@@ -67,7 +67,7 @@ public class QueueStackTests
             """
         );
 
-        var output = result["History.ts"];
+        var output = result["history.ts"];
         await Assert.That(output).Contains("_items: string[]");
     }
 
@@ -92,7 +92,7 @@ public class QueueStackTests
             """
         );
 
-        var output = result["UndoStack.ts"];
+        var output = result["undo-stack.ts"];
         await Assert.That(output).Contains(".push(action)");
         await Assert.That(output).Contains(".pop()");
         // Stack.Peek → arr[arr.length - 1]

@@ -21,7 +21,7 @@ public class LambdaTranspileTests
             """
         );
 
-        var output = result["Filters.ts"];
+        var output = result["filters.ts"];
         await Assert.That(output).Contains("=>");
         await Assert.That(output).Contains("x > 0");
         await Assert.That(output).DoesNotContain("unsupported");
@@ -52,7 +52,7 @@ public class LambdaTranspileTests
             """
         );
 
-        var output = result["ItemFilter.ts"];
+        var output = result["item-filter.ts"];
         await Assert.That(output).Contains("=>");
         await Assert.That(output).Contains("i.active");
     }
@@ -76,7 +76,7 @@ public class LambdaTranspileTests
             """
         );
 
-        var output = result["Logic.ts"];
+        var output = result["logic.ts"];
         await Assert.That(output).Contains("=>");
         await Assert.That(output).DoesNotContain("unsupported");
     }
@@ -104,7 +104,7 @@ public class LambdaTranspileTests
             """
         );
 
-        var output = result["MathUtils.ts"];
+        var output = result["math-utils.ts"];
         await Assert.That(output).Contains("=>");
         await Assert.That(output).Contains("x + y");
     }
@@ -128,7 +128,7 @@ public class LambdaTranspileTests
             """
         );
 
-        var output = result["Projection.ts"];
+        var output = result["projection.ts"];
         await Assert.That(output).Contains("=>");
         await Assert.That(output).Contains(".toUpperCase()");
     }
@@ -152,7 +152,7 @@ public class LambdaTranspileTests
             """
         );
 
-        var output = result["Check.ts"];
+        var output = result["check.ts"];
         await Assert.That(output).DoesNotContain("unsupported");
         await Assert.That(output).DoesNotContain("SimpleLambdaExpression");
     }

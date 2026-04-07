@@ -18,8 +18,8 @@ public class InheritanceTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("InheritanceBase.ts");
-        await Assert.That(result["Shape.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("inheritance-base.ts");
+        await Assert.That(result["shape.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -41,8 +41,8 @@ public class InheritanceTranspileTests
             """
         );
 
-        var expected = TranspileHelper.ReadExpected("InheritanceDerived.ts");
-        await Assert.That(result["Circle.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("inheritance-derived.ts");
+        await Assert.That(result["circle.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -61,7 +61,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var childTs = result["Child.ts"];
+        var childTs = result["child.ts"];
         await Assert.That(childTs).Contains("extends Base");
         await Assert.That(childTs).Contains("super(name)");
     }
@@ -82,7 +82,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var childTs = result["Child.ts"];
+        var childTs = result["child.ts"];
         // Only own params in constructor (base params are declared in parent)
         await Assert.That(childTs).Contains("constructor(readonly age: number)");
         await Assert.That(childTs).Contains("super(name)");
@@ -104,7 +104,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var derivedTs = result["Derived.ts"];
+        var derivedTs = result["derived.ts"];
         // equals should check both x and y
         await Assert.That(derivedTs).Contains("this.x === other.x");
         await Assert.That(derivedTs).Contains("this.y === other.y");
@@ -129,8 +129,8 @@ public class InheritanceTranspileTests
             """
         );
 
-        var extendedTs = result["Models/Extended.ts"];
-        await Assert.That(extendedTs).Contains("from \"../Base\"");
+        var extendedTs = result["models/extended.ts"];
+        await Assert.That(extendedTs).Contains("from \"../base\"");
     }
 
     [Test]
@@ -145,7 +145,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var childTs = result["Child.ts"];
+        var childTs = result["child.ts"];
         // Should not extend a non-transpiled type
         await Assert.That(childTs).DoesNotContain("extends");
     }

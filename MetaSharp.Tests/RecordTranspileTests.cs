@@ -10,8 +10,8 @@ public class RecordTranspileTests
             public readonly record struct Point(int X, int Y);
             """);
 
-        var expected = TranspileHelper.ReadExpected("SimpleRecord.ts");
-        await Assert.That(result["Point.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("simple-record.ts");
+        await Assert.That(result["point.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -27,8 +27,8 @@ public class RecordTranspileTests
             }
             """);
 
-        var expected = TranspileHelper.ReadExpected("RecordWithMethods.ts");
-        await Assert.That(result["Amount.ts"]).IsEqualTo(expected);
+        var expected = TranspileHelper.ReadExpected("record-with-methods.ts");
+        await Assert.That(result["amount.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -43,6 +43,6 @@ public class RecordTranspileTests
             """);
 
         // Instance methods use 'this' now (class-based pattern)
-        await Assert.That(result["Amount.ts"]).Contains("this.value");
+        await Assert.That(result["amount.ts"]).Contains("this.value");
     }
 }

@@ -18,7 +18,7 @@ public class AsyncTranspileTests
             """
         );
 
-        var output = result["Fetcher.ts"];
+        var output = result["fetcher.ts"];
         await Assert.That(output).Contains("static async load(url: string): Promise<string>");
         await Assert.That(output).Contains("return url;");
     }
@@ -39,7 +39,7 @@ public class AsyncTranspileTests
             """
         );
 
-        var output = result["Service.ts"];
+        var output = result["service.ts"];
         await Assert.That(output).Contains("Promise<number>");
     }
 
@@ -59,7 +59,7 @@ public class AsyncTranspileTests
             """
         );
 
-        var output = result["Worker.ts"];
+        var output = result["worker.ts"];
         await Assert.That(output).Contains("Promise<void>");
     }
 
@@ -81,7 +81,7 @@ public class AsyncTranspileTests
             """
         );
 
-        var output = result["Loader.ts"];
+        var output = result["loader.ts"];
         await Assert.That(output).Contains("await source");
     }
 
@@ -101,7 +101,7 @@ public class AsyncTranspileTests
             """
         );
 
-        var output = result["Cache.ts"];
+        var output = result["cache.ts"];
         await Assert.That(output).Contains("Promise<number>");
     }
 
@@ -121,7 +121,7 @@ public class AsyncTranspileTests
             """
         );
 
-        var output = result["Sink.ts"];
+        var output = result["sink.ts"];
         await Assert.That(output).Contains("Promise<void>");
     }
 }
