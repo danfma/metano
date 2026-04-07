@@ -298,6 +298,53 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 
 ## Infraestrutura
 
+### Convenções de Output e Imports
+
+> **Decisões:** kebab-case para arquivos, full-path imports, sem barrels artificiais,
+> subpath imports `#/` para acesso interno.
+
+- [ ] **kebab-case file names**: arquivos gerados em kebab-case (`UserId.cs` → `user-id.ts`)
+- [ ] Atualizar `Printer.Print` / file writing para converter PascalCase → kebab-case
+- [ ] Atualizar `ComputeRelativeImportPath` para gerar paths kebab-case
+- [ ] **Eliminar barrels artificiais**: parar de gerar `index.ts` em pastas pais
+- [ ] **Full-path imports**: cada import referencia o arquivo final diretamente
+- [ ] **Subpath imports `#/`**: configurar `package.json#imports` e `tsconfig.compilerOptions.paths`
+  para `"#/*": "./src/*"`
+- [ ] Imports internos do mesmo módulo usam sempre `#/` (consistência, não relative)
+- [ ] **Geração automática do `package.json` exports**: o transpiler emite `exports` field
+  baseado nos arquivos gerados
+- [ ] **Cache incremental** (necessário para regenerar só o que mudou):
+  - Hash dos arquivos C# de entrada + dependências semânticas
+  - Pular regeração de arquivos cujos hashes não mudaram
+  - Atualizar `package.json#exports` apenas com diffs
+- [ ] **Estrutura de testes**: testes em pasta `test/` espelhando estrutura de `src/`
+  (ex: `src/issues/domain/issue.ts` → `test/issues/domain/issue.test.ts`)
+- [ ] Imports nos testes usam `#/issues/domain/issue` (subpath imports)
+- [ ] Migrar SampleIssueTracker existente para o novo padrão
+
+### Compiler Architecture (recomendações Gemini)
+
+> Análise completa em `specs/compiler-overview.md`. Foco em performance, manutenibilidade e robustez.
+
+#### Performance & Escalabilidade
+- [ ] **Paralelismo na transformação**: TypeTransformer processa tipos em paralelo
+  (`Parallel.ForEach` ou `Dataflow`) — transpilação é embaraçosamente paralela
+- [ ] **Compilação incremental**: cache de hashes (entrada + metadados Roslyn) para
+  pular tipos não modificados — fundamental para projetos grandes e watch mode
+
+#### Manutenibilidade
+- [ ] **Visitor pattern**: refatorar `TypeTransformer` (2000+ linhas) e
+  `ExpressionTransformer` em visitors específicos por tipo de sintaxe — evita "God Object"
+- [ ] **Sistema de plugins/mappers**: usuários registram mappers customizados sem
+  alterar o core (alinhado com "Mapeamentos Declarativos" abaixo)
+
+#### Diagnostics
+- [ ] **Sistema de Diagnostics próprio** (similar ao Roslyn): reportar warnings/errors
+  de transpilação com localização exata no source C#
+- [ ] Substituir `/* unsupported: ... */` silencioso por warnings explícitos no build
+- [ ] Categorias: "feature não suportada", "constructo ambíguo", "tipo não resolvido"
+- [ ] CLI deve falhar (exit != 0) em errors de transpilação (não só de C#)
+
 ### Mapeamentos Declarativos (substituir BclMapper hardcoded)
 
 > Atualmente os mapeamentos BCL→JS estão hardcoded no `BclMapper.cs`.
@@ -333,9 +380,9 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 ### Developer Experience
 
 - [ ] Source maps (.cs → .ts) para debugging
-- [ ] Warnings para constructs C# não suportados (em vez de silent fail)
 - [ ] `--dry-run` para preview do output
 - [ ] `--verbose` para log detalhado da transformação
+- [ ] (Warnings para constructs não suportados está em "Compiler Architecture > Diagnostics")
 
 ### @meta-sharp/runtime
 
