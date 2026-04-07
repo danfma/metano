@@ -35,6 +35,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private SwitchHandler? _switches;
     private SwitchHandler Switches => _switches ??= new SwitchHandler(this, Patterns);
 
+    private LambdaHandler? _lambdas;
+    private LambdaHandler Lambdas => _lambdas ??= new LambdaHandler(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -237,8 +240,8 @@ public sealed class ExpressionTransformer(SemanticModel model)
             IsPatternExpressionSyntax isPattern => Patterns.TransformIsPattern(isPattern),
 
             // Lambda expressions
-            SimpleLambdaExpressionSyntax simpleLambda => TransformSimpleLambda(simpleLambda),
-            ParenthesizedLambdaExpressionSyntax parenLambda => TransformParenthesizedLambda(parenLambda),
+            SimpleLambdaExpressionSyntax simpleLambda => Lambdas.TransformSimpleLambda(simpleLambda),
+            ParenthesizedLambdaExpressionSyntax parenLambda => Lambdas.TransformParenthesizedLambda(parenLambda),
 
             // Assignment: x = value → x = value
             AssignmentExpressionSyntax assign => new TsBinaryExpression(
@@ -712,60 +715,6 @@ public sealed class ExpressionTransformer(SemanticModel model)
         return new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("Array"), "of"),
             elements);
-    }
-
-    // ─── Lambda expressions ─────────────────────────────────
-
-    private TsArrowFunction TransformSimpleLambda(SimpleLambdaExpressionSyntax lambda)
-    {
-        var param = TransformLambdaParameter(lambda.Parameter);
-        var body = TransformLambdaBody(lambda.Body);
-        var isAsync = lambda.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword);
-        return new TsArrowFunction([param], body, isAsync);
-    }
-
-    private TsArrowFunction TransformParenthesizedLambda(ParenthesizedLambdaExpressionSyntax lambda)
-    {
-        var parameters = lambda.ParameterList.Parameters
-            .Select(TransformLambdaParameter)
-            .ToList();
-        var body = TransformLambdaBody(lambda.Body);
-        var isAsync = lambda.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword);
-        return new TsArrowFunction(parameters, body, isAsync);
-    }
-
-    private TsParameter TransformLambdaParameter(ParameterSyntax param)
-    {
-        var name = TypeScriptNaming.ToCamelCase(param.Identifier.Text);
-
-        // Try to resolve the type from the semantic model
-        var symbol = model.GetDeclaredSymbol(param);
-        TsType type;
-        if (symbol is IParameterSymbol paramSymbol)
-        {
-            type = TypeMapper.Map(paramSymbol.Type);
-        }
-        else if (param.Type is not null)
-        {
-            var typeInfo = model.GetTypeInfo(param.Type);
-            type = typeInfo.Type is not null ? TypeMapper.Map(typeInfo.Type) : new TsAnyType();
-        }
-        else
-        {
-            type = new TsAnyType();
-        }
-
-        return new TsParameter(name, type);
-    }
-
-    private IReadOnlyList<TsStatement> TransformLambdaBody(CSharpSyntaxNode body)
-    {
-        return body switch
-        {
-            BlockSyntax block => block.Statements.Select(TransformStatement).ToList(),
-            ExpressionSyntax expr => [new TsReturnStatement(TransformExpression(expr))],
-            _ => [new TsReturnStatement(new TsIdentifier("undefined"))],
-        };
     }
 
     // ─── Emit ───────────────────────────────────────────────
