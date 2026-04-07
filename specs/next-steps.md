@@ -298,47 +298,43 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 
 ## Infraestrutura
 
-### Convenções de Output e Imports
+### ~~Convenções de Output e Imports~~ ✅ (parcial)
 
 > **Decisões:** kebab-case para arquivos, 1 tipo = 1 arquivo, barrels folha por namespace (sem
-> agregadores pai), full-path imports disponíveis como alternativa, subpath imports `#/` para
-> acesso interno, ciclic references não suportadas.
+> agregadores pai), `#/` subpath imports para todos os imports cross-file, ciclic references não
+> suportadas.
 
 #### File names e estrutura
-- [ ] **kebab-case file names**: arquivos gerados em kebab-case (`UserId.cs` → `user-id.ts`)
-- [ ] Atualizar `Printer.Print` / file writing para converter PascalCase → kebab-case
-- [ ] Atualizar `ComputeRelativeImportPath` para gerar paths kebab-case
-- [ ] 1 tipo = 1 arquivo (manter padrão atual)
+- [x] **kebab-case file names**: `UserId.cs` → `user-id.ts`
+- [x] `SymbolHelper.ToKebabCase()` helper
+- [x] `GetRelativePath` e `ComputeRelativeImportPath` geram paths kebab-case
+- [x] 1 tipo = 1 arquivo
 
 #### Barrels (folha apenas)
-- [ ] **Barrel folha**: gerar `index.ts` em cada pasta de namespace, re-exportando os tipos
-  da própria pasta (`issues/domain/index.ts` → `export * from "./issue"; export * from "./comment";`)
-- [ ] **NÃO gerar barrels agregadores pai**: nenhum `issues/index.ts` re-exportando de subpastas
-- [ ] Marcar `"sideEffects": false` no `package.json` gerado para tree-shaking eficaz
-- [ ] Consumer pode importar do barrel (`from "sample/issues/domain"`) OU do arquivo direto
-  (`from "sample/issues/domain/issue"`) — ambos válidos
+- [x] Barrel folha por pasta: re-exporta apenas os tipos da própria pasta
+- [x] NÃO gera barrels agregadores pai
+- [x] Detecta colisão `index.ts` (type chamado `Index`) e pula o barrel
+- [x] StringEnum/InlineWrapper re-exportados como value (não type-only)
+- [ ] Marcar `"sideEffects": false` automaticamente no `package.json` gerado
 
 #### Imports
-- [ ] **Subpath imports `#/`**: configurar `package.json#imports` e `tsconfig.compilerOptions.paths`
-  para `"#/*": "./src/*"`
-- [ ] Imports internos do mesmo módulo usam sempre `#/` (consistência, não relative)
-- [ ] **Geração automática do `package.json#exports`**: o transpiler emite `exports` field
-  baseado nos arquivos e barrels gerados
-
-#### Cache incremental
-- [ ] Hash dos arquivos C# de entrada + dependências semânticas
-- [ ] Pular regeração de arquivos cujos hashes não mudaram
-- [ ] Atualizar `package.json#exports` e barrels apenas com diffs
+- [x] **`#/` subpath imports** para todos os imports cross-file
+- [x] Sample configurado com `package.json#imports` e `tsconfig#paths`
+- [ ] Geração automática do `package.json#exports` baseado nos arquivos gerados
 
 #### Estrutura de testes
-- [ ] Testes em pasta `test/` espelhando estrutura de `src/`
-  (ex: `src/issues/domain/issue.ts` → `test/issues/domain/issue.test.ts`)
-- [ ] Imports nos testes usam `#/issues/domain/issue` (subpath imports)
-- [ ] Migrar SampleIssueTracker existente para o novo padrão
+- [x] Sample: testes em `test/` espelhando estrutura de `src/`
+- [x] Sample: imports nos testes usam `#/`
+- [x] Sample: `bunfig.toml` escopa testes para `./test`
 
-#### Restrições intencionais
-- [ ] **Cyclic references entre tipos: não suportadas**. Detectar no transpiler e emitir
-  warning/error claro com a cadeia de imports problemática.
+#### Estética
+- [x] Ordem dos membros da classe: fields → constructor → getters/setters → methods
+- [x] Linhas em branco entre grupos de membros e top-level statements
+- [x] Imports agrupados sem blank lines, blank line antes da primeira declaração
+
+#### Pendentes
+- [ ] **Cache incremental**: hash de arquivos + dependências semânticas, pular regeração
+- [ ] **Cyclic references**: detectar e emitir warning/error claro com a cadeia problemática
 
 ### Nested Types
 

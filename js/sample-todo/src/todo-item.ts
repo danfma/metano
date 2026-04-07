@@ -1,5 +1,6 @@
 import { HashCode } from "@meta-sharp/runtime";
-import type { Priority } from "./Priority";
+import { Priority } from "#/priority";
+
 export class TodoItem {
   constructor(readonly title: string, readonly completed: boolean = false, readonly priority: Priority = "medium") { }
 

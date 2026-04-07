@@ -1,3 +1,3 @@
-export type { Priority } from "./Priority";
-export { TodoItem } from "./TodoItem";
-export { TodoList } from "./TodoList";
+export { Priority } from "./priority";
+export { TodoItem } from "./todo-item";
+export { TodoList } from "./todo-list";
