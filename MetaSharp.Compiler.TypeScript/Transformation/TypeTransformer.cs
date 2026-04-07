@@ -36,7 +36,7 @@ public sealed class TypeTransformer(Compilation compilation)
         var nested = parent.GetTypeMembers()
             .Where(t => !t.IsImplicitlyDeclared)
             .Where(t => t.DeclaredAccessibility != Accessibility.Internal)
-            .Where(t => SymbolHelper.IsTranspilable(t, _assemblyWideTranspile, _currentAssembly))
+            .Where(t => SymbolHelper.IsTranspilable(t, _context!.AssemblyWideTranspile, _context.CurrentAssembly))
             .ToList();
 
         if (nested.Count == 0) return;
@@ -132,6 +132,17 @@ public sealed class TypeTransformer(Compilation compilation)
         _pathNaming = new PathNaming(
             namespaces.Count > 0 ? PathNaming.FindCommonNamespacePrefix(namespaces) : "");
 
+        _context = new TypeScriptTransformContext(
+            compilation,
+            _currentAssembly,
+            _assemblyWideTranspile,
+            _transpilableTypeMap,
+            _externalImportMap,
+            _bclExportMap,
+            _guardNameToTypeMap,
+            _pathNaming,
+            _diagnostics.Add);
+
         var files = new List<TsSourceFile>();
 
         foreach (var type in transpilableTypes)
@@ -159,6 +170,13 @@ public sealed class TypeTransformer(Compilation compilation)
     /// </summary>
     private Dictionary<string, string> _guardNameToTypeMap = [];
     private PathNaming _pathNaming = new("");
+
+    /// <summary>
+    /// Built once after the setup phase of <see cref="TransformAll"/> completes.
+    /// All per-type transformation code reads its shared state through this context
+    /// instead of touching the private fields directly.
+    /// </summary>
+    private TypeScriptTransformContext? _context;
 
     private IReadOnlyList<INamedTypeSymbol> DiscoverTranspilableTypes()
     {
@@ -264,7 +282,7 @@ public sealed class TypeTransformer(Compilation compilation)
         // Generate type guard function when [GenerateGuard] is present
         if (SymbolHelper.HasGenerateGuard(type))
         {
-            var guard = new TypeGuardBuilder(_transpilableTypeMap).Generate(type);
+            var guard = new TypeGuardBuilder(_context!.TranspilableTypeMap).Generate(type);
             if (guard is not null)
                 statements.Add(guard);
         }
@@ -275,13 +293,17 @@ public sealed class TypeTransformer(Compilation compilation)
 
         // Add imports for referenced transpilable types
         var imports = new ImportCollector(
-            _transpilableTypeMap, _externalImportMap, _bclExportMap, _guardNameToTypeMap, _pathNaming)
+            _context!.TranspilableTypeMap,
+            _context.ExternalImportMap,
+            _context.BclExportMap,
+            _context.GuardNameToTypeMap,
+            _context.PathNaming)
             .Collect(type, statements);
         statements.InsertRange(0, imports);
 
         var ns = PathNaming.GetNamespace(type);
         var tsTypeName = GetTsTypeName(type);
-        var relativePath = _pathNaming.GetRelativePath(ns, tsTypeName);
+        var relativePath = _context!.PathNaming.GetRelativePath(ns, tsTypeName);
 
         return new TsSourceFile(relativePath, statements, ns);
     }
@@ -343,7 +365,7 @@ public sealed class TypeTransformer(Compilation compilation)
         var result = new List<TsType>();
         foreach (var iface in type.Interfaces)
         {
-            if (SymbolHelper.IsTranspilable(iface.OriginalDefinition, _assemblyWideTranspile, _currentAssembly))
+            if (SymbolHelper.IsTranspilable(iface.OriginalDefinition, _context!.AssemblyWideTranspile, _context.CurrentAssembly))
             {
                 var tsName = GetTsTypeName(iface.OriginalDefinition);
                 if (iface.TypeArguments.Length > 0)
@@ -467,7 +489,7 @@ public sealed class TypeTransformer(Compilation compilation)
         TsType extendsType = new TsNamedType("Error");
         if (type.BaseType is not null && IsExceptionType(type.BaseType)
             && type.BaseType.ToDisplayString() != "System.Exception"
-            && SymbolHelper.IsTranspilable(type.BaseType, _assemblyWideTranspile, _currentAssembly))
+            && SymbolHelper.IsTranspilable(type.BaseType, _context!.AssemblyWideTranspile, _context.CurrentAssembly))
         {
             extendsType = TypeMapper.Map(type.BaseType);
         }
@@ -814,7 +836,7 @@ public sealed class TypeTransformer(Compilation compilation)
             && type.BaseType.SpecialType == SpecialType.None
             && type.BaseType.ToDisplayString() != "System.Object"
             && type.BaseType.ToDisplayString() != "System.ValueType"
-            && SymbolHelper.IsTranspilable(type.BaseType.OriginalDefinition, _assemblyWideTranspile, _currentAssembly))
+            && SymbolHelper.IsTranspilable(type.BaseType.OriginalDefinition, _context!.AssemblyWideTranspile, _context.CurrentAssembly))
         {
             extendsType = TypeMapper.Map(type.BaseType);
             baseParams = GetConstructorParams(type.BaseType.OriginalDefinition).ToArray();
@@ -1521,7 +1543,7 @@ public sealed class TypeTransformer(Compilation compilation)
             for (var i = 0; i < paramCount; i++)
             {
                 var check = TypeCheckGenerator.GenerateForParam(
-                    ctor.Parameters[i].Type, i, _assemblyWideTranspile, _currentAssembly);
+                    ctor.Parameters[i].Type, i, _context!.AssemblyWideTranspile, _context.CurrentAssembly);
                 condition = new TsBinaryExpression(condition, "&&", check);
             }
 
@@ -1650,7 +1672,7 @@ public sealed class TypeTransformer(Compilation compilation)
             for (var j = 0; j < paramCount; j++)
             {
                 var check = TypeCheckGenerator.GenerateForParam(
-                    method.Parameters[j].Type, j, _assemblyWideTranspile, _currentAssembly);
+                    method.Parameters[j].Type, j, _context!.AssemblyWideTranspile, _context.CurrentAssembly);
                 condition = new TsBinaryExpression(condition, "&&", check);
             }
 
@@ -1779,11 +1801,6 @@ public sealed class TypeTransformer(Compilation compilation)
 
 
     private ExpressionTransformer CreateExpressionTransformer(SemanticModel semanticModel) =>
-        new(semanticModel)
-        {
-            AssemblyWideTranspile = _assemblyWideTranspile,
-            CurrentAssembly = _currentAssembly,
-            ReportDiagnostic = _diagnostics.Add,
-        };
+        _context!.CreateExpressionTransformer(semanticModel);
 
 }
