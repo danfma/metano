@@ -6,6 +6,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" />
+    <!-- MSBuild.Locator loads these at runtime; exclude from build output to avoid conflicts -->
+    <PackageReference
+      Include="Microsoft.Build.Framework"
+      ExcludeAssets="runtime"
+      PrivateAssets="all"
+    />
   </ItemGroup>
 
   <ItemGroup>
