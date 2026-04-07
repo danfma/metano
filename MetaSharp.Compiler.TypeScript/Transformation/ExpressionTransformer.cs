@@ -62,6 +62,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private CollectionExpressionHandler? _collectionExpressions;
     private CollectionExpressionHandler CollectionExpressions => _collectionExpressions ??= new CollectionExpressionHandler(this);
 
+    private OperatorHandler? _operators;
+    private OperatorHandler Operators => _operators ??= new OperatorHandler(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -195,19 +198,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             LiteralExpressionSyntax lit => LiteralHandler.Transform(lit),
             IdentifierNameSyntax id => Identifiers.Transform(id),
 
-            // x is Type (old-style, before pattern matching) → x instanceof Type
-            BinaryExpressionSyntax { OperatorToken.Text: "is" } isExpr =>
-                new TsBinaryExpression(
-                    TransformExpression(isExpr.Left),
-                    "instanceof",
-                    new TsIdentifier(isExpr.Right.ToString()) // keep PascalCase for type name
-                ),
-
-            BinaryExpressionSyntax bin => new TsBinaryExpression(
-                TransformExpression(bin.Left),
-                MapBinaryOperator(bin.OperatorToken.Text),
-                TransformExpression(bin.Right)
-            ),
+            BinaryExpressionSyntax bin => Operators.TransformBinary(bin),
 
             MemberAccessExpressionSyntax member => MemberAccess.Transform(member),
 
@@ -250,10 +241,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             // this → this
             ThisExpressionSyntax => new TsIdentifier("this"),
 
-            PrefixUnaryExpressionSyntax prefix => new TsUnaryExpression(
-                prefix.OperatorToken.Text,
-                TransformExpression(prefix.Operand)
-            ),
+            PrefixUnaryExpressionSyntax prefix => Operators.TransformPrefixUnary(prefix),
 
             // x?.Prop → x?.prop
             ConditionalAccessExpressionSyntax condAccess =>
@@ -267,12 +255,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             SimpleLambdaExpressionSyntax simpleLambda => Lambdas.TransformSimpleLambda(simpleLambda),
             ParenthesizedLambdaExpressionSyntax parenLambda => Lambdas.TransformParenthesizedLambda(parenLambda),
 
-            // Assignment: x = value → x = value
-            AssignmentExpressionSyntax assign => new TsBinaryExpression(
-                TransformExpression(assign.Left),
-                MapAssignmentOperator(assign.OperatorToken.Text),
-                TransformExpression(assign.Right)
-            ),
+            AssignmentExpressionSyntax assign => Operators.TransformAssignment(assign),
 
             // Element access: arr[index] → arr[index]
             ElementAccessExpressionSyntax elemAccess => new TsElementAccess(
@@ -384,21 +367,4 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
         return result.Take(lastProvided + 1).ToList();
     }
-
-
-
-    private static string MapBinaryOperator(string op) => op switch
-    {
-        "==" => "===",
-        "!=" => "!==",
-        _ => op
-    };
-
-    private static string MapAssignmentOperator(string op) => op switch
-    {
-        "??=" => "??=",
-        _ => op
-    };
-
-
 }
