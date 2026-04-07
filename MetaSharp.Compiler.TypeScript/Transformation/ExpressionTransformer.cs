@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.Compiler.Diagnostics;
 using MetaSharp.TypeScript;
 using MetaSharp.TypeScript.AST;
@@ -257,7 +258,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
         if (symbol is INamedTypeSymbol or ITypeSymbol)
             return new TsIdentifier(id.Identifier.Text);
 
-        var name = SymbolHelper.ToCamelCase(id.Identifier.Text);
+        var name = TypeScriptNaming.ToCamelCase(id.Identifier.Text);
 
         if (symbol is not null && symbol.ContainingType is not null)
         {
@@ -315,7 +316,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
         // Enum members and constants → keep PascalCase
         var memberName = symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum }
             ? member.Name.Identifier.Text
-            : SymbolHelper.ToCamelCase(member.Name.Identifier.Text);
+            : TypeScriptNaming.ToCamelCase(member.Name.Identifier.Text);
 
         return new TsPropertyAccess(obj, memberName);
     }
@@ -327,7 +328,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
         if (symbol is IMethodSymbol methodSymbol)
         {
             // [Emit] — inline JS expression with $0, $1 placeholders
-            var emit = SymbolHelper.GetEmit(methodSymbol);
+            var emit = TypeScriptNaming.GetEmit(methodSymbol);
             if (emit is not null)
             {
                 var emitArgs = invocation.ArgumentList.Arguments
@@ -556,7 +557,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
         {
             if (assignment is AssignmentExpressionSyntax assign)
             {
-                var name = SymbolHelper.ToCamelCase(assign.Left.ToString());
+                var name = TypeScriptNaming.ToCamelCase(assign.Left.ToString());
                 var value = TransformExpression(assign.Right);
                 properties.Add(new TsObjectProperty(name, value));
             }
@@ -609,7 +610,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             MemberBindingExpressionSyntax memberBinding =>
                 new TsPropertyAccess(
                     new TsIdentifier(GetExpressionText(obj) + "?"),
-                    SymbolHelper.ToCamelCase(memberBinding.Name.Identifier.Text)
+                    TypeScriptNaming.ToCamelCase(memberBinding.Name.Identifier.Text)
                 ),
 
             // x?.Method() → x?.method()
@@ -617,7 +618,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
                 new TsCallExpression(
                     new TsPropertyAccess(
                         new TsIdentifier(GetExpressionText(obj) + "?"),
-                        SymbolHelper.ToCamelCase(binding.Name.Identifier.Text)
+                        TypeScriptNaming.ToCamelCase(binding.Name.Identifier.Text)
                     ),
                     invocation.ArgumentList.Arguments
                         .Select(a => TransformExpression(a.Expression))
@@ -801,7 +802,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
         foreach (var subpattern in recursive.PropertyPatternClause!.Subpatterns)
         {
-            var propName = SymbolHelper.ToCamelCase(subpattern.NameColon!.Name.Identifier.Text);
+            var propName = TypeScriptNaming.ToCamelCase(subpattern.NameColon!.Name.Identifier.Text);
             var propAccess = new TsPropertyAccess(expr, propName);
             var condition = TransformPatternToCondition(propAccess, subpattern.Pattern);
 
@@ -897,7 +898,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
     private TsParameter TransformLambdaParameter(ParameterSyntax param)
     {
-        var name = SymbolHelper.ToCamelCase(param.Identifier.Text);
+        var name = TypeScriptNaming.ToCamelCase(param.Identifier.Text);
 
         // Try to resolve the type from the semantic model
         var symbol = model.GetDeclaredSymbol(param);

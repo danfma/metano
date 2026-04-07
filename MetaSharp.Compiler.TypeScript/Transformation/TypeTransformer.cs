@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.Compiler.Diagnostics;
 using MetaSharp.TypeScript;
 using MetaSharp.TypeScript.AST;
@@ -298,17 +299,17 @@ public sealed class TypeTransformer(Compilation compilation)
             switch (member)
             {
                 case IPropertySymbol prop:
-                    var propName = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+                    var propName = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
                     var propType = TypeMapper.Map(prop.Type);
                     var isReadonly = prop.SetMethod is null || prop.SetMethod.IsInitOnly;
                     properties.Add(new TsProperty(propName, propType, isReadonly));
                     break;
 
                 case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary:
-                    var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+                    var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
                     var returnType = TypeMapper.Map(method.ReturnType);
                     var parameters = method.Parameters
-                        .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+                        .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
                         .ToList();
                     var methodTypeParams = ExtractMethodTypeParameters(method);
                     interfaceMethods.Add(new TsInterfaceMethod(name, parameters, returnType, methodTypeParams));
@@ -416,7 +417,7 @@ public sealed class TypeTransformer(Compilation compilation)
             foreach (var p in ctor.Parameters)
             {
                 ctorParams.Add(new TsConstructorParam(
-                    SymbolHelper.ToCamelCase(p.Name),
+                    TypeScriptNaming.ToCamelCase(p.Name),
                     TypeMapper.Map(p.Type),
                     Accessibility: TsAccessibility.None
                 ));
@@ -532,7 +533,7 @@ public sealed class TypeTransformer(Compilation compilation)
             if (method.IsImplicitlyDeclared) continue;
             if (method.DeclaredAccessibility != Accessibility.Public) continue;
             if (SymbolHelper.HasIgnore(method)) continue;
-            if (SymbolHelper.HasEmit(method)) continue;
+            if (TypeScriptNaming.HasEmit(method)) continue;
 
             var methodSyntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
             if (methodSyntax is null) continue;
@@ -542,10 +543,10 @@ public sealed class TypeTransformer(Compilation compilation)
             var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody,
                 isVoid: method.ReturnsVoid);
             var parameters = method.Parameters
-                .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+                .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
                 .ToList();
 
-            var methodName = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+            var methodName = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
             var returnType = TypeMapper.Map(method.ReturnType);
             functions.Add(new TsFunction(methodName, parameters, returnType, body,
                 Exported: true, Async: method.IsAsync));
@@ -666,7 +667,7 @@ public sealed class TypeTransformer(Compilation compilation)
         var receiverParamSyntax = paramList.Parameters[0];
         var semanticModel = compilation.GetSemanticModel(extensionBlock.SyntaxTree);
 
-        var receiverName = SymbolHelper.ToCamelCase(receiverParamSyntax.Identifier.Text);
+        var receiverName = TypeScriptNaming.ToCamelCase(receiverParamSyntax.Identifier.Text);
         var receiverTypeSymbol = receiverParamSyntax.Type is null
             ? null
             : semanticModel.GetTypeInfo(receiverParamSyntax.Type).Type;
@@ -687,11 +688,11 @@ public sealed class TypeTransformer(Compilation compilation)
                     if (methodSymbol.DeclaredAccessibility != Accessibility.Public) continue;
 
                     var name = SymbolHelper.GetNameOverride(methodSymbol)
-                        ?? SymbolHelper.ToCamelCase(methodSymbol.Name);
+                        ?? TypeScriptNaming.ToCamelCase(methodSymbol.Name);
                     var returnType = TypeMapper.Map(methodSymbol.ReturnType);
                     var parameters = new List<TsParameter> { receiverParam };
                     parameters.AddRange(methodSymbol.Parameters.Select(p =>
-                        new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type))));
+                        new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type))));
 
                     var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody,
                         isVoid: methodSymbol.ReturnsVoid);
@@ -705,7 +706,7 @@ public sealed class TypeTransformer(Compilation compilation)
                     if (propSymbol.DeclaredAccessibility != Accessibility.Public) continue;
 
                     var name = SymbolHelper.GetNameOverride(propSymbol)
-                        ?? SymbolHelper.ToCamelCase(propSymbol.Name);
+                        ?? TypeScriptNaming.ToCamelCase(propSymbol.Name);
                     var returnType = TypeMapper.Map(propSymbol.Type);
                     var parameters = new List<TsParameter> { receiverParam };
 
@@ -733,12 +734,12 @@ public sealed class TypeTransformer(Compilation compilation)
         if (prop.DeclaredAccessibility != Accessibility.Public) return null;
         if (prop.IsImplicitlyDeclared) return null;
 
-        var name = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+        var name = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
         var returnType = TypeMapper.Map(prop.Type);
 
         // The receiver parameter
         var parameters = prop.Parameters
-            .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
             .ToList();
 
         // Get the getter body
@@ -764,14 +765,14 @@ public sealed class TypeTransformer(Compilation compilation)
     {
         if (method.DeclaredAccessibility != Accessibility.Public) return null;
         if (method.IsImplicitlyDeclared) return null;
-        if (SymbolHelper.HasEmit(method)) return null;
+        if (TypeScriptNaming.HasEmit(method)) return null;
         // Skip property accessors — extension properties are handled via their associated property
         if (method.AssociatedSymbol is IPropertySymbol) return null;
 
         var syntaxNode = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
         if (syntaxNode is null) return null;
 
-        var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+        var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
         var hasYield = syntaxNode.DescendantNodes().OfType<YieldStatementSyntax>().Any();
         var returnType = hasYield
             ? TypeMapper.MapForGeneratorReturn(method.ReturnType)
@@ -779,7 +780,7 @@ public sealed class TypeTransformer(Compilation compilation)
         var isAsync = hasYield ? false : method.IsAsync;
 
         var parameters = method.Parameters
-            .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
             .ToList();
 
         var semanticModel = compilation.GetSemanticModel(syntaxNode.SyntaxTree);
@@ -896,7 +897,7 @@ public sealed class TypeTransformer(Compilation compilation)
                 case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary
                     && !method.IsImplicitlyDeclared
                     && method.DeclaredAccessibility is not (Accessibility.Internal or Accessibility.NotApplicable)
-                    && !SymbolHelper.HasEmit(method)
+                    && !TypeScriptNaming.HasEmit(method)
                     && method.AssociatedSymbol is not IPropertySymbol:
                     ordinaryMethods.Add(method);
                     break;
@@ -963,7 +964,7 @@ public sealed class TypeTransformer(Compilation compilation)
             if (SymbolHelper.HasIgnore(member)) continue;
             if (!primaryCtorParamDefaults.ContainsKey(member.Name)) continue;
 
-            var name = SymbolHelper.GetNameOverride(member) ?? SymbolHelper.ToCamelCase(member.Name);
+            var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
             var tsType = TypeMapper.Map(member.Type);
             var isReadonly = member.SetMethod is null || member.SetMethod.IsInitOnly;
             var accessibility = MapAccessibility(member.DeclaredAccessibility);
@@ -991,7 +992,7 @@ public sealed class TypeTransformer(Compilation compilation)
             if (member.IsOverride) continue;
             if (!primaryCtorParamDefaults.ContainsKey(member.Name)) continue;
 
-            var name = SymbolHelper.GetNameOverride(member) ?? SymbolHelper.ToCamelCase(member.Name);
+            var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
             var tsType = TypeMapper.Map(member.Type);
             var isReadonly = member.SetMethod is null || member.SetMethod.IsInitOnly;
             var accessibility = MapAccessibility(member.DeclaredAccessibility);
@@ -1081,7 +1082,7 @@ public sealed class TypeTransformer(Compilation compilation)
         // Skip backing fields for auto-properties (compiler-generated)
         if (field.AssociatedSymbol is not null) return null;
 
-        var name = SymbolHelper.GetNameOverride(field) ?? SymbolHelper.ToCamelCase(field.Name);
+        var name = SymbolHelper.GetNameOverride(field) ?? TypeScriptNaming.ToCamelCase(field.Name);
         var tsType = TypeMapper.Map(field.Type);
         var isReadonly = field.IsReadOnly;
         var accessibility = MapAccessibility(field.DeclaredAccessibility);
@@ -1095,7 +1096,7 @@ public sealed class TypeTransformer(Compilation compilation)
             // (the assignment is moved to the constructor body)
             var isCapuredInit = varDecl.Initializer.Value is IdentifierNameSyntax initId
                 && capturedParamNames is not null
-                && capturedParamNames.Contains(SymbolHelper.ToCamelCase(initId.Identifier.Text));
+                && capturedParamNames.Contains(TypeScriptNaming.ToCamelCase(initId.Identifier.Text));
 
             if (!isCapuredInit)
             {
@@ -1110,7 +1111,7 @@ public sealed class TypeTransformer(Compilation compilation)
 
     private static bool IsConstructorParam(IPropertySymbol prop, IReadOnlyList<TsConstructorParam> ctorParams)
     {
-        var name = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+        var name = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
         return ctorParams.Any(p => p.Name == name);
     }
 
@@ -1125,7 +1126,7 @@ public sealed class TypeTransformer(Compilation compilation)
         if (prop.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) return [];
         if (SymbolHelper.HasIgnore(prop)) return [];
 
-        var name = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+        var name = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
         var tsType = TypeMapper.Map(prop.Type);
         var accessibility = MapAccessibility(prop.DeclaredAccessibility);
         var results = new List<TsClassMember>();
@@ -1202,7 +1203,7 @@ public sealed class TypeTransformer(Compilation compilation)
         if (method.IsImplicitlyDeclared)
             return null;
         // [Emit] methods are consumed inline at call sites, not generated as methods
-        if (SymbolHelper.HasEmit(method))
+        if (TypeScriptNaming.HasEmit(method))
             return null;
         // Skip compiler-generated or internal/unsupported access levels
         if (method.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable)
@@ -1214,7 +1215,7 @@ public sealed class TypeTransformer(Compilation compilation)
         if (syntax is null)
             return null;
 
-        var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+        var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
         var hasYield = syntax.DescendantNodes().OfType<YieldStatementSyntax>().Any();
         var returnType = hasYield
             ? TypeMapper.MapForGeneratorReturn(method.ReturnType)
@@ -1223,7 +1224,7 @@ public sealed class TypeTransformer(Compilation compilation)
 
         var parameters = method
             .Parameters.Select(p => new TsParameter(
-                SymbolHelper.ToCamelCase(p.Name),
+                TypeScriptNaming.ToCamelCase(p.Name),
                 TypeMapper.Map(p.Type)
             ))
             .ToList();
@@ -1321,7 +1322,7 @@ public sealed class TypeTransformer(Compilation compilation)
 
         foreach (var param in primaryCtor.Parameters)
         {
-            var camelName = SymbolHelper.ToCamelCase(param.Name);
+            var camelName = TypeScriptNaming.ToCamelCase(param.Name);
             if (existingNames.Contains(camelName)) continue;
 
             // Check if this param is referenced by any field initializer
@@ -1357,7 +1358,7 @@ public sealed class TypeTransformer(Compilation compilation)
             if (syntax is VariableDeclaratorSyntax { Initializer.Value: IdentifierNameSyntax id }
                 && string.Equals(id.Identifier.Text, paramName, StringComparison.OrdinalIgnoreCase))
             {
-                return SymbolHelper.ToCamelCase(field.Name);
+                return TypeScriptNaming.ToCamelCase(field.Name);
             }
         }
         return null;
@@ -1397,7 +1398,7 @@ public sealed class TypeTransformer(Compilation compilation)
 
         var parameters = method
             .Parameters.Select(p => new TsParameter(
-                SymbolHelper.ToCamelCase(p.Name),
+                TypeScriptNaming.ToCamelCase(p.Name),
                 TypeMapper.Map(p.Type)
             ))
             .ToList();
@@ -1603,7 +1604,7 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             var @params = ctor.Parameters
                 .Select(p => new TsConstructorParam(
-                    SymbolHelper.ToCamelCase(p.Name),
+                    TypeScriptNaming.ToCamelCase(p.Name),
                     TypeMapper.Map(p.Type)))
                 .ToList();
             return new TsConstructorOverload(@params);
@@ -1693,7 +1694,7 @@ public sealed class TypeTransformer(Compilation compilation)
     {
         var sorted = methods.OrderByDescending(m => m.Parameters.Length).ToList();
         var firstName = sorted[0];
-        var name = SymbolHelper.GetNameOverride(firstName) ?? SymbolHelper.ToCamelCase(firstName.Name);
+        var name = SymbolHelper.GetNameOverride(firstName) ?? TypeScriptNaming.ToCamelCase(firstName.Name);
         var isStatic = firstName.IsStatic;
         var isAsync = sorted.Any(m => m.IsAsync);
         var accessibility = MapAccessibility(firstName.DeclaredAccessibility);
@@ -1718,7 +1719,7 @@ public sealed class TypeTransformer(Compilation compilation)
         var overloads = sorted.Select(m =>
         {
             var @params = m.Parameters
-                .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+                .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
                 .ToList();
             return new TsMethodOverload(@params, TypeMapper.Map(m.ReturnType));
         }).ToList();
@@ -1820,7 +1821,7 @@ public sealed class TypeTransformer(Compilation compilation)
         if (!method.IsStatic) exprTransformer.SelfParameterName = "this";
 
         var parameters = method.Parameters
-            .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
             .ToList();
         var returnType = TypeMapper.Map(method.ReturnType);
         var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody, isVoid: method.ReturnsVoid);
@@ -2124,7 +2125,7 @@ public sealed class TypeTransformer(Compilation compilation)
                 if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
                 if (SymbolHelper.HasIgnore(member)) continue;
 
-                var name = SymbolHelper.GetNameOverride(member) ?? SymbolHelper.ToCamelCase(member.Name);
+                var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
                 var tsType = TypeMapper.Map(member.Type);
 
                 // Avoid duplicates (from overrides)
