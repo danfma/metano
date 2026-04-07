@@ -12,7 +12,7 @@ namespace MetaSharp.Transformation;
 /// Several special cases short-circuit the default <c>new Type(args)</c> output:
 /// <list type="bullet">
 ///   <item><c>new UserId(v)</c> on an <c>[InlineWrapper]</c> struct → <c>UserId.create(v)</c></item>
-///   <item><c>new SomeRecord(...)</c> → <c>new SomeRecord(...)</c> with named-argument resolution via <see cref="ExpressionTransformer.ResolveArguments"/></item>
+///   <item><c>new SomeRecord(...)</c> → <c>new SomeRecord(...)</c> with named-argument resolution via <see cref="ArgumentResolver"/></item>
 ///   <item><c>new SomeException(msg)</c> → <c>new SomeException(msg)</c> if transpilable, otherwise <c>new Error(msg)</c></item>
 ///   <item><c>record with { X = expr }</c> → <c>source.with({ x: expr })</c> (calls <see cref="RecordSynthesizer.GenerateWith"/>'s output)</item>
 /// </list>
@@ -33,7 +33,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
         // new UserId(v) -> UserId.create(v)
         if (type is INamedTypeSymbol inlineWrapperType && SymbolHelper.HasInlineWrapper(inlineWrapperType))
         {
-            var args = _parent.ResolveArguments(creation.ArgumentList, creation);
+            var args = _parent.ArgumentResolver.Resolve(creation.ArgumentList, creation);
             var tsTypeName = SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
             return new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
@@ -48,7 +48,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
         // Exception → new ErrorSubclass(...) or new Error(...)
         if (IsExceptionType(type))
         {
-            var args = _parent.ResolveArguments(creation.ArgumentList, creation);
+            var args = _parent.ArgumentResolver.Resolve(creation.ArgumentList, creation);
             var errorName = type is INamedTypeSymbol named
                 && SymbolHelper.IsTranspilable(named, _parent.AssemblyWideTranspile, _parent.CurrentAssembly)
                 ? named.Name
@@ -57,7 +57,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
         }
 
         // Default: new Type(args) — resolve named arguments to positional
-        var ctorArgs = _parent.ResolveArguments(creation.ArgumentList, creation);
+        var ctorArgs = _parent.ArgumentResolver.Resolve(creation.ArgumentList, creation);
         var typeName = type is INamedTypeSymbol nt ? BuildQualifiedTypeName(nt) : (type?.Name ?? "Object");
         return new TsNewExpression(new TsIdentifier(typeName), ctorArgs);
     }
@@ -122,7 +122,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             var parentExpr = argumentList.Parent as ExpressionSyntax;
             if (parentExpr is not null)
             {
-                var args = _parent.ResolveArguments(argumentList, parentExpr);
+                var args = _parent.ArgumentResolver.Resolve(argumentList, parentExpr);
                 return new TsNewExpression(new TsIdentifier(recordType.Name), args);
             }
         }

@@ -68,6 +68,12 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private StatementHandler? _statements;
     private StatementHandler Statements => _statements ??= new StatementHandler(this);
 
+    private ThrowExpressionHandler? _throwExpressions;
+    private ThrowExpressionHandler ThrowExpressions => _throwExpressions ??= new ThrowExpressionHandler(this);
+
+    private ArgumentResolver? _argumentResolver;
+    internal ArgumentResolver ArgumentResolver => _argumentResolver ??= new ArgumentResolver(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -124,15 +130,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
             WithExpressionSyntax withExpr => ObjectCreation.TransformWithExpression(withExpr),
 
-            ThrowExpressionSyntax throwExpr =>
-            // In TS, throw is a statement, but we can wrap it in an IIFE for expression context
-            new TsCallExpression(
-                new TsArrowFunction(
-                    [],
-                    [new TsThrowStatement(TransformExpression(throwExpr.Expression))]
-                ),
-                []
-            ),
+            ThrowExpressionSyntax throwExpr => ThrowExpressions.Transform(throwExpr),
 
             AwaitExpressionSyntax awaitExpr => new TsAwaitExpression(
                 TransformExpression(awaitExpr.Expression)
@@ -173,98 +171,4 @@ public sealed class ExpressionTransformer(SemanticModel model)
         };
     }
 
-
-    /// <summary>
-    /// Resolves arguments (including named arguments) to positional order,
-    /// filling in default values for skipped parameters.
-    /// </summary>
-    internal List<TsExpression> ResolveArguments(ArgumentListSyntax? argumentList, ExpressionSyntax callSite)
-    {
-        if (argumentList is null || argumentList.Arguments.Count == 0)
-            return [];
-
-        // Check if any argument is named
-        var hasNamedArgs = argumentList.Arguments.Any(a => a.NameColon is not null);
-        if (!hasNamedArgs)
-        {
-            // All positional — simple case
-            return argumentList.Arguments.Select(a => TransformExpression(a.Expression)).ToList();
-        }
-
-        // Resolve the constructor/method symbol to get parameter order
-        var symbolInfo = model.GetSymbolInfo(callSite);
-        if (symbolInfo.Symbol is not IMethodSymbol methodSymbol)
-        {
-            // Fallback: just transform as-is
-            return argumentList.Arguments.Select(a => TransformExpression(a.Expression)).ToList();
-        }
-
-        var parameters = methodSymbol.Parameters;
-        var result = new TsExpression[parameters.Length];
-
-        // Fill defaults
-        for (var i = 0; i < parameters.Length; i++)
-        {
-            if (parameters[i].HasExplicitDefaultValue)
-            {
-                result[i] = parameters[i].ExplicitDefaultValue switch
-                {
-                    null => new TsLiteral("null"),
-                    bool b => new TsLiteral(b ? "true" : "false"),
-                    string s => new TsStringLiteral(s),
-                    int n => new TsLiteral(n.ToString()),
-                    _ => new TsLiteral(parameters[i].ExplicitDefaultValue?.ToString() ?? "undefined")
-                };
-            }
-            else
-            {
-                result[i] = new TsIdentifier("undefined");
-            }
-        }
-
-        // Place positional arguments first
-        var positionalIndex = 0;
-        foreach (var arg in argumentList.Arguments)
-        {
-            if (arg.NameColon is not null)
-            {
-                // Named argument — find the parameter index
-                var paramName = arg.NameColon.Name.Identifier.Text;
-                for (var i = 0; i < parameters.Length; i++)
-                {
-                    if (parameters[i].Name == paramName)
-                    {
-                        result[i] = TransformExpression(arg.Expression);
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                // Positional
-                result[positionalIndex] = TransformExpression(arg.Expression);
-                positionalIndex++;
-            }
-        }
-
-        // Trim trailing defaults
-        var lastNonDefault = result.Length - 1;
-        while (lastNonDefault >= 0 && result[lastNonDefault] is TsLiteral or TsIdentifier { Name: "undefined" })
-            lastNonDefault--;
-
-        // Actually, we need to keep all args up to the last explicitly provided one
-        // Find the last index that was explicitly provided
-        var lastProvided = -1;
-        for (var i = 0; i < parameters.Length; i++)
-        {
-            if (argumentList.Arguments.Any(a =>
-                (a.NameColon is not null && a.NameColon.Name.Identifier.Text == parameters[i].Name)
-                || (a.NameColon is null && argumentList.Arguments.IndexOf(a) == i)))
-            {
-                lastProvided = i;
-            }
-        }
-
-        return result.Take(lastProvided + 1).ToList();
-    }
 }
