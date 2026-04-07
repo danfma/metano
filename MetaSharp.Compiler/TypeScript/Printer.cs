@@ -184,10 +184,24 @@ public sealed class Printer(string indent = "  ")
         _sb.Write(ns.Name);
         _sb.WriteBlock(() =>
         {
-            foreach (var func in ns.Functions)
+            // Functions (used by InlineWrapper companions)
+            for (var i = 0; i < ns.Functions.Count; i++)
             {
-                PrintFunction(func);
+                if (i > 0) _sb.WriteLn();
+                PrintFunction(ns.Functions[i]);
                 _sb.WriteLn();
+            }
+
+            // Arbitrary nested members (used by nested types)
+            if (ns.Members is not null)
+            {
+                var startIdx = ns.Functions.Count;
+                for (var i = 0; i < ns.Members.Count; i++)
+                {
+                    if (startIdx + i > 0) _sb.WriteLn();
+                    PrintTopLevel(ns.Members[i]);
+                    _sb.WriteLn();
+                }
             }
         });
     }

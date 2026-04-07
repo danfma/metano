@@ -382,7 +382,24 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
         // Default: new Type(args) — resolve named arguments to positional
         var ctorArgs = ResolveArguments(creation.ArgumentList, creation);
-        return new TsNewExpression(new TsIdentifier(type?.Name ?? "Object"), ctorArgs);
+        var typeName = type is INamedTypeSymbol nt ? BuildQualifiedTypeName(nt) : (type?.Name ?? "Object");
+        return new TsNewExpression(new TsIdentifier(typeName), ctorArgs);
+    }
+
+    /// <summary>
+    /// Builds the TS-side qualified name for a type. Nested types become `Outer.Inner`.
+    /// </summary>
+    private static string BuildQualifiedTypeName(INamedTypeSymbol type)
+    {
+        if (type.ContainingType is null) return type.Name;
+        var parts = new List<string> { type.Name };
+        var current = type.ContainingType;
+        while (current is not null)
+        {
+            parts.Insert(0, current.Name);
+            current = current.ContainingType;
+        }
+        return string.Join(".", parts);
     }
 
     /// <summary>

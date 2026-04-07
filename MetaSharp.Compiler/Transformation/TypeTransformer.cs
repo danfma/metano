@@ -26,6 +26,45 @@ public sealed class TypeTransformer(Compilation compilation)
     }
 
     /// <summary>
+    /// Processes nested types of <paramref name="parent"/> and adds them as a companion
+    /// namespace declaration to <paramref name="statements"/>. This leverages TS declaration
+    /// merging so that `Outer.Inner` access syntax works just like in C#.
+    /// </summary>
+    private void TransformNestedTypes(INamedTypeSymbol parent, List<TsTopLevel> statements)
+    {
+        var nested = parent.GetTypeMembers()
+            .Where(t => !t.IsImplicitlyDeclared)
+            .Where(t => t.DeclaredAccessibility != Accessibility.Internal)
+            .Where(t => SymbolHelper.IsTranspilable(t, _assemblyWideTranspile, _currentAssembly))
+            .ToList();
+
+        if (nested.Count == 0) return;
+
+        var members = new List<TsTopLevel>();
+        foreach (var nestedType in nested)
+        {
+            var nestedFile = TransformType(nestedType);
+            if (nestedFile is null) continue;
+
+            // Skip imports — they're already handled by the parent file's CollectImports.
+            // Recursively flatten nested types of nested types is handled by the recursion.
+            foreach (var stmt in nestedFile.Statements)
+            {
+                if (stmt is TsImport or TsReExport) continue;
+                members.Add(stmt);
+            }
+        }
+
+        if (members.Count > 0)
+        {
+            statements.Add(new TsNamespaceDeclaration(
+                GetTsTypeName(parent),
+                Functions: [],
+                Members: members));
+        }
+    }
+
+    /// <summary>
     /// Discovers all types with [Transpile] and transforms each into a TsSourceFile.
     /// Generates namespace-based folder structure and index.ts barrel files.
     /// </summary>
@@ -122,6 +161,8 @@ public sealed class TypeTransformer(Compilation compilation)
     private IReadOnlyList<INamedTypeSymbol> DiscoverTranspilableTypes()
     {
         var types = new List<INamedTypeSymbol>();
+        var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
         foreach (var tree in compilation.SyntaxTrees)
         {
             var model = compilation.GetSemanticModel(tree);
@@ -130,8 +171,12 @@ public sealed class TypeTransformer(Compilation compilation)
             foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
             {
                 var symbol = model.GetDeclaredSymbol(typeDecl);
-                if (symbol is INamedTypeSymbol namedType && SymbolHelper.IsTranspilable(namedType, _assemblyWideTranspile, _currentAssembly))
-                    types.Add(namedType);
+                if (symbol is not INamedTypeSymbol namedType) continue;
+                // Skip nested types — they're processed by their containing type as companion namespaces
+                if (namedType.ContainingType is not null) continue;
+                if (!SymbolHelper.IsTranspilable(namedType, _assemblyWideTranspile, _currentAssembly)) continue;
+                if (!seen.Add(namedType)) continue;
+                types.Add(namedType);
             }
         }
 
@@ -221,6 +266,10 @@ public sealed class TypeTransformer(Compilation compilation)
             if (guard is not null)
                 statements.Add(guard);
         }
+
+        // Process nested types — emit a companion namespace with the nested members.
+        // TypeScript declaration merging makes `Outer.Inner` accessible just like in C#.
+        TransformNestedTypes(type, statements);
 
         // Add imports for referenced transpilable types
         var imports = CollectImports(type, statements);
@@ -2414,6 +2463,13 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             case TsNamedType named:
                 names.Add(named.Name);
+                // For nested types like "Outer.Inner", also add the root name "Outer"
+                // (the import is for the outer type, accessed via declaration merging).
+                if (named.Name.Contains('.'))
+                {
+                    var rootName = named.Name[..named.Name.IndexOf('.')];
+                    names.Add(rootName);
+                }
                 if (named.TypeArguments is not null)
                     foreach (var arg in named.TypeArguments)
                         CollectFromType(arg, names);
@@ -2474,6 +2530,13 @@ public sealed class TypeTransformer(Compilation compilation)
                 {
                     names.Add(id.Name);
                     valueNames.Add(id.Name); // used as value (constructor call)
+                    // For nested types like "Outer.Inner", also mark the root as value
+                    if (id.Name.Contains('.'))
+                    {
+                        var rootName = id.Name[..id.Name.IndexOf('.')];
+                        names.Add(rootName);
+                        valueNames.Add(rootName);
+                    }
                 }
                 foreach (var arg in newExpr.Arguments)
                     CollectFromExpression(arg, names, valueNames);

@@ -134,11 +134,11 @@ public static class TypeMapper
             if (named.TypeArguments.Length > 0)
             {
                 var args = named.TypeArguments.Select(Map).ToList();
-                return new TsNamedType(named.Name, args);
+                return new TsNamedType(BuildQualifiedName(named), args);
             }
 
             // Non-generic named type
-            return new TsNamedType(named.Name);
+            return new TsNamedType(BuildQualifiedName(named));
         }
 
         // Type parameters (T, K, V) — reference to a declared type parameter
@@ -221,6 +221,24 @@ public static class TypeMapper
         var fullName = named.ToDisplayString();
         return fullName is "System.DateTime" or "System.DateTimeOffset"
             or "System.DateOnly" or "System.TimeOnly" or "System.TimeSpan";
+    }
+
+    /// <summary>
+    /// Builds the TS-side qualified name for a type. Nested types are dotted: `Outer.Inner`.
+    /// Top-level types just return their own name.
+    /// </summary>
+    private static string BuildQualifiedName(INamedTypeSymbol type)
+    {
+        if (type.ContainingType is null)
+            return type.Name;
+        var parts = new List<string> { type.Name };
+        var current = type.ContainingType;
+        while (current is not null)
+        {
+            parts.Insert(0, current.Name);
+            current = current.ContainingType;
+        }
+        return string.Join(".", parts);
     }
 
     private static bool IsCollectionLike(INamedTypeSymbol type)
