@@ -261,7 +261,7 @@ public sealed class TypeTransformer(Compilation compilation)
         }
         else if (IsExceptionType(type))
         {
-            TransformException(type, statements);
+            new ExceptionTransformer(_context!).Transform(type, statements);
         }
         else if ((SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic)
         {
@@ -341,79 +341,6 @@ public sealed class TypeTransformer(Compilation compilation)
         return result;
     }
 
-
-    // ─── Exception (class extending Error) ───────────────────
-
-    private void TransformException(INamedTypeSymbol type, List<TsTopLevel> statements)
-    {
-        // Find the primary constructor or the constructor that calls base(message)
-        var ctor = type.Constructors
-            .Where(c => !c.IsImplicitlyDeclared && c.DeclaredAccessibility == Accessibility.Public)
-            .OrderByDescending(c => c.Parameters.Length)
-            .FirstOrDefault();
-
-        var ctorParams = new List<TsConstructorParam>();
-        var superArgs = new List<TsExpression>();
-
-        if (ctor is not null)
-        {
-            foreach (var p in ctor.Parameters)
-            {
-                ctorParams.Add(new TsConstructorParam(
-                    TypeScriptNaming.ToCamelCase(p.Name),
-                    TypeMapper.Map(p.Type),
-                    Accessibility: TsAccessibility.None
-                ));
-            }
-
-            // Try to find the base constructor argument (the message)
-            var syntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-
-            // For primary constructors with base initializer: class Foo(args) : Exception(expr)
-            if (syntax is ClassDeclarationSyntax classDecl && classDecl.BaseList is not null)
-            {
-                foreach (var baseType in classDecl.BaseList.Types)
-                {
-                    if (baseType is PrimaryConstructorBaseTypeSyntax primaryBase)
-                    {
-                        var semanticModel = compilation.GetSemanticModel(primaryBase.SyntaxTree);
-                        var exprTransformer = CreateExpressionTransformer(semanticModel);
-                        foreach (var arg in primaryBase.ArgumentList.Arguments)
-                        {
-                            superArgs.Add(exprTransformer.TransformExpression(arg.Expression));
-                        }
-                    }
-                }
-            }
-        }
-
-        // If we couldn't resolve the super args, just pass all ctor params
-        if (superArgs.Count == 0 && ctorParams.Count > 0)
-        {
-            superArgs.Add(new TsIdentifier(ctorParams[0].Name));
-        }
-
-        // Build constructor body: super(message)
-        var ctorBody = new List<TsStatement>
-        {
-            new TsExpressionStatement(
-                new TsCallExpression(new TsIdentifier("super"), superArgs)
-            )
-        };
-
-        var constructor = new TsConstructor(ctorParams, ctorBody);
-
-        // Determine the base class in TS
-        TsType extendsType = new TsNamedType("Error");
-        if (type.BaseType is not null && IsExceptionType(type.BaseType)
-            && type.BaseType.ToDisplayString() != "System.Exception"
-            && SymbolHelper.IsTranspilable(type.BaseType, _context!.AssemblyWideTranspile, _context.CurrentAssembly))
-        {
-            extendsType = TypeMapper.Map(type.BaseType);
-        }
-
-        statements.Add(new TsClass(type.Name, constructor, [], Extends: extendsType));
-    }
 
     internal static bool IsExceptionType(INamedTypeSymbol type)
     {
