@@ -1,5 +1,5 @@
 import { HashCode } from "@meta-sharp/runtime";
-import type { PageRequest } from "./page-request";
+import type { PageRequest } from "#/shared-kernel/page-request";
 export class PageResult<T> {
   constructor(readonly items: T[], readonly totalCount: number, readonly page: PageRequest) { }
 

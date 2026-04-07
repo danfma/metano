@@ -2593,45 +2593,21 @@ public sealed class TypeTransformer(Compilation compilation)
     /// Computes a relative import path from one namespace to another.
     /// e.g., from "Orzano.Shared" to "Orzano.Shared.Models" for type "Foo" → "./Models/Foo"
     /// </summary>
+    /// <summary>
+    /// Computes the absolute import path for a type, using the `#/` subpath import alias.
+    /// All cross-file imports use `#/<namespace-path>/<type-name>` format. The consumer
+    /// configures `package.json#imports` and `tsconfig#paths` to resolve `#/*` to `./src/*`.
+    /// </summary>
     private string ComputeRelativeImportPath(string fromNs, string toNs, string typeName)
     {
-        var fromRelative = StripRootNamespace(fromNs);
+        // fromNs is unused — we always emit absolute paths from #/ root
         var toRelative = StripRootNamespace(toNs);
-
-        var fromParts = fromRelative.Length > 0
-            ? fromRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
-            : [];
         var toParts = toRelative.Length > 0
             ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
             : [];
 
-        // Find common prefix length
-        var common = 0;
-        while (common < fromParts.Length && common < toParts.Length && fromParts[common] == toParts[common])
-            common++;
-
-        // Go up from 'from' to common ancestor
-        var ups = fromParts.Length - common;
-        var parts = new List<string>();
-
-        if (ups == 0 && toParts.Length == common)
-        {
-            // Same namespace
-            parts.Add(".");
-        }
-        else
-        {
-            for (var i = 0; i < ups; i++)
-                parts.Add("..");
-
-            if (parts.Count == 0)
-                parts.Add(".");
-        }
-
-        // Go down to 'to' from common ancestor
-        for (var i = common; i < toParts.Length; i++)
-            parts.Add(toParts[i]);
-
+        var parts = new List<string> { "#" };
+        parts.AddRange(toParts);
         parts.Add(SymbolHelper.ToKebabCase(typeName));
         return string.Join("/", parts);
     }

@@ -1,10 +1,10 @@
-import type { Issue } from "../domain/issue";
-import type { IssueId } from "../domain/issue-id";
-import { IssuePriority } from "../domain/issue-priority";
-import { IssueStatus } from "../domain/issue-status";
-import type { PageRequest } from "../../shared-kernel/page-request";
-import type { PageResult } from "../../shared-kernel/page-result";
-import type { UserId } from "../../shared-kernel/user-id";
+import type { Issue } from "#/issues/domain/issue";
+import type { IssueId } from "#/issues/domain/issue-id";
+import { IssuePriority } from "#/issues/domain/issue-priority";
+import { IssueStatus } from "#/issues/domain/issue-status";
+import type { PageRequest } from "#/shared-kernel/page-request";
+import type { PageResult } from "#/shared-kernel/page-result";
+import type { UserId } from "#/shared-kernel/user-id";
 export interface IIssueRepository {
   getByIdAsync(id: IssueId): Promise<Issue | null>;
   listAsync(): Promise<Issue[]>;

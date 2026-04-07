@@ -69,7 +69,7 @@ public class NamespaceTranspileTests
 
         var priceTs = result["models/price.ts"];
         // Import should go up one level to find Currency
-        await Assert.That(priceTs).Contains("from \"../currency\"");
+        await Assert.That(priceTs).Contains("from \"#/currency\"");
     }
 
     [Test]
@@ -143,6 +143,6 @@ public class NamespaceTranspileTests
         );
 
         var moneyTs = result["money.ts"];
-        await Assert.That(moneyTs).Contains("from \"./currency\"");
+        await Assert.That(moneyTs).Contains("from \"#/currency\"");
     }
 }

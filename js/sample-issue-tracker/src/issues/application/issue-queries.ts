@@ -1,9 +1,9 @@
 import { Enumerable } from "@meta-sharp/runtime";
 import type { Grouping } from "@meta-sharp/runtime";
-import type { Issue } from "../domain/issue";
-import { IssuePriority } from "../domain/issue-priority";
-import { IssueStatus } from "../domain/issue-status";
-import type { UserId } from "../../shared-kernel/user-id";
+import type { Issue } from "#/issues/domain/issue";
+import { IssuePriority } from "#/issues/domain/issue-priority";
+import { IssueStatus } from "#/issues/domain/issue-status";
+import type { UserId } from "#/shared-kernel/user-id";
 export function openIssues(issues: Issue[]): Issue[] {
   return Enumerable.from(issues).where((issue: Issue) => !issue.isClosed).orderByDescending((issue: Issue) => issue.priority).thenBy((issue: Issue) => issue.title).toArray();
 }

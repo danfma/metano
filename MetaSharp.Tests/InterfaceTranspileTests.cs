@@ -63,7 +63,7 @@ public class InterfaceTranspileTests
 
         var userTs = result["user.ts"];
         await Assert.That(userTs).Contains("implements IEntity");
-        await Assert.That(userTs).Contains("import type { IEntity } from \"./i-entity\"");
+        await Assert.That(userTs).Contains("import type { IEntity } from \"#/i-entity\"");
     }
 
     [Test]
@@ -87,7 +87,7 @@ public class InterfaceTranspileTests
 
         var userTs = result["user.ts"];
         await Assert.That(userTs).Contains("implements Entity");
-        await Assert.That(userTs).Contains("import type { Entity } from \"./entity\"");
+        await Assert.That(userTs).Contains("import type { Entity } from \"#/entity\"");
     }
 
     [Test]

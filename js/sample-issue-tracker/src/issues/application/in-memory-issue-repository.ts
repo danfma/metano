@@ -1,12 +1,12 @@
 import { Enumerable } from "@meta-sharp/runtime";
-import type { IIssueRepository } from "./i-issue-repository";
-import type { Issue } from "../domain/issue";
-import type { IssueId } from "../domain/issue-id";
-import { IssuePriority } from "../domain/issue-priority";
-import { IssueStatus } from "../domain/issue-status";
-import type { PageRequest } from "../../shared-kernel/page-request";
-import { PageResult } from "../../shared-kernel/page-result";
-import type { UserId } from "../../shared-kernel/user-id";
+import type { IIssueRepository } from "#/issues/application/i-issue-repository";
+import type { Issue } from "#/issues/domain/issue";
+import type { IssueId } from "#/issues/domain/issue-id";
+import { IssuePriority } from "#/issues/domain/issue-priority";
+import { IssueStatus } from "#/issues/domain/issue-status";
+import type { PageRequest } from "#/shared-kernel/page-request";
+import { PageResult } from "#/shared-kernel/page-result";
+import type { UserId } from "#/shared-kernel/user-id";
 export class InMemoryIssueRepository implements IIssueRepository {
   constructor() { }
 
