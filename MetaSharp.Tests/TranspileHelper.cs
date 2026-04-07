@@ -91,7 +91,7 @@ public static class TranspileHelper
     /// Compiles C# source code, transpiles it, and returns both the generated files and
     /// any diagnostics emitted by the transformer.
     /// </summary>
-    public static (Dictionary<string, string> Files, IReadOnlyList<MetaSharp.Diagnostics.MetaSharpDiagnostic> Diagnostics)
+    public static (Dictionary<string, string> Files, IReadOnlyList<MetaSharp.Compiler.Diagnostics.MetaSharpDiagnostic> Diagnostics)
         TranspileWithDiagnostics(string csharpSource)
     {
         var source = $"""

@@ -25,5 +25,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../MetaSharp.Annotations/MetaSharp.Annotations.csproj" />
+    <ProjectReference Include="../MetaSharp.Compiler/MetaSharp.Compiler.csproj" />
   </ItemGroup>
 </Project>

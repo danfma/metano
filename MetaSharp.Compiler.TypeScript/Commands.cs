@@ -102,13 +102,13 @@ public class Commands
         {
             switch (diag.Severity)
             {
-                case Diagnostics.MetaSharpDiagnosticSeverity.Error:
+                case Compiler.Diagnostics.MetaSharpDiagnosticSeverity.Error:
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.Error.WriteLine($"  {diag.Format()}");
                     Console.ResetColor();
                     errorCount++;
                     break;
-                case Diagnostics.MetaSharpDiagnosticSeverity.Warning:
+                case Compiler.Diagnostics.MetaSharpDiagnosticSeverity.Warning:
                     Console.ForegroundColor = ConsoleColor.Yellow;
                     Console.Error.WriteLine($"  {diag.Format()}");
                     Console.ResetColor();

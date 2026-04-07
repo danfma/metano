@@ -1,4 +1,4 @@
-using MetaSharp.Diagnostics;
+using MetaSharp.Compiler.Diagnostics;
 using MetaSharp.TypeScript;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;

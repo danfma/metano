@@ -1,4 +1,4 @@
-using MetaSharp.Diagnostics;
+using MetaSharp.Compiler.Diagnostics;
 
 namespace MetaSharp.Tests;
 
