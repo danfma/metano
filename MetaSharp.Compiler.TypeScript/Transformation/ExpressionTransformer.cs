@@ -41,6 +41,12 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private ObjectCreationHandler? _objectCreation;
     private ObjectCreationHandler ObjectCreation => _objectCreation ??= new ObjectCreationHandler(this);
 
+    private IdentifierHandler? _identifiers;
+    private IdentifierHandler Identifiers => _identifiers ??= new IdentifierHandler(this);
+
+    private GenericNameHandler? _genericNames;
+    private GenericNameHandler GenericNames => _genericNames ??= new GenericNameHandler(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -171,8 +177,8 @@ public sealed class ExpressionTransformer(SemanticModel model)
     {
         return expression switch
         {
-            LiteralExpressionSyntax lit => TransformLiteral(lit),
-            IdentifierNameSyntax id => TransformIdentifier(id),
+            LiteralExpressionSyntax lit => LiteralHandler.Transform(lit),
+            IdentifierNameSyntax id => Identifiers.Transform(id),
 
             // x is Type (old-style, before pattern matching) → x instanceof Type
             BinaryExpressionSyntax { OperatorToken.Text: "is" } isExpr =>
@@ -260,7 +266,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             ),
 
             // Generic type name as expression: OperationResult<Issue> → OperationResult
-            GenericNameSyntax genericName => TransformGenericName(genericName),
+            GenericNameSyntax genericName => GenericNames.Transform(genericName),
 
             // C# 12 collection expression: [] → []
             CollectionExpressionSyntax collExpr => TransformCollectionExpression(collExpr),
@@ -269,55 +275,6 @@ public sealed class ExpressionTransformer(SemanticModel model)
         };
     }
 
-    private TsExpression TransformIdentifier(IdentifierNameSyntax id)
-    {
-        var symbol = model.GetSymbolInfo(id).Symbol;
-
-        // Type references → keep PascalCase (e.g., IssueStatus, Guid, UserId)
-        if (symbol is INamedTypeSymbol or ITypeSymbol)
-            return new TsIdentifier(id.Identifier.Text);
-
-        var name = TypeScriptNaming.ToCamelCase(id.Identifier.Text);
-
-        if (symbol is not null && symbol.ContainingType is not null)
-        {
-            // Instance members → this.name
-            if (symbol is IPropertySymbol or IFieldSymbol && !symbol.IsStatic)
-            {
-                if (SelfParameterName is not null)
-                    return new TsPropertyAccess(new TsIdentifier(SelfParameterName), name);
-            }
-
-            // Instance method → this.name
-            if (symbol is IMethodSymbol { IsStatic: false, MethodKind: MethodKind.Ordinary })
-            {
-                if (SelfParameterName is not null)
-                    return new TsPropertyAccess(new TsIdentifier(SelfParameterName), name);
-            }
-
-            // Static method/property of the same class → ClassName.name
-            if (symbol.IsStatic && symbol is IMethodSymbol or IPropertySymbol or IFieldSymbol)
-            {
-                return new TsPropertyAccess(new TsIdentifier(symbol.ContainingType.Name), name);
-            }
-        }
-
-        return new TsIdentifier(name);
-    }
-
-    private TsExpression TransformLiteral(LiteralExpressionSyntax lit)
-    {
-        return lit.Kind() switch
-        {
-            SyntaxKind.StringLiteralExpression => new TsStringLiteral(lit.Token.ValueText),
-            SyntaxKind.TrueLiteralExpression => new TsLiteral("true"),
-            SyntaxKind.FalseLiteralExpression => new TsLiteral("false"),
-            SyntaxKind.NullLiteralExpression => new TsLiteral("null"),
-            SyntaxKind.DefaultLiteralExpression => new TsLiteral("null"),
-            // Numeric: strip suffixes (m, L, f, d)
-            _ => new TsLiteral(lit.Token.ValueText),
-        };
-    }
 
     private TsExpression TransformMemberAccess(MemberAccessExpressionSyntax member)
     {
@@ -551,22 +508,6 @@ public sealed class ExpressionTransformer(SemanticModel model)
         _ => op
     };
 
-    private TsExpression TransformGenericName(GenericNameSyntax genericName)
-    {
-        var symbol = model.GetSymbolInfo(genericName).Symbol;
-
-        // If it resolves to a type, keep PascalCase
-        if (symbol is INamedTypeSymbol)
-            return new TsIdentifier(genericName.Identifier.Text);
-
-        // Check if the semantic model can resolve to a type via SymbolInfo
-        var typeInfo = model.GetTypeInfo(genericName);
-        if (typeInfo.Type is not null)
-            return new TsIdentifier(typeInfo.Type.Name);
-
-        // Fallback — use the identifier text as-is (PascalCase for types)
-        return new TsIdentifier(genericName.Identifier.Text);
-    }
 
     // ─── Collection expressions ─────────────────────────────
 
