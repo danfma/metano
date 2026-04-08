@@ -261,10 +261,10 @@ public sealed class TypeTransformer(Compilation compilation)
         if (SymbolHelper.HasImport(type))
             return null;
 
-        // [NotEmitted] types are ambient/declaration-only — discoverable in C# so
-        // consumers can reference them in signatures, but no .ts file is generated and
-        // no import is emitted. Used for structural shapes over external library types.
-        if (SymbolHelper.HasNotEmitted(type))
+        // [NoEmit] types are ambient/declaration-only — discoverable in C# so consumers
+        // can reference them in signatures, but no .ts file is generated and no import
+        // is emitted. Used for structural shapes over external library types.
+        if (SymbolHelper.HasNoEmit(type))
             return null;
 
         var statements = new List<TsTopLevel>();

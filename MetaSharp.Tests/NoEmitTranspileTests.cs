@@ -1,23 +1,23 @@
 namespace MetaSharp.Tests;
 
 /// <summary>
-/// Tests for the <c>[NotEmitted]</c> attribute. The contract:
+/// Tests for the <c>[NoEmit]</c> attribute. The contract:
 /// <list type="bullet">
-///   <item>Type with <c>[NotEmitted]</c> generates NO .ts file</item>
+///   <item>Type with <c>[NoEmit]</c> generates NO .ts file</item>
 ///   <item>Other transpiled code can reference it (compiles in C#) but its name does
 ///   NOT appear as an import anywhere</item>
-///   <item>When a lambda parameter's type is <c>[NotEmitted]</c>, the lambda is emitted
+///   <item>When a lambda parameter's type is <c>[NoEmit]</c>, the lambda is emitted
 ///   without a parameter type annotation, letting TypeScript infer from context</item>
 /// </list>
 /// </summary>
-public class NotEmittedTranspileTests
+public class NoEmitTranspileTests
 {
     [Test]
-    public async Task NotEmittedType_DoesNotProduceFile()
+    public async Task NoEmitType_DoesNotProduceFile()
     {
         var result = TranspileHelper.Transpile(
             """
-            [NotEmitted]
+            [NoEmit]
             public interface IAmbient
             {
                 IAmbient Text(string text);
@@ -36,11 +36,11 @@ public class NotEmittedTranspileTests
     }
 
     [Test]
-    public async Task NotEmittedType_NotImportedFromConsumer()
+    public async Task NoEmitType_NotImportedFromConsumer()
     {
         // Even when a transpiled type references an [Import]'d external class whose
-        // method takes a callback over a [NotEmitted] interface, the .ts output must
-        // not try to import the [NotEmitted] type from anywhere.
+        // method takes a callback over a [NoEmit] interface, the .ts output must
+        // not try to import the [NoEmit] type from anywhere.
         var result = TranspileHelper.Transpile(
             """
             using System;
@@ -53,7 +53,7 @@ public class NotEmittedTranspileTests
                 public void Subscribe(Action<IExternalContext> handler) => throw new NotSupportedException();
             }
 
-            [NotEmitted]
+            [NoEmit]
             public interface IExternalContext
             {
                 IExternalContext Send(string text);
@@ -77,9 +77,9 @@ public class NotEmittedTranspileTests
     }
 
     [Test]
-    public async Task NotEmittedLambdaParameter_OmitsTypeAnnotation()
+    public async Task NoEmitLambdaParameter_OmitsTypeAnnotation()
     {
-        // The lambda parameter c has C# type IExternalContext (which is [NotEmitted]).
+        // The lambda parameter c has C# type IExternalContext (which is [NoEmit]).
         // The generated arrow function should have no `: IExternalContext` annotation —
         // so TypeScript infers the type from the External.subscribe signature in the
         // real .d.ts of "external-lib".
@@ -95,7 +95,7 @@ public class NotEmittedTranspileTests
                 public void Subscribe(Action<IExternalContext> handler) => throw new NotSupportedException();
             }
 
-            [NotEmitted]
+            [NoEmit]
             public interface IExternalContext
             {
                 IExternalContext Send(string text);

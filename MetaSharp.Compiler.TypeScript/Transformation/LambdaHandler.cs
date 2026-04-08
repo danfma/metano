@@ -50,7 +50,7 @@ public sealed class LambdaHandler(ExpressionTransformer parent)
             // don't want to import them. Drop the annotation entirely so TypeScript
             // infers the type from the call-site context (e.g., the imported function's
             // .d.ts signature).
-            if (IsNotEmittedType(paramSymbol.Type))
+            if (IsNoEmitType(paramSymbol.Type))
                 return new TsParameter(name, null);
 
             type = TypeMapper.Map(paramSymbol.Type);
@@ -58,7 +58,7 @@ public sealed class LambdaHandler(ExpressionTransformer parent)
         else if (param.Type is not null)
         {
             var typeInfo = _parent.Model.GetTypeInfo(param.Type);
-            if (typeInfo.Type is not null && IsNotEmittedType(typeInfo.Type))
+            if (typeInfo.Type is not null && IsNoEmitType(typeInfo.Type))
                 return new TsParameter(name, null);
             type = typeInfo.Type is not null ? TypeMapper.Map(typeInfo.Type) : new TsAnyType();
         }
@@ -70,8 +70,8 @@ public sealed class LambdaHandler(ExpressionTransformer parent)
         return new TsParameter(name, type);
     }
 
-    private static bool IsNotEmittedType(ITypeSymbol type) =>
-        type is INamedTypeSymbol named && SymbolHelper.HasNotEmitted(named);
+    private static bool IsNoEmitType(ITypeSymbol type) =>
+        type is INamedTypeSymbol named && SymbolHelper.HasNoEmit(named);
 
     private IReadOnlyList<TsStatement> TransformLambdaBody(CSharpSyntaxNode body)
     {

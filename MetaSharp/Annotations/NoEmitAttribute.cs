@@ -16,7 +16,7 @@ namespace MetaSharp.Annotations;
 ///     public void Get(string path, Action&lt;IHonoContext&gt; handler) =&gt; throw new();
 /// }
 ///
-/// [NotEmitted]
+/// [NoEmit]
 /// public interface IHonoContext
 /// {
 ///     IHonoContext Text(string text);
@@ -29,8 +29,8 @@ namespace MetaSharp.Annotations;
 ///
 /// Contrast with <see cref="NoTranspileAttribute"/>: <c>[NoTranspile]</c> excludes the
 /// type from discovery entirely (the compiler pretends it doesn't exist), while
-/// <c>[NotEmitted]</c> keeps the type discoverable so other transpiled code can reference
-/// it — only the emission step is skipped.
+/// <c>[NoEmit]</c> keeps the type discoverable so other transpiled code can reference it
+/// — only the emission step is skipped.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Interface)]
-public sealed class NotEmittedAttribute : Attribute;
+public sealed class NoEmitAttribute : Attribute;

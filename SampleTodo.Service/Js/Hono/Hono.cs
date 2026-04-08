@@ -11,7 +11,7 @@ public class Hono
     public void Get(string path, Action<IHonoContext> handler) => throw new NotSupportedException();
 }
 
-[NotEmitted]
+[NoEmit]
 public interface IHonoContext
 {
     [Name("text")]
