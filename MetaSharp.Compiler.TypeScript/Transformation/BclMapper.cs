@@ -45,15 +45,9 @@ public static class BclMapper
 
         // (string.Length is now handled declaratively via MetaSharp/Runtime/Strings.cs.)
 
-        // Queue<T>.Count, Stack<T>.Count → .length
-        // (List<T>/IList<T>/ICollection<T>/IReadOnlyList<T>/IReadOnlyCollection<T>.Count
-        // are now handled declaratively via MetaSharp/Runtime/Lists.cs.)
-        if (symbol.Name == "Count" && (IsQueueType(containing) || IsStackType(containing)))
-            return new TsPropertyAccess(obj, "length");
-
-        // Dictionary<K,V>.Count, HashSet<T>.Count → .size
-        if (symbol.Name == "Count" && IsMapOrSetType(containing))
-            return new TsPropertyAccess(obj, "size");
+        // List/Queue/Stack collection-family Count → length and Dictionary/HashSet
+        // Count → size are now handled declaratively via MetaSharp/Runtime/Lists.cs,
+        // Queues.cs, Stacks.cs, Dictionaries.cs and Sets.cs.
 
         // Task.CompletedTask and DateTimeOffset.UtcNow are now handled declaratively via
         // MetaSharp/Runtime/Tasks.cs and MetaSharp/Runtime/Temporal.cs.
@@ -117,36 +111,8 @@ public static class BclMapper
         // Contains, IndexOf, Insert, Clear, Reverse, Sort, ToArray). The Remove method is
         // intentionally not mapped — see the note in Lists.cs.
 
-        // Queue<T> instance methods
-        if (IsQueueType(containing) && invocation.Expression is MemberAccessExpressionSyntax queueAccess)
-        {
-            var obj = transformer.TransformExpression(queueAccess.Expression);
-            return name switch
-            {
-                "Enqueue" => new TsCallExpression(new TsPropertyAccess(obj, "push"), args),
-                "Dequeue" => new TsCallExpression(new TsPropertyAccess(obj, "shift"), []),
-                "Peek" => new TsElementAccess(obj, new TsLiteral("0")),
-                "Contains" => new TsCallExpression(new TsPropertyAccess(obj, "includes"), args),
-                "Clear" => new TsBinaryExpression(new TsPropertyAccess(obj, "length"), "=", new TsLiteral("0")),
-                _ => null,
-            };
-        }
-
-        // Stack<T> instance methods
-        if (IsStackType(containing) && invocation.Expression is MemberAccessExpressionSyntax stackAccess)
-        {
-            var obj = transformer.TransformExpression(stackAccess.Expression);
-            return name switch
-            {
-                "Push" => new TsCallExpression(new TsPropertyAccess(obj, "push"), args),
-                "Pop" => new TsCallExpression(new TsPropertyAccess(obj, "pop"), []),
-                "Peek" => new TsElementAccess(obj,
-                    new TsBinaryExpression(new TsPropertyAccess(obj, "length"), "-", new TsLiteral("1"))),
-                "Contains" => new TsCallExpression(new TsPropertyAccess(obj, "includes"), args),
-                "Clear" => new TsBinaryExpression(new TsPropertyAccess(obj, "length"), "=", new TsLiteral("0")),
-                _ => null,
-            };
-        }
+        // Queue<T> and Stack<T> instance methods are now handled declaratively via
+        // MetaSharp/Runtime/Queues.cs and MetaSharp/Runtime/Stacks.cs.
 
         // LINQ extension methods → lazy Enumerable chain via @meta-sharp/runtime
         if (IsLinqExtensionMethod(containing) && invocation.Expression is MemberAccessExpressionSyntax linqAccess)
@@ -212,22 +178,10 @@ public static class BclMapper
             };
         }
 
-        // Dictionary<K,V> instance methods
-        if (IsMapOrSetType(containing) && invocation.Expression is MemberAccessExpressionSyntax dictAccess)
-        {
-            var obj = transformer.TransformExpression(dictAccess.Expression);
-            return name switch
-            {
-                "ContainsKey" => new TsCallExpression(new TsPropertyAccess(obj, "has"), args),
-                "TryGetValue" => null, // complex pattern, skip for now
-                "Add" when args.Count == 2 => new TsCallExpression(new TsPropertyAccess(obj, "set"), args),
-                "Add" when args.Count == 1 => new TsCallExpression(new TsPropertyAccess(obj, "add"), args),
-                "Remove" => new TsCallExpression(new TsPropertyAccess(obj, "delete"), args),
-                "Clear" => new TsCallExpression(new TsPropertyAccess(obj, "clear"), []),
-                "Contains" => new TsCallExpression(new TsPropertyAccess(obj, "has"), args),
-                _ => null,
-            };
-        }
+        // Dictionary<K,V> and HashSet<T> family instance methods are now handled
+        // declaratively via MetaSharp/Runtime/Dictionaries.cs and MetaSharp/Runtime/Sets.cs.
+        // TryGetValue stays unmapped because the out-parameter idiom doesn't translate
+        // cleanly to JS Map.get — see the note in Dictionaries.cs.
 
         // Enum.HasFlag(flag) is now handled declaratively via MetaSharp/Runtime/Enums.cs.
 
@@ -322,29 +276,6 @@ public static class BclMapper
     // branches — those are handled declaratively now via MetaSharp/Runtime/Lists.cs.
     // ImmutableList/ImmutableArray support has been temporarily lost in the migration
     // and is tracked as a follow-up.)
-
-    private static bool IsMapOrSetType(string? fullName)
-    {
-        if (fullName is null) return false;
-        return fullName.StartsWith("System.Collections.Generic.Dictionary")
-            || fullName.StartsWith("System.Collections.Generic.IDictionary")
-            || fullName.StartsWith("System.Collections.Generic.IReadOnlyDictionary")
-            || fullName.StartsWith("System.Collections.Generic.HashSet")
-            || fullName.StartsWith("System.Collections.Generic.ISet")
-            || fullName.StartsWith("System.Collections.Generic.SortedSet");
-    }
-
-    private static bool IsQueueType(string? fullName)
-    {
-        if (fullName is null) return false;
-        return fullName.StartsWith("System.Collections.Generic.Queue");
-    }
-
-    private static bool IsStackType(string? fullName)
-    {
-        if (fullName is null) return false;
-        return fullName.StartsWith("System.Collections.Generic.Stack");
-    }
 
     private static bool IsLinqExtensionMethod(string? fullName)
     {
