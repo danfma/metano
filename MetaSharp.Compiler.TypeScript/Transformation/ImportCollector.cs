@@ -420,6 +420,19 @@ public sealed class ImportCollector(
                 foreach (var e in arrayLit.Elements)
                     CollectFromExpression(e, names, valueNames);
                 break;
+            case TsTemplate template:
+                // Templates carry real TS expression nodes for the receiver and each
+                // argument; the printer expands them into the call site, so the import
+                // collector must descend into them too. Without this case, identifiers
+                // referenced only inside [Emit] / [MapMethod]/[MapProperty] templates
+                // would either be missed entirely or be marked as type-only when they
+                // need to be value imports (e.g., a `new SomeRecord(...)` substituted
+                // into the template).
+                if (template.Receiver is not null)
+                    CollectFromExpression(template.Receiver, names, valueNames);
+                foreach (var arg in template.Arguments)
+                    CollectFromExpression(arg, names, valueNames);
+                break;
         }
     }
 

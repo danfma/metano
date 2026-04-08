@@ -55,25 +55,17 @@ public static class BclMapper
         if (symbol.Name == "Count" && IsMapOrSetType(containing))
             return new TsPropertyAccess(obj, "size");
 
-        // Task.CompletedTask → Promise.resolve()
-        if (containing == "System.Threading.Tasks.Task" && symbol.Name == "CompletedTask")
-            return new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("Promise"), "resolve"),
-                []);
+        // Task.CompletedTask and DateTimeOffset.UtcNow are now handled declaratively via
+        // MetaSharp/Runtime/Tasks.cs and MetaSharp/Runtime/Temporal.cs.
 
-        // DateOnly.DayNumber → dayNumber(date) helper from runtime
+        // DateOnly.DayNumber → dayNumber(date) helper from runtime.
+        // Stays hardcoded because DateOnly is .NET 6+ and the MetaSharp annotations
+        // assembly targets netstandard2.0 — typeof(DateOnly) doesn't resolve there.
+        // Tracked as a follow-up alongside multi-targeting the project.
         if (containing == "System.DateOnly" && symbol.Name == "DayNumber")
             return new TsCallExpression(
                 new TsIdentifier("dayNumber"),
                 [obj]);
-
-        // DateTimeOffset.UtcNow → Temporal.Now.zonedDateTimeISO()
-        if (containing == "System.DateTimeOffset" && symbol.Name == "UtcNow")
-            return new TsCallExpression(
-                new TsPropertyAccess(
-                    new TsPropertyAccess(new TsIdentifier("Temporal"), "Now"),
-                    "zonedDateTimeISO"),
-                []);
 
         return null;
     }
@@ -237,19 +229,7 @@ public static class BclMapper
             };
         }
 
-        // Enum.HasFlag(flag) → (value & flag) === flag
-        if (name == "HasFlag"
-            && (containing == "System.Enum" || method.ContainingType is { TypeKind: TypeKind.Enum })
-            && invocation.Expression is MemberAccessExpressionSyntax hasFlagAccess
-            && args.Count == 1)
-        {
-            var enumValue = transformer.TransformExpression(hasFlagAccess.Expression);
-            var flag = args[0];
-            return new TsBinaryExpression(
-                new TsParenthesized(new TsBinaryExpression(enumValue, "&", flag)),
-                "===",
-                flag);
-        }
+        // Enum.HasFlag(flag) is now handled declaratively via MetaSharp/Runtime/Enums.cs.
 
         // Enum.Parse<T>(text) → T[text as keyof typeof T]  (for numeric enums)
         if (containing == "System.Enum" && name == "Parse"
@@ -265,19 +245,16 @@ public static class BclMapper
                 new TsCastExpression(textArg, new TsNamedType($"keyof typeof {enumName}")));
         }
 
-        // Console.WriteLine → console.log
-        if (containing == "System.Console" && name == "WriteLine")
-            return new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("console"), "log"),
-                args
-            );
+        // Console.WriteLine, Guid.NewGuid, Task.FromResult are now handled declaratively
+        // via MetaSharp/Runtime/Console.cs, Guid.cs, and Tasks.cs.
 
-        // Guid.ToString("N") → .replace(/-/g, ""), Guid.ToString() → (identity, already string)
+        // Guid.ToString(format) → .replace(/-/g, "") for "N", identity for default.
+        // The lowering depends on the literal value of the format argument and stays
+        // hardcoded for now — declarative templates can't yet branch on argument literals.
         if (containing == "System.Guid" && name == "ToString"
             && invocation.Expression is MemberAccessExpressionSyntax guidToStringAccess)
         {
             var obj = transformer.TransformExpression(guidToStringAccess.Expression);
-            // Check if format arg is "N" (no hyphens)
             if (args.Count == 1 && args[0] is TsStringLiteral { Value: "N" })
                 return new TsCallExpression(
                     new TsPropertyAccess(obj, "replace"),
@@ -285,19 +262,6 @@ public static class BclMapper
             // Default: Guid is already a string in JS, .toString() is identity
             return obj;
         }
-
-        // Guid.NewGuid() → crypto.randomUUID()
-        if (containing == "System.Guid" && name == "NewGuid")
-            return new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("crypto"), "randomUUID"),
-                []);
-
-        // Task.FromResult(x) → Promise.resolve(x), Task.CompletedTask → Promise.resolve()
-        if (containing is "System.Threading.Tasks.Task" && name == "FromResult")
-            return new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("Promise"), "resolve"),
-                args
-            );
 
         return null;
     }

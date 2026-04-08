@@ -592,6 +592,10 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(lit.Raw);
                 break;
 
+            case TsTemplate template:
+                PrintTemplate(template);
+                break;
+
             case TsStringLiteral str:
                 _sb.WriteQuoted(str.Value);
                 break;
@@ -706,6 +710,64 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(" : ");
                 PrintExpression(cond.WhenFalse);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Renders a <see cref="TsTemplate"/> by walking the template string and emitting each
+    /// chunk in turn: literal text is written verbatim, while <c>$this</c> and <c>$N</c>
+    /// placeholders trigger a recursive <see cref="PrintExpression"/> call against the
+    /// substituted node. Recursion is what makes complex argument expressions
+    /// (nested calls, lambdas, binary operators) round-trip correctly — the template
+    /// author never has to think about textual rendering of the substitution payload.
+    /// </summary>
+    private void PrintTemplate(TsTemplate template)
+    {
+        var text = template.Template;
+        var i = 0;
+        while (i < text.Length)
+        {
+            // Look for the next placeholder; everything before it is literal text.
+            var dollar = text.IndexOf('$', i);
+            if (dollar < 0)
+            {
+                _sb.Write(text[i..]);
+                break;
+            }
+
+            if (dollar > i)
+                _sb.Write(text[i..dollar]);
+
+            // Try to parse $this first, then $<number>. Anything else is treated as
+            // a literal $ followed by the next char.
+            if (dollar + 4 < text.Length + 1
+                && dollar + 4 <= text.Length
+                && text.AsSpan(dollar, 5).SequenceEqual("$this".AsSpan()))
+            {
+                if (template.Receiver is not null)
+                    PrintExpression(template.Receiver);
+                i = dollar + 5;
+                continue;
+            }
+
+            // $0, $1, $2, … — read the integer suffix
+            var argStart = dollar + 1;
+            var argEnd = argStart;
+            while (argEnd < text.Length && char.IsDigit(text[argEnd]))
+                argEnd++;
+
+            if (argEnd > argStart
+                && int.TryParse(text.AsSpan(argStart, argEnd - argStart), out var argIndex)
+                && argIndex < template.Arguments.Count)
+            {
+                PrintExpression(template.Arguments[argIndex]);
+                i = argEnd;
+                continue;
+            }
+
+            // Lone $ or unrecognized placeholder — emit verbatim and advance one char.
+            _sb.Write("$");
+            i = dollar + 1;
         }
     }
 
