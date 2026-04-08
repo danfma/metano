@@ -132,6 +132,11 @@ public sealed class TypeTransformer(Compilation compilation)
         _pathNaming = new PathNaming(
             namespaces.Count > 0 ? PathNaming.FindCommonNamespacePrefix(namespaces) : "");
 
+        // Read declarative [MapMethod]/[MapProperty] from the current assembly + every
+        // referenced assembly. The registry is consulted by BclMapper before its hardcoded
+        // lowering rules.
+        var declarativeMappings = DeclarativeMappingRegistry.BuildFromCompilation(compilation);
+
         _context = new TypeScriptTransformContext(
             compilation,
             _currentAssembly,
@@ -141,6 +146,7 @@ public sealed class TypeTransformer(Compilation compilation)
             _bclExportMap,
             _guardNameToTypeMap,
             _pathNaming,
+            declarativeMappings,
             _diagnostics.Add);
 
         var files = new List<TsSourceFile>();

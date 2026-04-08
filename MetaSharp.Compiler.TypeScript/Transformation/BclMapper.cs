@@ -7,6 +7,13 @@ namespace MetaSharp.Transformation;
 
 /// <summary>
 /// Maps known BCL methods and properties to JavaScript equivalents.
+///
+/// Resolution order: declarative <c>[MapMethod]</c>/<c>[MapProperty]</c> entries from
+/// referenced assemblies are consulted first via
+/// <see cref="ExpressionTransformer.DeclarativeMappings"/>; the hardcoded fallbacks below
+/// only fire when no declarative entry matches. As declarative coverage grows, the
+/// hardcoded branches will be deleted one area at a time until <c>BclMapper</c> is a
+/// pure dispatcher over the registry.
 /// </summary>
 public static class BclMapper
 {
@@ -19,9 +26,22 @@ public static class BclMapper
         ExpressionTransformer transformer
     )
     {
-        var containing = symbol.ContainingType?.ToDisplayString();
+        if (symbol.ContainingType is null) return null;
 
         var obj = transformer.TransformExpression(member.Expression);
+
+        // 1. Declarative property mapping wins over any hardcoded fallback below.
+        if (symbol.Kind is SymbolKind.Property or SymbolKind.Field
+            && transformer.DeclarativeMappings.TryGetProperty(symbol.ContainingType, symbol.Name, out var propMapping))
+        {
+            // For instance access (`x.Prop`), the receiver is `obj`. For static access
+            // (`Type.Prop`), the receiver is dropped — `obj` would be the bare type
+            // identifier which we don't want to leak into the JS output.
+            var isStaticAccess = symbol.IsStatic;
+            return ApplyPropertyMapping(propMapping, receiver: isStaticAccess ? null : obj);
+        }
+
+        var containing = symbol.ContainingType.ToDisplayString();
 
         // string instance properties
         if (containing == "string" && symbol.Name == "Length")
@@ -67,12 +87,29 @@ public static class BclMapper
         ExpressionTransformer transformer
     )
     {
-        var containing = method.ContainingType?.ToDisplayString();
+        if (method.ContainingType is null) return null;
+
         var name = method.Name;
 
         var args = invocation
             .ArgumentList.Arguments.Select(a => transformer.TransformExpression(a.Expression))
             .ToList();
+
+        // 1. Declarative method mapping wins over any hardcoded fallback below.
+        if (transformer.DeclarativeMappings.TryGetMethod(method.ContainingType, name, out var methodMapping))
+        {
+            // Resolve the receiver: for instance methods, the syntax is
+            // `<expr>.Method(args)`, so the receiver expression is the left side of the
+            // member access. For static methods (and the rarer free-standing form), there
+            // is no receiver to substitute.
+            TsExpression? receiver = null;
+            if (!method.IsStatic && invocation.Expression is MemberAccessExpressionSyntax declarativeReceiverAccess)
+                receiver = transformer.TransformExpression(declarativeReceiverAccess.Expression);
+
+            return ApplyMethodMapping(methodMapping, receiver, args);
+        }
+
+        var containing = method.ContainingType.ToDisplayString();
 
         // System.Math static methods
         if (containing == "System.Math")
@@ -332,8 +369,44 @@ public static class BclMapper
     }
 
     /// <summary>
-    /// Creates a comparator arrow function for sorting: (a, b) => keySelector(a) - keySelector(b)
+    /// Applies a declarative property mapping. Properties never have arguments, so the
+    /// result is either a bare identifier (static) or a property access (instance).
+    /// Templates are still allowed: <c>JsTemplate = "Temporal.Now.plainDateTimeISO()"</c>
+    /// is a perfectly valid mapping for <c>DateTime.Now</c>.
     /// </summary>
+    private static TsExpression ApplyPropertyMapping(
+        DeclarativeMappingEntry mapping,
+        TsExpression? receiver)
+    {
+        if (mapping.HasTemplate)
+            return JsTemplateExpander.Expand(mapping.JsTemplate!, receiver, args: []);
+
+        var name = mapping.JsName!;
+        return receiver is not null
+            ? new TsPropertyAccess(receiver, name)
+            : new TsIdentifier(name);
+    }
+
+    /// <summary>
+    /// Applies a declarative method mapping. The simple-rename form always emits a call
+    /// expression — instance methods become <c>receiver.jsName(args)</c>, static methods
+    /// become <c>jsName(args)</c>. Templates take the receiver as <c>$this</c> and the
+    /// arguments as <c>$0</c>, <c>$1</c>, …
+    /// </summary>
+    private static TsExpression ApplyMethodMapping(
+        DeclarativeMappingEntry mapping,
+        TsExpression? receiver,
+        IReadOnlyList<TsExpression> args)
+    {
+        if (mapping.HasTemplate)
+            return JsTemplateExpander.Expand(mapping.JsTemplate!, receiver, args);
+
+        var name = mapping.JsName!;
+        var callee = receiver is not null
+            ? (TsExpression)new TsPropertyAccess(receiver, name)
+            : new TsIdentifier(name);
+        return new TsCallExpression(callee, args);
+    }
 
     // ─── Type classification helpers ────────────────────────
 

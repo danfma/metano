@@ -14,6 +14,7 @@ namespace MetaSharp.Transformation;
 ///   <item>The discovered transpilable type map (by both C# and TS name)</item>
 ///   <item>External import / BCL export / guard-name lookup tables</item>
 ///   <item>The <see cref="Transformation.PathNaming"/> helper carrying the project's root namespace</item>
+///   <item>The <see cref="Transformation.DeclarativeMappingRegistry"/> with all <c>[MapMethod]</c>/<c>[MapProperty]</c> entries collected from referenced assemblies</item>
 ///   <item>A diagnostic reporter callback that drains into <c>TypeTransformer.Diagnostics</c></item>
 /// </list>
 ///
@@ -30,6 +31,7 @@ public sealed class TypeScriptTransformContext(
     IReadOnlyDictionary<string, (string ExportedName, string FromPackage)> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
     PathNaming pathNaming,
+    DeclarativeMappingRegistry declarativeMappings,
     Action<MetaSharpDiagnostic> reportDiagnostic)
 {
     public Compilation Compilation { get; } = compilation;
@@ -40,6 +42,7 @@ public sealed class TypeScriptTransformContext(
     public IReadOnlyDictionary<string, (string ExportedName, string FromPackage)> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> GuardNameToTypeMap { get; } = guardNameToTypeMap;
     public PathNaming PathNaming { get; } = pathNaming;
+    public DeclarativeMappingRegistry DeclarativeMappings { get; } = declarativeMappings;
     public Action<MetaSharpDiagnostic> ReportDiagnostic { get; } = reportDiagnostic;
 
     /// <summary>
@@ -53,5 +56,6 @@ public sealed class TypeScriptTransformContext(
             AssemblyWideTranspile = AssemblyWideTranspile,
             CurrentAssembly = CurrentAssembly,
             ReportDiagnostic = ReportDiagnostic,
+            DeclarativeMappings = DeclarativeMappings,
         };
 }

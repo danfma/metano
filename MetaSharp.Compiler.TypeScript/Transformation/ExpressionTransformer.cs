@@ -23,6 +23,15 @@ public sealed class ExpressionTransformer(SemanticModel model)
     public Action<MetaSharpDiagnostic>? ReportDiagnostic { get; set; }
 
     /// <summary>
+    /// Declarative <c>[MapMethod]</c>/<c>[MapProperty]</c> entries collected from the
+    /// referenced assemblies. Consulted by <see cref="BclMapper"/> before falling back to
+    /// its hardcoded lowering rules. Defaults to <see cref="DeclarativeMappingRegistry.Empty"/>
+    /// when the transformer is created outside of a full <see cref="TypeScriptTransformContext"/>
+    /// (e.g., in unit tests that exercise it directly).
+    /// </summary>
+    public DeclarativeMappingRegistry DeclarativeMappings { get; set; } = DeclarativeMappingRegistry.Empty;
+
+    /// <summary>
     /// The Roslyn semantic model the expression transformer was created with.
     /// Exposed so extracted handlers (e.g., <see cref="PatternMatchingHandler"/>) can run
     /// their own type lookups against the same model.

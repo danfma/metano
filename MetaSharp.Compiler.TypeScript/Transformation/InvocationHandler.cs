@@ -60,32 +60,10 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
 
     /// <summary>
     /// Expands an [Emit] template, replacing <c>$0</c>, <c>$1</c>, … with the textual
-    /// form of each transformed argument. The result is a <see cref="TsLiteral"/> carrying
-    /// the raw JS so the printer emits it verbatim.
+    /// form of each transformed argument. Delegates to <see cref="JsTemplateExpander.Expand"/>
+    /// (no <c>$this</c> placeholder, since [Emit] is declared on a method whose parameters
+    /// already include any receiver).
     /// </summary>
-    private static TsExpression ExpandEmit(string template, IReadOnlyList<TsExpression> args)
-    {
-        var result = template;
-        for (var i = 0; i < args.Count; i++)
-        {
-            var argText = args[i] switch
-            {
-                TsIdentifier id => id.Name,
-                TsStringLiteral str => $"\"{str.Value}\"",
-                TsLiteral lit => lit.Raw,
-                TsPropertyAccess access => $"{ExprToString(access.Object)}.{access.Property}",
-                _ => $"/* arg{i} */"
-            };
-            result = result.Replace($"${i}", argText);
-        }
-
-        return new TsLiteral(result);
-    }
-
-    private static string ExprToString(TsExpression expr) => expr switch
-    {
-        TsIdentifier id => id.Name,
-        TsPropertyAccess access => $"{ExprToString(access.Object)}.{access.Property}",
-        _ => "unknown"
-    };
+    private static TsExpression ExpandEmit(string template, IReadOnlyList<TsExpression> args) =>
+        JsTemplateExpander.Expand(template, receiver: null, args);
 }
