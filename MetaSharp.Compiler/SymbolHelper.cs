@@ -51,6 +51,34 @@ public static class SymbolHelper
 
     public static bool HasModuleEntryPoint(ISymbol symbol) => HasAttribute(symbol, "ModuleEntryPoint");
 
+    /// <summary>
+    /// Reads <c>[ExportVarFromBody("name", AsDefault = ?, InPlace = ?)]</c> from a method
+    /// symbol. Returns null when the attribute isn't present.
+    /// </summary>
+    public static ExportVarFromBodyInfo? GetExportVarFromBody(ISymbol symbol)
+    {
+        var attr = symbol.GetAttributes().FirstOrDefault(a =>
+            a.AttributeClass?.Name is "ExportVarFromBodyAttribute" or "ExportVarFromBody");
+        if (attr is null) return null;
+
+        var name = attr.ConstructorArguments.Length > 0
+            ? attr.ConstructorArguments[0].Value?.ToString()
+            : null;
+        if (name is null) return null;
+
+        var asDefault = false;
+        var inPlace = false;
+        foreach (var named in attr.NamedArguments)
+        {
+            if (named.Key == "AsDefault" && named.Value.Value is bool ad) asDefault = ad;
+            else if (named.Key == "InPlace" && named.Value.Value is bool ip) inPlace = ip;
+        }
+
+        return new ExportVarFromBodyInfo(name, asDefault, inPlace);
+    }
+
+    public sealed record ExportVarFromBodyInfo(string Name, bool AsDefault, bool InPlace);
+
     public static bool HasInlineWrapper(ISymbol symbol) => HasAttribute(symbol, "InlineWrapper");
 
     /// <summary>

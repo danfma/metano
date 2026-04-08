@@ -66,6 +66,12 @@ public sealed class Printer(string indent = "  ")
                 PrintStatement(n.Inner);
                 _sb.WriteLn();
                 break;
+            case TsModuleExport n:
+                _sb.Write(n.IsDefault
+                    ? $"export default {n.Name};"
+                    : $"export {{ {n.Name} }};");
+                _sb.WriteLn();
+                break;
         }
     }
 
@@ -531,6 +537,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsVariableDeclaration varDecl:
+                if (varDecl.Exported) _sb.Write("export ");
                 _sb.Write(varDecl.Const ? "const " : "let ");
                 _sb.Write(varDecl.Name);
                 _sb.Write(" = ");

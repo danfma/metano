@@ -135,10 +135,64 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
         var body = exprTransformer.TransformBody(
             methodSyntax.Body,
             methodSyntax.ExpressionBody,
-            isVoid: method.ReturnsVoid);
+            isVoid: method.ReturnsVoid)
+            .ToList();
 
-        foreach (var stmt in body)
-            statements.Add(new TsTopLevelStatement(stmt));
+        // [ExportVarFromBody]: promote a named local from the body to a module export.
+        var exportInfo = SymbolHelper.GetExportVarFromBody(method);
+        if (exportInfo is not null)
+        {
+            // Hard error: AsDefault + InPlace is contradictory — `export default const x =`
+            // is not valid TS, and even if it were, references to `x` later in the body
+            // wouldn't bind.
+            if (exportInfo.AsDefault && exportInfo.InPlace)
+            {
+                _context.ReportDiagnostic(new MetaSharpDiagnostic(
+                    MetaSharpDiagnosticSeverity.Error,
+                    DiagnosticCodes.InvalidModuleEntryPoint,
+                    $"[ExportVarFromBody(\"{exportInfo.Name}\")] on '{method.Name}' cannot " +
+                    $"combine AsDefault = true with InPlace = true. Default exports must be " +
+                    $"emitted as a separate trailing statement; set InPlace = false.",
+                    method.Locations.FirstOrDefault()));
+                exportInfo = null;
+            }
+        }
+
+        TsTopLevel? trailingExport = null;
+        var foundLocal = false;
+        for (var i = 0; i < body.Count; i++)
+        {
+            if (exportInfo is not null
+                && body[i] is TsVariableDeclaration varDecl
+                && varDecl.Name == exportInfo.Name)
+            {
+                foundLocal = true;
+                if (exportInfo.InPlace)
+                {
+                    // Fold export into the declaration site (named export only).
+                    body[i] = varDecl with { Exported = true };
+                }
+                else
+                {
+                    // Keep declaration as-is; emit a trailing export referencing it by name.
+                    trailingExport = new TsModuleExport(exportInfo.Name, exportInfo.AsDefault);
+                }
+            }
+            statements.Add(new TsTopLevelStatement(body[i]));
+        }
+
+        if (exportInfo is not null && !foundLocal)
+        {
+            _context.ReportDiagnostic(new MetaSharpDiagnostic(
+                MetaSharpDiagnosticSeverity.Error,
+                DiagnosticCodes.InvalidModuleEntryPoint,
+                $"[ExportVarFromBody(\"{exportInfo.Name}\")] on '{method.Name}' did not find " +
+                $"a local variable named '{exportInfo.Name}' in the entry point body.",
+                method.Locations.FirstOrDefault()));
+        }
+
+        if (trailingExport is not null)
+            statements.Add(trailingExport);
     }
 
     private static bool IsValidEntryPointReturn(ITypeSymbol returnType)

@@ -262,6 +262,10 @@ public sealed class ImportCollector(
                 // import emission.
                 CollectFromStatement(topStmt.Inner, names, valueNames, runtimeHelpers);
                 break;
+            case TsModuleExport:
+                // `export default name;` / `export { name };` references a binding that
+                // already exists locally — no external import to collect.
+                break;
         }
     }
 
