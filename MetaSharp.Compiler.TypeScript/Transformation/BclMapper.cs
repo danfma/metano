@@ -47,8 +47,10 @@ public static class BclMapper
         if (containing == "string" && symbol.Name == "Length")
             return new TsPropertyAccess(obj, "length");
 
-        // List<T>.Count, Queue<T>.Count, Stack<T>.Count → .length
-        if (symbol.Name == "Count" && (IsCollectionType(containing) || IsQueueType(containing) || IsStackType(containing)))
+        // Queue<T>.Count, Stack<T>.Count → .length
+        // (List<T>/IList<T>/ICollection<T>/IReadOnlyList<T>/IReadOnlyCollection<T>.Count
+        // are now handled declaratively via MetaSharp/Runtime/Lists.cs.)
+        if (symbol.Name == "Count" && (IsQueueType(containing) || IsStackType(containing)))
             return new TsPropertyAccess(obj, "length");
 
         // Dictionary<K,V>.Count, HashSet<T>.Count → .size
@@ -162,34 +164,10 @@ public static class BclMapper
                 return new TsCallExpression(new TsPropertyAccess(obj, jsMethod), args);
         }
 
-        // List<T> / ICollection<T> instance methods
-        if (IsCollectionType(containing) && invocation.Expression is MemberAccessExpressionSyntax listAccess)
-        {
-            var obj = transformer.TransformExpression(listAccess.Expression);
-            var jsMethod = name switch
-            {
-                "Add" => "push",
-                "Contains" => "includes",
-                "IndexOf" => "indexOf",
-                "Remove" => null, // complex — needs splice pattern, skip for now
-                "Clear" => null,
-                "Insert" => "splice", // approximate
-                "Reverse" => "reverse",
-                "Sort" => "sort",
-                "ToArray" => "slice", // creates a copy
-                _ => null,
-            };
-
-            if (jsMethod is not null)
-                return new TsCallExpression(new TsPropertyAccess(obj, jsMethod), args);
-
-            // Clear() → .length = 0
-            if (name == "Clear")
-                return new TsBinaryExpression(
-                    new TsPropertyAccess(obj, "length"),
-                    "=",
-                    new TsLiteral("0"));
-        }
+        // List<T> / IList<T> / ICollection<T> / IReadOnlyList<T> instance methods are
+        // now handled declaratively via MetaSharp/Runtime/Lists.cs (Count, Add, AddRange,
+        // Contains, IndexOf, Insert, Clear, Reverse, Sort, ToArray). The Remove method is
+        // intentionally not mapped — see the note in Lists.cs.
 
         // Queue<T> instance methods
         if (IsQueueType(containing) && invocation.Expression is MemberAccessExpressionSyntax queueAccess)
@@ -409,18 +387,10 @@ public static class BclMapper
     }
 
     // ─── Type classification helpers ────────────────────────
-
-    private static bool IsCollectionType(string? fullName)
-    {
-        if (fullName is null) return false;
-        return fullName.StartsWith("System.Collections.Generic.List")
-            || fullName.StartsWith("System.Collections.Generic.IList")
-            || fullName.StartsWith("System.Collections.Generic.ICollection")
-            || fullName.StartsWith("System.Collections.Generic.IReadOnlyList")
-            || fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection")
-            || fullName.StartsWith("System.Collections.Immutable.ImmutableList")
-            || fullName.StartsWith("System.Collections.Immutable.ImmutableArray");
-    }
+    // (IsCollectionType was deleted alongside the hardcoded List/IList/ICollection
+    // branches — those are handled declaratively now via MetaSharp/Runtime/Lists.cs.
+    // ImmutableList/ImmutableArray support has been temporarily lost in the migration
+    // and is tracked as a follow-up.)
 
     private static bool IsMapOrSetType(string? fullName)
     {
