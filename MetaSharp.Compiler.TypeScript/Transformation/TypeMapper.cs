@@ -39,6 +39,36 @@ public static class TypeMapper
         set => _crossAssemblyTypeMap = value;
     }
 
+    /// <summary>
+    /// Assemblies that declare <c>[TranspileAssembly]</c> but lack
+    /// <c>[EmitPackage(JavaScript)]</c>. When the type mapper encounters a type whose
+    /// containing assembly is in this set, it adds the type's display name to
+    /// <see cref="CrossPackageMisses"/> so the transformer can raise MS0007.
+    /// </summary>
+    [ThreadStatic]
+    private static HashSet<IAssemblySymbol>? _assembliesNeedingEmitPackage;
+
+    public static HashSet<IAssemblySymbol> AssembliesNeedingEmitPackage
+    {
+        get => _assembliesNeedingEmitPackage ??= new(SymbolEqualityComparer.Default);
+        set => _assembliesNeedingEmitPackage = value;
+    }
+
+    /// <summary>
+    /// Display names of cross-assembly types whose containing assembly lacks
+    /// <c>[EmitPackage]</c>. The transformer drains this set after each transformation
+    /// pass and raises one MS0007 per unique entry, telling the user which producing
+    /// assembly needs the missing attribute.
+    /// </summary>
+    [ThreadStatic]
+    private static HashSet<string>? _crossPackageMisses;
+
+    public static HashSet<string> CrossPackageMisses
+    {
+        get => _crossPackageMisses ??= new();
+        set => _crossPackageMisses = value;
+    }
+
     public static TsType Map(ITypeSymbol type)
     {
         // Nullable<T> (value types: int?, bool?, etc.) → T | null
@@ -206,7 +236,19 @@ public static class TypeMapper
         // to the same map entry as the open one.
         var key = named.OriginalDefinition;
         if (!CrossAssemblyTypeMap.TryGetValue(key, out var entry))
+        {
+            // The lookup missed. If the symbol's containing assembly is in the
+            // "needs EmitPackage" set, that's the diagnostic case: a transpilable
+            // library that hasn't declared its package name. Record the type so the
+            // transformer can raise MS0007 once per unique miss.
+            var containingAssembly = key.ContainingAssembly;
+            if (containingAssembly is not null
+                && AssembliesNeedingEmitPackage.Contains(containingAssembly))
+            {
+                CrossPackageMisses.Add(named.ToDisplayString());
+            }
             return null;
+        }
 
         var ns = PathNaming.GetNamespace(entry.Symbol);
         // The TS type name follows the [Name] override if present, mirroring how the

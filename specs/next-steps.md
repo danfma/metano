@@ -238,10 +238,11 @@ name, so two assemblies with same-named types are correctly distinguished.
 
 **Follow-ups (not blocking):**
 
-- [ ] **MS0007 escalation in the consumer** — when a referenced type lives in an
+- [x] **MS0007 escalation in the consumer** — when a referenced type lives in an
       assembly with `[TranspileAssembly]` but no `[EmitPackage(JavaScript)]`, the
-      collector currently skips silently (the type just isn't imported). Should emit
-      a hard MS0007 explaining the producing assembly needs to declare the attribute.
+      compiler now emits MS0007 (hard error) at the consumer site instead of silently
+      skipping the import. Diagnostics deduplicate by type display name so a single
+      missing attribute produces exactly one error per type referenced.
 - [ ] **Auto-dependencies generation** in `package.json`: detect cross-package imports
       during emission and add the corresponding entries to `dependencies` automatically.
       Needs a version source — `workspace:*` for sibling projects in a Bun monorepo,

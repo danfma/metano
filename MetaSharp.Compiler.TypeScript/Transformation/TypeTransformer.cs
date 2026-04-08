@@ -123,6 +123,8 @@ public sealed class TypeTransformer(Compilation compilation)
         // is built so it only adds, never overwrites local entries.
         DiscoverCrossAssemblyTypes();
         TypeMapper.CrossAssemblyTypeMap = _crossAssemblyTypeMap;
+        TypeMapper.AssembliesNeedingEmitPackage = _assembliesNeedingEmitPackage;
+        TypeMapper.CrossPackageMisses = new HashSet<string>();
 
         // Build guard name → type name map for cross-file guard imports
         _guardNameToTypeMap = new Dictionary<string, string>();
@@ -177,6 +179,20 @@ public sealed class TypeTransformer(Compilation compilation)
         // of debugging it through tsgo's downstream error.
         CyclicReferenceDetector.DetectAndReport(files, _diagnostics.Add);
 
+        // Drain MS0007 cross-package misses recorded by TypeMapper.ResolveOrigin while
+        // mapping types. One error per unique miss; the message names the missing
+        // attribute and the producing assembly so the user knows where to fix it.
+        foreach (var miss in TypeMapper.CrossPackageMisses.OrderBy(s => s, StringComparer.Ordinal))
+        {
+            _diagnostics.Add(new MetaSharpDiagnostic(
+                MetaSharpDiagnosticSeverity.Error,
+                DiagnosticCodes.CrossPackageResolution,
+                $"Cannot resolve cross-package import for type '{miss}': its containing " +
+                $"assembly declares [TranspileAssembly] but no [EmitPackage] for the " +
+                $"JavaScript target. Add [assembly: EmitPackage(\"<package-name>\")] to " +
+                $"the producing project so consumers can import this type."));
+        }
+
         return files;
     }
 
@@ -194,6 +210,16 @@ public sealed class TypeTransformer(Compilation compilation)
     /// import statements.
     /// </summary>
     private Dictionary<ISymbol, CrossAssemblyEntry> _crossAssemblyTypeMap =
+        new(SymbolEqualityComparer.Default);
+
+    /// <summary>
+    /// Referenced assemblies that have <c>[TranspileAssembly]</c> but lack
+    /// <c>[EmitPackage(JavaScript)]</c>. The type mapper consults this set when a
+    /// cross-assembly type lookup misses; if the type's containing assembly is here,
+    /// it raises MS0007 in <see cref="TypeMapper.CrossPackageMisses"/> so the
+    /// transformer can report the missing-attribute error at the consumer site.
+    /// </summary>
+    private HashSet<IAssemblySymbol> _assembliesNeedingEmitPackage =
         new(SymbolEqualityComparer.Default);
     /// <summary>
     /// Maps guard function names (e.g., "isCurrency") to the type they guard (e.g., "Currency").
@@ -236,10 +262,17 @@ public sealed class TypeTransformer(Compilation compilation)
             if (!hasTranspileAssembly) continue;
 
             // Must also declare an EmitPackage for the JavaScript target — without it,
-            // we have no package name to import from. (The consumer-side error MS0007
-            // is raised in 21d when the type is actually referenced.)
+            // we have no package name to import from. The assembly is still a candidate
+            // (it's transpilable in principle), so we register it in
+            // _assembliesNeedingEmitPackage so the type mapper can detect references to
+            // its types and report MS0007 at the consumer site instead of failing
+            // silently with a downstream TypeScript "undefined identifier" error.
             var packageName = SymbolHelper.GetEmitPackage(asm, targetEnumValue: 0);
-            if (packageName is null) continue;
+            if (packageName is null)
+            {
+                _assembliesNeedingEmitPackage.Add(asm);
+                continue;
+            }
 
             // First pass: enumerate every transpilable type in the assembly so we can
             // compute its root namespace.

@@ -93,12 +93,12 @@ public class CrossPackageImportTests
     }
 
     [Test]
-    public async Task LibraryWithoutEmitPackage_TypeNotImported()
+    public async Task LibraryWithoutEmitPackage_EmitsMs0007AtConsumer()
     {
-        // Library has [TranspileAssembly] but no [EmitPackage], so its types aren't
-        // registered in the cross-assembly map. The consumer references the type but
-        // the import collector silently skips it (no string match in any other map).
-        // This is the documented behavior pending MS0007 escalation in a follow-up.
+        // Library has [TranspileAssembly] but no [EmitPackage], so its types can't be
+        // resolved to a package import. Instead of silently skipping (which would leave
+        // the consumer's .ts referencing an unbound name and failing downstream in tsgo),
+        // the compiler emits MS0007 at the consumer site explaining what to fix.
         var library = """
             [assembly: TranspileAssembly]
 
@@ -118,10 +118,41 @@ public class CrossPackageImportTests
             }
             """;
 
-        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
-        var output = result["holder.ts"];
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(library, consumer);
+        var output = files["holder.ts"];
 
-        // No import line for Item.
+        // No import line is generated (we have no package name to import from).
         await Assert.That(output).DoesNotContain("import { Item }");
+        // But MS0007 is raised so the user knows what to fix.
+        await Assert.That(diagnostics.Any(d =>
+            d.Code == "MS0007" && d.Message.Contains("Lib.Item"))).IsTrue();
+    }
+
+    [Test]
+    public async Task LibraryWithoutEmitPackage_DiagnosticDeduplicates()
+    {
+        // The same library type referenced from multiple consumer types should produce
+        // exactly one MS0007 (deduplicated by type display name).
+        var library = """
+            [assembly: TranspileAssembly]
+
+            namespace Lib;
+
+            public record Item(string Name);
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class HolderA { public Lib.Item? A { get; set; } }
+            public class HolderB { public Lib.Item? B { get; set; } }
+            public class HolderC { public Lib.Item? C { get; set; } }
+            """;
+
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(library, consumer);
+        var ms0007 = diagnostics.Where(d => d.Code == "MS0007" && d.Message.Contains("Lib.Item")).ToList();
+        await Assert.That(ms0007.Count).IsEqualTo(1);
     }
 }

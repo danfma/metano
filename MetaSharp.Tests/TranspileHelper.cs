@@ -147,8 +147,27 @@ public static class TranspileHelper
     /// validate cross-assembly type discovery and import resolution. The library source
     /// is wrapped with the same standard usings as <see cref="Transpile"/>.
     /// </summary>
+    /// <summary>
+    /// Same as <see cref="TranspileWithLibrary"/> but also returns the diagnostics
+    /// emitted by the consumer's transformation. Used for tests that assert MS00xx
+    /// codes around cross-package resolution.
+    /// </summary>
+    public static (Dictionary<string, string> Files, IReadOnlyList<MetaSharp.Compiler.Diagnostics.MetaSharpDiagnostic> Diagnostics)
+        TranspileWithLibraryAndDiagnostics(string librarySource, string consumerSource)
+    {
+        var (files, diagnostics) = TranspileWithLibraryCore(librarySource, consumerSource);
+        return (files, diagnostics);
+    }
+
     public static Dictionary<string, string> TranspileWithLibrary(
         string librarySource, string consumerSource)
+    {
+        var (files, _) = TranspileWithLibraryCore(librarySource, consumerSource);
+        return files;
+    }
+
+    private static (Dictionary<string, string> Files, IReadOnlyList<MetaSharp.Compiler.Diagnostics.MetaSharpDiagnostic> Diagnostics)
+        TranspileWithLibraryCore(string librarySource, string consumerSource)
     {
         var libSource = $"""
             using System;
@@ -200,7 +219,7 @@ public static class TranspileHelper
         var result = new Dictionary<string, string>();
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);
-        return result;
+        return (result, transformer.Diagnostics);
     }
 
     private static List<MetadataReference> BuildBaseReferences()
