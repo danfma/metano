@@ -714,12 +714,13 @@ public sealed class Printer(string indent = "  ")
     }
 
     /// <summary>
-    /// Renders a <see cref="TsTemplate"/> by walking the template string and emitting each
-    /// chunk in turn: literal text is written verbatim, while <c>$this</c> and <c>$N</c>
-    /// placeholders trigger a recursive <see cref="PrintExpression"/> call against the
-    /// substituted node. Recursion is what makes complex argument expressions
-    /// (nested calls, lambdas, binary operators) round-trip correctly — the template
-    /// author never has to think about textual rendering of the substitution payload.
+    /// Renders a <see cref="TsTemplate"/> by walking the template string and emitting
+    /// each chunk in turn: literal text is written verbatim, while
+    /// <c>$this</c>/<c>$N</c>/<c>$TN</c> placeholders trigger a substitution. Value
+    /// placeholders (<c>$this</c>, <c>$N</c>) recurse via <see cref="PrintExpression"/>
+    /// so complex argument shapes (nested calls, lambdas, binary operators) round-trip
+    /// correctly. Type placeholders (<c>$TN</c>) are plain identifier names and emit
+    /// as raw text.
     /// </summary>
     private void PrintTemplate(TsTemplate template)
     {
@@ -738,10 +739,8 @@ public sealed class Printer(string indent = "  ")
             if (dollar > i)
                 _sb.Write(text[i..dollar]);
 
-            // Try to parse $this first, then $<number>. Anything else is treated as
-            // a literal $ followed by the next char.
-            if (dollar + 4 < text.Length + 1
-                && dollar + 4 <= text.Length
+            // Try $this first.
+            if (dollar + 5 <= text.Length
                 && text.AsSpan(dollar, 5).SequenceEqual("$this".AsSpan()))
             {
                 if (template.Receiver is not null)
@@ -750,7 +749,24 @@ public sealed class Printer(string indent = "  ")
                 continue;
             }
 
-            // $0, $1, $2, … — read the integer suffix
+            // Then $T<n> (type-argument name placeholder).
+            if (dollar + 2 < text.Length && text[dollar + 1] == 'T' && char.IsDigit(text[dollar + 2]))
+            {
+                var typeArgStart = dollar + 2;
+                var typeArgEnd = typeArgStart;
+                while (typeArgEnd < text.Length && char.IsDigit(text[typeArgEnd]))
+                    typeArgEnd++;
+
+                if (int.TryParse(text.AsSpan(typeArgStart, typeArgEnd - typeArgStart), out var typeArgIndex)
+                    && typeArgIndex < template.TypeArgumentNames.Count)
+                {
+                    _sb.Write(template.TypeArgumentNames[typeArgIndex]);
+                    i = typeArgEnd;
+                    continue;
+                }
+            }
+
+            // Then $0, $1, … — read the integer suffix.
             var argStart = dollar + 1;
             var argEnd = argStart;
             while (argEnd < text.Length && char.IsDigit(text[argEnd]))

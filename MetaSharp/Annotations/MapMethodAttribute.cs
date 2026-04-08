@@ -64,8 +64,26 @@ public sealed class MapMethodAttribute : Attribute
     /// <summary>
     /// Full JavaScript expression template with <c>$this</c>, <c>$0</c>, <c>$1</c>, …
     /// placeholders. Mutually exclusive with <see cref="JsMethod"/>.
+    ///
+    /// Templates also support <c>$T0</c>, <c>$T1</c>, … placeholders which resolve to
+    /// the call site's generic method type-argument names. So
+    /// <c>JsTemplate = "$T0[$0 as keyof typeof $T0]"</c> applied to
+    /// <c>Enum.Parse&lt;Status&gt;(text)</c> emits
+    /// <c>Status[text as keyof typeof Status]</c>.
     /// </summary>
     public string? JsTemplate { get; init; }
+
+    /// <summary>
+    /// Optional literal-argument filter. When set, this declaration only matches if the
+    /// call site's first argument is a string literal whose value equals this property.
+    /// Used for literal-aware lowering like <c>Guid.ToString("N")</c> → strip hyphens vs
+    /// the parameterless <c>Guid.ToString()</c> → identity.
+    ///
+    /// Multiple declarations for the same <c>(Type, Member)</c> pair are walked in source
+    /// order; the first one whose filter matches the call site wins. Place specific
+    /// filters before unfiltered fallback declarations.
+    /// </summary>
+    public string? WhenArg0StringEquals { get; init; }
 
     public MapMethodAttribute(Type declaringType, string csharpMethod)
     {

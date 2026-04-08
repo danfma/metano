@@ -6,10 +6,19 @@ namespace MetaSharp.Transformation;
 /// One declarative mapping entry from <c>[MapMethod]</c> or <c>[MapProperty]</c>.
 /// Either <see cref="JsName"/> (simple rename) or <see cref="JsTemplate"/> is set, never
 /// both. The reader enforces the mutual exclusivity at registration time.
+///
+/// <see cref="WhenArg0StringEquals"/> is an optional literal-argument filter: when set,
+/// the entry only matches a call site whose first argument is a TS string literal with
+/// that exact value. Used for literal-aware lowering like <c>Guid.ToString("N")</c>.
 /// </summary>
-public sealed record DeclarativeMappingEntry(string? JsName, string? JsTemplate)
+public sealed record DeclarativeMappingEntry(
+    string? JsName,
+    string? JsTemplate,
+    string? WhenArg0StringEquals = null)
 {
     public bool HasTemplate => JsTemplate is not null;
+
+    public bool HasArgFilter => WhenArg0StringEquals is not null;
 }
 
 /// <summary>
@@ -27,11 +36,11 @@ public sealed record DeclarativeMappingEntry(string? JsName, string? JsTemplate)
 /// </summary>
 public sealed class DeclarativeMappingRegistry
 {
-    private readonly Dictionary<(INamedTypeSymbol Type, string Name), DeclarativeMappingEntry> _methods;
+    private readonly Dictionary<(INamedTypeSymbol Type, string Name), List<DeclarativeMappingEntry>> _methods;
     private readonly Dictionary<(INamedTypeSymbol Type, string Name), DeclarativeMappingEntry> _properties;
 
     private DeclarativeMappingRegistry(
-        Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> methods,
+        Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>> methods,
         Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> properties)
     {
         _methods = methods;
@@ -43,19 +52,38 @@ public sealed class DeclarativeMappingRegistry
     /// compilation does not reference any assembly that defines them).
     /// </summary>
     public static DeclarativeMappingRegistry Empty { get; } = new(
-        new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance),
+        new Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>>(SymbolNameKeyComparer.Instance),
         new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance));
 
-    public int MethodCount => _methods.Count;
+    public int MethodCount => _methods.Values.Sum(list => list.Count);
     public int PropertyCount => _properties.Count;
 
     /// <summary>
-    /// Looks up a declarative method mapping by the containing type and the C# method name.
-    /// The containing type is normalized to its <see cref="INamedTypeSymbol.OriginalDefinition"/>
-    /// so closed generics resolve to the open-generic registration.
+    /// Returns all declarative method mapping entries registered for the given containing
+    /// type + method name, in declaration order. Multiple entries are allowed when an
+    /// entry uses the optional <see cref="DeclarativeMappingEntry.WhenArg0StringEquals"/>
+    /// filter to discriminate between literal arg shapes (e.g.,
+    /// <c>Guid.ToString("N")</c> vs <c>Guid.ToString()</c>). Callers walk the list and
+    /// pick the first entry whose filter matches their call site.
+    ///
+    /// The containing type is normalized to its
+    /// <see cref="INamedTypeSymbol.OriginalDefinition"/> so closed generics resolve to
+    /// the open-generic registration.
     /// </summary>
-    public bool TryGetMethod(INamedTypeSymbol containingType, string methodName, out DeclarativeMappingEntry entry) =>
-        _methods.TryGetValue((containingType.OriginalDefinition, methodName), out entry!);
+    public bool TryGetMethods(
+        INamedTypeSymbol containingType,
+        string methodName,
+        out IReadOnlyList<DeclarativeMappingEntry> entries)
+    {
+        if (_methods.TryGetValue((containingType.OriginalDefinition, methodName), out var list))
+        {
+            entries = list;
+            return true;
+        }
+
+        entries = [];
+        return false;
+    }
 
     /// <summary>
     /// Looks up a declarative property mapping by the containing type and the C# property name.
@@ -72,7 +100,7 @@ public sealed class DeclarativeMappingRegistry
     /// </summary>
     public static DeclarativeMappingRegistry BuildFromCompilation(Compilation compilation)
     {
-        var methods = new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance);
+        var methods = new Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>>(SymbolNameKeyComparer.Instance);
         var properties = new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance);
 
         // Walk the current assembly + every referenced assembly's attributes
@@ -89,9 +117,9 @@ public sealed class DeclarativeMappingRegistry
             {
                 var attrName = attr.AttributeClass?.Name;
                 if (attrName is "MapMethodAttribute")
-                    TryRegister(attr, methods);
+                    TryRegisterMethod(attr, methods);
                 else if (attrName is "MapPropertyAttribute")
-                    TryRegister(attr, properties);
+                    TryRegisterProperty(attr, properties);
             }
         }
 
@@ -99,46 +127,84 @@ public sealed class DeclarativeMappingRegistry
     }
 
     /// <summary>
-    /// Reads one [MapMethod] / [MapProperty] attribute and inserts it into the target
-    /// dictionary. Both attribute shapes are identical from the AttributeData perspective:
-    /// the constructor takes <c>(Type, string)</c> and the optional named arguments are
-    /// either <c>JsMethod</c>/<c>JsProperty</c> (rename) or <c>JsTemplate</c>.
+    /// Reads one [MapMethod] attribute and appends it to the per-key list in the target
+    /// dictionary. Multiple entries per key are allowed when filters like
+    /// <c>WhenArg0StringEquals</c> are used to discriminate between literal arg shapes.
+    /// Entries are appended in walk order (current assembly first, then references), so
+    /// the consumer's source order within an assembly is preserved.
     /// </summary>
-    private static void TryRegister(
+    private static void TryRegisterMethod(
+        AttributeData attr,
+        Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>> target)
+    {
+        var entry = ReadEntry(attr, "JsMethod");
+        if (entry is null) return;
+
+        var declaringType = (INamedTypeSymbol)attr.ConstructorArguments[0].Value!;
+        var memberName = (string)attr.ConstructorArguments[1].Value!;
+        var key = (declaringType.OriginalDefinition, memberName);
+
+        if (!target.TryGetValue(key, out var list))
+        {
+            list = [];
+            target[key] = list;
+        }
+        list.Add(entry);
+    }
+
+    /// <summary>
+    /// Reads one [MapProperty] attribute and stores it in the target dictionary. Property
+    /// mappings don't use literal-argument filters (properties have no arguments), so
+    /// the storage stays single-entry-per-key with last-write-wins semantics.
+    /// </summary>
+    private static void TryRegisterProperty(
         AttributeData attr,
         Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> target)
     {
-        if (attr.ConstructorArguments.Length < 2) return;
-        if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol declaringType) return;
-        if (attr.ConstructorArguments[1].Value is not string memberName) return;
+        var entry = ReadEntry(attr, "JsProperty");
+        if (entry is null) return;
+
+        var declaringType = (INamedTypeSymbol)attr.ConstructorArguments[0].Value!;
+        var memberName = (string)attr.ConstructorArguments[1].Value!;
+        var key = (declaringType.OriginalDefinition, memberName);
+
+        target[key] = entry;
+    }
+
+    /// <summary>
+    /// Reads the body of a [MapMethod]/[MapProperty] AttributeData into a
+    /// <see cref="DeclarativeMappingEntry"/>, returning null when the constructor args
+    /// are missing or when neither <c>JsMethod</c>/<c>JsProperty</c> nor <c>JsTemplate</c>
+    /// is provided.
+    /// </summary>
+    private static DeclarativeMappingEntry? ReadEntry(AttributeData attr, string renameNamedArg)
+    {
+        if (attr.ConstructorArguments.Length < 2) return null;
+        if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol) return null;
+        if (attr.ConstructorArguments[1].Value is not string) return null;
 
         string? jsName = null;
         string? jsTemplate = null;
+        string? whenArg0StringEquals = null;
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
             {
-                case "JsMethod":
-                case "JsProperty":
+                case var k when k == renameNamedArg:
                     jsName = named.Value.Value as string;
                     break;
                 case "JsTemplate":
                     jsTemplate = named.Value.Value as string;
                     break;
+                case "WhenArg0StringEquals":
+                    whenArg0StringEquals = named.Value.Value as string;
+                    break;
             }
         }
 
-        // At least one form must be present; if both are set, JsTemplate wins (it's
-        // strictly more expressive than the rename shorthand).
-        if (jsName is null && jsTemplate is null) return;
+        if (jsName is null && jsTemplate is null) return null;
 
-        var entry = new DeclarativeMappingEntry(jsName, jsTemplate);
-        var key = (declaringType.OriginalDefinition, memberName);
-
-        // Last write wins. The expected pattern is one declaration per (Type, member),
-        // but if a consumer overrides a default mapping with their own, the consumer's
-        // assembly is walked after the default assembly so their entry takes precedence.
-        target[key] = entry;
+        return new DeclarativeMappingEntry(jsName, jsTemplate, whenArg0StringEquals);
     }
 
     /// <summary>

@@ -79,4 +79,74 @@ public class DeclarativeMappingTests
         var output = result["todo-list.ts"];
         await Assert.That(output).Contains("this.items.push(value)");
     }
+
+    [Test]
+    public async Task DeclarativeGuidToStringN_StripsHyphens()
+    {
+        // Guid.ToString("N") matches the WhenArg0StringEquals = "N" filter in
+        // MetaSharp/Runtime/Guid.cs and lowers via the strip-hyphens template.
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+
+            [Transpile]
+            public class IdGen
+            {
+                public string Compact(Guid id) => id.ToString("N");
+            }
+            """
+        );
+
+        var output = result["id-gen.ts"];
+        await Assert.That(output).Contains("id.replace(/-/g, \"\")");
+    }
+
+    [Test]
+    public async Task DeclarativeGuidToStringDefault_LowersToIdentity()
+    {
+        // Guid.ToString() with no argument falls through to the unfiltered fallback
+        // declaration in MetaSharp/Runtime/Guid.cs and lowers to the receiver itself
+        // (Guid is already a string at runtime).
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+
+            [Transpile]
+            public class IdGen
+            {
+                public string Render(Guid id) => id.ToString();
+            }
+            """
+        );
+
+        var output = result["id-gen.ts"];
+        // The body should be `return id;` — the ToString() call collapses to its receiver.
+        await Assert.That(output).Contains("return id;");
+    }
+
+    [Test]
+    public async Task DeclarativeEnumParse_EmbedsTypeArgumentName()
+    {
+        // Enum.Parse<T>(text) uses the $T0 placeholder in MetaSharp/Runtime/Enums.cs to
+        // embed the user's enum type name into the lowered indexer expression. The
+        // template is `$T0[$0 as keyof typeof $T0]`, so a call like
+        // `Enum.Parse<Status>(text)` lowers to `Status[text as keyof typeof Status]`.
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+
+            [Transpile]
+            public enum Status { Active, Inactive }
+
+            [Transpile]
+            public class StatusParser
+            {
+                public Status Parse(string text) => Enum.Parse<Status>(text);
+            }
+            """
+        );
+
+        var output = result["status-parser.ts"];
+        await Assert.That(output).Contains("Status[text as keyof typeof Status]");
+    }
 }

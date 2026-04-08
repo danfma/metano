@@ -81,20 +81,42 @@ public static class BclMapper
             .ArgumentList.Arguments.Select(a => transformer.TransformExpression(a.Expression))
             .ToList();
 
-        // 1. Declarative method mapping wins over any hardcoded fallback below.
-        if (transformer.DeclarativeMappings.TryGetMethod(method.ContainingType, name, out var methodMapping))
+        // 1. Declarative method mappings win over any hardcoded fallback below.
+        // Multiple entries per (Type, Name) are allowed when WhenArg0StringEquals filters
+        // are used to discriminate between literal arg shapes. Walk in declaration order
+        // and pick the first whose filter matches the call site.
+        if (transformer.DeclarativeMappings.TryGetMethods(method.ContainingType, name, out var methodMappings))
         {
-            // Resolve the receiver from the syntax. For instance methods this is the
-            // value expression to the left of the dot; for static methods called via
-            // `TypeName.Method(args)` this is the type identifier itself, which the
-            // IdentifierHandler renders verbatim in PascalCase. Both shapes feed the
-            // same JsMethod / JsTemplate substitution. Free-standing calls (no member
-            // access syntax) have no receiver to substitute.
-            TsExpression? receiver = null;
-            if (invocation.Expression is MemberAccessExpressionSyntax declarativeReceiverAccess)
-                receiver = transformer.TransformExpression(declarativeReceiverAccess.Expression);
+            DeclarativeMappingEntry? match = null;
+            foreach (var candidate in methodMappings)
+            {
+                if (MatchesArgFilter(candidate, args))
+                {
+                    match = candidate;
+                    break;
+                }
+            }
 
-            return ApplyMethodMapping(methodMapping, receiver, args);
+            if (match is not null)
+            {
+                // Resolve the receiver from the syntax. For instance methods this is the
+                // value expression to the left of the dot; for static methods called via
+                // `TypeName.Method(args)` this is the type identifier itself, which the
+                // IdentifierHandler renders verbatim in PascalCase. Both shapes feed the
+                // same JsMethod / JsTemplate substitution. Free-standing calls (no member
+                // access syntax) have no receiver to substitute.
+                TsExpression? receiver = null;
+                if (invocation.Expression is MemberAccessExpressionSyntax declarativeReceiverAccess)
+                    receiver = transformer.TransformExpression(declarativeReceiverAccess.Expression);
+
+                // Capture generic method type-argument names for $T0/$T1/... template
+                // placeholders. For non-generic methods this is the empty list.
+                var typeArgNames = method.TypeArguments
+                    .Select(t => t.Name)
+                    .ToList();
+
+                return ApplyMethodMapping(match, receiver, args, typeArgNames);
+            }
         }
 
         var containing = method.ContainingType.ToDisplayString();
@@ -183,39 +205,14 @@ public static class BclMapper
         // TryGetValue stays unmapped because the out-parameter idiom doesn't translate
         // cleanly to JS Map.get — see the note in Dictionaries.cs.
 
-        // Enum.HasFlag(flag) is now handled declaratively via MetaSharp/Runtime/Enums.cs.
+        // Enum.HasFlag(flag) and Enum.Parse<T>(text) are now handled declaratively via
+        // MetaSharp/Runtime/Enums.cs (the latter uses the $T0 placeholder for the
+        // generic method type-argument name).
 
-        // Enum.Parse<T>(text) → T[text as keyof typeof T]  (for numeric enums)
-        if (containing == "System.Enum" && name == "Parse"
-            && method.TypeArguments.Length == 1
-            && args.Count >= 1)
-        {
-            var enumType = method.TypeArguments[0];
-            var enumName = enumType.Name;
-            var textArg = args[0];
-            // For numeric enums: EnumName[text as keyof typeof EnumName]
-            return new TsElementAccess(
-                new TsIdentifier(enumName),
-                new TsCastExpression(textArg, new TsNamedType($"keyof typeof {enumName}")));
-        }
-
-        // Console.WriteLine, Guid.NewGuid, Task.FromResult are now handled declaratively
-        // via MetaSharp/Runtime/Console.cs, Guid.cs, and Tasks.cs.
-
-        // Guid.ToString(format) → .replace(/-/g, "") for "N", identity for default.
-        // The lowering depends on the literal value of the format argument and stays
-        // hardcoded for now — declarative templates can't yet branch on argument literals.
-        if (containing == "System.Guid" && name == "ToString"
-            && invocation.Expression is MemberAccessExpressionSyntax guidToStringAccess)
-        {
-            var obj = transformer.TransformExpression(guidToStringAccess.Expression);
-            if (args.Count == 1 && args[0] is TsStringLiteral { Value: "N" })
-                return new TsCallExpression(
-                    new TsPropertyAccess(obj, "replace"),
-                    [new TsLiteral("/-/g"), new TsStringLiteral("")]);
-            // Default: Guid is already a string in JS, .toString() is identity
-            return obj;
-        }
+        // Console.WriteLine, Guid.NewGuid, Guid.ToString(format), Task.FromResult are now
+        // handled declaratively via MetaSharp/Runtime/Console.cs, Guid.cs and Tasks.cs.
+        // Guid.ToString uses the WhenArg0StringEquals filter to discriminate "N" from the
+        // unfiltered identity fallback.
 
         return null;
     }
@@ -253,22 +250,37 @@ public static class BclMapper
     /// For free-standing calls (no member access on the LHS), the receiver is null and
     /// the rename produces a bare <c>jsName(args)</c> call.
     ///
-    /// The template form uses <c>$this</c> for the receiver and <c>$0</c>, <c>$1</c>, …
-    /// for the arguments — same convention as <see cref="EmitAttribute"/>.
+    /// The template form uses <c>$this</c> for the receiver, <c>$0</c>, <c>$1</c>, … for
+    /// the arguments (same convention as <see cref="EmitAttribute"/>), and
+    /// <c>$T0</c>, <c>$T1</c>, … for the call site's generic method type-argument names.
     /// </summary>
     private static TsExpression ApplyMethodMapping(
         DeclarativeMappingEntry mapping,
         TsExpression? receiver,
-        IReadOnlyList<TsExpression> args)
+        IReadOnlyList<TsExpression> args,
+        IReadOnlyList<string> typeArgumentNames)
     {
         if (mapping.HasTemplate)
-            return JsTemplateExpander.Expand(mapping.JsTemplate!, receiver, args);
+            return JsTemplateExpander.Expand(mapping.JsTemplate!, receiver, args, typeArgumentNames);
 
         var name = mapping.JsName!;
         var callee = receiver is not null
             ? (TsExpression)new TsPropertyAccess(receiver, name)
             : new TsIdentifier(name);
         return new TsCallExpression(callee, args);
+    }
+
+    /// <summary>
+    /// Decides whether a declarative mapping's optional arg-literal filter matches the
+    /// call site's transformed arguments. An entry without a filter matches anything;
+    /// an entry with <see cref="DeclarativeMappingEntry.WhenArg0StringEquals"/> matches
+    /// only when arg 0 is a TS string literal whose value equals the filter.
+    /// </summary>
+    private static bool MatchesArgFilter(DeclarativeMappingEntry entry, IReadOnlyList<TsExpression> args)
+    {
+        if (!entry.HasArgFilter) return true;
+        if (args.Count < 1) return false;
+        return args[0] is TsStringLiteral str && str.Value == entry.WhenArg0StringEquals;
     }
 
     // ─── Type classification helpers ────────────────────────

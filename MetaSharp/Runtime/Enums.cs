@@ -1,9 +1,4 @@
 // Declarative BCL → JavaScript mappings for System.Enum members.
-//
-// Enum.Parse<T>(text) is intentionally NOT mapped here because it requires accessing
-// the method's TypeArguments[0].Name to embed the enum name in the lowered expression
-// (`T[text as keyof typeof T]`), and the JsTemplate system has no $T placeholder for
-// generic type arguments. It stays hardcoded in BclMapper for now.
 
 using System;
 using MetaSharp.Annotations;
@@ -14,3 +9,11 @@ using MetaSharp.Annotations;
 // Roslyn always resolves the call to System.Enum.HasFlag — never to a derived type —
 // because the method isn't overridden.
 [assembly: MapMethod(typeof(Enum), nameof(Enum.HasFlag), JsTemplate = "($this & $0) === $0")]
+
+// Enum.Parse<T>(text) → T[text as keyof typeof T]
+// Uses the $T0 placeholder to embed the call site's generic method type-argument name
+// (the enum type) into the lowered expression. So `Enum.Parse<Status>("Active")` lowers
+// to `Status["Active" as keyof typeof Status]`, which TypeScript validates against the
+// enum's known member names at compile time.
+[assembly: MapMethod(typeof(Enum), nameof(Enum.Parse),
+    JsTemplate = "$T0[$0 as keyof typeof $T0]")]

@@ -11,7 +11,7 @@ namespace MetaSharp.Transformation;
 /// correctly without the template author having to worry about textual rendering of the
 /// substitution payload.
 ///
-/// Two flavors of placeholder are supported in the template string:
+/// Three flavors of placeholder are supported in the template string:
 ///
 /// <list type="bullet">
 ///   <item>
@@ -22,6 +22,11 @@ namespace MetaSharp.Transformation;
 ///   <item>
 ///     <c>$0</c>, <c>$1</c>, … — the C# explicit arguments in order. Same convention as
 ///     <see cref="EmitAttribute"/>.
+///   </item>
+///   <item>
+///     <c>$T0</c>, <c>$T1</c>, … — the call site's generic method type-argument names.
+///     Used to embed identifiers like the enum name in <c>Enum.Parse&lt;T&gt;</c> →
+///     <c>T[…]</c>.
 ///   </item>
 /// </list>
 ///
@@ -35,5 +40,12 @@ public static class JsTemplateExpander
         string template,
         TsExpression? receiver,
         IReadOnlyList<TsExpression> args) =>
-        new TsTemplate(template, receiver, args);
+        new TsTemplate(template, receiver, args, []);
+
+    public static TsExpression Expand(
+        string template,
+        TsExpression? receiver,
+        IReadOnlyList<TsExpression> args,
+        IReadOnlyList<string> typeArgumentNames) =>
+        new TsTemplate(template, receiver, args, typeArgumentNames);
 }
