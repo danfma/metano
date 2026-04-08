@@ -115,6 +115,13 @@ public sealed class TypeTransformer(Compilation compilation)
             }
         }
 
+        // Discover transpilable types from referenced assemblies (those that declare
+        // both [TranspileAssembly] and [EmitPackage(JavaScript)]). Populates
+        // _crossAssemblyTypeMap and augments _externalImportMap with [Import] entries
+        // from the referenced assemblies. Must run after the local _externalImportMap
+        // is built so it only adds, never overwrites local entries.
+        DiscoverCrossAssemblyTypes();
+
         // Build guard name → type name map for cross-file guard imports
         _guardNameToTypeMap = new Dictionary<string, string>();
         foreach (var t in transpilableTypes)
@@ -177,6 +184,16 @@ public sealed class TypeTransformer(Compilation compilation)
     private Dictionary<string, (string Name, string From)> _externalImportMap = [];
     private Dictionary<string, (string ExportedName, string FromPackage)> _bclExportMap = [];
     /// <summary>
+    /// Types discovered in referenced assemblies that declare both
+    /// <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>. Keyed by symbol
+    /// identity (not name) to handle the case where two assemblies expose types with
+    /// the same simple name. Consumed by <see cref="TypeMapper"/> when computing the
+    /// origin of a referenced type, and by the import collector to emit cross-package
+    /// import statements.
+    /// </summary>
+    private Dictionary<ISymbol, CrossAssemblyEntry> _crossAssemblyTypeMap =
+        new(SymbolEqualityComparer.Default);
+    /// <summary>
     /// Maps guard function names (e.g., "isCurrency") to the type they guard (e.g., "Currency").
     /// Used to resolve imports for cross-file guard calls.
     /// </summary>
@@ -189,6 +206,99 @@ public sealed class TypeTransformer(Compilation compilation)
     /// instead of touching the private fields directly.
     /// </summary>
     private TypeScriptTransformContext? _context;
+
+    /// <summary>
+    /// Walks <see cref="Compilation.References"/> and, for each referenced assembly that
+    /// declares <em>both</em> <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>,
+    /// enumerates its public transpilable types and registers them in
+    /// <see cref="_crossAssemblyTypeMap"/>. Also augments <see cref="_externalImportMap"/>
+    /// with any <c>[Import]</c> declarations from those assemblies so consumers can
+    /// transitively reach external bindings declared in a referenced library.
+    ///
+    /// Each cross-assembly type is paired with the root namespace of <em>its</em> source
+    /// assembly so the subpath inside the package can be computed independently of the
+    /// consumer's own root namespace.
+    /// </summary>
+    private void DiscoverCrossAssemblyTypes()
+    {
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
+                continue;
+            // Skip the assembly currently being compiled.
+            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly)) continue;
+
+            // Cheap filter: only consider assemblies that opt into transpilation.
+            var hasTranspileAssembly = asm.GetAttributes().Any(a =>
+                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly");
+            if (!hasTranspileAssembly) continue;
+
+            // Must also declare an EmitPackage for the JavaScript target — without it,
+            // we have no package name to import from. (The consumer-side error MS0007
+            // is raised in 21d when the type is actually referenced.)
+            var packageName = SymbolHelper.GetEmitPackage(asm, targetEnumValue: 0);
+            if (packageName is null) continue;
+
+            // First pass: enumerate every transpilable type in the assembly so we can
+            // compute its root namespace.
+            var assemblyTypes = new List<INamedTypeSymbol>();
+            CollectTypesFromNamespace(asm.GlobalNamespace, assemblyTypes);
+
+            var namespaces = assemblyTypes
+                .Select(PathNaming.GetNamespace)
+                .Where(ns => ns.Length > 0)
+                .ToList();
+            var rootNs = namespaces.Count > 0
+                ? PathNaming.FindCommonNamespacePrefix(namespaces)
+                : "";
+
+            // Second pass: register each type in the cross-assembly map. Tipos com
+            // [Import] continuam acessíveis pro consumer mas vão para o
+            // _externalImportMap (pacote externo de origem), não pro cross-assembly
+            // map (que assume "vem do package emitido por aquele assembly").
+            foreach (var type in assemblyTypes)
+            {
+                var import = SymbolHelper.GetImport(type);
+                if (import is not null)
+                {
+                    _externalImportMap[type.Name] = import.Value;
+                    var tsName = GetTsTypeName(type);
+                    if (tsName != type.Name)
+                        _externalImportMap[tsName] = import.Value;
+                    continue;
+                }
+
+                _crossAssemblyTypeMap[type] = new CrossAssemblyEntry(type, packageName, rootNs);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Recursively walks an <see cref="INamespaceSymbol"/> and collects every public
+    /// top-level type whose declaration would be transpiled (passes <see cref="SymbolHelper.IsTranspilable"/>
+    /// with assembly-wide opt-in). Nested types are skipped — they're processed by
+    /// their containing type as companion namespaces.
+    /// </summary>
+    private static void CollectTypesFromNamespace(
+        INamespaceSymbol ns, List<INamedTypeSymbol> sink)
+    {
+        foreach (var member in ns.GetMembers())
+        {
+            switch (member)
+            {
+                case INamespaceSymbol childNs:
+                    CollectTypesFromNamespace(childNs, sink);
+                    break;
+                case INamedTypeSymbol type
+                    when type.ContainingType is null
+                         && type.DeclaredAccessibility == Accessibility.Public
+                         && !SymbolHelper.HasNoTranspile(type)
+                         && !SymbolHelper.HasNoEmit(type):
+                    sink.Add(type);
+                    break;
+            }
+        }
+    }
 
     private IReadOnlyList<INamedTypeSymbol> DiscoverTranspilableTypes()
     {
