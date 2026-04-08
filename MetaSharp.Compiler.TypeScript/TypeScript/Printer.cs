@@ -62,6 +62,10 @@ public sealed class Printer(string indent = "  ")
             case TsConstObject n: PrintConstObject(n); break;
             case TsNamespaceDeclaration n: PrintNamespace(n); break;
             case TsClass n: PrintClass(n); break;
+            case TsTopLevelStatement n:
+                PrintStatement(n.Inner);
+                _sb.WriteLn();
+                break;
         }
     }
 

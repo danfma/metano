@@ -255,6 +255,13 @@ public sealed class ImportCollector(
                     }
                 }
                 break;
+            case TsTopLevelStatement topStmt:
+                // The body of a [ModuleEntryPoint] method ends up here as a flat list
+                // of top-level statements. Walk each one as a regular statement so any
+                // identifiers it references (e.g., `new Hono()`) are picked up for
+                // import emission.
+                CollectFromStatement(topStmt.Inner, names, valueNames, runtimeHelpers);
+                break;
         }
     }
 

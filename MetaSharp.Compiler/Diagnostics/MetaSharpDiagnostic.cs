@@ -67,4 +67,8 @@ public static class DiagnosticCodes
 
     /// <summary>MS0005 — A cyclic reference exists between generated TypeScript files.</summary>
     public const string CyclicReference = "MS0005";
+
+    /// <summary>MS0006 — Invalid use of [ModuleEntryPoint] (multiple, non-void/Task return,
+    /// or has parameters).</summary>
+    public const string InvalidModuleEntryPoint = "MS0006";
 }

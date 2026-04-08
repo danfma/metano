@@ -1,4 +1,5 @@
 using MetaSharp.Compiler;
+using MetaSharp.Compiler.Diagnostics;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -32,6 +33,28 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
+        // First, find any [ModuleEntryPoint] method on the class. Validate that there's
+        // at most one, then unwrap its body as top-level module statements (after the
+        // regular function members are emitted, so the entry point body sees them).
+        IMethodSymbol? entryPoint = null;
+        foreach (var member in type.GetMembers())
+        {
+            if (member is IMethodSymbol m && SymbolHelper.HasModuleEntryPoint(m))
+            {
+                if (entryPoint is not null)
+                {
+                    _context.ReportDiagnostic(new MetaSharpDiagnostic(
+                        MetaSharpDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidModuleEntryPoint,
+                        $"Type '{type.Name}' declares multiple [ModuleEntryPoint] methods. " +
+                        $"Only one is allowed per class.",
+                        m.Locations.FirstOrDefault()));
+                    continue;
+                }
+                entryPoint = m;
+            }
+        }
+
         // Process direct members (classic extension methods, plain static functions)
         foreach (var member in type.GetMembers())
         {
@@ -40,6 +63,9 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
             switch (member)
             {
                 case IMethodSymbol { MethodKind: MethodKind.Ordinary } method:
+                    // [ModuleEntryPoint] methods are NOT emitted as ordinary functions —
+                    // their body is unwrapped at the bottom of this method.
+                    if (SymbolHelper.HasModuleEntryPoint(method)) break;
                     var func = TransformModuleFunction(method);
                     if (func is not null) statements.Add(func);
                     break;
@@ -64,6 +90,63 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
                 TransformExtensionBlock(node, statements);
             }
         }
+
+        // Finally, unwrap the [ModuleEntryPoint] body as top-level statements.
+        if (entryPoint is not null)
+            UnwrapEntryPoint(entryPoint, statements);
+    }
+
+    /// <summary>
+    /// Validates a <c>[ModuleEntryPoint]</c> method and, if it passes, transforms its
+    /// body's statements into <see cref="TsTopLevelStatement"/>s appended to
+    /// <paramref name="statements"/>. Validation: must have no parameters, and the
+    /// return type must be <c>void</c>, <c>Task</c>, or <c>ValueTask</c> (any of those
+    /// can be combined with <c>async</c>; the async modifier is dropped because top-level
+    /// <c>await</c> is native to ESM modules).
+    /// </summary>
+    private void UnwrapEntryPoint(IMethodSymbol method, List<TsTopLevel> statements)
+    {
+        if (method.Parameters.Length > 0)
+        {
+            _context.ReportDiagnostic(new MetaSharpDiagnostic(
+                MetaSharpDiagnosticSeverity.Error,
+                DiagnosticCodes.InvalidModuleEntryPoint,
+                $"[ModuleEntryPoint] method '{method.Name}' must have no parameters.",
+                method.Locations.FirstOrDefault()));
+            return;
+        }
+
+        if (!IsValidEntryPointReturn(method.ReturnType))
+        {
+            _context.ReportDiagnostic(new MetaSharpDiagnostic(
+                MetaSharpDiagnosticSeverity.Error,
+                DiagnosticCodes.InvalidModuleEntryPoint,
+                $"[ModuleEntryPoint] method '{method.Name}' must return void, Task, or ValueTask. " +
+                $"Found: {method.ReturnType.ToDisplayString()}.",
+                method.Locations.FirstOrDefault()));
+            return;
+        }
+
+        var syntaxNode = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntaxNode is not MethodDeclarationSyntax methodSyntax) return;
+
+        var semanticModel = _context.Compilation.GetSemanticModel(syntaxNode.SyntaxTree);
+        var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
+        var body = exprTransformer.TransformBody(
+            methodSyntax.Body,
+            methodSyntax.ExpressionBody,
+            isVoid: method.ReturnsVoid);
+
+        foreach (var stmt in body)
+            statements.Add(new TsTopLevelStatement(stmt));
+    }
+
+    private static bool IsValidEntryPointReturn(ITypeSymbol returnType)
+    {
+        if (returnType.SpecialType == SpecialType.System_Void) return true;
+        var name = returnType.OriginalDefinition.ToDisplayString();
+        return name is "System.Threading.Tasks.Task"
+            or "System.Threading.Tasks.ValueTask";
     }
 
     /// <summary>

@@ -49,6 +49,8 @@ public static class SymbolHelper
 
     public static bool HasNoEmit(ISymbol symbol) => HasAttribute(symbol, "NoEmit");
 
+    public static bool HasModuleEntryPoint(ISymbol symbol) => HasAttribute(symbol, "ModuleEntryPoint");
+
     public static bool HasInlineWrapper(ISymbol symbol) => HasAttribute(symbol, "InlineWrapper");
 
     /// <summary>
