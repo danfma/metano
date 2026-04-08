@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="SampleIssueTracker/SampleIssueTracker.csproj" />
+    <Project Path="SampleTodo.Service\SampleTodo.Service.csproj" />
     <Project Path="SampleTodo/SampleTodo.csproj" />
   </Folder>
 </Solution>
