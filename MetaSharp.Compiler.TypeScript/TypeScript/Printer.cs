@@ -373,7 +373,7 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write("(");
                 _sb.Write(setter.ValueParam.Name);
                 _sb.Write(": ");
-                PrintType(setter.ValueParam.Type);
+                PrintType(setter.ValueParam.Type!);
                 _sb.Write(")");
                 PrintBody(setter.Body);
                 _sb.WriteLn();
@@ -845,8 +845,13 @@ public sealed class Printer(string indent = "  ")
         _sb.WriteList(parameters, p =>
         {
             _sb.Write(p.Name);
-            _sb.Write(": ");
-            PrintType(p.Type);
+            // Null Type → skip the annotation entirely (used by lambdas whose source
+            // parameter is a [NoEmit] type, so TypeScript can infer from context).
+            if (p.Type is not null)
+            {
+                _sb.Write(": ");
+                PrintType(p.Type);
+            }
         });
     }
 

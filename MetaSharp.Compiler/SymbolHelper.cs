@@ -47,18 +47,25 @@ public static class SymbolHelper
 
     public static bool HasNoTranspile(ISymbol symbol) => HasAttribute(symbol, "NoTranspile");
 
+    public static bool HasNotEmitted(ISymbol symbol) => HasAttribute(symbol, "NotEmitted");
+
     public static bool HasInlineWrapper(ISymbol symbol) => HasAttribute(symbol, "InlineWrapper");
 
     /// <summary>
     /// Determines if a type should be transpiled, considering:
     /// 1. [NoTranspile] → always excluded
-    /// 2. [Transpile] → always included
-    /// 3. assemblyWideTranspile + public → included
+    /// 2. [NotEmitted] → excluded from transpilation, but the type is still discoverable
+    ///    via Roslyn semantic model so user code can reference it. The transpiler
+    ///    won't generate a .ts file or import it from anywhere — it's an ambient
+    ///    declaration over an external library shape.
+    /// 3. [Transpile] → always included
+    /// 4. assemblyWideTranspile + public → included
     /// </summary>
     public static bool IsTranspilable(ISymbol symbol, bool assemblyWideTranspile = false,
         IAssemblySymbol? currentAssembly = null)
     {
         if (HasNoTranspile(symbol)) return false;
+        if (HasNotEmitted(symbol)) return false;
         if (HasTranspile(symbol)) return true;
         // Assembly-wide: only for types in the current compilation's assembly (not BCL/referenced assemblies)
         if (assemblyWideTranspile

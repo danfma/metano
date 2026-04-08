@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -42,14 +43,23 @@ public sealed class LambdaHandler(ExpressionTransformer parent)
 
         // Try to resolve the type from the semantic model
         var symbol = _parent.Model.GetDeclaredSymbol(param);
-        TsType type;
+        TsType? type;
         if (symbol is IParameterSymbol paramSymbol)
         {
+            // [NoEmit] parameter types are ambient — we have no TS name to emit and we
+            // don't want to import them. Drop the annotation entirely so TypeScript
+            // infers the type from the call-site context (e.g., the imported function's
+            // .d.ts signature).
+            if (IsNotEmittedType(paramSymbol.Type))
+                return new TsParameter(name, null);
+
             type = TypeMapper.Map(paramSymbol.Type);
         }
         else if (param.Type is not null)
         {
             var typeInfo = _parent.Model.GetTypeInfo(param.Type);
+            if (typeInfo.Type is not null && IsNotEmittedType(typeInfo.Type))
+                return new TsParameter(name, null);
             type = typeInfo.Type is not null ? TypeMapper.Map(typeInfo.Type) : new TsAnyType();
         }
         else
@@ -59,6 +69,9 @@ public sealed class LambdaHandler(ExpressionTransformer parent)
 
         return new TsParameter(name, type);
     }
+
+    private static bool IsNotEmittedType(ITypeSymbol type) =>
+        type is INamedTypeSymbol named && SymbolHelper.HasNotEmitted(named);
 
     private IReadOnlyList<TsStatement> TransformLambdaBody(CSharpSyntaxNode body)
     {

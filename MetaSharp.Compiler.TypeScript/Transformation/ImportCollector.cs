@@ -268,8 +268,9 @@ public sealed class ImportCollector(
         }
     }
 
-    private static void CollectFromType(TsType type, HashSet<string> names)
+    private static void CollectFromType(TsType? type, HashSet<string> names)
     {
+        if (type is null) return;
         switch (type)
         {
             case TsNamedType named:
