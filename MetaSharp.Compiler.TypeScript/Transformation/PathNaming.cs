@@ -65,6 +65,33 @@ public sealed class PathNaming(string rootNamespace)
     }
 
     /// <summary>
+    /// Computes the package-relative subpath for a type whose source assembly has the
+    /// given <paramref name="assemblyRootNamespace"/>. Used by the type mapper when
+    /// attaching cross-package origin metadata, where the subpath is later joined with
+    /// the package name to form <c>&lt;package&gt;/&lt;subpath&gt;</c>. No <c>#/</c>
+    /// prefix and no <c>.ts</c> suffix.
+    /// </summary>
+    public static string ComputeSubPath(string assemblyRootNamespace, string typeNamespace, string typeName)
+    {
+        var relative = typeNamespace;
+        if (assemblyRootNamespace.Length > 0)
+        {
+            if (typeNamespace == assemblyRootNamespace) relative = "";
+            else if (typeNamespace.StartsWith(assemblyRootNamespace + "."))
+                relative = typeNamespace[(assemblyRootNamespace.Length + 1)..];
+        }
+
+        var segments = relative.Length > 0
+            ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
+            : [];
+
+        var fileName = SymbolHelper.ToKebabCase(typeName);
+        return segments.Length > 0
+            ? string.Join("/", segments) + "/" + fileName
+            : fileName;
+    }
+
+    /// <summary>
     /// Finds the longest common dot-separated namespace prefix across the given list.
     /// Used to discover the project's root namespace at the start of a transpilation run.
     /// </summary>

@@ -139,9 +139,9 @@ public static class SymbolHelper
     }
 
     /// <summary>
-    /// Reads [Import("name", from: "module")] from a symbol.
+    /// Reads <c>[Import("name", from: "module", AsDefault = ?)]</c> from a symbol.
     /// </summary>
-    public static (string Name, string From)? GetImport(ISymbol symbol)
+    public static ImportInfo? GetImport(ISymbol symbol)
     {
         var attr = symbol.GetAttributes().FirstOrDefault(a =>
             a.AttributeClass?.Name is "ImportAttribute" or "Import");
@@ -152,8 +152,17 @@ public static class SymbolHelper
         var from = attr.ConstructorArguments.Length > 1 ? attr.ConstructorArguments[1].Value?.ToString() : null;
 
         if (name is null || from is null) return null;
-        return (name, from);
+
+        var asDefault = false;
+        foreach (var named in attr.NamedArguments)
+        {
+            if (named.Key == "AsDefault" && named.Value.Value is bool ad) asDefault = ad;
+        }
+
+        return new ImportInfo(name, from, asDefault);
     }
+
+    public sealed record ImportInfo(string Name, string From, bool AsDefault = false);
 
     /// <summary>
     /// Converts PascalCase to kebab-case for file paths.

@@ -102,16 +102,17 @@ public sealed class TypeTransformer(Compilation compilation)
         }
 
         // Register [Import] types as external (no .ts file generated, but importable)
-        _externalImportMap = new Dictionary<string, (string Name, string From)>();
+        _externalImportMap = new Dictionary<string, (string Name, string From, bool IsDefault)>();
         foreach (var t in transpilableTypes.ToList())
         {
             var import = SymbolHelper.GetImport(t);
             if (import is not null)
             {
-                _externalImportMap[t.Name] = import.Value;
+                var entry = (import.Name, import.From, import.AsDefault);
+                _externalImportMap[t.Name] = entry;
                 var tsName = GetTsTypeName(t);
                 if (tsName != t.Name)
-                    _externalImportMap[tsName] = import.Value;
+                    _externalImportMap[tsName] = entry;
             }
         }
 
@@ -121,6 +122,7 @@ public sealed class TypeTransformer(Compilation compilation)
         // from the referenced assemblies. Must run after the local _externalImportMap
         // is built so it only adds, never overwrites local entries.
         DiscoverCrossAssemblyTypes();
+        TypeMapper.CrossAssemblyTypeMap = _crossAssemblyTypeMap;
 
         // Build guard name → type name map for cross-file guard imports
         _guardNameToTypeMap = new Dictionary<string, string>();
@@ -181,7 +183,7 @@ public sealed class TypeTransformer(Compilation compilation)
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
     private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
-    private Dictionary<string, (string Name, string From)> _externalImportMap = [];
+    private Dictionary<string, (string Name, string From, bool IsDefault)> _externalImportMap = [];
     private Dictionary<string, (string ExportedName, string FromPackage)> _bclExportMap = [];
     /// <summary>
     /// Types discovered in referenced assemblies that declare both
@@ -261,10 +263,11 @@ public sealed class TypeTransformer(Compilation compilation)
                 var import = SymbolHelper.GetImport(type);
                 if (import is not null)
                 {
-                    _externalImportMap[type.Name] = import.Value;
+                    var entry = (import.Name, import.From, import.AsDefault);
+                    _externalImportMap[type.Name] = entry;
                     var tsName = GetTsTypeName(type);
                     if (tsName != type.Name)
-                        _externalImportMap[tsName] = import.Value;
+                        _externalImportMap[tsName] = entry;
                     continue;
                 }
 

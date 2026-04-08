@@ -79,9 +79,18 @@ public sealed class Printer(string indent = "  ")
     {
         _sb.Write("import ");
         if (import.TypeOnly) _sb.Write("type ");
-        _sb.Write("{ ");
-        _sb.Write(string.Join(", ", import.Names));
-        _sb.Write(" } from ");
+        if (import.IsDefault)
+        {
+            // `import Foo from "...";` — single name, no braces.
+            _sb.Write(import.Names[0]);
+        }
+        else
+        {
+            _sb.Write("{ ");
+            _sb.Write(string.Join(", ", import.Names));
+            _sb.Write(" }");
+        }
+        _sb.Write(" from ");
         _sb.WriteQuoted(import.From);
         _sb.Write(";");
     }

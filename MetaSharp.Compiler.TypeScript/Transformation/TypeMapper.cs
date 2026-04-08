@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.TypeScript;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
@@ -20,6 +21,22 @@ public static class TypeMapper
     {
         get => _bclExportMap ??= [];
         set => _bclExportMap = value;
+    }
+
+    /// <summary>
+    /// Cross-assembly type origins (set by TypeTransformer before transpilation). When a
+    /// referenced type's symbol is in this map, the produced <see cref="TsNamedType"/>
+    /// carries an <see cref="TsTypeOrigin"/> so the import collector can emit a
+    /// cross-package import statement of the form
+    /// <c>import { Foo } from "&lt;package&gt;/&lt;subpath&gt;"</c>.
+    /// </summary>
+    [ThreadStatic]
+    private static Dictionary<ISymbol, CrossAssemblyEntry>? _crossAssemblyTypeMap;
+
+    public static Dictionary<ISymbol, CrossAssemblyEntry> CrossAssemblyTypeMap
+    {
+        get => _crossAssemblyTypeMap ??= new(SymbolEqualityComparer.Default);
+        set => _crossAssemblyTypeMap = value;
     }
 
     public static TsType Map(ITypeSymbol type)
@@ -134,11 +151,11 @@ public static class TypeMapper
             if (named.TypeArguments.Length > 0)
             {
                 var args = named.TypeArguments.Select(Map).ToList();
-                return new TsNamedType(BuildQualifiedName(named), args);
+                return new TsNamedType(BuildQualifiedName(named), args, ResolveOrigin(named));
             }
 
             // Non-generic named type
-            return new TsNamedType(BuildQualifiedName(named));
+            return new TsNamedType(BuildQualifiedName(named), Origin: ResolveOrigin(named));
         }
 
         // Type parameters (T, K, V) — reference to a declared type parameter
@@ -173,6 +190,30 @@ public static class TypeMapper
         }
 
         return Map(type);
+    }
+
+    /// <summary>
+    /// Returns a <see cref="TsTypeOrigin"/> when <paramref name="named"/> is a type from
+    /// a cross-assembly source registered in <see cref="CrossAssemblyTypeMap"/>; null
+    /// otherwise. Looking up by symbol identity (via the map's
+    /// <see cref="SymbolEqualityComparer"/>) avoids the simple-name ambiguity that a
+    /// string-keyed lookup would have when two assemblies declare types with the same
+    /// name.
+    /// </summary>
+    private static TsTypeOrigin? ResolveOrigin(INamedTypeSymbol named)
+    {
+        // Use the original definition so a closed generic (e.g., MyType<int>) resolves
+        // to the same map entry as the open one.
+        var key = named.OriginalDefinition;
+        if (!CrossAssemblyTypeMap.TryGetValue(key, out var entry))
+            return null;
+
+        var ns = PathNaming.GetNamespace(entry.Symbol);
+        // The TS type name follows the [Name] override if present, mirroring how the
+        // file name is computed in the source assembly.
+        var typeName = SymbolHelper.GetNameOverride(entry.Symbol) ?? entry.Symbol.Name;
+        var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, typeName);
+        return new TsTypeOrigin(entry.PackageName, subPath);
     }
 
     /// <summary>
