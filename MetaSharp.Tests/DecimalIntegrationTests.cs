@@ -42,6 +42,96 @@ public class DecimalIntegrationTests
     }
 
     [Test]
+    public async Task DecimalArithmetic_LowersToMethodCalls()
+    {
+        // a + b → a.plus(b), - → minus, * → times, / → div, % → mod
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public decimal Add(decimal a, decimal b) => a + b;
+                public decimal Sub(decimal a, decimal b) => a - b;
+                public decimal Mul(decimal a, decimal b) => a * b;
+                public decimal Div(decimal a, decimal b) => a / b;
+                public decimal Mod(decimal a, decimal b) => a % b;
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return a.plus(b);");
+        await Assert.That(output).Contains("return a.minus(b);");
+        await Assert.That(output).Contains("return a.times(b);");
+        await Assert.That(output).Contains("return a.div(b);");
+        await Assert.That(output).Contains("return a.mod(b);");
+    }
+
+    [Test]
+    public async Task DecimalComparison_LowersToMethodCalls()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public bool Eq(decimal a, decimal b) => a == b;
+                public bool Ne(decimal a, decimal b) => a != b;
+                public bool Lt(decimal a, decimal b) => a < b;
+                public bool Gt(decimal a, decimal b) => a > b;
+                public bool Le(decimal a, decimal b) => a <= b;
+                public bool Ge(decimal a, decimal b) => a >= b;
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return a.eq(b);");
+        await Assert.That(output).Contains("return !a.eq(b);");
+        await Assert.That(output).Contains("return a.lt(b);");
+        await Assert.That(output).Contains("return a.gt(b);");
+        await Assert.That(output).Contains("return a.lte(b);");
+        await Assert.That(output).Contains("return a.gte(b);");
+    }
+
+    [Test]
+    public async Task DecimalNegation_LowersToNeg()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public decimal Negate(decimal x) => -x;
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return x.neg();");
+    }
+
+    [Test]
+    public async Task DecimalMixedWithIntLiteral_StillLowersToMethodCall()
+    {
+        // The literal `2` has C# type int but ConvertedType decimal — the decimal
+        // resolution should fire on the converted type so the operator becomes
+        // `x.times(new Decimal("2"))` (or similar).
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public decimal Double(decimal x) => x * 2m;
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("x.times(new Decimal(\"2\"))");
+    }
+
+    [Test]
     public async Task NonDecimalLiteral_StillLowersToBareNumber()
     {
         // Sanity check: int / double / float literals are unaffected.
