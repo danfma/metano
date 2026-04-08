@@ -443,8 +443,9 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
   `TypeTransformer` went from **2826 → 466 lines** (-83.5%) and `ExpressionTransformer` from
   **973 → 174 lines** (-82.1%). 30+ handlers extracted, each covering a specific sub-grammar
   (see the "Compiler Refactor (Done)" section above).
-- [ ] **Sistema de plugins/mappers**: usuários registram mappers customizados sem
-  alterar o core (alinhado com "Mapeamentos Declarativos" abaixo)
+- [x] **Plugin/mapper system**: users register custom mappers without touching the core
+  via assembly-level `[MapMethod]` / `[MapProperty]` attributes — see "Declarative
+  mappings" below.
 
 #### Diagnostics ✅
 - [x] **Sistema de Diagnostics próprio** (`MetaSharpDiagnostic`): reporta warnings/errors
@@ -455,22 +456,55 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] Errors causam exit code 1
 - [x] 4 testes em DiagnosticsTests.cs
 
-### Mapeamentos Declarativos (substituir BclMapper hardcoded)
+### Declarative BCL Mappings ✅
 
-> Atualmente os mapeamentos BCL→JS estão hardcoded no `BclMapper.cs`.
-> Migrar para um sistema declarativo via atributos assembly-level:
+> Replaces the hardcoded `BclMapper.cs` with assembly-level `[MapMethod]` /
+> `[MapProperty]` attributes living alongside the `MetaSharp` project under
+> `MetaSharp/Runtime/`. The compiler walks every referenced assembly's attributes,
+> indexes them by `(declaringType, memberName)`, and dispatches BCL → JS lowering
+> through the registry. `BclMapper.cs` shrank from ~400 lines (with hardcoded type-name
+> string matching) to ~340 lines of pure dispatch infrastructure.
+>
+> ```csharp
+> [assembly: MapMethod(typeof(List<>), nameof(List<int>.Add), JsMethod = "push")]
+> [assembly: MapProperty(typeof(List<>), nameof(List<int>.Count), JsProperty = "length")]
+> [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Where),
+>     WrapReceiver = "Enumerable.from", JsMethod = "where")]
+> ```
 
-```csharp
-[assembly: MapMethod(typeof(List<>), "Add", JsMethod = "push")]
-[assembly: MapProperty(typeof(List<>), "Count", JsProperty = "length")]
-[assembly: MapMethod(typeof(Enumerable), "Any", JsMethod = "some")]
-```
+- [x] `[MapMethod]` / `[MapProperty]` attributes in the `MetaSharp.Annotations` namespace
+- [x] `DeclarativeMappingRegistry` builds the lookup index from all referenced
+  assemblies during `TypeTransformer.TransformAll` setup
+- [x] `BclMapper.TryMap` / `TryMapMethod` consult the registry as the only source of
+  truth for BCL lowering; no hardcoded type-name branches remain
+- [x] External packages can ship their own mappings — any assembly with
+  `[assembly: MapMethod]` declarations is picked up automatically
+- [x] Default BCL mappings live under `MetaSharp/Runtime/`, organized by area:
+  Lists, Strings, Math, Console, Guid, Tasks, Temporal, Enums, Queues, Stacks,
+  Dictionaries, Sets, Linq (~140 declarations total)
+- [x] Schema features:
+    - `JsMethod` / `JsProperty` — simple rename, preserves the original receiver
+    - `JsTemplate` — full template with `$this`, `$0`/`$1`/..., `$T0`/`$T1`/...
+      (generic method type-arg names) placeholders, all expanded as real AST nodes
+      via `TsTemplate` so nested calls / lambdas / binary operators round-trip cleanly
+    - `WhenArg0StringEquals` — literal-argument filter for cases like
+      `Guid.ToString("N")` vs the default `Guid.ToString()`
+    - `WrapReceiver` — injects a wrapping call around the receiver (LINQ-style),
+      with generic chain detection so long fluent chains only wrap once
+    - `RuntimeImports` — declares runtime helper identifiers the template body
+      references so the import collector can emit the appropriate
+      `import { … } from "@meta-sharp/runtime";` line
 
-- [ ] Definir atributos `[MapMethod]`, `[MapProperty]` no MetaSharp.Annotations
-- [ ] Ler mapeamentos no TypeTransformer (similar a `[ExportFromBcl]`)
-- [ ] Packages externos podem definir seus próprios mapeamentos
-- [ ] BclMapper lê dos atributos em vez de hardcoded
-- [ ] Mapeamentos default no `@meta-sharp/runtime` (assembly C# companion)
+#### Migration follow-ups
+
+- [ ] `ImmutableList<T>` / `ImmutableArray<T>` — the previous hardcoded mapping was
+  silently broken (mapped immutable `Add` → `push`, which mutates), so support was
+  intentionally dropped during the migration. Adding it back needs a different
+  lowering strategy that respects immutable semantics.
+- [ ] `Dictionary<K,V>.TryGetValue` — the out-parameter idiom needs a multi-statement
+  rewrite that the current declarative pipeline can't express
+- [ ] `List<T>.Remove(item)` — returns `bool` but a naive splice template breaks the
+  contract (splice returns the removed elements, truthy when empty)
 
 ### Config File (`meta-sharp.json`)
 
