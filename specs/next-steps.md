@@ -45,6 +45,83 @@
 
 ---
 
+## Compiler Refactor (Done ✅)
+
+> Large architectural refactor, in two phases, to prepare the compiler for multiple targets
+> and eliminate the "God Objects" `TypeTransformer` (2826 lines) and `ExpressionTransformer`
+> (973 lines). All 22+ commits passed with **197 + 51 + 17 tests green** with no change in
+> the generated output.
+
+### Phase A — Core / TypeScript target split
+
+- [x] `MetaSharp.Compiler` became a **target-agnostic** library (core)
+- [x] `MetaSharp.Compiler.TypeScript` is the TypeScript target (depends on core)
+- [x] `ITranspilerTarget` interface in core
+- [x] `TranspilerHost.RunAsync(options, target)` orchestrates: load project → compile → target.Transform → write files
+- [x] `TypeScriptTarget : ITranspilerTarget` adapts the existing pipeline
+- [x] `MetaSharpDiagnostic` and `SymbolHelper` (target-agnostic part) moved to core
+- [x] CLI tool renamed to `metasharp-typescript`
+- [x] Each future target (Dart, Kotlin) will be its own CLI/project without touching the core
+
+### Phase B — TypeScript target internal decomposition
+
+#### `TypeTransformer.cs`: 2826 → **466 lines** (-83.5%)
+
+Extractions (in the order they were done):
+
+- `BarrelFileGenerator` — leaf-only `index.ts` generation
+- `RecordSynthesizer` — `equals/hashCode/with/MakeSelfType`
+- `TypeGuardBuilder` — `is{Type}` guards (`[GenerateGuard]`)
+- `TypeCheckGenerator` — per-parameter runtime type checks (dispatchers)
+- `OverloadDispatcherBuilder` — constructor + method overload dispatch + fast paths
+- `ImportCollector` + `PathNaming` — referenced-type walker, import resolution, kebab-case + `#/` paths
+- `TypeScriptTransformContext` — immutable shared state (compilation, maps, PathNaming, diagnostic reporter, ExpressionTransformer factory)
+- `EnumTransformer` — enum + `[StringEnum]`
+- `InterfaceTransformer` — interfaces
+- `ExceptionTransformer` — classes that extend `Error`
+- `InlineWrapperTransformer` — branded types + companion namespace
+- `ModuleTransformer` — `[ExportedAsModule]` static class / extension methods / extension blocks
+- `RecordClassTransformer` — record / struct / class catch-all (the biggest, ~700 lines extracted)
+
+#### `ExpressionTransformer.cs`: 973 → **174 lines** (-82.1%)
+
+Extracted handlers (each covers one sub-grammar):
+
+- `PatternMatchingHandler` — `is` patterns + the pattern sub-grammar
+- `SwitchHandler` — `switch` statement + `switch` expression (composes `PatternMatchingHandler`)
+- `LambdaHandler` — simple/parenthesized lambdas
+- `ObjectCreationHandler` — `new`, implicit `new`, `with` expression
+- `LiteralHandler`, `IdentifierHandler`, `GenericNameHandler` — atoms
+- `MemberAccessHandler` — `obj.Prop` / `Type.Member`
+- `InvocationHandler` — invocations + `[Emit]` template + `BclMapper` dispatch
+- `InterpolatedStringHandler` — `$"..."` → template literals
+- `OptionalChainingHandler` — `x?.Prop`, `x?.Method()`
+- `CollectionExpressionHandler` — C# 12 `[]` → array literal or `new HashSet()`
+- `OperatorHandler` — binary, assignment, prefix unary, legacy `is Type`
+- `StatementHandler` — statements (return, yield, if, throw, expr stmt, local decl, block, switch)
+- `ThrowExpressionHandler` — throw in expression position (lowered to an IIFE)
+- `ArgumentResolver` — named-to-positional argument resolution
+
+#### Final architectural pattern
+
+- **Each C# construct with lowering logic = one dedicated handler**
+- Handlers take the parent `ExpressionTransformer` (or `TypeScriptTransformContext`) as a dependency
+- Handlers compose with each other through lazy properties exposed on the parent (`Patterns`, `Switches`, etc. are `internal` when they need to be reached by other handlers)
+- The parent becomes a thin router + shared state
+- Inline cases are kept only for trivial 1-line AST node renames with no logic (parenthesized, ternary, cast, await, this, element access)
+
+#### Combined metrics
+
+| File | Start | End | Δ |
+|---|---|---|---|
+| `TypeTransformer.cs` | 2826 | 466 | -83.5% |
+| `ExpressionTransformer.cs` | 973 | 174 | -82.1% |
+| **Total** | **3799** | **640** | **-83.2%** |
+
+30+ new files in `MetaSharp.Compiler.TypeScript/Transformation/` + 8 new files in the core.
+
+---
+
 ## Alta Prioridade
 
 ### ~~Value Wrappers — `[InlineWrapper]` attribute~~ ✅
@@ -362,8 +439,10 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
   pular tipos não modificados — fundamental para projetos grandes e watch mode
 
 #### Manutenibilidade
-- [ ] **Visitor pattern**: refatorar `TypeTransformer` (2000+ linhas) e
-  `ExpressionTransformer` em visitors específicos por tipo de sintaxe — evita "God Object"
+- [x] **Decomposition into focused handlers** (not the formal GoF Visitor pattern, but the same goal):
+  `TypeTransformer` went from **2826 → 466 lines** (-83.5%) and `ExpressionTransformer` from
+  **973 → 174 lines** (-82.1%). 30+ handlers extracted, each covering a specific sub-grammar
+  (see the "Compiler Refactor (Done)" section above).
 - [ ] **Sistema de plugins/mappers**: usuários registram mappers customizados sem
   alterar o core (alinhado com "Mapeamentos Declarativos" abaixo)
 
@@ -502,10 +581,19 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] `fromJSON()` static method gerado (plain object → class instance, com validação)
 - [ ] Suporte a `[JsonPropertyName]`, `[JsonIgnore]`
 
-### Outros Targets
+### Other Targets
 
-- [ ] Gerar Dart (para Flutter) — mesma AST intermediária, Printer diferente
-- [ ] Gerar Kotlin — para uso Android nativo
+> The infrastructure is ready after the Compiler Refactor: each target is a separate project
+> that implements `ITranspilerTarget` and has its own AST + Printer. The `MetaSharp.Compiler`
+> core (target-agnostic) handles project loading + Roslyn compilation + diagnostics + file
+> writes. Adding a new target = new project + new AST + new handlers, without touching the
+> core or the existing TypeScript target.
+
+- [ ] `MetaSharp.Compiler.Dart` — for use with Flutter
+- [ ] `MetaSharp.Compiler.Kotlin` — for native Android
+- [ ] **JSX/TSX target via plugin in the TypeScript target** (option B) — `[JsxComponent]` attribute
+  + `JsxComponentTransformer` + new `Tsx*` AST nodes; emits raw `.tsx` and lets
+  Vite/SWC/Babel resolve it with the framework's plugin (Solid, React, etc.)
 
 ### Lambda / Expression Tree Optimization
 
