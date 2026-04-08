@@ -9,11 +9,11 @@
 using System;
 using MetaSharp.Annotations;
 
-[assembly: MapMethod(typeof(Math), "Round", JsMethod = "round")]
-[assembly: MapMethod(typeof(Math), "Floor", JsMethod = "floor")]
-[assembly: MapMethod(typeof(Math), "Ceiling", JsMethod = "ceil")]
-[assembly: MapMethod(typeof(Math), "Abs", JsMethod = "abs")]
-[assembly: MapMethod(typeof(Math), "Min", JsMethod = "min")]
-[assembly: MapMethod(typeof(Math), "Max", JsMethod = "max")]
-[assembly: MapMethod(typeof(Math), "Sqrt", JsMethod = "sqrt")]
-[assembly: MapMethod(typeof(Math), "Pow", JsMethod = "pow")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Round), JsMethod = "round")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Floor), JsMethod = "floor")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Ceiling), JsMethod = "ceil")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Abs), JsMethod = "abs")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Min), JsMethod = "min")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Max), JsMethod = "max")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Sqrt), JsMethod = "sqrt")]
+[assembly: MapMethod(typeof(Math), nameof(Math.Pow), JsMethod = "pow")]

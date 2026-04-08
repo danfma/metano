@@ -13,4 +13,4 @@ using System;
 using MetaSharp.Annotations;
 
 // Guid.NewGuid() → crypto.randomUUID()
-[assembly: MapMethod(typeof(Guid), "NewGuid", JsTemplate = "crypto.randomUUID()")]
+[assembly: MapMethod(typeof(Guid), nameof(Guid.NewGuid), JsTemplate = "crypto.randomUUID()")]

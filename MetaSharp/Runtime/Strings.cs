@@ -8,31 +8,31 @@ using MetaSharp.Annotations;
 
 // ─── string property ────────────────────────────────────────
 
-[assembly: MapProperty(typeof(string), "Length", JsProperty = "length")]
+[assembly: MapProperty(typeof(string), nameof(string.Length), JsProperty = "length")]
 
 // ─── Case conversion ────────────────────────────────────────
 // JS string has no locale variants; both invariant and culture-aware C# helpers map to
 // the same JS counterpart.
 
-[assembly: MapMethod(typeof(string), "ToUpper", JsMethod = "toUpperCase")]
-[assembly: MapMethod(typeof(string), "ToUpperInvariant", JsMethod = "toUpperCase")]
-[assembly: MapMethod(typeof(string), "ToLower", JsMethod = "toLowerCase")]
-[assembly: MapMethod(typeof(string), "ToLowerInvariant", JsMethod = "toLowerCase")]
+[assembly: MapMethod(typeof(string), nameof(string.ToUpper), JsMethod = "toUpperCase")]
+[assembly: MapMethod(typeof(string), nameof(string.ToUpperInvariant), JsMethod = "toUpperCase")]
+[assembly: MapMethod(typeof(string), nameof(string.ToLower), JsMethod = "toLowerCase")]
+[assembly: MapMethod(typeof(string), nameof(string.ToLowerInvariant), JsMethod = "toLowerCase")]
 
 // ─── Search / inspection ────────────────────────────────────
 
-[assembly: MapMethod(typeof(string), "Contains", JsMethod = "includes")]
-[assembly: MapMethod(typeof(string), "StartsWith", JsMethod = "startsWith")]
-[assembly: MapMethod(typeof(string), "EndsWith", JsMethod = "endsWith")]
-[assembly: MapMethod(typeof(string), "IndexOf", JsMethod = "indexOf")]
+[assembly: MapMethod(typeof(string), nameof(string.Contains), JsMethod = "includes")]
+[assembly: MapMethod(typeof(string), nameof(string.StartsWith), JsMethod = "startsWith")]
+[assembly: MapMethod(typeof(string), nameof(string.EndsWith), JsMethod = "endsWith")]
+[assembly: MapMethod(typeof(string), nameof(string.IndexOf), JsMethod = "indexOf")]
 
 // ─── Trimming ───────────────────────────────────────────────
 
-[assembly: MapMethod(typeof(string), "Trim", JsMethod = "trim")]
-[assembly: MapMethod(typeof(string), "TrimStart", JsMethod = "trimStart")]
-[assembly: MapMethod(typeof(string), "TrimEnd", JsMethod = "trimEnd")]
+[assembly: MapMethod(typeof(string), nameof(string.Trim), JsMethod = "trim")]
+[assembly: MapMethod(typeof(string), nameof(string.TrimStart), JsMethod = "trimStart")]
+[assembly: MapMethod(typeof(string), nameof(string.TrimEnd), JsMethod = "trimEnd")]
 
 // ─── Substring / replace ────────────────────────────────────
 
-[assembly: MapMethod(typeof(string), "Substring", JsMethod = "substring")]
-[assembly: MapMethod(typeof(string), "Replace", JsMethod = "replace")]
+[assembly: MapMethod(typeof(string), nameof(string.Substring), JsMethod = "substring")]
+[assembly: MapMethod(typeof(string), nameof(string.Replace), JsMethod = "replace")]

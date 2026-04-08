@@ -13,4 +13,4 @@ using MetaSharp.Annotations;
 // `typeof(Enum)` declaration matches calls on any [Flags]-tagged enum at the call site.
 // Roslyn always resolves the call to System.Enum.HasFlag — never to a derived type —
 // because the method isn't overridden.
-[assembly: MapMethod(typeof(Enum), "HasFlag", JsTemplate = "($this & $0) === $0")]
+[assembly: MapMethod(typeof(Enum), nameof(Enum.HasFlag), JsTemplate = "($this & $0) === $0")]

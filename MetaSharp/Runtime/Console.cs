@@ -8,4 +8,4 @@
 using System;
 using MetaSharp.Annotations;
 
-[assembly: MapMethod(typeof(Console), "WriteLine", JsTemplate = "console.log($0)")]
+[assembly: MapMethod(typeof(Console), nameof(Console.WriteLine), JsTemplate = "console.log($0)")]

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using MetaSharp.Annotations;
 
 // Task.CompletedTask → Promise.resolve()
-[assembly: MapProperty(typeof(Task), "CompletedTask", JsTemplate = "Promise.resolve()")]
+[assembly: MapProperty(typeof(Task), nameof(Task.CompletedTask), JsTemplate = "Promise.resolve()")]
 
 // Task.FromResult(x) → Promise.resolve(x)
-[assembly: MapMethod(typeof(Task), "FromResult", JsTemplate = "Promise.resolve($0)")]
+[assembly: MapMethod(typeof(Task), nameof(Task.FromResult), JsTemplate = "Promise.resolve($0)")]

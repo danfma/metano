@@ -16,5 +16,5 @@ using System;
 using MetaSharp.Annotations;
 
 // DateTimeOffset.UtcNow → Temporal.Now.zonedDateTimeISO()
-[assembly: MapProperty(typeof(DateTimeOffset), "UtcNow",
+[assembly: MapProperty(typeof(DateTimeOffset), nameof(DateTimeOffset.UtcNow),
     JsTemplate = "Temporal.Now.zonedDateTimeISO()")]
