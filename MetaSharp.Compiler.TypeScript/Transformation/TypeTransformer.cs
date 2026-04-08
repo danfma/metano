@@ -162,6 +162,12 @@ public sealed class TypeTransformer(Compilation compilation)
         var indexFiles = BarrelFileGenerator.Generate(files);
         files.AddRange(indexFiles);
 
+        // Detect cyclic #/ imports between the generated files and emit MS0005
+        // diagnostics for each distinct cycle. Cycles are reported as warnings — the
+        // build proceeds, but the consumer sees the chain in their build log instead
+        // of debugging it through tsgo's downstream error.
+        CyclicReferenceDetector.DetectAndReport(files, _diagnostics.Add);
+
         return files;
     }
 

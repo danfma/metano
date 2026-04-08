@@ -64,4 +64,7 @@ public static class DiagnosticCodes
 
     /// <summary>MS0004 — Conflicting attributes on a single symbol.</summary>
     public const string ConflictingAttributes = "MS0004";
+
+    /// <summary>MS0005 — A cyclic reference exists between generated TypeScript files.</summary>
+    public const string CyclicReference = "MS0005";
 }
