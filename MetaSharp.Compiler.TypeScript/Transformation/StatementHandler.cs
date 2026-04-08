@@ -112,12 +112,67 @@ public sealed class StatementHandler(ExpressionTransformer parent)
             ? _parent.TransformExpression(variable.Initializer.Value)
             : new TsIdentifier("undefined");
 
-        return new TsVariableDeclaration(
-            name,
-            init,
-            decl.IsConst || decl.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)
-        );
+        // C# `const` / `readonly` → always TS `const`. Otherwise default to `const` and
+        // demote to `let` only when the local is mutated later in its enclosing scope
+        // (assignment, compound assignment, ++/--, ref/out arg). This produces idiomatic
+        // TS where most locals are immutable and the few mutable ones stand out.
+        var isConst = decl.IsConst
+            || decl.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)
+            || !IsLocalMutated(variable);
+
+        return new TsVariableDeclaration(name, init, isConst);
     }
+
+    /// <summary>
+    /// Returns true if the local declared by <paramref name="variable"/> is written to
+    /// anywhere within its enclosing function/method body — meaning the emitted TS must
+    /// use <c>let</c> instead of <c>const</c>. Considers direct assignment, compound
+    /// assignment, prefix/postfix increment/decrement, and <c>ref</c>/<c>out</c> args.
+    /// </summary>
+    private bool IsLocalMutated(VariableDeclaratorSyntax variable)
+    {
+        if (_parent.Model.GetDeclaredSymbol(variable) is not ILocalSymbol local)
+            return true; // conservative: if we can't resolve, assume mutable
+
+        // Search the enclosing executable scope (method body, lambda, accessor, …).
+        // Walking the entire enclosing block is sufficient because C# locals can't
+        // escape it, and we re-resolve symbols through the SemanticModel so shadowing
+        // by an inner scope (different ILocalSymbol) is naturally excluded.
+        SyntaxNode? scope = variable.FirstAncestorOrSelf<BlockSyntax>();
+        scope ??= variable.FirstAncestorOrSelf<MemberDeclarationSyntax>();
+        if (scope is null) return true;
+
+        foreach (var node in scope.DescendantNodes())
+        {
+            switch (node)
+            {
+                case AssignmentExpressionSyntax assign
+                    when ResolvesTo(assign.Left, local):
+                    return true;
+                case PrefixUnaryExpressionSyntax pre
+                    when (pre.IsKind(SyntaxKind.PreIncrementExpression)
+                          || pre.IsKind(SyntaxKind.PreDecrementExpression))
+                         && ResolvesTo(pre.Operand, local):
+                    return true;
+                case PostfixUnaryExpressionSyntax post
+                    when (post.IsKind(SyntaxKind.PostIncrementExpression)
+                          || post.IsKind(SyntaxKind.PostDecrementExpression))
+                         && ResolvesTo(post.Operand, local):
+                    return true;
+                case ArgumentSyntax arg
+                    when (arg.RefKindKeyword.IsKind(SyntaxKind.RefKeyword)
+                          || arg.RefKindKeyword.IsKind(SyntaxKind.OutKeyword))
+                         && ResolvesTo(arg.Expression, local):
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool ResolvesTo(ExpressionSyntax expr, ILocalSymbol local) =>
+        SymbolEqualityComparer.Default.Equals(
+            _parent.Model.GetSymbolInfo(expr).Symbol, local);
 
     private TsStatement UnsupportedStatement(StatementSyntax statement)
     {

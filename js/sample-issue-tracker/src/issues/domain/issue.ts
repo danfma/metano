@@ -98,7 +98,7 @@ export class Issue {
   }
 
   private transitionToNextStatusActorIdChangedAt(nextStatus: IssueStatus, actorId: UserId, changedAt: Temporal.ZonedDateTime): void {
-    let previousStatus = this.status;
+    const previousStatus = this.status;
     if (!IssueWorkflow.canTransition(previousStatus, nextStatus)) {
       throw new Error(`Cannot transition issue from ${previousStatus} to ${nextStatus}.`);
     }

@@ -18,7 +18,7 @@ export class IssueService {
   }
 
   private async createAsyncTitleDescriptionTypePriority(title: string, description: string, type: IssueType, priority: IssuePriority): Promise<OperationResult<Issue>> {
-    let issue = new Issue(IssueId.new_(), title, description, type, priority);
+    const issue = new Issue(IssueId.new_(), title, description, type, priority);
     await this._repository.saveAsync(issue);
     return OperationResult.ok(issue);
   }
@@ -40,12 +40,12 @@ export class IssueService {
   }
 
   async loadAsync(issueId: IssueId): Promise<OperationResult<Issue>> {
-    let issue = await this._repository.getByIdAsync(issueId);
+    const issue = await this._repository.getByIdAsync(issueId);
     return issue === null ? OperationResult.fail("issue_not_found", `Issue ${issueId} was not found.`) : OperationResult.ok(issue);
   }
 
   async assignAsync(issueId: IssueId, assigneeId: UserId): Promise<OperationResult<Issue>> {
-    let loadResult = await this.loadAsync(issueId);
+    const loadResult = await this.loadAsync(issueId);
     if (!loadResult.hasValue || loadResult.value === null) {
       return loadResult;
     }
@@ -55,7 +55,7 @@ export class IssueService {
   }
 
   async planSprintAsync(issueId: IssueId, sprintKey: string): Promise<OperationResult<Issue>> {
-    let loadResult = await this.loadAsync(issueId);
+    const loadResult = await this.loadAsync(issueId);
     if (!loadResult.hasValue || loadResult.value === null) {
       return loadResult;
     }
@@ -65,7 +65,7 @@ export class IssueService {
   }
 
   private async addCommentAsyncIssueIdAuthorIdMessage(issueId: IssueId, authorId: UserId, message: string): Promise<OperationResult<Issue>> {
-    let loadResult = await this.loadAsync(issueId);
+    const loadResult = await this.loadAsync(issueId);
     if (!loadResult.hasValue || loadResult.value === null) {
       return loadResult;
     }
@@ -91,7 +91,7 @@ export class IssueService {
   }
 
   async transitionAsync(issueId: IssueId, nextStatus: IssueStatus, actorId: UserId): Promise<OperationResult<Issue>> {
-    let loadResult = await this.loadAsync(issueId);
+    const loadResult = await this.loadAsync(issueId);
     if (!loadResult.hasValue || loadResult.value === null) {
       return loadResult;
     }
