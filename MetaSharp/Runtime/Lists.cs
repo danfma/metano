@@ -89,8 +89,10 @@ using MetaSharp.Annotations;
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.Sort), JsMethod = "sort")]
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.ToArray), JsMethod = "slice")]
 
-// ─── Remove (intentionally not mapped) ──────────────────────
-// List<T>.Remove(item) returns a bool (true if found and removed). A naive splice-based
-// template would break that contract because splice returns the removed elements as an
-// array (truthy when empty, BUG). Leaving this unmapped preserves the previous BclMapper
-// behavior of returning null (no special lowering) and is tracked as a follow-up.
+// ─── Remove ─────────────────────────────────────────────────
+// list.Remove(item) → IIFE that finds the index, splices it out if found, and returns
+// the boolean directly. Capturing the receiver as the IIFE argument `arr` avoids
+// double-evaluation when the C# receiver is a method call instead of a plain identifier.
+
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Remove),
+    JsTemplate = "((arr) => { const i = arr.indexOf($0); if (i >= 0) { arr.splice(i, 1); return true; } return false; })($this)")]

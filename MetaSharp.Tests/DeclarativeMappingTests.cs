@@ -125,6 +125,82 @@ public class DeclarativeMappingTests
     }
 
     [Test]
+    public async Task DeclarativeListRemove_LowersToCapturedReceiverIife()
+    {
+        // List<T>.Remove returns a bool. The declarative template wraps an arrow IIFE
+        // that captures the receiver as `arr`, finds the index via indexOf, splices it
+        // out if found, and returns the boolean. Capturing the receiver as the IIFE
+        // argument prevents double-evaluation when the receiver is a method call.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class TodoList
+            {
+                public List<int> Items { get; } = [];
+                public bool Discard(int value) => Items.Remove(value);
+            }
+            """
+        );
+
+        var output = result["todo-list.ts"];
+        await Assert.That(output).Contains("arr.indexOf(value)");
+        await Assert.That(output).Contains("arr.splice(i, 1)");
+        await Assert.That(output).Contains("return true");
+        await Assert.That(output).Contains("return false");
+        // Receiver is passed as the IIFE argument, not duplicated.
+        await Assert.That(output).Contains("})(this.items)");
+    }
+
+    [Test]
+    public async Task DeclarativeImmutableListAdd_LowersToSpread()
+    {
+        // ImmutableList<T>.Add returns a NEW list — the spread template creates a fresh
+        // array containing the original elements followed by the new item.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Immutable;
+
+            [Transpile]
+            public class History
+            {
+                public ImmutableList<int> Snapshots { get; private set; } = ImmutableList<int>.Empty;
+                public void Record(int value) { Snapshots = Snapshots.Add(value); }
+            }
+            """
+        );
+
+        var output = result["history.ts"];
+        await Assert.That(output).Contains("[...this.snapshots, value]");
+    }
+
+    [Test]
+    public async Task DeclarativeImmutableListRemoveAt_LowersToCapturedReceiverIife()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Immutable;
+
+            [Transpile]
+            public class History
+            {
+                public ImmutableList<int> Snapshots { get; private set; } = ImmutableList<int>.Empty;
+                public void DropAt(int index) { Snapshots = Snapshots.RemoveAt(index); }
+            }
+            """
+        );
+
+        var output = result["history.ts"];
+        // The IIFE captures the receiver as `arr` and slices around the index. The arrow
+        // body is a single expression so the IIFE form is `((arr) => [...])(receiver)`,
+        // not `((arr) => { ... })(receiver)`.
+        await Assert.That(output).Contains("arr.slice(0, index)");
+        await Assert.That(output).Contains("arr.slice(index + 1)");
+        await Assert.That(output).Contains("])(this.snapshots)");
+    }
+
+    [Test]
     public async Task DeclarativeEnumParse_EmbedsTypeArgumentName()
     {
         // Enum.Parse<T>(text) uses the $T0 placeholder in MetaSharp/Runtime/Enums.cs to
