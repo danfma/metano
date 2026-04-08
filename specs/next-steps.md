@@ -31,8 +31,12 @@
 
 - [x] `[Transpile]`, `[StringEnum]`, `[Name]`, `[Ignore]`, `[ExportedAsModule]`
 - [x] `[ExportFromBcl]` — assembly-level BCL → package JS
-- [x] `[Import]` — tipo/membro externo de módulo JS
+- [x] `[Import]` — tipo/membro externo de módulo JS (com `AsDefault` para default-import)
 - [x] `[Emit]` — JS inline com placeholders
+- [x] `[NoEmit]` — tipo declaration-only, descoberto mas não emitido (ambient)
+- [x] `[ModuleEntryPoint]` — body do método vira top-level executável do módulo
+- [x] `[ExportVarFromBody]` — promove local var do entry point a export do módulo
+- [x] `[EmitPackage(name, target)]` + `EmitTarget` enum — identidade do package no target
 
 ### AST & Printer
 
@@ -206,42 +210,67 @@ Extracted handlers (each covers one sub-grammar):
 - [x] `[Emit]` — JS inline nos call sites com placeholders `$0`, `$1`
 - [ ] Config file (`meta-sharp.json`) — futuro, para mapeamentos sem poluir o código
 
-### Cross-Project References — `.metalib` (MetaSharp Library)
+### Cross-Project References ✅ (ProjectReference path)
 
-**Design aprovado:** opção 1 — arquivo binário de metadados (similar ao `.klib` do Kotlin).
+**Status:** the `ProjectReference` flow is done. A library project decorated with
+`[assembly: TranspileAssembly]` + `[assembly: EmitPackage("name")]` exposes its public
+types to consumers; consumer projects automatically resolve cross-assembly type
+references and emit `import { Foo } from "name/sub/path"` statements computed against
+the **library's own** root namespace (so two libraries with overlapping namespaces
+don't collide). Disambiguation happens at the symbol level via Roslyn, not by string
+name, so two assemblies with same-named types are correctly distinguished.
 
-O `.metalib` contém:
+**Done:**
 
-- Assinaturas dos tipos transpilados (contratos, não código)
-- Metadata: namespace → package JS mapping, type guards info
-- Formato: JSON, MessagePack ou MemoryPack (a definir)
+- [x] `[assembly: EmitPackage(name, target = JavaScript)]` + `EmitTarget` enum (multiple
+      instances allowed, one per target)
+- [x] `PackageJsonWriter` becomes the authoritative source for `package.json#name` —
+      diverging values get MS0007 warning, attribute wins
+- [x] `TypeTransformer.DiscoverCrossAssemblyTypes` walks `compilation.References` and
+      registers their public types into `_crossAssemblyTypeMap` (keyed by symbol identity)
+- [x] `[Import]` declarations from referenced assemblies fold into the local
+      `_externalImportMap` (transitive external bindings)
+- [x] `TsNamedType` carries optional `TsTypeOrigin(PackageName, SubPath, IsDefault)`,
+      populated by `TypeMapper` at construction time
+- [x] `ImportCollector` consumes the origin directly during its AST walk and emits the
+      cross-package import statement
+- [x] `[Import(..., AsDefault = true)]` + `TsImport.IsDefault` for default-import syntax
 
-**Fluxo:**
+**Follow-ups (not blocking):**
 
-```
-Projeto A (lib)
-  → meta-sharp compile → gera .ts + .metalib
-  → dotnet pack → NuGet com .metalib embutido
+- [ ] **MS0007 escalation in the consumer** — when a referenced type lives in an
+      assembly with `[TranspileAssembly]` but no `[EmitPackage(JavaScript)]`, the
+      collector currently skips silently (the type just isn't imported). Should emit
+      a hard MS0007 explaining the producing assembly needs to declare the attribute.
+- [ ] **Auto-dependencies generation** in `package.json`: detect cross-package imports
+      during emission and add the corresponding entries to `dependencies` automatically.
+      Needs a version source — `workspace:*` for sibling projects in a Bun monorepo,
+      `^x.y.z` for external packages. Probably a new attribute property
+      (`[EmitPackage("x", Version = "1.2.3")]`) to declare the version on the C# side.
+- [ ] **Multi-type-per-file support** — today MetaSharp emits one type per `.ts` file
+      and the cross-package `subPath` is computed from the type name. When a future
+      feature lets multiple types share a file, the subpath needs to become a file
+      path (not a type path) and the import collector needs to group multiple names
+      under the same subpath.
 
-Projeto B (consome A via NuGet)
-  → meta-sharp compile → lê .metalib de A → resolve tipos e gera imports
-  → bundler (Vite/Bun) → resolve packages → bundle final
-```
+### NuGet Library Path — `.metalib` (future)
 
-**Resolução de referências:**
+The `ProjectReference` flow above uses Roslyn's in-process compilation references and
+works for source-available libraries within the same solution. For libraries shipped
+as NuGet packages (no source), MetaSharp needs a separate metadata sidecar file:
 
-- `ProjectReference` (source disponível) → Roslyn resolve direto
-- `PackageReference` (NuGet, sem source) → lê `.metalib` do package
+- A `.metalib` (binary metadata) embedded in the NuGet package
+- Contains type signatures + namespace → package JS mapping + type guard info
+- Read by the consumer's compiler when resolving cross-assembly references
+- Format TBD: JSON, MessagePack, or MemoryPack
 
-**Tarefas:**
+**Tasks:**
 
-- [ ] Definir formato do `.metalib` (schema de assinaturas, metadata)
-- [ ] Gerar `.metalib` durante `meta-sharp compile`
-- [ ] Embutir `.metalib` no NuGet package (via `.csproj` targets)
-- [ ] Ler `.metalib` de packages referenciados para resolver tipos
-- [ ] `ProjectReference A → B` gera import do package JS correspondente
-- [ ] Gerar `package.json` com dependências entre projetos
-- [ ] Cada assembly .NET → um package JS
+- [ ] Define `.metalib` schema (signatures + metadata)
+- [ ] Generate `.metalib` during transpilation
+- [ ] Embed `.metalib` in the NuGet package via `.csproj` targets
+- [ ] Read `.metalib` from referenced packages and feed it into the same
+      `_crossAssemblyTypeMap` as the `ProjectReference` path
 
 **Futuro:**
 
