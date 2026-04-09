@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 
@@ -24,7 +25,7 @@ public static class RecordSynthesizer
         TsExpression condition = new TsBinaryExpression(
             new TsIdentifier("other"),
             "instanceof",
-            new TsIdentifier(type.Name)
+            new TsIdentifier(TypeTransformer.GetTsTypeName(type))
         );
 
         foreach (var param in ctorParams)
@@ -100,7 +101,11 @@ public static class RecordSynthesizer
             "with",
             [new TsParameter("overrides?", new TsNamedType("Partial", [selfType]))],
             selfType,
-            [new TsReturnStatement(new TsNewExpression(new TsIdentifier(type.Name), args))]
+            [
+                new TsReturnStatement(
+                    new TsNewExpression(new TsIdentifier(TypeTransformer.GetTsTypeName(type)), args)
+                ),
+            ]
         );
     }
 
@@ -110,13 +115,14 @@ public static class RecordSynthesizer
     /// </summary>
     public static TsNamedType MakeSelfType(INamedTypeSymbol type)
     {
+        var tsName = TypeTransformer.GetTsTypeName(type);
         if (type.TypeParameters.Length == 0)
-            return new TsNamedType(type.Name);
+            return new TsNamedType(tsName);
 
-        var args = type.TypeParameters
-            .Select<ITypeParameterSymbol, TsType>(tp => new TsNamedType(tp.Name))
+        var args = type
+            .TypeParameters.Select<ITypeParameterSymbol, TsType>(tp => new TsNamedType(tp.Name))
             .ToList();
 
-        return new TsNamedType(type.Name, args);
+        return new TsNamedType(tsName, args);
     }
 }

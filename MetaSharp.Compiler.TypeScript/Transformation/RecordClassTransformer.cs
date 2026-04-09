@@ -41,11 +41,17 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         TsType? extendsType = null;
         var baseParams = Array.Empty<TsConstructorParam>();
 
-        if (type.BaseType is not null
+        if (
+            type.BaseType is not null
             && type.BaseType.SpecialType == SpecialType.None
             && type.BaseType.ToDisplayString() != "System.Object"
             && type.BaseType.ToDisplayString() != "System.ValueType"
-            && SymbolHelper.IsTranspilable(type.BaseType.OriginalDefinition, _context.AssemblyWideTranspile, _context.CurrentAssembly))
+            && SymbolHelper.IsTranspilable(
+                type.BaseType.OriginalDefinition,
+                _context.AssemblyWideTranspile,
+                _context.CurrentAssembly
+            )
+        )
         {
             extendsType = TypeMapper.Map(type.BaseType);
             baseParams = GetConstructorParams(type.BaseType.OriginalDefinition).ToArray();
@@ -60,11 +66,13 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         // Detect captured primary constructor params (used in field initializers but not properties)
         var capturedParams = GetCapturedConstructorParams(type, ctorParamsForSignature);
         ctorParamsForSignature.AddRange(capturedParams);
-        var capturedParamNames = capturedParams.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var capturedParamNames = capturedParams
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Detect multiple constructors
-        var explicitCtors = type.Constructors
-            .Where(c => c.DeclaredAccessibility == Accessibility.Public)
+        var explicitCtors = type
+            .Constructors.Where(c => c.DeclaredAccessibility == Accessibility.Public)
             .Where(c => !c.IsImplicitlyDeclared || c.Parameters.Length > 0)
             .ToList();
 
@@ -72,8 +80,11 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
         if (explicitCtors.Count > 1)
         {
-            constructor = new OverloadDispatcherBuilder(_context)
-                .BuildConstructor(type, explicitCtors, extendsType);
+            constructor = new OverloadDispatcherBuilder(_context).BuildConstructor(
+                type,
+                explicitCtors,
+                extendsType
+            );
         }
         else
         {
@@ -84,9 +95,11 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 var superArgs = ResolveSuperArguments(type, baseParams);
                 if (superArgs.Count > 0)
                 {
-                    ctorBody.Add(new TsExpressionStatement(
-                        new TsCallExpression(new TsIdentifier("super"), superArgs)
-                    ));
+                    ctorBody.Add(
+                        new TsExpressionStatement(
+                            new TsCallExpression(new TsIdentifier("super"), superArgs)
+                        )
+                    );
                 }
             }
 
@@ -96,11 +109,15 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 var fieldName = GetCapturedFieldName(type, captured.Name);
                 if (fieldName is not null)
                 {
-                    ctorBody.Add(new TsExpressionStatement(
-                        new TsBinaryExpression(
-                            new TsPropertyAccess(new TsIdentifier("this"), fieldName),
-                            "=",
-                            new TsIdentifier(captured.Name))));
+                    ctorBody.Add(
+                        new TsExpressionStatement(
+                            new TsBinaryExpression(
+                                new TsPropertyAccess(new TsIdentifier("this"), fieldName),
+                                "=",
+                                new TsIdentifier(captured.Name)
+                            )
+                        )
+                    );
                 }
             }
 
@@ -130,11 +147,13 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                     classMembers.AddRange(propMembers);
                     break;
 
-                case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary
-                    && !method.IsImplicitlyDeclared
-                    && method.DeclaredAccessibility is not (Accessibility.Internal or Accessibility.NotApplicable)
-                    && !TypeScriptNaming.HasEmit(method)
-                    && method.AssociatedSymbol is not IPropertySymbol:
+                case IMethodSymbol method
+                    when method.MethodKind == MethodKind.Ordinary
+                        && !method.IsImplicitlyDeclared
+                        && method.DeclaredAccessibility
+                            is not (Accessibility.Internal or Accessibility.NotApplicable)
+                        && !TypeScriptNaming.HasEmit(method)
+                        && method.AssociatedSymbol is not IPropertySymbol:
                     ordinaryMethods.Add(method);
                     break;
 
@@ -145,9 +164,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         }
 
         // Process ordinary methods — detect overloads (same name, different signatures)
-        var methodGroups = ordinaryMethods
-            .GroupBy(m => m.Name)
-            .ToList();
+        var methodGroups = ordinaryMethods.GroupBy(m => m.Name).ToList();
 
         foreach (var group in methodGroups)
         {
@@ -162,8 +179,10 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             else
             {
                 // Multiple overloads — generate dispatcher
-                var overloadMembers = new OverloadDispatcherBuilder(_context)
-                    .BuildMethod(type, methods);
+                var overloadMembers = new OverloadDispatcherBuilder(_context).BuildMethod(
+                    type,
+                    methods
+                );
                 classMembers.AddRange(overloadMembers);
             }
         }
@@ -179,14 +198,16 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         var implementsList = GetImplementedInterfaces(type);
         var typeParams = TypeTransformer.ExtractTypeParameters(type);
 
-        statements.Add(new TsClass(
-            type.Name,
-            constructor,
-            classMembers,
-            Extends: extendsType,
-            Implements: implementsList.Count > 0 ? implementsList : null,
-            TypeParameters: typeParams
-        ));
+        statements.Add(
+            new TsClass(
+                TypeTransformer.GetTsTypeName(type),
+                constructor,
+                classMembers,
+                Extends: extendsType,
+                Implements: implementsList.Count > 0 ? implementsList : null,
+                TypeParameters: typeParams
+            )
+        );
     }
 
     // ─── Constructor parameter discovery ──────────────────────
@@ -198,18 +219,29 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
         foreach (var member in type.GetMembers().OfType<IPropertySymbol>())
         {
-            if (member.IsImplicitlyDeclared) continue;
-            if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
-            if (SymbolHelper.HasIgnore(member)) continue;
-            if (!primaryCtorParamDefaults.ContainsKey(member.Name)) continue;
+            if (member.IsImplicitlyDeclared)
+                continue;
+            if (
+                member.DeclaredAccessibility
+                is Accessibility.Internal
+                    or Accessibility.NotApplicable
+            )
+                continue;
+            if (SymbolHelper.HasIgnore(member))
+                continue;
+            if (!primaryCtorParamDefaults.ContainsKey(member.Name))
+                continue;
 
-            var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
+            var name =
+                SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
             var tsType = TypeMapper.Map(member.Type);
             var isReadonly = member.SetMethod is null || member.SetMethod.IsInitOnly;
             var accessibility = TypeTransformer.MapAccessibility(member.DeclaredAccessibility);
             var defaultValue = primaryCtorParamDefaults[member.Name];
 
-            ctorParams.Add(new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue));
+            ctorParams.Add(
+                new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue)
+            );
         }
 
         return ctorParams;
@@ -225,19 +257,31 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
         foreach (var member in type.GetMembers().OfType<IPropertySymbol>())
         {
-            if (member.IsImplicitlyDeclared) continue;
-            if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
-            if (SymbolHelper.HasIgnore(member)) continue;
-            if (member.IsOverride) continue;
-            if (!primaryCtorParamDefaults.ContainsKey(member.Name)) continue;
+            if (member.IsImplicitlyDeclared)
+                continue;
+            if (
+                member.DeclaredAccessibility
+                is Accessibility.Internal
+                    or Accessibility.NotApplicable
+            )
+                continue;
+            if (SymbolHelper.HasIgnore(member))
+                continue;
+            if (member.IsOverride)
+                continue;
+            if (!primaryCtorParamDefaults.ContainsKey(member.Name))
+                continue;
 
-            var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
+            var name =
+                SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
             var tsType = TypeMapper.Map(member.Type);
             var isReadonly = member.SetMethod is null || member.SetMethod.IsInitOnly;
             var accessibility = TypeTransformer.MapAccessibility(member.DeclaredAccessibility);
             var defaultValue = primaryCtorParamDefaults[member.Name];
 
-            ctorParams.Add(new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue));
+            ctorParams.Add(
+                new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue)
+            );
         }
 
         return ctorParams;
@@ -248,14 +292,17 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     /// Includes all constructors — for C# 12+ primary constructor classes,
     /// the constructor is IsImplicitlyDeclared (unlike records where it's explicit).
     /// </summary>
-    private static Dictionary<string, TsExpression?> GetPrimaryConstructorParamDefaults(INamedTypeSymbol type)
+    private static Dictionary<string, TsExpression?> GetPrimaryConstructorParamDefaults(
+        INamedTypeSymbol type
+    )
     {
         var result = new Dictionary<string, TsExpression?>(StringComparer.OrdinalIgnoreCase);
-        var primaryCtor = type.Constructors
-            .OrderByDescending(c => c.Parameters.Length)
+        var primaryCtor = type
+            .Constructors.OrderByDescending(c => c.Parameters.Length)
             .FirstOrDefault();
 
-        if (primaryCtor is null) return result;
+        if (primaryCtor is null)
+            return result;
 
         foreach (var p in primaryCtor.Parameters)
         {
@@ -263,17 +310,22 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             if (p.HasExplicitDefaultValue)
             {
                 // Check if the parameter type is a StringEnum — resolve to string literal
-                if (p.Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+                if (
+                    p.Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
                     && SymbolHelper.HasStringEnum(enumType)
-                    && p.ExplicitDefaultValue is int enumOrdinal)
+                    && p.ExplicitDefaultValue is int enumOrdinal
+                )
                 {
-                    var enumMember = enumType.GetMembers().OfType<IFieldSymbol>()
+                    var enumMember = enumType
+                        .GetMembers()
+                        .OfType<IFieldSymbol>()
                         .Where(f => f.HasConstantValue)
                         .FirstOrDefault(f => (int)f.ConstantValue! == enumOrdinal);
 
                     if (enumMember is not null)
                     {
-                        var memberName = SymbolHelper.GetNameOverride(enumMember) ?? enumMember.Name;
+                        var memberName =
+                            SymbolHelper.GetNameOverride(enumMember) ?? enumMember.Name;
                         defaultValue = new TsStringLiteral(memberName);
                     }
                     else
@@ -290,8 +342,10 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                         bool b => new TsLiteral(b ? "true" : "false"),
                         int i => new TsLiteral(i.ToString()),
                         long l => new TsLiteral(l.ToString()),
-                        double d => new TsLiteral(d.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                        _ => new TsLiteral(p.ExplicitDefaultValue.ToString()!)
+                        double d => new TsLiteral(
+                            d.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        ),
+                        _ => new TsLiteral(p.ExplicitDefaultValue.ToString()!),
                     };
                 }
             }
@@ -315,7 +369,12 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     private static TsExpression? ComputeDefaultInitializer(ITypeSymbol type)
     {
         // Nullable value types (int?, MyEnum?) → null
-        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+        if (
+            type is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            }
+        )
             return new TsLiteral("null");
 
         // Nullable reference types → null
@@ -327,26 +386,39 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         // `EnumName.Member` resolves correctly.
         if (type.TypeKind == TypeKind.Enum && type is INamedTypeSymbol enumType)
         {
-            var firstMember = enumType.GetMembers()
+            var firstMember = enumType
+                .GetMembers()
                 .OfType<IFieldSymbol>()
                 .Where(f => f.IsConst)
-                .OrderBy(f => f.ConstantValue switch
-                {
-                    int i => (long)i,
-                    long l => l,
-                    _ => long.MaxValue,
-                })
+                .OrderBy(f =>
+                    f.ConstantValue switch
+                    {
+                        int i => (long)i,
+                        long l => l,
+                        _ => long.MaxValue,
+                    }
+                )
                 .FirstOrDefault();
-            if (firstMember is null) return null;
+            if (firstMember is null)
+                return null;
             var enumName = TypeTransformer.GetTsTypeName(enumType);
             return new TsPropertyAccess(new TsIdentifier(enumName), firstMember.Name);
         }
 
         // Numeric primitives → 0
-        if (type.SpecialType is SpecialType.System_Int16 or SpecialType.System_Int32 or SpecialType.System_Int64
-            or SpecialType.System_UInt16 or SpecialType.System_UInt32 or SpecialType.System_UInt64
-            or SpecialType.System_Byte or SpecialType.System_SByte
-            or SpecialType.System_Single or SpecialType.System_Double)
+        if (
+            type.SpecialType
+            is SpecialType.System_Int16
+                or SpecialType.System_Int32
+                or SpecialType.System_Int64
+                or SpecialType.System_UInt16
+                or SpecialType.System_UInt32
+                or SpecialType.System_UInt64
+                or SpecialType.System_Byte
+                or SpecialType.System_SByte
+                or SpecialType.System_Single
+                or SpecialType.System_Double
+        )
         {
             return new TsLiteral("0");
         }
@@ -355,9 +427,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         // emitted Decimal references are syntactically consistent across the file.
         if (type.SpecialType == SpecialType.System_Decimal)
         {
-            return new TsNewExpression(
-                new TsIdentifier("Decimal"),
-                [new TsStringLiteral("0")]);
+            return new TsNewExpression(new TsIdentifier("Decimal"), [new TsStringLiteral("0")]);
         }
 
         // bool → false
@@ -372,11 +442,15 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
     private TsFieldMember? TransformField(IFieldSymbol field, HashSet<string>? capturedParamNames)
     {
-        if (field.IsImplicitlyDeclared) return null;
-        if (field.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) return null;
-        if (SymbolHelper.HasIgnore(field)) return null;
+        if (field.IsImplicitlyDeclared)
+            return null;
+        if (field.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable)
+            return null;
+        if (SymbolHelper.HasIgnore(field))
+            return null;
         // Skip backing fields for auto-properties (compiler-generated)
-        if (field.AssociatedSymbol is not null) return null;
+        if (field.AssociatedSymbol is not null)
+            return null;
 
         var name = SymbolHelper.GetNameOverride(field) ?? TypeScriptNaming.ToCamelCase(field.Name);
         var tsType = TypeMapper.Map(field.Type);
@@ -390,9 +464,12 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         {
             // Skip initializer if it references a captured constructor param
             // (the assignment is moved to the constructor body)
-            var isCapuredInit = varDecl.Initializer.Value is IdentifierNameSyntax initId
+            var isCapuredInit =
+                varDecl.Initializer.Value is IdentifierNameSyntax initId
                 && capturedParamNames is not null
-                && capturedParamNames.Contains(TypeScriptNaming.ToCamelCase(initId.Identifier.Text));
+                && capturedParamNames.Contains(
+                    TypeScriptNaming.ToCamelCase(initId.Identifier.Text)
+                );
 
             if (!isCapuredInit)
             {
@@ -410,7 +487,10 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         return new TsFieldMember(name, tsType, initializer, isReadonly, accessibility);
     }
 
-    private static bool IsConstructorParam(IPropertySymbol prop, IReadOnlyList<TsConstructorParam> ctorParams)
+    private static bool IsConstructorParam(
+        IPropertySymbol prop,
+        IReadOnlyList<TsConstructorParam> ctorParams
+    )
     {
         var name = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
         return ctorParams.Any(p => p.Name == name);
@@ -421,9 +501,12 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     /// </summary>
     private IReadOnlyList<TsClassMember> TransformProperty(IPropertySymbol prop)
     {
-        if (prop.IsImplicitlyDeclared) return [];
-        if (prop.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) return [];
-        if (SymbolHelper.HasIgnore(prop)) return [];
+        if (prop.IsImplicitlyDeclared)
+            return [];
+        if (prop.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable)
+            return [];
+        if (SymbolHelper.HasIgnore(prop))
+            return [];
 
         var name = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
         var tsType = TypeMapper.Map(prop.Type);
@@ -431,12 +514,21 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         var results = new List<TsClassMember>();
 
         // Check if the property has explicit accessor bodies
-        var syntax = prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as PropertyDeclarationSyntax;
+        var syntax =
+            prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            as PropertyDeclarationSyntax;
 
-        var hasGetterBody = syntax?.ExpressionBody is not null
-            || syntax?.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration) && (a.Body is not null || a.ExpressionBody is not null)) == true;
-        var hasSetterBody = syntax?.AccessorList?.Accessors.Any(a =>
-            a.IsKind(SyntaxKind.SetAccessorDeclaration) && (a.Body is not null || a.ExpressionBody is not null)) == true;
+        var hasGetterBody =
+            syntax?.ExpressionBody is not null
+            || syntax?.AccessorList?.Accessors.Any(a =>
+                a.IsKind(SyntaxKind.GetAccessorDeclaration)
+                && (a.Body is not null || a.ExpressionBody is not null)
+            ) == true;
+        var hasSetterBody =
+            syntax?.AccessorList?.Accessors.Any(a =>
+                a.IsKind(SyntaxKind.SetAccessorDeclaration)
+                && (a.Body is not null || a.ExpressionBody is not null)
+            ) == true;
 
         if (hasGetterBody || syntax?.ExpressionBody is not null)
         {
@@ -448,12 +540,22 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             IReadOnlyList<TsStatement> getterBody;
             if (syntax.ExpressionBody is not null)
             {
-                getterBody = [new TsReturnStatement(exprTransformer.TransformExpression(syntax.ExpressionBody.Expression))];
+                getterBody =
+                [
+                    new TsReturnStatement(
+                        exprTransformer.TransformExpression(syntax.ExpressionBody.Expression)
+                    ),
+                ];
             }
             else
             {
-                var getAccessor = syntax.AccessorList!.Accessors.First(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-                getterBody = exprTransformer.TransformBody(getAccessor.Body, getAccessor.ExpressionBody);
+                var getAccessor = syntax.AccessorList!.Accessors.First(a =>
+                    a.IsKind(SyntaxKind.GetAccessorDeclaration)
+                );
+                getterBody = exprTransformer.TransformBody(
+                    getAccessor.Body,
+                    getAccessor.ExpressionBody
+                );
             }
 
             results.Add(new TsGetterMember(name, tsType, getterBody));
@@ -461,11 +563,16 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
         if (hasSetterBody)
         {
-            var setAccessor = syntax!.AccessorList!.Accessors.First(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
+            var setAccessor = syntax!.AccessorList!.Accessors.First(a =>
+                a.IsKind(SyntaxKind.SetAccessorDeclaration)
+            );
             var semanticModel = _context.Compilation.GetSemanticModel(syntax.SyntaxTree);
             var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
             exprTransformer.SelfParameterName = "this";
-            var setterBody = exprTransformer.TransformBody(setAccessor.Body, setAccessor.ExpressionBody);
+            var setterBody = exprTransformer.TransformBody(
+                setAccessor.Body,
+                setAccessor.ExpressionBody
+            );
             var valueParam = new TsParameter("value", tsType);
 
             results.Add(new TsSetterMember(name, valueParam, setterBody));
@@ -501,30 +608,38 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
     private TsClassMember? TransformClassMethod(IMethodSymbol method)
     {
-        if (method.IsImplicitlyDeclared) return null;
+        if (method.IsImplicitlyDeclared)
+            return null;
         // [Emit] methods are consumed inline at call sites, not generated as methods
-        if (TypeScriptNaming.HasEmit(method)) return null;
+        if (TypeScriptNaming.HasEmit(method))
+            return null;
         // Skip compiler-generated or internal/unsupported access levels
-        if (method.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) return null;
+        if (method.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable)
+            return null;
 
         var syntax =
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as MethodDeclarationSyntax;
-        if (syntax is null) return null;
+        if (syntax is null)
+            return null;
 
         // Method declarations use the member-name camelCase (no reserved-word
         // escape) so a method named `Delete` becomes `delete()` instead of
         // `delete_()`. Both the declaration and the call site (MemberAccessHandler)
         // route through the same non-escaping helper, so they stay in agreement.
-        var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCaseMember(method.Name);
+        var name =
+            SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCaseMember(method.Name);
         var hasYield = syntax.DescendantNodes().OfType<YieldStatementSyntax>().Any();
         var returnType = hasYield
             ? TypeMapper.MapForGeneratorReturn(method.ReturnType)
             : TypeMapper.Map(method.ReturnType);
         var isAsync = hasYield ? false : method.IsAsync;
 
-        var parameters = method.Parameters
-            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+        var parameters = method
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                TypeMapper.Map(p.Type)
+            ))
             .ToList();
 
         var semanticModel = _context.Compilation.GetSemanticModel(syntax.SyntaxTree);
@@ -534,7 +649,11 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         if (!method.IsStatic)
             exprTransformer.SelfParameterName = "this";
 
-        var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody, isVoid: method.ReturnsVoid);
+        var body = exprTransformer.TransformBody(
+            syntax.Body,
+            syntax.ExpressionBody,
+            isVoid: method.ReturnsVoid
+        );
 
         return new TsMethodMember(
             name,
@@ -551,20 +670,26 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
     private IReadOnlyList<TsClassMember> TransformClassOperator(
         INamedTypeSymbol containingType,
-        IMethodSymbol method)
+        IMethodSymbol method
+    )
     {
         var nameOverride = SymbolHelper.GetNameOverride(method);
-        if (nameOverride is null) return [];
+        if (nameOverride is null)
+            return [];
 
         var syntax =
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as OperatorDeclarationSyntax;
-        if (syntax is null) return [];
+        if (syntax is null)
+            return [];
 
         var returnType = TypeMapper.Map(method.ReturnType);
 
-        var parameters = method.Parameters
-            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+        var parameters = method
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                TypeMapper.Map(p.Type)
+            ))
             .ToList();
 
         var semanticModel = _context.Compilation.GetSemanticModel(syntax.SyntaxTree);
@@ -584,7 +709,10 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             // Unary: $negate(): Type { return ClassName.__negate(this); }
             var helperBody = new TsReturnStatement(
                 new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier(containingType.Name), staticName),
+                    new TsPropertyAccess(
+                        new TsIdentifier(TypeTransformer.GetTsTypeName(containingType)),
+                        staticName
+                    ),
                     [new TsIdentifier("this")]
                 )
             );
@@ -596,11 +724,16 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             var rightParam = parameters.Last();
             var helperBody = new TsReturnStatement(
                 new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier(containingType.Name), staticName),
+                    new TsPropertyAccess(
+                        new TsIdentifier(TypeTransformer.GetTsTypeName(containingType)),
+                        staticName
+                    ),
                     [new TsIdentifier("this"), new TsIdentifier(rightParam.Name)]
                 )
             );
-            results.Add(new TsMethodMember($"${nameOverride}", [rightParam], returnType, [helperBody]));
+            results.Add(
+                new TsMethodMember($"${nameOverride}", [rightParam], returnType, [helperBody])
+            );
         }
 
         return results;
@@ -615,37 +748,55 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     /// </summary>
     private static IReadOnlyList<TsConstructorParam> GetCapturedConstructorParams(
         INamedTypeSymbol type,
-        IReadOnlyList<TsConstructorParam> existingParams)
+        IReadOnlyList<TsConstructorParam> existingParams
+    )
     {
-        var primaryCtor = type.Constructors
-            .OrderByDescending(c => c.Parameters.Length)
+        var primaryCtor = type
+            .Constructors.OrderByDescending(c => c.Parameters.Length)
             .FirstOrDefault();
-        if (primaryCtor is null) return [];
+        if (primaryCtor is null)
+            return [];
 
-        var existingNames = existingParams.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existingNames = existingParams
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var result = new List<TsConstructorParam>();
 
         foreach (var param in primaryCtor.Parameters)
         {
             var camelName = TypeScriptNaming.ToCamelCase(param.Name);
-            if (existingNames.Contains(camelName)) continue;
+            if (existingNames.Contains(camelName))
+                continue;
 
             // Check if this param is referenced by any field initializer
-            var isCapured = type.GetMembers().OfType<IFieldSymbol>()
+            var isCapured = type.GetMembers()
+                .OfType<IFieldSymbol>()
                 .Any(f =>
                 {
                     var syntax = f.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-                    if (syntax is VariableDeclaratorSyntax { Initializer.Value: IdentifierNameSyntax id })
-                        return string.Equals(id.Identifier.Text, param.Name, StringComparison.OrdinalIgnoreCase);
+                    if (
+                        syntax is VariableDeclaratorSyntax
+                        {
+                            Initializer.Value: IdentifierNameSyntax id
+                        }
+                    )
+                        return string.Equals(
+                            id.Identifier.Text,
+                            param.Name,
+                            StringComparison.OrdinalIgnoreCase
+                        );
                     return false;
                 });
 
             if (isCapured)
             {
-                result.Add(new TsConstructorParam(
-                    camelName,
-                    TypeMapper.Map(param.Type),
-                    Accessibility: TsAccessibility.None));
+                result.Add(
+                    new TsConstructorParam(
+                        camelName,
+                        TypeMapper.Map(param.Type),
+                        Accessibility: TsAccessibility.None
+                    )
+                );
             }
         }
 
@@ -660,8 +811,10 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         foreach (var field in type.GetMembers().OfType<IFieldSymbol>())
         {
             var syntax = field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-            if (syntax is VariableDeclaratorSyntax { Initializer.Value: IdentifierNameSyntax id }
-                && string.Equals(id.Identifier.Text, paramName, StringComparison.OrdinalIgnoreCase))
+            if (
+                syntax is VariableDeclaratorSyntax { Initializer.Value: IdentifierNameSyntax id }
+                && string.Equals(id.Identifier.Text, paramName, StringComparison.OrdinalIgnoreCase)
+            )
             {
                 return TypeScriptNaming.ToCamelCase(field.Name);
             }
@@ -679,7 +832,13 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         var result = new List<TsType>();
         foreach (var iface in type.Interfaces)
         {
-            if (SymbolHelper.IsTranspilable(iface.OriginalDefinition, _context.AssemblyWideTranspile, _context.CurrentAssembly))
+            if (
+                SymbolHelper.IsTranspilable(
+                    iface.OriginalDefinition,
+                    _context.AssemblyWideTranspile,
+                    _context.CurrentAssembly
+                )
+            )
             {
                 var tsName = TypeTransformer.GetTsTypeName(iface.OriginalDefinition);
                 if (iface.TypeArguments.Length > 0)
@@ -704,22 +863,29 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     /// </summary>
     private IReadOnlyList<TsExpression> ResolveSuperArguments(
         INamedTypeSymbol type,
-        IReadOnlyList<TsConstructorParam> baseParams)
+        IReadOnlyList<TsConstructorParam> baseParams
+    )
     {
         // Try to find PrimaryConstructorBaseTypeSyntax in the type's declaration
         foreach (var syntaxRef in type.DeclaringSyntaxReferences)
         {
-            if (syntaxRef.GetSyntax() is not TypeDeclarationSyntax typeDecl) continue;
-            if (typeDecl.BaseList is null) continue;
+            if (syntaxRef.GetSyntax() is not TypeDeclarationSyntax typeDecl)
+                continue;
+            if (typeDecl.BaseList is null)
+                continue;
 
             foreach (var baseType in typeDecl.BaseList.Types)
             {
                 if (baseType is PrimaryConstructorBaseTypeSyntax primaryBase)
                 {
-                    var semanticModel = _context.Compilation.GetSemanticModel(primaryBase.SyntaxTree);
+                    var semanticModel = _context.Compilation.GetSemanticModel(
+                        primaryBase.SyntaxTree
+                    );
                     var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
-                    return primaryBase.ArgumentList.Arguments
-                        .Select(a => exprTransformer.TransformExpression(a.Expression))
+                    return primaryBase
+                        .ArgumentList.Arguments.Select(a =>
+                            exprTransformer.TransformExpression(a.Expression)
+                        )
                         .ToList();
                 }
             }
@@ -757,11 +923,14 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         // Walk the type's properties in lockstep with the param list.
         var orderedProps = type.GetMembers()
             .OfType<IPropertySymbol>()
-            .Where(p => !p.IsImplicitlyDeclared
-                        && p.DeclaredAccessibility is not (Accessibility.Internal or Accessibility.NotApplicable)
-                        && !SymbolHelper.HasIgnore(p)
-                        && !p.IsOverride
-                        && paramDefaults.ContainsKey(p.Name))
+            .Where(p =>
+                !p.IsImplicitlyDeclared
+                && p.DeclaredAccessibility
+                    is not (Accessibility.Internal or Accessibility.NotApplicable)
+                && !SymbolHelper.HasIgnore(p)
+                && !p.IsOverride
+                && paramDefaults.ContainsKey(p.Name)
+            )
             .ToList();
 
         var properties = new List<TsProperty>(ownParams.Count);
@@ -788,20 +957,36 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     /// signature. Static methods, operator overloads, and compiler-generated
     /// members are skipped.
     /// </summary>
-    private void EmitPlainObjectMethods(INamedTypeSymbol type, string typeName, List<TsTopLevel> statements)
+    private void EmitPlainObjectMethods(
+        INamedTypeSymbol type,
+        string typeName,
+        List<TsTopLevel> statements
+    )
     {
         foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
         {
-            if (method.IsImplicitlyDeclared) continue;
-            if (method.MethodKind != MethodKind.Ordinary) continue;
-            if (method.IsStatic) continue;
-            if (method.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
-            if (SymbolHelper.HasIgnore(method)) continue;
-            if (TypeScriptNaming.HasEmit(method)) continue;
+            if (method.IsImplicitlyDeclared)
+                continue;
+            if (method.MethodKind != MethodKind.Ordinary)
+                continue;
+            if (method.IsStatic)
+                continue;
+            if (
+                method.DeclaredAccessibility
+                is Accessibility.Internal
+                    or Accessibility.NotApplicable
+            )
+                continue;
+            if (SymbolHelper.HasIgnore(method))
+                continue;
+            if (TypeScriptNaming.HasEmit(method))
+                continue;
 
-            var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            var syntax =
+                method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
                 as MethodDeclarationSyntax;
-            if (syntax is null) continue;
+            if (syntax is null)
+                continue;
 
             var semanticModel = _context.Compilation.GetSemanticModel(syntax.SyntaxTree);
             var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
@@ -811,27 +996,38 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             exprTransformer.SelfParameterName = "self";
 
             var body = exprTransformer.TransformBody(
-                syntax.Body, syntax.ExpressionBody, isVoid: method.ReturnsVoid);
+                syntax.Body,
+                syntax.ExpressionBody,
+                isVoid: method.ReturnsVoid
+            );
 
             // First parameter is always `self: T`; the rest are the C# parameters.
             var selfParam = new TsParameter("self", new TsNamedType(typeName));
             var parameters = new List<TsParameter> { selfParam };
-            parameters.AddRange(method.Parameters
-                .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type))));
+            parameters.AddRange(
+                method.Parameters.Select(p => new TsParameter(
+                    TypeScriptNaming.ToCamelCase(p.Name),
+                    TypeMapper.Map(p.Type)
+                ))
+            );
 
             // Function name escapes reserved words because top-level function
             // declarations CANNOT use them (`function delete() {}` is illegal even
             // though `obj.delete` is fine). The InvocationHandler call-site rewrite
             // routes through the same ToCamelCase variant.
-            var fnName = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
+            var fnName =
+                SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
             var returnType = TypeMapper.Map(method.ReturnType);
-            statements.Add(new TsFunction(
-                fnName,
-                parameters,
-                returnType,
-                body,
-                Exported: true,
-                Async: method.IsAsync));
+            statements.Add(
+                new TsFunction(
+                    fnName,
+                    parameters,
+                    returnType,
+                    body,
+                    Exported: true,
+                    Async: method.IsAsync
+                )
+            );
         }
     }
 }

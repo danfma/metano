@@ -15,9 +15,15 @@ public static class TypeMapper
     /// Key: C# full type name (e.g. "System.Decimal"), Value: (ExportedName, FromPackage)
     /// </summary>
     [ThreadStatic]
-    private static Dictionary<string, (string ExportedName, string FromPackage, string Version)>? _bclExportMap;
+    private static Dictionary<
+        string,
+        (string ExportedName, string FromPackage, string Version)
+    >? _bclExportMap;
 
-    public static Dictionary<string, (string ExportedName, string FromPackage, string Version)> BclExportMap
+    public static Dictionary<
+        string,
+        (string ExportedName, string FromPackage, string Version)
+    > BclExportMap
     {
         get => _bclExportMap ??= [];
         set => _bclExportMap = value;
@@ -111,21 +117,32 @@ public static class TypeMapper
     public static TsType Map(ITypeSymbol type)
     {
         // Nullable<T> (value types: int?, bool?, etc.) → T | null
-        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+        if (
+            type is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            } nullable
+        )
         {
             var inner = Map(nullable.TypeArguments[0]);
             return MakeNullable(inner);
         }
 
         // Nullable reference types (string?, Money?, etc.) → T | null
-        if (type.NullableAnnotation == NullableAnnotation.Annotated && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+        if (
+            type.NullableAnnotation == NullableAnnotation.Annotated
+            && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
+        )
         {
             var inner = Map(type.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
             return MakeNullable(inner);
         }
 
         // Check BCL export map first (overrides hardcoded mappings)
-        if (type is INamedTypeSymbol bclType && BclExportMap.TryGetValue(bclType.ToDisplayString(), out var bclExport))
+        if (
+            type is INamedTypeSymbol bclType
+            && BclExportMap.TryGetValue(bclType.ToDisplayString(), out var bclExport)
+        )
         {
             // Track for auto-deps generation when the mapping declares a Version. The
             // package name is the npm package the user will need to install.
@@ -178,42 +195,67 @@ public static class TypeMapper
                 return new TsBigIntType();
 
             // Temporal date/time types
-            if (fullName is "System.DateTime") return new TsNamedType("Temporal.PlainDateTime");
-            if (fullName is "System.DateTimeOffset") return new TsNamedType("Temporal.ZonedDateTime");
-            if (fullName is "System.DateOnly") return new TsNamedType("Temporal.PlainDate");
-            if (fullName is "System.TimeOnly") return new TsNamedType("Temporal.PlainTime");
-            if (fullName is "System.TimeSpan") return new TsNamedType("Temporal.Duration");
+            if (fullName is "System.DateTime")
+                return new TsNamedType("Temporal.PlainDateTime");
+            if (fullName is "System.DateTimeOffset")
+                return new TsNamedType("Temporal.ZonedDateTime");
+            if (fullName is "System.DateOnly")
+                return new TsNamedType("Temporal.PlainDate");
+            if (fullName is "System.TimeOnly")
+                return new TsNamedType("Temporal.PlainTime");
+            if (fullName is "System.TimeSpan")
+                return new TsNamedType("Temporal.Duration");
 
             // Simple mappings
-            if (fullName is "System.Guid") return new TsStringType();
-            if (fullName is "System.Uri") return new TsStringType();
-            if (fullName is "System.Object") return new TsNamedType("unknown");
+            if (fullName is "System.Guid")
+                return new TsStringType();
+            if (fullName is "System.Uri")
+                return new TsStringType();
+            if (fullName is "System.Object")
+                return new TsNamedType("unknown");
 
             // Dictionary → Map<K, V>
             if (IsDictionaryLike(named) && named.TypeArguments.Length >= 2)
-                return new TsNamedType("Map", [Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]);
+                return new TsNamedType(
+                    "Map",
+                    [Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]
+                );
 
             // HashSet / ISet → HashSet<T> (from @meta-sharp/runtime, respects equals/hashCode)
             if (IsSetLike(named) && named.TypeArguments.Length > 0)
                 return new TsNamedType("HashSet", [Map(named.TypeArguments[0])]);
 
             // KeyValuePair<K,V> → [K, V]
-            if (fullName.StartsWith("System.Collections.Generic.KeyValuePair") && named.TypeArguments.Length >= 2)
+            if (
+                fullName.StartsWith("System.Collections.Generic.KeyValuePair")
+                && named.TypeArguments.Length >= 2
+            )
                 return new TsTupleType([Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]);
 
             // Tuple / ValueTuple → [T1, T2, ...]
             var originalName = named.OriginalDefinition.ToDisplayString();
-            if ((originalName.StartsWith("System.Tuple") || originalName.StartsWith("System.ValueTuple")
-                || named.IsTupleType)
-                && named.TypeArguments.Length > 0)
+            if (
+                (
+                    originalName.StartsWith("System.Tuple")
+                    || originalName.StartsWith("System.ValueTuple")
+                    || named.IsTupleType
+                )
+                && named.TypeArguments.Length > 0
+            )
                 return new TsTupleType(named.TypeArguments.Select(Map).ToList());
 
             // IGrouping<K,V> → Grouping<K,V> (from @meta-sharp/runtime)
             if (fullName.StartsWith("System.Linq.IGrouping") && named.TypeArguments.Length >= 2)
-                return new TsNamedType("Grouping", [Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]);
+                return new TsNamedType(
+                    "Grouping",
+                    [Map(named.TypeArguments[0]), Map(named.TypeArguments[1])]
+                );
 
             // IReadOnlyCollection<T> → Iterable<T> (compatible with both Array and HashSet)
-            if (fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection") && named.TypeArguments.Length > 0)
+            if (
+                fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection")
+                && named.TypeArguments.Length > 0
+            )
                 return new TsNamedType("Iterable", [Map(named.TypeArguments[0])]);
 
             // Collections → T[]
@@ -253,8 +295,10 @@ public static class TypeMapper
         {
             var fullName = named.ToDisplayString();
             if (
-                (fullName.StartsWith("System.Collections.Generic.IEnumerable")
-                    || fullName.StartsWith("System.Collections.Generic.IEnumerator"))
+                (
+                    fullName.StartsWith("System.Collections.Generic.IEnumerable")
+                    || fullName.StartsWith("System.Collections.Generic.IEnumerator")
+                )
                 && named.TypeArguments.Length > 0
             )
             {
@@ -285,8 +329,10 @@ public static class TypeMapper
             // library that hasn't declared its package name. Record the type so the
             // transformer can raise MS0007 once per unique miss.
             var containingAssembly = key.ContainingAssembly;
-            if (containingAssembly is not null
-                && AssembliesNeedingEmitPackage.Contains(containingAssembly))
+            if (
+                containingAssembly is not null
+                && AssembliesNeedingEmitPackage.Contains(containingAssembly)
+            )
             {
                 CrossPackageMisses.Add(named.ToDisplayString());
             }
@@ -298,7 +344,8 @@ public static class TypeMapper
         // import multi-type files via the file path (not the type path). Otherwise
         // fall back to the type's own name (with [Name] override applied), matching
         // the 1:1 default. Both branches go through ToKebabCase via ComputeSubPath.
-        var fileName = SymbolHelper.GetEmitInFile(entry.Symbol)
+        var fileName =
+            SymbolHelper.GetEmitInFile(entry.Symbol)
             ?? SymbolHelper.GetNameOverride(entry.Symbol)
             ?? entry.Symbol.Name;
         var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, fileName);
@@ -360,10 +407,15 @@ public static class TypeMapper
     /// </summary>
     public static bool NeedsTemporalImport(ITypeSymbol type)
     {
-        if (type is not INamedTypeSymbol named) return false;
+        if (type is not INamedTypeSymbol named)
+            return false;
         var fullName = named.ToDisplayString();
-        return fullName is "System.DateTime" or "System.DateTimeOffset"
-            or "System.DateOnly" or "System.TimeOnly" or "System.TimeSpan";
+        return fullName
+            is "System.DateTime"
+                or "System.DateTimeOffset"
+                or "System.DateOnly"
+                or "System.TimeOnly"
+                or "System.TimeSpan";
     }
 
     /// <summary>
@@ -373,12 +425,12 @@ public static class TypeMapper
     private static string BuildQualifiedName(INamedTypeSymbol type)
     {
         if (type.ContainingType is null)
-            return type.Name;
-        var parts = new List<string> { type.Name };
+            return TypeTransformer.GetTsTypeName(type);
+        var parts = new List<string> { TypeTransformer.GetTsTypeName(type) };
         var current = type.ContainingType;
         while (current is not null)
         {
-            parts.Insert(0, current.Name);
+            parts.Insert(0, TypeTransformer.GetTsTypeName(current));
             current = current.ContainingType;
         }
         return string.Join(".", parts);

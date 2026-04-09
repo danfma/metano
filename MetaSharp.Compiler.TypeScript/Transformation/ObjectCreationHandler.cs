@@ -31,10 +31,14 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
 
         // Inline wrapper structs are emitted as companion objects, not classes:
         // new UserId(v) -> UserId.create(v)
-        if (type is INamedTypeSymbol inlineWrapperType && SymbolHelper.HasInlineWrapper(inlineWrapperType))
+        if (
+            type is INamedTypeSymbol inlineWrapperType
+            && SymbolHelper.HasInlineWrapper(inlineWrapperType)
+        )
         {
             var args = _parent.ArgumentResolver.Resolve(creation.ArgumentList, creation);
-            var tsTypeName = SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
+            var tsTypeName =
+                SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
             return new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
                 args
@@ -54,30 +58,43 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
         if (IsExceptionType(type))
         {
             var args = _parent.ArgumentResolver.Resolve(creation.ArgumentList, creation);
-            var errorName = type is INamedTypeSymbol named
-                && SymbolHelper.IsTranspilable(named, _parent.AssemblyWideTranspile, _parent.CurrentAssembly)
-                ? named.Name
-                : "Error";
+            var errorName =
+                type is INamedTypeSymbol named
+                && SymbolHelper.IsTranspilable(
+                    named,
+                    _parent.AssemblyWideTranspile,
+                    _parent.CurrentAssembly
+                )
+                    ? TypeTransformer.GetTsTypeName(named)
+                    : "Error";
             return new TsNewExpression(new TsIdentifier(errorName), args);
         }
 
         // Default: new Type(args) — resolve named arguments to positional
         var ctorArgs = _parent.ArgumentResolver.Resolve(creation.ArgumentList, creation);
-        var typeName = type is INamedTypeSymbol nt ? BuildQualifiedTypeName(nt) : (type?.Name ?? "Object");
+        var typeName = type is INamedTypeSymbol nt
+            ? BuildQualifiedTypeName(nt)
+            : (type?.Name ?? "Object");
         return new TsNewExpression(new TsIdentifier(typeName), ctorArgs);
     }
 
-    public TsExpression TransformImplicitObjectCreation(ImplicitObjectCreationExpressionSyntax creation)
+    public TsExpression TransformImplicitObjectCreation(
+        ImplicitObjectCreationExpressionSyntax creation
+    )
     {
         var typeInfo = _parent.Model.GetTypeInfo(creation);
         var type = typeInfo.ConvertedType;
 
-        if (type is INamedTypeSymbol inlineWrapperType && SymbolHelper.HasInlineWrapper(inlineWrapperType))
+        if (
+            type is INamedTypeSymbol inlineWrapperType
+            && SymbolHelper.HasInlineWrapper(inlineWrapperType)
+        )
         {
             var inlineArgs = creation
                 .ArgumentList.Arguments.Select(a => _parent.TransformExpression(a.Expression))
                 .ToList();
-            var tsTypeName = SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
+            var tsTypeName =
+                SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
             return new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
                 inlineArgs
@@ -94,7 +111,14 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             .ArgumentList.Arguments.Select(a => _parent.TransformExpression(a.Expression))
             .ToList();
 
-        return new TsNewExpression(new TsIdentifier(type?.Name ?? "Object"), args);
+        return new TsNewExpression(
+            new TsIdentifier(
+                type is INamedTypeSymbol implicitNamed
+                    ? TypeTransformer.GetTsTypeName(implicitNamed)
+                    : "Object"
+            ),
+            args
+        );
     }
 
     public TsExpression TransformWithExpression(WithExpressionSyntax withExpr)
@@ -145,7 +169,8 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
     private TsExpression CreatePlainObjectLiteral(
         INamedTypeSymbol type,
         ArgumentListSyntax? argumentList,
-        ExpressionSyntax creationSyntax)
+        ExpressionSyntax creationSyntax
+    )
     {
         var properties = new List<TsObjectProperty>();
         if (argumentList is null || argumentList.Arguments.Count == 0)
@@ -186,7 +211,8 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
 
     private TsNewExpression CreateNewFromArgs(
         INamedTypeSymbol recordType,
-        ArgumentListSyntax? argumentList)
+        ArgumentListSyntax? argumentList
+    )
     {
         // Use ResolveArguments for named argument support
         if (argumentList is not null)
@@ -196,14 +222,20 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             if (parentExpr is not null)
             {
                 var args = _parent.ArgumentResolver.Resolve(argumentList, parentExpr);
-                return new TsNewExpression(new TsIdentifier(recordType.Name), args);
+                return new TsNewExpression(
+                    new TsIdentifier(TypeTransformer.GetTsTypeName(recordType)),
+                    args
+                );
             }
         }
 
-        var simpleArgs = argumentList?.Arguments
-            .Select(a => _parent.TransformExpression(a.Expression))
-            .ToList() ?? [];
-        return new TsNewExpression(new TsIdentifier(recordType.Name), simpleArgs);
+        var simpleArgs =
+            argumentList?.Arguments.Select(a => _parent.TransformExpression(a.Expression)).ToList()
+            ?? [];
+        return new TsNewExpression(
+            new TsIdentifier(TypeTransformer.GetTsTypeName(recordType)),
+            simpleArgs
+        );
     }
 
     /// <summary>
@@ -211,12 +243,13 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
     /// </summary>
     private static string BuildQualifiedTypeName(INamedTypeSymbol type)
     {
-        if (type.ContainingType is null) return type.Name;
-        var parts = new List<string> { type.Name };
+        if (type.ContainingType is null)
+            return TypeTransformer.GetTsTypeName(type);
+        var parts = new List<string> { TypeTransformer.GetTsTypeName(type) };
         var current = type.ContainingType;
         while (current is not null)
         {
-            parts.Insert(0, current.Name);
+            parts.Insert(0, TypeTransformer.GetTsTypeName(current));
             current = current.ContainingType;
         }
         return string.Join(".", parts);

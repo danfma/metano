@@ -22,8 +22,10 @@ public sealed class ExceptionTransformer(TypeScriptTransformContext context)
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
         // Find the primary constructor or the constructor that calls base(message)
-        var ctor = type.Constructors
-            .Where(c => !c.IsImplicitlyDeclared && c.DeclaredAccessibility == Accessibility.Public)
+        var ctor = type
+            .Constructors.Where(c =>
+                !c.IsImplicitlyDeclared && c.DeclaredAccessibility == Accessibility.Public
+            )
             .OrderByDescending(c => c.Parameters.Length)
             .FirstOrDefault();
 
@@ -34,11 +36,13 @@ public sealed class ExceptionTransformer(TypeScriptTransformContext context)
         {
             foreach (var p in ctor.Parameters)
             {
-                ctorParams.Add(new TsConstructorParam(
-                    TypeScriptNaming.ToCamelCase(p.Name),
-                    TypeMapper.Map(p.Type),
-                    Accessibility: TsAccessibility.None
-                ));
+                ctorParams.Add(
+                    new TsConstructorParam(
+                        TypeScriptNaming.ToCamelCase(p.Name),
+                        TypeMapper.Map(p.Type),
+                        Accessibility: TsAccessibility.None
+                    )
+                );
             }
 
             // Try to find the base constructor argument (the message)
@@ -51,7 +55,9 @@ public sealed class ExceptionTransformer(TypeScriptTransformContext context)
                 {
                     if (baseType is PrimaryConstructorBaseTypeSyntax primaryBase)
                     {
-                        var semanticModel = _context.Compilation.GetSemanticModel(primaryBase.SyntaxTree);
+                        var semanticModel = _context.Compilation.GetSemanticModel(
+                            primaryBase.SyntaxTree
+                        );
                         var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
                         foreach (var arg in primaryBase.ArgumentList.Arguments)
                         {
@@ -71,22 +77,29 @@ public sealed class ExceptionTransformer(TypeScriptTransformContext context)
         // Build constructor body: super(message)
         var ctorBody = new List<TsStatement>
         {
-            new TsExpressionStatement(
-                new TsCallExpression(new TsIdentifier("super"), superArgs)
-            )
+            new TsExpressionStatement(new TsCallExpression(new TsIdentifier("super"), superArgs)),
         };
 
         var constructor = new TsConstructor(ctorParams, ctorBody);
 
         // Determine the base class in TS
         TsType extendsType = new TsNamedType("Error");
-        if (type.BaseType is not null && TypeTransformer.IsExceptionType(type.BaseType)
+        if (
+            type.BaseType is not null
+            && TypeTransformer.IsExceptionType(type.BaseType)
             && type.BaseType.ToDisplayString() != "System.Exception"
-            && SymbolHelper.IsTranspilable(type.BaseType, _context.AssemblyWideTranspile, _context.CurrentAssembly))
+            && SymbolHelper.IsTranspilable(
+                type.BaseType,
+                _context.AssemblyWideTranspile,
+                _context.CurrentAssembly
+            )
+        )
         {
             extendsType = TypeMapper.Map(type.BaseType);
         }
 
-        statements.Add(new TsClass(type.Name, constructor, [], Extends: extendsType));
+        statements.Add(
+            new TsClass(TypeTransformer.GetTsTypeName(type), constructor, [], Extends: extendsType)
+        );
     }
 }

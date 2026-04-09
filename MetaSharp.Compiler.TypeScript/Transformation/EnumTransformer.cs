@@ -37,11 +37,13 @@ public static class EnumTransformer
                 entries.Add((member.Name, new TsStringLiteral(name)));
             }
 
+            var tsName = TypeTransformer.GetTsTypeName(type);
             // export const EnumName = { Member: "value", ... } as const;
-            statements.Add(new TsConstObject(type.Name, entries));
+            statements.Add(new TsConstObject(tsName, entries));
             // export type EnumName = typeof EnumName[keyof typeof EnumName];
-            statements.Add(new TsTypeAlias(type.Name,
-                new TsNamedType($"typeof {type.Name}[keyof typeof {type.Name}]")));
+            statements.Add(
+                new TsTypeAlias(tsName, new TsNamedType($"typeof {tsName}[keyof typeof {tsName}]"))
+            );
         }
         else
         {
@@ -56,7 +58,7 @@ public static class EnumTransformer
                 );
             }
 
-            statements.Add(new TsEnum(type.Name, members));
+            statements.Add(new TsEnum(TypeTransformer.GetTsTypeName(type), members));
         }
     }
 }
