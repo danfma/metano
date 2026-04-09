@@ -294,6 +294,72 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
     // ─── Field / Property / Method transformation ─────────────
 
+    /// <summary>
+    /// Returns the TypeScript expression representing the default value for a C# type
+    /// when no explicit initializer is provided. Mirrors C#'s <c>default(T)</c>
+    /// semantics for value types and enums so the generated TS doesn't end up with
+    /// <c>undefined</c> at runtime where C# would have a deterministic zero / false /
+    /// first-enum-member default. Returns null for types where no automatic default
+    /// makes sense (string, reference types, generic type parameters).
+    /// </summary>
+    private static TsExpression? ComputeDefaultInitializer(ITypeSymbol type)
+    {
+        // Nullable value types (int?, MyEnum?) → null
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+            return new TsLiteral("null");
+
+        // Nullable reference types → null
+        if (type.NullableAnnotation == NullableAnnotation.Annotated)
+            return new TsLiteral("null");
+
+        // Enums → first member (matches default(E) which is (E)0). Works for both
+        // numeric and string enums because both lower to TS forms where
+        // `EnumName.Member` resolves correctly.
+        if (type.TypeKind == TypeKind.Enum && type is INamedTypeSymbol enumType)
+        {
+            var firstMember = enumType.GetMembers()
+                .OfType<IFieldSymbol>()
+                .Where(f => f.IsConst)
+                .OrderBy(f => f.ConstantValue switch
+                {
+                    int i => (long)i,
+                    long l => l,
+                    _ => long.MaxValue,
+                })
+                .FirstOrDefault();
+            if (firstMember is null) return null;
+            var enumName = TypeTransformer.GetTsTypeName(enumType);
+            return new TsPropertyAccess(new TsIdentifier(enumName), firstMember.Name);
+        }
+
+        // Numeric primitives → 0
+        if (type.SpecialType is SpecialType.System_Int16 or SpecialType.System_Int32 or SpecialType.System_Int64
+            or SpecialType.System_UInt16 or SpecialType.System_UInt32 or SpecialType.System_UInt64
+            or SpecialType.System_Byte or SpecialType.System_SByte
+            or SpecialType.System_Single or SpecialType.System_Double)
+        {
+            return new TsLiteral("0");
+        }
+
+        // decimal → new Decimal("0"). Matches the literal handling form so the
+        // emitted Decimal references are syntactically consistent across the file.
+        if (type.SpecialType == SpecialType.System_Decimal)
+        {
+            return new TsNewExpression(
+                new TsIdentifier("Decimal"),
+                [new TsStringLiteral("0")]);
+        }
+
+        // bool → false
+        if (type.SpecialType == SpecialType.System_Boolean)
+            return new TsLiteral("false");
+
+        // string, reference types, type parameters: no automatic default — the C#
+        // compiler would either default these to null (with nullable annotations) or
+        // require an explicit initializer.
+        return null;
+    }
+
     private TsFieldMember? TransformField(IFieldSymbol field, HashSet<string>? capturedParamNames)
     {
         if (field.IsImplicitlyDeclared) return null;
@@ -325,6 +391,11 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 initializer = exprTransformer.TransformExpression(varDecl.Initializer.Value);
             }
         }
+
+        // No explicit initializer → fall back to default(T) for value types so the
+        // runtime behavior matches C# (enum → first member, int → 0, bool → false,
+        // decimal → new Decimal("0"), etc.). Reference types and string stay null.
+        initializer ??= ComputeDefaultInitializer(field.Type);
 
         return new TsFieldMember(name, tsType, initializer, isReadonly, accessibility);
     }
@@ -403,11 +474,13 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 exprTransformer.SelfParameterName = "this";
                 initializer = exprTransformer.TransformExpression(syntax.Initializer.Value);
             }
-            else if (prop.Type.NullableAnnotation == NullableAnnotation.Annotated
-                     || prop.Type.IsValueType && prop.Type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+            else
             {
-                // Nullable properties without explicit initializer → = null
-                initializer = new TsLiteral("null");
+                // No explicit `= ...` initializer → fall back to default(T). Handles
+                // both nullable types (→ null, via the nullable branch inside the
+                // helper) and value types (enum → first member, int → 0, etc.) so
+                // the runtime behavior matches C#.
+                initializer = ComputeDefaultInitializer(prop.Type);
             }
 
             results.Add(new TsFieldMember(name, tsType, initializer, isReadonly, accessibility));

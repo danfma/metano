@@ -56,20 +56,17 @@ public class EndToEndOutputTests
         //    type is observable through Issue's API but never named at the syntax
         //    level in this consumer's source.
         //
-        // 3. `status: IssueStatus;` has no default initializer. C# auto-defaults
-        //    enum properties to `default(T)` but the transpiler doesn't emit a
-        //    corresponding `= IssueStatus.Open`. This is a pre-existing limitation
-        //    (not introduced by the multi-type-per-file work) and is documented as a
-        //    follow-up — when the consumer reads `tracker.status` before any
-        //    assignment, TypeScript treats it as `undefined`, not `0`. For now, the
-        //    user has to explicitly initialize the property.
+        // 3. `status: IssueStatus = IssueStatus.Open;` has the auto-init that mirrors
+        //    C#'s `default(IssueStatus)` semantics. Without the explicit initializer,
+        //    TS would leave the field as `undefined` at runtime, breaking equality
+        //    checks. The compiler picks the first enum member (value 0) automatically.
         var expected =
             "import { Issue, IssueStatus } from \"@acme/issues/issue\";\n" +
             "\n" +
             "export class Tracker {\n" +
             "  current: Issue | null = null;\n" +
             "\n" +
-            "  status: IssueStatus;\n" +
+            "  status: IssueStatus = IssueStatus.Open;\n" +
             "\n" +
             "  constructor() { }\n" +
             "}\n";
