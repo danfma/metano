@@ -165,6 +165,21 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
                     fields.Add((name, tsType));
             }
 
+            foreach (var member in current.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (member.IsImplicitlyDeclared) continue;
+                if (member.IsStatic) continue;
+                if (member.AssociatedSymbol is not null) continue;
+                if (member.DeclaredAccessibility is Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable) continue;
+                if (SymbolHelper.HasIgnore(member)) continue;
+
+                var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
+                var tsType = TypeMapper.Map(member.Type);
+
+                if (fields.All(f => f.Name != name))
+                    fields.Add((name, tsType));
+            }
+
             current = current.BaseType;
         }
 

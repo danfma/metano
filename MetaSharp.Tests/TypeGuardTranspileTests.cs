@@ -179,4 +179,68 @@ public class TypeGuardTranspileTests
         var output = result["item.ts"];
         await Assert.That(output).Contains("): value is Item");
     }
+
+    [Test]
+    public async Task Class_WithPublicField_GuardChecksField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, GenerateGuard]
+            public class Counter
+            {
+                public int Count;
+            }
+            """
+        );
+
+        var output = result["counter.ts"];
+        await Assert.That(output).Contains("export function isCounter(value: unknown): value is Counter");
+        await Assert.That(output).Contains("typeof v.count === \"number\"");
+    }
+
+    [Test]
+    public async Task InheritedProtectedField_GuardChecksInheritedField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile]
+                public class Base
+                {
+                    protected bool _active = true;
+                }
+
+                [Transpile, GenerateGuard]
+                public class Child : Base
+                {
+                    public int Count;
+                }
+            }
+            """
+        );
+
+        var output = result["child.ts"];
+        await Assert.That(output).Contains("typeof v._active === \"boolean\"");
+        await Assert.That(output).Contains("typeof v.count === \"number\"");
+    }
+
+    [Test]
+    public async Task Guard_WithPropertyAndField_ChecksBoth()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, GenerateGuard]
+            public class Sample
+            {
+                public int Count;
+                public string Name { get; set; } = "";
+            }
+            """
+        );
+
+        var output = result["sample.ts"];
+        await Assert.That(output).Contains("typeof v.count === \"number\"");
+        await Assert.That(output).Contains("typeof v.name === \"string\"");
+    }
 }
