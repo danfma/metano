@@ -460,7 +460,8 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 
 #### Pendentes
 - [ ] **Cache incremental**: hash de arquivos + dependências semânticas, pular regeração
-- [ ] **Cyclic references**: detectar e emitir warning/error claro com a cadeia problemática
+- [x] **Cyclic references**: detectar e emitir warning/error claro com a cadeia problemática
+  (CyclicReferenceDetector emits MS0005 warnings)
 
 ### ~~Nested Types~~ ✅
 
@@ -543,14 +544,17 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 
 #### Migration follow-ups
 
-- [ ] `ImmutableList<T>` / `ImmutableArray<T>` — the previous hardcoded mapping was
-  silently broken (mapped immutable `Add` → `push`, which mutates), so support was
-  intentionally dropped during the migration. Adding it back needs a different
-  lowering strategy that respects immutable semantics.
-- [ ] `Dictionary<K,V>.TryGetValue` — the out-parameter idiom needs a multi-statement
-  rewrite that the current declarative pipeline can't express
-- [ ] `List<T>.Remove(item)` — returns `bool` but a naive splice template breaks the
-  contract (splice returns the removed elements, truthy when empty)
+- [x] `ImmutableList<T>` / `ImmutableArray<T>` — lowered via `ImmutableCollection`
+  namespace helpers in `@meta-sharp/runtime`. Each mutation method (Add, AddRange,
+  Insert, Remove, RemoveAt, Clear) calls a namespaced pure function that returns a
+  new array. No wrapper/class — representation stays as plain `T[]` so serialization
+  works without friction (same approach as Kotlin's read-only collections).
+- [x] `Dictionary<K,V>.TryGetValue` — expanded at the statement level into
+  `const value = dict.get(key); if (value !== undefined) { … }`. The pattern is
+  detected in `StatementHandler.TransformBody` so the `Transform` return type
+  doesn't need to change.
+- [x] `List<T>.Remove(item)` — lowered to `listRemove($this, $0)` runtime helper
+  that does `indexOf + splice` and returns `bool`, matching the C# contract.
 
 ### Config File (`meta-sharp.json`)
 
@@ -581,8 +585,12 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] `dayNumber()` helper para DateOnly.DayNumber (temporal-helpers)
 - [x] Runtime type checks: `isChar`, `isString`, `isByte`, `isSByte`, `isInt16`, `isUInt16`, `isInt32`, `isUInt32`,
   `isInt64`, `isUInt64`, `isFloat32`, `isFloat64`, `isBool`, `isBigInt`
-- [ ] `Decimal` wrapper (ou integração com decimal.js)
-- [ ] `equals()` / `hashCode()` utilities para comparação deep
+- [x] `Decimal` integration via decimal.js — type mapping (`decimal` → `Decimal`), literal
+  lowering (`1.5m` → `new Decimal("1.5")`), operator lowering (`a + b` → `a.plus(b)`),
+  and member mappings (`decimal.Parse`, `CompareTo`, constants). Built-in via
+  `MetaSharp/Runtime/Decimal.cs` with `Version = "^10.6.0"` for auto-deps.
+- [x] `equals()` / `hashCode()` utilities — records auto-generate structural equality
+  and xxHash32-based hashCode via `@meta-sharp/runtime`'s `HashCode` helper.
 - [ ] Serialization helpers: `toJSON()` / `fromJSON()` com validação
 
 ### LINQ Runtime — Migração para pipe-based (tree-shaking)
