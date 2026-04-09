@@ -68,12 +68,28 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
         );
     }
 
-    public TsExpression TransformAssignment(AssignmentExpressionSyntax assign) =>
-        new TsBinaryExpression(
+    public TsExpression TransformAssignment(AssignmentExpressionSyntax assign)
+    {
+        // Dictionary indexer SET: `dict[key] = value` → `dict.set(key, value)` since
+        // JS Map doesn't support bracket assignment. Only fires for the simple `=`
+        // operator — compound forms (`dict[k] += 1`) on a dictionary aren't legal in
+        // C# anyway.
+        if (assign.OperatorToken.Text == "="
+            && assign.Left is ElementAccessExpressionSyntax elemAccess
+            && ExpressionTransformer.IsDictionaryLike(_parent.Model.GetTypeInfo(elemAccess.Expression).Type))
+        {
+            var receiver = _parent.TransformExpression(elemAccess.Expression);
+            var key = _parent.TransformExpression(elemAccess.ArgumentList.Arguments[0].Expression);
+            var value = _parent.TransformExpression(assign.Right);
+            return new TsCallExpression(new TsPropertyAccess(receiver, "set"), [key, value]);
+        }
+
+        return new TsBinaryExpression(
             _parent.TransformExpression(assign.Left),
             MapAssignmentOperator(assign.OperatorToken.Text),
             _parent.TransformExpression(assign.Right)
         );
+    }
 
     public TsExpression TransformPrefixUnary(PrefixUnaryExpressionSyntax prefix)
     {

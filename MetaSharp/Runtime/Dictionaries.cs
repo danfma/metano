@@ -6,9 +6,11 @@
 // JS Map exposes .size (a property) while .delete, .has, .clear, .set, .get are methods —
 // Count → size needs MapProperty, the rest use MapMethod.
 //
-// IReadOnlyDictionary<K,V> exposes a smaller subset (ContainsKey + indexer + Count). The
-// indexer doesn't need a member-level mapping because the property/index access is
-// emitted directly.
+// The indexer (`dict[key]` GET / `dict[key] = value` SET) is NOT a declarative mapping
+// — it's special-cased in ExpressionTransformer.TransformElementAccess and
+// OperatorHandler.TransformAssignment because the rewrite shape (`map.get(key)` /
+// `map.set(key, value)`) doesn't fit the [MapMethod] template form (the C# operation
+// is a syntactic indexer, not a named method symbol).
 
 using System.Collections.Generic;
 using MetaSharp.Annotations;

@@ -165,11 +165,10 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
             AssignmentExpressionSyntax assign => Operators.TransformAssignment(assign),
 
-            // Element access: arr[index] → arr[index]
-            ElementAccessExpressionSyntax elemAccess => new TsElementAccess(
-                TransformExpression(elemAccess.Expression),
-                TransformExpression(elemAccess.ArgumentList.Arguments[0].Expression)
-            ),
+            // Element access: arr[index] → arr[index] for arrays/lists; for
+            // Dictionary<K,V> (which lowers to JS Map), the indexer GET becomes
+            // `receiver.get(key)` since JS Map doesn't expose bracket access.
+            ElementAccessExpressionSyntax elemAccess => TransformElementAccess(elemAccess),
 
             // Generic type name as expression: OperationResult<Issue> → OperationResult
             GenericNameSyntax genericName => GenericNames.Transform(genericName),
@@ -181,4 +180,37 @@ public sealed class ExpressionTransformer(SemanticModel model)
         };
     }
 
+    /// <summary>
+    /// Lowers a C# element access expression. Arrays / lists keep the bracket form
+    /// (<c>arr[i]</c> stays valid in JS). Dictionary-family receivers — which lower
+    /// to JS Map at the type level — get rewritten to <c>map.get(key)</c> since JS
+    /// Map doesn't expose bracket access. Assignment to a dictionary indexer is
+    /// handled separately in <see cref="OperatorHandler.TransformAssignment"/>.
+    /// </summary>
+    private TsExpression TransformElementAccess(ElementAccessExpressionSyntax elemAccess)
+    {
+        var receiverType = Model.GetTypeInfo(elemAccess.Expression).Type;
+        var receiver = TransformExpression(elemAccess.Expression);
+        var key = TransformExpression(elemAccess.ArgumentList.Arguments[0].Expression);
+
+        if (IsDictionaryLike(receiverType))
+            return new TsCallExpression(new TsPropertyAccess(receiver, "get"), [key]);
+
+        return new TsElementAccess(receiver, key);
+    }
+
+    /// <summary>
+    /// Returns true if <paramref name="type"/> is one of the dictionary types that
+    /// lowers to JS Map (<c>Dictionary&lt;,&gt;</c>, <c>IDictionary&lt;,&gt;</c>,
+    /// <c>IReadOnlyDictionary&lt;,&gt;</c>). Used by both element-access and
+    /// assignment handlers to decide between bracket and method-call lowering.
+    /// </summary>
+    internal static bool IsDictionaryLike(ITypeSymbol? type)
+    {
+        if (type is not INamedTypeSymbol named) return false;
+        var name = named.OriginalDefinition.ToDisplayString();
+        return name is "System.Collections.Generic.Dictionary<TKey, TValue>"
+            or "System.Collections.Generic.IDictionary<TKey, TValue>"
+            or "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>";
+    }
 }
