@@ -154,6 +154,7 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
             foreach (var member in current.GetMembers().OfType<IPropertySymbol>())
             {
                 if (member.IsImplicitlyDeclared) continue;
+                if (member.IsStatic) continue;
                 if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
                 if (SymbolHelper.HasIgnore(member)) continue;
 
