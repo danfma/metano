@@ -156,6 +156,7 @@ public sealed class Printer(string indent = "  ")
                 PrintAccessibility(prop.Accessibility);
                 if (prop.Readonly) _sb.Write("readonly ");
                 _sb.Write(prop.Name);
+                if (prop.Optional) _sb.Write("?");
                 _sb.Write(": ");
                 PrintType(prop.Type);
                 _sb.Write(";");

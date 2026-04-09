@@ -116,6 +116,69 @@ public class PlainObjectTests
     }
 
     [Test]
+    public async Task DefaultValuedParam_BecomesOptionalField()
+    {
+        // Constructor params with defaults in C# become optional fields in the
+        // emitted TS interface (`name?: Type`). The construction side already drops
+        // omitted args from the literal, so the two halves agree.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record Page(string Title, int PageNumber = 1, bool Draft = false);
+            """);
+
+        var output = result["page.ts"];
+        await Assert.That(output).Contains("readonly title: string");
+        await Assert.That(output).Contains("readonly pageNumber?: number");
+        await Assert.That(output).Contains("readonly draft?: boolean");
+    }
+
+    [Test]
+    public async Task OmittedDefaultArgs_NotInObjectLiteral()
+    {
+        // Construction with positional args that omit the optional ones produces a
+        // literal without the omitted keys (the receiver reads `undefined`, which
+        // is fine because the field is optional in the interface).
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record Page(string Title, int PageNumber = 1);
+
+            [Transpile]
+            public class Factory
+            {
+                public Page Make() => new Page("intro");
+            }
+            """);
+
+        var output = result["factory.ts"];
+        // Only `title` in the literal — pageNumber omitted (the receiver gets
+        // undefined, the optional field allows it).
+        await Assert.That(output).Contains("{ title: \"intro\" }");
+        await Assert.That(output).DoesNotContain("pageNumber");
+    }
+
+    [Test]
+    public async Task ExplicitDefaultArg_StillEmitted()
+    {
+        // When the user explicitly passes the default value, the literal includes
+        // it (the user said so).
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record Page(string Title, int PageNumber = 1);
+
+            [Transpile]
+            public class Factory
+            {
+                public Page Make() => new Page("intro", 5);
+            }
+            """);
+
+        await Assert.That(result["factory.ts"]).Contains("{ title: \"intro\", pageNumber: 5 }");
+    }
+
+    [Test]
     public async Task PlainObject_NoEqualsHashCodeWithMethods()
     {
         // Sanity: a regular record has equals/hashCode/with; a [PlainObject] one does not.

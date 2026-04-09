@@ -734,13 +734,39 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     /// constructor params + readonly fields). Methods, equality, and <c>with</c>
     /// helpers are intentionally omitted — the user opted into "data only" semantics
     /// when they applied the attribute.
+    ///
+    /// <para>Constructor params with default values become OPTIONAL fields in the
+    /// emitted interface (<c>name?: Type</c>). The <c>ObjectCreationHandler</c>
+    /// already drops omitted args from the literal it emits at construction time, so
+    /// the two halves agree: omitting an arg in C# produces a literal without the
+    /// key, and the receiving side can read JSON that omits the field without TS
+    /// type errors.</para>
     /// </summary>
     private void EmitAsPlainObject(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
+        var paramDefaults = GetPrimaryConstructorParamDefaults(type);
         var ownParams = GetOwnConstructorParams(type);
-        var properties = ownParams
-            .Select(p => new TsProperty(p.Name, p.Type, Readonly: true))
+
+        // GetOwnConstructorParams uses TypeScript's camelCase + [Name] override for
+        // the param name, but the defaults map is keyed off the original C# property
+        // name. We need to recover the C# name to look up "is this default-valued?".
+        // Walk the type's properties in lockstep with the param list.
+        var orderedProps = type.GetMembers()
+            .OfType<IPropertySymbol>()
+            .Where(p => !p.IsImplicitlyDeclared
+                        && p.DeclaredAccessibility is not (Accessibility.Internal or Accessibility.NotApplicable)
+                        && !SymbolHelper.HasIgnore(p)
+                        && !p.IsOverride
+                        && paramDefaults.ContainsKey(p.Name))
             .ToList();
+
+        var properties = new List<TsProperty>(ownParams.Count);
+        for (var i = 0; i < ownParams.Count && i < orderedProps.Count; i++)
+        {
+            var p = ownParams[i];
+            var hasDefault = paramDefaults[orderedProps[i].Name] is not null;
+            properties.Add(new TsProperty(p.Name, p.Type, Readonly: true, Optional: hasDefault));
+        }
 
         var name = SymbolHelper.GetNameOverride(type) ?? type.Name;
         statements.Add(new TsInterface(name, properties));
