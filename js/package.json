@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "bun run --parallel ts:watch website:dev",
+    "build": "tsgo -b .",
     "ts:watch": "tsgo -b --watch -v"
   },
   "dependencies": {

@@ -3,6 +3,7 @@
   "references": [
     { "path": "./meta-sharp-runtime/tsconfig.json" },
     { "path": "./sample-todo/tsconfig.json" },
+    { "path": "./sample-todo-service/tsconfig.json" },
     { "path": "./sample-issue-tracker/tsconfig.json" },
   ],
 }
