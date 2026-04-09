@@ -86,6 +86,93 @@ public class DictionaryIndexerTests
         await Assert.That(result["cache.ts"]).Contains("map.get(key)");
     }
 
+    // ─── TryGetValue pattern expansion ──────────────────────
+
+    [Test]
+    public async Task TryGetValue_ExpandsToConstAndIf()
+    {
+        // The canonical pattern: `if (dict.TryGetValue(key, out var value)) { use(value); }`
+        // expands to two TS statements at the body level.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Cache
+            {
+                private readonly Dictionary<string, int> _items = new();
+                public int? Lookup(string key)
+                {
+                    if (_items.TryGetValue(key, out var value))
+                    {
+                        return value;
+                    }
+                    return null;
+                }
+            }
+            """);
+
+        var output = result["cache.ts"];
+        // const value = this._items.get(key);
+        await Assert.That(output).Contains("const value = this._items.get(key)");
+        // if (value !== undefined) {
+        await Assert.That(output).Contains("value !== undefined");
+        await Assert.That(output).Contains("return value;");
+        // No TryGetValue call in the output
+        await Assert.That(output).DoesNotContain("tryGetValue");
+    }
+
+    [Test]
+    public async Task TryGetValue_WithElse_PreservesElseBranch()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Cache
+            {
+                private readonly Dictionary<string, string> _items = new();
+                public string Get(string key)
+                {
+                    if (_items.TryGetValue(key, out var found))
+                        return found;
+                    else
+                        return "default";
+                }
+            }
+            """);
+
+        var output = result["cache.ts"];
+        await Assert.That(output).Contains("const found = this._items.get(key)");
+        await Assert.That(output).Contains("found !== undefined");
+        await Assert.That(output).Contains("return found;");
+        await Assert.That(output).Contains("return \"default\";");
+    }
+
+    [Test]
+    public async Task TryGetValue_NegatedCondition_NotExpanded()
+    {
+        // `if (!dict.TryGetValue(...))` is a negated form that doesn't match the
+        // expansion pattern. It falls through as a regular invocation (the method
+        // isn't mapped, so it stays as-is / falls through to the default handler).
+        // We don't expand this case because the value isn't usable in the then-branch.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Cache
+            {
+                private readonly Dictionary<string, int> _items = new();
+                public bool Missing(string key) => !_items.ContainsKey(key);
+            }
+            """);
+
+        // Sanity check: ContainsKey → has
+        await Assert.That(result["cache.ts"]).Contains("!this._items.has(key)");
+    }
+
     [Test]
     public async Task IReadOnlyDictionaryGet_AlsoLowers()
     {

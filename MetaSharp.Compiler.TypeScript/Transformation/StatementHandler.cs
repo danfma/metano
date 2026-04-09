@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.Compiler.Diagnostics;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
@@ -80,7 +81,20 @@ public sealed class StatementHandler(ExpressionTransformer parent)
         }
 
         if (block is not null)
-            return block.Statements.Select(Transform).ToList();
+        {
+            var result = new List<TsStatement>();
+            foreach (var stmt in block.Statements)
+            {
+                // Expand `if (dict.TryGetValue(key, out var value)) { … }` into two
+                // statements: `const value = dict.get(key);` + `if (value !== undefined) { … }`.
+                // The expansion happens here (at the body level) because Transform returns
+                // a single TsStatement and we don't want to change its signature.
+                if (TryExpandTryGetValue(stmt, result))
+                    continue;
+                result.Add(Transform(stmt));
+            }
+            return result;
+        }
 
         return [];
     }
@@ -102,6 +116,59 @@ public sealed class StatementHandler(ExpressionTransformer parent)
             return block.Statements.Select(Transform).ToList();
 
         return [Transform(statement)];
+    }
+
+    /// <summary>
+    /// Detects the <c>if (dict.TryGetValue(key, out var value)) { … }</c> pattern and
+    /// expands it into two TS statements:
+    /// <code>
+    /// const value = dict.get(key);         // hoisted declaration
+    /// if (value !== undefined) { … }       // rewritten condition
+    /// </code>
+    /// Returns true if the expansion happened and the result was appended to
+    /// <paramref name="sink"/>; false if the statement didn't match the pattern (caller
+    /// should process it normally).
+    /// </summary>
+    private bool TryExpandTryGetValue(StatementSyntax stmt, List<TsStatement> sink)
+    {
+        // Shape check: if (<condition>) { … }
+        if (stmt is not IfStatementSyntax ifStmt) return false;
+
+        // Condition must be an invocation: dict.TryGetValue(key, out var value)
+        if (ifStmt.Condition is not InvocationExpressionSyntax invocation) return false;
+        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess) return false;
+
+        // Method must be TryGetValue on a dictionary-like type
+        var symbol = _parent.Model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+        if (symbol is null || symbol.Name != "TryGetValue") return false;
+        var receiverType = _parent.Model.GetTypeInfo(memberAccess.Expression).Type;
+        if (!ExpressionTransformer.IsDictionaryLike(receiverType)) return false;
+
+        // Must have 2 args: key and `out var <name>`
+        if (invocation.ArgumentList.Arguments.Count != 2) return false;
+        var outArg = invocation.ArgumentList.Arguments[1];
+        if (!outArg.RefOrOutKeyword.IsKind(SyntaxKind.OutKeyword)) return false;
+        if (outArg.Expression is not DeclarationExpressionSyntax declExpr) return false;
+        if (declExpr.Designation is not SingleVariableDesignationSyntax designation) return false;
+
+        var varName = TypeScriptNaming.ToCamelCase(designation.Identifier.Text);
+        var receiver = _parent.TransformExpression(memberAccess.Expression);
+        var key = _parent.TransformExpression(invocation.ArgumentList.Arguments[0].Expression);
+
+        // 1. const <varName> = <receiver>.get(<key>);
+        var getCall = new TsCallExpression(new TsPropertyAccess(receiver, "get"), [key]);
+        sink.Add(new TsVariableDeclaration(varName, getCall, Const: true));
+
+        // 2. if (<varName> !== undefined) { <then> } else { <else> }
+        var condition = new TsBinaryExpression(
+            new TsIdentifier(varName), "!==", new TsIdentifier("undefined"));
+        var thenBody = TransformStatementBody(ifStmt.Statement);
+        var elseBody = ifStmt.Else?.Statement is not null
+            ? TransformStatementBody(ifStmt.Else.Statement)
+            : null;
+        sink.Add(new TsIfStatement(condition, thenBody, elseBody));
+
+        return true;
     }
 
     private TsVariableDeclaration TransformLocalDeclaration(LocalDeclarationStatementSyntax decl)
