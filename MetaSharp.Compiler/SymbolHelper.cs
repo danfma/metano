@@ -51,6 +51,8 @@ public static class SymbolHelper
 
     public static bool HasModuleEntryPoint(ISymbol symbol) => HasAttribute(symbol, "ModuleEntryPoint");
 
+    public static bool HasPlainObject(ISymbol symbol) => HasAttribute(symbol, "PlainObject");
+
     /// <summary>
     /// Reads the file name from <c>[EmitInFile("name")]</c> on a type symbol, or null
     /// when the attribute isn't present (in which case the type takes its own name as

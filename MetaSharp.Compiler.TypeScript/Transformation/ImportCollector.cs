@@ -52,8 +52,10 @@ public sealed class ImportCollector(
         // exist as separate files when the grouping kicks in).
         var currentFileName = GetFileName(currentType);
 
-        // Runtime imports (HashCode for records)
-        if (currentType.IsRecord)
+        // Runtime imports (HashCode for records). [PlainObject] records are emitted as
+        // interfaces with no class wrapper and no equals/hashCode/with helpers, so they
+        // don't need the runtime helper either.
+        if (currentType.IsRecord && !SymbolHelper.HasPlainObject(currentType))
         {
             imports.Add(new TsImport(["HashCode"], "@meta-sharp/runtime"));
         }

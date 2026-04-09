@@ -41,6 +41,11 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             );
         }
 
+        // [PlainObject] types lower to object literals — no class wrapper, no
+        // constructor invocation, just a plain JS data shape.
+        if (type is INamedTypeSymbol plainType && SymbolHelper.HasPlainObject(plainType))
+            return CreatePlainObjectLiteral(plainType, creation.ArgumentList, creation);
+
         // Record struct/record → new Type(args)
         if (type is INamedTypeSymbol { IsRecord: true } recordType)
             return CreateNewFromArgs(recordType, creation.ArgumentList);
@@ -79,6 +84,9 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             );
         }
 
+        if (type is INamedTypeSymbol plainType && SymbolHelper.HasPlainObject(plainType))
+            return CreatePlainObjectLiteral(plainType, creation.ArgumentList, creation);
+
         if (type is INamedTypeSymbol { IsRecord: true } recordType)
             return CreateNewFromArgs(recordType, creation.ArgumentList);
 
@@ -91,7 +99,6 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
 
     public TsExpression TransformWithExpression(WithExpressionSyntax withExpr)
     {
-        // record with { X = expr } → source.with({ x: expr })
         var source = _parent.TransformExpression(withExpr.Expression);
         var properties = new List<TsObjectProperty>();
 
@@ -105,10 +112,76 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             }
         }
 
+        // [PlainObject] target: lower to spread literal `{ ...source, k: v }` instead
+        // of the class-based `source.with({ k: v })` form, since the type has no
+        // `with` method on its prototype.
+        var sourceType = _parent.Model.GetTypeInfo(withExpr.Expression).Type;
+        if (sourceType is INamedTypeSymbol named && SymbolHelper.HasPlainObject(named))
+        {
+            var spreadProps = new List<TsObjectProperty>(properties.Count + 1)
+            {
+                new("", new TsSpreadExpression(source)),
+            };
+            spreadProps.AddRange(properties);
+            return new TsObjectLiteral(spreadProps);
+        }
+
+        // record with { X = expr } → source.with({ x: expr })
         return new TsCallExpression(
             new TsPropertyAccess(source, "with"),
             [new TsObjectLiteral(properties)]
         );
+    }
+
+    /// <summary>
+    /// Lowers <c>new T(args)</c> to a TypeScript object literal when <c>T</c> has
+    /// <c>[PlainObject]</c>. Positional arguments are matched to the constructor's
+    /// parameter names (taken from the resolved <see cref="IMethodSymbol"/>); named
+    /// arguments use their explicit name. Each parameter becomes a property keyed by
+    /// its camelCase name; default-valued params that the user omitted are simply
+    /// dropped (they're treated as <c>undefined</c> in TS, matching how plain JS
+    /// objects work).
+    /// </summary>
+    private TsExpression CreatePlainObjectLiteral(
+        INamedTypeSymbol type,
+        ArgumentListSyntax? argumentList,
+        ExpressionSyntax creationSyntax)
+    {
+        var properties = new List<TsObjectProperty>();
+        if (argumentList is null || argumentList.Arguments.Count == 0)
+            return new TsObjectLiteral(properties);
+
+        // Resolve the constructor symbol so positional args can be matched to param
+        // names. Roslyn picks the right overload based on the call site.
+        var ctor = _parent.Model.GetSymbolInfo(creationSyntax).Symbol as IMethodSymbol;
+        var ctorParams = ctor?.Parameters;
+
+        for (var i = 0; i < argumentList.Arguments.Count; i++)
+        {
+            var arg = argumentList.Arguments[i];
+            string paramName;
+            if (arg.NameColon is not null)
+            {
+                // Explicit named argument: `new T(title: "x")`
+                paramName = arg.NameColon.Name.Identifier.Text;
+            }
+            else if (ctorParams is { } parms && i < parms.Length)
+            {
+                paramName = parms[i].Name;
+            }
+            else
+            {
+                // No symbol resolution available — fall back to a positional name.
+                // This shouldn't happen for well-formed code; the printer would still
+                // emit valid TS but with a confusing key.
+                paramName = $"_{i}";
+            }
+
+            var value = _parent.TransformExpression(arg.Expression);
+            properties.Add(new TsObjectProperty(TypeScriptNaming.ToCamelCase(paramName), value));
+        }
+
+        return new TsObjectLiteral(properties);
     }
 
     private TsNewExpression CreateNewFromArgs(

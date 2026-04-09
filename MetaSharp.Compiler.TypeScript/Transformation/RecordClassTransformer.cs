@@ -27,6 +27,16 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
+        // [PlainObject] short-circuit: emit as a TS interface (data shape, no class
+        // wrapper). The lowering of `new T(...)` and `with` is handled in
+        // ObjectCreationHandler — both produce object literals instead of constructor
+        // calls / `.with()` invocations, so the runtime form is plain JS data.
+        if (SymbolHelper.HasPlainObject(type))
+        {
+            EmitAsPlainObject(type, statements);
+            return;
+        }
+
         // Resolve base class (if transpilable)
         TsType? extendsType = null;
         var baseParams = Array.Empty<TsConstructorParam>();
@@ -715,5 +725,24 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         return baseParams
             .Select<TsConstructorParam, TsExpression>(p => new TsIdentifier(p.Name))
             .ToList();
+    }
+
+    /// <summary>
+    /// Emits a <c>[PlainObject]</c> type as a TypeScript <c>interface</c> rather than a
+    /// class. The properties come from the record's primary constructor parameters
+    /// (same source as the class form, just rendered as interface members instead of
+    /// constructor params + readonly fields). Methods, equality, and <c>with</c>
+    /// helpers are intentionally omitted — the user opted into "data only" semantics
+    /// when they applied the attribute.
+    /// </summary>
+    private void EmitAsPlainObject(INamedTypeSymbol type, List<TsTopLevel> statements)
+    {
+        var ownParams = GetOwnConstructorParams(type);
+        var properties = ownParams
+            .Select(p => new TsProperty(p.Name, p.Type, Readonly: true))
+            .ToList();
+
+        var name = SymbolHelper.GetNameOverride(type) ?? type.Name;
+        statements.Add(new TsInterface(name, properties));
     }
 }
