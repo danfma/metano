@@ -29,8 +29,20 @@ public sealed class IdentifierHandler(ExpressionTransformer parent)
     {
         var symbol = _parent.Model.GetSymbolInfo(id).Symbol;
 
-        // Type references → keep PascalCase (e.g., IssueStatus, Guid, UserId)
-        if (symbol is INamedTypeSymbol or ITypeSymbol)
+        // Type references → keep PascalCase (e.g., IssueStatus, Guid, UserId).
+        // When the type comes from a cross-package source, route through TypeMapper
+        // so the origin metadata is captured and the import collector can emit the
+        // corresponding import statement. We can't reuse TsNamedType (it's a TsType,
+        // not a TsExpression), so we emit a TsTypeReference wrapper that the printer
+        // treats identically to a bare identifier but the collector recognizes.
+        if (symbol is INamedTypeSymbol named)
+        {
+            var mapped = TypeMapper.Map(named);
+            if (mapped is TsNamedType { Origin: { } origin } namedType)
+                return new TsTypeReference(namedType.Name, origin);
+            return new TsIdentifier(id.Identifier.Text);
+        }
+        if (symbol is ITypeSymbol)
             return new TsIdentifier(id.Identifier.Text);
 
         var name = TypeScriptNaming.ToCamelCase(id.Identifier.Text);

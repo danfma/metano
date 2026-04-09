@@ -1,4 +1,4 @@
 using MetaSharp.Annotations;
 
 [assembly: TranspileAssembly]
-[assembly: EmitPackage("sample-issue-tracker")]
+[assembly: EmitPackage("sample-issue-tracker", Version = "workspace:*")]

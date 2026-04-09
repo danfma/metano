@@ -608,6 +608,12 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(id.Name);
                 break;
 
+            case TsTypeReference typeRef:
+                // Same on-the-wire syntax as a bare identifier; the wrapper exists
+                // purely so the import collector can see the cross-package origin.
+                _sb.Write(typeRef.Name);
+                break;
+
             case TsLiteral lit:
                 _sb.Write(lit.Raw);
                 break;

@@ -1,0 +1,41 @@
+{
+  "name": "sample-todo-service",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "@meta-sharp/runtime": "workspace:*",
+    "sample-todo": "workspace:*",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native-preview": "^7.0.0-dev.20260225.1"
+  },
+  "scripts": {
+    "generate": "dotnet run --project ../../MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj -- -p ../../SampleTodo.Service/SampleTodo.Service.csproj -o ./src --clean --time",
+    "build": "tsgo -b .",
+    "test": "bun test"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./program": {
+      "types": "./dist/program.d.ts",
+      "import": "./dist/program.js"
+    },
+    "./todo-summarizer": {
+      "types": "./dist/todo-summarizer.d.ts",
+      "import": "./dist/todo-summarizer.js"
+    }
+  }
+}

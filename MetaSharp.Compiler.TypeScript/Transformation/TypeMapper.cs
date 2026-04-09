@@ -304,10 +304,15 @@ public static class TypeMapper
         var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, fileName);
 
         // Track that this package was actually referenced so the transformer can emit
-        // a corresponding `dependencies` entry in the consumer's package.json. We
-        // format the version eagerly here from the source assembly's identity so the
-        // tracking dictionary stays homogeneous (all string→string).
-        if (entry.Symbol.ContainingAssembly is { } sourceAsm)
+        // a corresponding `dependencies` entry in the consumer's package.json. The
+        // version comes from one of two sources, in order of precedence:
+        //   1. [EmitPackage(..., Version = "...")] declarative override on the source
+        //      assembly (lets the user pin to `workspace:*` for monorepo siblings or
+        //      to a specific tag for published packages).
+        //   2. The source assembly's Identity.Version, formatted as ^Major.Minor.Patch.
+        if (entry.VersionOverride is not null)
+            UsedCrossPackages[entry.PackageName] = entry.VersionOverride;
+        else if (entry.Symbol.ContainingAssembly is { } sourceAsm)
             UsedCrossPackages[entry.PackageName] = FormatAssemblyVersion(sourceAsm);
 
         return new TsTypeOrigin(entry.PackageName, subPath);

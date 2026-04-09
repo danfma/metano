@@ -289,12 +289,14 @@ public sealed class TypeTransformer(Compilation compilation)
             // _assembliesNeedingEmitPackage so the type mapper can detect references to
             // its types and report MS0007 at the consumer site instead of failing
             // silently with a downstream TypeScript "undefined identifier" error.
-            var packageName = SymbolHelper.GetEmitPackage(asm, targetEnumValue: 0);
-            if (packageName is null)
+            var packageInfo = SymbolHelper.GetEmitPackageInfo(asm, targetEnumValue: 0);
+            if (packageInfo is null)
             {
                 _assembliesNeedingEmitPackage.Add(asm);
                 continue;
             }
+            var packageName = packageInfo.Name;
+            var versionOverride = packageInfo.Version;
 
             // First pass: enumerate every transpilable type in the assembly so we can
             // compute its root namespace.
@@ -326,7 +328,7 @@ public sealed class TypeTransformer(Compilation compilation)
                     continue;
                 }
 
-                _crossAssemblyTypeMap[type] = new CrossAssemblyEntry(type, packageName, rootNs);
+                _crossAssemblyTypeMap[type] = new CrossAssemblyEntry(type, packageName, rootNs, versionOverride);
             }
         }
     }

@@ -95,13 +95,13 @@ public static class SymbolHelper
     /// <summary>
     /// Reads the <c>[assembly: EmitPackage("name", target)]</c> declaration from
     /// <paramref name="assembly"/> for the requested <paramref name="target"/>. Returns
-    /// the package name on a match, or <c>null</c> when no matching attribute exists.
-    /// Multiple <c>[EmitPackage]</c> instances are supported (one per target); the first
-    /// one whose <c>Target</c> matches wins.
+    /// the package info (name + optional version override) on a match, or <c>null</c>
+    /// when no matching attribute exists. Multiple <c>[EmitPackage]</c> instances are
+    /// supported (one per target); the first one whose <c>Target</c> matches wins.
     /// </summary>
     /// <param name="targetEnumValue">Integer value of the EmitTarget enum (matches the
     /// underlying value the attribute was constructed with). Pass 0 for JavaScript.</param>
-    public static string? GetEmitPackage(IAssemblySymbol assembly, int targetEnumValue)
+    public static EmitPackageInfo? GetEmitPackageInfo(IAssemblySymbol assembly, int targetEnumValue)
     {
         foreach (var attr in assembly.GetAttributes())
         {
@@ -118,11 +118,28 @@ public static class SymbolHelper
             if (attr.ConstructorArguments.Length > 1
                 && attr.ConstructorArguments[1].Value is int t)
                 target = t;
+            if (target != targetEnumValue) continue;
 
-            if (target == targetEnumValue) return name;
+            string? version = null;
+            foreach (var named in attr.NamedArguments)
+            {
+                if (named.Key == "Version" && named.Value.Value is string v && v.Length > 0)
+                    version = v;
+            }
+
+            return new EmitPackageInfo(name, version);
         }
         return null;
     }
+
+    /// <summary>
+    /// Convenience overload that returns just the package name (or null) for callers
+    /// that don't care about the version override.
+    /// </summary>
+    public static string? GetEmitPackage(IAssemblySymbol assembly, int targetEnumValue) =>
+        GetEmitPackageInfo(assembly, targetEnumValue)?.Name;
+
+    public sealed record EmitPackageInfo(string Name, string? Version);
 
     public static bool HasInlineWrapper(ISymbol symbol) => HasAttribute(symbol, "InlineWrapper");
 

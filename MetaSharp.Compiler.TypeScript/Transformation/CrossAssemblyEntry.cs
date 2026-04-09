@@ -19,7 +19,16 @@ namespace MetaSharp.Transformation;
 ///   relative to <em>its</em> root, not the consumer's.</item>
 /// </list>
 /// </summary>
+/// <param name="Symbol">Original Roslyn symbol of the cross-assembly type.</param>
+/// <param name="PackageName">Value of <c>[assembly: EmitPackage(name)]</c> on the source.</param>
+/// <param name="AssemblyRootNamespace">Source assembly's longest common namespace prefix.</param>
+/// <param name="VersionOverride">Optional version specifier from
+/// <c>[assembly: EmitPackage(..., Version = "...")]</c>. When set, takes precedence
+/// over the source assembly's <c>Identity.Version</c> for auto-dep generation. Useful
+/// for sibling projects in a Bun monorepo where the right value is <c>workspace:*</c>,
+/// not the MSBuild-default <c>1.0.0.0</c>.</param>
 public sealed record CrossAssemblyEntry(
     INamedTypeSymbol Symbol,
     string PackageName,
-    string AssemblyRootNamespace);
+    string AssemblyRootNamespace,
+    string? VersionOverride = null);

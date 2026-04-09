@@ -432,6 +432,13 @@ public sealed class ImportCollector(
     {
         switch (expr)
         {
+            case TsTypeReference typeRef:
+                // Cross-package type used in expression position (e.g., the receiver of
+                // a static member access like `Priority.High`). The wrapper carries the
+                // origin so we can register the import without going through name-based
+                // resolution.
+                crossPackageOrigins[typeRef.Name] = typeRef.Origin;
+                break;
             case TsNewExpression newExpr:
                 if (newExpr.Callee is TsIdentifier id)
                 {
