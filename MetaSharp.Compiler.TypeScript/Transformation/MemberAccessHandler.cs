@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -30,13 +31,39 @@ public sealed class MemberAccessHandler(ExpressionTransformer parent)
                 return mapped;
         }
 
+        // Nullable<T>.Value / .HasValue elision: in TS the value carries no envelope —
+        // a `T?` value is just `T | null`. After the user's null check, the value IS
+        // the value. <c>.Value</c> on a Nullable lowers to the receiver as-is;
+        // <c>.HasValue</c> becomes a null comparison so the meaning is preserved.
+        var receiverType = _parent.Model.GetTypeInfo(member.Expression).Type;
+        if (receiverType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+        {
+            var memberText = member.Name.Identifier.Text;
+            if (memberText == "Value")
+                return _parent.TransformExpression(member.Expression);
+            if (memberText == "HasValue")
+                return new TsBinaryExpression(
+                    _parent.TransformExpression(member.Expression),
+                    "!==",
+                    new TsLiteral("null"));
+        }
+
         var obj = _parent.TransformExpression(member.Expression);
 
         // Enum members and constants → keep PascalCase
-        var memberName = symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum }
-            ? member.Name.Identifier.Text
-            : TypeScriptNaming.ToCamelCase(member.Name.Identifier.Text);
+        if (symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum })
+            return new TsPropertyAccess(obj, member.Name.Identifier.Text);
 
+        // [Name("override")] takes precedence — verbatim, no camelCase, no escape.
+        // This matters for cases like `[Name("delete")]` on a binding where the
+        // camelCase pipeline would otherwise escape the JS reserved word to
+        // `delete_` (correct for variable names, but the user explicitly opted into
+        // a property name and reserved words ARE valid in property position).
+        var nameOverride = symbol is null ? null : SymbolHelper.GetNameOverride(symbol);
+        if (nameOverride is not null)
+            return new TsPropertyAccess(obj, nameOverride);
+
+        var memberName = TypeScriptNaming.ToCamelCase(member.Name.Identifier.Text);
         return new TsPropertyAccess(obj, memberName);
     }
 }

@@ -30,7 +30,13 @@ public static class TypeScriptNaming
     }
 
     /// <summary>
-    /// Converts PascalCase to camelCase for TS output.
+    /// Converts PascalCase to camelCase for TS output. Reserved words get an
+    /// underscore suffix so they're safe to use as variable / parameter / class-member
+    /// identifiers (declaration sites and call sites use the same suffix so they
+    /// remain in agreement). When the user wants a property name that IS a reserved
+    /// word in JS (e.g., a method named <c>delete</c> on the Hono binding), they
+    /// can opt out of the auto-conversion via <c>[Name("delete")]</c>; the
+    /// <c>MemberAccessHandler</c> honors that override verbatim.
     /// </summary>
     public static string ToCamelCase(string name)
     {

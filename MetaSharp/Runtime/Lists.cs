@@ -98,3 +98,20 @@ using MetaSharp.Annotations;
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.Remove),
     JsTemplate = "listRemove($this, $0)",
     RuntimeImports = "listRemove")]
+
+// list.RemoveAt(index) → list.splice(index, 1)
+// JS array splice with deleteCount=1 removes one element at the position. The return
+// value is dropped (C# RemoveAt returns void).
+
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.RemoveAt), JsTemplate = "$this.splice($0, 1)")]
+[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.RemoveAt), JsTemplate = "$this.splice($0, 1)")]
+
+// ─── FindIndex / Find ───────────────────────────────────────
+// list.FindIndex(predicate) → array.findIndex(predicate)
+// list.Find(predicate) → array.find(predicate) ?? null  (C# returns default(T) which
+// is null for reference types; JS Array.find returns undefined which we coalesce so
+// the C# null-check semantics match.)
+
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.FindIndex), JsMethod = "findIndex")]
+[assembly: MapMethod(typeof(List<>), nameof(List<int>.Find),
+    JsTemplate = "($this.find($0) ?? null)")]

@@ -134,7 +134,13 @@ public sealed class ImportCollector(
         foreach (var (importPath, bucket) in byPath.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             bucket.Names.Sort(StringComparer.Ordinal);
-            imports.Add(new TsImport(bucket.Names.ToArray(), importPath));
+            // Type-only when none of the names in this bucket are used as values
+            // (i.e., none appear in `new T()`, `T.staticMember`, etc.). With
+            // `verbatimModuleSyntax: true` in the consumer, value imports of
+            // type-only references trigger TS2749 / TS1484, so getting this right
+            // matters at the cross-package boundary.
+            var allTypeOnly = bucket.Names.All(n => !valueTypes.Contains(n));
+            imports.Add(new TsImport(bucket.Names.ToArray(), importPath, TypeOnly: allTypeOnly));
         }
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
