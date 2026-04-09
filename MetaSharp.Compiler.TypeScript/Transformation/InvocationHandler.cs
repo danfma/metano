@@ -1,3 +1,4 @@
+using MetaSharp.Compiler;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -48,6 +49,25 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
             var mapped = BclMapper.TryMapMethod(methodSymbol, invocation, _parent);
             if (mapped is not null)
                 return mapped;
+
+            // [PlainObject] instance method call: rewrite `obj.Method(args)` to
+            // `methodName(obj, args)` since the type has no class wrapper at runtime
+            // — methods are emitted as standalone helpers that take the receiver as
+            // their first parameter (see RecordClassTransformer.EmitPlainObjectMethods).
+            if (!methodSymbol.IsStatic
+                && methodSymbol.MethodKind == MethodKind.Ordinary
+                && methodSymbol.ContainingType is { } container
+                && SymbolHelper.HasPlainObject(container)
+                && invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                var receiver = _parent.TransformExpression(memberAccess.Expression);
+                var fnName = SymbolHelper.GetNameOverride(methodSymbol)
+                    ?? TypeScriptNaming.ToCamelCase(methodSymbol.Name);
+                var helperArgs = new List<TsExpression> { receiver };
+                helperArgs.AddRange(invocation.ArgumentList.Arguments
+                    .Select(a => _parent.TransformExpression(a.Expression)));
+                return new TsCallExpression(new TsIdentifier(fnName), helperArgs);
+            }
         }
 
         var callee = _parent.TransformExpression(invocation.Expression);

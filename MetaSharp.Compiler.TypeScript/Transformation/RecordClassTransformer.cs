@@ -774,5 +774,64 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
         var name = SymbolHelper.GetNameOverride(type) ?? type.Name;
         statements.Add(new TsInterface(name, properties));
+
+        // Emit instance methods as standalone helper functions that take the type as
+        // their first parameter (the explicit `self`). The method body is transformed
+        // with `SelfParameterName = "self"` so any reference to `this` (or implicit
+        // `this.member`) inside the body rewrites to `self`.
+        EmitPlainObjectMethods(type, name, statements);
+    }
+
+    /// <summary>
+    /// Walks the type's instance methods and emits one TS helper function per
+    /// method. The first parameter is always <c>self: T</c>; the rest mirror the C#
+    /// signature. Static methods, operator overloads, and compiler-generated
+    /// members are skipped.
+    /// </summary>
+    private void EmitPlainObjectMethods(INamedTypeSymbol type, string typeName, List<TsTopLevel> statements)
+    {
+        foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
+        {
+            if (method.IsImplicitlyDeclared) continue;
+            if (method.MethodKind != MethodKind.Ordinary) continue;
+            if (method.IsStatic) continue;
+            if (method.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
+            if (SymbolHelper.HasIgnore(method)) continue;
+            if (TypeScriptNaming.HasEmit(method)) continue;
+
+            var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                as MethodDeclarationSyntax;
+            if (syntax is null) continue;
+
+            var semanticModel = _context.Compilation.GetSemanticModel(syntax.SyntaxTree);
+            var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
+            // Inside a [PlainObject] method body, `this` rewrites to `self`. The
+            // member-access transformer reads SelfParameterName off the expression
+            // transformer when emitting bare identifiers (instance member references).
+            exprTransformer.SelfParameterName = "self";
+
+            var body = exprTransformer.TransformBody(
+                syntax.Body, syntax.ExpressionBody, isVoid: method.ReturnsVoid);
+
+            // First parameter is always `self: T`; the rest are the C# parameters.
+            var selfParam = new TsParameter("self", new TsNamedType(typeName));
+            var parameters = new List<TsParameter> { selfParam };
+            parameters.AddRange(method.Parameters
+                .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type))));
+
+            // Function name escapes reserved words because top-level function
+            // declarations CANNOT use them (`function delete() {}` is illegal even
+            // though `obj.delete` is fine). The InvocationHandler call-site rewrite
+            // routes through the same ToCamelCase variant.
+            var fnName = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
+            var returnType = TypeMapper.Map(method.ReturnType);
+            statements.Add(new TsFunction(
+                fnName,
+                parameters,
+                returnType,
+                body,
+                Exported: true,
+                Async: method.IsAsync));
+        }
     }
 }

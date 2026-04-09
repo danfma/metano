@@ -179,6 +179,105 @@ public class PlainObjectTests
     }
 
     [Test]
+    public async Task InstanceMethod_LowersToStandaloneHelper()
+    {
+        // [PlainObject] records can declare methods, which lower to top-level
+        // helper functions that take the type as their first parameter.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record TodoItem(string Title, bool Completed)
+            {
+                public TodoItem ToggleCompleted() => this with { Completed = !Completed };
+            }
+            """);
+
+        var output = result["todo-item.ts"];
+        // Interface stays plain.
+        await Assert.That(output).Contains("export interface TodoItem");
+        // Helper function takes self as first param.
+        await Assert.That(output).Contains("export function toggleCompleted(self: TodoItem)");
+        // Body uses self.completed (the implicit `this.Completed` from C# rewrites
+        // to `self.completed`).
+        await Assert.That(output).Contains("self.completed");
+    }
+
+    [Test]
+    public async Task InstanceMethodCallSite_RewritesToHelperCall()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record TodoItem(string Title, bool Completed)
+            {
+                public TodoItem ToggleCompleted() => this with { Completed = !Completed };
+            }
+
+            [Transpile]
+            public class Service
+            {
+                public TodoItem Toggle(TodoItem item) => item.ToggleCompleted();
+            }
+            """);
+
+        var output = result["service.ts"];
+        // Call site is rewritten to `toggleCompleted(item)` not `item.toggleCompleted()`
+        await Assert.That(output).Contains("toggleCompleted(item)");
+        await Assert.That(output).DoesNotContain("item.toggleCompleted");
+    }
+
+    [Test]
+    public async Task PlainObjectMethod_WithReservedName_StillEscaped()
+    {
+        // Top-level function declarations can NOT use reserved words even though
+        // class methods can. The helper function name escapes; the call site
+        // matches via the same path.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record Bin(int Count)
+            {
+                public Bin Delete() => this with { Count = 0 };
+            }
+
+            [Transpile]
+            public class Service
+            {
+                public Bin Empty(Bin b) => b.Delete();
+            }
+            """);
+
+        var binOutput = result["bin.ts"];
+        var svcOutput = result["service.ts"];
+        await Assert.That(binOutput).Contains("export function delete_");
+        await Assert.That(svcOutput).Contains("delete_(b)");
+    }
+
+    [Test]
+    public async Task PlainObjectMethod_WithArgs_PassesAlongsideSelf()
+    {
+        // Helper function signature: (self, arg1, arg2, ...). Call site passes the
+        // receiver as the first argument plus the rest in order.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record Counter(int Value)
+            {
+                public Counter Add(int amount) => this with { Value = Value + amount };
+            }
+
+            [Transpile]
+            public class Service
+            {
+                public Counter Bump(Counter c, int n) => c.Add(n);
+            }
+            """);
+
+        await Assert.That(result["counter.ts"]).Contains("export function add(self: Counter, amount: number)");
+        await Assert.That(result["service.ts"]).Contains("add(c, n)");
+    }
+
+    [Test]
     public async Task PlainObject_NoEqualsHashCodeWithMethods()
     {
         // Sanity: a regular record has equals/hashCode/with; a [PlainObject] one does not.
