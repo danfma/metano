@@ -317,6 +317,81 @@ public class CrossPackageImportTests
     }
 
     [Test]
+    public async Task PlainObject_CrossPackage_EmitsAsTypeImport()
+    {
+        // A [PlainObject] declared in a library and consumed from another project
+        // should: (1) emit as a TS interface in the library, (2) flow through the
+        // cross-package origin pipeline in the consumer, (3) be imported as
+        // type-only since the interface is erased at runtime.
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/dtos")]
+
+            namespace AcmeDtos;
+
+            [PlainObject]
+            public record CreateUserDto(string Name, string Email);
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Handler
+            {
+                public AcmeDtos.CreateUserDto? Pending { get; set; }
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+        var output = result["handler.ts"];
+
+        // Type-only cross-package import: the consumer references CreateUserDto only
+        // as a type (in a property declaration), so the import must be `import type`
+        // to satisfy verbatimModuleSyntax-style consumers.
+        await Assert.That(output).Contains("import type { CreateUserDto } from \"@acme/dtos/create-user-dto\"");
+        await Assert.That(output).Contains("pending: CreateUserDto | null");
+    }
+
+    [Test]
+    public async Task PlainObject_CrossPackage_ConstructionLowersToObjectLiteral()
+    {
+        // When the consumer constructs the cross-package [PlainObject] type via
+        // `new T(args)`, the lowering should still produce an object literal — not
+        // a class instantiation. The construction is a value usage, so the import
+        // is no longer type-only and the consumer can write the object literal
+        // referencing the named shape.
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/dtos")]
+
+            namespace AcmeDtos;
+
+            [PlainObject]
+            public record CreateUserDto(string Name, string Email);
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Factory
+            {
+                public AcmeDtos.CreateUserDto Make() =>
+                    new AcmeDtos.CreateUserDto("Ana", "ana@example.com");
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+        var output = result["factory.ts"];
+
+        await Assert.That(output).Contains("{ name: \"Ana\", email: \"ana@example.com\" }");
+        await Assert.That(output).DoesNotContain("new CreateUserDto");
+    }
+
+    [Test]
     public async Task ExportFromBclWithVersion_AddedToDependencies()
     {
         // The default decimal mapping in MetaSharp/Runtime/Decimal.cs declares
