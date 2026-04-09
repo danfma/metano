@@ -10,9 +10,17 @@ namespace MetaSharp.TypeScript.AST;
 /// </list>
 /// Combine with <see cref="TypeOnly"/> for <c>import type</c> form. The two flags can
 /// also combine: <c>import type A from "from";</c>.
+///
+/// <para><see cref="TypeOnlyNames"/> is a per-name set of names that should be
+/// emitted with the inline <c>type</c> qualifier — used when <see cref="TypeOnly"/>
+/// is false but some names are types and others are values, producing
+/// <c>import { Foo, type Bar } from "from";</c>. When <see cref="TypeOnly"/> is true
+/// the per-name set is irrelevant (the whole statement is type-only). The set
+/// must be a subset of <see cref="Names"/>.</para>
 /// </summary>
 public sealed record TsImport(
     string[] Names,
     string From,
     bool TypeOnly = false,
-    bool IsDefault = false) : TsTopLevel;
+    bool IsDefault = false,
+    IReadOnlySet<string>? TypeOnlyNames = null) : TsTopLevel;

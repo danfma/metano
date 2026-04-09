@@ -134,13 +134,27 @@ public sealed class ImportCollector(
         foreach (var (importPath, bucket) in byPath.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             bucket.Names.Sort(StringComparer.Ordinal);
-            // Type-only when none of the names in this bucket are used as values
-            // (i.e., none appear in `new T()`, `T.staticMember`, etc.). With
-            // `verbatimModuleSyntax: true` in the consumer, value imports of
-            // type-only references trigger TS2749 / TS1484, so getting this right
-            // matters at the cross-package boundary.
-            var allTypeOnly = bucket.Names.All(n => !valueTypes.Contains(n));
-            imports.Add(new TsImport(bucket.Names.ToArray(), importPath, TypeOnly: allTypeOnly));
+            // Per-name type-only detection. With `verbatimModuleSyntax: true` in the
+            // consumer, importing a type-only reference as a value triggers TS2749 /
+            // TS1484, so we mark each name independently:
+            //
+            //   - All names type-only       → `import type { … }`        (whole stmt)
+            //   - All names value           → `import { … }`             (plain)
+            //   - Mixed                     → `import { A, type B }`     (per-name)
+            //
+            // The mixed form requires extending the named-import emission with the
+            // inline `type` qualifier, which the printer handles via TsImport.TypeOnlyNames.
+            var typeOnlyNames = bucket.Names
+                .Where(n => !valueTypes.Contains(n))
+                .ToHashSet(StringComparer.Ordinal);
+            var allTypeOnly = typeOnlyNames.Count == bucket.Names.Count;
+            var anyTypeOnly = typeOnlyNames.Count > 0;
+
+            imports.Add(new TsImport(
+                bucket.Names.ToArray(),
+                importPath,
+                TypeOnly: allTypeOnly,
+                TypeOnlyNames: !allTypeOnly && anyTypeOnly ? typeOnlyNames : null));
         }
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))

@@ -355,6 +355,58 @@ public class CrossPackageImportTests
     }
 
     [Test]
+    public async Task CrossPackageImport_MixedValueAndType_UsesPerNameQualifier()
+    {
+        // When the same import path has BOTH a value-position name and a type-only
+        // name, the emission must use the inline `type` qualifier on the type-only
+        // entries: `import { TodoItem, type Priority } from "sample-todo/index"`.
+        // Without this, type-only names get imported as values and tsgo errors with
+        // TS2749 under verbatimModuleSyntax.
+        //
+        // For this test the library has two co-located types in one file
+        // (via [EmitInFile]) so they share an import bucket — one used as a value,
+        // one only as a type.
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/lib")]
+
+            namespace AcmeLib;
+
+            [EmitInFile("widgets")]
+            public class Widget
+            {
+                public Widget(string name) { Name = name; }
+                public string Name { get; }
+            }
+
+            [EmitInFile("widgets")]
+            public enum WidgetSize { Small, Large }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Box
+            {
+                // Nullable so the auto-default doesn't reference WidgetSize as a value
+                // (which would put it in the value-names set and disable type-only).
+                public AcmeLib.WidgetSize? Size { get; set; }
+                public AcmeLib.Widget Make() => new AcmeLib.Widget("hello");
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+        var output = result["box.ts"];
+
+        // Per-name qualifier: Widget is value (used in `new`), WidgetSize is type only.
+        // Sort order is alphabetical so `type WidgetSize` comes after `Widget`.
+        await Assert.That(output).Contains("import { Widget, type WidgetSize }");
+        await Assert.That(output).Contains("@acme/lib/widgets");
+    }
+
+    [Test]
     public async Task PlainObject_CrossPackage_ConstructionLowersToObjectLiteral()
     {
         // When the consumer constructs the cross-package [PlainObject] type via

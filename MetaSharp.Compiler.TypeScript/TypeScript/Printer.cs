@@ -87,7 +87,26 @@ public sealed class Printer(string indent = "  ")
         else
         {
             _sb.Write("{ ");
-            _sb.Write(string.Join(", ", import.Names));
+            // Per-name `type` qualifier: `import { Foo, type Bar } from "...";`. Only
+            // applied when the statement isn't already wholly type-only — otherwise
+            // the per-name qualifiers would be redundant. The set is empty in the
+            // common case so the join short-circuits to the plain form.
+            var typeOnlyNames = import.TypeOnlyNames;
+            if (typeOnlyNames is null || typeOnlyNames.Count == 0 || import.TypeOnly)
+            {
+                _sb.Write(string.Join(", ", import.Names));
+            }
+            else
+            {
+                var parts = new string[import.Names.Length];
+                for (var i = 0; i < import.Names.Length; i++)
+                {
+                    parts[i] = typeOnlyNames.Contains(import.Names[i])
+                        ? "type " + import.Names[i]
+                        : import.Names[i];
+                }
+                _sb.Write(string.Join(", ", parts));
+            }
             _sb.Write(" }");
         }
         _sb.Write(" from ");
