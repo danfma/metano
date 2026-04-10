@@ -1,12 +1,12 @@
 import { Enumerable } from "metano-runtime";
 import type { IIssueRepository } from "#/issues/application/i-issue-repository";
-import type { Issue } from "#/issues/domain/issue";
-import type { IssueId } from "#/issues/domain/issue-id";
-import { IssuePriority } from "#/issues/domain/issue-priority";
-import { IssueStatus } from "#/issues/domain/issue-status";
-import type { PageRequest } from "#/shared-kernel/page-request";
-import { PageResult } from "#/shared-kernel/page-result";
-import type { UserId } from "#/shared-kernel/user-id";
+import type { Issue } from "#/issues/domain";
+import type { IssueId } from "#/issues/domain";
+import { IssuePriority } from "#/issues/domain";
+import { IssueStatus } from "#/issues/domain";
+import type { PageRequest } from "#/shared-kernel";
+import { PageResult } from "#/shared-kernel";
+import type { UserId } from "#/shared-kernel";
 
 export class InMemoryIssueRepository implements IIssueRepository {
   private readonly _issues: Issue[] = [];

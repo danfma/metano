@@ -109,15 +109,17 @@ public sealed class ImportCollector(
             importedNames.Add(helper);
 
         // Cross-package imports collected via TsTypeOrigin (resolved at type-mapping
-        // time, no string lookup needed). Each origin carries the full path; multiple
-        // type names that share the same path (e.g., types co-located via [EmitInFile])
-        // are merged into a single named-import line. Default imports are kept
+        // time, no string lookup needed). Each origin carries the package name plus
+        // the namespace barrel subpath; multiple type names that share that path are
+        // merged into a single named-import line. Default imports are kept
         // separate because the syntax `import Foo from "..."` only supports one name.
         var byPath = new Dictionary<string, (List<string> Names, bool IsDefault)>();
         foreach (var (typeName, origin) in crossPackageOrigins)
         {
             if (!importedNames.Add(typeName)) continue;
-            var importPath = $"{origin.PackageName}/{origin.SubPath}";
+            var importPath = origin.SubPath.Length > 0
+                ? $"{origin.PackageName}/{origin.SubPath}"
+                : origin.PackageName;
             // Default imports never merge — emit them as their own line.
             if (origin.IsDefault)
             {

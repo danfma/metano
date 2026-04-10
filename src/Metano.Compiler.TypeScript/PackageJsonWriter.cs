@@ -55,7 +55,8 @@ public static class PackageJsonWriter
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
         // Build the imports/exports objects
-        var imports = BuildImports(srcRelative, distDirRelativeToPackageRoot);
+        var hasRootIndex = files.Any(f => NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal));
+        var imports = BuildImports(srcRelative, distDirRelativeToPackageRoot, hasRootIndex);
         var exports = BuildExports(files, distDirRelativeToPackageRoot);
 
         JsonObject root;
@@ -121,12 +122,12 @@ public static class PackageJsonWriter
     /// Builds the `imports` object with conditional exports for the `#/*` alias.
     /// Format: dist (.js + .d.ts) is preferred, source .ts is the fallback for dev.
     /// </summary>
-    private static JsonObject BuildImports(string srcRelative, string distRelative)
+    private static JsonObject BuildImports(string srcRelative, string distRelative, bool hasRootIndex)
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
         var dist = NormalizePath(distRelative).TrimEnd('/');
 
-        return new JsonObject
+        var imports = new JsonObject
         {
             ["#/*"] = new JsonObject
             {
@@ -135,6 +136,18 @@ public static class PackageJsonWriter
                 ["default"] = $"./{src}/*.ts",
             }
         };
+
+        if (hasRootIndex)
+        {
+            imports["#"] = new JsonObject
+            {
+                ["types"] = $"./{dist}/index.d.ts",
+                ["import"] = $"./{dist}/index.js",
+                ["default"] = $"./{src}/index.ts",
+            };
+        }
+
+        return imports;
     }
 
     /// <summary>

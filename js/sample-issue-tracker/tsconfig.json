@@ -15,6 +15,7 @@
     "verbatimModuleSyntax": true,
 
     "paths": {
+      "#": ["./src/index.ts"],
       "#/*": ["./src/*"]
     },
 

@@ -4,7 +4,7 @@ using Metano.TypeScript.AST;
 namespace Metano.Transformation;
 
 /// <summary>
-/// Detects cyclic <c>#/</c> imports between the generated <see cref="TsSourceFile"/>s
+/// Detects cyclic local-package imports between the generated <see cref="TsSourceFile"/>s
 /// and emits a <c>MS0005</c> warning per cycle. Without this check, a cyclic chain only
 /// surfaces downstream when the consumer's TypeScript compiler trips over it with a
 /// confusing error — by then the user has to read the import lines manually to figure
@@ -17,8 +17,8 @@ namespace Metano.Transformation;
 /// Each distinct cycle is reported once — the visited set guarantees we don't re-enter
 /// nodes whose subgraphs have already been explored.
 ///
-/// Only intra-project paths (those starting with <c>#/</c>, the project's subpath import
-/// alias) participate in the graph. Imports from external packages
+/// Only intra-project paths (the root alias <c>#</c> and subpath aliases starting with
+/// <c>#/</c>) participate in the graph. Imports from external packages
 /// (<c>metano-runtime</c>, <c>@js-temporal/polyfill</c>, etc.) are skipped — their
 /// resolution lives outside Metano's view of the world.
 /// </summary>
@@ -31,15 +31,28 @@ public static class CyclicReferenceDetector
         if (files.Count == 0) return;
 
         // Build the file index keyed by the kebab-cased relative path WITHOUT the .ts
-        // extension, matching the form that #/-prefixed imports use.
-        var byImportKey = new Dictionary<string, TsSourceFile>(StringComparer.Ordinal);
+        // extension. For index files we also register the directory barrel alias:
+        //
+        // - `index.ts`                → `#`
+        // - `issues/domain/index.ts`  → `#/issues/domain`
+        var byImportKey = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var file in files)
         {
             var key = StripTsExtension(file.FileName);
-            byImportKey[key] = file;
+            byImportKey[key] = key;
+
+            if (Path.GetFileName(key).Equals("index", StringComparison.Ordinal))
+            {
+                var parent = Path.GetDirectoryName(key)?.Replace('\\', '/') ?? "";
+                if (parent.Length == 0)
+                    byImportKey[""] = key;
+                else
+                    byImportKey[parent] = key;
+            }
         }
 
-        // Build the import graph. Edges point from a file to every file it imports via #/.
+        // Build the import graph. Edges point from a file to every file it imports via
+        // the local package aliases (`#` or `#/...`).
         var graph = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var file in files)
         {
@@ -48,11 +61,9 @@ public static class CyclicReferenceDetector
             foreach (var stmt in file.Statements)
             {
                 if (stmt is not TsImport import) continue;
-                if (!import.From.StartsWith("#/", StringComparison.Ordinal)) continue;
-
-                var targetKey = import.From[2..]; // strip "#/"
-                if (byImportKey.ContainsKey(targetKey))
-                    targets.Add(targetKey);
+                if (!TryNormalizeLocalImport(import.From, out var targetImportKey)) continue;
+                if (byImportKey.TryGetValue(targetImportKey, out var canonicalTarget))
+                    targets.Add(canonicalTarget);
             }
             graph[key] = targets;
         }
@@ -137,11 +148,37 @@ public static class CyclicReferenceDetector
 
     private static MetanoDiagnostic BuildDiagnostic(IReadOnlyList<string> cycle)
     {
-        var chain = string.Join(" → ", cycle.Select(n => $"#/{n}"));
+        var chain = string.Join(" → ", cycle.Select(ToDisplayImportPath));
         return new MetanoDiagnostic(
             MetanoDiagnosticSeverity.Warning,
             DiagnosticCodes.CyclicReference,
             $"Cyclic import detected: {chain}. The TypeScript compiler may emit confusing errors; consider extracting the shared piece into its own file.");
+    }
+
+    private static bool TryNormalizeLocalImport(string from, out string key)
+    {
+        if (from == "#")
+        {
+            key = "";
+            return true;
+        }
+
+        if (from.StartsWith("#/", StringComparison.Ordinal))
+        {
+            key = from[2..];
+            return true;
+        }
+
+        key = "";
+        return false;
+    }
+
+    private static string ToDisplayImportPath(string key)
+    {
+        if (key == "index") return "#";
+        if (key.EndsWith("/index", StringComparison.Ordinal))
+            return "#/" + key[..^"/index".Length];
+        return "#/" + key;
     }
 
     private static string StripTsExtension(string fileName) =>

@@ -130,7 +130,7 @@ public class InheritanceTranspileTests
         );
 
         var extendedTs = result["models/extended.ts"];
-        await Assert.That(extendedTs).Contains("from \"#/base\"");
+        await Assert.That(extendedTs).Contains("from \"#\"");
     }
 
     [Test]

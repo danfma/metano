@@ -68,8 +68,8 @@ public class NamespaceTranspileTests
         );
 
         var priceTs = result["models/price.ts"];
-        // Import should go up one level to find Currency
-        await Assert.That(priceTs).Contains("from \"#/currency\"");
+        // Different namespace → import the root barrel of the package/project.
+        await Assert.That(priceTs).Contains("from \"#\"");
     }
 
     [Test]
@@ -143,6 +143,8 @@ public class NamespaceTranspileTests
         );
 
         var moneyTs = result["money.ts"];
+        // Same namespace falls back to the concrete file to avoid a cycle through
+        // the same namespace barrel (`money.ts -> # -> index.ts -> ./money.ts`).
         await Assert.That(moneyTs).Contains("from \"#/currency\"");
     }
 }

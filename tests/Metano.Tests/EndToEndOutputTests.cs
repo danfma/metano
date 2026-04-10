@@ -46,9 +46,10 @@ public class EndToEndOutputTests
         // namespace resolution, or property emission shows up as a clear diff.
         // Notable observations:
         //
-        // 1. Cross-package import is MERGED into one line sharing the `@acme/issues/issue`
-        //    path. The two names come from different C# types but live in the same
-        //    `[EmitInFile("issue")]` group. The MIXED `type` qualifier appears because
+        // 1. Cross-package import is MERGED into one line sharing the package root
+        //    barrel `@acme/issues`. The two names come from different C# types but
+        //    live in the same namespace and are re-exported by the root barrel. The
+        //    MIXED `type` qualifier appears because
         //    Issue is referenced only as a type (the property's declared type) while
         //    IssueStatus is used as a value (the auto-init `= IssueStatus.Open`); the
         //    per-name type qualifier handles the asymmetry without splitting into two
@@ -64,7 +65,7 @@ public class EndToEndOutputTests
         //    TS would leave the field as `undefined` at runtime, breaking equality
         //    checks. The compiler picks the first enum member (value 0) automatically.
         var expected =
-            "import { type Issue, IssueStatus } from \"@acme/issues/issue\";\n" +
+            "import { type Issue, IssueStatus } from \"@acme/issues\";\n" +
             "\n" +
             "export class Tracker {\n" +
             "  current: Issue | null = null;\n" +

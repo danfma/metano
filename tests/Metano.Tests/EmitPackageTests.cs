@@ -31,6 +31,34 @@ public class EmitPackageTests
     }
 
     [Test]
+    public async Task ImportsIncludeRootAliasForPackageBarrel()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("domain/index.ts", [], ""),
+            new TsSourceFile("domain/item.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir, srcDir, files, authoritativePackageName: "sample-todo");
+
+        var pkg = ReadJson(tempDir);
+        var imports = pkg["imports"] as JsonObject;
+        await Assert.That(imports).IsNotNull();
+        await Assert.That((imports!["#"] as JsonObject)!["default"]?.GetValue<string>())
+            .IsEqualTo("./src/index.ts");
+        await Assert.That((imports["#/*"] as JsonObject)!["default"]?.GetValue<string>())
+            .IsEqualTo("./src/*.ts");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
     public async Task ExistingFileWithMatchingName_NoWarning()
     {
         var tempDir = CreateTempDir();

@@ -46,10 +46,18 @@ public sealed class PathNaming(string rootNamespace)
     }
 
     /// <summary>
-    /// Computes the absolute import path for a type using the <c>#/</c> subpath import alias.
-    /// All cross-file imports use <c>#/&lt;namespace-path&gt;/&lt;type-name&gt;</c>; consumers
-    /// configure <c>package.json#imports</c> and <c>tsconfig#paths</c> to resolve <c>#/*</c>
-    /// to <c>./src/*</c>. The <paramref name="fromNs"/> is unused — paths are always rooted.
+    /// Computes the absolute import path for a generated type using the local package alias.
+    ///
+    /// Preferred strategy is namespace-first:
+    ///
+    /// - different namespace → import the namespace barrel (<c>#/issues/domain</c>)
+    /// - root namespace      → import the package root barrel (<c>#</c>)
+    ///
+    /// Same-namespace imports fall back to the concrete file path to avoid trivial cycles like:
+    ///
+    /// <c>issue.ts → #/issues/domain → issues/domain/index.ts → ./issue.ts</c>
+    ///
+    /// The <paramref name="typeName"/> parameter therefore remains necessary for the fallback.
     /// </summary>
     public string ComputeRelativeImportPath(string fromNs, string toNs, string typeName)
     {
@@ -58,18 +66,32 @@ public sealed class PathNaming(string rootNamespace)
             ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
             : [];
 
-        var parts = new List<string> { "#" };
-        parts.AddRange(toParts);
-        parts.Add(SymbolHelper.ToKebabCase(typeName));
-        return string.Join("/", parts);
+        // Same namespace: file-first fallback to avoid importing through the same
+        // namespace barrel that re-exports the current file.
+        if (fromNs == toNs)
+        {
+            var parts = new List<string> { "#" };
+            parts.AddRange(toParts);
+            parts.Add(SymbolHelper.ToKebabCase(typeName));
+            return string.Join("/", parts);
+        }
+
+        // Different namespace: import the namespace barrel.
+        if (toParts.Length == 0) return "#";
+        return "#/" + string.Join("/", toParts);
     }
 
     /// <summary>
-    /// Computes the package-relative subpath for a type whose source assembly has the
-    /// given <paramref name="assemblyRootNamespace"/>. Used by the type mapper when
-    /// attaching cross-package origin metadata, where the subpath is later joined with
-    /// the package name to form <c>&lt;package&gt;/&lt;subpath&gt;</c>. No <c>#/</c>
-    /// prefix and no <c>.ts</c> suffix.
+    /// Computes the package-relative namespace barrel subpath for a type whose source
+    /// assembly has the given <paramref name="assemblyRootNamespace"/>.
+    ///
+    /// Examples:
+    ///
+    /// - root ns match  → <c>""</c>                → import from <c>"pkg"</c>
+    /// - child namespace → <c>"domain"</c>         → import from <c>"pkg/domain"</c>
+    /// - nested namespace → <c>"issues/domain"</c> → import from <c>"pkg/issues/domain"</c>
+    ///
+    /// No <c>#/</c> prefix and no <c>.ts</c> suffix.
     /// </summary>
     public static string ComputeSubPath(string assemblyRootNamespace, string typeNamespace, string typeName)
     {
@@ -85,10 +107,9 @@ public sealed class PathNaming(string rootNamespace)
             ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
             : [];
 
-        var fileName = SymbolHelper.ToKebabCase(typeName);
         return segments.Length > 0
-            ? string.Join("/", segments) + "/" + fileName
-            : fileName;
+            ? string.Join("/", segments)
+            : "";
     }
 
     /// <summary>

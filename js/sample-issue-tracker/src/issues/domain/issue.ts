@@ -6,7 +6,7 @@ import { IssuePriority } from "#/issues/domain/issue-priority";
 import { IssueStatus } from "#/issues/domain/issue-status";
 import { IssueType } from "#/issues/domain/issue-type";
 import { IssueWorkflow } from "#/issues/domain/issue-workflow";
-import type { UserId } from "#/shared-kernel/user-id";
+import type { UserId } from "#/shared-kernel";
 
 export class Issue {
   status: IssueStatus = IssueStatus.Backlog;

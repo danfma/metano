@@ -340,15 +340,10 @@ public static class TypeMapper
         }
 
         var ns = PathNaming.GetNamespace(entry.Symbol);
-        // File name resolution: prefer [EmitInFile("name")] when present so consumers
-        // import multi-type files via the file path (not the type path). Otherwise
-        // fall back to the type's own name (with [Name] override applied), matching
-        // the 1:1 default. Both branches go through ToKebabCase via ComputeSubPath.
-        var fileName =
-            SymbolHelper.GetEmitInFile(entry.Symbol)
-            ?? SymbolHelper.GetNameOverride(entry.Symbol)
-            ?? entry.Symbol.Name;
-        var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, fileName);
+        // Cross-package imports are namespace-first: resolve to the producer package's
+        // namespace barrel, and to the package root when the type lives directly under
+        // the assembly root namespace.
+        var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, entry.Symbol.Name);
 
         // Track that this package was actually referenced so the transformer can emit
         // a corresponding `dependencies` entry in the consumer's package.json. The

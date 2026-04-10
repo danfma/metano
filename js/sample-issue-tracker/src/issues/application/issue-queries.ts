@@ -1,9 +1,9 @@
 import { Enumerable } from "metano-runtime";
 import type { Grouping } from "metano-runtime";
-import type { Issue } from "#/issues/domain/issue";
-import { IssuePriority } from "#/issues/domain/issue-priority";
-import { IssueStatus } from "#/issues/domain/issue-status";
-import type { UserId } from "#/shared-kernel/user-id";
+import type { Issue } from "#/issues/domain";
+import { IssuePriority } from "#/issues/domain";
+import { IssueStatus } from "#/issues/domain";
+import type { UserId } from "#/shared-kernel";
 
 export function openIssues(issues: Issue[]): Issue[] {
   return Enumerable.from(issues).where((issue: Issue) => !issue.isClosed).orderByDescending((issue: Issue) => issue.priority).thenBy((issue: Issue) => issue.title).toArray();

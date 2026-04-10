@@ -1,6 +1,6 @@
 import { HashCode } from "metano-runtime";
 import { Temporal } from "@js-temporal/polyfill";
-import { UserId } from "#/shared-kernel/user-id";
+import { UserId } from "#/shared-kernel";
 
 export class Comment {
   constructor(readonly authorId: UserId, readonly message: string, readonly createdAt: Temporal.ZonedDateTime, readonly isSystem: boolean = false) { }

@@ -294,6 +294,59 @@ as NuGet packages (no source), Metano needs a separate metadata sidecar file:
 - [ ] Compiler plugins para targets customizados (SolidJS JSX, React, etc.)
 - [ ] Source maps cross-project
 
+### Namespace-first imports / barrel-first resolution
+
+**Status:** o transpiler hoje expõe barrels por namespace no `package.json`, mas continua
+resolvendo imports internos e cross-package pelo caminho do arquivo concreto. Isso
+diverge da regra desejada para simular o modelo de namespaces do C#:
+
+- desejado: `import { TypeA, TypeB } from "{package}/{namespace-path}"`
+- desejado quando namespace == root namespace / assembly namespace: `import { TypeA } from "{package}"`
+- fallback excepcional: `.../{type-name}` somente quando o barrel introduzir ciclo ou
+  outra ambiguidade real
+
+**Achados do audit (2026-04-10):**
+
+- `PathNaming.ComputeRelativeImportPath()` hoje sempre inclui o nome do arquivo no fim
+  do subpath `#/.../<type-or-file>`; não há modo "barrel-first".
+- `PathNaming.ComputeSubPath()` hoje produz subpaths cross-package com sufixo do arquivo
+  (`@scope/pkg/domain/money`, `@scope/pkg/widgets`, etc.).
+- `ImportCollector` agrupa imports por path já resolvido em arquivo e, portanto, reforça
+  a estratégia file-first tanto para imports locais quanto para cross-package.
+- `PackageJsonWriter` exporta tanto os barrels (`"./issues/domain"`) quanto os arquivos
+  individuais (`"./issues/domain/issue"`), o que viabiliza o comportamento atual.
+- O código gerado em `js/sample-issue-tracker` confirma isso: os imports internos usam
+  `#/issues/domain/issue`, `#/shared-kernel/page-request`, etc., nunca `#/issues/domain`
+  nem `# /shared-kernel`.
+
+**Tarefas:**
+
+- [ ] Introduzir uma estratégia explícita de resolução de imports (`file-first` vs
+      `namespace-first`), deixando `namespace-first` como padrão do target TypeScript.
+- [ ] Alterar `PathNaming` para resolver imports locais para o barrel do namespace
+      (`#/issues/domain`) e usar `#/` somente no root barrel quando o namespace alvo
+      for o root namespace do assembly/projeto.
+- [ ] Alterar o pipeline cross-package para resolver `TsTypeOrigin.SubPath` para o
+      barrel do namespace, usando apenas o nome do package quando o namespace do tipo
+      der match com o root namespace do assembly produtor.
+- [ ] Preservar fallback para caminho do arquivo apenas em cenários detectados de ciclo,
+      colisão de barrel (`index.ts`) ou impossibilidade real de re-export.
+- [ ] Revisar `PackageJsonWriter` para garantir export `"."` estável e compatível com o
+      root barrel, além de decidir se exports por arquivo continuam públicos ou viram
+      fallback interno.
+- [ ] Atualizar os testes existentes que hoje fixam imports file-first e adicionar
+      cobertura para:
+      - imports locais via barrel de namespace
+      - imports cross-package via barrel de namespace
+      - imports root-package quando namespace == root namespace do assembly
+      - fallback para arquivo em caso de ciclo/barrel collision
+- [ ] Regenerar `js/sample-issue-tracker` e validar que os imports passam a usar os
+      barrels de namespace em `src/` e `test/`.
+- [ ] Decidir se `js/metano-runtime` entra na mesma convenção imediatamente ou se fica
+      fora do escopo por ser código manual/runtime e não output direto do transpiler.
+
+**Plano detalhado:** `specs/namespace-imports-plan.md`
+
 ---
 
 ## Validação e Verificação de Tipos em Runtime
