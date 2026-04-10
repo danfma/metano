@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- This project has no code — it only packages the MSBuild .targets file
+         that hooks the metasharp-typescript CLI into the consumer's build.
+         We target netstandard2.0 for maximum NuGet compatibility and suppress
+         the empty-assembly warning. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+    <NoWarn>$(NoWarn);CS8021</NoWarn>
+
+    <!-- NuGet packaging metadata -->
+    <PackageId>MetaSharp.Build</PackageId>
+    <Description>MSBuild integration for MetaSharp — automatically transpiles annotated C# types to TypeScript on dotnet build.</Description>
+    <IsPackable>true</IsPackable>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embed the .targets files so NuGet delivers them to the consumer's build -->
+    <None Include="build/**" Pack="true" PackagePath="build/" />
+    <None Include="buildTransitive/**" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+</Project>

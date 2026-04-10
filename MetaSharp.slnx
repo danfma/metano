@@ -3,6 +3,7 @@
     <Project Path="src/MetaSharp/MetaSharp.csproj" />
     <Project Path="src/MetaSharp.Compiler/MetaSharp.Compiler.csproj" />
     <Project Path="src/MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj" />
+    <Project Path="src/MetaSharp.Build/MetaSharp.Build.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MetaSharp.Tests/MetaSharp.Tests.csproj" />

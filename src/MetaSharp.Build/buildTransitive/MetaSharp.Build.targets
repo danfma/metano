@@ -1,0 +1,39 @@
+<Project>
+  <!--
+    MetaSharp automatic TypeScript generation target.
+
+    Runs the metasharp-typescript CLI after a successful Build when
+    MetaSharpOutputDir is set. The CLI reads the compiled assembly via Roslyn,
+    transforms annotated types into a TypeScript AST, and writes .ts files to
+    the output directory.
+
+    Configurable properties (set in the consuming .csproj):
+
+      MetaSharpOutputDir        (required)  Where to write .ts files
+      MetaSharpClean            (optional)  true to wipe the output dir first (default: false)
+      MetaSharpDist             (optional)  JS dist dir relative to package root (default: ./dist)
+      MetaSharpPackageRoot      (optional)  Root of the npm package (default: parent of OutputDir)
+      MetaSharpSkipPackageJson  (optional)  true to skip package.json generation (default: false)
+      MetaSharpShowTimings      (optional)  true to print timing info (default: false)
+      MetaSharpExtraArgs        (optional)  Additional CLI arguments
+  -->
+
+  <Target Name="MetaSharpTranspile"
+          AfterTargets="Build"
+          Condition="'$(MetaSharpOutputDir)' != ''">
+
+    <PropertyGroup>
+      <_MetaSharpArgs>-p "$(MSBuildProjectFullPath)" -o "$(MetaSharpOutputDir)"</_MetaSharpArgs>
+      <_MetaSharpArgs Condition="'$(MetaSharpClean)' == 'true'">$(_MetaSharpArgs) --clean</_MetaSharpArgs>
+      <_MetaSharpArgs Condition="'$(MetaSharpShowTimings)' == 'true'">$(_MetaSharpArgs) --time</_MetaSharpArgs>
+      <_MetaSharpArgs Condition="'$(MetaSharpDist)' != ''">$(_MetaSharpArgs) --dist "$(MetaSharpDist)"</_MetaSharpArgs>
+      <_MetaSharpArgs Condition="'$(MetaSharpPackageRoot)' != ''">$(_MetaSharpArgs) --package-root "$(MetaSharpPackageRoot)"</_MetaSharpArgs>
+      <_MetaSharpArgs Condition="'$(MetaSharpSkipPackageJson)' == 'true'">$(_MetaSharpArgs) --skip-package-json</_MetaSharpArgs>
+      <_MetaSharpArgs Condition="'$(MetaSharpExtraArgs)' != ''">$(_MetaSharpArgs) $(MetaSharpExtraArgs)</_MetaSharpArgs>
+    </PropertyGroup>
+
+    <Message Importance="high" Text="MetaSharp: Transpiling $(MSBuildProjectName) → $(MetaSharpOutputDir)" />
+    <Exec Command="dotnet metasharp-typescript $(_MetaSharpArgs)" />
+
+  </Target>
+</Project>
