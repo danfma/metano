@@ -51,7 +51,7 @@ public class Commands
 
             var resolvedPackageRoot = packageRoot is not null
                 ? Path.GetFullPath(packageRoot)
-                : Path.GetDirectoryName(outputDir)!;
+                : FindPackageRoot(outputDir);
 
             var pkgDiagnostics = PackageJsonWriter.UpdateOrCreate(
                 resolvedPackageRoot,
@@ -67,5 +67,28 @@ public class Commands
 
             Console.WriteLine($"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}");
         }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="startDir"/> looking for the nearest directory
+    /// that contains a <c>package.json</c>. This mimics how npm/bun resolve the
+    /// package root and removes the fragile assumption that the output directory is
+    /// always a direct child of the package root (e.g., <c>&lt;root&gt;/src/</c>).
+    /// Falls back to the parent of <paramref name="startDir"/> when no
+    /// <c>package.json</c> is found (preserving the legacy behavior).
+    /// </summary>
+    private static string FindPackageRoot(string startDir)
+    {
+        var current = startDir;
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current, "package.json")))
+                return current;
+            var parent = Path.GetDirectoryName(current);
+            if (parent == current) break; // filesystem root
+            current = parent;
+        }
+        // Fallback: parent of the output dir (legacy convention)
+        return Path.GetDirectoryName(startDir)!;
     }
 }
