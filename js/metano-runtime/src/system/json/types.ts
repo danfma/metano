@@ -91,7 +91,8 @@ export interface PropertySpec {
 
 export interface TypeSpec<T = unknown> {
   /** Constructor reference (for instanceof checks and context lookups) */
-  readonly type: new (...args: unknown[]) => T;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly type: abstract new (...args: any[]) => T;
   /** Parent type's spec — properties are inherited */
   readonly base?: TypeSpec;
   /** Constructs T from a Record<ts-field-name, deserialized-value> */

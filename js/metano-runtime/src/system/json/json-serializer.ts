@@ -20,7 +20,7 @@ export class BoundSerializer {
   }
 
   /** Resolve a spec by constructor — throws if not registered. */
-  specFor<T>(type: new (...args: unknown[]) => T): TypeSpec<T> {
+  specFor<T>(type: abstract new (...args: any[]) => T): TypeSpec<T> {
     const spec = this.context.resolve(type);
     if (!spec) {
       throw new Error(

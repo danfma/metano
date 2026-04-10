@@ -9,7 +9,7 @@ import type { TypeSpec, SerializerContextOptions, JsonConverter } from "./types.
 export abstract class SerializerContext {
   readonly options: SerializerContextOptions;
   private readonly _registry = new Map<
-    new (...args: unknown[]) => unknown,
+    abstract new (...args: any[]) => unknown,
     TypeSpec
   >();
 
@@ -41,7 +41,7 @@ export abstract class SerializerContext {
    * Looks up a spec by constructor reference. Returns undefined if the type
    * was not registered via createSpec().
    */
-  resolve<T>(type: new (...args: unknown[]) => T): TypeSpec<T> | undefined {
+  resolve<T>(type: abstract new (...args: any[]) => T): TypeSpec<T> | undefined {
     return this._registry.get(type) as TypeSpec<T> | undefined;
   }
 }
