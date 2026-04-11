@@ -362,8 +362,13 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         {
             var fullName = named.ToDisplayString();
 
-            // Guid / Uri → string → primitive
-            if (fullName is "System.Guid" or "System.Uri")
+            // Guid → UUID branded type. At runtime it's a string (JSON wire:
+            // primitive string), but the deserialize side wraps via UUID.create.
+            if (fullName is "System.Guid")
+                return "branded";
+
+            // Uri → primitive string (no special handling needed).
+            if (fullName is "System.Uri")
                 return "primitive";
 
             // Decimal
@@ -516,7 +521,14 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
             case "branded":
             {
-                var tsTypeName = TypeTransformer.GetTsTypeName((INamedTypeSymbol)type);
+                // System.Guid maps to the UUID branded type from metano-runtime.
+                // Other branded types come from user-defined [InlineWrapper] structs
+                // and use their TS type name directly.
+                var named = (INamedTypeSymbol)type;
+                var tsTypeName =
+                    named.ToDisplayString() == "System.Guid"
+                        ? "UUID"
+                        : TypeTransformer.GetTsTypeName(named);
                 return new TsObjectLiteral([
                     new TsObjectProperty("kind", new TsStringLiteral("branded")),
                     new TsObjectProperty(

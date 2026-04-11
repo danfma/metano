@@ -312,4 +312,38 @@ public class JsonSerializerContextTests
         await Assert.That(ts).Contains("kind: \"array\"");
         await Assert.That(ts).Contains("kind: \"primitive\"");
     }
+
+    [Test]
+    public async Task GuidProperty_ClassifiedAsBrandedWithUuidCreate()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public record Entity(Guid Id, string Name);
+
+            [Transpile]
+            [JsonSourceGenerationOptions]
+            [JsonSerializable(typeof(Entity))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        );
+
+        var ts = result["json-context.ts"];
+
+        // Guid should be classified as a branded descriptor pointing at UUID.create
+        await Assert.That(ts).Contains("kind: \"branded\"");
+        await Assert.That(ts).Contains("create: UUID.create");
+        // And UUID should be imported from metano-runtime
+        await Assert.That(ts).Contains("import { UUID } from \"metano-runtime\"");
+    }
 }

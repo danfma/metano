@@ -207,8 +207,13 @@ public static class TypeMapper
                 return new TsNamedType("Temporal.Duration");
 
             // Simple mappings
+            // Guid → branded UUID type from metano-runtime. The brand erases at
+            // runtime (UUID is literally `string`), but gives the type system a
+            // distinction between "any string" and "a validated UUID". The import
+            // is added via the direct metano-runtime path in ImportCollector
+            // (alongside HashCode / Enumerable / HashSet) — no origin needed.
             if (fullName is "System.Guid")
-                return new TsStringType();
+                return new TsNamedType("UUID");
             if (fullName is "System.Uri")
                 return new TsStringType();
             if (fullName is "System.Object")

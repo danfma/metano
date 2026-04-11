@@ -157,7 +157,7 @@ frontend, with clean output and no runtime penalty.**
 - `DateTimeOffset` → `Temporal.ZonedDateTime`
 - `TimeSpan` → `Temporal.Duration`
 - `decimal` → `Decimal` (from `decimal.js`, arbitrary precision)
-- `Guid` → `string`
+- `Guid` → `UUID` (branded `string`, from `metano-runtime`)
 - `BigInteger` → `bigint`
 
 ### Control knobs via attributes

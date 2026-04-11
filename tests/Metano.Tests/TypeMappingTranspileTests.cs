@@ -93,7 +93,7 @@ public class TypeMappingTranspileTests
     // ─── Simple type mappings ───────────────────────────────
 
     [Test]
-    public async Task Guid_MapsToString()
+    public async Task Guid_MapsToUuidBrandedType()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -103,7 +103,63 @@ public class TypeMappingTranspileTests
         );
 
         var output = result["entity.ts"];
-        await Assert.That(output).Contains("id: string");
+        // Guid → branded UUID type from metano-runtime (not plain string).
+        await Assert.That(output).Contains("id: UUID");
+        await Assert.That(output).Contains("import { UUID } from \"metano-runtime\"");
+    }
+
+    [Test]
+    public async Task GuidNewGuid_LowersToUuidNewUuid()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class IdFactory
+            {
+                public static Guid Create() => Guid.NewGuid();
+            }
+            """
+        );
+
+        var output = result["id-factory.ts"];
+        await Assert.That(output).Contains("UUID.newUuid()");
+        await Assert.That(output).Contains("import { UUID } from \"metano-runtime\"");
+    }
+
+    [Test]
+    public async Task GuidToStringN_LowersToHyphenStrip()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class IdFactory
+            {
+                public static string Compact(Guid id) => id.ToString("N");
+            }
+            """
+        );
+
+        var output = result["id-factory.ts"];
+        // The "N" form strips hyphens via String.replace.
+        await Assert.That(output).Contains("replace(/-/g, \"\")");
+    }
+
+    [Test]
+    public async Task GuidEmpty_LowersToUuidEmpty()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class IdFactory
+            {
+                public static Guid GetEmpty() => Guid.Empty;
+            }
+            """
+        );
+
+        var output = result["id-factory.ts"];
+        await Assert.That(output).Contains("UUID.empty");
+        await Assert.That(output).Contains("import { UUID } from \"metano-runtime\"");
     }
 
     // ─── Dictionary → Map ───────────────────────────────────

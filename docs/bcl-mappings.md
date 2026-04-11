@@ -13,7 +13,7 @@ This page lists every mapping the transpiler knows about out of the box.
 | `decimal` | `Decimal` (from [`decimal.js`](https://mikemcl.github.io/decimal.js/)) |
 | `BigInteger` | `bigint` |
 | `char` | `string` (length 1) |
-| `Guid` | `string` (36-char UUID) |
+| `Guid` | `UUID` (branded `string`, from `metano-runtime`) |
 | `Uri` | `string` |
 | `object` | `unknown` |
 | `void` | `void` |
@@ -40,12 +40,42 @@ package. Operators are lowered to method calls:
 
 ### `Guid` specifics
 
-`Guid` is a `string` in TypeScript, so the normal lowering is trivial, but:
+`Guid` maps to `UUID` — a **branded primitive type** shipped by `metano-runtime`.
+At runtime it's literally a `string`, so serialization and interop with ordinary
+string APIs work without any wrapper, but the type system distinguishes "any
+arbitrary string" from "a validated UUID".
+
+```typescript
+// metano-runtime
+export type UUID = string & { readonly __brand: "UUID" };
+export namespace UUID {
+  export function create(value: string): UUID;
+  export function newUuid(): UUID;
+  export function newCompact(): UUID;
+  export const empty: UUID;
+  export function isUuid(value: unknown): value is UUID;
+}
+```
+
+**Lowerings:**
 
 | C# | TypeScript |
 |----|----|
-| `Guid.NewGuid()` | `crypto.randomUUID()` |
-| `Guid.NewGuid().ToString("N")` | `crypto.randomUUID().replace(/-/g, "")` |
+| `Guid.NewGuid()` | `UUID.newUuid()` |
+| `Guid.NewGuid().ToString("N")` | `UUID.newUuid().replace(/-/g, "")` (compact form) |
+| `Guid.Parse(s)` | `UUID.create(s)` |
+| `Guid.Empty` | `UUID.empty` |
+| `guid.ToString()` | `guid` (identity — already a string) |
+
+**Why branded?** The same rationale as `[InlineWrapper]` on user-defined IDs:
+you get compile-time type safety without runtime overhead. A random `string`
+can't be passed where a `UUID` is expected, but a `UUID` is still serializable
+as JSON, loggable, and indexable like any other string.
+
+**Escape hatches:** cast a `string` to `UUID` with `UUID.create(str)` (or `str as UUID`
+if you're sure about the shape), and cast back to plain `string` with `uuid as string`
+(though you usually don't need to — `UUID` is already structurally assignable to
+`string` for any read-only API).
 
 ## Date / time (Temporal API)
 

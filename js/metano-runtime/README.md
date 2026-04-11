@@ -65,6 +65,29 @@ const result = Enumerable.from([1, 2, 3, 4, 5])
   `lastOrDefault`, `single`, `singleOrDefault`, `any`, `all`, `count`, `sum`, `average`,
   `min`, `max`, `minBy`, `maxBy`, `contains`, `aggregate`
 
+### `UUID` — branded UUID type
+
+A branded primitive that `System.Guid` maps to. At runtime it's literally a
+`string`, so serialization and interop with ordinary string APIs work without
+ceremony, but the type system distinguishes "a validated UUID" from "any old
+string".
+
+```typescript
+import { UUID } from "metano-runtime";
+
+const id = UUID.newUuid();                // "550e8400-e29b-41d4-a716-446655440000"
+const compact = UUID.newCompact();         // "550e8400e29b41d4a716446655440000"
+const empty = UUID.empty;                  // "00000000-0000-0000-0000-000000000000"
+const wrapped = UUID.create("abc-123");    // unchecked wrap, caller is trusted
+
+if (UUID.isUuid(someValue)) {
+  // type narrowed to UUID here
+}
+```
+
+The Metano transpiler uses `UUID.create()` in JSON deserialization and
+`UUID.newUuid()` as the lowering for `Guid.NewGuid()`.
+
 ### Primitive type guards
 
 Runtime type predicates used by generated overload dispatchers:

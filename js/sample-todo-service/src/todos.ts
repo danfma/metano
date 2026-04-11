@@ -1,4 +1,5 @@
 import { Enumerable } from "metano-runtime";
+import { UUID } from "metano-runtime";
 import { listRemove } from "metano-runtime";
 import { type Priority, TodoItem } from "sample-todo";
 
@@ -32,7 +33,7 @@ export class TodoStore {
   }
 
   add(dto: CreateTodoDto): StoredTodo {
-    const id = crypto.randomUUID();
+    const id = UUID.newUuid();
     const stored = { id: id, item: new TodoItem(dto.title, false, dto.priority) };
     this._items.push(stored);
     return stored;

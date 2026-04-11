@@ -1,4 +1,5 @@
 import { HashCode } from "metano-runtime";
+import { UUID } from "metano-runtime";
 
 export type UserId = string & { readonly __brand: "UserId" };
 
@@ -8,7 +9,7 @@ export namespace UserId {
   }
 
   export function new_(): UserId {
-    return UserId.create(crypto.randomUUID().replace(/-/g, ""));
+    return UserId.create(UUID.newUuid().replace(/-/g, ""));
   }
 
   export function system(): UserId {

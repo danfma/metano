@@ -103,6 +103,17 @@ public sealed class ImportCollector(
             imports.Add(new TsImport(["Enumerable"], "metano-runtime"));
         }
 
+        // UUID import (branded type used for System.Guid mapping). Referenced
+        // either via a type annotation (`TsNamedType("UUID")` from TypeMapper)
+        // or via a template body (e.g., `Guid.NewGuid()` lowered to `UUID.newUuid()`).
+        // Hoisted before `runtimeHelpers` so the helpers set can drop UUID to
+        // avoid emitting a duplicate import line.
+        if (referencedTypes.Contains("UUID") || runtimeHelpers.Contains("UUID"))
+        {
+            imports.Add(new TsImport(["UUID"], "metano-runtime"));
+            runtimeHelpers.Remove("UUID");
+        }
+
         // Runtime helper imports collected from TsTemplate.RuntimeImports declarations
         // (e.g., dayNumber, listRemove, immutableInsert, immutableRemoveAt, immutableRemove).
         // Bundled into a single import line from metano-runtime.
@@ -129,6 +140,7 @@ public sealed class ImportCollector(
             "Enumerable",
             "Grouping",
             "HashSet",
+            "UUID",
         };
         foreach (var helper in runtimeHelpers)
             importedNames.Add(helper);

@@ -199,7 +199,7 @@ Extracted handlers (each covers one sub-grammar):
 - [x] SampleIssueTracker: UserId/IssueId como `readonly record struct` + `[InlineWrapper]`
 - [x] Plano detalhado: `specs/value-wrappers-plan.md`
 
-### `Guid` → `UUID` branded type
+### ~~`Guid` → `UUID` branded type~~ ✅
 
 > Currently `Guid` maps to a plain `string` in the generated TypeScript, which loses
 > type safety — any random `string` can be assigned to a variable typed as a GUID.
@@ -240,29 +240,37 @@ export class User {
 
 **Tasks:**
 
-- [ ] Add `UUID` branded type + companion namespace in `metano-runtime` under
-      `src/system/uuid.ts` with `create()`, `newUuid()`, `newCompact()`, tests
-- [ ] Export `UUID` from `metano-runtime`'s barrel `src/system/index.ts`
-- [ ] Update `TypeMapper.Map()` in `src/Metano.Compiler.TypeScript/Transformation/TypeMapper.cs`
-      to map `System.Guid` → `TsNamedType("UUID")` with runtime origin instead of
-      `TsStringType()`
-- [ ] Update `Metano/Runtime/Guid.cs` `[MapMethod]`/`[MapProperty]` declarations:
-      - `Guid.NewGuid()` → `UUID.newUuid()`
-      - `Guid.NewGuid().ToString("N")` → `UUID.newCompact()`
-      - `Guid.Parse(s)` / cast → `UUID.create(s)`
-      - `Guid.Empty` → `UUID.create("00000000-0000-0000-0000-000000000000")`
-- [ ] Update JSON serialization `ClassifyPropertyType` to treat `Guid` as a
-      `branded` descriptor (passthrough on serialize, `UUID.create` on deserialize)
-- [ ] Update runtime type check: `isUuid(value: unknown): value is UUID`
-- [ ] Add test coverage in `tests/Metano.Tests/`:
-      - `GuidMapsToUuidBranded`
-      - `GuidNewGuidLowersToUuidNewUuid`
-      - `GuidInJsonContextUsesBrandedDescriptor`
-- [ ] Regenerate samples (`SampleIssueTracker` already uses `Guid.NewGuid()`
-      inside `UserId.New()`) and verify the output
-- [ ] Update `docs/bcl-mappings.md` and `README.md` to document the new mapping
-- [ ] Document the migration impact: existing consumers that rely on `Guid` being
-      a raw `string` will need to use `UUID.create(...)` explicitly
+- [x] Add `UUID` branded type + companion namespace in `metano-runtime` under
+      `src/system/uuid.ts` with `create()`, `newUuid()`, `newCompact()`, `empty`,
+      `isUuid()` type guard, and 16 tests covering every case
+- [x] Export `UUID` from `metano-runtime`'s barrel `src/system/index.ts`
+- [x] Update `TypeMapper.Map()` in `src/Metano.Compiler.TypeScript/Transformation/TypeMapper.cs`
+      to map `System.Guid` → `TsNamedType("UUID")` instead of `TsStringType()`
+- [x] Add UUID to the `metano-runtime` direct import path in `ImportCollector`
+      (alongside HashCode / Enumerable / HashSet / Grouping)
+- [x] Update `Metano/Runtime/Guid.cs` `[MapMethod]`/`[MapProperty]` declarations:
+      - `Guid.NewGuid()` → `UUID.newUuid()` (via `RuntimeImports = "UUID"`)
+      - `Guid.Parse(s)` → `UUID.create(s)`
+      - `Guid.Empty` → `UUID.empty`
+      - `Guid.ToString("N")` kept as literal `$this.replace(/-/g, "")` fallback
+      - `Guid.ToString()` kept as identity `$this` fallback
+- [x] Update JSON serialization `ClassifyPropertyType` to treat `System.Guid` as
+      a `branded` descriptor and `BuildTypeDescriptor` to emit `UUID.create`
+- [x] Add test coverage in `tests/Metano.Tests/`:
+      - `Guid_MapsToUuidBrandedType`
+      - `GuidNewGuid_LowersToUuidNewUuid`
+      - `GuidToStringN_LowersToHyphenStrip`
+      - `GuidEmpty_LowersToUuidEmpty`
+      - `GuidProperty_ClassifiedAsBrandedWithUuidCreate` (JSON serializer test)
+- [x] Regenerate samples — `SampleIssueTracker` (UserId.New, IssueId.New) and
+      `SampleTodo.Service` (TodoStore.Add) now use `UUID.newUuid()`, all 78
+      bun tests still pass
+- [x] Update `docs/bcl-mappings.md`, `README.md`, and `js/metano-runtime/README.md`
+      to document the new mapping
+- [x] Verified migration impact: the old `id: string` assertion in
+      `TypeMappingTranspileTests.Guid_MapsToString` was replaced; no other
+      breaking changes downstream — `UUID` is structurally assignable to `string`
+      for any read-only API
 
 **Migration note:** this is technically a breaking change for anyone consuming
 `Guid`-typed fields across the TS boundary, but the escape hatch is simple — a
