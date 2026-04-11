@@ -8,5 +8,11 @@ repo = "metano"
 [nuget]
 source = "https://api.nuget.org/v3/index.json"
 
+# Tests are run by the CI workflow (TUnit via `dotnet run`, not VSTest).
+# dotnet-releaser does not support Microsoft.Testing.Platform yet.
+[test]
+enable = false
+
+# Coverage is not yet supported for Testing Platform (TUnit) projects.
 [coverage]
-enable = true
+enable = false

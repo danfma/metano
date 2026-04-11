@@ -5,6 +5,16 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "description": "Runtime support library for Metano-generated TypeScript code",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/danfma/metano.git",
+    "directory": "js/metano-runtime"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
   "exports": {
     ".": "./dist/index.js",
     "./system/json": "./dist/system/json/index.js",
