@@ -367,10 +367,10 @@ name, so two assemblies with same-named types are correctly distinguished.
       source of truth).
 - [x] **Multi-type-per-file support** via `[EmitInFile("name")]`. Types decorated with
       the same file name (in the same C# namespace) are co-located in one `.ts` file
-      instead of producing one file per type. Cross-package consumers automatically
-      resolve the import to the file path: a reference to a co-located type becomes
-      `import { Foo, Bar } from "<package>/<ns>/<file>"`, and multiple names from the
-      same file are merged into one import line. Conflicting namespaces under the same
+      instead of producing one file per type. Under namespace-first resolution the
+      consumer imports the co-located names through the namespace barrel
+      (`import { Foo, Bar } from "<package>/<ns>"`), and multiple names from the same
+      barrel are merged into one import line. Conflicting namespaces under the same
       file name are rejected with MS0008.
 
 ### NuGet Library Path — `.metalib` (future)
@@ -397,81 +397,45 @@ as NuGet packages (no source), Metano needs a separate metadata sidecar file:
 - [ ] Compiler plugins para targets customizados (SolidJS JSX, React, etc.)
 - [ ] Source maps cross-project
 
-### Namespace-first imports / barrel-first resolution
+### ~~Namespace-first imports / barrel-first resolution~~ ✅
 
-**Status:** o transpiler hoje expõe barrels por namespace no `package.json`, mas continua
-resolvendo imports internos e cross-package pelo caminho do arquivo concreto. Isso
-diverge da regra desejada para simular o modelo de namespaces do C#:
-
-- desejado: `import { TypeA, TypeB } from "{package}/{namespace-path}"`
-- desejado quando namespace == root namespace / assembly namespace: `import { TypeA } from "{package}"`
-- fallback excepcional: `.../{type-name}` somente quando o barrel introduzir ciclo ou
-  outra ambiguidade real
-
-**Achados do audit (2026-04-10):**
-
-- `PathNaming.ComputeRelativeImportPath()` hoje sempre inclui o nome do arquivo no fim
-  do subpath `#/.../<type-or-file>`; não há modo "barrel-first".
-- `PathNaming.ComputeSubPath()` hoje produz subpaths cross-package com sufixo do arquivo
-  (`@scope/pkg/domain/money`, `@scope/pkg/widgets`, etc.).
-- `ImportCollector` agrupa imports por path já resolvido em arquivo e, portanto, reforça
-  a estratégia file-first tanto para imports locais quanto para cross-package.
-- `PackageJsonWriter` exporta tanto os barrels (`"./issues/domain"`) quanto os arquivos
-  individuais (`"./issues/domain/issue"`), o que viabiliza o comportamento atual.
-- O código gerado em `js/sample-issue-tracker` confirma isso: os imports internos usam
-  `#/issues/domain/issue`, `#/shared-kernel/page-request`, etc., nunca `#/issues/domain`
-  nem `# /shared-kernel`.
-
-**Tarefas:**
-
-- [ ] Introduzir uma estratégia explícita de resolução de imports (`file-first` vs
-      `namespace-first`), deixando `namespace-first` como padrão do target TypeScript.
-- [ ] Alterar `PathNaming` para resolver imports locais para o barrel do namespace
-      (`#/issues/domain`) e usar `#/` somente no root barrel quando o namespace alvo
-      for o root namespace do assembly/projeto.
-- [ ] Alterar o pipeline cross-package para resolver `TsTypeOrigin.SubPath` para o
-      barrel do namespace, usando apenas o nome do package quando o namespace do tipo
-      der match com o root namespace do assembly produtor.
-- [ ] Preservar fallback para caminho do arquivo apenas em cenários detectados de ciclo,
-      colisão de barrel (`index.ts`) ou impossibilidade real de re-export.
-- [ ] Revisar `PackageJsonWriter` para garantir export `"."` estável e compatível com o
-      root barrel, além de decidir se exports por arquivo continuam públicos ou viram
-      fallback interno.
-- [ ] Atualizar os testes existentes que hoje fixam imports file-first e adicionar
-      cobertura para:
-      - imports locais via barrel de namespace
-      - imports cross-package via barrel de namespace
-      - imports root-package quando namespace == root namespace do assembly
-      - fallback para arquivo em caso de ciclo/barrel collision
-- [ ] Regenerar `js/sample-issue-tracker` e validar que os imports passam a usar os
-      barrels de namespace em `src/` e `test/`.
-- [ ] Decidir se `js/metano-runtime` entra na mesma convenção imediatamente ou se fica
-      fora do escopo por ser código manual/runtime e não output direto do transpiler.
-
-**Plano detalhado:** `specs/namespace-imports-plan.md`
-
-### Imports relativos no mesmo namespace
-
-**Status:** hoje o transpiler já trata arquivos do mesmo namespace como exceção ao
-barrel-first, mas ainda usa o alias do package (`#/foo/bar/type`) para esses imports.
-O próximo refinamento é simplificar esse caso para imports relativos locais, deixando a
-regra completa assim:
+Regra final implementada:
 
 - mesmo namespace → import relativo por arquivo (`./issue-workflow`)
 - namespace diferente no mesmo package → barrel de namespace (`#/issues/domain`)
-- cross-package → namespace barrel ou root do package
+- root namespace do assembly no mesmo package → `#`
+- cross-package → `{package}/{namespace-path}` ou só `{package}` quando o tipo está no
+  root namespace do assembly produtor
 
-**Tarefas:**
+**Entregas:**
 
-- [ ] Trocar o fallback de mesmo namespace em `PathNaming` de `#/namespace/type` para
-      import relativo (`./type`) calculado a partir do arquivo atual.
-- [ ] Atualizar `CyclicReferenceDetector` para continuar analisando apenas aliases do
-      package (`#` e `#/*`) e ignorar imports relativos locais.
-- [ ] Ajustar testes que hoje ainda aceitam fallback file-first via alias do package.
-- [ ] Regenerar `js/sample-issue-tracker` e validar que `issues/domain/*` usa imports
-      relativos locais, enquanto `issues/application/*` continua usando barrels.
+- [x] `PathNaming.ComputeRelativeImportPath` resolve para barrel de namespace por padrão
+      e usa `./type-name` como caso especial para mesmo namespace (evita ciclo
+      `file → barrel → file`)
+- [x] `PathNaming.ComputeSubPath` (cross-package) retorna só o namespace path — sem
+      sufixo do arquivo — e vazio quando o namespace casa com o root do assembly
+- [x] `ImportCollector` coleta imports locais num bucket por path e emite uma linha
+      mesclada por barrel (merge + 3-case type-only form: all-value / all-type-only /
+      mixed values-first), espelhando o mesmo padrão já usado pelo loop cross-package
+- [x] `CyclicReferenceDetector` normaliza `#`, `#/...` e `./...` no grafo de ciclos
+- [x] `PackageJsonWriter` expõe `"#"` no `imports` quando há root `index.ts` e gera
+      export `"."` para o root barrel
+- [x] `BarrelFileGenerator` é leaf-only por padrão — preserva tree-shaking
+- [x] Testes novos em `NamespaceTranspileTests`: merge multi-tipo, all-type-only como
+      whole-statement (`import type { ... }`), mixed values-first (`{ V, type T }`)
+- [x] Samples regenerados: `sample-issue-tracker` vai de 9 linhas de import para 2 em
+      `issue-service.ts`; `sample-todo-service` adota values-first no mixed form
 
-**Plano detalhado:** `specs/same-namespace-relative-imports-plan.md`
+**Deixado de fora:**
+
+- [ ] **Root barrel agregado quando o root namespace é puramente sub-namespaces** — pode
+      ser adicionado como opt-in via flag (ex: `--namespace-barrels`) gerando o barrel
+      raiz com `export namespace` para espelhar a hierarquia C#. Ignorado por padrão
+      porque `export namespace { export * from ... }` quebra tree-shaking moderno.
+
+**Planos detalhados (concluídos):**
+- `specs/namespace-imports-plan.md`
+- `specs/same-namespace-relative-imports-plan.md`
 
 ---
 

@@ -53,7 +53,8 @@ public class EndToEndOutputTests
         //    Issue is referenced only as a type (the property's declared type) while
         //    IssueStatus is used as a value (the auto-init `= IssueStatus.Open`); the
         //    per-name type qualifier handles the asymmetry without splitting into two
-        //    import statements.
+        //    import statements. Values come first, then types — each group sorted
+        //    alphabetically — so the mixed form reads as `{ Value, type TypeOnly }`.
         //
         // 2. The consumer does NOT import Decimal because it doesn't use decimal
         //    directly — only references Issue, which has a decimal field. The field's
@@ -65,7 +66,7 @@ public class EndToEndOutputTests
         //    TS would leave the field as `undefined` at runtime, breaking equality
         //    checks. The compiler picks the first enum member (value 0) automatically.
         var expected =
-            "import { type Issue, IssueStatus } from \"@acme/issues\";\n"
+            "import { IssueStatus, type Issue } from \"@acme/issues\";\n"
             + "\n"
             + "export class Tracker {\n"
             + "  current: Issue | null = null;\n"

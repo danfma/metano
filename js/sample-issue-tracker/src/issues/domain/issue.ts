@@ -1,12 +1,12 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { isString } from "metano-runtime";
+import type { UserId } from "#/shared-kernel";
 import { Comment } from "./comment";
 import type { IssueId } from "./issue-id";
 import { IssuePriority } from "./issue-priority";
 import { IssueStatus } from "./issue-status";
 import { IssueType } from "./issue-type";
 import { IssueWorkflow } from "./issue-workflow";
-import type { UserId } from "#/shared-kernel";
 
 export class Issue {
   status: IssueStatus = IssueStatus.Backlog;
