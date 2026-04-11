@@ -26,6 +26,16 @@ jobs:
       - name: Build
         run: dotnet build -maxcpucount:1
 
+      - name: Verify samples are regenerated cleanly
+        run: |
+          if ! git diff --quiet -- js/ 2>&1; then
+            echo "Generated TS files are out of sync with the C# source."
+            echo "Run 'dotnet build' locally and commit the regenerated files."
+            git status -- js/
+            git diff -- js/ | head -100
+            exit 1
+          fi
+
       - name: Test
         run: dotnet run --project tests/Metano.Tests/
 

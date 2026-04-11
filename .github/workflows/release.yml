@@ -21,12 +21,20 @@ jobs:
           dotnet-version: "10.0.x"
           dotnet-quality: "preview"
 
+      # setup-node writes ~/.npmrc with the registry + auth token template.
+      # The actual token is supplied via NODE_AUTH_TOKEN at publish time.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
       - uses: oven-sh/setup-bun@v2
 
       - name: Restore tools
         run: dotnet tool restore
 
-      # .NET: build, test, pack, publish NuGet, create GitHub Release + changelog
+      # .NET: build, pack, publish NuGet, create GitHub Release + changelog
+      # (tests are disabled in dotnet-releaser.toml; CI runs them separately)
       - name: dotnet-releaser
         run: |
           dotnet dotnet-releaser run \
@@ -34,11 +42,15 @@ jobs:
             --github-token "${{ secrets.GITHUB_TOKEN }}" \
             dotnet-releaser.toml
 
-      # npm: sync version from tag and publish metano-runtime
-      - name: Publish npm
+      # Build the npm package before publishing
+      - name: Build metano-runtime
+        working-directory: js
+        run: |
+          bun install
+          cd metano-runtime && bun run build
+
+      # Sync version from the tag and publish to npm
+      - name: Publish metano-runtime to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          cd js && bun install
-          cd metano-runtime && bun run build && bun test
-          bash ../../scripts/sync-npm-version.sh
+        run: bash scripts/sync-npm-version.sh

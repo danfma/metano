@@ -46,12 +46,22 @@ jobs:
           if [ -n "$OVERRIDE" ]; then
             BUMP="$OVERRIDE"
           else
-            # Analyze conventional commits since last tag
-            COMMITS=$(git log "$LATEST"..HEAD --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+            # Analyze conventional commits since last tag.
+            # %B includes subject + body so we catch `BREAKING CHANGE:` footers.
+            # Use tag range if the tag exists; otherwise scan full history.
+            if git rev-parse -q --verify "$LATEST" >/dev/null; then
+              COMMITS=$(git log "$LATEST"..HEAD --pretty=format:"%B%n---END---")
+            else
+              COMMITS=$(git log --pretty=format:"%B%n---END---")
+            fi
             BUMP="patch"
-            if echo "$COMMITS" | grep -qE "^feat(\(.+\))?!:|BREAKING CHANGE"; then
+            # Major: subject starts with `feat!:` / `feat(scope)!:` / any `!:`
+            #        OR any commit body contains `BREAKING CHANGE:` / `BREAKING-CHANGE:`
+            if echo "$COMMITS" | grep -qE "^[a-z]+(\([^)]+\))?!:"; then
               BUMP="major"
-            elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+            elif echo "$COMMITS" | grep -qE "^BREAKING[ -]CHANGE:"; then
+              BUMP="major"
+            elif echo "$COMMITS" | grep -qE "^feat(\([^)]+\))?:"; then
               BUMP="minor"
             fi
           fi
