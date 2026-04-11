@@ -10,9 +10,59 @@ TypeScript from a Bun project.
 - **Bun 1.3+** — [install](https://bun.sh)
 - **Git**
 
-## Step 1: Create a C# class library
+## The mental model
+
+Before we touch any code, it helps to understand how Metano thinks about your
+project layout:
+
+- **C# project** (your `.csproj`) — the **source** of types and logic.
+- **TypeScript package** (a directory with its own `package.json`) — the
+  **target** where generated `.ts` files land.
+
+When you run `dotnet build`, Metano takes every type marked for transpilation
+in the C# project and writes the resulting TypeScript files into the target
+package's `src/` directory. The target is a **real npm package** that lives on
+its own — it has its own `package.json`, its own `tsconfig.json`, its own
+bundler config (Vite, Bun, esbuild, whatever you prefer), and its own tests.
+
+The target package can live wherever makes sense for your workflow:
+
+- **Alongside the C# project** in the same repository (e.g., `MyDomain/` next
+  to `MyDomain-ts/`)
+- **In a different folder** entirely (monorepo sibling, or a separate repo
+  used as a workspace dependency)
+- **Even outside the repository** if you want to ship it as an npm package
+  that other projects install
+
+**Why this split?** Because it keeps you in both ecosystems without
+compromises. On the C# side, you use your normal IDE, nuget packages, tests,
+and debugging. On the TypeScript side, you keep **everything you love about
+modern JS tooling** — Vite dev server with hot module replacement, Bun test
+watch mode, source maps, bundler tree-shaking, your preferred linter and
+formatter. The generated `.ts` files look and behave like files you would
+have written by hand, so all your JS tools work on them without any special
+integration. You get the *best of both worlds*: your domain logic stays in
+C# (one source of truth), and your frontend stays buttery-smooth with its
+native dev loop.
+
+The rest of this guide creates both sides step by step so you can see how it
+fits together.
+
+## Step 1: Create the C# source project
+
+Pick a folder where both the C# side and the TS side will live. For this
+guide we'll use a single parent directory with two siblings:
+
+```
+my-app/
+├── my-domain/        ← C# project (source)
+└── my-domain-ts/     ← TypeScript package (target)
+```
+
+Create the C# side first:
 
 ```bash
+mkdir -p my-app && cd my-app
 mkdir my-domain && cd my-domain
 dotnet new classlib
 ```
@@ -33,19 +83,84 @@ Edit the generated `.csproj`:
   </ItemGroup>
 
   <PropertyGroup>
+    <!-- Where the generated .ts files land. This path is relative to the
+         .csproj and should point at the `src/` directory of your target
+         TypeScript package. -->
     <MetanoOutputDir>../my-domain-ts/src</MetanoOutputDir>
+    <!-- Wipe the output directory before each build so stale files from
+         renamed/deleted C# types don't linger. Safe because the folder is
+         entirely generator-owned. -->
     <MetanoClean>true</MetanoClean>
   </PropertyGroup>
 </Project>
 ```
 
-Two packages:
-- **`Metano`** — the attributes (`[Transpile]`, `[StringEnum]`, etc.) and BCL runtime
-  mappings
-- **`Metano.Build`** — MSBuild integration that runs the transpiler after
-  `dotnet build`
+**Two NuGet packages:**
 
-## Step 2: Write some C#
+- **`Metano`** — the attributes (`[Transpile]`, `[StringEnum]`, etc.) and BCL
+  runtime mappings. This is the package your C# code actually references.
+- **`Metano.Build`** — a tiny MSBuild integration that hooks into
+  `dotnet build` and runs the transpiler as a post-build step. No code of
+  its own — just a `.targets` file that invokes the `metano-typescript` CLI
+  automatically.
+
+**Key property: `MetanoOutputDir`**
+
+This tells Metano where to write the generated TypeScript. It's a path
+**relative to the `.csproj` file** and should point at the `src/` folder of
+whatever TypeScript package will consume the output. In this guide we're
+using `../my-domain-ts/src` — a sibling directory we'll create next.
+
+## Step 2: Create the target TypeScript package
+
+The target is a normal npm package. You can use Bun, npm, pnpm, or yarn —
+whatever fits your workflow. For this guide we'll use Bun:
+
+```bash
+cd ..                           # back to my-app/
+mkdir my-domain-ts && cd my-domain-ts
+bun init -y
+mkdir src
+```
+
+You now have `my-domain-ts/package.json`, `my-domain-ts/tsconfig.json`, and
+an empty `my-domain-ts/src/` folder where Metano will write the generated
+files.
+
+Add `metano-runtime` as a dependency (most generated code imports from it):
+
+```bash
+bun add metano-runtime
+```
+
+That's it — this package is **your normal TypeScript project**. You can add
+Vite, Next.js, Remix, React, Svelte, Playwright, Jest, Biome, ESLint,
+Prettier, whatever you want. None of it has to know that `src/` is
+generated — to your JS tooling it's just a regular TypeScript project.
+
+### Why this structure
+
+The key insight is that the target package is a **plain TypeScript project**
+that happens to have its `src/` populated by a code generator. This matters
+because it means:
+
+- **Your frontend dev loop is unchanged.** If you're using Vite, run
+  `vite dev` in `my-domain-ts/` and you get HMR just like you would with any
+  other project. Metano regenerates `.ts` files on `dotnet build`, and Vite
+  picks up the changes via its normal file watcher.
+- **Your bundler doesn't need a plugin.** Tree-shaking, code splitting,
+  source maps — all of it works because the generated code is idiomatic
+  TypeScript.
+- **Your tests stay in JS.** Use `bun test`, Jest, Vitest — whatever you
+  like. Tests can import from `./src` like any other module.
+- **Your linter/formatter works.** Biome, ESLint, Prettier — point them at
+  `src/` and they'll happily format the generated code (Metano's output is
+  already close to idiomatic, so this is usually a no-op).
+
+In short: **C# gives you one source of truth for domain logic; TypeScript
+tooling stays in charge of everything else.**
+
+## Step 3: Write some C#
 
 Delete the default `Class1.cs` and create `Product.cs`:
 
@@ -84,9 +199,12 @@ What these attributes do:
 - **`[StringEnum]`** — emits `Category` as a string union (`"Books" | "Electronics" | "Clothing"`)
   instead of a numeric enum.
 
-## Step 3: Build
+## Step 4: Build
+
+From the C# project directory:
 
 ```bash
+cd ../my-domain     # back to the csproj side if you're in my-domain-ts
 dotnet build
 ```
 
@@ -94,14 +212,20 @@ You should see output like:
 
 ```
 Metano: transpiling MyDomain...
-  Generated: my-domain/src/category.ts
-  Generated: my-domain/src/product.ts
-  Generated: my-domain/src/index.ts
-  Updated: my-domain/package.json
+  Generated: category.ts
+  Generated: product.ts
+  Generated: index.ts
+  Updated: ../my-domain-ts/package.json
 Metano: 3 file(s) generated in ../my-domain-ts/src
 ```
 
-## Step 4: Inspect the output
+Metano wrote the files into `my-domain-ts/src/` (the `MetanoOutputDir` you
+configured) **and** merged a `metano-runtime` + `decimal.js` dependency into
+`my-domain-ts/package.json`. Every subsequent `dotnet build` regenerates the
+files; the `MetanoClean` flag wipes the output directory first so renamed or
+deleted C# types don't leave stale `.ts` files behind.
+
+## Step 5: Inspect the output
 
 `../my-domain-ts/src/category.ts`:
 
@@ -179,17 +303,20 @@ The transpiler also generated `package.json` with:
 }
 ```
 
-## Step 5: Consume from a Bun project
+## Step 6: Consume from your TypeScript package
+
+The `my-domain-ts` package you created in Step 2 now has generated files in
+`src/`. Make sure the new `decimal.js` dependency (added automatically by the
+transpiler to `package.json`) is installed:
 
 ```bash
 cd ../my-domain-ts
 bun install
 ```
 
-Create a small script:
+Create a quick smoke-test script at `my-domain-ts/test.ts`:
 
 ```typescript
-// test.ts
 import { Product, Category } from "./src";
 import { Decimal } from "decimal.js";
 
@@ -203,6 +330,25 @@ Run it:
 ```bash
 bun run test.ts
 ```
+
+From here on, this is **just a TypeScript package**. Add your frontend
+framework of choice, point Vite at it, write tests, import it from other
+packages — the generated code has no Metano-specific requirements beyond
+`metano-runtime`.
+
+### The edit / run loop
+
+During development the flow is:
+
+1. Edit C# in `my-domain/`
+2. `dotnet build` (or let your IDE do it on save) — regenerates
+   `my-domain-ts/src/`
+3. Your JS dev tooling picks up the file changes automatically
+
+If you're running `vite dev` or `bun --watch` in `my-domain-ts/`, you'll see
+the browser reload / test runner re-run as soon as the generator finishes.
+No extra plugin, no custom integration — the generated `.ts` files look like
+any other files on disk as far as the bundler and test runner are concerned.
 
 ## Where to go next
 
