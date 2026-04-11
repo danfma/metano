@@ -452,18 +452,14 @@ metano/
 
 ### Pipeline
 
-```
-┌────────────────────┐    ┌────────────────────┐    ┌──────────────────┐    ┌──────────────┐
-│  C# source files   │───▶│ Roslyn compilation │───▶│ SymbolModel walk │───▶│  TS AST      │
-│  + [Transpile]     │    │  (MSBuildWorkspace)│    │ (Type/Expression │    │ (~65 records)│
-│  attributes        │    │                    │    │  Transformers)   │    │              │
-└────────────────────┘    └────────────────────┘    └──────────────────┘    └──────────────┘
-                                                                                    │
-                                                                                    ▼
-                           ┌────────────────────┐    ┌──────────────────┐    ┌──────────────┐
-                           │  package.json +    │◀───│     Printer      │◀───│  Import      │
-                           │  index.ts barrels  │    │  (.ts generator) │    │  Collector   │
-                           └────────────────────┘    └──────────────────┘    └──────────────┘
+```mermaid
+flowchart LR
+    A[C# source files<br/>+ Transpile attributes] --> B[Roslyn compilation<br/>MSBuildWorkspace]
+    B --> C[SymbolModel walk<br/>Type/Expression Transformers]
+    C --> D[TS AST<br/>~65 records]
+    D --> E[Import Collector]
+    E --> F[Printer<br/>.ts generator]
+    F --> G[package.json +<br/>index.ts barrels]
 ```
 
 1. **Load** — `MSBuildWorkspace` opens the `.csproj`, runs source generators, produces a
@@ -743,21 +739,27 @@ sharing the same SemVer version derived from the git tag:
 
 Releases use **conventional commits** + **dotnet-releaser** + **npm Trusted Publishing**:
 
-```
-Developer:
-  1. Work on feature branch with conventional commits (feat:, fix:, feat!: …)
-  2. PR → CI runs (.NET build + test, JS build + test, format check)
-  3. Merge to main
+```mermaid
+sequenceDiagram
+    actor Dev as Developer
+    participant Main as main branch
+    participant CITag as Create Release Tag<br/>workflow
+    participant Rel as Release workflow
+    participant NuGet as nuget.org
+    participant NPM as npmjs.org
+    participant GHR as GitHub Releases
 
-Release:
-  4. Click "Create Release Tag" in GitHub Actions (workflow_dispatch)
-     → parses conventional commits since the last tag
-     → computes the next version (patch / minor / major)
-     → creates and pushes the tag vX.Y.Z
-  5. Tag push triggers the Release workflow:
-     a. dotnet-releaser: build + pack + publish NuGet + GitHub Release + changelog
-     b. sync-npm-version.sh: sync version to metano-runtime + publish via npm OIDC
-  6. Done — NuGet and npm both show the new version
+    Dev->>Main: Merge PR<br/>(conventional commits)
+    Dev->>CITag: Click "Run workflow"
+    CITag->>CITag: Parse commits since last tag
+    CITag->>CITag: Compute next version<br/>(patch / minor / major)
+    CITag->>Main: git tag vX.Y.Z + push
+    Main->>Rel: Tag push trigger
+    Rel->>Rel: dotnet build + test
+    Rel->>NuGet: Publish 4 NuGet packages
+    Rel->>GHR: Create GitHub Release + changelog
+    Rel->>NPM: Publish metano-runtime<br/>(via Trusted Publishing OIDC)
+    Rel-->>Dev: Done ✓
 ```
 
 ### Branching model

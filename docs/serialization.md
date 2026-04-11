@@ -11,14 +11,15 @@ comparisons.
 There are three representations of your data, and each transition has its own
 rules:
 
-```
-       C# (source)
-      /           \
-     /  transpile  \
-    /               \
-TypeScript ──────── JSON
-  (target)   parse/  (wire format)
-             stringify
+```mermaid
+flowchart TD
+    CS[C# source]
+    TS[TypeScript target]
+    JSON[JSON wire format]
+
+    CS -->|transpile| TS
+    TS -->|stringify| JSON
+    JSON -->|parse| TS
 ```
 
 Naming conventions differ at each layer:

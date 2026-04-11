@@ -6,18 +6,14 @@ when you want to contribute.
 
 ## High-level pipeline
 
-```
-┌────────────────────┐    ┌────────────────────┐    ┌──────────────────┐    ┌──────────────┐
-│  C# source files   │───▶│ Roslyn compilation │───▶│ SymbolModel walk │───▶│  TS AST      │
-│  + [Transpile]     │    │  (MSBuildWorkspace)│    │ (Type/Expression │    │ (~65 records)│
-│  attributes        │    │                    │    │  Transformers)   │    │              │
-└────────────────────┘    └────────────────────┘    └──────────────────┘    └──────────────┘
-                                                                                    │
-                                                                                    ▼
-                           ┌────────────────────┐    ┌──────────────────┐    ┌──────────────┐
-                           │  package.json +    │◀───│     Printer      │◀───│  Import      │
-                           │  index.ts barrels  │    │  (.ts generator) │    │  Collector   │
-                           └────────────────────┘    └──────────────────┘    └──────────────┘
+```mermaid
+flowchart LR
+    A[C# source files<br/>+ Transpile attributes] --> B[Roslyn compilation<br/>MSBuildWorkspace]
+    B --> C[SymbolModel walk<br/>Type/Expression Transformers]
+    C --> D[TS AST<br/>~65 records]
+    D --> E[Import Collector]
+    E --> F[Printer<br/>.ts generator]
+    F --> G[package.json +<br/>index.ts barrels]
 ```
 
 **Each step:**
