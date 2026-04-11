@@ -32,4 +32,5 @@ in-depth guides.
 - **[Main README](../README.md)** — Project overview, features, installation
 - **[CLAUDE.md](../CLAUDE.md)** — Guidance for contributors and AI assistants
 - **[Sample projects](../samples/)** — Real examples with their own READMEs
-- **[Roadmap](../specs/next-steps.md)** — What's done and what's planned
+- **[Architecture Decision Records](adr/)** — The "why" behind major design choices
+- **[Roadmap / pending work](https://github.com/danfma/metano/issues)** — Feature backlog tracked on the GitHub issue tracker

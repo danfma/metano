@@ -139,4 +139,5 @@ Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, ru
 - `global.json` — SDK 10.0.0, rollForward latestMinor
 - `Directory.Build.props` — TreatWarningsAsErrors, ImplicitUsings, Nullable, LangVersion preview
 - `Directory.Packages.props` — Central Package Management
-- `specs/next-steps.md` — Full feature backlog and roadmap
+- [GitHub issues](https://github.com/danfma/metano/issues) — feature backlog and in-flight work
+- [`docs/adr/`](docs/adr/) — Architecture Decision Records (MADR-style, short format)

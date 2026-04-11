@@ -66,10 +66,9 @@ the consumer's local `_externalImportMap`, so transitive external bindings
 (`decimal.js`, `hono`, polyfills) work without the consumer re-declaring
 them.
 
-The `.metalib` path is deferred to a follow-up (tracked under
-`next-steps.md` → Slice 5 → "`.metalib` metadata sidecar for
-NuGet-shipped libraries"). When added, it will feed into the same
-`_crossAssemblyTypeMap` — additive, not a rewrite.
+The `.metalib` path is deferred to a follow-up, tracked as
+[issue #27](https://github.com/danfma/metano/issues/27). When added, it
+will feed into the same `_crossAssemblyTypeMap` — additive, not a rewrite.
 
 ## Consequences
 

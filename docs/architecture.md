@@ -313,5 +313,6 @@ consumer, so you can test `[EmitPackage]` flow end-to-end.
 ## See also
 
 - [CLAUDE.md](../CLAUDE.md) — day-to-day contributor guidance
-- [specs/next-steps.md](../specs/next-steps.md) — roadmap with all completed and planned items
+- [Architecture Decision Records](adr/) — the "why" behind major design choices, including the core/target split, handler decomposition, namespace-first imports, and more
+- [GitHub issues](https://github.com/danfma/metano/issues) — feature backlog and in-flight work
 - [Attribute Reference](attributes.md) — user-facing view of every attribute

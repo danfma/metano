@@ -185,8 +185,12 @@ The current cross-project flow works for **source-available** dependencies (via
 that don't include source, Metano needs a metadata sidecar file called
 `.metalib` to provide the type signatures without full source access.
 
-**Status:** not yet implemented. Tracked in
-[specs/next-steps.md](../specs/next-steps.md#nuget-library-path--metalib-future).
+**Status:** not yet implemented. Tracked as
+[issue #27](https://github.com/danfma/metano/issues/27) — schema, generation,
+embedding, and consumption. The design rationale for reusing Roslyn compilation
+references as the primary cross-assembly channel (and leaving `.metalib` as an
+additive follow-up) is captured in
+[ADR-0004](adr/0004-cross-project-references-via-roslyn.md).
 
 For now, share source via `ProjectReference` within the same solution or via a
 monorepo.

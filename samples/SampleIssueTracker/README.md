@@ -182,10 +182,20 @@ You should see **51 passing tests** that cover:
 
 ## Known issue
 
-There's a cyclic import between `Issue` and `IssueWorkflow` (they reference each
-other across the same namespace barrel). Metano emits an `MS0005` warning during
-the build, but the generated code still compiles and runs — the fallback to file
-imports is planned in [`specs/namespace-imports-plan.md`](../../specs/namespace-imports-plan.md#task-5-implementar-fallback-controlado-para-ciclos-e-colisões).
+There's a cyclic import between `Issue` and `IssueWorkflow`: `issue.ts` imports
+`IssueWorkflow` as a value (it instantiates a workflow instance), and
+`issue-workflow.ts` imports `Issue` as a type (the workflow methods take an
+`Issue` parameter). Metano emits an `MS0005` warning during the build, but the
+generated code compiles and runs correctly — TypeScript erases type-only imports
+at runtime, so the cycle is harmless in practice.
+
+The current `CyclicReferenceDetector` is deliberately conservative: it treats
+every local edge (`#`, `#/...`, `./...`) as load-bearing, regardless of whether
+it's a type-only import. See
+[ADR-0006](../../docs/adr/0006-namespace-first-barrel-imports.md) for the
+namespace-first import strategy that shapes the detector's view of the graph.
+A refinement to ignore type-only edges is a natural follow-up; if it becomes
+load-bearing for a consumer, open an issue on the tracker.
 
 ## Why this matters
 

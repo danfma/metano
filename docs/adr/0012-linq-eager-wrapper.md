@@ -48,8 +48,9 @@ refactor".
 ## Decision
 
 Implement **option 2** as the current design, and **explicitly track
-option 3 in the backlog** as the eventual migration when tree-shaking
-LINQ becomes load-bearing.
+option 3** as
+[issue #20](https://github.com/danfma/metano/issues/20) — the
+eventual migration when tree-shaking LINQ becomes load-bearing.
 
 `metano-runtime` ships `EnumerableBase<T>` with concrete subclasses per
 operator. `BclMapper` lowers C# LINQ calls into fluent chains against
@@ -78,8 +79,8 @@ Supported operators:
   `single`, `singleOrDefault`, `any`, `all`, `count`, `sum`,
   `average`, `min`, `max`, `minBy`, `maxBy`, `contains`, `aggregate`.
 
-The planned migration to option 3 (tracked in the pending-work
-backlog as "LINQ pipe-based migration for tree-shaking") will:
+The planned migration to option 3, tracked as
+[issue #20](https://github.com/danfma/metano/issues/20), will:
 
 - Introduce `OperatorFn<T, R>` + `pipe()` with typed overloads.
 - Convert each operator into a standalone function: `where(pred)`
@@ -149,7 +150,8 @@ single C# file.
 - `tests/Metano.Tests/` — LINQ lowering tests across
   `ExtensionTranspileTests.cs`, `GenericTranspileTests.cs`,
   `MethodOverloadTests.cs`
-- Pending backlog — "LINQ pipe-based migration for tree-shaking"
-  tracks the eventual migration to option 3.
+- [Issue #20](https://github.com/danfma/metano/issues/20) — LINQ
+  pipe-based migration for tree-shaking (tracks the eventual migration
+  to option 3).
 - Related: [ADR-0003](0003-declarative-bcl-mappings.md) (the
   declarative mapping infrastructure the LINQ lowering rides on).

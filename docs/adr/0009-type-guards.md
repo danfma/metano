@@ -107,8 +107,8 @@ namespace barrel. The `TsTypePredicateType` AST node carries the
   `assertX(value): X` (throws on failure instead of returning a
   boolean) and discriminated unions (when a type has an enum field
   that can act as a discriminant, the guard could narrow by the
-  discriminant first and skip the rest). Both are in the pending
-  backlog.
+  discriminant first and skip the rest). Both are tracked as
+  [issue #24](https://github.com/danfma/metano/issues/24).
 
 ## Alternatives considered
 
@@ -131,4 +131,5 @@ namespace barrel. The `TsTypePredicateType` AST node carries the
 - `js/metano-runtime/src/system/primitives/` — `isInt32`, `isString`,
   etc.
 - `tests/Metano.Tests/TypeGuardTranspileTests.cs`
-- Pending backlog — `assertX` throwing variant + discriminated unions.
+- [Issue #24](https://github.com/danfma/metano/issues/24) — `assertX`
+  throwing variant + discriminated unions (tracked follow-ups).

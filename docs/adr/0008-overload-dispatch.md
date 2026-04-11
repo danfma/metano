@@ -85,8 +85,9 @@ with the pre-dispatch code path.
 - (+) The fast-path pattern unlocks a future optimization:
   compile-time-known call sites (where the type of every argument is
   statically resolvable) can target the fast-path directly, skipping
-  the dispatcher. That work is tracked in the pending backlog but
-  requires no rewrite — the methods are already there.
+  the dispatcher. That work is tracked as
+  [issue #25](https://github.com/danfma/metano/issues/25) but requires
+  no rewrite — the methods are already there.
 - (+) Constructor overloads use the same pattern. No special-casing.
 - (−) Runtime dispatch cost on every overloaded call. Each call pays
   for the type checks before reaching the body. For hot loops this
@@ -124,4 +125,6 @@ with the pre-dispatch code path.
   `ConstructorOverloadTests.cs`, `MethodOverloadFastPathTests.cs`
 - Related: [ADR-0009](0009-type-guards.md) for the runtime type check
   functions the dispatcher uses; static-known fast-path optimization
-  tracked in the pending-work backlog.
+  and the other overload follow-ups (constructor factories, inheritance
+  with overloads) are tracked as
+  [issue #25](https://github.com/danfma/metano/issues/25).

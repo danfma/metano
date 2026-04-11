@@ -80,7 +80,8 @@ barrel via `export * from "./issues/domain"; export * from "./planning/domain"; 
 `export namespace` blocks to mirror the C# hierarchy preserves
 tree-shaking in principle but changes every consumer's import surface.
 Neither is acceptable as the default, so the feature is tracked as an
-**opt-in flag** (`--namespace-barrels`) in the pending-work backlog.
+**opt-in flag** (`--namespace-barrels`) in
+[issue #22](https://github.com/danfma/metano/issues/22).
 
 `CyclicReferenceDetector` normalizes `#`, `#/...`, and `./...` in its
 graph, so cycles across any of the three forms surface as MS0005
@@ -134,6 +135,8 @@ diagnostics before tsgo chokes on them.
 - `tests/Metano.Tests/NamespaceTranspileTests.cs`,
   `CrossPackageImportTests.cs`, `EndToEndOutputTests.cs`
 - Issue #12 — merge local imports per barrel + values-first mixed form
-- Historical: `specs/namespace-imports-plan.md`,
-  `specs/same-namespace-relative-imports-plan.md` (to be deleted in
-  slice 4 — git history preserves them)
+- Historical: the two detailed execution plans
+  (`specs/namespace-imports-plan.md` and
+  `specs/same-namespace-relative-imports-plan.md`) were removed as part
+  of the documentation reorganization (issue #14). `git log --follow`
+  preserves them if the full plan text is ever needed.
