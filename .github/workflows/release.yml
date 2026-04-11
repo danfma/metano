@@ -29,7 +29,7 @@ jobs:
       # .NET: build, test, pack, publish NuGet, create GitHub Release + changelog
       - name: dotnet-releaser
         run: |
-          dotnet-releaser run \
+          dotnet dotnet-releaser run \
             --nuget-token "${{ secrets.NUGET_TOKEN }}" \
             --github-token "${{ secrets.GITHUB_TOKEN }}" \
             dotnet-releaser.toml
