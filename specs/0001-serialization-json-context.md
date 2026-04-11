@@ -29,32 +29,27 @@ runtime.
 
 ## Architecture
 
-```
-Transpiler (compile time)              Runtime (metano-runtime/system/json)
-┌──────────────────────────┐           ┌──────────────────────────┐
-│ 1. Find JsonSerializer-  │           │ SerializerContext         │
-│    Context subclasses    │           │   ├─ options              │
-│ 2. Read [JsonSource-     │           │   ├─ converters           │
-│    GenerationOptions]    │           │   └─ createSpec()         │
-│ 3. Read [JsonSerializable│           │                          │
-│    (typeof(T))] list     │           │ JsonSerializer            │
-│ 4. For each type:        │    ──►    │   ├─ serialize(obj, spec) │
-│    - resolve JSON names  │  (emits)  │   ├─ deserialize(data,    │
-│    - classify prop types │           │   │   spec)               │
-│    - detect inheritance  │           │   └─ withContext(ctx)     │
-│ 5. Emit TS class with    │           │                          │
-│    lazy getter per type  │           │ TypeSpec<T>               │
-└──────────────────────────┘           │   ├─ type (constructor)   │
-                                       │   ├─ base? (parent spec) │
-                                       │   ├─ factory             │
-                                       │   └─ properties[]        │
-                                       │       ├─ ts (field name) │
-                                       │       ├─ json (wire name)│
-                                       │       └─ type descriptor │
-                                       │                          │
-                                       │ PropertyNamingPolicy      │
-                                       │   (only for manual use)  │
-                                       └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Transpiler["Transpiler (compile time)"]
+        direction TB
+        T1["1. Find JsonSerializerContext<br/>subclasses"]
+        T2["2. Read<br/>[JsonSourceGenerationOptions]"]
+        T3["3. Read [JsonSerializable]<br/>target type list"]
+        T4["4. For each type:<br/>• resolve JSON names<br/>• classify prop types<br/>• detect inheritance"]
+        T5["5. Emit TS class with<br/>lazy getter per type"]
+        T1 --> T2 --> T3 --> T4 --> T5
+    end
+
+    subgraph Runtime["Runtime (metano-runtime/system/json)"]
+        direction TB
+        SC["SerializerContext<br/>• options<br/>• converters<br/>• createSpec()"]
+        JS["JsonSerializer<br/>• serialize(obj, spec)<br/>• deserialize(data, spec)<br/>• withContext(ctx)"]
+        TS["TypeSpec&lt;T&gt;<br/>• type (constructor)<br/>• base (parent spec)<br/>• factory<br/>• properties[]<br/>(ts / json / descriptor)"]
+        PNP["PropertyNamingPolicy<br/>(manual use only)"]
+    end
+
+    Transpiler -. emits .-> Runtime
 ```
 
 ---
