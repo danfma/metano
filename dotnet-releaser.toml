@@ -8,6 +8,9 @@ project = "Metano.slnx"
 [github]
 user = "danfma"
 repo = "metano"
+# Our tags are prefixed with "v" (e.g., v0.1.0). Without this, dotnet-releaser
+# falls back to "Build only mode" because the tag isn't recognized as a release tag.
+version_prefix = "v"
 
 [nuget]
 source = "https://api.nuget.org/v3/index.json"
