@@ -211,6 +211,15 @@ public sealed class ImportCollector(
             (List<string> Names, HashSet<string> TypeOnlyNames)
         >(StringComparer.Ordinal);
 
+        // Per-specifier dedup inside a bucket. The outer `importedNames` set dedupes
+        // by the *referenced* identifier (the key used to look up the symbol), but
+        // `_transpilableTypeMap` is dual-keyed by C# name AND TS name when [Name]
+        // diverges, so two distinct lookup keys can resolve to the same `targetTsName`
+        // and attempt to add it twice. Without this guard the output would be
+        // `import { Foo, Foo } from "..."`. Also: if a specifier is observed as both
+        // value and type-only across iterations, the value form wins — type-only is
+        // the narrower claim, and runtime-imported names must not be demoted to
+        // type-only imports (would break `new Foo(...)` at runtime).
         void AddLocal(string importPath, string name, bool typeOnly)
         {
             if (!localByPath.TryGetValue(importPath, out var bucket))
@@ -218,9 +227,12 @@ public sealed class ImportCollector(
                 bucket = (new List<string>(), new HashSet<string>(StringComparer.Ordinal));
                 localByPath[importPath] = bucket;
             }
-            bucket.Names.Add(name);
+            if (!bucket.Names.Contains(name))
+                bucket.Names.Add(name);
             if (typeOnly)
                 bucket.TypeOnlyNames.Add(name);
+            else
+                bucket.TypeOnlyNames.Remove(name);
         }
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
