@@ -238,4 +238,4 @@ Both are valid ways to handle JSON data:
 
 - [Attribute Reference](attributes.md#PlainObject) — `[PlainObject]` details
 - [BCL Type Mappings](bcl-mappings.md) — how types are classified
-- [specs/serialization-plan.md](../specs/serialization-plan.md) — the original design doc
+- [`specs/0001-serialization-json-context.md`](../specs/0001-serialization-json-context.md) — the design doc (the transpiler + runtime now implement Phases 1–4; Phase 5 end-to-end validation is tracked as [issue #16](https://github.com/danfma/metano/issues/16))
