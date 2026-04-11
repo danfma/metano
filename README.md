@@ -13,6 +13,7 @@ TypeScript that runs in any modern JS environment.
 ## Table of Contents
 
 - [Why Metano?](#why-metano)
+- [How Metano differs from previous C# → JS/TS tools](#how-metano-differs-from-previous-c--jsts-tools)
 - [Key Features](#key-features)
 - [Quick Example](#quick-example)
 - [Tech Stack](#tech-stack)
@@ -48,6 +49,75 @@ It's designed for teams that want:
 - **Strong types** on both sides without manually syncing them
 - **Idiomatic output** — not transpiled gibberish, real TypeScript you'd be proud to write
 - **Zero runtime overhead** where possible (branded types, string unions, plain arrays)
+
+---
+
+## How Metano differs from previous C# → JS/TS tools
+
+C# has a long history of "run .NET in the browser" projects — **Bridge.NET**, **H5**
+(a Bridge fork), **SharpKit**, **JSIL**, and more recently **Blazor WebAssembly**.
+They all solved variations of a similar problem, but with trade-offs Metano is
+explicitly trying to avoid.
+
+**Bridge.NET and its descendants** ported a large chunk of the .NET BCL into
+JavaScript so that almost any C# code would just run. The output worked, but it
+dragged in a heavy runtime, emitted code that looked nothing like hand-written
+JavaScript, and made interop with the existing JS ecosystem awkward. You ended up
+with "C# pretending to be JS" instead of real JavaScript.
+
+**Blazor WebAssembly** took a different route: ship the .NET runtime itself to
+the browser as a WASM binary and run the original C# IL. That preserves full C#
+fidelity but gives you a multi-megabyte download and makes sharing types with
+regular JS/TS code painful — you're living in a separate world.
+
+**API codegen tools** like NSwag and Swagger Codegen only generate TypeScript
+*type declarations* from an OpenAPI contract. They solve the schema sync problem
+but give you nothing on the behavior side: no methods, no validation, no domain
+logic, just `interface` stubs.
+
+**Fable** (F# → JS/TS) is the closest spiritual neighbor — it aims for idiomatic
+output and is a great project. Metano applies the same philosophy to C#, which
+is the mainstream language for .NET backends.
+
+### Metano's philosophy
+
+**Share code *and* behavior, not just types.** Records, classes, methods, LINQ
+queries, pattern matching, exceptions — if it compiles in C#, the transpiler
+tries to give you real working TypeScript with the same semantics.
+
+**Output should be as good as hand-written TypeScript.** No `__mscorlib` global,
+no heavyweight runtime, no unreadable mangled names. The generated `.ts` files
+use normal classes, normal `import` statements, idiomatic naming, and tree-shake
+cleanly. You should be able to open one and say "yeah, I'd have written this the
+same way". The only runtime dependency is `metano-runtime`, a small npm package
+with the minimum viable helpers (HashCode, LINQ, HashSet, primitive type guards,
+optional JSON serializer) — and even then only for features that actually need it.
+
+**Accept some restrictions, deliberately.** Metano doesn't try to transpile
+*every* C# feature under the sun. You mark specific types with `[Transpile]` (or
+opt the whole assembly in with `[assembly: TranspileAssembly]`), and the
+transpiler covers the language surface most teams use for domain code: records,
+classes, inheritance, interfaces, generics, LINQ, pattern matching,
+async/await, exceptions, nullable types. Reflection-heavy code, dynamic
+dispatch, and unsafe blocks are out of scope. This is a conscious trade-off —
+restricting the input lets the output stay clean.
+
+**Zero runtime cost where possible.** `[StringEnum]` compiles to a `const` object
+with no wrapper. `[InlineWrapper]` gives you branded primitives — `UserId` is
+literally a `string` at runtime. `[PlainObject]` emits plain interfaces so DTOs
+round-trip through `JSON.stringify` without ceremony. The defaults are chosen so
+that the generated code is roughly as fast as what you'd write by hand.
+
+**Work *with* the JS ecosystem, not against it.** External npm packages are
+first-class: declare a C# facade with `[Import(from: "some-package")]` and the
+transpiler emits real `import` statements and wires up `package.json#dependencies`.
+You can wrap Hono, React, Zod, or any other JS library and use it from C# without
+the transpiler ever trying to model those packages internally.
+
+Metano won't replace Blazor if you want full .NET in the browser, and it won't
+replace NSwag if you only need type stubs from an API contract. It fills the
+middle ground: **shared domain code between a .NET backend and a TypeScript
+frontend, with clean output and no runtime penalty.**
 
 ---
 
