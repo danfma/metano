@@ -1,14 +1,7 @@
 import { isString } from "metano-runtime";
+import { Issue, IssueId, IssuePriority, IssueStatus, IssueType } from "#/issues/domain";
+import { OperationResult, type PageRequest, type PageResult, type UserId } from "#/shared-kernel";
 import type { IIssueRepository } from "./i-issue-repository";
-import { Issue } from "#/issues/domain";
-import { IssueId } from "#/issues/domain";
-import { IssuePriority } from "#/issues/domain";
-import { IssueStatus } from "#/issues/domain";
-import { IssueType } from "#/issues/domain";
-import { OperationResult } from "#/shared-kernel";
-import type { PageRequest } from "#/shared-kernel";
-import type { PageResult } from "#/shared-kernel";
-import type { UserId } from "#/shared-kernel";
 
 export class IssueService {
   private readonly _repository: IIssueRepository;

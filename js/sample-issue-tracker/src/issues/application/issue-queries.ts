@@ -1,8 +1,6 @@
 import { Enumerable } from "metano-runtime";
 import type { Grouping } from "metano-runtime";
-import type { Issue } from "#/issues/domain";
-import { IssuePriority } from "#/issues/domain";
-import { IssueStatus } from "#/issues/domain";
+import { IssuePriority, IssueStatus, type Issue } from "#/issues/domain";
 import type { UserId } from "#/shared-kernel";
 
 export function openIssues(issues: Issue[]): Issue[] {

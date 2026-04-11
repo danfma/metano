@@ -1,7 +1,7 @@
 import { Enumerable } from "metano-runtime";
 import { UUID } from "metano-runtime";
 import { listRemove } from "metano-runtime";
-import { type Priority, TodoItem } from "sample-todo";
+import { TodoItem, type Priority } from "sample-todo";
 
 export interface StoredTodo {
   readonly id: string;

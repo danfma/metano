@@ -174,7 +174,6 @@ public sealed class ImportCollector(
         }
         foreach (var (importPath, bucket) in byPath.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
-            bucket.Names.Sort(StringComparer.Ordinal);
             // Per-name type-only detection. With `verbatimModuleSyntax: true` in the
             // consumer, importing a type-only reference as a value triggers TS2749 /
             // TS1484, so we mark each name independently:
@@ -190,6 +189,7 @@ public sealed class ImportCollector(
                 .ToHashSet(StringComparer.Ordinal);
             var allTypeOnly = typeOnlyNames.Count == bucket.Names.Count;
             var anyTypeOnly = typeOnlyNames.Count > 0;
+            SortValuesFirst(bucket.Names, typeOnlyNames);
 
             imports.Add(
                 new TsImport(
@@ -199,6 +199,28 @@ public sealed class ImportCollector(
                     TypeOnlyNames: !allTypeOnly && anyTypeOnly ? typeOnlyNames : null
                 )
             );
+        }
+
+        // Local imports (guards + transpilable types within the project) are bucketed
+        // by import path so multiple names from the same barrel collapse into one line.
+        // Same strategy the cross-package loop above uses — keeps barrel-first output
+        // clean and Biome-friendly (e.g., all-type-only → whole-statement `import type`
+        // rather than per-name `{ type A, type B }`).
+        var localByPath = new Dictionary<
+            string,
+            (List<string> Names, HashSet<string> TypeOnlyNames)
+        >(StringComparer.Ordinal);
+
+        void AddLocal(string importPath, string name, bool typeOnly)
+        {
+            if (!localByPath.TryGetValue(importPath, out var bucket))
+            {
+                bucket = (new List<string>(), new HashSet<string>(StringComparer.Ordinal));
+                localByPath[importPath] = bucket;
+            }
+            bucket.Names.Add(name);
+            if (typeOnly)
+                bucket.TypeOnlyNames.Add(name);
         }
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
@@ -231,7 +253,9 @@ public sealed class ImportCollector(
             )
                 continue;
 
-            // BCL export mapping (e.g., decimal → Decimal from "decimal.js")
+            // BCL export mapping (e.g., decimal → Decimal from "decimal.js").
+            // Not bucketed: each BCL mapping can land on a distinct external package,
+            // and the cross-package merge strategy doesn't apply here.
             var bclEntry = _bclExportMap.Values.FirstOrDefault(e => e.ExportedName == typeName);
             if (
                 bclEntry.ExportedName is not null
@@ -243,7 +267,9 @@ public sealed class ImportCollector(
                 continue;
             }
 
-            // External import mapping ([Import] attribute, with optional AsDefault)
+            // External import mapping ([Import] attribute, with optional AsDefault).
+            // Not bucketed: default imports never merge (`import Foo from "..."` is
+            // one-name-only) and named externals come from arbitrary modules.
             if (
                 _externalImportMap.TryGetValue(typeName, out var extImport)
                 && importedNames.Add(typeName)
@@ -259,7 +285,10 @@ public sealed class ImportCollector(
                 continue;
             }
 
-            // Guard function reference (e.g., isCurrency → import from Currency's file)
+            // Guard function reference (e.g., isCurrency → import from Currency's file).
+            // Bucketed alongside transpilable types so a file that uses both `Currency`
+            // and `isCurrency` ends up with a single `import { Currency, isCurrency }`
+            // line instead of two.
             if (
                 _guardNameToTypeMap.TryGetValue(typeName, out var guardedTypeName)
                 && _transpilableTypeMap.TryGetValue(guardedTypeName, out var guardedSymbol)
@@ -277,7 +306,8 @@ public sealed class ImportCollector(
                     guardNs,
                     guardFileName
                 );
-                imports.Add(new TsImport([typeName], guardPath));
+                // Guards are functions → always imported as values, never type-only.
+                AddLocal(guardPath, typeName, typeOnly: false);
                 continue;
             }
 
@@ -306,10 +336,53 @@ public sealed class ImportCollector(
             // StringEnums generate const objects — always import as value
             var isStringEnum = SymbolHelper.HasStringEnum(referencedSymbol);
             var typeOnly = !valueTypes.Contains(typeName) && !isStringEnum;
-            imports.Add(new TsImport([targetTsName], importPath, TypeOnly: typeOnly));
+            AddLocal(importPath, targetTsName, typeOnly);
+        }
+
+        // Emit one merged TsImport per bucketed local path. Three-case form:
+        //   - all type-only → `import type { A, B } from "..."`       (whole statement)
+        //   - all value     → `import { A, B } from "..."`            (plain)
+        //   - mixed         → `import { A, type B } from "..."`       (per-name)
+        // The whole-statement form is preferred when everything is type-only so Biome's
+        // `noImportTypeQualifier` lint stays quiet.
+        foreach (
+            var (importPath, bucket) in localByPath.OrderBy(kv => kv.Key, StringComparer.Ordinal)
+        )
+        {
+            var allTypeOnly = bucket.TypeOnlyNames.Count == bucket.Names.Count;
+            var anyTypeOnly = bucket.TypeOnlyNames.Count > 0;
+            SortValuesFirst(bucket.Names, bucket.TypeOnlyNames);
+            imports.Add(
+                new TsImport(
+                    bucket.Names.ToArray(),
+                    importPath,
+                    TypeOnly: allTypeOnly,
+                    TypeOnlyNames: !allTypeOnly && anyTypeOnly ? bucket.TypeOnlyNames : null
+                )
+            );
         }
 
         return imports;
+    }
+
+    /// <summary>
+    /// Sorts named-import entries with values first (alphabetical), then type-only
+    /// names (alphabetical). In all-value or all-type-only buckets this reduces to a
+    /// plain alphabetical sort. In mixed buckets it produces the more readable
+    /// <c>{ Value, type Type }</c> shape instead of interleaving them by name.
+    /// </summary>
+    private static void SortValuesFirst(List<string> names, IReadOnlySet<string> typeOnlyNames)
+    {
+        names.Sort(
+            (a, b) =>
+            {
+                var aIsType = typeOnlyNames.Contains(a);
+                var bIsType = typeOnlyNames.Contains(b);
+                if (aIsType != bIsType)
+                    return aIsType ? 1 : -1;
+                return string.CompareOrdinal(a, b);
+            }
+        );
     }
 
     /// <summary>
