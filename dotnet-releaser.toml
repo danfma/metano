@@ -1,3 +1,7 @@
+# Disable default packs — only publish NuGet packages + GitHub Release changelog.
+# No cross-platform standalone binaries (zip/deb/rpm/tar.gz).
+profile = "custom"
+
 [msbuild]
 project = "Metano.slnx"
 
