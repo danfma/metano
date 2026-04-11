@@ -48,6 +48,30 @@
 - [x] `IndentedStringBuilder` extraído do Printer
 - [x] Printer refatorado: `PrintConstructor`, `PrintClassMember`, `PrintBody`, `PrintAccessibility`
 
+### Documentation ✅
+
+- [x] `README.md` — project overview, features, quick example, getting started,
+      architecture, key concepts, release flow
+- [x] `docs/README.md` — documentation index linking every guide
+- [x] `docs/getting-started.md` — first Metano project walkthrough (create a csproj,
+      annotate types, build, consume from Bun)
+- [x] `docs/attributes.md` — complete reference for every attribute with examples
+- [x] `docs/bcl-mappings.md` — every C# → TypeScript type mapping (primitives,
+      collections, temporal, decimal, LINQ, strings, Math, enums)
+- [x] `docs/cross-package.md` — multi-project setup via `[EmitPackage]`,
+      namespace-first resolution, `MS0007`/`MS0008` diagnostics
+- [x] `docs/serialization.md` — `JsonSerializerContext` transpilation, naming
+      policies, descriptors, custom converters, `[PlainObject]` vs context
+- [x] `docs/architecture.md` — internal pipeline, project split, TS target
+      internals, expression handlers, BCL lowering, extension points
+- [x] `samples/SampleTodo/README.md` — basic records + string enums sample
+- [x] `samples/SampleTodo.Service/README.md` — Hono CRUD sample with cross-package
+      imports, `[PlainObject]` DTOs, `[ModuleEntryPoint]`
+- [x] `samples/SampleIssueTracker/README.md` — complex domain model sample with
+      branded IDs, rich aggregates, LINQ, inheritance
+- [x] `js/metano-runtime/README.md` — npm package description (HashCode, HashSet,
+      LINQ, primitive guards, JSON serializer, ImmutableCollection helpers)
+
 ---
 
 ## Compiler Refactor (Done ✅)
@@ -175,6 +199,76 @@ Extracted handlers (each covers one sub-grammar):
 - [x] SampleIssueTracker: UserId/IssueId como `readonly record struct` + `[InlineWrapper]`
 - [x] Plano detalhado: `specs/value-wrappers-plan.md`
 
+### `Guid` → `UUID` branded type
+
+> Currently `Guid` maps to a plain `string` in the generated TypeScript, which loses
+> type safety — any random `string` can be assigned to a variable typed as a GUID.
+> Using a branded type gives us the same zero-cost safety that `[InlineWrapper]`
+> provides for user-defined IDs, but applied to the BCL `Guid` itself.
+
+**Goal:** `Guid` should map to a branded `UUID` type shipped by `metano-runtime`,
+so the type system distinguishes "a UUID string" from "any old string".
+
+**Target output:**
+
+```typescript
+// metano-runtime/system/uuid.ts (new runtime module)
+export type UUID = string & { readonly __brand: "UUID" };
+export namespace UUID {
+    export function create(value: string): UUID { return value as UUID; }
+    export function newUuid(): UUID { return crypto.randomUUID() as UUID; }
+    export function newCompact(): UUID { return crypto.randomUUID().replace(/-/g, "") as UUID; }
+}
+```
+
+Consumer code:
+
+```csharp
+public record User(Guid Id, string Name);
+```
+
+becomes:
+
+```typescript
+import { UUID } from "metano-runtime";
+
+export class User {
+    constructor(readonly id: UUID, readonly name: string) {}
+    // ...
+}
+```
+
+**Tasks:**
+
+- [ ] Add `UUID` branded type + companion namespace in `metano-runtime` under
+      `src/system/uuid.ts` with `create()`, `newUuid()`, `newCompact()`, tests
+- [ ] Export `UUID` from `metano-runtime`'s barrel `src/system/index.ts`
+- [ ] Update `TypeMapper.Map()` in `src/Metano.Compiler.TypeScript/Transformation/TypeMapper.cs`
+      to map `System.Guid` → `TsNamedType("UUID")` with runtime origin instead of
+      `TsStringType()`
+- [ ] Update `Metano/Runtime/Guid.cs` `[MapMethod]`/`[MapProperty]` declarations:
+      - `Guid.NewGuid()` → `UUID.newUuid()`
+      - `Guid.NewGuid().ToString("N")` → `UUID.newCompact()`
+      - `Guid.Parse(s)` / cast → `UUID.create(s)`
+      - `Guid.Empty` → `UUID.create("00000000-0000-0000-0000-000000000000")`
+- [ ] Update JSON serialization `ClassifyPropertyType` to treat `Guid` as a
+      `branded` descriptor (passthrough on serialize, `UUID.create` on deserialize)
+- [ ] Update runtime type check: `isUuid(value: unknown): value is UUID`
+- [ ] Add test coverage in `tests/Metano.Tests/`:
+      - `GuidMapsToUuidBranded`
+      - `GuidNewGuidLowersToUuidNewUuid`
+      - `GuidInJsonContextUsesBrandedDescriptor`
+- [ ] Regenerate samples (`SampleIssueTracker` already uses `Guid.NewGuid()`
+      inside `UserId.New()`) and verify the output
+- [ ] Update `docs/bcl-mappings.md` and `README.md` to document the new mapping
+- [ ] Document the migration impact: existing consumers that rely on `Guid` being
+      a raw `string` will need to use `UUID.create(...)` explicitly
+
+**Migration note:** this is technically a breaking change for anyone consuming
+`Guid`-typed fields across the TS boundary, but the escape hatch is simple — a
+`UUID` is assignable to a `string` via cast (`id as string`), and a `string`
+becomes a `UUID` via `UUID.create(id)`. Worth doing in a pre-1.0 release.
+
 ### ~~Generics~~ ✅
 
 - [x] Record genérico simples (`Result<T>`) com `Partial<Result<T>>` no `with()`
@@ -204,7 +298,8 @@ Extracted handlers (each covers one sub-grammar):
   `Temporal.PlainTime`, `DateTimeOffset` → `Temporal.ZonedDateTime`, `TimeSpan` → `Temporal.Duration` (com import
   automático de `@js-temporal/polyfill`)
 - [x] `Dictionary<K,V>` → `Map<K, V>`, `HashSet<T>` → `HashSet<T>` (runtime, com equals/hashCode)
-- [x] `Guid` → `string`, `Uri` → `string`, `object` → `unknown`
+- [x] ~~`Guid` → `string`~~ (superseded — see "Guid → UUID branded type" below),
+      `Uri` → `string`, `object` → `unknown`
 - [x] `Tuple<T1,T2>` / `ValueTuple` / `KeyValuePair<K,V>` → `[T1, T2]` (TsTupleType)
 - [x] `[ExportFromBcl]` — assembly-level: mapeia tipo BCL para package JS (ex: `decimal` → `Decimal` de `decimal.js`)
 - [x] `[Import]` — tipo externo não gera .ts, referências geram import correto
