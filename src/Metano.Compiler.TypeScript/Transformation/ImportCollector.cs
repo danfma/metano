@@ -974,6 +974,22 @@ public sealed class ImportCollector(
                         crossPackageOrigins
                     );
                 break;
+            case TsCastExpression cast:
+                // Descend into both the inner expression AND the target type.
+                // The target type can introduce a brand-new identifier that
+                // appears nowhere else — e.g. `p.estimatedHours as Decimal` in a
+                // generated serializer factory, where `Decimal` is referenced
+                // only here and needs to end up in the import list. Without this
+                // case, the walker would miss it entirely.
+                CollectFromExpression(
+                    cast.Expression,
+                    names,
+                    valueNames,
+                    runtimeHelpers,
+                    crossPackageOrigins
+                );
+                CollectFromType(cast.Type, names, crossPackageOrigins);
+                break;
             case TsTemplate template:
                 // Templates carry real TS expression nodes for the receiver and each
                 // argument; the printer expands them into the call site, so the import
