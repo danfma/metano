@@ -151,7 +151,7 @@ Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, ru
 - **Commit references.** When working on a GitHub issue, add `(#N)` at the end of the commit title and `Closes #N` (or `Part of #N` for partial work) in the commit body.
 - **No AI attribution in commits.** Never add Co-Authored-By or similar references unless explicitly allowed.
 - **Issue titles are prose.** `Introduce a metano.json config file`, not `feat: introduce metano.json config file`. PR titles follow conventional-commit style (`feat:`, `fix:`, `chore:`, etc.) because GitHub reuses them as squash-merge commit messages.
-- **Conventional commits.** `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, with optional scopes and `!` for breaking changes.
+- **Conventional commits.** `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, with optional scopes and `!` for breaking changes. The description after the prefix must start with a verb in the **infinitive** form: `feat: add ...`, `fix: correct ...`, `chore: move ...` — never `feat: added ...` or `fix: fixes ...`.
 
 ### Code
 
