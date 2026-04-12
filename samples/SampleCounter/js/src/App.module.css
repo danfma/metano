@@ -1,0 +1,35 @@
+.counter {
+    --bg: #D3DAD9;
+
+    display: inline-flex;
+    border: solid 1px var(--bg);
+    border-radius: 3px;
+    padding: 0;
+    height: 41px;
+    justify-content: stretch;
+}
+
+.action {
+    flex-grow: 0;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    min-width: 50px;
+    border: none;
+    background-color: var(--bg);
+    transition: background-color 100ms;
+}
+
+.action:hover {
+    background-color: #715A5A;
+}
+
+.text {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bg);
+    margin: 0;
+    padding: 0 1.25rem;
+    background-color: #44444E;
+    min-width: 50px;
+}
