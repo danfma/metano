@@ -33,6 +33,11 @@ public sealed class Printer(string indent = "  ")
     /// Imports/re-exports are grouped together with no blank lines. Distinct kinds
     /// (types vs functions vs constants) get a blank line between them. Same-kind
     /// items (e.g., consecutive functions) also get a blank line for readability.
+    /// For ModuleEntryPoint bodies — where both sides are <see cref="TsTopLevelStatement"/>
+    /// wrapping inner statements — the rule delegates to
+    /// <see cref="ShouldInsertBlankBefore"/> so the same "conditionals / loops /
+    /// return / multi-line var decls are separated; simple consecutive vars are
+    /// not" rule applies uniformly.
     /// </summary>
     private static bool NeedsBlankLineBetween(TsTopLevel prev, TsTopLevel next)
     {
@@ -45,8 +50,107 @@ public sealed class Printer(string indent = "  ")
         if (prevIsImport != nextIsImport)
             return true;
 
-        // For non-imports, separate everything by blank lines (types, functions, constants)
+        // Both are [ModuleEntryPoint] body statements — apply the statement-level
+        // spacing rule so consecutive `const` vars don't get spuriously separated,
+        // but everything else at the top level still gets air (each route handler
+        // call, each class instantiation, etc. is a distinct logical unit).
+        if (prev is TsTopLevelStatement prevStmt && next is TsTopLevelStatement nextStmt)
+            return ShouldInsertBlankBefore(prevStmt.Inner, nextStmt.Inner, topLevel: true);
+
+        // For non-imports, separate everything else by blank lines (types, functions,
+        // constants, classes, mixed top-level statement + non-statement).
         return true;
+    }
+
+    /// <summary>
+    /// Encodes the statement-level blank-line rule used by
+    /// <see cref="PrintStatementList"/> and <see cref="NeedsBlankLineBetween"/>:
+    /// <list type="bullet">
+    ///   <item>Always one blank line around <c>if</c> / <c>switch</c> and before <c>return</c>.</item>
+    ///   <item>Always one blank line around a variable declaration whose initializer
+    ///   prints on more than one line (object literals with spread or &gt;3 props).</item>
+    ///   <item>No separator between consecutive single-line variable declarations
+    ///   or between a variable declaration and a trivial expression statement.</item>
+    /// </list>
+    /// The rule is symmetric — if either side is a control-flow statement or a
+    /// multi-line variable, the pair is separated.
+    /// </summary>
+    private static bool ShouldInsertBlankBefore(
+        TsStatement prev,
+        TsStatement curr,
+        bool topLevel = false
+    )
+    {
+        // Blank before any `return` (unless it's the first statement, which is
+        // the caller's responsibility to skip).
+        if (curr is TsReturnStatement)
+            return true;
+
+        // Control-flow structures get visual air on both sides.
+        if (IsControlFlow(prev) || IsControlFlow(curr))
+            return true;
+
+        // Multi-line variable declarations get blank lines above and below so the
+        // block shape is visually detached from its siblings.
+        if (IsMultiLineVarDecl(prev) || IsMultiLineVarDecl(curr))
+            return true;
+
+        // Top-level statements (ModuleEntryPoint) are separated by default —
+        // each route handler, middleware registration, etc. is a logical unit.
+        // The only exception is consecutive single-line variable declarations
+        // (`const app = ...; const store = ...;`) which stay grouped.
+        if (topLevel && !(prev is TsVariableDeclaration && curr is TsVariableDeclaration))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// The set of statements that always get a blank line around them.
+    /// </summary>
+    private static bool IsControlFlow(TsStatement stmt) =>
+        stmt is TsIfStatement or TsSwitchStatement;
+
+    /// <summary>
+    /// A variable declaration is "multi-line" when its initializer is an object
+    /// literal that <see cref="PrintObjectLiteral"/> would emit in block form:
+    /// more than three properties, or any spread property. Everything else
+    /// (primitives, identifiers, calls, arrays, single-prop or small object
+    /// literals) prints inline and does not need surrounding blank lines.
+    /// </summary>
+    private static bool IsMultiLineVarDecl(TsStatement stmt)
+    {
+        if (stmt is not TsVariableDeclaration varDecl)
+            return false;
+        if (varDecl.Initializer is not TsObjectLiteral obj)
+            return false;
+        if (obj.Properties.Count > 3)
+            return true;
+        foreach (var prop in obj.Properties)
+        {
+            if (prop.Value is TsSpreadExpression)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Prints a list of statements (method / constructor / lambda / block body,
+    /// or a switch case body) applying the statement-level blank-line rule from
+    /// <see cref="ShouldInsertBlankBefore"/>. Replaces direct
+    /// <c>_sb.WriteLines(list, PrintStatement)</c> calls, which would glue every
+    /// statement together with a single newline regardless of kind.
+    /// </summary>
+    private void PrintStatementList(IReadOnlyList<TsStatement> statements)
+    {
+        for (var i = 0; i < statements.Count; i++)
+        {
+            var curr = statements[i];
+            if (i > 0 && ShouldInsertBlankBefore(statements[i - 1], curr))
+                _sb.WriteLn();
+            PrintStatement(curr);
+            _sb.WriteLn();
+        }
     }
 
     // ─── Top-level ──────────────────────────────────────────
@@ -83,8 +187,12 @@ public sealed class Printer(string indent = "  ")
                 PrintClass(n);
                 break;
             case TsTopLevelStatement n:
+                // Do NOT emit an extra WriteLn here — the `Print()` top-level
+                // loop already writes a single trailing newline after every
+                // PrintTopLevel call. Emitting one here produced the historical
+                // double-blank-line bug in ModuleEntryPoint output
+                // (`\n\n\n` between each statement in program.ts).
                 PrintStatement(n.Inner);
-                _sb.WriteLn();
                 break;
             case TsModuleExport n:
                 _sb.Write(n.IsDefault ? $"export default {n.Name};" : $"export {{ {n.Name} }};");
@@ -613,11 +721,11 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write("if (");
                 PrintExpression(ifStmt.Condition);
                 _sb.Write(")");
-                _sb.WriteBlock(() => _sb.WriteLines(ifStmt.Then, PrintStatement));
+                _sb.WriteBlock(() => PrintStatementList(ifStmt.Then));
                 if (ifStmt.Else is { Count: > 0 })
                 {
                     _sb.Write(" else");
-                    _sb.WriteBlock(() => _sb.WriteLines(ifStmt.Else, PrintStatement));
+                    _sb.WriteBlock(() => PrintStatementList(ifStmt.Else));
                 }
 
                 break;
@@ -674,7 +782,7 @@ public sealed class Printer(string indent = "  ")
 
                         _sb.WriteLn();
                         _sb.Indent();
-                        _sb.WriteLines(c.Body, PrintStatement);
+                        PrintStatementList(c.Body);
                         _sb.Dedent();
                     }
                 });
@@ -785,15 +893,21 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write("async ");
                 _sb.Write("(");
                 PrintParameters(arrow.Parameters);
-                _sb.Write(") => ");
-                // Single return statement → concise expression body
+                // Write the arrow without a trailing space — the concise form
+                // adds its own space before the expression, and the block form
+                // lets WriteBlock insert " {" (including its own leading space).
+                // Without this split, block-body arrows printed as `) =>  {`
+                // with two spaces — cosmetic but visible in every route handler
+                // in sample-todo-service/src/program.ts.
+                _sb.Write(") =>");
                 if (arrow.Body is [TsReturnStatement { Expression: { } returnExpr }])
                 {
+                    _sb.Write(" ");
                     PrintExpression(returnExpr);
                 }
                 else
                 {
-                    _sb.WriteBlock(() => _sb.WriteLines(arrow.Body, PrintStatement));
+                    _sb.WriteBlock(() => PrintStatementList(arrow.Body));
                 }
                 break;
 
@@ -1019,6 +1133,6 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintBody(IReadOnlyList<TsStatement> body)
     {
-        _sb.WriteBlock(() => _sb.WriteLines(body, PrintStatement));
+        _sb.WriteBlock(() => PrintStatementList(body));
     }
 }
