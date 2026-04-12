@@ -2,6 +2,18 @@
   "$schema": "https://alirezanet.github.io/Husky.Net/schema.json",
   "tasks": [
     {
+      "name": "csharpier-format",
+      "group": "pre-commit",
+      "command": "dotnet",
+      "args": ["csharpier", "format", "."]
+    },
+    {
+      "name": "biome-fix",
+      "group": "pre-commit",
+      "command": "bash",
+      "args": ["-c", "cd js && bunx biome check --fix ."]
+    },
+    {
       "name": "csharpier-check",
       "group": "pre-push",
       "command": "dotnet",
