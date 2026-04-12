@@ -35,7 +35,7 @@ public sealed class Printer(string indent = "  ")
     /// items (e.g., consecutive functions) also get a blank line for readability.
     /// For ModuleEntryPoint bodies — where both sides are <see cref="TsTopLevelStatement"/>
     /// wrapping inner statements — the rule delegates to
-    /// <see cref="ShouldInsertBlankBefore"/> so the same "conditionals / loops /
+    /// <see cref="ShouldInsertBlankBefore"/> so the same "conditionals /
     /// return / multi-line var decls are separated; simple consecutive vars are
     /// not" rule applies uniformly.
     /// </summary>
@@ -66,9 +66,11 @@ public sealed class Printer(string indent = "  ")
     /// Encodes the statement-level blank-line rule used by
     /// <see cref="PrintStatementList"/> and <see cref="NeedsBlankLineBetween"/>:
     /// <list type="bullet">
-    ///   <item>Always one blank line around <c>if</c> / <c>switch</c> and before <c>return</c>.</item>
+    ///   <item>Always one blank line around control-flow (<c>if</c> / <c>switch</c>)
+    ///   and before <c>return</c>. No loop nodes exist in the AST today; extend
+    ///   <see cref="IsControlFlow"/> when they're added.</item>
     ///   <item>Always one blank line around a variable declaration whose initializer
-    ///   prints on more than one line (object literals with spread or &gt;3 props).</item>
+    ///   prints multi-line (see <see cref="IsMultiLineVarDecl"/>).</item>
     ///   <item>No separator between consecutive single-line variable declarations
     ///   or between a variable declaration and a trivial expression statement.</item>
     /// </list>
@@ -107,43 +109,67 @@ public sealed class Printer(string indent = "  ")
 
     /// <summary>
     /// The set of statements that always get a blank line around them.
+    /// The AST currently has no loop statement nodes (for / while / foreach);
+    /// if they're added in the future, extend this predicate.
     /// </summary>
     private static bool IsControlFlow(TsStatement stmt) =>
         stmt is TsIfStatement or TsSwitchStatement;
 
     /// <summary>
-    /// An expression is "complex" when it shouldn't be inlined as a property
-    /// value or array element because doing so produces an unreadably long line.
-    /// Used by <see cref="PrintObjectLiteral"/> and the array-literal branch to
-    /// decide inline vs. multi-line layout.
+    /// An expression is "complex" when it shouldn't appear inline inside an
+    /// object literal property or array element because doing so produces an
+    /// unreadably long line. Used by <see cref="ShouldPrintObjectMultiLine"/>
+    /// and <see cref="ShouldPrintArrayMultiLine"/> to decide layout.
     /// </summary>
-    private static bool IsComplexPropertyValue(TsExpression expr) =>
+    private static bool IsComplexInlineExpression(TsExpression expr) =>
         expr
             is TsArrowFunction
                 or TsArrayLiteral { Elements.Count: > 0 }
                 or TsObjectLiteral { Properties.Count: > 0 };
 
     /// <summary>
-    /// A variable declaration is "multi-line" when its initializer is an object
-    /// literal that <see cref="PrintObjectLiteral"/> would emit in block form:
-    /// more than three properties, or any spread property. Everything else
-    /// (primitives, identifiers, calls, arrays, single-prop or small object
-    /// literals) prints inline and does not need surrounding blank lines.
+    /// Whether <see cref="PrintObjectLiteral"/> would emit this object in
+    /// block form. Shared by the printer and <see cref="IsMultiLineVarDecl"/>
+    /// so the blank-line spacing rule stays in sync with the actual layout.
     /// </summary>
-    private static bool IsMultiLineVarDecl(TsStatement stmt)
+    private static bool ShouldPrintObjectMultiLine(TsObjectLiteral obj)
     {
-        if (stmt is not TsVariableDeclaration varDecl)
-            return false;
-        if (varDecl.Initializer is not TsObjectLiteral obj)
-            return false;
         if (obj.Properties.Count > 3)
             return true;
         foreach (var prop in obj.Properties)
         {
             if (prop.Value is TsSpreadExpression)
                 return true;
+            if (IsComplexInlineExpression(prop.Value))
+                return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Whether the array-literal branch would emit this array in block form.
+    /// Shared by the printer and <see cref="IsMultiLineVarDecl"/>.
+    /// </summary>
+    private static bool ShouldPrintArrayMultiLine(TsArrayLiteral arr) =>
+        arr.Elements.Count > 0 && arr.Elements.Any(IsComplexInlineExpression);
+
+    /// <summary>
+    /// A variable declaration is "multi-line" when its initializer is a literal
+    /// that the printer emits in block form — object literals that match
+    /// <see cref="ShouldPrintObjectMultiLine"/> or array literals that match
+    /// <see cref="ShouldPrintArrayMultiLine"/>. Everything else prints inline
+    /// and does not need surrounding blank lines.
+    /// </summary>
+    private static bool IsMultiLineVarDecl(TsStatement stmt)
+    {
+        if (stmt is not TsVariableDeclaration varDecl)
+            return false;
+        return varDecl.Initializer switch
+        {
+            TsObjectLiteral obj => ShouldPrintObjectMultiLine(obj),
+            TsArrayLiteral arr => ShouldPrintArrayMultiLine(arr),
+            _ => false,
+        };
     }
 
     /// <summary>
@@ -882,7 +908,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsArrayLiteral arrayLit:
-                if (arrayLit.Elements.Count > 0 && arrayLit.Elements.Any(IsComplexPropertyValue))
+                if (ShouldPrintArrayMultiLine(arrayLit))
                 {
                     _sb.Write("[");
                     _sb.WriteLn();
@@ -1064,9 +1090,7 @@ public sealed class Printer(string indent = "  ")
             return;
         }
 
-        var hasSpread = obj.Properties.Any(p => p.Value is TsSpreadExpression);
-        var hasComplexValue = obj.Properties.Any(p => IsComplexPropertyValue(p.Value));
-        if (obj.Properties.Count <= 3 && !hasSpread && !hasComplexValue)
+        if (!ShouldPrintObjectMultiLine(obj))
         {
             _sb.Write("{ ");
             _sb.WriteList(obj.Properties, PrintObjectProperty);
