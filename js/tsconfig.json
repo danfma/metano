@@ -1,9 +1,0 @@
-{
-  "files": [],
-  "references": [
-    { "path": "./metano-runtime/tsconfig.json" },
-    { "path": "./sample-todo/tsconfig.json" },
-    { "path": "./sample-todo-service/tsconfig.json" },
-    { "path": "./sample-issue-tracker/tsconfig.json" },
-  ],
-}

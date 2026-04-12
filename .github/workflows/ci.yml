@@ -45,9 +45,6 @@ jobs:
   js:
     name: JS Build & Test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: js
     steps:
       - uses: actions/checkout@v5
 
@@ -57,16 +54,16 @@ jobs:
         run: bun install
 
       - name: metano-runtime
-        run: cd metano-runtime && bun run build && bun test
+        run: cd js/metano-runtime && bun run build && bun test
 
       - name: sample-todo
-        run: cd sample-todo && bun run build && bun test
+        run: cd js/sample-todo && bun run build && bun test
 
       - name: sample-todo-service
-        run: cd sample-todo-service && bun run build && bun test
+        run: cd js/sample-todo-service && bun run build && bun test
 
       - name: sample-issue-tracker
-        run: cd sample-issue-tracker && bun run build && bun test
+        run: cd js/sample-issue-tracker && bun run build && bun test
 
       - name: Biome check
         run: bunx biome check .

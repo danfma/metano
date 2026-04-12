@@ -54,7 +54,6 @@ export type HashSetDescriptor = {
  */
 export type BrandedDescriptor = {
   readonly kind: "branded";
-  // biome-ignore lint/suspicious/noExplicitAny: see doc comment above
   readonly create: (value: any) => unknown;
 };
 

@@ -11,7 +11,7 @@
       "name": "biome-fix",
       "group": "pre-commit",
       "command": "bash",
-      "args": ["-c", "cd js && bunx biome check --fix ."]
+      "args": ["-c", "bunx biome check --fix ."]
     },
     {
       "name": "csharpier-check",
@@ -23,7 +23,7 @@
       "name": "biome-check",
       "group": "pre-push",
       "command": "bash",
-      "args": ["-c", "cd js && bunx biome check ."]
+      "args": ["-c", "bunx biome check ."]
     }
   ]
 }
