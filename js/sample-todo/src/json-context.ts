@@ -18,17 +18,17 @@ export class JsonContext extends SerializerContext {
       properties: [
         {
           ts: "title",
-          json: "Title",
+          json: "title",
           type: { kind: "primitive" },
         },
         {
           ts: "completed",
-          json: "Completed",
+          json: "completed",
           type: { kind: "primitive" },
         },
         {
           ts: "priority",
-          json: "Priority",
+          json: "priority",
           type: { kind: "enum", values: Priority },
         },
       ],
