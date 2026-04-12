@@ -32,8 +32,8 @@ cd js/metano-runtime && bun run build             # TypeScript build (tsgo)
 cd js/metano-runtime && bun test                  # run runtime tests
 cd js/sample-todo && bun run build                    # TS build of generated code
 cd js/sample-todo && bun test                         # end-to-end tests (18 tests)
-cd js/sample-issue-tracker && bun run build && bun test  # 51 tests
-cd js/sample-todo-service && bun run build && bun test   # 9 tests (cross-package + Hono CRUD)
+cd js/sample-issue-tracker && bun run build && bun test  # 65 tests
+cd js/sample-todo-service && bun run build && bun test   # 19 tests (cross-package + Hono CRUD + JSON serialization)
 ```
 
 Always use **Bun** — never npm, yarn, or pnpm.
@@ -58,7 +58,7 @@ Metano.slnx
 │       ├── Transformation/              # 39 focused handlers (TypeTransformer, ExpressionTransformer, etc.)
 │       └── TypeScript/AST + Printer.cs  # ~65 TS AST record types and the printer
 ├── tests/
-│   └── Metano.Tests/                 # 320 TUnit tests with inline C# compilation
+│   └── Metano.Tests/                 # 337 TUnit tests with inline C# compilation
 │       └── Expected/                    # Expected .ts output files for golden tests
 ├── samples/
 │   ├── SampleTodo/                      # Sample C# project for end-to-end validation
@@ -141,3 +141,22 @@ Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, ru
 - `Directory.Packages.props` — Central Package Management
 - [GitHub issues](https://github.com/danfma/metano/issues) — feature backlog and in-flight work
 - [`docs/adr/`](docs/adr/) — Architecture Decision Records (MADR-style, short format)
+
+## Conventions
+
+### Workflow
+
+- **Review before commit.** Always run the `simplify` skill (code review with 3 agents: reuse, quality, efficiency) on the diff BEFORE committing or declaring a feature complete. Fix findings first, then commit.
+- **Worktree per issue.** Use `git worktree add ../Metano-issue-{N} -b <branch> main` for branch work. Never switch branches in the main working directory — other agents may be working there concurrently.
+- **Commit references.** When working on a GitHub issue, add `(#N)` at the end of the commit title and `Closes #N` (or `Part of #N` for partial work) in the commit body.
+- **No AI attribution in commits.** Never add Co-Authored-By or similar references unless explicitly allowed.
+- **Issue titles are prose.** `Introduce a metano.json config file`, not `feat: introduce metano.json config file`. PR titles follow conventional-commit style (`feat:`, `fix:`, `chore:`, etc.) because GitHub reuses them as squash-merge commit messages.
+- **Conventional commits.** `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, with optional scopes and `!` for breaking changes.
+
+### Code
+
+- **Language.** All repository artifacts (code, comments, docs, commits, PR descriptions) in English. Conversations with the user can be in Portuguese.
+- **Nullable types.** Keep `T | null = null` as the default representation for nullable C# types in generated TS. Don't auto-convert to `T?` (optional/undefined). The C# `null` maps to TS `null`, not `undefined`. Exception: `[PlainObject]` DTO fields use `field?: T` (optional) for the wire-shape use case.
+- **JS tooling.** Always use **Bun** — never npm, yarn, npx, or pnpm.
+- **JS test conventions.** Tests live in `test/` (sibling to `src/`), mirroring the source directory structure. Imports use `#/*` subpath aliases (e.g., `import { Foo } from "#/system/json"`). Test files use `.test.ts` suffix.
+- **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
