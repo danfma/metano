@@ -196,8 +196,15 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             propSpecs.Add(BuildPropertySpec(tsName, jsonName, descriptor, prop));
         }
 
-        // type: TodoItem
-        var typeProperty = new TsObjectProperty("type", new TsIdentifier(tsTypeName));
+        var isPlainObject = SymbolHelper.HasPlainObject(targetType);
+
+        // type: TodoItem — only for class-backed types. [PlainObject] types
+        // lower to TS interfaces with no runtime constructor, so there's no
+        // value to reference. Their specs are accessed via the context getter
+        // (e.g., ctx.storedTodo), not via resolve(Class).
+        TsObjectProperty? typeProperty = isPlainObject
+            ? null
+            : new TsObjectProperty("type", new TsIdentifier(tsTypeName));
 
         // base: this.baseSpec (if type has a transpilable base)
         TsObjectProperty? baseProperty = null;
@@ -216,37 +223,52 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             );
         }
 
-        // factory: (p) => new TodoItem(p.title as string, ...)
-        var factoryArgs = properties
-            .Select(x =>
-                new TsCastExpression(
-                    new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
-                    TypeMapper.Map(x.Property.Type)
-                ) as TsExpression
-            )
-            .ToList();
+        // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject
+        var factoryParam = new TsParameter(
+            "p",
+            new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
+        );
+
+        TsExpression factoryBody;
+        if (isPlainObject)
+        {
+            // [PlainObject] → object literal: { title: p.title as string, ... }
+            var objLiteralProps = properties
+                .Select(x => new TsObjectProperty(
+                    x.TsName,
+                    new TsCastExpression(
+                        new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
+                        TypeMapper.Map(x.Property.Type)
+                    )
+                ))
+                .ToList();
+            factoryBody = new TsObjectLiteral(objLiteralProps);
+        }
+        else
+        {
+            // Class → new TodoItem(p.title as string, ...)
+            var factoryArgs = properties
+                .Select(x =>
+                    new TsCastExpression(
+                        new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
+                        TypeMapper.Map(x.Property.Type)
+                    ) as TsExpression
+                )
+                .ToList();
+            factoryBody = new TsNewExpression(new TsIdentifier(tsTypeName), factoryArgs);
+        }
 
         var factoryProperty = new TsObjectProperty(
             "factory",
-            new TsArrowFunction(
-                [
-                    new TsParameter(
-                        "p",
-                        new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
-                    ),
-                ],
-                [
-                    new TsReturnStatement(
-                        new TsNewExpression(new TsIdentifier(tsTypeName), factoryArgs)
-                    ),
-                ]
-            )
+            new TsArrowFunction([factoryParam], [new TsReturnStatement(factoryBody)])
         );
 
         // properties: [...]
         var propertiesProperty = new TsObjectProperty("properties", new TsArrayLiteral(propSpecs));
 
-        var objectProps = new List<TsObjectProperty> { typeProperty };
+        var objectProps = new List<TsObjectProperty>();
+        if (typeProperty is not null)
+            objectProps.Add(typeProperty);
         if (baseProperty is not null)
             objectProps.Add(baseProperty);
         objectProps.Add(factoryProperty);

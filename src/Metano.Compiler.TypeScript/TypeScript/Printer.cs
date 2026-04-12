@@ -958,7 +958,19 @@ public sealed class Printer(string indent = "  ")
                 if (arrow.Body is [TsReturnStatement { Expression: { } returnExpr }])
                 {
                     _sb.Write(" ");
-                    PrintExpression(returnExpr);
+                    // Object literals in concise arrow bodies must be wrapped in
+                    // parentheses — without them, `=> { id: ... }` is parsed as a
+                    // block body with a label, not a returned object literal.
+                    if (returnExpr is TsObjectLiteral)
+                    {
+                        _sb.Write("(");
+                        PrintExpression(returnExpr);
+                        _sb.Write(")");
+                    }
+                    else
+                    {
+                        PrintExpression(returnExpr);
+                    }
                 }
                 else
                 {

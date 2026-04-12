@@ -35,6 +35,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./json-context": {
+      "types": "./dist/json-context.d.ts",
+      "import": "./dist/json-context.js"
+    },
     "./program": {
       "types": "./dist/program.d.ts",
       "import": "./dist/program.js"

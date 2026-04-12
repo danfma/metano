@@ -105,9 +105,14 @@ export interface PropertySpec {
 // ─── Type Spec ───────────────────────────────────────────────────────────────
 
 export interface TypeSpec<T = unknown> {
-  /** Constructor reference (for instanceof checks and context lookups) */
+  /**
+   * Constructor reference (for instanceof checks and context lookups).
+   * Optional for [PlainObject] types that lower to TypeScript interfaces —
+   * they have no runtime constructor, so the spec is accessed via its getter
+   * on the context (e.g., `ctx.storedTodo`) rather than via `resolve(Class)`.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly type: abstract new (
+  readonly type?: abstract new (
     ...args: any[]
   ) => T;
   /** Parent type's spec — properties are inherited */
