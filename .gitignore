@@ -21,3 +21,7 @@ Thumbs.db
 # Build artifacts
 *.tsbuildinfo
 bun.lock
+
+# Local working plans (per CLAUDE.md workflow — private per-session notes,
+# not committed — the authoritative backlog lives in GitHub issues)
+tasks/
