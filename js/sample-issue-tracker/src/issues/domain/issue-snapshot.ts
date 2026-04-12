@@ -29,6 +29,7 @@ export class IssueSnapshot {
     hc.add(this.updatedAt);
     hc.add(this.estimatedHours);
     hc.add(this.comments);
+
     return hc.toHashCode();
   }
 

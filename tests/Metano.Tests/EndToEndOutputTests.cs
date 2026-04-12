@@ -124,6 +124,7 @@ public class EndToEndOutputTests
             + "    hc.add(this.title);\n"
             + "    hc.add(this.status);\n"
             + "    hc.add(this.estimatedCost);\n"
+            + "\n"
             + "    return hc.toHashCode();\n"
             + "  }\n"
             + "\n"

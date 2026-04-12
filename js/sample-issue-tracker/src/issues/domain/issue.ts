@@ -88,20 +88,26 @@ export class Issue {
   addComment(...args: unknown[]): void {
     if (args.length === 3 && typeof args[0] === "string" && isString(args[1]) && typeof args[2] === "object") {
       this.addCommentAuthorIdMessageCreatedAt(args[0] as UserId, args[1] as string, args[2] as Temporal.ZonedDateTime);
+
       return;
     }
+
     if (args.length === 2 && typeof args[0] === "string" && isString(args[1])) {
       this.addCommentAuthorIdMessage(args[0] as UserId, args[1] as string);
+
       return;
     }
+
     throw new Error("No matching overload for addComment");
   }
 
   private transitionToNextStatusActorIdChangedAt(nextStatus: IssueStatus, actorId: UserId, changedAt: Temporal.ZonedDateTime): void {
     const previousStatus = this.status;
+
     if (!IssueWorkflow.canTransition(previousStatus, nextStatus)) {
       throw new Error(`Cannot transition issue from ${previousStatus} to ${nextStatus}.`);
     }
+
     this.status = nextStatus;
     this._comments.push(Comment.system(`Status changed from ${previousStatus} to ${nextStatus} by ${actorId}.`, changedAt));
     this.touch(changedAt);
@@ -116,12 +122,16 @@ export class Issue {
   transitionTo(...args: unknown[]): void {
     if (args.length === 3 && (args[0] === "backlog" || args[0] === "ready" || args[0] === "in-progress" || args[0] === "in-review" || args[0] === "done" || args[0] === "cancelled") && typeof args[1] === "string" && typeof args[2] === "object") {
       this.transitionToNextStatusActorIdChangedAt(args[0] as IssueStatus, args[1] as UserId, args[2] as Temporal.ZonedDateTime);
+
       return;
     }
+
     if (args.length === 2 && (args[0] === "backlog" || args[0] === "ready" || args[0] === "in-progress" || args[0] === "in-review" || args[0] === "done" || args[0] === "cancelled") && typeof args[1] === "string") {
       this.transitionToNextStatusActorId(args[0] as IssueStatus, args[1] as UserId);
+
       return;
     }
+
     throw new Error("No matching overload for transitionTo");
   }
 

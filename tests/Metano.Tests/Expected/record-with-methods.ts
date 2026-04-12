@@ -18,6 +18,7 @@ export class Amount {
   hashCode(): number {
     const hc = new HashCode();
     hc.add(this.value);
+
     return hc.toHashCode();
   }
 

@@ -38,16 +38,22 @@ export class TodoList {
   add(...args: unknown[]): void {
     if (args.length === 2 && isString(args[0]) && (args[1] === "low" || args[1] === "medium" || args[1] === "high")) {
       this.addTitlePriority(args[0] as string, args[1] as Priority);
+
       return;
     }
+
     if (args.length === 1 && args[0] instanceof TodoItem) {
       this.addItem(args[0] as TodoItem);
+
       return;
     }
+
     if (args.length === 1 && isString(args[0])) {
       this.addTitle(args[0] as string);
+
       return;
     }
+
     throw new Error("No matching overload for add");
   }
 

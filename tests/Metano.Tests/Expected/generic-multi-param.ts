@@ -11,6 +11,7 @@ export class Pair<K, V> {
     const hc = new HashCode();
     hc.add(this.key);
     hc.add(this.value);
+
     return hc.toHashCode();
   }
 
