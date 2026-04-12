@@ -8,11 +8,17 @@
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./src/*.ts"
+    },
+    "#": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
     }
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
-    "metano-runtime": "workspace:*"
+    "metano-runtime": "workspace:*",
+    "decimal.js": "^10.6.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -24,6 +30,10 @@
     "test": "bun test"
   },
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./issues/application/i-issue-repository": {
       "types": "./dist/issues/application/i-issue-repository.d.ts",
       "import": "./dist/issues/application/i-issue-repository.js"
@@ -60,6 +70,10 @@
       "types": "./dist/issues/domain/issue-priority.d.ts",
       "import": "./dist/issues/domain/issue-priority.js"
     },
+    "./issues/domain/issue-snapshot": {
+      "types": "./dist/issues/domain/issue-snapshot.d.ts",
+      "import": "./dist/issues/domain/issue-snapshot.js"
+    },
     "./issues/domain/issue-status": {
       "types": "./dist/issues/domain/issue-status.d.ts",
       "import": "./dist/issues/domain/issue-status.js"
@@ -75,6 +89,10 @@
     "./issues/domain/issue": {
       "types": "./dist/issues/domain/issue.d.ts",
       "import": "./dist/issues/domain/issue.js"
+    },
+    "./json-context": {
+      "types": "./dist/json-context.d.ts",
+      "import": "./dist/json-context.js"
     },
     "./planning/domain": {
       "types": "./dist/planning/domain/index.d.ts",
