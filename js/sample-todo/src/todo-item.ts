@@ -25,6 +25,7 @@ export class TodoItem {
     hc.add(this.title);
     hc.add(this.completed);
     hc.add(this.priority);
+
     return hc.toHashCode();
   }
 

@@ -19,6 +19,7 @@ export class Comment {
     hc.add(this.message);
     hc.add(this.createdAt);
     hc.add(this.isSystem);
+
     return hc.toHashCode();
   }
 

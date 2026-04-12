@@ -11,6 +11,7 @@ export class Result<T> {
     const hc = new HashCode();
     hc.add(this.value);
     hc.add(this.success);
+
     return hc.toHashCode();
   }
 

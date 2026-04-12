@@ -19,6 +19,7 @@ export class Circle extends Shape {
     hc.add(this.x);
     hc.add(this.y);
     hc.add(this.radius);
+
     return hc.toHashCode();
   }
 

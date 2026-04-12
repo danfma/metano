@@ -17,6 +17,7 @@ export class Pair {
     const hc = new HashCode();
     hc.add(this.a);
     hc.add(this.b);
+
     return hc.toHashCode();
   }
 

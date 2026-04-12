@@ -11,6 +11,7 @@ export class Repo<T extends IEntity> {
   hashCode(): number {
     const hc = new HashCode();
     hc.add(this.item);
+
     return hc.toHashCode();
   }
 

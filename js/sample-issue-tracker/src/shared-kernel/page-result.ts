@@ -21,6 +21,7 @@ export class PageResult<T> {
     hc.add(this.items);
     hc.add(this.totalCount);
     hc.add(this.page);
+
     return hc.toHashCode();
   }
 

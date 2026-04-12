@@ -25,6 +25,7 @@ export class OperationResult<T> {
     hc.add(this.value);
     hc.add(this.errorCode);
     hc.add(this.errorMessage);
+
     return hc.toHashCode();
   }
 

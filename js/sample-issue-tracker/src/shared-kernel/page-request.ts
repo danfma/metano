@@ -23,6 +23,7 @@ export class PageRequest {
     const hc = new HashCode();
     hc.add(this.number);
     hc.add(this.size);
+
     return hc.toHashCode();
   }
 

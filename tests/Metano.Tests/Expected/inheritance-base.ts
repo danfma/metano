@@ -11,6 +11,7 @@ export class Shape {
     const hc = new HashCode();
     hc.add(this.x);
     hc.add(this.y);
+
     return hc.toHashCode();
   }
 
