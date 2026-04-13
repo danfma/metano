@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  createDelegate,
-  delegateAdd,
-  delegateRemove,
-  isDelegate,
-} from "#/system/delegates.ts";
+import { createDelegate, delegateAdd, delegateRemove, isDelegate } from "#/system/delegates.ts";
 
 describe("isDelegate", () => {
   test("returns false for a plain function", () => {
@@ -26,8 +21,14 @@ describe("createDelegate", () => {
   test("calls all handlers and returns the last result", () => {
     const results: string[] = [];
     const d = createDelegate(
-      (msg: string) => { results.push("A:" + msg); return 1; },
-      (msg: string) => { results.push("B:" + msg); return 2; },
+      (msg: string) => {
+        results.push("A:" + msg);
+        return 1;
+      },
+      (msg: string) => {
+        results.push("B:" + msg);
+        return 2;
+      },
     );
 
     const ret = d("hello");
@@ -55,9 +56,15 @@ describe("delegateAdd", () => {
 
   test("multicast delegate calls all handlers in order", () => {
     const log: number[] = [];
-    const a = (x: number) => { log.push(x); };
-    const b = (x: number) => { log.push(x * 10); };
-    const c = (x: number) => { log.push(x * 100); };
+    const a = (x: number) => {
+      log.push(x);
+    };
+    const b = (x: number) => {
+      log.push(x * 10);
+    };
+    const c = (x: number) => {
+      log.push(x * 100);
+    };
 
     let d: typeof a | null = null;
     d = delegateAdd(d, a);
