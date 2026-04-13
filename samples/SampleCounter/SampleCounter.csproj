@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Metano/Metano.csproj" />
+    <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

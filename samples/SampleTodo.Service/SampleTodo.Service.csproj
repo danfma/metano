@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
     <ProjectReference Include="../SampleTodo/SampleTodo.csproj" />
   </ItemGroup>
 
