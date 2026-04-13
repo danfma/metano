@@ -56,12 +56,11 @@ public static class PackageJsonWriter
         var packageJsonPath = Path.Combine(packageRoot, "package.json");
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
-        // Build the imports/exports objects
-        var hasRootIndex = files.Any(f =>
-            NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal)
-        );
+        // Build the imports/exports objects. Exports are only needed for libraries;
+        // the root-index check is derived from the exports object to avoid a duplicate scan.
+        var exports = isExecutable ? null : BuildExports(files, distDirRelativeToPackageRoot);
+        var hasRootIndex = exports?.ContainsKey(".") ?? false;
         var imports = BuildImports(srcRelative, distDirRelativeToPackageRoot, hasRootIndex);
-        var exports = BuildExports(files, distDirRelativeToPackageRoot);
 
         JsonObject root;
         if (File.Exists(packageJsonPath))
@@ -106,15 +105,17 @@ public static class PackageJsonWriter
         root["type"] = "module";
         root["sideEffects"] = false;
 
-        // Only populate imports/exports when the user hasn't customized them.
-        // If the key already exists, the user's version prevails.
+        // Only populate imports when the user hasn't customized them.
         if (root["imports"] is null)
             root["imports"] = imports;
-        // Executables (ConsoleApplication) don't need exports — they're not
-        // consumed by other packages. Libraries always get exports so
-        // cross-package resolution works.
-        if (!isExecutable && root["exports"] is null)
+        // Exports are always overwritten — they're a transpiler-computed artifact
+        // derived from the namespace barrel structure. Stale exports from previous
+        // runs must not survive. Executables don't need exports (they're not
+        // consumed by other packages), so any stale entries are removed.
+        if (exports is not null)
             root["exports"] = exports;
+        else
+            root.Remove("exports");
 
         // Merge auto-generated cross-package dependencies into the existing
         // `dependencies` object, leaving any user-hand-written entries for OTHER
@@ -170,35 +171,28 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Builds the `exports` object listing every public path the consumer can import.
-    /// Each barrel becomes a directory-level subpath, each individual file gets its own subpath.
+    /// Builds the <c>exports</c> object listing the public subpaths the consumer can import.
+    /// Only namespace barrel files (<c>index.ts</c>) become export entries — individual type
+    /// files are accessed through their barrel, matching the namespace-first convention
+    /// from ADR-0006.
     /// </summary>
     private static JsonObject BuildExports(IReadOnlyList<TsSourceFile> files, string distRelative)
     {
         var dist = NormalizePath(distRelative).TrimEnd('/');
         var exports = new JsonObject();
 
-        // Sort for deterministic output
-        var ordered = files.OrderBy(f => f.FileName, StringComparer.Ordinal).ToList();
+        var barrels = files
+            .Select(f => NormalizePath(f.FileName))
+            .Where(name => Path.GetFileName(name).Equals("index.ts", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal);
 
-        foreach (var file in ordered)
+        foreach (var name in barrels)
         {
-            var name = NormalizePath(file.FileName);
-            // Strip .ts
-            var withoutExt = name.EndsWith(".ts") ? name[..^3] : name;
+            var withoutExt = name[..^3]; // Strip .ts
 
-            string subpath;
-            if (Path.GetFileName(withoutExt) == "index")
-            {
-                // Barrel: ./issues/domain/index.ts → "./issues/domain"
-                var parent = Path.GetDirectoryName(withoutExt)?.Replace('\\', '/') ?? "";
-                subpath = parent.Length == 0 ? "." : $"./{parent}";
-            }
-            else
-            {
-                // Regular file: ./issues/domain/issue.ts → "./issues/domain/issue"
-                subpath = $"./{withoutExt}";
-            }
+            // Barrel: issues/domain/index → "./issues/domain", root index → "."
+            var parent = Path.GetDirectoryName(withoutExt)?.Replace('\\', '/') ?? "";
+            var subpath = parent.Length == 0 ? "." : $"./{parent}";
 
             exports[subpath] = new JsonObject
             {

@@ -34,93 +34,21 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./issues/application/i-issue-repository": {
-      "types": "./dist/issues/application/i-issue-repository.d.ts",
-      "import": "./dist/issues/application/i-issue-repository.js"
-    },
-    "./issues/application/in-memory-issue-repository": {
-      "types": "./dist/issues/application/in-memory-issue-repository.d.ts",
-      "import": "./dist/issues/application/in-memory-issue-repository.js"
-    },
     "./issues/application": {
       "types": "./dist/issues/application/index.d.ts",
       "import": "./dist/issues/application/index.js"
-    },
-    "./issues/application/issue-queries": {
-      "types": "./dist/issues/application/issue-queries.d.ts",
-      "import": "./dist/issues/application/issue-queries.js"
-    },
-    "./issues/application/issue-service": {
-      "types": "./dist/issues/application/issue-service.d.ts",
-      "import": "./dist/issues/application/issue-service.js"
-    },
-    "./issues/domain/comment": {
-      "types": "./dist/issues/domain/comment.d.ts",
-      "import": "./dist/issues/domain/comment.js"
     },
     "./issues/domain": {
       "types": "./dist/issues/domain/index.d.ts",
       "import": "./dist/issues/domain/index.js"
     },
-    "./issues/domain/issue-id": {
-      "types": "./dist/issues/domain/issue-id.d.ts",
-      "import": "./dist/issues/domain/issue-id.js"
-    },
-    "./issues/domain/issue-priority": {
-      "types": "./dist/issues/domain/issue-priority.d.ts",
-      "import": "./dist/issues/domain/issue-priority.js"
-    },
-    "./issues/domain/issue-snapshot": {
-      "types": "./dist/issues/domain/issue-snapshot.d.ts",
-      "import": "./dist/issues/domain/issue-snapshot.js"
-    },
-    "./issues/domain/issue-status": {
-      "types": "./dist/issues/domain/issue-status.d.ts",
-      "import": "./dist/issues/domain/issue-status.js"
-    },
-    "./issues/domain/issue-type": {
-      "types": "./dist/issues/domain/issue-type.d.ts",
-      "import": "./dist/issues/domain/issue-type.js"
-    },
-    "./issues/domain/issue-workflow": {
-      "types": "./dist/issues/domain/issue-workflow.d.ts",
-      "import": "./dist/issues/domain/issue-workflow.js"
-    },
-    "./issues/domain/issue": {
-      "types": "./dist/issues/domain/issue.d.ts",
-      "import": "./dist/issues/domain/issue.js"
-    },
-    "./json-context": {
-      "types": "./dist/json-context.d.ts",
-      "import": "./dist/json-context.js"
-    },
     "./planning/domain": {
       "types": "./dist/planning/domain/index.d.ts",
       "import": "./dist/planning/domain/index.js"
     },
-    "./planning/domain/sprint": {
-      "types": "./dist/planning/domain/sprint.d.ts",
-      "import": "./dist/planning/domain/sprint.js"
-    },
     "./shared-kernel": {
       "types": "./dist/shared-kernel/index.d.ts",
       "import": "./dist/shared-kernel/index.js"
-    },
-    "./shared-kernel/operation-result": {
-      "types": "./dist/shared-kernel/operation-result.d.ts",
-      "import": "./dist/shared-kernel/operation-result.js"
-    },
-    "./shared-kernel/page-request": {
-      "types": "./dist/shared-kernel/page-request.d.ts",
-      "import": "./dist/shared-kernel/page-request.js"
-    },
-    "./shared-kernel/page-result": {
-      "types": "./dist/shared-kernel/page-result.d.ts",
-      "import": "./dist/shared-kernel/page-result.js"
-    },
-    "./shared-kernel/user-id": {
-      "types": "./dist/shared-kernel/user-id.d.ts",
-      "import": "./dist/shared-kernel/user-id.js"
     }
   }
 }
