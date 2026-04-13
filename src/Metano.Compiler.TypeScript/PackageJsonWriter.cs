@@ -65,14 +65,28 @@ public static class PackageJsonWriter
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
         // Resolve the source root: explicit parameter, or infer from first path segment.
-        var resolvedSrcRoot = NormalizePath(srcRoot ?? srcRelative.Split('/')[0]);
+        // "--src-root ." means the package root itself is the source root, so the full
+        // srcRelative becomes the output prefix (e.g., "src/domain" → prefix "src/domain").
+        var rawSrcRoot = srcRoot?.Replace('\\', '/').TrimStart('/').TrimEnd('/');
+        string resolvedSrcRoot;
+        if (rawSrcRoot is null or "")
+            resolvedSrcRoot = srcRelative.Split('/')[0]; // infer from first segment
+        else if (rawSrcRoot == ".")
+            resolvedSrcRoot = ""; // package root is the source root
+        else
+            resolvedSrcRoot = rawSrcRoot.TrimStart('.', '/');
 
         // Output prefix: the path from the source root to the output directory.
         // Empty when outputDir IS the source root (e.g., srcRelative = "src").
         // Validate that srcRelative is within resolvedSrcRoot — if not, fall back
         // to empty prefix and warn rather than producing silently wrong paths.
         string outputPrefix;
-        if (srcRelative == resolvedSrcRoot)
+        if (resolvedSrcRoot.Length == 0)
+        {
+            // Package root is the source root — full srcRelative is the prefix.
+            outputPrefix = srcRelative;
+        }
+        else if (srcRelative == resolvedSrcRoot)
         {
             outputPrefix = "";
         }

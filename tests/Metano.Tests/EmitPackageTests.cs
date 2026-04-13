@@ -517,6 +517,61 @@ public class EmitPackageTests
         Directory.Delete(tempDir, recursive: true);
     }
 
+    [Test]
+    public async Task Exports_SrcRootDot_UsesFullSrcRelativeAsPrefix()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "domain");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        // srcRoot = "." means package root is the source root,
+        // so srcRelative ("domain") becomes the full prefix.
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg",
+            srcRoot: "."
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.ContainsKey("./domain")).IsTrue();
+        await Assert.That(exports.ContainsKey(".")).IsFalse();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Exports_SrcRootWithTrailingSlash_NormalizedCorrectly()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src", "domain");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        // Trailing slash should be stripped — "src/" behaves like "src"
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg",
+            srcRoot: "src/"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.ContainsKey("./domain")).IsTrue();
+        await Assert.That(exports.ContainsKey(".")).IsFalse();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"metasharp-test-{Guid.NewGuid():N}");
