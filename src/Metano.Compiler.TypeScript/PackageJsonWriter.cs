@@ -69,10 +69,30 @@ public static class PackageJsonWriter
 
         // Output prefix: the path from the source root to the output directory.
         // Empty when outputDir IS the source root (e.g., srcRelative = "src").
-        var outputPrefix =
-            srcRelative == resolvedSrcRoot
-                ? ""
-                : NormalizePath(Path.GetRelativePath(resolvedSrcRoot, srcRelative));
+        // Validate that srcRelative is within resolvedSrcRoot — if not, fall back
+        // to empty prefix and warn rather than producing silently wrong paths.
+        string outputPrefix;
+        if (srcRelative == resolvedSrcRoot)
+        {
+            outputPrefix = "";
+        }
+        else if (srcRelative.StartsWith(resolvedSrcRoot + "/", StringComparison.Ordinal))
+        {
+            outputPrefix = srcRelative[(resolvedSrcRoot.Length + 1)..];
+        }
+        else
+        {
+            outputPrefix = "";
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.CrossPackageResolution,
+                    $"--src-root '{resolvedSrcRoot}' is not an ancestor of output path "
+                        + $"'{srcRelative}'. Ignoring prefix — imports/exports paths may be incorrect. "
+                        + $"Set --src-root to the directory that your build tool uses as rootDir."
+                )
+            );
+        }
 
         // Build the imports/exports objects. Exports are only needed for libraries.
         var exports = isExecutable
@@ -127,14 +147,24 @@ public static class PackageJsonWriter
         root["type"] = "module";
         root["sideEffects"] = false;
 
-        // Merge transpiler-managed entries into the existing imports/exports objects.
-        // User-defined entries for other subpaths are preserved.
-        MergeJsonObject(root, "imports", imports);
+        // Replace transpiler-managed entries while preserving user-defined ones.
+        // For imports, the transpiler manages "#" and "#/*" — stale aliases are removed.
+        HashSet<string> managedImportKeys = ["#", "#/*"];
+        ReplacePreservingUserEntries(root, "imports", imports, managedImportKeys);
 
+        // Exports are fully transpiler-controlled — replace entirely.
+        // Unlike imports (where users may add custom aliases like "#custom/*"),
+        // export subpaths are derived from namespace barrels and cannot be
+        // distinguished from user entries.
         if (exports is not null)
-            MergeJsonObject(root, "exports", exports);
-        else
+        {
             root.Remove("exports");
+            root["exports"] = exports;
+        }
+        else
+        {
+            root.Remove("exports");
+        }
 
         // Merge auto-generated cross-package dependencies into the existing
         // `dependencies` object, leaving any user-hand-written entries for OTHER
@@ -153,22 +183,34 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Merges entries from <paramref name="generated"/> into the existing JSON object at
-    /// <paramref name="key"/>. Creates the object if it doesn't exist. Overwrites entries
-    /// with matching keys but preserves user-defined entries with other keys.
+    /// Replaces the JSON object at <paramref name="key"/> with <paramref name="generated"/>,
+    /// preserving any user-defined entries whose keys are absent from the generated set.
+    /// Keys listed in <paramref name="managedKeys"/> are considered transpiler-managed — if
+    /// they appear in the existing object but not in <paramref name="generated"/>, they are
+    /// stale and silently dropped instead of being preserved.
     /// </summary>
-    private static void MergeJsonObject(JsonObject root, string key, JsonObject generated)
+    private static void ReplacePreservingUserEntries(
+        JsonObject root,
+        string key,
+        JsonObject generated,
+        IReadOnlySet<string>? managedKeys = null
+    )
     {
-        var existing = root[key] as JsonObject ?? new JsonObject();
-
-        foreach (var (entryKey, entryValue) in generated)
+        if (root[key] is JsonObject existing)
         {
-            // Remove existing entry first (JsonObject doesn't allow duplicate keys)
-            existing.Remove(entryKey);
-            existing[entryKey] = entryValue?.DeepClone();
+            // Copy user-defined entries that the transpiler doesn't manage.
+            foreach (var (entryKey, entryValue) in existing.ToList())
+            {
+                if (generated.ContainsKey(entryKey))
+                    continue; // Already in generated — transpiler's version wins.
+                if (managedKeys is not null && managedKeys.Contains(entryKey))
+                    continue; // Stale transpiler key — drop it.
+                generated[entryKey] = entryValue?.DeepClone();
+            }
         }
 
-        root[key] = existing;
+        root.Remove(key);
+        root[key] = generated;
     }
 
     /// <summary>
