@@ -288,50 +288,6 @@ public class EmitPackageTests
     }
 
     [Test]
-    public async Task Exports_MergedWithUserDefinedEntries()
-    {
-        var tempDir = CreateTempDir();
-        var srcDir = Path.Combine(tempDir, "src");
-        Directory.CreateDirectory(srcDir);
-
-        // Existing package.json with user-defined custom export
-        File.WriteAllText(
-            Path.Combine(tempDir, "package.json"),
-            """
-            {
-              "name": "test-pkg",
-              "exports": {
-                "./custom": { "types": "./dist/custom.d.ts", "import": "./dist/custom.js" }
-              }
-            }
-            """
-        );
-
-        var files = new[]
-        {
-            new TsSourceFile("index.ts", [], ""),
-            new TsSourceFile("item.ts", [], ""),
-        };
-
-        PackageJsonWriter.UpdateOrCreate(
-            tempDir,
-            srcDir,
-            files,
-            authoritativePackageName: "test-pkg"
-        );
-
-        var pkg = ReadJson(tempDir);
-        var exports = pkg["exports"] as JsonObject;
-        await Assert.That(exports).IsNotNull();
-        // Transpiler barrel entry added
-        await Assert.That(exports!.ContainsKey(".")).IsTrue();
-        // User-defined entry preserved
-        await Assert.That(exports.ContainsKey("./custom")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
-    }
-
-    [Test]
     public async Task Imports_MergedWithUserDefinedEntries()
     {
         var tempDir = CreateTempDir();
@@ -366,6 +322,98 @@ public class EmitPackageTests
         // Transpiler entries added
         await Assert.That(imports!.ContainsKey("#/*")).IsTrue();
         await Assert.That(imports.ContainsKey("#")).IsTrue();
+        // User-defined entry preserved
+        await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Exports_StaleEntriesRemovedOnRegeneration()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        // Existing package.json with stale exports from a previous run
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "test-pkg",
+              "exports": {
+                ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+                "./old-barrel": { "types": "./dist/old-barrel/index.d.ts", "import": "./dist/old-barrel/index.js" }
+              }
+            }
+            """
+        );
+
+        // Current generation only has root barrel — old-barrel was removed
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("item.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        // Current barrel preserved
+        await Assert.That(exports!.ContainsKey(".")).IsTrue();
+        // Stale entry removed
+        await Assert.That(exports.ContainsKey("./old-barrel")).IsFalse();
+        await Assert.That(exports!.Count).IsEqualTo(1);
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Imports_StaleRootAliasRemovedWhenBarrelDisappears()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        // Existing package.json with "#" root alias from a previous run that had index.ts
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "test-pkg",
+              "imports": {
+                "#": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "default": "./src/index.ts" },
+                "#/*": { "types": "./dist/*.d.ts", "import": "./dist/*.js", "default": "./src/*.ts" },
+                "#custom/*": "./lib/*.ts"
+              }
+            }
+            """
+        );
+
+        // Current generation has no root barrel (no index.ts)
+        var files = new[] { new TsSourceFile("item.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var imports = pkg["imports"] as JsonObject;
+        await Assert.That(imports).IsNotNull();
+        // Stale "#" alias removed (no root barrel in current generation)
+        await Assert.That(imports!.ContainsKey("#")).IsFalse();
+        // "#/*" still present (always generated)
+        await Assert.That(imports.ContainsKey("#/*")).IsTrue();
         // User-defined entry preserved
         await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
 
