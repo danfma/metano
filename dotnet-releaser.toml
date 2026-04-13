@@ -3,7 +3,10 @@
 profile = "custom"
 
 [msbuild]
-project = "Metano.slnx"
+# Use the packages-only solution to avoid building samples during release.
+# Samples have AfterBuild targets that run the compiler via `dotnet run`,
+# which causes file-lock conflicts under parallel builds.
+project = "Metano-packages.slnx"
 
 [github]
 user = "danfma"

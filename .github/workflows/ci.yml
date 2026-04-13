@@ -24,7 +24,7 @@ jobs:
         run: dotnet tool restore
 
       - name: Build
-        run: dotnet build -maxcpucount:1
+        run: dotnet build Metano.slnx -maxcpucount:1
 
       - name: Verify samples are regenerated cleanly
         run: |

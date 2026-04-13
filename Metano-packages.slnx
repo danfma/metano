@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Metano/Metano.csproj" />
+    <Project Path="src/Metano.Compiler/Metano.Compiler.csproj" />
+    <Project Path="src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj" />
+    <Project Path="src/Metano.Build/Metano.Build.csproj" />
+  </Folder>
+</Solution>
