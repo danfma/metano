@@ -314,7 +314,12 @@ public class EmitPackageTests
             new TsSourceFile("item.ts", [], ""),
         };
 
-        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "test-pkg");
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
 
         var pkg = ReadJson(tempDir);
         var exports = pkg["exports"] as JsonObject;
