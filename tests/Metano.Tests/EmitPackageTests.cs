@@ -288,21 +288,20 @@ public class EmitPackageTests
     }
 
     [Test]
-    public async Task Exports_RegeneratedOnSubsequentRuns()
+    public async Task Exports_MergedWithUserDefinedEntries()
     {
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
 
-        // First run: stale file-based exports (simulating old behavior)
+        // Existing package.json with user-defined custom export
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
             {
               "name": "test-pkg",
               "exports": {
-                ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-                "./item": { "types": "./dist/item.d.ts", "import": "./dist/item.js" }
+                "./custom": { "types": "./dist/custom.d.ts", "import": "./dist/custom.js" }
               }
             }
             """
@@ -324,10 +323,148 @@ public class EmitPackageTests
         var pkg = ReadJson(tempDir);
         var exports = pkg["exports"] as JsonObject;
         await Assert.That(exports).IsNotNull();
-        // Stale "./item" entry must be gone — only barrel "." remains
-        await Assert.That(exports!.Count).IsEqualTo(1);
-        await Assert.That(exports.ContainsKey(".")).IsTrue();
-        await Assert.That(exports.ContainsKey("./item")).IsFalse();
+        // Transpiler barrel entry added
+        await Assert.That(exports!.ContainsKey(".")).IsTrue();
+        // User-defined entry preserved
+        await Assert.That(exports.ContainsKey("./custom")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Imports_MergedWithUserDefinedEntries()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        // Existing package.json with user-defined custom import alias
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "test-pkg",
+              "imports": {
+                "#custom/*": "./lib/*.ts"
+              }
+            }
+            """
+        );
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var imports = pkg["imports"] as JsonObject;
+        await Assert.That(imports).IsNotNull();
+        // Transpiler entries added
+        await Assert.That(imports!.ContainsKey("#/*")).IsTrue();
+        await Assert.That(imports.ContainsKey("#")).IsTrue();
+        // User-defined entry preserved
+        await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Exports_SubdirectoryOutput_IncludesPrefix()
+    {
+        var tempDir = CreateTempDir();
+        // Output to src/domain/ — a subdirectory of the source root
+        var srcDir = Path.Combine(tempDir, "src", "domain");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("users/index.ts", [], ""),
+            new TsSourceFile("users/user.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        // Subpaths include "domain" prefix
+        await Assert.That(exports!.ContainsKey("./domain")).IsTrue();
+        await Assert.That(exports.ContainsKey("./domain/users")).IsTrue();
+        // Root "." must NOT exist (output is not at source root)
+        await Assert.That(exports.ContainsKey(".")).IsFalse();
+        // Dist paths include the prefix
+        var rootEntry = exports["./domain"] as JsonObject;
+        await Assert
+            .That(rootEntry!["types"]?.GetValue<string>())
+            .IsEqualTo("./dist/domain/index.d.ts");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Imports_SubdirectoryOutput_DistPathsIncludePrefix()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src", "domain");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var imports = pkg["imports"] as JsonObject;
+        await Assert.That(imports).IsNotNull();
+
+        var wildcard = imports!["#/*"] as JsonObject;
+        await Assert.That(wildcard).IsNotNull();
+        // Dist paths include "domain/" prefix
+        await Assert.That(wildcard!["types"]?.GetValue<string>()).IsEqualTo("./dist/domain/*.d.ts");
+        await Assert.That(wildcard["import"]?.GetValue<string>()).IsEqualTo("./dist/domain/*.js");
+        // Source paths use the full srcRelative (unchanged)
+        await Assert.That(wildcard["default"]?.GetValue<string>()).IsEqualTo("./src/domain/*.ts");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Exports_ExplicitSrcRoot_OverridesDefault()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "lib", "models");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg",
+            srcRoot: "lib"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        // srcRoot = "lib", srcRelative = "lib/models" → prefix = "models"
+        await Assert.That(exports!.ContainsKey("./models")).IsTrue();
+        await Assert.That(exports.ContainsKey(".")).IsFalse();
 
         Directory.Delete(tempDir, recursive: true);
     }

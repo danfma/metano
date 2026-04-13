@@ -6,11 +6,14 @@ using Metano.TypeScript.AST;
 namespace Metano;
 
 /// <summary>
-/// Generates and updates the consumer's package.json with `imports`, `exports`, `sideEffects`,
-/// and `type` fields based on the TypeScript files emitted by the transpiler.
+/// Generates and updates the consumer's package.json with <c>imports</c>, <c>exports</c>,
+/// <c>sideEffects</c>, and <c>type</c> fields based on the TypeScript files emitted by the
+/// transpiler.
 ///
 /// Strategy: non-destructive merge. The user's hand-written fields (name, dependencies,
-/// scripts, etc.) are preserved. Only the controlled fields are overwritten.
+/// scripts, etc.) are preserved. Transpiler-managed entries inside <c>imports</c> and
+/// <c>exports</c> are merged into the existing objects — user-defined entries for other
+/// subpaths survive untouched.
 /// </summary>
 public static class PackageJsonWriter
 {
@@ -28,19 +31,23 @@ public static class PackageJsonWriter
     /// </summary>
     /// <param name="packageRoot">Root directory of the consumer Bun/Node package.</param>
     /// <param name="outputDirAbsolute">Absolute path where TS files are emitted (e.g., /path/to/pkg/src).</param>
-    /// <param name="distDirRelativeToPackageRoot">Relative path from packageRoot to the JS output directory (default: "./dist").</param>
     /// <param name="files">All generated TsSourceFile objects (type files + barrels).</param>
+    /// <param name="distDirRelativeToPackageRoot">Relative path from packageRoot to the JS output
+    /// directory (default: "./dist").</param>
     /// <param name="authoritativePackageName">When non-null, this name (typically read
     /// from <c>[assembly: EmitPackage(...)]</c>) is written to <c>package.json#name</c>
-    /// as the source of truth. If the existing file already had a different name, an
-    /// MS0007 diagnostic is returned and the authoritative value still wins (because
-    /// cross-package import resolution depends on it).</param>
-    /// <param name="crossPackageDependencies">Maps each cross-package npm name that the
-    /// transpiler emitted an import for, to its version specifier (e.g., <c>^1.2.3</c>
-    /// or <c>workspace:*</c>). The writer MERGES these into <c>package.json#dependencies</c>
-    /// — existing entries the user has hand-written for OTHER packages are preserved
-    /// untouched; existing entries for the same package are overwritten with the
-    /// compiler-computed version (so versions stay in sync with the C# project).</param>
+    /// as the source of truth.</param>
+    /// <param name="crossPackageDependencies">Maps each cross-package npm name to its version
+    /// specifier. Merged into <c>package.json#dependencies</c> — user entries for other
+    /// packages are preserved.</param>
+    /// <param name="isExecutable">When true, exports are not generated (executables are not
+    /// consumed by other packages).</param>
+    /// <param name="srcRoot">TypeScript source root relative to the package root
+    /// (e.g., <c>src</c>). When the output directory is a subdirectory of the source root
+    /// (e.g., <c>src/domain</c>), the prefix (<c>domain</c>) is applied to dist paths and
+    /// export subpaths so they mirror the build tool's directory structure.
+    /// Default: inferred as the first path segment of the output directory relative to the
+    /// package root.</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -49,18 +56,36 @@ public static class PackageJsonWriter
         string distDirRelativeToPackageRoot = "./dist",
         string? authoritativePackageName = null,
         IReadOnlyDictionary<string, string>? crossPackageDependencies = null,
-        bool isExecutable = false
+        bool isExecutable = false,
+        string? srcRoot = null
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
         var packageJsonPath = Path.Combine(packageRoot, "package.json");
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
-        // Build the imports/exports objects. Exports are only needed for libraries;
-        // the root-index check is derived from the exports object to avoid a duplicate scan.
-        var exports = isExecutable ? null : BuildExports(files, distDirRelativeToPackageRoot);
-        var hasRootIndex = exports?.ContainsKey(".") ?? false;
-        var imports = BuildImports(srcRelative, distDirRelativeToPackageRoot, hasRootIndex);
+        // Resolve the source root: explicit parameter, or infer from first path segment.
+        var resolvedSrcRoot = NormalizePath(srcRoot ?? srcRelative.Split('/')[0]);
+
+        // Output prefix: the path from the source root to the output directory.
+        // Empty when outputDir IS the source root (e.g., srcRelative = "src").
+        var outputPrefix =
+            srcRelative == resolvedSrcRoot
+                ? ""
+                : NormalizePath(Path.GetRelativePath(resolvedSrcRoot, srcRelative));
+
+        // Build the imports/exports objects. Exports are only needed for libraries.
+        var exports = isExecutable
+            ? null
+            : BuildExports(files, distDirRelativeToPackageRoot, outputPrefix);
+        var rootExportKey = outputPrefix.Length > 0 ? $"./{outputPrefix}" : ".";
+        var hasRootIndex = exports?.ContainsKey(rootExportKey) ?? false;
+        var imports = BuildImports(
+            srcRelative,
+            distDirRelativeToPackageRoot,
+            hasRootIndex,
+            outputPrefix
+        );
 
         JsonObject root;
         if (File.Exists(packageJsonPath))
@@ -79,9 +104,6 @@ public static class PackageJsonWriter
         }
 
         // [EmitPackage] is the source of truth for the package name when present.
-        // If the existing file's name diverges, warn and overwrite — cross-package
-        // import resolution depends on the attribute value, so the package.json must
-        // match what consumers will write in their `import { … } from "<name>/…"` lines.
         if (authoritativePackageName is not null)
         {
             var existingName = root["name"]?.GetValue<string>();
@@ -105,22 +127,18 @@ public static class PackageJsonWriter
         root["type"] = "module";
         root["sideEffects"] = false;
 
-        // Only populate imports when the user hasn't customized them.
-        if (root["imports"] is null)
-            root["imports"] = imports;
-        // Exports are always overwritten — they're a transpiler-computed artifact
-        // derived from the namespace barrel structure. Stale exports from previous
-        // runs must not survive. Executables don't need exports (they're not
-        // consumed by other packages), so any stale entries are removed.
+        // Merge transpiler-managed entries into the existing imports/exports objects.
+        // User-defined entries for other subpaths are preserved.
+        MergeJsonObject(root, "imports", imports);
+
         if (exports is not null)
-            root["exports"] = exports;
+            MergeJsonObject(root, "exports", exports);
         else
             root.Remove("exports");
 
         // Merge auto-generated cross-package dependencies into the existing
         // `dependencies` object, leaving any user-hand-written entries for OTHER
-        // packages alone. We only touch the keys we know about, so adding `react` or
-        // `bun-types` by hand will survive a regenerate cycle.
+        // packages alone.
         if (crossPackageDependencies is { Count: > 0 })
         {
             var deps = root["dependencies"] as JsonObject ?? new JsonObject();
@@ -135,24 +153,45 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Builds the `imports` object with conditional exports for the `#/*` alias.
+    /// Merges entries from <paramref name="generated"/> into the existing JSON object at
+    /// <paramref name="key"/>. Creates the object if it doesn't exist. Overwrites entries
+    /// with matching keys but preserves user-defined entries with other keys.
+    /// </summary>
+    private static void MergeJsonObject(JsonObject root, string key, JsonObject generated)
+    {
+        var existing = root[key] as JsonObject ?? new JsonObject();
+
+        foreach (var (entryKey, entryValue) in generated)
+        {
+            // Remove existing entry first (JsonObject doesn't allow duplicate keys)
+            existing.Remove(entryKey);
+            existing[entryKey] = entryValue?.DeepClone();
+        }
+
+        root[key] = existing;
+    }
+
+    /// <summary>
+    /// Builds the <c>imports</c> object with conditional exports for the <c>#/*</c> alias.
     /// Format: dist (.js + .d.ts) is preferred, source .ts is the fallback for dev.
     /// </summary>
     private static JsonObject BuildImports(
         string srcRelative,
         string distRelative,
-        bool hasRootIndex
+        bool hasRootIndex,
+        string outputPrefix
     )
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
         var dist = NormalizePath(distRelative).TrimEnd('/');
+        var distBase = outputPrefix.Length > 0 ? $"{dist}/{outputPrefix}" : dist;
 
         var imports = new JsonObject
         {
             ["#/*"] = new JsonObject
             {
-                ["types"] = $"./{dist}/*.d.ts",
-                ["import"] = $"./{dist}/*.js",
+                ["types"] = $"./{distBase}/*.d.ts",
+                ["import"] = $"./{distBase}/*.js",
                 ["default"] = $"./{src}/*.ts",
             },
         };
@@ -161,8 +200,8 @@ public static class PackageJsonWriter
         {
             imports["#"] = new JsonObject
             {
-                ["types"] = $"./{dist}/index.d.ts",
-                ["import"] = $"./{dist}/index.js",
+                ["types"] = $"./{distBase}/index.d.ts",
+                ["import"] = $"./{distBase}/index.js",
                 ["default"] = $"./{src}/index.ts",
             };
         }
@@ -174,11 +213,17 @@ public static class PackageJsonWriter
     /// Builds the <c>exports</c> object listing the public subpaths the consumer can import.
     /// Only namespace barrel files (<c>index.ts</c>) become export entries — individual type
     /// files are accessed through their barrel, matching the namespace-first convention
-    /// from ADR-0006.
+    /// from ADR-0006. When <paramref name="outputPrefix"/> is non-empty, it is prepended
+    /// to both the subpath key and the dist path.
     /// </summary>
-    private static JsonObject BuildExports(IReadOnlyList<TsSourceFile> files, string distRelative)
+    private static JsonObject BuildExports(
+        IReadOnlyList<TsSourceFile> files,
+        string distRelative,
+        string outputPrefix
+    )
     {
         var dist = NormalizePath(distRelative).TrimEnd('/');
+        var distBase = outputPrefix.Length > 0 ? $"{dist}/{outputPrefix}" : dist;
         var exports = new JsonObject();
 
         var barrels = files
@@ -190,14 +235,22 @@ public static class PackageJsonWriter
         {
             var withoutExt = name[..^3]; // Strip .ts
 
-            // Barrel: issues/domain/index → "./issues/domain", root index → "."
+            // Barrel directory: "issues/domain/index" → "issues/domain", root "index" → ""
             var parent = Path.GetDirectoryName(withoutExt)?.Replace('\\', '/') ?? "";
-            var subpath = parent.Length == 0 ? "." : $"./{parent}";
+
+            // Subpath: prepend outputPrefix when present.
+            // root index.ts with prefix "domain" → "./domain"
+            // users/index.ts with prefix "domain" → "./domain/users"
+            string subpath;
+            if (outputPrefix.Length > 0)
+                subpath = parent.Length == 0 ? $"./{outputPrefix}" : $"./{outputPrefix}/{parent}";
+            else
+                subpath = parent.Length == 0 ? "." : $"./{parent}";
 
             exports[subpath] = new JsonObject
             {
-                ["types"] = $"./{dist}/{withoutExt}.d.ts",
-                ["import"] = $"./{dist}/{withoutExt}.js",
+                ["types"] = $"./{distBase}/{withoutExt}.d.ts",
+                ["import"] = $"./{distBase}/{withoutExt}.js",
             };
         }
 

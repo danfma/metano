@@ -13,6 +13,7 @@
       MetanoClean            (optional)  true to wipe the output dir first (default: false)
       MetanoDist             (optional)  JS dist dir relative to package root (default: ./dist)
       MetanoPackageRoot      (optional)  Root of the npm package (default: parent of OutputDir)
+      MetanoSrcRoot          (optional)  TS source root relative to package root (default: inferred)
       MetanoSkipPackageJson  (optional)  true to skip package.json generation (default: false)
       MetanoShowTimings      (optional)  true to print timing info (default: false)
       MetanoExtraArgs        (optional)  Additional CLI arguments
@@ -37,6 +38,9 @@
       >
       <_MetanoArgs Condition="'$(MetanoPackageRoot)' != ''"
         >$(_MetanoArgs) --package-root "$(MetanoPackageRoot)"</_MetanoArgs
+      >
+      <_MetanoArgs Condition="'$(MetanoSrcRoot)' != ''"
+        >$(_MetanoArgs) --src-root "$(MetanoSrcRoot)"</_MetanoArgs
       >
       <_MetanoArgs Condition="'$(MetanoSkipPackageJson)' == 'true'"
         >$(_MetanoArgs) --skip-package-json</_MetanoArgs

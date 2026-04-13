@@ -5,15 +5,15 @@
   "sideEffects": false,
   "module": "./dist/program.js",
   "imports": {
-    "#/*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./src/*.ts"
-    },
     "#": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./src/index.ts"
+    },
+    "#/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
     }
   },
   "dependencies": {

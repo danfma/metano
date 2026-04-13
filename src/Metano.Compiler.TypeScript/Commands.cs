@@ -14,6 +14,7 @@ public class Commands
     /// <param name="clean">-c, Clean output directory before generating</param>
     /// <param name="packageRoot">Root directory of the consumer package (default: parent of --output)</param>
     /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
+    /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
     /// <param name="skipPackageJson">Skip generating/updating package.json</param>
     [Command("")]
     public async Task Transpile(
@@ -23,6 +24,7 @@ public class Commands
         bool clean = false,
         string? packageRoot = null,
         string dist = "./dist",
+        string? srcRoot = null,
         bool skipPackageJson = false
     )
     {
@@ -60,7 +62,8 @@ public class Commands
                 dist,
                 authoritativePackageName: target.LastEmitPackageName,
                 crossPackageDependencies: target.LastCrossPackageDependencies,
-                isExecutable: target.LastIsExecutable
+                isExecutable: target.LastIsExecutable,
+                srcRoot: srcRoot
             );
 
             foreach (var d in pkgDiagnostics)
