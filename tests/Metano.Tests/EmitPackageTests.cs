@@ -219,6 +219,114 @@ public class EmitPackageTests
         Directory.Delete(tempDir, recursive: true);
     }
 
+    [Test]
+    public async Task Exports_OnlyIncludeBarrelFiles()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("domain/index.ts", [], ""),
+            new TsSourceFile("domain/item.ts", [], ""),
+            new TsSourceFile("domain/category.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        // Only barrels: "." and "./domain"
+        await Assert.That(exports!.Count).IsEqualTo(2);
+        await Assert.That(exports.ContainsKey(".")).IsTrue();
+        await Assert.That(exports.ContainsKey("./domain")).IsTrue();
+        // Individual files must NOT appear
+        await Assert.That(exports.ContainsKey("./domain/item")).IsFalse();
+        await Assert.That(exports.ContainsKey("./domain/category")).IsFalse();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Exports_FlatPackageOnlyExportsRoot()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("todo-item.ts", [], ""),
+            new TsSourceFile("todo-list.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "sample-todo"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.Count).IsEqualTo(1);
+        await Assert.That(exports.ContainsKey(".")).IsTrue();
+        await Assert.That(exports.ContainsKey("./todo-item")).IsFalse();
+        await Assert.That(exports.ContainsKey("./todo-list")).IsFalse();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Exports_RegeneratedOnSubsequentRuns()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        // First run: stale file-based exports (simulating old behavior)
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "test-pkg",
+              "exports": {
+                ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+                "./item": { "types": "./dist/item.d.ts", "import": "./dist/item.js" }
+              }
+            }
+            """
+        );
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("item.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "test-pkg");
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+        await Assert.That(exports).IsNotNull();
+        // Stale "./item" entry must be gone — only barrel "." remains
+        await Assert.That(exports!.Count).IsEqualTo(1);
+        await Assert.That(exports.ContainsKey(".")).IsTrue();
+        await Assert.That(exports.ContainsKey("./item")).IsFalse();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"metasharp-test-{Guid.NewGuid():N}");

@@ -29,23 +29,5 @@
     "generate": "dotnet run --project ../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj -- -p ../../samples/SampleTodo.Service/SampleTodo.Service.csproj -o ./src --clean --time",
     "build": "tsgo -b .",
     "test": "bun test"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./json-context": {
-      "types": "./dist/json-context.d.ts",
-      "import": "./dist/json-context.js"
-    },
-    "./program": {
-      "types": "./dist/program.d.ts",
-      "import": "./dist/program.js"
-    },
-    "./todos": {
-      "types": "./dist/todos.d.ts",
-      "import": "./dist/todos.js"
-    }
   }
 }

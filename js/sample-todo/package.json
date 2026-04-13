@@ -31,22 +31,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./json-context": {
-      "types": "./dist/json-context.d.ts",
-      "import": "./dist/json-context.js"
-    },
-    "./priority": {
-      "types": "./dist/priority.d.ts",
-      "import": "./dist/priority.js"
-    },
-    "./todo-item": {
-      "types": "./dist/todo-item.d.ts",
-      "import": "./dist/todo-item.js"
-    },
-    "./todo-list": {
-      "types": "./dist/todo-list.d.ts",
-      "import": "./dist/todo-list.js"
     }
   }
 }
