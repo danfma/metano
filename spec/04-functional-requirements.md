@@ -80,7 +80,16 @@ requirement uses a stable identifier in the format `FR-XXX`.
 - **FR-029** The system shall generate barrels/index files consistent with
   namespaces and product output conventions.
 - **FR-030** The system shall generate or update the target package's
-  `package.json` with dependencies required by the output.
+  `package.json` with correct `imports`, `exports`, and `dependencies` fields.
+  When the transpiler output directory is a subdirectory of the package's
+  TypeScript source root (e.g., `src/domain/` inside a package whose build
+  tool compiles from `src/`), the generated `imports` and `exports` paths
+  shall include the correct prefix so that dist paths mirror the source tree
+  structure. The system shall accept an explicit source-root parameter
+  (`--src-root` / `MetanoSrcRoot`, defaulting to the first path segment of
+  the output directory relative to the package root) to resolve ambiguity
+  when the relationship between source and dist directories cannot be
+  inferred.
 - **FR-031** The system shall reflect cross-package dependencies between
   transpiled assemblies through correct npm-based imports.
 
@@ -100,6 +109,10 @@ requirement uses a stable identifier in the format `FR-XXX`.
   entry point.
 - **FR-037** The system shall operate on real C# projects, using compilation and
   semantic analysis as the basis for transformation.
+- **FR-046** The product shall support consumption of `Metano` and
+  `Metano.Build` as build-only dependencies in .NET projects, so adopting the
+  transpiler does not unnecessarily contribute runtime or transitive package
+  surface to downstream application outputs.
 
 ## 9. Diagnostic Requirements
 
@@ -126,3 +139,6 @@ requirement uses a stable identifier in the format `FR-XXX`.
   supported language surface.
 - **FR-045** The system shall detect cyclic local-package import chains between
   generated TypeScript files and report them through diagnostics.
+- **FR-047** The system shall derive cross-package TypeScript import and export
+  subpaths from C# namespace structure and declared package identity, not from
+  incidental file placement details in the generated output tree.

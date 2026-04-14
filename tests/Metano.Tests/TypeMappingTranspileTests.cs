@@ -105,7 +105,9 @@ public class TypeMappingTranspileTests
         var output = result["entity.ts"];
         // Guid → branded UUID type from metano-runtime (not plain string).
         await Assert.That(output).Contains("id: UUID");
-        await Assert.That(output).Contains("import { UUID } from \"metano-runtime\"");
+        // UUID may be merged with other metano-runtime imports (e.g., HashCode)
+        await Assert.That(output).Contains("UUID");
+        await Assert.That(output).Contains("from \"metano-runtime\"");
     }
 
     [Test]
@@ -123,7 +125,9 @@ public class TypeMappingTranspileTests
 
         var output = result["id-factory.ts"];
         await Assert.That(output).Contains("UUID.newUuid()");
-        await Assert.That(output).Contains("import { UUID } from \"metano-runtime\"");
+        // UUID may be merged with other metano-runtime imports (e.g., HashCode)
+        await Assert.That(output).Contains("UUID");
+        await Assert.That(output).Contains("from \"metano-runtime\"");
     }
 
     [Test]
@@ -159,7 +163,9 @@ public class TypeMappingTranspileTests
 
         var output = result["id-factory.ts"];
         await Assert.That(output).Contains("UUID.empty");
-        await Assert.That(output).Contains("import { UUID } from \"metano-runtime\"");
+        // UUID may be merged with other metano-runtime imports (e.g., HashCode)
+        await Assert.That(output).Contains("UUID");
+        await Assert.That(output).Contains("from \"metano-runtime\"");
     }
 
     // ─── Dictionary → Map ───────────────────────────────────

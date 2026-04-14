@@ -388,7 +388,90 @@ public sealed class ImportCollector(
             );
         }
 
-        return imports;
+        return MergeImportsByPath(imports);
+    }
+
+    /// <summary>
+    /// Consolidates multiple <see cref="TsImport"/> entries that share the same path into
+    /// a single import line. Default imports are kept separate. Type-only qualification is
+    /// preserved: a name is type-only only if ALL contributing imports marked it as such.
+    /// </summary>
+    private static IReadOnlyList<TsImport> MergeImportsByPath(List<TsImport> imports)
+    {
+        var merged = new List<TsImport>();
+        var grouped = imports.GroupBy(i => (i.From, i.IsDefault)).ToList();
+
+        foreach (var group in grouped)
+        {
+            var items = group.ToList();
+            if (items.Count == 1)
+            {
+                merged.Add(items[0]);
+                continue;
+            }
+
+            // Default imports can't be merged (only one name per default import).
+            if (group.Key.IsDefault)
+            {
+                merged.AddRange(items);
+                continue;
+            }
+
+            // Merge all names, preserving type-only where every contributor agrees.
+            var allNames = new List<string>();
+            var typeOnlyNames = new HashSet<string>(StringComparer.Ordinal);
+            var allTypeOnly = true;
+
+            foreach (var item in items)
+            {
+                foreach (var name in item.Names)
+                {
+                    if (allNames.Contains(name))
+                        continue;
+                    allNames.Add(name);
+
+                    var isTypeOnly =
+                        item.TypeOnly
+                        || (item.TypeOnlyNames is not null && item.TypeOnlyNames.Contains(name));
+                    if (isTypeOnly)
+                        typeOnlyNames.Add(name);
+                }
+
+                if (!item.TypeOnly)
+                    allTypeOnly = false;
+            }
+
+            // Names that appear as value in ANY import are not type-only.
+            if (!allTypeOnly)
+            {
+                foreach (var item in items)
+                {
+                    if (item.TypeOnly)
+                        continue;
+                    foreach (var name in item.Names)
+                    {
+                        if (item.TypeOnlyNames is null || !item.TypeOnlyNames.Contains(name))
+                            typeOnlyNames.Remove(name);
+                    }
+                }
+            }
+
+            var finalAllTypeOnly = allTypeOnly || typeOnlyNames.Count == allNames.Count;
+            SortValuesFirst(allNames, typeOnlyNames);
+
+            merged.Add(
+                new TsImport(
+                    allNames.ToArray(),
+                    group.Key.From,
+                    TypeOnly: finalAllTypeOnly,
+                    TypeOnlyNames: !finalAllTypeOnly && typeOnlyNames.Count > 0
+                        ? typeOnlyNames
+                        : null
+                )
+            );
+        }
+
+        return merged;
     }
 
     /// <summary>

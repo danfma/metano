@@ -46,6 +46,13 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
                 return ExpandEmit(emit, emitArgs);
             }
 
+            // Math.Round/Floor/Ceiling with a decimal argument → decimal.js instance method
+            // (e.g., `Math.Round(amount)` → `amount.round()`). The standard Math.round is
+            // for number operands; decimal.js has its own round/floor/ceil.
+            var mathDecimalResult = TryRewriteMathDecimal(methodSymbol, invocation);
+            if (mathDecimalResult is not null)
+                return mathDecimalResult;
+
             var mapped = BclMapper.TryMapMethod(methodSymbol, invocation, _parent);
             if (mapped is not null)
                 return mapped;
@@ -82,6 +89,44 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
             .ToList();
 
         return new TsCallExpression(callee, args);
+    }
+
+    /// <summary>
+    /// Rewrites <c>Math.Round/Floor/Ceiling</c> calls when the first argument is
+    /// <c>System.Decimal</c>. The JS <c>Math.round</c> only works on <c>number</c>;
+    /// decimal.js instances have their own <c>.round()</c>, <c>.floor()</c>, <c>.ceil()</c>.
+    /// </summary>
+    private TsExpression? TryRewriteMathDecimal(
+        IMethodSymbol method,
+        InvocationExpressionSyntax invocation
+    )
+    {
+        if (
+            method.ContainingType?.ToDisplayString() != "System.Math"
+            || method.Parameters.Length == 0
+        )
+            return null;
+
+        var firstParamType = _parent
+            .Model.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression)
+            .Type;
+        if (firstParamType?.SpecialType != SpecialType.System_Decimal)
+            return null;
+
+        var jsMethodName = method.Name switch
+        {
+            "Round" => "round",
+            "Floor" => "floor",
+            "Ceiling" => "ceil",
+            "Abs" => "abs",
+            _ => null,
+        };
+
+        if (jsMethodName is null)
+            return null;
+
+        var arg = _parent.TransformExpression(invocation.ArgumentList.Arguments[0].Expression);
+        return new TsCallExpression(new TsPropertyAccess(arg, jsMethodName), []);
     }
 
     /// <summary>

@@ -146,7 +146,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
                 TransformExpression(cond.WhenFalse)
             ),
 
-            CastExpressionSyntax cast => TransformExpression(cast.Expression),
+            CastExpressionSyntax cast => TransformCast(cast),
 
             WithExpressionSyntax withExpr => ObjectCreation.TransformWithExpression(withExpr),
 
@@ -195,6 +195,78 @@ public sealed class ExpressionTransformer(SemanticModel model)
                 $"Expression '{expression.Kind()}' is not supported by the transpiler."
             ),
         };
+    }
+
+    /// <summary>
+    /// Lowers a C# explicit cast expression. Most casts are erased (JS types are the
+    /// same at runtime), but numeric type conversions that change representation need
+    /// explicit code:
+    /// <list type="bullet">
+    ///   <item><c>(decimal)bigIntVar</c> → <c>new Decimal(bigIntVar.toString())</c></item>
+    ///   <item><c>(BigInteger)decimalExpr</c> → <c>BigInt(expr.toFixed(0))</c></item>
+    ///   <item><c>(int)decimalVar</c> / <c>(long)decimalVar</c> → <c>decimalVar.toNumber()</c></item>
+    /// </list>
+    /// </summary>
+    private TsExpression TransformCast(CastExpressionSyntax cast)
+    {
+        var inner = TransformExpression(cast.Expression);
+        var sourceInfo = Model.GetTypeInfo(cast.Expression);
+        var sourceType = sourceInfo.Type;
+        var targetType = Model.GetTypeInfo(cast).Type;
+
+        if (sourceType is null || targetType is null)
+            return inner;
+
+        var sourceFull = sourceType.ToDisplayString();
+        var targetFull = targetType.ToDisplayString();
+
+        // BigInteger → decimal: new Decimal(value.toString())
+        if (sourceFull == "System.Numerics.BigInteger" && targetFull == "decimal")
+        {
+            return new TsNewExpression(
+                new TsIdentifier("Decimal"),
+                [new TsCallExpression(new TsPropertyAccess(inner, "toString"), [])]
+            );
+        }
+
+        // decimal → BigInteger: BigInt(value.toFixed(0))
+        if (sourceFull == "decimal" && targetFull == "System.Numerics.BigInteger")
+        {
+            return new TsCallExpression(
+                new TsIdentifier("BigInt"),
+                [new TsCallExpression(new TsPropertyAccess(inner, "toFixed"), [new TsLiteral("0")])]
+            );
+        }
+
+        // decimal → int/long/short/byte (any integer): value.toNumber()
+        if (
+            sourceFull == "decimal"
+            && targetType.SpecialType
+                is SpecialType.System_Int32
+                    or SpecialType.System_Int64
+                    or SpecialType.System_Int16
+                    or SpecialType.System_Byte
+                    or SpecialType.System_UInt32
+                    or SpecialType.System_UInt64
+        )
+        {
+            return new TsCallExpression(new TsPropertyAccess(inner, "toNumber"), []);
+        }
+
+        // int/long → BigInteger: BigInt(value)
+        if (
+            targetFull == "System.Numerics.BigInteger"
+            && sourceType.SpecialType
+                is SpecialType.System_Int32
+                    or SpecialType.System_Int64
+                    or SpecialType.System_Decimal
+        )
+        {
+            return new TsCallExpression(new TsIdentifier("BigInt"), [inner]);
+        }
+
+        // Default: erase the cast (same-width numeric, reference casts, etc.)
+        return inner;
     }
 
     /// <summary>

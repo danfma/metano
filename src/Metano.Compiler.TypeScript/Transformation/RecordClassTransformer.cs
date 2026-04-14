@@ -149,6 +149,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
         // Fields, properties, operators
         var ordinaryMethods = new List<IMethodSymbol>();
+        var operatorMethods = new List<(string Name, IMethodSymbol Method)>();
 
         foreach (var member in type.GetMembers())
         {
@@ -179,12 +180,43 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                     break;
 
                 case IMethodSymbol method when method.MethodKind == MethodKind.UserDefinedOperator:
-                    classMembers.AddRange(TransformClassOperator(type, method));
+                {
+                    var opSyntax =
+                        method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                        as OperatorDeclarationSyntax;
+                    var opName =
+                        SymbolHelper.GetNameOverride(method)
+                        ?? (
+                            opSyntax is not null
+                                ? MapOperatorTokenToName(opSyntax.OperatorToken.Text)
+                                : null
+                        );
+                    if (opName is not null)
+                        operatorMethods.Add((opName, method));
                     break;
+                }
 
                 case IEventSymbol evt:
                     classMembers.AddRange(TransformEvent(evt));
                     break;
+            }
+        }
+
+        // Process operators — group by derived name, dispatch when overloaded
+        foreach (var opGroup in operatorMethods.GroupBy(o => o.Name))
+        {
+            var ops = opGroup.ToList();
+            if (ops.Count == 1)
+            {
+                classMembers.AddRange(TransformClassOperator(type, ops[0].Method, ops[0].Name));
+            }
+            else
+            {
+                // Multiple overloads for the same operator token — use the dispatcher.
+                // Wrap each operator as a named method so the existing dispatcher can handle it.
+                classMembers.AddRange(
+                    BuildOperatorDispatcher(type, ops[0].Name, ops.Select(o => o.Method).ToList())
+                );
             }
         }
 
@@ -780,13 +812,10 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
 
     private IReadOnlyList<TsClassMember> TransformClassOperator(
         INamedTypeSymbol containingType,
-        IMethodSymbol method
+        IMethodSymbol method,
+        string operatorName
     )
     {
-        var nameOverride = SymbolHelper.GetNameOverride(method);
-        if (nameOverride is null)
-            return [];
-
         var syntax =
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as OperatorDeclarationSyntax;
@@ -806,7 +835,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
         var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody);
 
-        var staticName = $"__{nameOverride}";
+        var staticName = $"__{operatorName}";
         var isUnary = method.Parameters.Length == 1;
         var results = new List<TsClassMember>();
 
@@ -826,7 +855,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                     [new TsIdentifier("this")]
                 )
             );
-            results.Add(new TsMethodMember($"${nameOverride}", [], returnType, [helperBody]));
+            results.Add(new TsMethodMember($"${operatorName}", [], returnType, [helperBody]));
         }
         else
         {
@@ -842,12 +871,268 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 )
             );
             results.Add(
-                new TsMethodMember($"${nameOverride}", [rightParam], returnType, [helperBody])
+                new TsMethodMember($"${operatorName}", [rightParam], returnType, [helperBody])
             );
         }
 
         return results;
     }
+
+    /// <summary>
+    /// Maps a C# operator token to a conventional TypeScript method name.
+    /// Returns null for unsupported operators.
+    /// </summary>
+    private static string? MapOperatorTokenToName(string token) =>
+        token switch
+        {
+            "+" => "add",
+            "-" => "subtract",
+            "*" => "multiply",
+            "/" => "divide",
+            "%" => "modulo",
+            "==" => "equals",
+            "!=" => "notEquals",
+            "<" => "lessThan",
+            ">" => "greaterThan",
+            "<=" => "lessThanOrEqual",
+            ">=" => "greaterThanOrEqual",
+            "!" => "not",
+            "~" => "bitwiseNot",
+            "&" => "bitwiseAnd",
+            "|" => "bitwiseOr",
+            "^" => "xor",
+            "<<" => "shiftLeft",
+            ">>" => "shiftRight",
+            _ => null,
+        };
+
+    /// <summary>
+    /// Generates overload-dispatching plumbing for operators that share the same derived
+    /// name (e.g., two <c>operator *</c> overloads with different parameter types).
+    /// Produces a static dispatcher (<c>__multiply(...args)</c>) plus fast-path specializations,
+    /// and a single instance helper (<c>$multiply</c>) that delegates to the static dispatcher.
+    /// </summary>
+    private IReadOnlyList<TsClassMember> BuildOperatorDispatcher(
+        INamedTypeSymbol containingType,
+        string operatorName,
+        List<IMethodSymbol> overloads
+    )
+    {
+        var sorted = overloads.OrderByDescending(m => m.Parameters.Length).ToList();
+        var staticName = $"__{operatorName}";
+        var returnType = TypeMapper.Map(sorted[0].ReturnType);
+        var className = TypeTransformer.GetTsTypeName(containingType);
+        var members = new List<TsClassMember>();
+
+        // Generate overload signatures for the static dispatcher
+        var overloadSigs = sorted
+            .Select(m =>
+            {
+                var @params = m
+                    .Parameters.Select(p => new TsParameter(
+                        TypeScriptNaming.ToCamelCase(p.Name),
+                        TypeMapper.Map(p.Type)
+                    ))
+                    .ToList();
+                return new TsMethodOverload(@params, TypeMapper.Map(m.ReturnType));
+            })
+            .ToList();
+
+        // Generate fast-path names using same strategy as OverloadDispatcherBuilder
+        var fastPathNames = sorted
+            .Select(m =>
+                staticName
+                + string.Concat(m.Parameters.Select(p => Capitalize(SimpleTypeName(p.Type))))
+            )
+            .ToList();
+
+        // Generate fast-path methods (private, one per overload)
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var method = sorted[i];
+            var syntax =
+                method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                as OperatorDeclarationSyntax;
+            if (syntax is null)
+                continue;
+
+            var parameters = method
+                .Parameters.Select(p => new TsParameter(
+                    TypeScriptNaming.ToCamelCase(p.Name),
+                    TypeMapper.Map(p.Type)
+                ))
+                .ToList();
+            var semanticModel = _context.Compilation.GetSemanticModel(syntax.SyntaxTree);
+            var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
+            var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody);
+
+            members.Add(
+                new TsMethodMember(
+                    fastPathNames[i],
+                    parameters,
+                    TypeMapper.Map(method.ReturnType),
+                    body,
+                    Static: true,
+                    Accessibility: TsAccessibility.Private
+                )
+            );
+        }
+
+        // Generate dispatcher body that delegates to fast-paths
+        var dispatcherBody = new List<TsStatement>();
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var method = sorted[i];
+            var paramCount = method.Parameters.Length;
+
+            TsExpression condition = new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("args"), "length"),
+                "===",
+                new TsLiteral(paramCount.ToString())
+            );
+
+            for (var j = 0; j < paramCount; j++)
+            {
+                var check = TypeCheckGenerator.GenerateForParam(
+                    method.Parameters[j].Type,
+                    j,
+                    _context.AssemblyWideTranspile,
+                    _context.CurrentAssembly
+                );
+                condition = new TsBinaryExpression(condition, "&&", check);
+            }
+
+            var callArgs = new List<TsExpression>();
+            for (var j = 0; j < paramCount; j++)
+            {
+                var paramType = TypeMapper.Map(method.Parameters[j].Type);
+                callArgs.Add(new TsCastExpression(new TsIdentifier($"args[{j}]"), paramType));
+            }
+
+            var delegateCall = new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier(className), fastPathNames[i]),
+                callArgs
+            );
+
+            dispatcherBody.Add(new TsIfStatement(condition, [new TsReturnStatement(delegateCall)]));
+        }
+
+        dispatcherBody.Add(
+            new TsThrowStatement(
+                new TsNewExpression(
+                    new TsIdentifier("Error"),
+                    [new TsStringLiteral($"No matching overload for {operatorName}")]
+                )
+            )
+        );
+
+        // Static dispatcher: static __multiply(...args: unknown[]): ReturnType
+        members.Add(
+            new TsMethodMember(
+                staticName,
+                [new TsParameter("...args", new TsNamedType("unknown[]"))],
+                returnType,
+                dispatcherBody,
+                Static: true,
+                Overloads: overloadSigs
+            )
+        );
+
+        // Instance helper: $multiply(...args: unknown[]): ReturnType
+        // Dispatches to static fast-paths with `this` as first argument.
+        var instanceDispatchBody = new List<TsStatement>();
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var method = sorted[i];
+            // Instance args start at index 1 (skip `this`/`left`)
+            var instanceArgCount = method.Parameters.Length - 1;
+
+            TsExpression instCondition = new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("args"), "length"),
+                "===",
+                new TsLiteral(instanceArgCount.ToString())
+            );
+
+            for (var j = 0; j < instanceArgCount; j++)
+            {
+                var check = TypeCheckGenerator.GenerateForParam(
+                    method.Parameters[j + 1].Type, // skip first param (self)
+                    j,
+                    _context.AssemblyWideTranspile,
+                    _context.CurrentAssembly
+                );
+                instCondition = new TsBinaryExpression(instCondition, "&&", check);
+            }
+
+            var instCallArgs = new List<TsExpression> { new TsIdentifier("this") };
+            for (var j = 0; j < instanceArgCount; j++)
+            {
+                var paramType = TypeMapper.Map(method.Parameters[j + 1].Type);
+                instCallArgs.Add(new TsCastExpression(new TsIdentifier($"args[{j}]"), paramType));
+            }
+
+            var instCall = new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier(className), fastPathNames[i]),
+                instCallArgs
+            );
+
+            instanceDispatchBody.Add(
+                new TsIfStatement(instCondition, [new TsReturnStatement(instCall)])
+            );
+        }
+
+        instanceDispatchBody.Add(
+            new TsThrowStatement(
+                new TsNewExpression(
+                    new TsIdentifier("Error"),
+                    [new TsStringLiteral($"No matching overload for {operatorName}")]
+                )
+            )
+        );
+
+        // Instance overload signatures (skip first param — it becomes `this`)
+        var instanceOverloads = sorted
+            .Select(m =>
+            {
+                var @params = m
+                    .Parameters.Skip(1)
+                    .Select(p => new TsParameter(
+                        TypeScriptNaming.ToCamelCase(p.Name),
+                        TypeMapper.Map(p.Type)
+                    ))
+                    .ToList();
+                return new TsMethodOverload(@params, TypeMapper.Map(m.ReturnType));
+            })
+            .ToList();
+
+        members.Add(
+            new TsMethodMember(
+                $"${operatorName}",
+                [new TsParameter("...args", new TsNamedType("unknown[]"))],
+                returnType,
+                instanceDispatchBody,
+                Overloads: instanceOverloads
+            )
+        );
+
+        return members;
+    }
+
+    private static string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    private static string SimpleTypeName(ITypeSymbol type) =>
+        type.SpecialType switch
+        {
+            SpecialType.System_Int32 => "Int",
+            SpecialType.System_Int64 => "Long",
+            SpecialType.System_String => "String",
+            SpecialType.System_Boolean => "Bool",
+            SpecialType.System_Double => "Double",
+            SpecialType.System_Single => "Float",
+            SpecialType.System_Decimal => "Decimal",
+            _ => type.Name,
+        };
 
     // ─── Captured primary-ctor params (DI-style) ──────────────
 
