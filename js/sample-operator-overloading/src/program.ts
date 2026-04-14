@@ -1,4 +1,5 @@
-import { Currency, Money } from "#";
+import { Currency } from "./currency";
+import { Money } from "./money";
 
 let poket = Money.fromCents(150, Currency.Usd);
 

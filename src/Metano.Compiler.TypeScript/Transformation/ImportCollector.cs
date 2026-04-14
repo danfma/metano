@@ -68,7 +68,12 @@ public sealed class ImportCollector(
         referencedTypes.Remove($"is{tsTypeName}"); // own guard — don't import
 
         var imports = new List<TsImport>();
+        // For compiler-synthesized types (top-level statements), the namespace is empty.
+        // Use the project's root namespace so same-namespace imports produce relative paths
+        // instead of barrel aliases.
         var currentNs = PathNaming.GetNamespace(currentType);
+        if (currentNs.Length == 0 && _pathNaming.RootNamespace.Length > 0)
+            currentNs = _pathNaming.RootNamespace;
         // The current file's "key" — file name + namespace — used to elide self-imports
         // for types co-located via [EmitInFile]. Without this, a multi-type file would
         // try to import its sibling types from their individual paths (which don't
