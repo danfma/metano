@@ -213,14 +213,11 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
         var left = _parent.TransformExpression(assign.Left);
         var right = _parent.TransformExpression(assign.Right);
 
-        // x = x.$add(y)
+        // x = x.$add(y) — reuse `left` to avoid evaluating the LHS twice.
         return new TsBinaryExpression(
             left,
             "=",
-            new TsCallExpression(
-                new TsPropertyAccess(_parent.TransformExpression(assign.Left), $"${opName}"),
-                [right]
-            )
+            new TsCallExpression(new TsPropertyAccess(left, $"${opName}"), [right])
         );
     }
 

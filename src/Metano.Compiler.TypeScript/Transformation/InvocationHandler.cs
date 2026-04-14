@@ -92,9 +92,11 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
     }
 
     /// <summary>
-    /// Rewrites <c>Math.Round/Floor/Ceiling</c> calls when the first argument is
-    /// <c>System.Decimal</c>. The JS <c>Math.round</c> only works on <c>number</c>;
-    /// decimal.js instances have their own <c>.round()</c>, <c>.floor()</c>, <c>.ceil()</c>.
+    /// Rewrites <c>Math.Round</c>, <c>Math.Floor</c>, <c>Math.Ceiling</c>, and <c>Math.Abs</c>
+    /// calls when the first argument is <c>System.Decimal</c>. The JS <c>Math.round</c> only
+    /// works on <c>number</c>; decimal.js instances have their own instance methods.
+    /// Only rewrites single-argument overloads — multi-argument overloads (e.g.,
+    /// <c>Math.Round(decimal, int)</c>) are left for the standard BCL mapping.
     /// </summary>
     private TsExpression? TryRewriteMathDecimal(
         IMethodSymbol method,
@@ -103,7 +105,7 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
     {
         if (
             method.ContainingType?.ToDisplayString() != "System.Math"
-            || method.Parameters.Length == 0
+            || invocation.ArgumentList.Arguments.Count != 1
         )
             return null;
 

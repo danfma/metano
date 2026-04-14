@@ -114,8 +114,11 @@ public static class PackageJsonWriter
             : BuildExports(files, distDirRelativeToPackageRoot, outputPrefix);
         // Check for a root barrel from the file list — executables skip exports
         // but may still need the "#" import alias for internal barrel imports.
+        // When outputPrefix is set, the root barrel is at {prefix}/index.ts.
+        var rootIndexName = outputPrefix.Length > 0 ? $"{outputPrefix}/index.ts" : "index.ts";
         var hasRootIndex = files.Any(f =>
-            NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal)
+            NormalizePath(f.FileName).Equals(rootIndexName, StringComparison.Ordinal)
+            || NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal)
         );
         var imports = BuildImports(
             srcRelative,
