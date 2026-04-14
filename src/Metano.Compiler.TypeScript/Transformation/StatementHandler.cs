@@ -220,8 +220,15 @@ public sealed class StatementHandler(ExpressionTransformer parent)
         // Walking the entire enclosing block is sufficient because C# locals can't
         // escape it, and we re-resolve symbols through the SemanticModel so shadowing
         // by an inner scope (different ILocalSymbol) is naturally excluded.
+        //
+        // For top-level statements (C# 9+), each statement lives in its own
+        // GlobalStatementSyntax which inherits from MemberDeclarationSyntax. Walking
+        // only that node would miss mutations from sibling statements — use the
+        // CompilationUnit as scope so all top-level statements are visible.
         SyntaxNode? scope = variable.FirstAncestorOrSelf<BlockSyntax>();
-        scope ??= variable.FirstAncestorOrSelf<MemberDeclarationSyntax>();
+        scope ??= variable.FirstAncestorOrSelf<GlobalStatementSyntax>() is not null
+            ? variable.FirstAncestorOrSelf<CompilationUnitSyntax>()
+            : variable.FirstAncestorOrSelf<MemberDeclarationSyntax>();
         if (scope is null)
             return true;
 

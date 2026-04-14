@@ -1,5 +1,4 @@
-import { HashCode } from "metano-runtime";
-import { UUID } from "metano-runtime";
+import { HashCode, UUID } from "metano-runtime";
 
 export type IssueId = string & { readonly __brand: "IssueId" };
 

@@ -1,5 +1,4 @@
-import { isString } from "metano-runtime";
-import { Enumerable } from "metano-runtime";
+import { Enumerable, isString } from "metano-runtime";
 import { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 

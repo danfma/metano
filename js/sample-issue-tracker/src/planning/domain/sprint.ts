@@ -1,6 +1,5 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { dayNumber } from "metano-runtime";
-import { HashSet } from "metano-runtime";
+import { HashSet, dayNumber } from "metano-runtime";
 import type { IssueId } from "#/issues/domain";
 
 export class Sprint {

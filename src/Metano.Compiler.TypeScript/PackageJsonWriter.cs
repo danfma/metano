@@ -112,8 +112,11 @@ public static class PackageJsonWriter
         var exports = isExecutable
             ? null
             : BuildExports(files, distDirRelativeToPackageRoot, outputPrefix);
-        var rootExportKey = outputPrefix.Length > 0 ? $"./{outputPrefix}" : ".";
-        var hasRootIndex = exports?.ContainsKey(rootExportKey) ?? false;
+        // Check for a root barrel from the file list — executables skip exports
+        // but may still need the "#" import alias for internal barrel imports.
+        var hasRootIndex = files.Any(f =>
+            NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal)
+        );
         var imports = BuildImports(
             srcRelative,
             distDirRelativeToPackageRoot,

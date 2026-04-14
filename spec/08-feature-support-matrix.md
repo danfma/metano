@@ -59,6 +59,9 @@ Statuses are intentionally high-level:
 | --- | --- | --- | --- |
 | Output | Namespace-based imports and barrels | Implemented | Guided by ADR-0006 and ADR-0007. |
 | Packaging | `[EmitPackage]` cross-package support | Implemented | Includes `package.json` dependency propagation. |
+| Packaging | `Metano` and `Metano.Build` as build-only consumer dependencies | Planned/Partial | Intended to avoid unnecessary runtime/transitive contribution in consuming .NET projects. |
+| Packaging | Subdirectory-aware `package.json` imports/exports (`--src-root`) | Planned | When output targets a subdirectory of the source tree, dist paths and export subpaths must include the correct prefix (FR-030). |
+| Cross-package | Import/export subpaths derived from namespace instead of file layout | Planned/Correction | Spec-mandated behavior; current implementation requires correction. |
 | Serialization | `JsonSerializerContext` transpilation | Implemented | JSON names resolved at transpile time. |
 | Validation | Generated type guards | Implemented | Via `[GenerateGuard]`. |
 | Diagnostics | Stable `MS0001`-`MS0008` catalog | Implemented | See diagnostic catalog. |

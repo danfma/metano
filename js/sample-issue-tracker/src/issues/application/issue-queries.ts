@@ -1,5 +1,4 @@
-import { Enumerable } from "metano-runtime";
-import type { Grouping } from "metano-runtime";
+import { Enumerable, type Grouping } from "metano-runtime";
 import { IssuePriority, IssueStatus, type Issue } from "#/issues/domain";
 import type { UserId } from "#/shared-kernel";
 
