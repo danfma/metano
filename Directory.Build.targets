@@ -1,0 +1,25 @@
+<Project>
+  <!--
+    Auto-install Husky.Net git hooks once per machine.
+
+    Runs after `dotnet restore` (which `dotnet build` triggers implicitly)
+    so a fresh clone gets the pre-commit / pre-push checks wired up
+    without any extra step. The marker file under `obj/` makes the
+    install idempotent across rebuilds, and the IsCrossTargetingBuild
+    guard keeps it out of multi-TFM inner builds. CI bypasses it via
+    HUSKY=0 so build agents don't waste time on hook setup.
+  -->
+  <Target
+    Name="HuskyInstall"
+    AfterTargets="Restore"
+    Condition="'$(HUSKY)' != '0' AND '$(IsCrossTargetingBuild)' != 'true' AND !Exists('$(MSBuildThisFileDirectory)obj/.husky-installed')"
+  >
+    <Exec
+      Command="dotnet husky install"
+      WorkingDirectory="$(MSBuildThisFileDirectory)"
+      IgnoreExitCode="true"
+    />
+    <MakeDir Directories="$(MSBuildThisFileDirectory)obj" />
+    <Touch Files="$(MSBuildThisFileDirectory)obj/.husky-installed" AlwaysCreate="true" />
+  </Target>
+</Project>
