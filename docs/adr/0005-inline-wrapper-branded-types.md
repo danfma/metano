@@ -118,11 +118,26 @@ also protects BCL identifiers that cross the TS boundary.
 ## References
 
 - `src/Metano/Annotations/InlineWrapperAttribute.cs`
-- `src/Metano.Compiler.TypeScript/Transformation/InlineWrapperTransformer.cs`
-- `src/Metano.Compiler.TypeScript/Transformation/TypeMapper.cs` — `Guid`
-  → `UUID` mapping
+- `src/Metano.Compiler.TypeScript/Bridge/IrToTsInlineWrapperBridge.cs`
+- `src/Metano.Compiler.TypeScript/Bridge/IrToTsTypeMapper.cs` —
+  `IrPrimitive.Guid` → `UUID` mapping
 - `targets/js/metano-runtime/src/system/uuid.ts` — runtime-provided branded type
 - `samples/SampleIssueTracker` — `UserId`, `IssueId` as inline wrappers
 - `tests/Metano.Tests/InlineWrapperTranspileTests.cs`
 - Related: [ADR-0003](0003-declarative-bcl-mappings.md) — how the
   `Guid` → `UUID` mapping is declared.
+
+## Post-refactor note (2026-04)
+
+`InlineWrapperTransformer.cs` and `TypeMapper.cs` listed above were
+retired. The inline-wrapper shape is now lowered by
+`IrToTsInlineWrapperBridge` (under `src/Metano.Compiler.TypeScript/Bridge/`),
+which consumes an `IrClassDeclaration` whose
+`IrTypeSemantics.IsInlineWrapper` + `InlineWrappedType` were populated by
+the IR extractor in `src/Metano.Compiler/Extraction/IrClassExtractor.cs`.
+The `Guid` → `UUID` runtime helper discovery moved from the old `TypeMapper`
+to `IrRuntimeRequirementScanner` (adds `("UUID", BrandedType)` to the
+module's requirement set), which `IrRuntimeRequirementToTsImport.Convert`
+translates into the concrete `import { UUID } from "metano-runtime"`. See
+[ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md) for
+the wider context.

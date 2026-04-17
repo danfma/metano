@@ -118,13 +118,38 @@ with the pre-dispatch code path.
 
 ## References
 
-- `src/Metano.Compiler.TypeScript/Transformation/OverloadDispatcherBuilder.cs`
-- `src/Metano.Compiler.TypeScript/Transformation/TypeCheckGenerator.cs`
+- `src/Metano.Compiler.TypeScript/Bridge/IrToTsOverloadDispatcherBridge.cs`
+- `src/Metano.Compiler.TypeScript/Bridge/IrToTsConstructorDispatcherBridge.cs`
+- `src/Metano.Compiler.TypeScript/Bridge/IrTypeCheckBuilder.cs`
 - `src/Metano.Compiler.TypeScript/TypeScript/AST/TsConstructorOverload.cs`
 - `tests/Metano.Tests/MethodOverloadTests.cs`,
-  `ConstructorOverloadTests.cs`, `MethodOverloadFastPathTests.cs`
+  `ConstructorOverloadTests.cs`, `MethodOverloadFastPathTests.cs`,
+  `tests/Metano.Tests/IR/IrToTsOverloadDispatcherBridgeTests.cs`
 - Related: [ADR-0009](0009-type-guards.md) for the runtime type check
   functions the dispatcher uses; static-known fast-path optimization
   and the other overload follow-ups (constructor factories, inheritance
   with overloads) are tracked as
   [issue #25](https://github.com/danfma/metano/issues/25).
+
+## Post-refactor note (2026-04)
+
+`OverloadDispatcherBuilder.cs` and `TypeCheckGenerator.cs` listed above
+were retired. The dispatch strategy documented here is unchanged: a
+dispatcher method with a widened `(...args)` signature, per-overload
+branches gated by runtime type checks, with a static-known fast-path for
+call sites where the compiler can prove which overload is targeted. The
+implementation now lives under `src/Metano.Compiler.TypeScript/Bridge/`
+as three related types:
+
+- `IrToTsOverloadDispatcherBridge` — method overload dispatcher.
+- `IrToTsConstructorDispatcherBridge` — constructor overload dispatcher
+  (declares `const <name> = args[i] as <Type>` per branch so the lowered
+  body and `super(...)` resolve).
+- `IrTypeCheckBuilder` — emits the runtime type guards
+  (`isInt32`, `instanceof T`, `typeof === "object"`, exhaustive string
+  enum checks, etc.) consumed by both dispatchers.
+
+Overload groups are produced by the IR extractor folding siblings onto
+`IrMethodDeclaration.Overloads` and `IrConstructorDeclaration.Overloads`
+— backends consume them directly. See
+[ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md).
