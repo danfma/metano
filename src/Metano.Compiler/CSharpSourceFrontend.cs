@@ -43,22 +43,125 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         LoadedCompilation = compilation;
         LoadErrorCount = errorCount;
 
-        // Fields beyond AssemblyName / Diagnostics stay empty during the
-        // shell phase. Downstream targets fall back to `LoadedCompilation`
-        // for discovery / extraction until the follow-up migration wires
-        // them onto `IrCompilation`.
+        return BuildIrCompilation(
+            compilation,
+            fallbackAssemblyName: assemblyName,
+            diagnostics: diagnostics
+        );
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IrCompilation"/> from an already-loaded Roslyn
+    /// <see cref="Compilation"/>. Used by the test suite (and any future
+    /// in-process caller) so the frontend's extraction can be exercised
+    /// without going through <see cref="MSBuildWorkspace"/>. Mirrors the
+    /// production path: stores the compilation on
+    /// <see cref="LoadedCompilation"/>, resets <see cref="LoadErrorCount"/>
+    /// to <c>0</c>, and returns the populated record.
+    /// </summary>
+    public IrCompilation ExtractFromCompilation(Compilation compilation)
+    {
+        LoadedCompilation = compilation;
+        LoadErrorCount = 0;
+        return BuildIrCompilation(
+            compilation,
+            fallbackAssemblyName: compilation.AssemblyName ?? "",
+            diagnostics: new List<MetanoDiagnostic>()
+        );
+    }
+
+    private static IrCompilation BuildIrCompilation(
+        Compilation? compilation,
+        string fallbackAssemblyName,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        // Fields beyond what's already populated stay empty during the
+        // incremental migration. Downstream targets fall back to
+        // `LoadedCompilation` for the rest until follow-up PRs wire them
+        // onto `IrCompilation`.
         return new IrCompilation(
-            AssemblyName: compilation?.AssemblyName ?? assemblyName,
+            AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: null,
             AssemblyWideTranspile: false,
             Modules: Array.Empty<IrModule>(),
             ReferencedModules: Array.Empty<IrModule>(),
             CrossAssemblyOrigins: new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal),
             ExternalImports: new Dictionary<string, IrExternalImport>(StringComparer.Ordinal),
-            BclExports: new Dictionary<string, IrBclExport>(StringComparer.Ordinal),
+            BclExports: compilation is null
+                ? new Dictionary<string, IrBclExport>(StringComparer.Ordinal)
+                : BuildBclExports(compilation),
             AssembliesNeedingEmitPackage: new HashSet<string>(StringComparer.Ordinal),
             Diagnostics: diagnostics
         );
+    }
+
+    /// <summary>
+    /// Reads <c>[ExportFromBcl]</c> declarations from every assembly in scope
+    /// (referenced first, current assembly last so user-side overrides win on
+    /// conflict) and returns them keyed by the BCL type's display string.
+    /// Mirrors the legacy <c>TypeTransformer.LoadBclExportMappings</c>; the
+    /// target-side copy stays in place until the contract flip migrates
+    /// consumers onto the IR.
+    /// </summary>
+    private static Dictionary<string, IrBclExport> BuildBclExports(Compilation compilation)
+    {
+        var map = new Dictionary<string, IrBclExport>(StringComparer.Ordinal);
+
+        foreach (var reference in compilation.References)
+        {
+            if (
+                compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol asm
+                && !SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly)
+            )
+                CollectBclExportsFromAssembly(asm, map);
+        }
+        CollectBclExportsFromAssembly(compilation.Assembly, map);
+
+        return map;
+    }
+
+    private static void CollectBclExportsFromAssembly(
+        IAssemblySymbol assembly,
+        Dictionary<string, IrBclExport> sink
+    )
+    {
+        foreach (var attr in assembly.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is not ("ExportFromBclAttribute" or "ExportFromBcl"))
+                continue;
+
+            if (attr.ConstructorArguments.Length == 0)
+                continue;
+            if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol typeArg)
+                continue;
+
+            var exportedName = "";
+            var fromPackage = "";
+            string? version = null;
+
+            foreach (var namedArg in attr.NamedArguments)
+            {
+                switch (namedArg.Key)
+                {
+                    case "ExportedName":
+                        exportedName = namedArg.Value.Value?.ToString() ?? "";
+                        break;
+                    case "FromPackage":
+                        fromPackage = namedArg.Value.Value?.ToString() ?? "";
+                        break;
+                    case "Version":
+                        var raw = namedArg.Value.Value?.ToString();
+                        version = string.IsNullOrEmpty(raw) ? null : raw;
+                        break;
+                }
+            }
+
+            if (exportedName.Length == 0)
+                continue;
+
+            sink[typeArg.ToDisplayString()] = new IrBclExport(exportedName, fromPackage, version);
+        }
     }
 
     /// <summary>
