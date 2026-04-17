@@ -90,6 +90,20 @@ Dictionaries, Sets, Linq — roughly 140 declarations total.
 - `src/Metano/Annotations/MapMethodAttribute.cs`,
   `src/Metano/Annotations/MapPropertyAttribute.cs`
 - `src/Metano/Runtime/` — all default mappings by area
-- `src/Metano.Compiler.TypeScript/Transformation/BclMapper.cs`
+- `src/Metano.Compiler.TypeScript/Bridge/IrToTsBclMapper.cs`
 - `src/Metano.Compiler.TypeScript/Transformation/DeclarativeMappingRegistry.cs`
-- `tests/Metano.Tests/DeclarativeMappingTests.cs`
+- `tests/Metano.Tests/IR/IrToTsBclMapperTests.cs`
+
+## Post-refactor note (2026-04)
+
+The decision here — declarative assembly-level mappings driving a
+per-compilation registry — is unchanged. The consumer moved from
+`BclMapper` (Roslyn-walking) to `IrToTsBclMapper` in
+`src/Metano.Compiler.TypeScript/Bridge/`, which takes IR call expressions
+and member accesses and renders `TsTemplate` / `TsCallExpression` nodes.
+The `DeclarativeMappingRegistry` grew full-name-keyed secondary indices
+(`GetStableFullName` / `CSharpErrorMessageFormat`) so the IR lookup is
+symbol-free and deterministic. The Dart target will consume the same
+registry through its own bridge when per-target templates are added.
+See [ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md)
+for the wider IR architecture.

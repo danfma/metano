@@ -113,11 +113,29 @@ will feed into the same `_crossAssemblyTypeMap` — additive, not a rewrite.
 
 - `src/Metano.Compiler.TypeScript/Transformation/TypeTransformer.cs` —
   `DiscoverCrossAssemblyTypes`
-- `src/Metano.Compiler.TypeScript/Transformation/TypeMapper.cs` —
-  populates `TsNamedType.Origin`
+- `src/Metano.Compiler.TypeScript/Transformation/IrTypeOriginResolverFactory.cs` —
+  populates `IrTypeOrigin` on every `IrNamedTypeRef` during extraction
+- `src/Metano.Compiler.TypeScript/Bridge/IrToTsTypeMapper.cs` — propagates
+  `IrTypeOrigin` onto `TsNamedType.Origin` during lowering
 - `src/Metano.Compiler.TypeScript/TypeScript/AST/TsTypeOrigin.cs`
 - `src/Metano/Annotations/TranspileAssemblyAttribute.cs`
 - `src/Metano/Annotations/EmitPackageAttribute.cs`
 - `tests/Metano.Tests/CrossPackageImportTests.cs`
 - Related: [ADR-0011](0011-emit-package-ssot.md) (`[EmitPackage]` as
   package.json SSoT + auto-deps merge — planned)
+
+## Post-refactor note (2026-04)
+
+Roslyn is still the front-end (and still carries the cross-assembly
+metadata that makes this decision cheap), but the flow now goes through
+the shared IR. The Roslyn `Compilation` is walked by extractors in
+`src/Metano.Compiler/Extraction/` which stamp `IrTypeOrigin(PackageId,
+Namespace, VersionHint?)` on every `IrNamedTypeRef`; the target bridges
+read it without touching Roslyn symbols. `TypeMapper` is retired
+(replaced by `IrToTsTypeMapper`), and the alternative "Custom IR + ..."
+path listed above has partially materialized: the IR is the canonical
+representation, Roslyn is just the loader. See
+[ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md). A
+follow-up will physically separate the C# frontend so `Metano.Compiler`
+stops referencing `Microsoft.CodeAnalysis.*`, opening the door to
+non-Roslyn front-ends.

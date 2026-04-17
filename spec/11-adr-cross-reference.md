@@ -19,6 +19,7 @@ shape the current product.
 | `ADR-0010` | Diagnostics and stable codes | Supports FR-038, FR-039, and diagnostic catalog rules. |
 | `ADR-0011` | `[EmitPackage]` as SSOT | Supports FR-030 and FR-031. |
 | `ADR-0012` | LINQ eager wrapper strategy | Supports FR-017 and runtime support assumptions. |
+| `ADR-0013` | Shared IR as canonical semantic representation | Supports NFR maintainability and multi-target extensibility; foundation for additional source frontends. |
 
 ## Guidance
 

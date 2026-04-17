@@ -84,3 +84,33 @@ Representative handlers extracted:
 - `src/Metano.Compiler.TypeScript/Transformation/TypeScriptTransformContext.cs`
   — the immutable shared state handed to every handler
 - 30+ handler files under `src/Metano.Compiler.TypeScript/Transformation/`
+
+## Post-refactor note (2026-04)
+
+The handler decomposition pattern survives intact — it's still the shape
+of the TypeScript target — but the handlers migrated from consuming
+Roslyn directly to consuming the shared IR introduced by
+[ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md). The
+TS-specific "transformer" classes listed above were either renamed to
+`IrTo*Bridge` and relocated to `src/Metano.Compiler.TypeScript/Bridge/`,
+or folded into `IrToTsClassEmitter` (the surviving orchestrator):
+
+| Retired class | Replacement |
+| --- | --- |
+| `EnumTransformer` | `IrToTsEnumBridge` |
+| `InterfaceTransformer` | `IrToTsInterfaceBridge` |
+| `ExceptionTransformer` | `IrToTsExceptionBridge` |
+| `InlineWrapperTransformer` | `IrToTsInlineWrapperBridge` |
+| `ModuleTransformer` | `IrToTsModuleBridge` |
+| `RecordClassTransformer` | `IrToTsClassEmitter` (orchestrator) + `IrToTsClassBridge` (helpers) |
+| `RecordSynthesizer` | `IrToTsRecordSynthesisBridge` |
+| `OverloadDispatcherBuilder` | `IrToTsOverloadDispatcherBridge` + `IrToTsConstructorDispatcherBridge` |
+| `TypeCheckGenerator` | `IrTypeCheckBuilder` |
+| `BclMapper` | `IrToTsBclMapper` |
+| `TypeMapper` | `IrToTsTypeMapper` |
+| `ExpressionTransformer` + 13 child handlers | `IrToTsExpressionBridge` + `IrToTsStatementBridge` |
+
+The decision recorded here (decompose over monolith, compose via parent
+properties, no formal Visitor) was ratified by the Dart target — the same
+shape now lives in `src/Metano.Compiler.Dart/Bridge/` with no TypeScript
+contamination.
