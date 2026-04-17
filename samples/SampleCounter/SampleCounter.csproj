@@ -5,17 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <MetanoOutputDir>js/src/sample-counter</MetanoOutputDir>
+    <MetanoOutputDir>../../targets/js/sample-counter/src/sample-counter</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="js\" />
   </ItemGroup>
 
   <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />

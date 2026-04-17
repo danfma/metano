@@ -1,5 +1,5 @@
 {
-  "name": "js",
+  "name": "sample-counter",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -20,6 +20,15 @@
   },
   "sideEffects": false,
   "imports": {
-    "#/*": "./src/*"
+    "#/*": {
+      "types": "./dist/sample-counter/*.d.ts",
+      "import": "./dist/sample-counter/*.js",
+      "default": "./src/sample-counter/*.ts"
+    },
+    "#": {
+      "types": "./dist/sample-counter/index.d.ts",
+      "import": "./dist/sample-counter/index.js",
+      "default": "./src/sample-counter/index.ts"
+    }
   }
 }
