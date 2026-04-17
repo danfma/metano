@@ -1,0 +1,89 @@
+using Metano.Compiler;
+using Metano.Tests.IR;
+
+namespace Metano.Tests.Frontend;
+
+/// <summary>
+/// Producer-side tests for the bits of <see cref="IrCompilation"/> that
+/// <see cref="CSharpSourceFrontend"/> already populates. Consumers (the
+/// language targets) still build their own copy of this data; these
+/// tests exist so the frontend cannot silently regress while the
+/// migration is in flight.
+/// </summary>
+public class CSharpSourceFrontendTests
+{
+    [Test]
+    public async Task BclExports_AreCollectedFromCurrentAssembly()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: ExportFromBcl(
+                typeof(decimal),
+                FromPackage = "decimal.js",
+                ExportedName = "Decimal",
+                Version = "^10.6.0"
+            )]
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.BclExports).ContainsKey("decimal");
+        var entry = ir.BclExports["decimal"];
+        await Assert.That(entry.ExportedName).IsEqualTo("Decimal");
+        await Assert.That(entry.FromPackage).IsEqualTo("decimal.js");
+        await Assert.That(entry.Version).IsEqualTo("^10.6.0");
+    }
+
+    [Test]
+    public async Task BclExports_OmitVersionWhenAttributeLeavesItEmpty()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: ExportFromBcl(
+                typeof(decimal),
+                FromPackage = "decimal.js",
+                ExportedName = "Decimal"
+            )]
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        var entry = ir.BclExports["decimal"];
+        await Assert.That(entry.Version).IsNull();
+    }
+
+    [Test]
+    public async Task BclExports_PullInDeclarationsFromReferencedAssemblies()
+    {
+        // Metano.Runtime declares [assembly: ExportFromBcl(typeof(decimal), ...)] for
+        // decimal.js. The reference is brought in by IrTestHelper.BaseReferences via
+        // TranspileHelper, so a project that doesn't redeclare the mapping should
+        // still see it.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public class Marker {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.BclExports).ContainsKey("decimal");
+    }
+
+    [Test]
+    public async Task BclExports_IgnoreAttributesWithoutExportedName()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: ExportFromBcl(typeof(System.Guid), FromPackage = "uuid")]
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.BclExports.ContainsKey("System.Guid")).IsFalse();
+    }
+}
