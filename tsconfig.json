@@ -1,10 +1,10 @@
 {
   "files": [],
   "references": [
-    { "path": "./js/metano-runtime/tsconfig.json" },
-    { "path": "./js/sample-todo/tsconfig.json" },
-    { "path": "./js/sample-todo-service/tsconfig.json" },
-    { "path": "./js/sample-issue-tracker/tsconfig.json" },
-    { "path": "./samples/SampleCounter/js/tsconfig.json"}
-  ],
+    { "path": "./targets/js/metano-runtime/tsconfig.json" },
+    { "path": "./targets/js/sample-todo/tsconfig.json" },
+    { "path": "./targets/js/sample-todo-service/tsconfig.json" },
+    { "path": "./targets/js/sample-issue-tracker/tsconfig.json" },
+    { "path": "./targets/js/sample-counter/tsconfig.json" }
+  ]
 }

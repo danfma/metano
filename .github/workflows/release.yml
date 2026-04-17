@@ -47,7 +47,7 @@ jobs:
       - name: Build metano-runtime
         run: |
           bun install
-          cd js/metano-runtime && bun run build
+          cd targets/js/metano-runtime && bun run build
 
       # Sync version from the tag and publish to npm via Trusted Publishing.
       # No NPM_TOKEN — the npm CLI uses the OIDC token from id-token: write.

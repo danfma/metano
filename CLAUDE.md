@@ -19,7 +19,10 @@ dotnet run --project tests/Metano.Tests/ -- \
   --results-directory TestResults                     # run tests with code coverage
 dotnet run --project src/Metano.Compiler.TypeScript/ -- \
   -p samples/SampleTodo/SampleTodo.csproj \
-  -o js/sample-todo/src --clean                       # transpile SampleTodo to TypeScript
+  -o targets/js/sample-todo/src --clean               # transpile SampleTodo to TypeScript
+dotnet run --project src/Metano.Compiler.Dart/ -- \
+  -p samples/SampleCounter/SampleCounter.csproj \
+  -o targets/flutter/sample_counter/lib/sample_counter --clean  # transpile SampleCounter to Dart
 dotnet csharpier .                                    # format C# code
 ```
 
@@ -28,12 +31,13 @@ TUnit on .NET 10 requires `dotnet run` instead of `dotnet test`.
 ### JavaScript/TypeScript (Bun)
 
 ```sh
-cd js/metano-runtime && bun run build             # TypeScript build (tsgo)
-cd js/metano-runtime && bun test                  # run runtime tests
-cd js/sample-todo && bun run build                    # TS build of generated code
-cd js/sample-todo && bun test                         # end-to-end tests (18 tests)
-cd js/sample-issue-tracker && bun run build && bun test  # 65 tests
-cd js/sample-todo-service && bun run build && bun test   # 19 tests (cross-package + Hono CRUD + JSON serialization)
+cd targets/js/metano-runtime && bun run build             # TypeScript build (tsgo)
+cd targets/js/metano-runtime && bun test                  # run runtime tests
+cd targets/js/sample-todo && bun run build                # TS build of generated code
+cd targets/js/sample-todo && bun test                     # end-to-end tests (18 tests)
+cd targets/js/sample-issue-tracker && bun run build && bun test  # 65 tests
+cd targets/js/sample-todo-service && bun run build && bun test   # 19 tests (cross-package + Hono CRUD + JSON serialization)
+cd targets/js/sample-counter && bun run dev               # Vite + SolidJS counter MVP sample
 ```
 
 Always use **Bun** — never npm, yarn, or pnpm.
@@ -51,24 +55,36 @@ Metano.slnx
 │   │   ├── TranspilerHost.cs            # Orchestrates load → compile → target.Transform → write
 │   │   ├── SymbolHelper.cs              # Target-agnostic Roslyn helpers (attribute readers, type checks)
 │   │   └── Diagnostics/                 # MetanoDiagnostic + DiagnosticCodes (MS0001–MS0008)
-│   └── Metano.Compiler.TypeScript/   # TypeScript target (depends on the core)
-│       ├── TypeScriptTarget.cs          # ITranspilerTarget adapter
-│       ├── Commands.cs                  # CLI (ConsoleAppFramework) — `metano-typescript`
-│       ├── PackageJsonWriter.cs         # Auto-generates package.json (imports/exports/dependencies)
-│       ├── Transformation/              # 39 focused handlers (TypeTransformer, ExpressionTransformer, etc.)
-│       └── TypeScript/AST + Printer.cs  # ~65 TS AST record types and the printer
+│   ├── Metano.Compiler.TypeScript/   # TypeScript target (depends on the core)
+│   │   ├── TypeScriptTarget.cs          # ITranspilerTarget adapter
+│   │   ├── Commands.cs                  # CLI (ConsoleAppFramework) — `metano-typescript`
+│   │   ├── Bridge/                      # IR → TS AST bridges (enums, interfaces, plain objects)
+│   │   ├── PackageJsonWriter.cs         # Auto-generates package.json (imports/exports/dependencies)
+│   │   ├── Transformation/              # 39 focused handlers (TypeTransformer, ExpressionTransformer, etc.)
+│   │   └── TypeScript/AST + Printer.cs  # ~65 TS AST record types and the printer
+│   └── Metano.Compiler.Dart/         # Dart/Flutter target (prototype — shape-only, no bodies yet)
+│       ├── DartTarget.cs                # ITranspilerTarget adapter
+│       ├── Commands.cs                  # CLI — `metano-dart`
+│       ├── Bridge/                      # IR → Dart AST (enum, interface, class)
+│       ├── Transformation/              # Dart transformer orchestrator
+│       └── Dart/AST + Printer.cs        # Minimal Dart AST + printer
 ├── tests/
 │   └── Metano.Tests/                 # 337 TUnit tests with inline C# compilation
 │       └── Expected/                    # Expected .ts output files for golden tests
 ├── samples/
 │   ├── SampleTodo/                      # Sample C# project for end-to-end validation
 │   ├── SampleTodo.Service/              # Hono-based service sample (cross-package + [PlainObject] CRUD)
-│   └── SampleIssueTracker/              # Larger sample exercising LINQ, records, modules, overloads
-├── js/                                  # Bun workspace
-│   ├── metano-runtime/              # metano-runtime (HashCode, HashSet, LINQ, type checks)
-│   ├── sample-todo/                     # Generated TS from SampleTodo + bun tests (18)
-│   ├── sample-todo-service/             # Generated TS from SampleTodo.Service + bun tests (9)
-│   └── sample-issue-tracker/            # Generated TS from SampleIssueTracker + bun tests (51)
+│   ├── SampleIssueTracker/              # Larger sample exercising LINQ, records, modules, overloads
+│   └── SampleCounter/                   # Counter MVP sample (used by Vite + SolidJS consumer)
+└── targets/                             # One subfolder per language target + its samples
+    ├── js/                              # Bun workspace (TypeScript target)
+    │   ├── metano-runtime/              # metano-runtime (HashCode, HashSet, LINQ, type checks)
+    │   ├── sample-todo/                 # Generated TS from SampleTodo + bun tests (18)
+    │   ├── sample-todo-service/         # Generated TS from SampleTodo.Service + bun tests (9)
+    │   ├── sample-issue-tracker/        # Generated TS from SampleIssueTracker + bun tests (51)
+    │   └── sample-counter/              # Vite + SolidJS MVP consumer of generated SampleCounter TS
+    └── flutter/                         # Dart/Flutter target consumers
+        └── sample_counter/              # Flutter app consuming generated Dart from SampleCounter
 ```
 
 ### Pipeline

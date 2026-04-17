@@ -28,11 +28,11 @@ jobs:
 
       - name: Verify samples are regenerated cleanly
         run: |
-          if ! git diff --quiet -- js/ 2>&1; then
+          if ! git diff --quiet -- targets/ 2>&1; then
             echo "Generated TS files are out of sync with the C# source."
             echo "Run 'dotnet build' locally and commit the regenerated files."
-            git status -- js/
-            git diff -- js/ | head -100
+            git status -- targets/
+            git diff -- targets/ | head -100
             exit 1
           fi
 
@@ -54,16 +54,16 @@ jobs:
         run: bun install
 
       - name: metano-runtime
-        run: cd js/metano-runtime && bun run build && bun test
+        run: cd targets/js/metano-runtime && bun run build && bun test
 
       - name: sample-todo
-        run: cd js/sample-todo && bun run build && bun test
+        run: cd targets/js/sample-todo && bun run build && bun test
 
       - name: sample-todo-service
-        run: cd js/sample-todo-service && bun run build && bun test
+        run: cd targets/js/sample-todo-service && bun run build && bun test
 
       - name: sample-issue-tracker
-        run: cd js/sample-issue-tracker && bun run build && bun test
+        run: cd targets/js/sample-issue-tracker && bun run build && bun test
 
       - name: Biome check
         run: bunx biome check .

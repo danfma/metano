@@ -128,7 +128,7 @@ namespace barrel. The `TsTypePredicateType` AST node carries the
 - `src/Metano.Compiler.TypeScript/Transformation/TypeGuardBuilder.cs`
 - `src/Metano.Compiler.TypeScript/TypeScript/AST/TsTypePredicateType.cs`
 - `src/Metano/Annotations/GenerateGuardAttribute.cs`
-- `js/metano-runtime/src/system/primitives/` — `isInt32`, `isString`,
+- `targets/js/metano-runtime/src/system/primitives/` — `isInt32`, `isString`,
   etc.
 - `tests/Metano.Tests/TypeGuardTranspileTests.cs`
 - [Issue #24](https://github.com/danfma/metano/issues/24) — `assertX`
