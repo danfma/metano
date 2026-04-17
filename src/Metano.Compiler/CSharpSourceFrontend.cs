@@ -80,6 +80,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // incremental migration. Downstream targets fall back to
         // `LoadedCompilation` for the rest until follow-up PRs wire them
         // onto `IrCompilation`.
+        IReadOnlyDictionary<string, IrExternalImport> externalImports = compilation is null
+            ? new Dictionary<string, IrExternalImport>(StringComparer.Ordinal)
+            : BuildExternalImports(compilation, diagnostics);
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: null,
@@ -87,9 +91,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             Modules: Array.Empty<IrModule>(),
             ReferencedModules: Array.Empty<IrModule>(),
             CrossAssemblyOrigins: new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal),
-            ExternalImports: compilation is null
-                ? new Dictionary<string, IrExternalImport>(StringComparer.Ordinal)
-                : BuildExternalImports(compilation),
+            ExternalImports: externalImports,
             BclExports: compilation is null
                 ? new Dictionary<string, IrBclExport>(StringComparer.Ordinal)
                 : BuildBclExports(compilation),
@@ -102,14 +104,20 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// Walks every public top-level type in the current compilation and
     /// surfaces those carrying <c>[Import("name", from)]</c> as
     /// <see cref="IrExternalImport"/> entries keyed by the C# type's simple
-    /// name. Matches what the legacy
-    /// <c>TypeTransformer._externalImportMap</c> populated for the local
-    /// assembly; cross-assembly <c>[Import]</c> aggregation and per-target
-    /// <c>[Name]</c> aliasing stay on the consumer side until later
-    /// migration steps wire them through the IR.
+    /// source name. This intentionally covers only the source-name keys for
+    /// the local assembly that the legacy
+    /// <c>TypeTransformer._externalImportMap</c> exposed; cross-assembly
+    /// <c>[Import]</c> aggregation and per-target <c>[Name]</c> aliasing
+    /// remain on the consumer side until later migration steps wire them
+    /// through the IR. Mirrors the legacy
+    /// <c>TypeTransformer.RegisterExternalImportMapping</c> conflict policy:
+    /// the first mapping wins and any divergent re-registration produces a
+    /// <see cref="DiagnosticCodes.AmbiguousConstruct"/> warning surfaced
+    /// through <see cref="IrCompilation.Diagnostics"/>.
     /// </summary>
     private static Dictionary<string, IrExternalImport> BuildExternalImports(
-        Compilation compilation
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics
     )
     {
         var map = new Dictionary<string, IrExternalImport>(StringComparer.Ordinal);
@@ -122,12 +130,33 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             if (import is null)
                 continue;
 
-            map[type.Name] = new IrExternalImport(
+            var entry = new IrExternalImport(
                 Name: import.Name,
                 From: import.From,
                 IsDefault: import.AsDefault,
                 Version: import.Version
             );
+
+            if (map.TryGetValue(type.Name, out var existing))
+            {
+                if (existing == entry)
+                    continue;
+
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Warning,
+                        DiagnosticCodes.AmbiguousConstruct,
+                        $"External import name collision for '{type.Name}'. Keeping "
+                            + $"'{existing.From}' ('{existing.Name}') and ignoring "
+                            + $"conflicting mapping from '{type.ToDisplayString()}' to "
+                            + $"'{entry.From}' ('{entry.Name}').",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+                continue;
+            }
+
+            map[type.Name] = entry;
         }
 
         return map;
