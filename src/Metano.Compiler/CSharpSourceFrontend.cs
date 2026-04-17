@@ -87,13 +87,68 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             Modules: Array.Empty<IrModule>(),
             ReferencedModules: Array.Empty<IrModule>(),
             CrossAssemblyOrigins: new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal),
-            ExternalImports: new Dictionary<string, IrExternalImport>(StringComparer.Ordinal),
+            ExternalImports: compilation is null
+                ? new Dictionary<string, IrExternalImport>(StringComparer.Ordinal)
+                : BuildExternalImports(compilation),
             BclExports: compilation is null
                 ? new Dictionary<string, IrBclExport>(StringComparer.Ordinal)
                 : BuildBclExports(compilation),
             AssembliesNeedingEmitPackage: new HashSet<string>(StringComparer.Ordinal),
             Diagnostics: diagnostics
         );
+    }
+
+    /// <summary>
+    /// Walks every public top-level type in the current compilation and
+    /// surfaces those carrying <c>[Import("name", from)]</c> as
+    /// <see cref="IrExternalImport"/> entries keyed by the C# type's simple
+    /// name. Matches what the legacy
+    /// <c>TypeTransformer._externalImportMap</c> populated for the local
+    /// assembly; cross-assembly <c>[Import]</c> aggregation and per-target
+    /// <c>[Name]</c> aliasing stay on the consumer side until later
+    /// migration steps wire them through the IR.
+    /// </summary>
+    private static Dictionary<string, IrExternalImport> BuildExternalImports(
+        Compilation compilation
+    )
+    {
+        var map = new Dictionary<string, IrExternalImport>(StringComparer.Ordinal);
+        var types = new List<INamedTypeSymbol>();
+        CollectPublicTopLevelTypes(compilation.Assembly.GlobalNamespace, types);
+
+        foreach (var type in types)
+        {
+            var import = SymbolHelper.GetImport(type);
+            if (import is null)
+                continue;
+
+            map[type.Name] = new IrExternalImport(
+                Name: import.Name,
+                From: import.From,
+                IsDefault: import.AsDefault,
+                Version: import.Version
+            );
+        }
+
+        return map;
+    }
+
+    private static void CollectPublicTopLevelTypes(INamespaceSymbol ns, List<INamedTypeSymbol> sink)
+    {
+        foreach (var member in ns.GetMembers())
+        {
+            switch (member)
+            {
+                case INamespaceSymbol childNs:
+                    CollectPublicTopLevelTypes(childNs, sink);
+                    break;
+                case INamedTypeSymbol type
+                    when type.ContainingType is null
+                        && type.DeclaredAccessibility == Accessibility.Public:
+                    sink.Add(type);
+                    break;
+            }
+        }
     }
 
     /// <summary>

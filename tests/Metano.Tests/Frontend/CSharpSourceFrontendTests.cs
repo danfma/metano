@@ -95,4 +95,56 @@ public class CSharpSourceFrontendTests
         foreach (var entry in ir.BclExports.Values)
             await Assert.That(entry.FromPackage).IsNotEqualTo("uuid");
     }
+
+    [Test]
+    public async Task ExternalImports_CollectImportAttributesFromCurrentAssembly()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [Import("Hono", from: "hono", Version = "^4.0.0")]
+            public class Hono {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.ExternalImports).ContainsKey("Hono");
+        var entry = ir.ExternalImports["Hono"];
+        await Assert.That(entry.Name).IsEqualTo("Hono");
+        await Assert.That(entry.From).IsEqualTo("hono");
+        await Assert.That(entry.IsDefault).IsFalse();
+        await Assert.That(entry.Version).IsEqualTo("^4.0.0");
+    }
+
+    [Test]
+    public async Task ExternalImports_PreserveAsDefaultFlag()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [Import("React", from: "react", AsDefault = true)]
+            public class React {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        var entry = ir.ExternalImports["React"];
+        await Assert.That(entry.IsDefault).IsTrue();
+        await Assert.That(entry.Version).IsNull();
+    }
+
+    [Test]
+    public async Task ExternalImports_IgnoreTypesWithoutImportAttribute()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public class Plain {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.ExternalImports.ContainsKey("Plain")).IsFalse();
+    }
 }
