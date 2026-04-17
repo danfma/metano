@@ -16,9 +16,4 @@ namespace Metano.Compiler.IR;
 /// <param name="Version">Optional semver specifier the backend merges into
 /// its package manifest (npm <c>dependencies</c>, pub <c>dependencies</c>,
 /// …).</param>
-public sealed record IrExternalImport(
-    string Name,
-    string From,
-    bool IsDefault,
-    string? Version
-);
+public sealed record IrExternalImport(string Name, string From, bool IsDefault, string? Version);
