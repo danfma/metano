@@ -1,4 +1,5 @@
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 using Metano.Tests.IR;
 
 namespace Metano.Tests.Frontend;
@@ -146,5 +147,45 @@ public class CSharpSourceFrontendTests
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
         await Assert.That(ir.ExternalImports.ContainsKey("Plain")).IsFalse();
+    }
+
+    [Test]
+    public async Task ExternalImports_NameCollisionKeepsFirstAndWarns()
+    {
+        // Two top-level types share the simple name `Widget` across distinct
+        // namespaces with conflicting [Import] mappings. CollectPublicTopLevelTypes
+        // walks namespaces via INamespaceSymbol.GetMembers(), which Roslyn returns
+        // in declaration/alphabetical order — `Alpha` is visited before `Beta`,
+        // so the Alpha mapping wins and the Beta one becomes a warning.
+        var compilation = IrTestHelper.Compile(
+            """
+            namespace Alpha
+            {
+                [Import("Widget", from: "alpha-pkg")]
+                public class Widget {}
+            }
+
+            namespace Beta
+            {
+                [Import("Widget", from: "beta-pkg")]
+                public class Widget {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.ExternalImports.Count).IsEqualTo(1);
+        await Assert.That(ir.ExternalImports).ContainsKey("Widget");
+        var entry = ir.ExternalImports["Widget"];
+        await Assert.That(entry.From).IsEqualTo("alpha-pkg");
+
+        var warning = ir.Diagnostics.SingleOrDefault(d =>
+            d.Severity == MetanoDiagnosticSeverity.Warning
+            && d.Code == DiagnosticCodes.AmbiguousConstruct
+        );
+        await Assert.That(warning).IsNotNull();
+        await Assert.That(warning!.Message).Contains("Widget");
+        await Assert.That(warning.Message).Contains("beta-pkg");
     }
 }
