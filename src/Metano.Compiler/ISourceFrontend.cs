@@ -1,5 +1,6 @@
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler;
 
@@ -20,6 +21,36 @@ public interface ISourceFrontend
     /// <summary>Short identifier for CLI / log messages (e.g.,
     /// <c>"csharp"</c>).</summary>
     string Name { get; }
+
+    /// <summary>
+    /// Roslyn <see cref="Compilation"/> produced by the most recent
+    /// <see cref="ExtractAsync"/> call, or <see langword="null"/> if
+    /// loading failed.
+    /// <para>
+    /// <b>Transitional escape hatch.</b> Exposed so
+    /// <see cref="TranspilerHost"/> can hand the Roslyn compilation to
+    /// the active <see cref="ITranspilerTarget"/> while the targets still
+    /// drive their own discovery + extraction. Will be removed in B.3
+    /// once every call site consumes the <see cref="IrCompilation"/>
+    /// directly. Frontends with no Roslyn backing return
+    /// <see langword="null"/>.
+    /// </para>
+    /// </summary>
+    Compilation? LoadedCompilation { get; }
+
+    /// <summary>
+    /// Count of language-level errors surfaced during the most recent
+    /// <see cref="ExtractAsync"/> call (Roslyn diagnostics for the C#
+    /// frontend). Zero when loading succeeded.
+    /// <para>
+    /// <b>Transitional escape hatch.</b> Mirrors
+    /// <see cref="LoadedCompilation"/> — used by
+    /// <see cref="TranspilerHost"/> as the CLI exit code while
+    /// frontend-level failures are also reported via
+    /// <see cref="IrCompilation.Diagnostics"/>. Will be removed in B.3.
+    /// </para>
+    /// </summary>
+    int LoadErrorCount { get; }
 
     /// <summary>Asynchronously loads + extracts the project at
     /// <paramref name="projectPath"/>. Never returns <see langword="null"/>

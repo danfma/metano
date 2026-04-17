@@ -1,3 +1,4 @@
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
@@ -24,21 +25,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// <inheritdoc />
     public string Name => "csharp";
 
-    /// <summary>
-    /// Compilation produced by the most recent <see cref="ExtractAsync"/>
-    /// call, or <see langword="null"/> if loading failed. Exposed as a
-    /// transitional escape hatch so <see cref="TranspilerHost"/> can pass
-    /// the Roslyn <see cref="Compilation"/> on to the active
-    /// <see cref="ITranspilerTarget"/> while the targets still drive
-    /// their own extraction. Will be removed once every call site
-    /// consumes the <see cref="IrCompilation"/> directly.
-    /// </summary>
+    /// <inheritdoc />
     public Compilation? LoadedCompilation { get; private set; }
 
-    /// <summary>
-    /// Count of Roslyn-level errors surfaced during the most recent
-    /// <see cref="ExtractAsync"/> call. Zero when loading succeeded.
-    /// </summary>
+    /// <inheritdoc />
     public int LoadErrorCount { get; private set; }
 
     public async Task<IrCompilation> ExtractAsync(
@@ -47,14 +37,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var assemblyName = Path.GetFileNameWithoutExtension(projectPath);
+        var diagnostics = new List<MetanoDiagnostic>();
 
-        var (compilation, errorCount) = await LoadCompilationAsync(projectPath, ct);
+        var (compilation, errorCount) = await LoadCompilationAsync(projectPath, diagnostics, ct);
         LoadedCompilation = compilation;
         LoadErrorCount = errorCount;
 
-        // Fields beyond AssemblyName stay empty during the shell phase.
-        // Downstream targets fall back to `LoadedCompilation` for
-        // discovery / extraction until the follow-up migration wires
+        // Fields beyond AssemblyName / Diagnostics stay empty during the
+        // shell phase. Downstream targets fall back to `LoadedCompilation`
+        // for discovery / extraction until the follow-up migration wires
         // them onto `IrCompilation`.
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? assemblyName,
@@ -66,7 +57,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ExternalImports: new Dictionary<string, IrExternalImport>(StringComparer.Ordinal),
             BclExports: new Dictionary<string, IrBclExport>(StringComparer.Ordinal),
             AssembliesNeedingEmitPackage: new HashSet<string>(StringComparer.Ordinal),
-            Diagnostics: []
+            Diagnostics: diagnostics
         );
     }
 
@@ -74,17 +65,29 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// Opens the project via <see cref="MSBuildWorkspace"/> and returns
     /// the resulting <see cref="Compilation"/>. Mirrors the previous
     /// <c>TranspilerHost.LoadCompilationAsync</c>: progress and errors
-    /// go to stdout/stderr; a null result signals "do not proceed" and
-    /// the error count propagates to the CLI exit code.
+    /// also go to stdout/stderr so the CLI trace stays unchanged, but
+    /// every failure is additionally appended to <paramref name="diagnostics"/>
+    /// as a <see cref="DiagnosticCodes.FrontendLoadFailure"/> entry so
+    /// the host (and any future programmatic caller) can react via
+    /// <see cref="IrCompilation.Diagnostics"/>.
     /// </summary>
     private static async Task<(Compilation? Compilation, int ErrorCount)> LoadCompilationAsync(
         string projectPath,
+        List<MetanoDiagnostic> diagnostics,
         CancellationToken ct
     )
     {
         if (!File.Exists(projectPath))
         {
-            Console.Error.WriteLine($"Project not found: {projectPath}");
+            var message = $"Project not found: {projectPath}";
+            Console.Error.WriteLine(message);
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.FrontendLoadFailure,
+                    message
+                )
+            );
             return (null, 1);
         }
 
@@ -94,7 +97,17 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         workspace.RegisterWorkspaceFailedHandler(e =>
         {
             if (e.Diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
-                Console.Error.WriteLine($"  Workspace error: {e.Diagnostic.Message}");
+            {
+                var message = $"Workspace error: {e.Diagnostic.Message}";
+                Console.Error.WriteLine($"  {message}");
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.FrontendLoadFailure,
+                        message
+                    )
+                );
+            }
         });
 
         Console.WriteLine("  Opening MSBuild project...");
@@ -108,7 +121,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         if (compilation is null)
         {
-            Console.Error.WriteLine("Failed to compile project.");
+            const string message = "Failed to compile project.";
+            Console.Error.WriteLine(message);
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.FrontendLoadFailure,
+                    message
+                )
+            );
             return (null, 1);
         }
 
@@ -124,6 +145,19 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             {
                 Console.Error.WriteLine($"  {error}");
             }
+
+            foreach (var error in roslynErrors)
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.FrontendLoadFailure,
+                        error.GetMessage(),
+                        error.Location
+                    )
+                );
+            }
+
             return (null, roslynErrors.Count);
         }
 

@@ -25,7 +25,7 @@ public static class TranspilerHost
     public static async Task<TranspileResult> RunAsync(
         TranspileOptions options,
         ITranspilerTarget target,
-        CSharpSourceFrontend frontend
+        ISourceFrontend frontend
     )
     {
         var projectPath = Path.GetFullPath(options.ProjectPath);
@@ -33,14 +33,21 @@ public static class TranspilerHost
 
         var totalSw = Stopwatch.StartNew();
         var compileSw = Stopwatch.StartNew();
-        _ = await frontend.ExtractAsync(projectPath);
+        var ir = await frontend.ExtractAsync(projectPath);
         var compilation = frontend.LoadedCompilation;
         var roslynErrorCount = frontend.LoadErrorCount;
 
         compileSw.Stop();
 
         if (compilation is null)
-            return new TranspileResult(false, [], 0, roslynErrorCount);
+        {
+            // Surface the frontend's load-failure diagnostics via the
+            // standard reporter so the CLI shows the MS0009 line(s)
+            // alongside the raw stderr trace the frontend already wrote.
+            var (frontendWarnings, frontendErrors) = ReportDiagnostics(ir.Diagnostics);
+            var errors = frontendErrors > 0 ? frontendErrors : roslynErrorCount;
+            return new TranspileResult(false, [], frontendWarnings, errors);
+        }
 
         if (options.ShowTimings)
             Console.WriteLine($"  Compilation: {compileSw.ElapsedMilliseconds}ms");
@@ -53,7 +60,14 @@ public static class TranspilerHost
         if (options.ShowTimings)
             Console.WriteLine($"  Transpilation: {transpileSw.ElapsedMilliseconds}ms");
 
-        var (warningCount, errorCount) = ReportDiagnostics(output.Diagnostics);
+        // Merge frontend diagnostics with target diagnostics so any
+        // warnings raised during extraction are surfaced even on the
+        // happy path.
+        var allDiagnostics =
+            ir.Diagnostics.Count == 0
+                ? output.Diagnostics
+                : ir.Diagnostics.Concat(output.Diagnostics).ToList();
+        var (warningCount, errorCount) = ReportDiagnostics(allDiagnostics);
 
         if (errorCount > 0)
             return new TranspileResult(false, output.Files, warningCount, errorCount);

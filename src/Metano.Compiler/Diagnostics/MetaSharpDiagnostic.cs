@@ -81,4 +81,9 @@ public static class DiagnosticCodes
     /// file name belong to different namespaces, so the file would have an ambiguous
     /// folder placement.</summary>
     public const string EmitInFileConflict = "MS0008";
+
+    /// <summary>MS0009 — Source frontend failed to load or compile the project (project
+    /// file missing, MSBuild workspace failure, null compilation, or language-level
+    /// errors reported by Roslyn).</summary>
+    public const string FrontendLoadFailure = "MS0009";
 }
