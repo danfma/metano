@@ -1,3 +1,4 @@
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 
 namespace Metano.Compiler;
@@ -21,12 +22,15 @@ public interface ISourceFrontend
     string Name { get; }
 
     /// <summary>Asynchronously loads + extracts the project at
-    /// <paramref name="projectPath"/>.</summary>
+    /// <paramref name="projectPath"/>. Never returns <see langword="null"/>
+    /// — frontend-level failures (project not found, compile errors,
+    /// malformed attributes) surface via
+    /// <see cref="IrCompilation.Diagnostics"/> with
+    /// <see cref="MetanoDiagnosticSeverity.Error"/>, and the caller
+    /// decides whether to proceed with the (possibly empty) module
+    /// list.</summary>
     /// <param name="projectPath">Path to the entry source artifact (e.g.,
     /// a <c>.csproj</c> for the C# frontend).</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The extracted compilation, or <c>null</c> if loading
-    /// failed. Frontend-level failures (project not found, compile
-    /// errors) surface via diagnostics and a null result.</returns>
-    Task<IrCompilation?> ExtractAsync(string projectPath, CancellationToken ct = default);
+    Task<IrCompilation> ExtractAsync(string projectPath, CancellationToken ct = default);
 }

@@ -2,9 +2,10 @@ namespace Metano.Compiler.IR;
 
 /// <summary>
 /// An external JS/TS module dependency declared on a C# type via
-/// <c>[Import(name, from, asDefault, version)]</c>. The frontend resolves
-/// every <c>[Import]</c>-annotated type once during extraction and indexes
-/// the result by the type's simple name + the emitted (target) name so
+/// <c>[Import(name, from)]</c>, with optional <c>AsDefault</c> and
+/// <c>Version</c> attribute properties. The frontend resolves every
+/// <c>[Import]</c>-annotated type once during extraction and indexes the
+/// result by the type's simple name + the emitted (target) name so
 /// backends can emit the import without re-walking Roslyn.
 /// </summary>
 /// <param name="Name">Identifier bound in the generated source (may be the

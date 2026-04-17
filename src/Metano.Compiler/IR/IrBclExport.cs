@@ -10,5 +10,7 @@ namespace Metano.Compiler.IR;
 /// <param name="FromPackage">Package name the identifier is imported
 /// from.</param>
 /// <param name="Version">Semver specifier the backend merges into its
-/// package manifest.</param>
-public sealed record IrBclExport(string ExportedName, string FromPackage, string Version);
+/// package manifest, or <see langword="null"/> when the
+/// <c>[ExportFromBcl]</c> attribute did not specify a version (backends
+/// should skip the dependency rather than emit an empty range).</param>
+public sealed record IrBclExport(string ExportedName, string FromPackage, string? Version);
