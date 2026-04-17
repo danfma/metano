@@ -211,7 +211,7 @@ public record TodoItem(string Title, bool Completed = false, Priority Priority =
 }
 ```
 
-**Output** — `js/sample-todo/src/todo-item.ts`:
+**Output** — `targets/js/sample-todo/src/todo-item.ts`:
 
 ```typescript
 import { HashCode } from "metano-runtime";
@@ -263,7 +263,7 @@ export class TodoItem {
 }
 ```
 
-And `js/sample-todo/src/priority.ts`:
+And `targets/js/sample-todo/src/priority.ts`:
 
 ```typescript
 export const Priority = {
@@ -326,15 +326,19 @@ Real C# projects transpiled into TypeScript and exercised with Bun tests —
 each one validates a different slice of the compiler:
 
 - [`samples/SampleTodo`](samples/SampleTodo/) — minimal records + string
-  enums. Good starting point. Generates [`js/sample-todo`](js/sample-todo/).
+  enums. Good starting point. Generates
+  [`targets/js/sample-todo`](targets/js/sample-todo/).
 - [`samples/SampleTodo.Service`](samples/SampleTodo.Service/) — Hono CRUD
   service showing cross-package imports, `[PlainObject]` DTOs, and
   `[ModuleEntryPoint]`. Generates
-  [`js/sample-todo-service`](js/sample-todo-service/).
+  [`targets/js/sample-todo-service`](targets/js/sample-todo-service/).
 - [`samples/SampleIssueTracker`](samples/SampleIssueTracker/) — larger
   domain model with branded IDs, rich aggregates, LINQ queries,
   inheritance, and a repository. Generates
-  [`js/sample-issue-tracker`](js/sample-issue-tracker/).
+  [`targets/js/sample-issue-tracker`](targets/js/sample-issue-tracker/).
+- [`samples/SampleCounter`](samples/SampleCounter/) — Counter MVP
+  (model + view interface + presenter) consumed by a Vite + SolidJS
+  frontend in [`targets/js/sample-counter`](targets/js/sample-counter/).
 
 ---
 

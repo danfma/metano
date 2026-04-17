@@ -140,7 +140,7 @@ single C# file.
 
 ## References
 
-- `js/metano-runtime/src/system/linq/` — `EnumerableBase` +
+- `targets/js/metano-runtime/src/system/linq/` — `EnumerableBase` +
   operator subclasses + terminals
 - `src/Metano/Runtime/Linq.cs` — declarative LINQ mappings via
   `[MapMethod]`

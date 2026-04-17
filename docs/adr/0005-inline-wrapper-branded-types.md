@@ -121,7 +121,7 @@ also protects BCL identifiers that cross the TS boundary.
 - `src/Metano.Compiler.TypeScript/Transformation/InlineWrapperTransformer.cs`
 - `src/Metano.Compiler.TypeScript/Transformation/TypeMapper.cs` — `Guid`
   → `UUID` mapping
-- `js/metano-runtime/src/system/uuid.ts` — runtime-provided branded type
+- `targets/js/metano-runtime/src/system/uuid.ts` — runtime-provided branded type
 - `samples/SampleIssueTracker` — `UserId`, `IssueId` as inline wrappers
 - `tests/Metano.Tests/InlineWrapperTranspileTests.cs`
 - Related: [ADR-0003](0003-declarative-bcl-mappings.md) — how the

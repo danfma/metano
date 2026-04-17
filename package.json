@@ -1,8 +1,7 @@
 {
   "private": true,
   "workspaces": [
-    "js/*",
-    "samples/SampleCounter/js"
+    "targets/js/*"
   ],
   "devDependencies": {
     "@biomejs/biome": "2.4.4",

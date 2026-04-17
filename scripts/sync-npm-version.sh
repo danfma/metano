@@ -27,7 +27,7 @@ fi
 # whether you invoke it from the repo root or from anywhere else.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-RUNTIME_DIR="$REPO_ROOT/js/metano-runtime"
+RUNTIME_DIR="$REPO_ROOT/targets/js/metano-runtime"
 
 if [ ! -d "$RUNTIME_DIR" ]; then
   echo "ERROR: metano-runtime directory not found at $RUNTIME_DIR" >&2
