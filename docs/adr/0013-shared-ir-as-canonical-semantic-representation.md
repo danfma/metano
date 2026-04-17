@@ -13,7 +13,7 @@ Dart/Flutter second — re-walked the Roslyn semantic model itself. Record
 shape detection, nullable lowering, overload folding, BCL mapping origins,
 runtime helper discovery, the `[PlainObject]` / `[InlineWrapper]` / `[Emit]`
 gates — each one lived inline in TS-specific handlers (`RecordClassTransformer`
-at 1.529 lines, `ExpressionTransformer` + 13 child handlers, `TypeMapper`
+at 1,529 lines, `ExpressionTransformer` + 13 child handlers, `TypeMapper`
 with five `[ThreadStatic]` fields feeding 40+ call sites). A Dart target
 written in the same shape would have had to re-derive the same Roslyn
 heuristics, silently drifting from the TypeScript answer on any edge case.
