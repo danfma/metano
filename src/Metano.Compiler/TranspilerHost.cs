@@ -1,40 +1,41 @@
 using System.Diagnostics;
 using Metano.Compiler.Diagnostics;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.MSBuild;
 
 namespace Metano.Compiler;
 
 /// <summary>
-/// Target-agnostic orchestration for transpilation runs:
-/// loads a C# project via MSBuildWorkspace, runs an <see cref="ITranspilerTarget"/>
-/// against the resulting compilation, prints diagnostics, and writes generated files
-/// to the output directory.
+/// Target-agnostic orchestration for transpilation runs: delegates project
+/// loading + semantic extraction to an <see cref="ISourceFrontend"/>
+/// (the C# frontend by default), runs an <see cref="ITranspilerTarget"/>
+/// against the resulting compilation, prints diagnostics, and writes
+/// generated files to the output directory.
 ///
-/// Each language target (TypeScript, Dart, …) wraps this in its own CLI which adds
-/// target-specific flags (e.g., TypeScript's --dist, --skip-package-json) and any
-/// post-emit work such as writing a package.json.
+/// Each language target (TypeScript, Dart, …) wraps this in its own CLI
+/// which adds target-specific flags (e.g., TypeScript's --dist,
+/// --skip-package-json) and any post-emit work such as writing a
+/// package.json.
 /// </summary>
 public static class TranspilerHost
 {
-    public static async Task<TranspileResult> RunAsync(
+    public static Task<TranspileResult> RunAsync(
         TranspileOptions options,
         ITranspilerTarget target
+    ) => RunAsync(options, target, new CSharpSourceFrontend());
+
+    public static async Task<TranspileResult> RunAsync(
+        TranspileOptions options,
+        ITranspilerTarget target,
+        CSharpSourceFrontend frontend
     )
     {
         var projectPath = Path.GetFullPath(options.ProjectPath);
         var outputDir = Path.GetFullPath(options.OutputDir);
 
-        if (!File.Exists(projectPath))
-        {
-            Console.Error.WriteLine($"Project not found: {projectPath}");
-
-            return new TranspileResult(false, [], 0, 1);
-        }
-
         var totalSw = Stopwatch.StartNew();
         var compileSw = Stopwatch.StartNew();
-        var (compilation, roslynErrorCount) = await LoadCompilationAsync(projectPath);
+        _ = await frontend.ExtractAsync(projectPath);
+        var compilation = frontend.LoadedCompilation;
+        var roslynErrorCount = frontend.LoadErrorCount;
 
         compileSw.Stop();
 
@@ -79,58 +80,6 @@ public static class TranspilerHost
         Console.WriteLine($"Metano: {output.Files.Count} file(s) generated in {outputDir}");
 
         return new TranspileResult(true, output.Files, warningCount, 0);
-    }
-
-    private static async Task<(Compilation? Compilation, int ErrorCount)> LoadCompilationAsync(
-        string projectPath
-    )
-    {
-        Console.WriteLine($"Metano: Loading project {Path.GetFileName(projectPath)}...");
-
-        using var workspace = MSBuildWorkspace.Create();
-
-        workspace.RegisterWorkspaceFailedHandler(e =>
-        {
-            if (e.Diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
-                Console.Error.WriteLine($"  Workspace error: {e.Diagnostic.Message}");
-        });
-
-        Console.WriteLine("  Opening MSBuild project...");
-
-        var proj = await workspace.OpenProjectAsync(projectPath);
-
-        Console.WriteLine("  Project loaded.");
-        Console.WriteLine("  Creating Roslyn compilation...");
-
-        var compilation = await proj.GetCompilationAsync();
-
-        Console.WriteLine("  Compilation created.");
-
-        if (compilation is null)
-        {
-            Console.Error.WriteLine("Failed to compile project.");
-
-            return (null, 1);
-        }
-
-        var roslynErrors = compilation
-            .GetDiagnostics()
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-
-        if (roslynErrors.Count > 0)
-        {
-            Console.Error.WriteLine($"Compilation has {roslynErrors.Count} error(s):");
-
-            foreach (var error in roslynErrors.Take(10))
-            {
-                Console.Error.WriteLine($"  {error}");
-            }
-
-            return (null, roslynErrors.Count);
-        }
-
-        return (compilation, 0);
     }
 
     private static async Task EmitFilesAsync(
