@@ -84,6 +84,15 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.BclExports.ContainsKey("System.Guid")).IsFalse();
+        // Resolve the same key the production code uses (typeArg.ToDisplayString()) so a
+        // future format change can't accidentally make the assertion pass on the wrong key.
+        var guidType = compilation.GetTypeByMetadataName("System.Guid");
+        await Assert.That(guidType).IsNotNull();
+        await Assert.That(ir.BclExports.ContainsKey(guidType!.ToDisplayString())).IsFalse();
+
+        // Defence-in-depth: nothing else in the map should claim the "uuid" package
+        // either, since the attribute lacked the required ExportedName property.
+        foreach (var entry in ir.BclExports.Values)
+            await Assert.That(entry.FromPackage).IsNotEqualTo("uuid");
     }
 }
