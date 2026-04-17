@@ -18,7 +18,6 @@
 // support for the immutable family requires a different lowering strategy and is tracked
 // as a follow-up.
 
-using System.Collections.Generic;
 using Metano.Annotations;
 
 // ─── Count ──────────────────────────────────────────────────

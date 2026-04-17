@@ -3,7 +3,6 @@
 // Stack<T> lowers to a plain JS array used LIFO. JS arrays already have push/pop with
 // LIFO semantics; peek and clear use templates because JS has no equivalent member.
 
-using System.Collections.Generic;
 using Metano.Annotations;
 
 [assembly: MapProperty(typeof(Stack<>), nameof(Stack<int>.Count), JsProperty = "length")]

@@ -5,7 +5,6 @@
 // with the lowercase identifier instead of the simple-rename shorthand (which would
 // preserve the PascalCase Console).
 
-using System;
 using Metano.Annotations;
 
 [assembly: MapMethod(typeof(Console), nameof(Console.WriteLine), JsTemplate = "console.log($0)")]

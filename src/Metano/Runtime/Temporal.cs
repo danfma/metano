@@ -6,7 +6,6 @@
 // the static factories and the helper extensions used by the transpiled code at the
 // call site.
 
-using System;
 using Metano.Annotations;
 
 // DateTimeOffset.UtcNow → Temporal.Now.zonedDateTimeISO()

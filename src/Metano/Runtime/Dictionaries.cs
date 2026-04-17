@@ -12,7 +12,6 @@
 // `map.set(key, value)`) doesn't fit the [MapMethod] template form (the C# operation
 // is a syntactic indexer, not a named method symbol).
 
-using System.Collections.Generic;
 using Metano.Annotations;
 
 // ─── Count → size ───────────────────────────────────────────

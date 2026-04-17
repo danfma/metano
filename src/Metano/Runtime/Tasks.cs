@@ -3,7 +3,6 @@
 // Task<T> and Task lower to JS Promise<T> and Promise<void> respectively. The static
 // factory methods on Task become equivalent calls on Promise.
 
-using System.Threading.Tasks;
 using Metano.Annotations;
 
 // Task.CompletedTask → Promise.resolve()

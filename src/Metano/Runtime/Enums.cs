@@ -1,6 +1,5 @@
 // Declarative BCL → JavaScript mappings for System.Enum members.
 
-using System;
 using Metano.Annotations;
 
 // flags.HasFlag(other) → (flags & other) === other

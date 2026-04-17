@@ -6,7 +6,6 @@
 // C# becomes `Math.round(x)` in JS because the IdentifierHandler renders the type
 // reference `Math` as the bare identifier `Math`, and the JS global has the same name.
 
-using System;
 using Metano.Annotations;
 
 [assembly: MapMethod(typeof(Math), nameof(Math.Round), JsMethod = "round")]

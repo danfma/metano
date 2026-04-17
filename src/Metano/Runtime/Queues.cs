@@ -4,7 +4,6 @@
 // API, so we use templates to express the equivalent operations: push for enqueue,
 // shift for dequeue, [0] for peek, length = 0 for clear.
 
-using System.Collections.Generic;
 using Metano.Annotations;
 
 [assembly: MapProperty(typeof(Queue<>), nameof(Queue<int>.Count), JsProperty = "length")]

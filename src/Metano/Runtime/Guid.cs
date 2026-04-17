@@ -12,7 +12,6 @@
 // whose filter matches the call site, so more specific filters must come BEFORE
 // the fallback.
 
-using System;
 using Metano.Annotations;
 
 // Guid.NewGuid() → UUID.newUuid()

@@ -5,7 +5,6 @@
 // exposes the same surface as the JS Set built-in (add, delete, has, clear, size) plus
 // extra hooks for the equality contract.
 
-using System.Collections.Generic;
 using Metano.Annotations;
 
 // ─── Count → size ───────────────────────────────────────────

@@ -3,7 +3,7 @@ namespace Metano.Annotations;
 /// <summary>
 /// Marks a type as <em>declaration-only</em>: it exists in the C# type system so user
 /// code can reference it (parameters, return types, lambdas), but the transpiler does
-/// NOT generate a .ts file for it AND does NOT emit any import for it in consumers.
+/// NOT generate an output file for it AND does NOT emit any import for it in consumers.
 ///
 /// Useful for ambient types that describe the structural shape of an external library
 /// without naming an actual export. The canonical example is a callback context type
@@ -31,11 +31,33 @@ namespace Metano.Annotations;
 /// type from discovery entirely (the compiler pretends it doesn't exist), while
 /// <c>[NoEmit]</c> keeps the type discoverable so other transpiled code can reference it
 /// — only the emission step is skipped.
+/// <para>
+/// Follows the per-target resolution pattern of <see cref="NameAttribute"/>:
+/// <c>[NoEmit(TargetLanguage.Dart)]</c> skips emission on Dart while letting
+/// the same type emit a TS file, and the parameterless form applies to every
+/// target that lacks a per-target <c>[NoEmit]</c>.
+/// </para>
 /// </summary>
 [AttributeUsage(
     AttributeTargets.Class
         | AttributeTargets.Struct
         | AttributeTargets.Enum
-        | AttributeTargets.Interface
+        | AttributeTargets.Interface,
+    AllowMultiple = true
 )]
-public sealed class NoEmitAttribute : Attribute;
+public sealed class NoEmitAttribute : Attribute
+{
+    public NoEmitAttribute()
+    {
+        Target = null;
+    }
+
+    public NoEmitAttribute(TargetLanguage target)
+    {
+        Target = target;
+    }
+
+    /// <summary>The target this no-emit applies to, or <c>null</c> for the
+    /// untargeted (global) form.</summary>
+    public TargetLanguage? Target { get; }
+}

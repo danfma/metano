@@ -19,7 +19,6 @@
 //
 // — the .select() and .toArray() steps see a chained receiver and skip re-wrapping.
 
-using System.Linq;
 using Metano.Annotations;
 
 // ─── Composition (lazy — returns the runtime Enumerable wrapper) ─

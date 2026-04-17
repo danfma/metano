@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler;
@@ -11,7 +12,7 @@ namespace Metano.Compiler;
 /// </summary>
 public static class SymbolHelper
 {
-    public static bool HasAttribute(ISymbol symbol, string attributeName)
+    public static bool HasAttribute(this ISymbol symbol, string attributeName)
     {
         return symbol
             .GetAttributes()
@@ -21,51 +22,163 @@ public static class SymbolHelper
             );
     }
 
-    public static string? GetNameOverride(ISymbol symbol)
+    /// <summary>
+    /// Reads a symbol's <c>[Name]</c> override. Multiple <c>[Name]</c>
+    /// attributes can coexist on the same symbol — at most one untargeted
+    /// plus at most one per <see cref="TargetLanguage"/> — so resolution
+    /// picks the best match:
+    /// <list type="number">
+    ///   <item>A <c>[Name(target, "…")]</c> with a matching target wins.</item>
+    ///   <item>Otherwise the untargeted <c>[Name("…")]</c> (if any).</item>
+    ///   <item>Otherwise <c>null</c>.</item>
+    /// </list>
+    /// </summary>
+    public static string? GetNameOverride(this ISymbol symbol, TargetLanguage? target = null)
     {
-        var attr = symbol
-            .GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.Name is "NameAttribute" or "Name");
+        string? untargeted = null;
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is not ("NameAttribute" or "Name"))
+                continue;
+            if (attr.ConstructorArguments.Length == 0)
+                continue;
 
-        if (attr is { ConstructorArguments.Length: > 0 })
-            return attr.ConstructorArguments[0].Value?.ToString();
+            // Two constructor shapes exist: (string name) → untargeted; and
+            // (TargetLanguage target, string name) → per-target. Roslyn surfaces
+            // the enum as its backing integer value in ConstructorArguments.
+            if (
+                attr.ConstructorArguments.Length == 1
+                && attr.ConstructorArguments[0].Value is string onlyName
+            )
+            {
+                untargeted = onlyName;
+                continue;
+            }
 
-        return null;
+            if (
+                attr.ConstructorArguments.Length >= 2
+                && attr.ConstructorArguments[0].Value is int targetValue
+                && attr.ConstructorArguments[1].Value is string perTargetName
+                && target is TargetLanguage wanted
+                && (int)wanted == targetValue
+            )
+            {
+                // Exact match — early return, no need to scan further.
+                return perTargetName;
+            }
+        }
+        return untargeted;
     }
 
-    public static bool HasTranspile(ISymbol symbol) => HasAttribute(symbol, "Transpile");
+    public static bool HasTranspile(this ISymbol symbol) => HasAttribute(symbol, "Transpile");
 
-    public static bool HasStringEnum(ISymbol symbol) => HasAttribute(symbol, "StringEnum");
+    public static bool HasStringEnum(this ISymbol symbol) => HasAttribute(symbol, "StringEnum");
 
-    public static bool HasFlags(ISymbol symbol) =>
+    public static bool HasFlags(this ISymbol symbol) =>
         HasAttribute(symbol, "Flags") || HasAttribute(symbol, "FlagsAttribute");
 
-    public static bool HasIgnore(ISymbol symbol) => HasAttribute(symbol, "Ignore");
+    /// <summary>
+    /// Backwards-compatible overload: returns true when <em>any</em> <c>[Ignore]</c>
+    /// is present, targeted or not. Callers that know which backend they are
+    /// emitting for should prefer the target-aware overload below so a
+    /// <c>[Ignore(TargetLanguage.Dart)]</c> doesn't silently suppress a member
+    /// on the TS side.
+    /// </summary>
+    public static bool HasIgnore(this ISymbol symbol) => HasIgnore(symbol, target: null);
 
-    public static bool HasModule(ISymbol symbol) => HasAttribute(symbol, "Module");
+    /// <summary>
+    /// Target-aware <c>[Ignore]</c> lookup. Returns true when either an
+    /// untargeted <c>[Ignore]</c> is present or a <c>[Ignore(target)]</c> for
+    /// the given <paramref name="target"/>. Per-target occurrences for a
+    /// different target are treated as absent — they do not suppress the
+    /// member on the current target.
+    /// </summary>
+    public static bool HasIgnore(this ISymbol symbol, TargetLanguage? target) =>
+        HasTargetableFlag(symbol, "Ignore", target);
 
-    public static bool HasExportedAsModule(ISymbol symbol) =>
+    /// <summary>
+    /// Shared matcher for per-target "flag" attributes (<c>[Ignore]</c>,
+    /// <c>[NoEmit]</c>, …) that carry only an optional <see cref="TargetLanguage"/>.
+    /// <para>Match rules:</para>
+    /// <list type="bullet">
+    ///   <item>An <em>untargeted</em> occurrence (<c>[Attr]</c>) satisfies every
+    ///   caller, regardless of <paramref name="target"/>.</item>
+    ///   <item>A <em>targeted</em> occurrence (<c>[Attr(target)]</c>) only satisfies
+    ///   callers passing the exact same <paramref name="target"/>. A caller
+    ///   passing <c>null</c> (target-agnostic queries such as the legacy
+    ///   <see cref="IsTranspilable(this ISymbol, bool, IAssemblySymbol?)"/>)
+    ///   does <b>not</b> match a targeted occurrence — otherwise
+    ///   <c>[NoEmit(TargetLanguage.Dart)]</c> would suppress TS discovery too.</item>
+    /// </list>
+    /// </summary>
+    private static bool HasTargetableFlag(
+        ISymbol symbol,
+        string attributeShortName,
+        TargetLanguage? target
+    )
+    {
+        var attributeName = attributeShortName + "Attribute";
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (
+                attr.AttributeClass?.Name != attributeShortName
+                && attr.AttributeClass?.Name != attributeName
+            )
+                continue;
+
+            // Untargeted form — constructor with no args. Matches every caller.
+            if (attr.ConstructorArguments.Length == 0)
+                return true;
+
+            // Targeted form — single TargetLanguage arg (surfaces as int).
+            // Only matches a non-null caller that asked for the same target;
+            // target-null callers fall through so a Dart-specific flag cannot
+            // poison TS discovery paths (see IsTranspilable).
+            if (
+                attr.ConstructorArguments.Length == 1
+                && attr.ConstructorArguments[0].Value is int targetValue
+                && target is TargetLanguage wanted
+                && (int)wanted == targetValue
+            )
+                return true;
+        }
+        return false;
+    }
+
+    public static bool HasModule(this ISymbol symbol) => HasAttribute(symbol, "Module");
+
+    public static bool HasExportedAsModule(this ISymbol symbol) =>
         HasAttribute(symbol, "ExportedAsModule");
 
-    public static bool HasImport(ISymbol symbol) => HasAttribute(symbol, "Import");
+    public static bool HasImport(this ISymbol symbol) => HasAttribute(symbol, "Import");
 
-    public static bool HasGenerateGuard(ISymbol symbol) => HasAttribute(symbol, "GenerateGuard");
+    public static bool HasEmit(this ISymbol symbol) => HasAttribute(symbol, "Emit");
 
-    public static bool HasNoTranspile(ISymbol symbol) => HasAttribute(symbol, "NoTranspile");
+    public static bool HasGenerateGuard(this ISymbol symbol) =>
+        HasAttribute(symbol, "GenerateGuard");
 
-    public static bool HasNoEmit(ISymbol symbol) => HasAttribute(symbol, "NoEmit");
+    public static bool HasNoTranspile(this ISymbol symbol) => HasAttribute(symbol, "NoTranspile");
 
-    public static bool HasModuleEntryPoint(ISymbol symbol) =>
+    public static bool HasNoEmit(this ISymbol symbol) => HasNoEmit(symbol, target: null);
+
+    /// <summary>
+    /// Target-aware <c>[NoEmit]</c> lookup — same shape as
+    /// <see cref="HasIgnore(this ISymbol, TargetLanguage?)"/>.
+    /// </summary>
+    public static bool HasNoEmit(this ISymbol symbol, TargetLanguage? target) =>
+        HasTargetableFlag(symbol, "NoEmit", target);
+
+    public static bool HasModuleEntryPoint(this ISymbol symbol) =>
         HasAttribute(symbol, "ModuleEntryPoint");
 
-    public static bool HasPlainObject(ISymbol symbol) => HasAttribute(symbol, "PlainObject");
+    public static bool HasPlainObject(this ISymbol symbol) => HasAttribute(symbol, "PlainObject");
 
     /// <summary>
     /// Reads the file name from <c>[EmitInFile("name")]</c> on a type symbol, or null
     /// when the attribute isn't present (in which case the type takes its own name as
     /// the file).
     /// </summary>
-    public static string? GetEmitInFile(ISymbol symbol)
+    public static string? GetEmitInFile(this ISymbol symbol)
     {
         var attr = symbol
             .GetAttributes()
@@ -79,7 +192,7 @@ public static class SymbolHelper
     /// Reads <c>[ExportVarFromBody("name", AsDefault = ?, InPlace = ?)]</c> from a method
     /// symbol. Returns null when the attribute isn't present.
     /// </summary>
-    public static ExportVarFromBodyInfo? GetExportVarFromBody(ISymbol symbol)
+    public static ExportVarFromBodyInfo? GetExportVarFromBody(this ISymbol symbol)
     {
         var attr = symbol
             .GetAttributes()
@@ -162,7 +275,8 @@ public static class SymbolHelper
 
     public sealed record EmitPackageInfo(string Name, string? Version);
 
-    public static bool HasInlineWrapper(ISymbol symbol) => HasAttribute(symbol, "InlineWrapper");
+    public static bool HasInlineWrapper(this ISymbol symbol) =>
+        HasAttribute(symbol, "InlineWrapper");
 
     /// <summary>
     /// Determines if a type should be transpiled, considering:
@@ -203,7 +317,7 @@ public static class SymbolHelper
     /// Reads <c>[Import("name", from: "module", AsDefault = ?, Version = ?)]</c> from
     /// a symbol.
     /// </summary>
-    public static ImportInfo? GetImport(ISymbol symbol)
+    public static ImportInfo? GetImport(this ISymbol symbol)
     {
         var attr = symbol
             .GetAttributes()
