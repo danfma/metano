@@ -1,9 +1,8 @@
-using Metano.Compiler.Diagnostics;
-
 // Pulled in so the `<see cref="ISourceFrontend"/>` and
 // `<see cref="SymbolHelper.GetStableFullName"/>` references below resolve
 // from this nested namespace without needing fully-qualified names.
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 
 namespace Metano.Compiler.IR;
 
