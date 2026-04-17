@@ -34,7 +34,7 @@ domain model.
 
 ## Generated output
 
-The transpiled TypeScript lives in [`../../js/sample-todo/src`](../../js/sample-todo/src/).
+The transpiled TypeScript lives in [`../../targets/js/sample-todo/src`](../../targets/js/sample-todo/src/).
 Key files:
 
 - `priority.ts` — the string union type

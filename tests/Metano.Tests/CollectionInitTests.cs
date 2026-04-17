@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Metano.Tests;
 
 public class CollectionInitTests

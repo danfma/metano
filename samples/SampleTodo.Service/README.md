@@ -64,7 +64,7 @@ npm package.
 
 ## Generated output
 
-The transpiled TypeScript lives in [`../../js/sample-todo-service/src`](../../js/sample-todo-service/src/):
+The transpiled TypeScript lives in [`../../targets/js/sample-todo-service/src`](../../targets/js/sample-todo-service/src/):
 
 - `program.ts` — route wiring, top-level code, `export default app`
 - `todos.ts` — `StoredTodo`, `CreateTodoDto`, `UpdateTodoDto` interfaces + `TodoStore` class

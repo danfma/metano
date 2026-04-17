@@ -1,5 +1,8 @@
+using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Extraction;
 using Metano.TypeScript.AST;
+using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
@@ -15,15 +18,18 @@ namespace Metano.Transformation;
 ///   <item>records / classes / structs → <c>instanceof</c> fast path + per-field checks</item>
 /// </list>
 ///
-/// Field checks recurse into other transpilable guards via the supplied
-/// <see cref="_transpilableTypeMap"/>.
+/// Field checks recurse into other transpilable guards via the context's
+/// <see cref="TypeScriptTransformContext.TranspilableTypeMap"/>.
 /// </summary>
-public sealed class TypeGuardBuilder(
-    IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap
-)
+public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 {
-    private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap =
-        transpilableTypeMap;
+    private readonly TypeScriptTransformContext _context = context;
+
+    private TsType MapType(ITypeSymbol symbol) =>
+        IrToTsTypeMapper.Map(
+            IrTypeRefMapper.Map(symbol, _context.OriginResolver, TargetLanguage.TypeScript),
+            _context.BclOverrides
+        );
 
     /// <summary>
     /// Returns null when the type doesn't need a guard (exceptions, ExportedAsModule,
@@ -75,7 +81,7 @@ public sealed class TypeGuardBuilder(
             condition = members
                 .Select<IFieldSymbol, TsExpression>(m =>
                 {
-                    var name = SymbolHelper.GetNameOverride(m) ?? m.Name;
+                    var name = SymbolHelper.GetNameOverride(m, TargetLanguage.TypeScript) ?? m.Name;
                     return new TsBinaryExpression(
                         new TsIdentifier("value"),
                         "===",
@@ -191,9 +197,7 @@ public sealed class TypeGuardBuilder(
     /// <summary>
     /// Gets all fields (own + inherited) for guard validation.
     /// </summary>
-    private static IReadOnlyList<(string Name, TsType Type)> GetAllFieldsForGuard(
-        INamedTypeSymbol type
-    )
+    private IReadOnlyList<(string Name, TsType Type)> GetAllFieldsForGuard(INamedTypeSymbol type)
     {
         var fields = new List<(string Name, TsType Type)>();
 
@@ -218,13 +222,13 @@ public sealed class TypeGuardBuilder(
                 // assembly-level visibility distinction.
                 if (!IsGuardVisible(member.DeclaredAccessibility))
                     continue;
-                if (SymbolHelper.HasIgnore(member))
+                if (SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript))
                     continue;
 
                 var name =
-                    SymbolHelper.GetNameOverride(member)
+                    SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
                     ?? TypeScriptNaming.ToCamelCase(member.Name);
-                var tsType = TypeMapper.Map(member.Type);
+                var tsType = MapType(member.Type);
 
                 // Avoid duplicates (from overrides)
                 if (fields.All(f => f.Name != name))
@@ -241,13 +245,13 @@ public sealed class TypeGuardBuilder(
                     continue;
                 if (!IsGuardVisible(member.DeclaredAccessibility))
                     continue;
-                if (SymbolHelper.HasIgnore(member))
+                if (SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript))
                     continue;
 
                 var name =
-                    SymbolHelper.GetNameOverride(member)
+                    SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
                     ?? TypeScriptNaming.ToCamelCase(member.Name);
-                var tsType = TypeMapper.Map(member.Type);
+                var tsType = MapType(member.Type);
 
                 if (fields.All(f => f.Name != name))
                     fields.Add((name, tsType));
@@ -311,7 +315,7 @@ public sealed class TypeGuardBuilder(
             ),
 
             // Transpilable named type → call guard recursively
-            TsNamedType { Name: var n } when _transpilableTypeMap.ContainsKey(n) =>
+            TsNamedType { Name: var n } when _context.TranspilableTypeMap.ContainsKey(n) =>
                 new TsCallExpression(new TsIdentifier($"is{n}"), [fieldAccess]),
 
             // Union with null (nullable) → field == null || innerCheck

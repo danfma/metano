@@ -1,0 +1,36 @@
+{
+  "name": "sample-todo",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
+    },
+    "#": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "metano-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native-preview": "^7.0.0-dev.20260225.1"
+  },
+  "scripts": {
+    "generate": "dotnet run --project ../../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj -- -p ../../../samples/SampleTodo/SampleTodo.csproj -o ./src --clean --time",
+    "build": "tsgo -b .",
+    "test": "bun test"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  }
+}

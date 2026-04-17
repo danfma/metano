@@ -1,4 +1,3 @@
-using Metano.Compiler;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
@@ -13,8 +12,6 @@ namespace Metano.Transformation;
 /// </summary>
 public static class TypeScriptNaming
 {
-    public static bool HasEmit(ISymbol symbol) => SymbolHelper.HasAttribute(symbol, "Emit");
-
     /// <summary>
     /// Reads [Emit("expression")] from a symbol.
     /// </summary>

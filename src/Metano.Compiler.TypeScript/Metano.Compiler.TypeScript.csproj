@@ -28,4 +28,8 @@
     <ProjectReference Include="../Metano/Metano.csproj" />
     <ProjectReference Include="../Metano.Compiler/Metano.Compiler.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Metano.Tests" />
+  </ItemGroup>
 </Project>

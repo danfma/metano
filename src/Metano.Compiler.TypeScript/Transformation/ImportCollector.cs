@@ -1,5 +1,7 @@
 using Metano.Compiler;
+using Metano.Compiler.IR;
 using Metano.TypeScript.AST;
+using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
@@ -29,7 +31,9 @@ public sealed class ImportCollector(
         (string ExportedName, string FromPackage, string Version)
     > bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
-    PathNaming pathNaming
+    PathNaming pathNaming,
+    TypeMappingContext typeMappingContext,
+    IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null
 )
 {
     private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap =
@@ -44,6 +48,9 @@ public sealed class ImportCollector(
     > _bclExportMap = bclExportMap;
     private readonly IReadOnlyDictionary<string, string> _guardNameToTypeMap = guardNameToTypeMap;
     private readonly PathNaming _pathNaming = pathNaming;
+    private readonly TypeMappingContext _typeMappingContext = typeMappingContext;
+    private readonly IReadOnlySet<IrRuntimeRequirement>? _irRuntimeRequirements =
+        irRuntimeRequirements;
 
     public IReadOnlyList<TsImport> Collect(
         INamedTypeSymbol currentType,
@@ -80,42 +87,45 @@ public sealed class ImportCollector(
         // exist as separate files when the grouping kicks in).
         var currentFileName = GetFileName(currentType);
 
-        // Runtime imports (HashCode for records). [PlainObject] records are emitted as
-        // interfaces with no class wrapper and no equals/hashCode/with helpers, so they
-        // don't need the runtime helper either.
-        if (currentType.IsRecord && !SymbolHelper.HasPlainObject(currentType))
-        {
-            imports.Add(new TsImport(["HashCode"], "metano-runtime"));
-        }
+        // The IR runtime requirement scanner owns helpers visible from type
+        // signatures (HashCode for records, Temporal for date types, UUID for
+        // Guid, HashSet for sets, Grouping for LINQ groupings). Those land
+        // first so the import line ordering matches the legacy output
+        // (runtime helpers above intra-project / cross-package imports).
+        if (_irRuntimeRequirements is { Count: > 0 } reqs)
+            imports.AddRange(IrRuntimeRequirementToTsImport.Convert(reqs));
 
-        // Temporal polyfill import (if any Temporal types are referenced)
-        if (referencedTypes.Any(t => t.StartsWith("Temporal.")))
-        {
-            imports.Add(new TsImport(["Temporal"], "@js-temporal/polyfill"));
-        }
+        // The walker below still covers cases the IR scanner doesn't see:
+        //   - template-driven RuntimeImports (declared on [Emit] / [MapMethod])
+        //   - Enumerable / Grouping when they appear only in expression bodies
+        //     (lambda parameter type annotations, fluent chains) — the scanner
+        //     finds them only on type signatures
+        //   - UUID inside expression bodies emitted by the legacy
+        //     JsonSerializerContextTransformer (doesn't flow through IR yet).
+        var alreadyImported = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var imp in imports)
+        foreach (var name in imp.Names)
+            alreadyImported.Add(name);
 
-        // Runtime type check imports (isString, isInt32, etc.)
-        var runtimeTypeChecks = referencedTypes.Where(IsRuntimeTypeCheck).OrderBy(n => n).ToArray();
-
-        if (runtimeTypeChecks.Length > 0)
-        {
-            imports.Add(new TsImport(runtimeTypeChecks, "metano-runtime"));
-        }
-
-        // LINQ Enumerable import
-        if (referencedTypes.Contains("Enumerable"))
+        if (referencedTypes.Contains("Enumerable") && !alreadyImported.Contains("Enumerable"))
         {
             imports.Add(new TsImport(["Enumerable"], "metano-runtime"));
+            alreadyImported.Add("Enumerable");
         }
 
-        // UUID import (branded type used for System.Guid mapping). Referenced
-        // either via a type annotation (`TsNamedType("UUID")` from TypeMapper)
-        // or via a template body (e.g., `Guid.NewGuid()` lowered to `UUID.newUuid()`).
-        // Hoisted before `runtimeHelpers` so the helpers set can drop UUID to
-        // avoid emitting a duplicate import line.
-        if (referencedTypes.Contains("UUID") || runtimeHelpers.Contains("UUID"))
+        if (referencedTypes.Contains("Grouping") && !alreadyImported.Contains("Grouping"))
+        {
+            imports.Add(new TsImport(["Grouping"], "metano-runtime", TypeOnly: true));
+            alreadyImported.Add("Grouping");
+        }
+
+        if (
+            (referencedTypes.Contains("UUID") || runtimeHelpers.Contains("UUID"))
+            && !alreadyImported.Contains("UUID")
+        )
         {
             imports.Add(new TsImport(["UUID"], "metano-runtime"));
+            alreadyImported.Add("UUID");
             runtimeHelpers.Remove("UUID");
         }
 
@@ -127,38 +137,8 @@ public sealed class ImportCollector(
             imports.Add(new TsImport(runtimeHelpers.OrderBy(n => n).ToArray(), "metano-runtime"));
         }
 
-        // HashSet import (from runtime collections)
-        if (referencedTypes.Contains("HashSet"))
-        {
-            imports.Add(new TsImport(["HashSet"], "metano-runtime"));
-        }
-
-        // LINQ Grouping type import
-        if (referencedTypes.Contains("Grouping"))
-        {
-            imports.Add(new TsImport(["Grouping"], "metano-runtime", TypeOnly: true));
-        }
-
-        // Delegate helper imports (delegateAdd, delegateRemove from metano-runtime)
-        var delegateHelpers = referencedTypes
-            .Where(n => n is "delegateAdd" or "delegateRemove")
-            .OrderBy(n => n)
-            .ToArray();
-        if (delegateHelpers.Length > 0)
-        {
-            imports.Add(new TsImport(delegateHelpers, "metano-runtime"));
-        }
-
-        // Track what we've already imported to avoid duplicates
-        var importedNames = new HashSet<string>(runtimeTypeChecks)
-        {
-            "Enumerable",
-            "Grouping",
-            "HashSet",
-            "UUID",
-            "delegateAdd",
-            "delegateRemove",
-        };
+        // Track what we've already imported to avoid duplicates downstream.
+        var importedNames = new HashSet<string>(alreadyImported);
         foreach (var helper in runtimeHelpers)
             importedNames.Add(helper);
 
@@ -312,7 +292,7 @@ public sealed class ImportCollector(
                 // Track for auto-deps when [Import] declared a Version. The package
                 // name is `extImport.From` (the module specifier).
                 if (extImport.Version is not null && extImport.Version.Length > 0)
-                    TypeMapper.UsedCrossPackages[extImport.From] = extImport.Version;
+                    _typeMappingContext.UsedCrossPackages[extImport.From] = extImport.Version;
                 continue;
             }
 

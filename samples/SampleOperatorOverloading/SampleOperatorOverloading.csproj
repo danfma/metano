@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <MetanoOutputDir>../../js/sample-operator-overloading/src</MetanoOutputDir>
+    <MetanoOutputDir>../../targets/js/sample-operator-overloading/src</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
   </PropertyGroup>

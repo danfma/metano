@@ -212,9 +212,12 @@ public class NameAttributeConsistencyTests
         );
 
         var taskTs = result["task-item.ts"];
-        // The auto-init for the enum should use the overridden member name "low"
-        // not the raw C# name "Low"
-        await Assert.That(taskTs).Contains("Priority.low");
-        await Assert.That(taskTs).DoesNotContain("Priority.Low");
+        // StringEnum emits a const object whose KEYS stay on the C# member
+        // name; the [Name] override only changes the string VALUE. References
+        // (including `default(Priority)` auto-inits) have to use the CLR key
+        // — `Priority.low` would be `undefined` at runtime since the object
+        // is `{ Low: "low", … }`.
+        await Assert.That(taskTs).Contains("Priority.Low");
+        await Assert.That(taskTs).DoesNotContain("Priority.low");
     }
 }

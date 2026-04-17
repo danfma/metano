@@ -1,7 +1,10 @@
+using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
-using Metano.TypeScript;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.IR;
 using Metano.TypeScript.AST;
+using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -16,6 +19,16 @@ public sealed class TypeTransformer(Compilation compilation)
     private readonly List<MetanoDiagnostic> _diagnostics = [];
 
     /// <summary>
+    /// Forwarded to <see cref="TypeScriptTransformContext.UseIrBodiesWhenCovered"/>.
+    /// Always <c>true</c> in production — the IR pipeline is the only path for
+    /// method-body lowering now that the legacy transformers are gone. Kept as
+    /// an init-only kill switch so a regression test can intentionally bypass
+    /// the IR bridges and confirm the type-emission code skips the type
+    /// without crashing.
+    /// </summary>
+    public bool UseIrBodiesWhenCovered { get; init; } = true;
+
+    /// <summary>
     /// Diagnostics collected during transformation. Includes warnings about unsupported
     /// language features and other issues that the user should know about.
     /// </summary>
@@ -27,7 +40,7 @@ public sealed class TypeTransformer(Compilation compilation)
     /// Maps each cross-package npm name that was actually referenced during
     /// transformation to its npm version specifier (<c>^Major.Minor.Patch</c>, or
     /// <c>workspace:*</c> when the source assembly has no explicit version). Drained
-    /// from <see cref="TypeMapper.UsedCrossPackages"/> at the end of <c>TransformAll</c>
+    /// from <see cref="TypeMappingContext.UsedCrossPackages"/> at the end of <c>TransformAll</c>
     /// and surfaced to the CLI driver so the package.json writer can merge the entries
     /// into <c>dependencies</c>.
     /// </summary>
@@ -53,8 +66,8 @@ public sealed class TypeTransformer(Compilation compilation)
             .Where(t =>
                 SymbolHelper.IsTranspilable(
                     t,
-                    _context!.AssemblyWideTranspile,
-                    _context.CurrentAssembly
+                    Context.AssemblyWideTranspile,
+                    Context.CurrentAssembly
                 )
             )
             .ToList();
@@ -160,10 +173,19 @@ public sealed class TypeTransformer(Compilation compilation)
         // from the referenced assemblies. Must run after the local _externalImportMap
         // is built so it only adds, never overwrites local entries.
         DiscoverCrossAssemblyTypes();
-        TypeMapper.CrossAssemblyTypeMap = _crossAssemblyTypeMap;
-        TypeMapper.AssembliesNeedingEmitPackage = _assembliesNeedingEmitPackage;
-        TypeMapper.CrossPackageMisses = new HashSet<string>();
-        TypeMapper.UsedCrossPackages = new Dictionary<string, string>();
+
+        // Build the explicit per-compilation context that replaces TypeMapper statics.
+        var crossPackageMisses = new HashSet<string>();
+        var usedCrossPackages = new Dictionary<string, string>();
+        var typeMappingContext = new TypeMappingContext(
+            _bclExportMap,
+            _crossAssemblyTypeMap,
+            _assembliesNeedingEmitPackage,
+            crossPackageMisses,
+            usedCrossPackages
+        );
+
+        // All callers now use the explicit TypeMappingContext — no static assignment needed.
 
         // Build guard name → type name map for cross-file guard imports
         _guardNameToTypeMap = new Dictionary<string, string>();
@@ -199,7 +221,11 @@ public sealed class TypeTransformer(Compilation compilation)
             _pathNaming,
             declarativeMappings,
             _diagnostics.Add
-        );
+        )
+        {
+            TypeMapping = typeMappingContext,
+            UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
+        };
 
         var files = new List<TsSourceFile>();
 
@@ -228,7 +254,12 @@ public sealed class TypeTransformer(Compilation compilation)
         // Drain MS0007 cross-package misses recorded by TypeMapper.ResolveOrigin while
         // mapping types. One error per unique miss; the message names the missing
         // attribute and the producing assembly so the user knows where to fix it.
-        foreach (var miss in TypeMapper.CrossPackageMisses.OrderBy(s => s, StringComparer.Ordinal))
+        foreach (
+            var miss in typeMappingContext.CrossPackageMisses.OrderBy(
+                s => s,
+                StringComparer.Ordinal
+            )
+        )
         {
             _diagnostics.Add(
                 new MetanoDiagnostic(
@@ -246,7 +277,7 @@ public sealed class TypeTransformer(Compilation compilation)
         // pre-formatted (string → version specifier), populated by three paths in
         // TypeMapper / ImportCollector. The CLI driver merges it into the consumer's
         // package.json.
-        foreach (var (packageName, version) in TypeMapper.UsedCrossPackages)
+        foreach (var (packageName, version) in typeMappingContext.UsedCrossPackages)
         {
             _crossPackageDependencies[packageName] = version;
         }
@@ -259,8 +290,9 @@ public sealed class TypeTransformer(Compilation compilation)
 
     /// <summary>
     /// The compiler-synthesized entry point method from C# 9+ top-level statements.
-    /// When set, the containing type is routed through <see cref="ModuleTransformer"/>
-    /// as an implicit <c>[ExportedAsModule]</c> + <c>[ModuleEntryPoint]</c>.
+    /// When set, the containing type is routed through
+    /// <see cref="EmitTopLevelStatements"/> as an implicit
+    /// <c>[ExportedAsModule]</c> + <c>[ModuleEntryPoint]</c>.
     /// </summary>
     private IMethodSymbol? _syntheticEntryPoint;
     private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
@@ -289,7 +321,7 @@ public sealed class TypeTransformer(Compilation compilation)
     /// Referenced assemblies that have <c>[TranspileAssembly]</c> but lack
     /// <c>[EmitPackage(JavaScript)]</c>. The type mapper consults this set when a
     /// cross-assembly type lookup misses; if the type's containing assembly is here,
-    /// it raises MS0007 in <see cref="TypeMapper.CrossPackageMisses"/> so the
+    /// it raises MS0007 in <see cref="TypeMappingContext.CrossPackageMisses"/> so the
     /// transformer can report the missing-attribute error at the consumer site.
     /// </summary>
     private HashSet<IAssemblySymbol> _assembliesNeedingEmitPackage = new(
@@ -306,9 +338,21 @@ public sealed class TypeTransformer(Compilation compilation)
     /// <summary>
     /// Built once after the setup phase of <see cref="TransformAll"/> completes.
     /// All per-type transformation code reads its shared state through this context
-    /// instead of touching the private fields directly.
+    /// instead of touching the private fields directly. Access via <see cref="Context"/>
+    /// to fail fast if a per-type helper is invoked before <see cref="TransformAll"/>.
     /// </summary>
     private TypeScriptTransformContext? _context;
+
+    /// <summary>Non-nullable view of <see cref="_context"/> — every per-type helper goes
+    /// through this property so a misuse (helper called before <see cref="TransformAll"/>
+    /// finishes its setup phase) raises a clear <see cref="InvalidOperationException"/>
+    /// instead of a generic <see cref="NullReferenceException"/>.</summary>
+    private TypeScriptTransformContext Context =>
+        _context
+        ?? throw new InvalidOperationException(
+            "TypeScriptTransformContext is not yet initialized — TransformAll() must "
+                + "complete its setup phase before any per-type helper runs."
+        );
 
     /// <summary>
     /// Walks <see cref="Compilation.References"/> and, for each referenced assembly that
@@ -423,7 +467,7 @@ public sealed class TypeTransformer(Compilation compilation)
                     when type.ContainingType is null
                         && type.DeclaredAccessibility == Accessibility.Public
                         && !SymbolHelper.HasNoTranspile(type)
-                        && !SymbolHelper.HasNoEmit(type):
+                        && !SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript):
                     sink.Add(type);
                     break;
             }
@@ -511,8 +555,7 @@ public sealed class TypeTransformer(Compilation compilation)
         }
         LoadBclExportFromAssembly(compilation.Assembly);
 
-        // Make BCL export map available to TypeMapper
-        TypeMapper.BclExportMap = _bclExportMap;
+        // _bclExportMap is passed to TypeMappingContext by reference — no static needed.
     }
 
     private void LoadBclExportFromAssembly(IAssemblySymbol assembly)
@@ -562,7 +605,11 @@ public sealed class TypeTransformer(Compilation compilation)
     /// produced any statements (and is therefore part of a file group); false if it's
     /// a no-op (e.g., <c>[Import]</c> or <c>[NoEmit]</c>).
     /// </summary>
-    private bool BuildTypeStatements(INamedTypeSymbol type, List<TsTopLevel> sink)
+    private bool BuildTypeStatements(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache = null
+    )
     {
         // [Import] types are external — don't generate .ts files
         if (SymbolHelper.HasImport(type))
@@ -571,26 +618,29 @@ public sealed class TypeTransformer(Compilation compilation)
         // [NoEmit] types are ambient/declaration-only — discoverable in C# so consumers
         // can reference them in signatures, but no .ts file is generated and no import
         // is emitted. Used for structural shapes over external library types.
-        if (SymbolHelper.HasNoEmit(type))
+        if (SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript))
             return false;
 
         var startCount = sink.Count;
 
         if (type.TypeKind == TypeKind.Enum)
         {
-            EnumTransformer.Transform(type, sink);
+            var enumIr = (IrEnumDeclaration)GetOrExtractIr(type, irCache)!;
+            IrToTsEnumBridge.Convert(enumIr, sink);
         }
         else if (type.TypeKind == TypeKind.Interface)
         {
-            InterfaceTransformer.Transform(type, sink);
+            var ifaceIr = (IrInterfaceDeclaration)GetOrExtractIr(type, irCache)!;
+            IrToTsInterfaceBridge.Convert(ifaceIr, sink);
         }
         else if (IsExceptionType(type))
         {
-            new ExceptionTransformer(_context!).Transform(type, sink);
+            var exceptionIr = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
+            IrToTsExceptionBridge.Convert(exceptionIr, sink, Context.DeclarativeMappings);
         }
         else if (IsJsonSerializerContextType(type))
         {
-            new JsonSerializerContextTransformer(_context!).Transform(type, sink);
+            new JsonSerializerContextTransformer(Context).Transform(type, sink);
         }
         else if (
             _syntheticEntryPoint is not null
@@ -598,24 +648,25 @@ public sealed class TypeTransformer(Compilation compilation)
         )
         {
             // C# 9+ top-level statements → unwrap as module-level code
-            new ModuleTransformer(_context!).TransformTopLevelStatements(
-                _syntheticEntryPoint,
-                sink
-            );
+            EmitTopLevelStatements(_syntheticEntryPoint, sink);
         }
         else if (
             (SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic
         )
         {
-            new ModuleTransformer(_context!).Transform(type, sink);
+            TryEmitModuleViaIr(type, sink);
         }
-        else if (new InlineWrapperTransformer(_context!).Transform(type, sink))
-        {
-            // InlineWrapper handled by specialized pipeline.
-        }
+        else if (TryEmitInlineWrapperViaIr(type, sink, irCache)) { }
         else if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
         {
-            new RecordClassTransformer(_context!).Transform(type, sink);
+            if (TryEmitPlainObjectViaIr(type, sink, irCache))
+            {
+                // Fully emitted through the IR pipeline.
+            }
+            else
+            {
+                new IrToTsClassEmitter(Context).Transform(type, sink);
+            }
         }
 
         if (sink.Count == startCount)
@@ -624,7 +675,7 @@ public sealed class TypeTransformer(Compilation compilation)
         // Generate type guard function when [GenerateGuard] is present
         if (SymbolHelper.HasGenerateGuard(type))
         {
-            var guard = new TypeGuardBuilder(_context!.TranspilableTypeMap).Generate(type);
+            var guard = new TypeGuardBuilder(Context).Generate(type);
             if (guard is not null)
                 sink.Add(guard);
         }
@@ -646,11 +697,17 @@ public sealed class TypeTransformer(Compilation compilation)
     /// </summary>
     private TsSourceFile? TransformGroup(TypeFileGroup group)
     {
+        // Per-group IR cache: each type is extracted at most once, then shared by the
+        // bridge converters (BuildTypeStatements) and the runtime-requirement scanner
+        // below. Without this, plain-object classes were extracted three times per group.
+        var irCache = new Dictionary<INamedTypeSymbol, IrTypeDeclaration>(
+            SymbolEqualityComparer.Default
+        );
         var statements = new List<TsTopLevel>();
         var anyEmitted = false;
         foreach (var type in group.Types)
         {
-            if (BuildTypeStatements(type, statements))
+            if (BuildTypeStatements(type, statements, irCache))
                 anyEmitted = true;
         }
 
@@ -662,17 +719,61 @@ public sealed class TypeTransformer(Compilation compilation)
         // multi-type files, the elision still works for the primary type, and other
         // types in the same file aren't imported anyway (they're locally declared).
         var primaryType = group.Types[0];
+        var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
         var imports = new ImportCollector(
-            _context!.TranspilableTypeMap,
-            _context.ExternalImportMap,
-            _context.BclExportMap,
-            _context.GuardNameToTypeMap,
-            _context.PathNaming
+            Context.TranspilableTypeMap,
+            Context.ExternalImportMap,
+            Context.BclExportMap,
+            Context.GuardNameToTypeMap,
+            Context.PathNaming,
+            Context.TypeMapping!,
+            irRequirements
         ).Collect(primaryType, statements);
         statements.InsertRange(0, imports);
 
-        var relativePath = _context!.PathNaming.GetRelativePath(group.Namespace, group.FileName);
+        var relativePath = Context.PathNaming.GetRelativePath(group.Namespace, group.FileName);
         return new TsSourceFile(relativePath, statements, group.Namespace);
+    }
+
+    /// <summary>
+    /// Builds the union of <see cref="IrRuntimeRequirement"/> facts for every type in
+    /// the file group. The IR scanner only needs the type's declared shape (no bodies,
+    /// no compilation context), so we run it for every supported kind regardless of
+    /// which emitter handled the actual TS lowering. Types that don't go through any
+    /// IR extractor today (synthetic top-level entry points, [Import]/[NoEmit] types)
+    /// are simply skipped — the legacy walker still picks up their template-level
+    /// runtime needs.
+    /// </summary>
+    private IReadOnlySet<IrRuntimeRequirement> ScanIrRuntimeRequirements(
+        IReadOnlyList<INamedTypeSymbol> types,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration> irCache
+    )
+    {
+        var acc = new HashSet<IrRuntimeRequirement>();
+        foreach (var type in types)
+        {
+            if (
+                SymbolHelper.HasImport(type)
+                || SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript)
+            )
+                continue;
+            // Synthetic top-level entry points are wrapped in a class but emitted
+            // as module-level code by EmitTopLevelStatements; the IR class
+            // extraction would produce an irrelevant shape, so skip it.
+            if (
+                _syntheticEntryPoint is not null
+                && SymbolEqualityComparer.Default.Equals(type, _syntheticEntryPoint.ContainingType)
+            )
+                continue;
+
+            var ir = GetOrExtractIr(type, irCache);
+            if (ir is null)
+                continue;
+
+            foreach (var req in IrRuntimeRequirementScanner.Scan(ir))
+                acc.Add(req);
+        }
+        return acc;
     }
 
     /// <summary>
@@ -776,7 +877,305 @@ public sealed class TypeTransformer(Compilation compilation)
     /// </summary>
     internal static string GetTsTypeName(INamedTypeSymbol type)
     {
-        return SymbolHelper.GetNameOverride(type) ?? type.Name;
+        return SymbolHelper.GetNameOverride(type, TargetLanguage.TypeScript) ?? type.Name;
+    }
+
+    /// <summary>
+    /// Lowers an <c>[ExportedAsModule]</c> static class (or any static class
+    /// holding extension methods / extension blocks) through
+    /// <see cref="IrToTsModuleBridge"/>. The body of a single
+    /// <c>[ModuleEntryPoint]</c> is unwrapped as top-level module statements
+    /// after the regular functions. Returns <c>true</c> when the type was
+    /// handled (even if only diagnostics were emitted) and <c>false</c> only
+    /// when the body coverage probe rejects it — at which point the caller
+    /// produces no output for the type.
+    /// </summary>
+    private bool TryEmitModuleViaIr(INamedTypeSymbol type, List<TsTopLevel> sink)
+    {
+        if (!Context.UseIrBodiesWhenCovered)
+            return false;
+        // Walk members once to find the entry point AND surface the
+        // multiple-[ModuleEntryPoint] diagnostic.
+        IMethodSymbol? entryPoint = null;
+        var diagnosed = false;
+        foreach (var member in type.GetMembers())
+        {
+            if (member is IMethodSymbol m && SymbolHelper.HasModuleEntryPoint(m))
+            {
+                if (entryPoint is not null)
+                {
+                    ReportInvalidEntryPoint(
+                        m,
+                        $"Type '{type.Name}' declares multiple [ModuleEntryPoint] "
+                            + "methods. Only one is allowed per class."
+                    );
+                    diagnosed = true;
+                    continue;
+                }
+                entryPoint = m;
+            }
+        }
+
+        var functions = IrModuleFunctionExtractor
+            .Extract(type, Context.OriginResolver, Context.Compilation, TargetLanguage.TypeScript)
+            // IrModuleFunctionExtractor emits every public method. Strip the
+            // entry point — its body is unwrapped separately below.
+            .Where(f =>
+                entryPoint is null
+                || !string.Equals(f.Name, entryPoint.Name, StringComparison.Ordinal)
+            )
+            .ToList();
+
+        // Validate + extract entry point body. Invalid signatures surface
+        // diagnostics here and the entry point is dropped; ordinary module
+        // functions still emit so the rest of the file is salvageable.
+        IReadOnlyList<IrStatement>? entryBody = null;
+        if (entryPoint is not null)
+        {
+            if (entryPoint.Parameters.Length > 0)
+            {
+                ReportInvalidEntryPoint(
+                    entryPoint,
+                    $"[ModuleEntryPoint] method '{entryPoint.Name}' must have no parameters."
+                );
+                entryPoint = null;
+                diagnosed = true;
+            }
+            else if (!IsValidEntryPointReturn(entryPoint.ReturnType))
+            {
+                ReportInvalidEntryPoint(
+                    entryPoint,
+                    $"[ModuleEntryPoint] method '{entryPoint.Name}' must return void, Task, "
+                        + $"or ValueTask. Found: {entryPoint.ReturnType.ToDisplayString()}."
+                );
+                entryPoint = null;
+                diagnosed = true;
+            }
+            else
+            {
+                entryBody = ExtractMethodBody(entryPoint);
+                if (entryBody is null || !IrBodyCoverageProbe.IsFullyCovered(entryBody))
+                {
+                    ReportUnsupportedBody(
+                        entryPoint,
+                        $"[ModuleEntryPoint] body of '{type.Name}.{entryPoint.Name}' contains "
+                            + "constructs the IR pipeline doesn't yet model; the type was skipped."
+                    );
+                    return true;
+                }
+            }
+        }
+
+        // No work to do: when a diagnostic was already raised, swallow the
+        // type so the caller's `sink.Count == startCount` check skips file
+        // emission without falling back to a now-deleted legacy path.
+        if (functions.Count == 0 && entryBody is null)
+            return diagnosed;
+        foreach (var fn in functions)
+        {
+            if (fn.Body is null || !IrBodyCoverageProbe.IsFullyCovered(fn.Body))
+            {
+                ReportUnsupportedBody(
+                    type,
+                    $"Module function '{type.Name}.{fn.Name}' contains constructs the IR "
+                        + "pipeline doesn't yet model; the type was skipped."
+                );
+                return true;
+            }
+        }
+
+        IrToTsModuleBridge.Convert(functions, sink, Context.DeclarativeMappings);
+
+        // Entry point body flows as top-level module statements after the
+        // ordinary functions, so it can reference them.
+        if (entryBody is not null && entryPoint is not null)
+        {
+            var exportInfo = SymbolHelper.GetExportVarFromBody(entryPoint);
+            if (exportInfo is { AsDefault: true, InPlace: true })
+            {
+                ReportInvalidEntryPoint(
+                    entryPoint,
+                    $"[ExportVarFromBody(\"{exportInfo.Name}\")] on "
+                        + $"'{entryPoint.Name}' cannot combine AsDefault = true with "
+                        + $"InPlace = true. Default exports must be emitted as a "
+                        + $"separate trailing statement; set InPlace = false."
+                );
+                exportInfo = null;
+            }
+
+            var lowered = IrToTsStatementBridge
+                .MapBody(entryBody, Context.DeclarativeMappings)
+                .ToList();
+            TsTopLevel? trailingExport = null;
+            var foundLocal = false;
+            for (var i = 0; i < lowered.Count; i++)
+            {
+                if (
+                    exportInfo is not null
+                    && lowered[i] is TsVariableDeclaration varDecl
+                    && varDecl.Name == exportInfo.Name
+                )
+                {
+                    foundLocal = true;
+                    if (exportInfo.InPlace)
+                        lowered[i] = varDecl with { Exported = true };
+                    else
+                        trailingExport = new TsModuleExport(exportInfo.Name, exportInfo.AsDefault);
+                }
+                sink.Add(new TsTopLevelStatement(lowered[i]));
+            }
+
+            if (exportInfo is not null && !foundLocal)
+            {
+                ReportInvalidEntryPoint(
+                    entryPoint,
+                    $"[ExportVarFromBody(\"{exportInfo.Name}\")] on "
+                        + $"'{entryPoint.Name}' did not find a local variable named "
+                        + $"'{exportInfo.Name}' in the entry point body."
+                );
+            }
+
+            if (trailingExport is not null)
+                sink.Add(trailingExport);
+        }
+        return true;
+    }
+
+    private void ReportInvalidEntryPoint(IMethodSymbol method, string message) =>
+        Context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.InvalidModuleEntryPoint,
+                message,
+                method.Locations.FirstOrDefault()
+            )
+        );
+
+    private void ReportUnsupportedBody(ISymbol contextSymbol, string message) =>
+        Context.ReportUnsupportedBody(contextSymbol, message);
+
+    /// <summary>
+    /// Lowers C# 9+ top-level statements into module-level TS statements. The
+    /// synthetic entry point's declaring syntax is the
+    /// <see cref="CompilationUnitSyntax"/> that hosts the
+    /// <see cref="GlobalStatementSyntax"/> nodes; we walk those directly so
+    /// the <c>const x = …</c> promotion + <c>TryGetValue</c> expansion that
+    /// <see cref="IrStatementExtractor.ExtractStatements(IReadOnlyList{StatementSyntax})"/>
+    /// applies match the body-extraction path.
+    /// </summary>
+    private void EmitTopLevelStatements(IMethodSymbol syntheticEntryPoint, List<TsTopLevel> sink)
+    {
+        var syntaxRef = syntheticEntryPoint.DeclaringSyntaxReferences.FirstOrDefault();
+        if (syntaxRef is null)
+            return;
+
+        var tree = syntaxRef.SyntaxTree;
+        var semanticModel = Context.Compilation.GetSemanticModel(tree);
+        var stmtExtractor = new IrStatementExtractor(
+            semanticModel,
+            target: TargetLanguage.TypeScript
+        );
+
+        // GlobalStatementSyntax is always a direct child of CompilationUnitSyntax —
+        // walking ChildNodes avoids descending into the bodies of nested types,
+        // local functions, or lambdas declared in the file.
+        var globalStatements = ((CompilationUnitSyntax)tree.GetRoot())
+            .Members.OfType<GlobalStatementSyntax>()
+            .Select(g => g.Statement)
+            .ToList();
+
+        var irBody = stmtExtractor.ExtractStatements(globalStatements);
+        foreach (var ts in IrToTsStatementBridge.MapBody(irBody, Context.DeclarativeMappings))
+            sink.Add(new TsTopLevelStatement(ts));
+    }
+
+    private IReadOnlyList<IrStatement>? ExtractMethodBody(IMethodSymbol method)
+    {
+        var syntax =
+            method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            as MethodDeclarationSyntax;
+        if (syntax is null || (syntax.Body is null && syntax.ExpressionBody is null))
+            return null;
+        var model = Context.Compilation.GetSemanticModel(syntax.SyntaxTree);
+        return new IrStatementExtractor(model, target: TargetLanguage.TypeScript).ExtractBody(
+            syntax.Body,
+            syntax.ExpressionBody,
+            isVoid: method.ReturnsVoid
+        );
+    }
+
+    private static bool IsValidEntryPointReturn(ITypeSymbol returnType)
+    {
+        if (returnType.SpecialType == SpecialType.System_Void)
+            return true;
+        var original = returnType.OriginalDefinition.ToDisplayString();
+        return original is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask";
+    }
+
+    private bool TryEmitPlainObjectViaIr(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (!SymbolHelper.HasPlainObject(type))
+            return false;
+
+        var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
+        return IrToTsPlainObjectBridge.Convert(ir, sink, Context.DeclarativeMappings);
+    }
+
+    /// <summary>
+    /// Routes <c>[InlineWrapper]</c> structs through
+    /// <see cref="IrToTsInlineWrapperBridge"/>. The IR class extractor already
+    /// records <see cref="IrTypeSemantics.IsInlineWrapper"/> +
+    /// <see cref="IrTypeSemantics.InlineWrappedType"/>, so the bridge has
+    /// every piece it needs to emit the brand alias + companion namespace.
+    /// </summary>
+    private bool TryEmitInlineWrapperViaIr(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (!SymbolHelper.HasInlineWrapper(type) || type.TypeKind != TypeKind.Struct)
+            return false;
+
+        var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
+        return IrToTsInlineWrapperBridge.Convert(ir, sink, Context.DeclarativeMappings);
+    }
+
+    /// <summary>
+    /// Returns the IR for <paramref name="type"/>, reusing the per-group cache when
+    /// supplied. Returns <c>null</c> for type kinds the IR pipeline doesn't model
+    /// (delegates, type parameters). Callers that already gated on a known kind can
+    /// safely cast the result.
+    /// </summary>
+    private IrTypeDeclaration? GetOrExtractIr(
+        INamedTypeSymbol type,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (irCache is not null && irCache.TryGetValue(type, out var cached))
+            return cached;
+        IrTypeDeclaration? ir = type.TypeKind switch
+        {
+            TypeKind.Enum => IrEnumExtractor.Extract(type),
+            TypeKind.Interface => IrInterfaceExtractor.Extract(
+                type,
+                target: TargetLanguage.TypeScript
+            ),
+            TypeKind.Class or TypeKind.Struct => IrClassExtractor.Extract(
+                type,
+                Context.OriginResolver,
+                Context.Compilation,
+                TargetLanguage.TypeScript
+            ),
+            _ => null,
+        };
+        if (ir is not null && irCache is not null)
+            irCache[type] = ir;
+        return ir;
     }
 
     internal static bool IsExceptionType(INamedTypeSymbol type)
@@ -800,51 +1199,6 @@ public sealed class TypeTransformer(Compilation compilation)
             if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
                 return true;
             current = current.BaseType;
-        }
-
-        return false;
-    }
-
-    internal static bool TryGetInlineWrapperPrimitiveType(
-        INamedTypeSymbol type,
-        out TsType primitiveType
-    )
-    {
-        primitiveType = new TsAnyType();
-
-        var valueMembers = new List<ITypeSymbol>();
-
-        foreach (var member in type.GetMembers())
-        {
-            if (member.IsImplicitlyDeclared)
-                continue;
-            if (member.IsStatic)
-                continue;
-            if (member.DeclaredAccessibility != Accessibility.Public)
-                continue;
-            if (SymbolHelper.HasIgnore(member))
-                continue;
-
-            switch (member)
-            {
-                case IPropertySymbol prop
-                    when prop.GetMethod is not null && prop.Parameters.Length == 0:
-                    valueMembers.Add(prop.Type);
-                    break;
-                case IFieldSymbol field:
-                    valueMembers.Add(field.Type);
-                    break;
-            }
-        }
-
-        if (valueMembers.Count != 1)
-            return false;
-
-        var mapped = TypeMapper.Map(valueMembers[0]);
-        if (mapped is TsStringType or TsNumberType or TsBooleanType or TsBigIntType)
-        {
-            primitiveType = mapped;
-            return true;
         }
 
         return false;
@@ -878,78 +1232,6 @@ public sealed class TypeTransformer(Compilation compilation)
         return false;
     }
 
-    internal static IReadOnlyList<TsTypeParameter>? ExtractTypeParameters(INamedTypeSymbol type)
-    {
-        if (type.TypeParameters.Length == 0)
-            return null;
-        return type
-            .TypeParameters.Select(tp =>
-            {
-                TsType? constraint = null;
-                if (tp.ConstraintTypes.Length > 0)
-                    constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
-                return new TsTypeParameter(tp.Name, constraint);
-            })
-            .ToList();
-    }
-
-    internal static IReadOnlyList<TsTypeParameter>? ExtractMethodTypeParameters(
-        IMethodSymbol method
-    )
-    {
-        // Method has its own type parameters
-        if (method.TypeParameters.Length > 0)
-        {
-            return method
-                .TypeParameters.Select(tp =>
-                {
-                    TsType? constraint = null;
-                    if (tp.ConstraintTypes.Length > 0)
-                        constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
-                    return new TsTypeParameter(tp.Name, constraint);
-                })
-                .ToList();
-        }
-
-        // Static methods in generic classes: promote class type params to method level
-        // In TS, static members cannot reference class type parameters
-        if (method.IsStatic && method.ContainingType?.TypeParameters.Length > 0)
-        {
-            var classTypeParams = method.ContainingType.TypeParameters;
-            // Check if the method actually uses any class type params
-            var usedParams = classTypeParams
-                .Where(tp =>
-                    ReferencesTypeParam(method.ReturnType, tp)
-                    || method.Parameters.Any(p => ReferencesTypeParam(p.Type, tp))
-                )
-                .ToList();
-
-            if (usedParams.Count > 0)
-            {
-                return usedParams
-                    .Select(tp =>
-                    {
-                        TsType? constraint = null;
-                        if (tp.ConstraintTypes.Length > 0)
-                            constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
-                        return new TsTypeParameter(tp.Name, constraint);
-                    })
-                    .ToList();
-            }
-        }
-
-        return null;
-    }
-
-    private static bool ReferencesTypeParam(ITypeSymbol type, ITypeParameterSymbol typeParam)
-    {
-        if (SymbolEqualityComparer.Default.Equals(type, typeParam))
-            return true;
-        if (type is INamedTypeSymbol named)
-            return named.TypeArguments.Any(arg => ReferencesTypeParam(arg, typeParam));
-        return false;
-    }
-
     internal static TsAccessibility MapAccessibility(Accessibility accessibility) =>
         accessibility switch
         {
@@ -958,7 +1240,4 @@ public sealed class TypeTransformer(Compilation compilation)
                 TsAccessibility.Protected,
             _ => TsAccessibility.Public,
         };
-
-    private ExpressionTransformer CreateExpressionTransformer(SemanticModel semanticModel) =>
-        _context!.CreateExpressionTransformer(semanticModel);
 }

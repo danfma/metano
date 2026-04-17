@@ -206,5 +206,5 @@ This sample is the benchmark for Metano's **coverage of real C# idioms**:
 - The 51 bun tests verify end-to-end behavior, not just "does it compile"
 
 It's also the easiest way to see what a non-trivial Metano project output looks
-like. Open [`js/sample-issue-tracker/src/issues/domain/issue.ts`](../../js/sample-issue-tracker/src/issues/domain/issue.ts)
+like. Open [`targets/js/sample-issue-tracker/src/issues/domain/issue.ts`](../../targets/js/sample-issue-tracker/src/issues/domain/issue.ts)
 to see the real output.

@@ -801,6 +801,10 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(";");
                 break;
 
+            case TsRawStatement raw:
+                _sb.Write(raw.Text);
+                break;
+
             case TsVariableDeclaration varDecl:
                 if (varDecl.Exported)
                     _sb.Write("export ");

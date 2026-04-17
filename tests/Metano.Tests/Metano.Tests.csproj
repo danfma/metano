@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Metano/Metano.csproj" />
     <ProjectReference Include="../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj" />
+    <ProjectReference Include="../../src/Metano.Compiler.Dart/Metano.Compiler.Dart.csproj" />
   </ItemGroup>
 
   <ItemGroup>

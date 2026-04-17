@@ -1,5 +1,8 @@
+using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Extraction;
 using Metano.TypeScript.AST;
+using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
@@ -15,6 +18,12 @@ namespace Metano.Transformation;
 public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext context)
 {
     private readonly TypeScriptTransformContext _context = context;
+
+    private TsType MapType(ITypeSymbol symbol) =>
+        IrToTsTypeMapper.Map(
+            IrTypeRefMapper.Map(symbol, _context.OriginResolver, TargetLanguage.TypeScript),
+            _context.BclOverrides
+        );
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
@@ -238,7 +247,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                     x.TsName,
                     new TsCastExpression(
                         new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
-                        TypeMapper.Map(x.Property.Type)
+                        MapType(x.Property.Type)
                     )
                 ))
                 .ToList();
@@ -251,7 +260,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 .Select(x =>
                     new TsCastExpression(
                         new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
-                        TypeMapper.Map(x.Property.Type)
+                        MapType(x.Property.Type)
                     ) as TsExpression
                 )
                 .ToList();
@@ -303,7 +312,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 continue;
 
             var tsName =
-                SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
+                SymbolHelper.GetNameOverride(prop, TargetLanguage.TypeScript)
+                ?? TypeScriptNaming.ToCamelCase(prop.Name);
 
             // JSON name: [JsonPropertyName] wins, otherwise apply naming policy
             var jsonName = GetJsonPropertyName(prop) ?? ApplyNamingPolicy(prop.Name, namingPolicy);
@@ -409,15 +419,15 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 return "temporal";
 
             // Dictionary-like → map
-            if (TypeMapper.IsDictionaryLike(named) && named.TypeArguments.Length >= 2)
+            if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)
                 return "map";
 
             // HashSet-like → hashSet
-            if (TypeMapper.IsSetLike(named) && named.TypeArguments.Length > 0)
+            if (named.IsSetLike() && named.TypeArguments.Length > 0)
                 return "hashSet";
 
             // Collection-like → array
-            if (TypeMapper.IsCollectionLike(named) && named.TypeArguments.Length > 0)
+            if (named.IsCollectionLike() && named.TypeArguments.Length > 0)
                 return "array";
 
             // Enum with [StringEnum] → enum, otherwise numericEnum
@@ -528,7 +538,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
             case "temporal":
             {
-                var tsType = TypeMapper.Map(type);
+                var tsType = MapType(type);
                 var typeName = tsType is TsNamedType namedTs
                     ? namedTs.Name
                     : "Temporal.PlainDateTime";
@@ -580,7 +590,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
             case "ref":
             {
-                var tsType = TypeMapper.Map(type);
+                var tsType = MapType(type);
                 var refName = tsType is TsNamedType namedTs ? namedTs.Name : "unknown";
                 var getterName = TypeScriptNaming.ToCamelCase(refName);
                 return new TsObjectLiteral([

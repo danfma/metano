@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <MetanoOutputDir>../../js/sample-todo/src</MetanoOutputDir>
+    <MetanoOutputDir>../../targets/js/sample-todo/src</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
   </PropertyGroup>

@@ -1,4 +1,7 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.IR;
+using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
@@ -60,16 +63,65 @@ public sealed class TypeScriptTransformContext(
     public Action<MetanoDiagnostic> ReportDiagnostic { get; } = reportDiagnostic;
 
     /// <summary>
-    /// Creates a configured <see cref="ExpressionTransformer"/> for the given semantic
-    /// model. Centralized here so every caller produces an expression transformer with
-    /// the same diagnostics + assembly-wide-transpile wiring.
+    /// Reports MS0001 (UnsupportedFeature) for an IR-pipeline body the bridge
+    /// can't lower. Used as the graceful-failure signal from
+    /// <c>IrToTsClassEmitter</c> and <c>TypeTransformer</c> when the legacy
+    /// fallbacks are gone but the IR coverage probe still rejects the body —
+    /// surfaces the gap at build time instead of crashing or silently dropping
+    /// output.
     /// </summary>
-    public ExpressionTransformer CreateExpressionTransformer(SemanticModel semanticModel) =>
-        new(semanticModel)
-        {
-            AssemblyWideTranspile = AssemblyWideTranspile,
-            CurrentAssembly = CurrentAssembly,
-            ReportDiagnostic = ReportDiagnostic,
-            DeclarativeMappings = DeclarativeMappings,
-        };
+    public void ReportUnsupportedBody(ISymbol contextSymbol, string message) =>
+        ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedFeature,
+                message,
+                contextSymbol.Locations.FirstOrDefault()
+            )
+        );
+
+    /// <summary>
+    /// The per-compilation type mapping context. Provides explicit access to the mutable
+    /// state that <see cref="TypeMapper"/> needs during transformation, replacing the
+    /// legacy <c>[ThreadStatic]</c> fields.
+    /// </summary>
+    public TypeMappingContext? TypeMapping { get; init; }
+
+    /// <summary>
+    /// Switches method-body lowering between the IR pipeline (default,
+    /// <c>true</c>) and a no-op stub used by tests that want to verify the IR
+    /// path is the single source of truth. With the legacy expression/dispatcher
+    /// transformers removed, flipping this to <c>false</c> causes constructor
+    /// and overload dispatchers to throw — there is no longer-existing fallback
+    /// to fall through to.
+    /// </summary>
+    public bool UseIrBodiesWhenCovered { get; init; } = true;
+
+    private BclExportTypeOverrides? _bclOverrides;
+
+    /// <summary>
+    /// Shared <see cref="IrToTsTypeOverrides"/> that applies <c>[ExportFromBcl]</c>
+    /// mappings (decimal → Decimal from decimal.js, etc.) when lowering an
+    /// <see cref="IrTypeRef"/> through <see cref="IrToTsTypeMapper"/>. Tracks
+    /// per-package usage in <see cref="TypeMappingContext.UsedCrossPackages"/>
+    /// so the CLI driver emits the right <c>package.json#dependencies</c>.
+    /// Created once per compilation and reused across every emitter / bridge /
+    /// builder that lowers type refs.
+    /// </summary>
+    public BclExportTypeOverrides BclOverrides =>
+        _bclOverrides ??= new BclExportTypeOverrides(
+            TypeMapping!.BclExportMap,
+            TypeMapping.UsedCrossPackages
+        );
+
+    private IrTypeOriginResolver? _originResolver;
+
+    /// <summary>
+    /// Shared <see cref="IrTypeOriginResolver"/> that records cross-assembly
+    /// type origins + drains cross-package misses into the current
+    /// <see cref="TypeMappingContext"/>. Created once per compilation so the
+    /// closure isn't rebuilt on every <see cref="IrTypeRefMapper.Map"/> call.
+    /// </summary>
+    public IrTypeOriginResolver OriginResolver =>
+        _originResolver ??= IrTypeOriginResolverFactory.Create(TypeMapping!);
 }
