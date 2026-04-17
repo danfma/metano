@@ -133,8 +133,9 @@ with the pre-dispatch code path.
 
 ## Post-refactor note (2026-04)
 
-`OverloadDispatcherBuilder.cs` and `TypeCheckGenerator.cs` listed above
-were retired. The dispatch strategy documented here is unchanged: a
+The previously referenced legacy transformer types
+`OverloadDispatcherBuilder.cs` and `TypeCheckGenerator.cs` were
+retired. The dispatch strategy documented here is unchanged: a
 dispatcher method with a widened `(...args)` signature, per-overload
 branches gated by runtime type checks, with a static-known fast-path for
 call sites where the compiler can prove which overload is targeted. The
