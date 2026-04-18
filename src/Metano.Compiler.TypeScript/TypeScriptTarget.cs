@@ -1,4 +1,5 @@
 using Metano.Compiler;
+using Metano.Compiler.IR;
 using Metano.Transformation;
 using Metano.TypeScript;
 using Metano.TypeScript.AST;
@@ -49,13 +50,15 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// </summary>
     public bool LastIsExecutable { get; private set; }
 
-    public TargetOutput Transform(Compilation compilation)
+    public TargetOutput Transform(IrCompilation ir, Compilation compilation)
     {
         var transformer = new TypeTransformer(compilation);
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
-        // Read [EmitPackage] for the JavaScript target (enum value 0).
-        LastEmitPackageName = SymbolHelper.GetEmitPackage(compilation.Assembly, targetEnumValue: 0);
+        // Prefer the frontend-populated package name; the underlying Roslyn read
+        // remains as a defensive fallback while every consumer migrates onto IR.
+        LastEmitPackageName =
+            ir.PackageName ?? SymbolHelper.GetEmitPackage(compilation.Assembly, targetEnumValue: 0);
         LastCrossPackageDependencies = transformer.CrossPackageDependencies;
         LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
 

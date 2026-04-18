@@ -53,7 +53,7 @@ public static class TranspilerHost
             Console.WriteLine($"  Compilation: {compileSw.ElapsedMilliseconds}ms");
 
         var transpileSw = Stopwatch.StartNew();
-        var output = target.Transform(compilation);
+        var output = target.Transform(ir, compilation);
 
         transpileSw.Stop();
 
