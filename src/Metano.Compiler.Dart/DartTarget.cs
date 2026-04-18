@@ -15,8 +15,15 @@ public sealed class DartTarget : ITranspilerTarget
 
     public IReadOnlyList<DartSourceFile> LastSourceFiles { get; private set; } = [];
 
-    public TargetOutput Transform(IrCompilation ir, Compilation compilation)
+    public TargetOutput Transform(IrCompilation ir, Compilation? compilation)
     {
+        if (compilation is null)
+            throw new NotSupportedException(
+                "DartTarget currently requires a Roslyn-backed source frontend; "
+                    + "compilation was null. The Roslyn dependency will go away once the "
+                    + "Dart transformer reads everything it needs from IrCompilation."
+            );
+
         // The Dart prototype still drives discovery off the Roslyn compilation;
         // the IR is accepted to honor the contract and used opportunistically
         // by helpers as they migrate.

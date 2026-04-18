@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.IR;
 using Metano.Transformation;
@@ -50,15 +51,26 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// </summary>
     public bool LastIsExecutable { get; private set; }
 
-    public TargetOutput Transform(IrCompilation ir, Compilation compilation)
+    public TargetOutput Transform(IrCompilation ir, Compilation? compilation)
     {
+        if (compilation is null)
+            throw new NotSupportedException(
+                "TypeScriptTarget currently requires a Roslyn-backed source frontend; "
+                    + "compilation was null. The Roslyn dependency will go away once the "
+                    + "TypeScript transformer reads everything it needs from IrCompilation."
+            );
+
         var transformer = new TypeTransformer(compilation);
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
         // Prefer the frontend-populated package name; the underlying Roslyn read
         // remains as a defensive fallback while every consumer migrates onto IR.
         LastEmitPackageName =
-            ir.PackageName ?? SymbolHelper.GetEmitPackage(compilation.Assembly, targetEnumValue: 0);
+            ir.PackageName
+            ?? SymbolHelper.GetEmitPackage(
+                compilation.Assembly,
+                targetEnumValue: (int)EmitTarget.JavaScript
+            );
         LastCrossPackageDependencies = transformer.CrossPackageDependencies;
         LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
 
