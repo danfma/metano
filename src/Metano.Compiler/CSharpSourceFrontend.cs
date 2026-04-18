@@ -156,7 +156,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             if (!hasTranspileAssembly)
                 continue;
 
-            var packageInfo = SymbolHelper.GetEmitPackageInfo(asm, targetEnumValue: 0);
+            var packageInfo = SymbolHelper.GetEmitPackageInfo(
+                asm,
+                targetEnumValue: (int)EmitTarget.JavaScript
+            );
             if (packageInfo is null)
             {
                 needingPackage.Add(asm.Name);
@@ -166,17 +169,22 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             var assemblyTypes = new List<INamedTypeSymbol>();
             CollectPublicTopLevelTypes(asm.GlobalNamespace, assemblyTypes);
 
-            var rootNamespace = ComputeAssemblyRootNamespace(assemblyTypes);
+            // Filter the same way the legacy CollectTypesFromNamespace does — anything
+            // that wouldn't be discovered for emission must not influence the assembly
+            // root namespace either, otherwise an [NoEmit] type sitting in an unrelated
+            // namespace would silently shrink the prefix used for import subpaths.
+            var emittedAssemblyTypes = assemblyTypes
+                .Where(type =>
+                    SymbolHelper.GetImport(type) is null
+                    && !SymbolHelper.HasNoTranspile(type)
+                    && !SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript)
+                )
+                .ToList();
 
-            foreach (var type in assemblyTypes)
+            var rootNamespace = ComputeAssemblyRootNamespace(emittedAssemblyTypes);
+
+            foreach (var type in emittedAssemblyTypes)
             {
-                if (SymbolHelper.GetImport(type) is not null)
-                    continue;
-                if (SymbolHelper.HasNoTranspile(type))
-                    continue;
-                if (SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript))
-                    continue;
-
                 origins[type.GetStableFullName()] = new IrTypeOrigin(
                     PackageId: packageInfo.Name,
                     Namespace: type.ContainingNamespace.IsGlobalNamespace
@@ -201,28 +209,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             namespaces.Add(type.ContainingNamespace.ToDisplayString());
         }
 
-        if (namespaces.Count == 0)
-            return "";
-        if (namespaces.Count == 1)
-            return namespaces[0];
-
-        var parts = namespaces[0].Split('.');
-        var commonLength = parts.Length;
-        for (var i = 1; i < namespaces.Count; i++)
-        {
-            var otherParts = namespaces[i].Split('.');
-            commonLength = Math.Min(commonLength, otherParts.Length);
-            for (var j = 0; j < commonLength; j++)
-            {
-                if (parts[j] != otherParts[j])
-                {
-                    commonLength = j;
-                    break;
-                }
-            }
-        }
-
-        return string.Join(".", parts.Take(commonLength));
+        return NamespaceUtilities.FindCommonPrefix(namespaces);
     }
 
     /// <summary>

@@ -123,31 +123,6 @@ public sealed class PathNaming(string rootNamespace)
     /// Finds the longest common dot-separated namespace prefix across the given list.
     /// Used to discover the project's root namespace at the start of a transpilation run.
     /// </summary>
-    public static string FindCommonNamespacePrefix(IReadOnlyList<string> namespaces)
-    {
-        if (namespaces.Count == 0)
-            return "";
-        if (namespaces.Count == 1)
-            return namespaces[0];
-
-        var parts = namespaces[0].Split('.');
-        var commonLength = parts.Length;
-
-        for (var i = 1; i < namespaces.Count; i++)
-        {
-            var otherParts = namespaces[i].Split('.');
-            commonLength = Math.Min(commonLength, otherParts.Length);
-
-            for (var j = 0; j < commonLength; j++)
-            {
-                if (parts[j] != otherParts[j])
-                {
-                    commonLength = j;
-                    break;
-                }
-            }
-        }
-
-        return string.Join(".", parts.Take(commonLength));
-    }
+    public static string FindCommonNamespacePrefix(IReadOnlyList<string> namespaces) =>
+        NamespaceUtilities.FindCommonPrefix(namespaces);
 }

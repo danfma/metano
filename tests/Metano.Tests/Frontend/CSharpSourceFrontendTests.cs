@@ -268,6 +268,64 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
+    public async Task CrossAssemblyOrigins_RootNamespaceIgnoresNoEmitAndNoTranspileTypes()
+    {
+        // The reference declares emitted types under Acme.Mixed.* but also has
+        // [NoEmit] / [NoTranspile] types in an unrelated `Zeta.Hidden` namespace.
+        // The legacy discovery filters those out before computing the assembly
+        // root namespace, so the prefix must stay at "Acme.Mixed" — without the
+        // filter it would shrink to "" and break import subpath generation.
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("acme-mixed")]
+
+            namespace Acme.Mixed.Feature
+            {
+                [Transpile]
+                public class Real {}
+            }
+
+            namespace Acme.Mixed.Other
+            {
+                [Transpile]
+                public class Sibling {}
+            }
+
+            namespace Zeta.Hidden
+            {
+                [NoEmit]
+                public class Ambient {}
+
+                [NoTranspile]
+                public class Ignored {}
+            }
+            """,
+            assemblyName: "AcmeMixed"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            [Transpile]
+            public class Marker {}
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        var realKey = consumer
+            .GetTypeByMetadataName("Acme.Mixed.Feature.Real")!
+            .GetStableFullName();
+        await Assert.That(ir.CrossAssemblyOrigins).ContainsKey(realKey);
+        await Assert
+            .That(ir.CrossAssemblyOrigins[realKey].AssemblyRootNamespace)
+            .IsEqualTo("Acme.Mixed");
+    }
+
+    [Test]
     public async Task ExternalImports_NameCollisionKeepsFirstAndWarns()
     {
         // Two top-level types share the simple name `Widget` across distinct
