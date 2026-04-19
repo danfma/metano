@@ -5,13 +5,20 @@ using Metano.Compiler.IR;
 namespace Metano.Transformation;
 
 /// <summary>
-/// Builds an <see cref="IrTypeOriginResolver"/> backed by the TypeScript target's
-/// <see cref="TypeMappingContext.CrossAssemblyTypeMap"/>. The resolver:
+/// Builds an <see cref="IrTypeOriginResolver"/> backed by the IR's
+/// <see cref="IrCompilation.CrossAssemblyOrigins"/> map (carried through
+/// <see cref="TypeMappingContext.CrossAssemblyOrigins"/>). The resolver:
 /// <list type="bullet">
-///   <item>Returns <see cref="IrTypeOrigin"/> with package ID + source namespace when
-///   the type lives in another transpilable assembly.</item>
-///   <item>Records cross-package misses and used-packages as side effects on the context
-///   so packaging/diagnostics stay consistent with the legacy pipeline.</item>
+///   <item>Returns the frontend-built <see cref="IrTypeOrigin"/> when the type
+///   lives in another transpilable assembly that declared <c>[EmitPackage]</c>
+///   for this target.</item>
+///   <item>Falls back to the source assembly's MSBuild
+///   <see cref="IAssemblySymbol.Identity"/> version when the IR origin's
+///   <see cref="IrTypeOrigin.VersionHint"/> is null, so the package.json writer
+///   still pins a deterministic dependency range.</item>
+///   <item>Records cross-package misses (referenced assembly opted into
+///   transpilation but lacks <c>[EmitPackage]</c>) so the consumer can raise
+///   MS0007 at the right call site.</item>
 /// </list>
 /// </summary>
 public static class IrTypeOriginResolverFactory
@@ -20,12 +27,13 @@ public static class IrTypeOriginResolverFactory
         named =>
         {
             var key = named.OriginalDefinition;
-            if (!ctx.CrossAssemblyTypeMap.TryGetValue(key, out var entry))
+            var stableKey = key.GetStableFullName();
+            if (!ctx.CrossAssemblyOrigins.TryGetValue(stableKey, out var origin))
             {
                 var containingAssembly = key.ContainingAssembly;
                 if (
                     containingAssembly is not null
-                    && ctx.AssembliesNeedingEmitPackage.Contains(containingAssembly)
+                    && ctx.AssembliesNeedingEmitPackage.Contains(containingAssembly.Name)
                 )
                 {
                     ctx.CrossPackageMisses.Add(named.ToDisplayString());
@@ -34,21 +42,17 @@ public static class IrTypeOriginResolverFactory
             }
 
             // Track package usage so package.json dependencies stay accurate even
-            // when the IR path (rather than the legacy TypeMapper) is used.
-            if (entry.VersionOverride is not null)
-                ctx.UsedCrossPackages[entry.PackageName] = entry.VersionOverride;
-            else if (entry.Symbol.ContainingAssembly is { } sourceAsm)
-                ctx.UsedCrossPackages[entry.PackageName] = RoslynTypeQueries.FormatAssemblyVersion(
+            // when the IR path (rather than the legacy TypeMapper) is used. Prefer
+            // the explicit [EmitPackage(Version=...)] override; otherwise read the
+            // source assembly's MSBuild Identity through Roslyn — that fallback
+            // can't move onto the IR until the frontend is target-aware.
+            if (origin.VersionHint is { Length: > 0 } versionHint)
+                ctx.UsedCrossPackages[origin.PackageId] = versionHint;
+            else if (key.ContainingAssembly is { } sourceAsm)
+                ctx.UsedCrossPackages[origin.PackageId] = RoslynTypeQueries.FormatAssemblyVersion(
                     sourceAsm
                 );
 
-            var sourceNamespace = PathNaming.GetNamespace(entry.Symbol);
-            return new IrTypeOrigin(
-                PackageId: entry.PackageName,
-                Namespace: sourceNamespace.Length > 0 ? sourceNamespace : null,
-                AssemblyRootNamespace: entry.AssemblyRootNamespace.Length > 0
-                    ? entry.AssemblyRootNamespace
-                    : null
-            );
+            return origin;
         };
 }

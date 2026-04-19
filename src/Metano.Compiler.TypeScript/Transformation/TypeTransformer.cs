@@ -168,8 +168,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var usedCrossPackages = new Dictionary<string, string>();
         var typeMappingContext = new TypeMappingContext(
             ir.BclExports,
-            _crossAssemblyTypeMap,
-            _assembliesNeedingEmitPackage,
+            ir.CrossAssemblyOrigins,
+            ir.AssembliesNeedingEmitPackage,
             crossPackageMisses,
             usedCrossPackages
         );
@@ -288,29 +288,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private Dictionary<string, IrExternalImport> _externalImportMap = [];
 
     /// <summary>
-    /// Types discovered in referenced assemblies that declare both
-    /// <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>. Keyed by symbol
-    /// identity (not name) to handle the case where two assemblies expose types with
-    /// the same simple name. Consumed by <see cref="TypeMapper"/> when computing the
-    /// origin of a referenced type, and by the import collector to emit cross-package
-    /// import statements.
-    /// </summary>
-    private Dictionary<ISymbol, CrossAssemblyEntry> _crossAssemblyTypeMap = new(
-        SymbolEqualityComparer.Default
-    );
-
-    /// <summary>
-    /// Referenced assemblies that have <c>[TranspileAssembly]</c> but lack
-    /// <c>[EmitPackage(JavaScript)]</c>. The type mapper consults this set when a
-    /// cross-assembly type lookup misses; if the type's containing assembly is here,
-    /// it raises MS0007 in <see cref="TypeMappingContext.CrossPackageMisses"/> so the
-    /// transformer can report the missing-attribute error at the consumer site.
-    /// </summary>
-    private HashSet<IAssemblySymbol> _assembliesNeedingEmitPackage = new(
-        SymbolEqualityComparer.Default
-    );
-
-    /// <summary>
     /// Maps guard function names (e.g., "isCurrency") to the type they guard (e.g., "Currency").
     /// Used to resolve imports for cross-file guard calls.
     /// </summary>
@@ -340,13 +317,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// Walks <see cref="Compilation.References"/> and, for each referenced assembly that
     /// declares <em>both</em> <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>,
     /// enumerates its public transpilable types and registers them in
-    /// <see cref="_crossAssemblyTypeMap"/>. Also augments <see cref="_externalImportMap"/>
-    /// with any <c>[Import]</c> declarations from those assemblies so consumers can
-    /// transitively reach external bindings declared in a referenced library.
-    ///
-    /// Each cross-assembly type is paired with the root namespace of <em>its</em> source
-    /// assembly so the subpath inside the package can be computed independently of the
-    /// consumer's own root namespace.
+    /// <see cref="IrCompilation.CrossAssemblyOrigins"/>. Augments
+    /// <see cref="_externalImportMap"/> with any <c>[Import]</c> declarations from
+    /// those assemblies so consumers can transitively reach external bindings
+    /// declared in a referenced library — that bit stays target-specific until
+    /// the frontend produces cross-assembly external imports keyed by both
+    /// source and target name.
     /// </summary>
     private void DiscoverCrossAssemblyTypes()
     {
@@ -358,7 +334,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
                 continue;
 
-            // Cheap filter: only consider assemblies that opt into transpilation.
+            // Cheap filter: only consider assemblies that opt into transpilation
+            // and have an EmitPackage for the active target — assemblies without
+            // EmitPackage are already surfaced in ir.AssembliesNeedingEmitPackage,
+            // and types they expose are not importable.
             var hasTranspileAssembly = asm.GetAttributes()
                 .Any(a =>
                     a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
@@ -366,71 +345,45 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (!hasTranspileAssembly)
                 continue;
 
-            // Must also declare an EmitPackage for the JavaScript target — without it,
-            // we have no package name to import from. The assembly is still a candidate
-            // (it's transpilable in principle), so we register it in
-            // _assembliesNeedingEmitPackage so the type mapper can detect references to
-            // its types and report MS0007 at the consumer site instead of failing
-            // silently with a downstream TypeScript "undefined identifier" error.
-            var packageInfo = SymbolHelper.GetEmitPackageInfo(asm, targetEnumValue: 0);
+            var packageInfo = SymbolHelper.GetEmitPackageInfo(
+                asm,
+                targetEnumValue: (int)EmitTarget.JavaScript
+            );
             if (packageInfo is null)
-            {
-                _assembliesNeedingEmitPackage.Add(asm);
                 continue;
-            }
-            var packageName = packageInfo.Name;
-            var versionOverride = packageInfo.Version;
 
-            // First pass: enumerate every transpilable type in the assembly so we can
-            // compute its root namespace.
             var assemblyTypes = new List<INamedTypeSymbol>();
             CollectTypesFromNamespace(asm.GlobalNamespace, assemblyTypes);
 
-            var namespaces = assemblyTypes
-                .Select(PathNaming.GetNamespace)
-                .Where(ns => ns.Length > 0)
-                .ToList();
-            var rootNs =
-                namespaces.Count > 0 ? PathNaming.FindCommonNamespacePrefix(namespaces) : "";
-
-            // Second pass: register each type in the cross-assembly map. Tipos com
-            // [Import] continuam acessíveis pro consumer mas vão para o
-            // _externalImportMap (pacote externo de origem), não pro cross-assembly
-            // map (que assume "vem do package emitido por aquele assembly").
+            // Register cross-assembly [Import] types. The cross-assembly origin
+            // map for non-[Import] types is now produced by the frontend and read
+            // off the IR via TypeMappingContext.CrossAssemblyOrigins.
             foreach (var type in assemblyTypes)
             {
                 var import = SymbolHelper.GetImport(type);
-                if (import is not null)
-                {
-                    var entry = new IrExternalImport(
-                        Name: import.Name,
-                        From: import.From,
-                        IsDefault: import.AsDefault,
-                        Version: import.Version
-                    );
+                if (import is null)
+                    continue;
+
+                var entry = new IrExternalImport(
+                    Name: import.Name,
+                    From: import.From,
+                    IsDefault: import.AsDefault,
+                    Version: import.Version
+                );
+                RegisterExternalImportMapping(
+                    type.Name,
+                    entry,
+                    type.ToDisplayString(),
+                    type.Locations.FirstOrDefault()
+                );
+                var tsName = GetTsTypeName(type);
+                if (tsName != type.Name)
                     RegisterExternalImportMapping(
-                        type.Name,
+                        tsName,
                         entry,
                         type.ToDisplayString(),
                         type.Locations.FirstOrDefault()
                     );
-                    var tsName = GetTsTypeName(type);
-                    if (tsName != type.Name)
-                        RegisterExternalImportMapping(
-                            tsName,
-                            entry,
-                            type.ToDisplayString(),
-                            type.Locations.FirstOrDefault()
-                        );
-                    continue;
-                }
-
-                _crossAssemblyTypeMap[type] = new CrossAssemblyEntry(
-                    type,
-                    packageName,
-                    rootNs,
-                    versionOverride
-                );
             }
         }
     }
