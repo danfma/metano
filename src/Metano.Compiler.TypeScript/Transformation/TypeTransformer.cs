@@ -125,9 +125,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // current-assembly [Import] types keyed by C# simple name (and emits
         // MS0003 on collisions before the host merges its diagnostics with ours).
         // The TS-name aliasing below is a target concern that stays here until
-        // the frontend gains target awareness.
-        _externalImportMap = new Dictionary<string, IrExternalImport>(ir.ExternalImports);
-        foreach (var t in transpilableTypes)
+        // the frontend gains target awareness — it must walk every public
+        // top-level [Import] type (mirroring the frontend's CollectPublicTopLevelTypes
+        // pass), not just `transpilableTypes`, so an [Import] placeholder
+        // without [Transpile] in a project that does not declare
+        // [assembly: TranspileAssembly] still gets its TS-name alias.
+        _externalImportMap = new Dictionary<string, IrExternalImport>(
+            ir.ExternalImports,
+            StringComparer.Ordinal
+        );
+        foreach (var t in EnumeratePublicTopLevelTypes(compilation.Assembly.GlobalNamespace))
         {
             var import = SymbolHelper.GetImport(t);
             if (import is null)
@@ -449,6 +456,34 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                         && !SymbolHelper.HasNoTranspile(type)
                         && !SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript):
                     sink.Add(type);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Yields every public top-level type reachable from <paramref name="ns"/>,
+    /// without applying the <c>[NoTranspile]</c> / <c>[NoEmit]</c> filters that
+    /// <see cref="CollectTypesFromNamespace"/> uses for emission discovery.
+    /// Mirrors the frontend's <c>CollectPublicTopLevelTypes</c> walk so the
+    /// TS-name aliasing pass can register every <c>[Import]</c> type the IR
+    /// already covers, including placeholders that the user did not mark with
+    /// <c>[Transpile]</c>.
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> EnumeratePublicTopLevelTypes(INamespaceSymbol ns)
+    {
+        foreach (var member in ns.GetMembers())
+        {
+            switch (member)
+            {
+                case INamespaceSymbol childNs:
+                    foreach (var nested in EnumeratePublicTopLevelTypes(childNs))
+                        yield return nested;
+                    break;
+                case INamedTypeSymbol type
+                    when type.ContainingType is null
+                        && type.DeclaredAccessibility == Accessibility.Public:
+                    yield return type;
                     break;
             }
         }
