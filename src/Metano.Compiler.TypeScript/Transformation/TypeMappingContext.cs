@@ -1,5 +1,4 @@
 using Metano.Compiler.IR;
-using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
 
@@ -13,8 +12,8 @@ namespace Metano.Transformation;
 /// </summary>
 public sealed class TypeMappingContext(
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
-    Dictionary<ISymbol, CrossAssemblyEntry> crossAssemblyTypeMap,
-    HashSet<IAssemblySymbol> assembliesNeedingEmitPackage,
+    IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
+    IReadOnlySet<string> assembliesNeedingEmitPackage,
     HashSet<string>? crossPackageMisses = null,
     Dictionary<string, string>? usedCrossPackages = null
 )
@@ -28,16 +27,25 @@ public sealed class TypeMappingContext(
     public static TypeMappingContext Empty { get; } =
         new(
             new Dictionary<string, IrBclExport>(),
-            new(SymbolEqualityComparer.Default),
-            new(SymbolEqualityComparer.Default)
+            new Dictionary<string, IrTypeOrigin>(),
+            new HashSet<string>(StringComparer.Ordinal)
         );
 
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
 
-    public Dictionary<ISymbol, CrossAssemblyEntry> CrossAssemblyTypeMap { get; } =
-        crossAssemblyTypeMap;
+    /// <summary>
+    /// Cross-assembly origins indexed by <see cref="SymbolHelper.GetStableFullName"/>.
+    /// Carried directly from <see cref="IrCompilation.CrossAssemblyOrigins"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, IrTypeOrigin> CrossAssemblyOrigins { get; } =
+        crossAssemblyOrigins;
 
-    public HashSet<IAssemblySymbol> AssembliesNeedingEmitPackage { get; } =
+    /// <summary>
+    /// Names of referenced assemblies that opted into transpilation but did not declare
+    /// <c>[EmitPackage]</c> for the active target. Carried from
+    /// <see cref="IrCompilation.AssembliesNeedingEmitPackage"/>.
+    /// </summary>
+    public IReadOnlySet<string> AssembliesNeedingEmitPackage { get; } =
         assembliesNeedingEmitPackage;
 
     public HashSet<string> CrossPackageMisses { get; } = crossPackageMisses ?? [];
