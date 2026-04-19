@@ -30,10 +30,7 @@ public sealed class TypeScriptTransformContext(
     IAssemblySymbol? currentAssembly,
     bool assemblyWideTranspile,
     IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap,
-    IReadOnlyDictionary<
-        string,
-        (string Name, string From, bool IsDefault, string? Version)
-    > externalImportMap,
+    IReadOnlyDictionary<string, IrExternalImport> externalImportMap,
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
     PathNaming pathNaming,
@@ -46,10 +43,8 @@ public sealed class TypeScriptTransformContext(
     public bool AssemblyWideTranspile { get; } = assemblyWideTranspile;
     public IReadOnlyDictionary<string, INamedTypeSymbol> TranspilableTypeMap { get; } =
         transpilableTypeMap;
-    public IReadOnlyDictionary<
-        string,
-        (string Name, string From, bool IsDefault, string? Version)
-    > ExternalImportMap { get; } = externalImportMap;
+    public IReadOnlyDictionary<string, IrExternalImport> ExternalImportMap { get; } =
+        externalImportMap;
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> GuardNameToTypeMap { get; } = guardNameToTypeMap;
     public PathNaming PathNaming { get; } = pathNaming;

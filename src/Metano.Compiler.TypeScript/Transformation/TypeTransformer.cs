@@ -121,30 +121,32 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 _transpilableTypeMap[tsName] = t;
         }
 
-        // Register [Import] types as external (no .ts file generated, but importable)
-        _externalImportMap =
-            new Dictionary<string, (string Name, string From, bool IsDefault, string? Version)>();
-        foreach (var t in transpilableTypes.ToList())
+        // Seed the external-import map from the frontend. The IR already covers
+        // current-assembly [Import] types keyed by C# simple name (and emits
+        // MS0003 on collisions before the host merges its diagnostics with ours).
+        // The TS-name aliasing below is a target concern that stays here until
+        // the frontend gains target awareness.
+        _externalImportMap = new Dictionary<string, IrExternalImport>(ir.ExternalImports);
+        foreach (var t in transpilableTypes)
         {
             var import = SymbolHelper.GetImport(t);
-            if (import is not null)
-            {
-                var entry = (import.Name, import.From, import.AsDefault, import.Version);
-                RegisterExternalImportMapping(
-                    t.Name,
-                    entry,
-                    t.ToDisplayString(),
-                    t.Locations.FirstOrDefault()
-                );
-                var tsName = GetTsTypeName(t);
-                if (tsName != t.Name)
-                    RegisterExternalImportMapping(
-                        tsName,
-                        entry,
-                        t.ToDisplayString(),
-                        t.Locations.FirstOrDefault()
-                    );
-            }
+            if (import is null)
+                continue;
+            var tsName = GetTsTypeName(t);
+            if (tsName == t.Name)
+                continue;
+            var entry = new IrExternalImport(
+                Name: import.Name,
+                From: import.From,
+                IsDefault: import.AsDefault,
+                Version: import.Version
+            );
+            RegisterExternalImportMapping(
+                tsName,
+                entry,
+                t.ToDisplayString(),
+                t.Locations.FirstOrDefault()
+            );
         }
 
         // Discover transpilable types from referenced assemblies (those that declare
@@ -276,10 +278,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private IMethodSymbol? _syntheticEntryPoint;
     private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
-    private Dictionary<
-        string,
-        (string Name, string From, bool IsDefault, string? Version)
-    > _externalImportMap = [];
+    private Dictionary<string, IrExternalImport> _externalImportMap = [];
 
     /// <summary>
     /// Types discovered in referenced assemblies that declare both
@@ -396,7 +395,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 var import = SymbolHelper.GetImport(type);
                 if (import is not null)
                 {
-                    var entry = (import.Name, import.From, import.AsDefault, import.Version);
+                    var entry = new IrExternalImport(
+                        Name: import.Name,
+                        From: import.From,
+                        IsDefault: import.AsDefault,
+                        Version: import.Version
+                    );
                     RegisterExternalImportMapping(
                         type.Name,
                         entry,
@@ -758,7 +762,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     private void RegisterExternalImportMapping(
         string key,
-        (string Name, string From, bool IsDefault, string? Version) entry,
+        IrExternalImport entry,
         string ownerDisplayName,
         Location? location
     )

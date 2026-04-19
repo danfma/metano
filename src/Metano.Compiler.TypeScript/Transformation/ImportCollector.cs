@@ -22,10 +22,7 @@ namespace Metano.Transformation;
 /// </summary>
 public sealed class ImportCollector(
     IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap,
-    IReadOnlyDictionary<
-        string,
-        (string Name, string From, bool IsDefault, string? Version)
-    > externalImportMap,
+    IReadOnlyDictionary<string, IrExternalImport> externalImportMap,
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
     PathNaming pathNaming,
@@ -35,10 +32,8 @@ public sealed class ImportCollector(
 {
     private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap =
         transpilableTypeMap;
-    private readonly IReadOnlyDictionary<
-        string,
-        (string Name, string From, bool IsDefault, string? Version)
-    > _externalImportMap = externalImportMap;
+    private readonly IReadOnlyDictionary<string, IrExternalImport> _externalImportMap =
+        externalImportMap;
     private readonly IReadOnlyDictionary<string, IrBclExport> _bclExportMap = bclExportMap;
     private readonly IReadOnlyDictionary<string, string> _guardNameToTypeMap = guardNameToTypeMap;
     private readonly PathNaming _pathNaming = pathNaming;
