@@ -105,9 +105,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     {
         _currentAssembly = compilation.Assembly;
 
-        // Read [ExportFromBcl] assembly-level attributes
-        LoadBclExportMappings();
-
         // The frontend already detects [assembly: TranspileAssembly] (semantic model
         // first, syntax-tree fallback for inline test compilations) — read it off the
         // IR rather than redoing the same probe.
@@ -161,7 +158,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var crossPackageMisses = new HashSet<string>();
         var usedCrossPackages = new Dictionary<string, string>();
         var typeMappingContext = new TypeMappingContext(
-            _bclExportMap,
+            ir.BclExports,
             _crossAssemblyTypeMap,
             _assembliesNeedingEmitPackage,
             crossPackageMisses,
@@ -199,7 +196,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _assemblyWideTranspile,
             _transpilableTypeMap,
             _externalImportMap,
-            _bclExportMap,
+            ir.BclExports,
             _guardNameToTypeMap,
             _pathNaming,
             declarativeMappings,
@@ -283,10 +280,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string,
         (string Name, string From, bool IsDefault, string? Version)
     > _externalImportMap = [];
-    private Dictionary<
-        string,
-        (string ExportedName, string FromPackage, string Version)
-    > _bclExportMap = [];
 
     /// <summary>
     /// Types discovered in referenced assemblies that declare both
@@ -516,70 +509,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         return types;
-    }
-
-    private void LoadBclExportMappings()
-    {
-        _bclExportMap =
-            new Dictionary<string, (string ExportedName, string FromPackage, string Version)>();
-
-        // Read [ExportFromBcl] from the current assembly first, then from every
-        // referenced assembly so that built-in mappings (e.g., decimal → Decimal from
-        // decimal.js, declared in Metano/Runtime/Decimal.cs) flow through without
-        // the user having to redeclare them in their own project. The current assembly
-        // is processed last so user overrides win on conflict.
-        foreach (var reference in compilation.References)
-        {
-            if (
-                compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol asm
-                && !SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly)
-            )
-                LoadBclExportFromAssembly(asm);
-        }
-        LoadBclExportFromAssembly(compilation.Assembly);
-
-        // _bclExportMap is passed to TypeMappingContext by reference — no static needed.
-    }
-
-    private void LoadBclExportFromAssembly(IAssemblySymbol assembly)
-    {
-        foreach (var attr in assembly.GetAttributes())
-        {
-            if (attr.AttributeClass?.Name is not ("ExportFromBclAttribute" or "ExportFromBcl"))
-                continue;
-
-            // Constructor arg is typeof(Type)
-            if (attr.ConstructorArguments.Length == 0)
-                continue;
-            var typeArg = attr.ConstructorArguments[0].Value as INamedTypeSymbol;
-            if (typeArg is null)
-                continue;
-
-            var exportedName = "";
-            var fromPackage = "";
-            var version = "";
-
-            foreach (var namedArg in attr.NamedArguments)
-            {
-                switch (namedArg.Key)
-                {
-                    case "ExportedName":
-                        exportedName = namedArg.Value.Value?.ToString() ?? "";
-                        break;
-                    case "FromPackage":
-                        fromPackage = namedArg.Value.Value?.ToString() ?? "";
-                        break;
-                    case "Version":
-                        version = namedArg.Value.Value?.ToString() ?? "";
-                        break;
-                }
-            }
-
-            if (exportedName.Length > 0)
-            {
-                _bclExportMap[typeArg.ToDisplayString()] = (exportedName, fromPackage, version);
-            }
-        }
     }
 
     /// <summary>

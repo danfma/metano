@@ -17,16 +17,18 @@ public interface IrToTsTypeOverrides
 }
 
 /// <summary>
-/// Wraps the legacy <see cref="Metano.Transformation.TypeMappingContext.BclExportMap"/>
+/// Wraps the frontend-populated
+/// <see cref="IrCompilation.BclExports"/> map (carried through
+/// <see cref="Metano.Transformation.TypeMappingContext.BclExportMap"/>)
 /// into the bridge-friendly resolver interface and tracks the package +
 /// version of every override that fires so the package.json writer picks
 /// up the cross-package dependency. Today it only resolves <c>decimal</c>
 /// (the only <c>[ExportFromBcl]</c> entry shipped by
 /// <c>Metano.Runtime</c>); the lookup uses Roslyn's full type name as the
-/// dictionary key, matching the legacy behaviour.
+/// dictionary key, matching what the frontend stores.
 /// </summary>
 public sealed class BclExportTypeOverrides(
-    IReadOnlyDictionary<string, (string ExportedName, string FromPackage, string Version)> map,
+    IReadOnlyDictionary<string, IrBclExport> map,
     Dictionary<string, string> usedCrossPackages
 ) : IrToTsTypeOverrides
 {
@@ -39,8 +41,8 @@ public sealed class BclExportTypeOverrides(
 
         // Mirror TypeMapper.Map: every BCL hit records its package name and
         // version so the package.json writer surfaces the dependency.
-        if (entry.FromPackage.Length > 0 && entry.Version.Length > 0)
-            usedCrossPackages[entry.FromPackage] = entry.Version;
+        if (entry.FromPackage.Length > 0 && entry.Version is { Length: > 0 } version)
+            usedCrossPackages[entry.FromPackage] = version;
         return new TsNamedType(entry.ExportedName);
     }
 

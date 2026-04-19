@@ -1,3 +1,4 @@
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
@@ -11,7 +12,7 @@ namespace Metano.Transformation;
 /// <see cref="CrossPackageMisses"/> accumulate data during transformation.
 /// </summary>
 public sealed class TypeMappingContext(
-    Dictionary<string, (string ExportedName, string FromPackage, string Version)> bclExportMap,
+    IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     Dictionary<ISymbol, CrossAssemblyEntry> crossAssemblyTypeMap,
     HashSet<IAssemblySymbol> assembliesNeedingEmitPackage,
     HashSet<string>? crossPackageMisses = null,
@@ -25,12 +26,13 @@ public sealed class TypeMappingContext(
     /// simply not resolve.
     /// </summary>
     public static TypeMappingContext Empty { get; } =
-        new([], new(SymbolEqualityComparer.Default), new(SymbolEqualityComparer.Default));
+        new(
+            new Dictionary<string, IrBclExport>(),
+            new(SymbolEqualityComparer.Default),
+            new(SymbolEqualityComparer.Default)
+        );
 
-    public Dictionary<
-        string,
-        (string ExportedName, string FromPackage, string Version)
-    > BclExportMap { get; } = bclExportMap;
+    public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
 
     public Dictionary<ISymbol, CrossAssemblyEntry> CrossAssemblyTypeMap { get; } =
         crossAssemblyTypeMap;

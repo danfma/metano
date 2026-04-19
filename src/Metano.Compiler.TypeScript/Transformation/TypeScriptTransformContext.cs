@@ -34,10 +34,7 @@ public sealed class TypeScriptTransformContext(
         string,
         (string Name, string From, bool IsDefault, string? Version)
     > externalImportMap,
-    IReadOnlyDictionary<
-        string,
-        (string ExportedName, string FromPackage, string Version)
-    > bclExportMap,
+    IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
     PathNaming pathNaming,
     DeclarativeMappingRegistry declarativeMappings,
@@ -53,10 +50,7 @@ public sealed class TypeScriptTransformContext(
         string,
         (string Name, string From, bool IsDefault, string? Version)
     > ExternalImportMap { get; } = externalImportMap;
-    public IReadOnlyDictionary<
-        string,
-        (string ExportedName, string FromPackage, string Version)
-    > BclExportMap { get; } = bclExportMap;
+    public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> GuardNameToTypeMap { get; } = guardNameToTypeMap;
     public PathNaming PathNaming { get; } = pathNaming;
     public DeclarativeMappingRegistry DeclarativeMappings { get; } = declarativeMappings;

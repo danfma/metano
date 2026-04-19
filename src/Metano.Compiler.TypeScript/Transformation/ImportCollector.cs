@@ -26,10 +26,7 @@ public sealed class ImportCollector(
         string,
         (string Name, string From, bool IsDefault, string? Version)
     > externalImportMap,
-    IReadOnlyDictionary<
-        string,
-        (string ExportedName, string FromPackage, string Version)
-    > bclExportMap,
+    IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
     PathNaming pathNaming,
     TypeMappingContext typeMappingContext,
@@ -42,10 +39,7 @@ public sealed class ImportCollector(
         string,
         (string Name, string From, bool IsDefault, string? Version)
     > _externalImportMap = externalImportMap;
-    private readonly IReadOnlyDictionary<
-        string,
-        (string ExportedName, string FromPackage, string Version)
-    > _bclExportMap = bclExportMap;
+    private readonly IReadOnlyDictionary<string, IrBclExport> _bclExportMap = bclExportMap;
     private readonly IReadOnlyDictionary<string, string> _guardNameToTypeMap = guardNameToTypeMap;
     private readonly PathNaming _pathNaming = pathNaming;
     private readonly TypeMappingContext _typeMappingContext = typeMappingContext;
@@ -269,7 +263,7 @@ public sealed class ImportCollector(
             // and the cross-package merge strategy doesn't apply here.
             var bclEntry = _bclExportMap.Values.FirstOrDefault(e => e.ExportedName == typeName);
             if (
-                bclEntry.ExportedName is not null
+                bclEntry is not null
                 && bclEntry.FromPackage.Length > 0
                 && importedNames.Add(typeName)
             )
