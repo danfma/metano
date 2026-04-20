@@ -121,15 +121,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 _transpilableTypeMap[tsName] = t;
         }
 
-        // Seed the external-import map from the frontend. The IR already covers
-        // every [Import] type (local + cross-assembly) keyed by C# simple name,
-        // with MS0003 collisions surfaced through the host's diagnostic merge.
-        // The TS-name aliasing below is a target concern that stays here until
-        // the frontend gains target awareness — it must walk every public
-        // top-level [Import] type (mirroring the frontend's walker), not just
-        // `transpilableTypes`, so an [Import] placeholder without [Transpile]
-        // in a project that does not declare [assembly: TranspileAssembly]
-        // still gets its TS-name alias.
+        // Seed the external-import map from the frontend. The IR covers every
+        // [Import] type from the current assembly, plus those from referenced
+        // assemblies that opt into transpilation ([TranspileAssembly]) and
+        // declare an [EmitPackage] for the active target — keyed by C# simple
+        // name, with MS0003 collisions surfaced through the host's diagnostic
+        // merge. The TS-name aliasing below is a target concern that stays
+        // here until the frontend gains target awareness — it must walk every
+        // public top-level [Import] type (mirroring the frontend's walker),
+        // not just `transpilableTypes`, so an [Import] placeholder without
+        // [Transpile] in a project that does not declare
+        // [assembly: TranspileAssembly] still gets its TS-name alias.
         _externalImportMap = new Dictionary<string, IrExternalImport>(
             ir.ExternalImports,
             StringComparer.Ordinal
