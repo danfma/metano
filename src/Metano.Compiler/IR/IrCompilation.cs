@@ -35,15 +35,17 @@ namespace Metano.Compiler.IR;
 /// assemblies that declared <c>[TranspileAssembly]</c> + <c>[EmitPackage]</c>.
 /// The backend reads these to populate cross-package imports without
 /// emitting their content.</param>
-/// <param name="CrossAssemblyOrigins">Dictionary keyed by the stable full
-/// name produced during extraction (see
-/// <see cref="SymbolHelper.GetStableFullName"/>) giving the
+/// <param name="CrossAssemblyOrigins">Dictionary keyed by the
+/// assembly-qualified stable full name produced during extraction (see
+/// <see cref="SymbolHelper.GetCrossAssemblyOriginKey"/>) giving the
 /// <see cref="IrTypeOrigin"/> for every referenced type that belongs to a
-/// transpilable assembly. Consumers should use this registry only when
-/// they already have that stable key available from frontend-produced
-/// metadata; <see cref="IrNamedTypeRef"/> alone is not a direct lookup
-/// key — the origin travels via <see cref="IrNamedTypeRef.Origin"/> when
-/// available.</param>
+/// transpilable assembly. Qualifying the key by assembly prevents two
+/// referenced assemblies that expose types with identical stable full
+/// names from silently clobbering each other's origin. Consumers should
+/// use this registry only when they already have that stable key
+/// available from frontend-produced metadata;
+/// <see cref="IrNamedTypeRef"/> alone is not a direct lookup key — the
+/// origin travels via <see cref="IrNamedTypeRef.Origin"/> when available.</param>
 /// <param name="ExternalImports">Dictionary keyed by type name (both source
 /// and emitted) giving the <see cref="IrExternalImport"/> to emit for
 /// <c>[Import]</c>-annotated types.</param>

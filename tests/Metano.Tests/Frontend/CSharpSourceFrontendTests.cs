@@ -182,7 +182,7 @@ public class CSharpSourceFrontendTests
 
         var moneyType = consumer.GetTypeByMetadataName("Acme.Shared.Domain.Money");
         await Assert.That(moneyType).IsNotNull();
-        var key = moneyType!.GetStableFullName();
+        var key = moneyType!.GetCrossAssemblyOriginKey();
 
         await Assert.That(ir.CrossAssemblyOrigins).ContainsKey(key);
         var origin = ir.CrossAssemblyOrigins[key];
@@ -220,7 +220,7 @@ public class CSharpSourceFrontendTests
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
 
         await Assert.That(ir.AssembliesNeedingEmitPackage).Contains("OrphanLib");
-        await Assert.That(ir.CrossAssemblyOrigins.Keys).DoesNotContain("Orphan.Detached");
+        await Assert.That(ir.CrossAssemblyOrigins.Keys).DoesNotContain("OrphanLib:Orphan.Detached");
     }
 
     [Test]
@@ -258,9 +258,15 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
 
-        var realKey = consumer.GetTypeByMetadataName("Acme.Mixed.Real")!.GetStableFullName();
-        var honoKey = consumer.GetTypeByMetadataName("Acme.Mixed.HonoStub")!.GetStableFullName();
-        var ambientKey = consumer.GetTypeByMetadataName("Acme.Mixed.Ambient")!.GetStableFullName();
+        var realKey = consumer
+            .GetTypeByMetadataName("Acme.Mixed.Real")!
+            .GetCrossAssemblyOriginKey();
+        var honoKey = consumer
+            .GetTypeByMetadataName("Acme.Mixed.HonoStub")!
+            .GetCrossAssemblyOriginKey();
+        var ambientKey = consumer
+            .GetTypeByMetadataName("Acme.Mixed.Ambient")!
+            .GetCrossAssemblyOriginKey();
 
         await Assert.That(ir.CrossAssemblyOrigins).ContainsKey(realKey);
         await Assert.That(ir.CrossAssemblyOrigins.ContainsKey(honoKey)).IsFalse();
@@ -318,7 +324,7 @@ public class CSharpSourceFrontendTests
 
         var realKey = consumer
             .GetTypeByMetadataName("Acme.Mixed.Feature.Real")!
-            .GetStableFullName();
+            .GetCrossAssemblyOriginKey();
         await Assert.That(ir.CrossAssemblyOrigins).ContainsKey(realKey);
         await Assert
             .That(ir.CrossAssemblyOrigins[realKey].AssemblyRootNamespace)
