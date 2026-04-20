@@ -27,7 +27,7 @@ public static class IrTypeOriginResolverFactory
         named =>
         {
             var key = named.OriginalDefinition;
-            var stableKey = key.GetStableFullName();
+            var stableKey = key.GetCrossAssemblyOriginKey();
             if (!ctx.CrossAssemblyOrigins.TryGetValue(stableKey, out var origin))
             {
                 var containingAssembly = key.ContainingAssembly;

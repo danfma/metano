@@ -32,6 +32,18 @@ public static class SymbolHelper
     public static string GetStableFullName(this ITypeSymbol type) =>
         type.OriginalDefinition.ToDisplayString(StableTypeFullNameFormat);
 
+    /// <summary>
+    /// Returns the key used by
+    /// <see cref="IR.IrCompilation.CrossAssemblyOrigins"/> to store an
+    /// <see cref="IR.IrTypeOrigin"/> for a type that lives in a referenced
+    /// transpilable assembly. The key is assembly-qualified
+    /// (<c>"{assemblyName}:{stableFullName}"</c>) so two referenced
+    /// assemblies that happen to expose types with identical stable full
+    /// names cannot silently clobber each other's origin entry.
+    /// </summary>
+    public static string GetCrossAssemblyOriginKey(this ITypeSymbol type) =>
+        $"{type.ContainingAssembly?.Name ?? string.Empty}:{type.GetStableFullName()}";
+
     public static bool HasAttribute(this ISymbol symbol, string attributeName)
     {
         return symbol

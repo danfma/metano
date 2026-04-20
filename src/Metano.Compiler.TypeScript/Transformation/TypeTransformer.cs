@@ -316,13 +316,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// Walks <see cref="Compilation.References"/> and, for each referenced assembly that
     /// declares <em>both</em> <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>,
-    /// enumerates its public transpilable types and registers them in
-    /// <see cref="IrCompilation.CrossAssemblyOrigins"/>. Augments
-    /// <see cref="_externalImportMap"/> with any <c>[Import]</c> declarations from
-    /// those assemblies so consumers can transitively reach external bindings
-    /// declared in a referenced library — that bit stays target-specific until
-    /// the frontend produces cross-assembly external imports keyed by both
-    /// source and target name.
+    /// enumerates its public types and augments <see cref="_externalImportMap"/> with
+    /// any <c>[Import]</c> declarations from those assemblies so consumers can
+    /// transitively reach external bindings declared in a referenced library.
+    /// The non-<c>[Import]</c> cross-assembly origin map is produced by the frontend
+    /// (<see cref="IrCompilation.CrossAssemblyOrigins"/>) and consumed via
+    /// <see cref="TypeMappingContext.CrossAssemblyOrigins"/>; this method stays
+    /// target-specific until the frontend also emits cross-assembly external
+    /// imports keyed by both source and target name.
     /// </summary>
     private void DiscoverCrossAssemblyTypes()
     {
@@ -345,11 +346,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (!hasTranspileAssembly)
                 continue;
 
-            var packageInfo = SymbolHelper.GetEmitPackageInfo(
-                asm,
-                targetEnumValue: (int)EmitTarget.JavaScript
-            );
-            if (packageInfo is null)
+            if (
+                SymbolHelper.GetEmitPackageInfo(asm, targetEnumValue: (int)EmitTarget.JavaScript)
+                is null
+            )
                 continue;
 
             var assemblyTypes = new List<INamedTypeSymbol>();

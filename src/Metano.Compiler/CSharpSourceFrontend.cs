@@ -129,7 +129,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     ///   target, every public top-level type that is not <c>[Import]</c>,
     ///   <c>[NoEmit]</c>, or <c>[NoTranspile]</c> contributes an
     ///   <see cref="IrTypeOrigin"/> keyed by
-    ///   <see cref="SymbolHelper.GetStableFullName(ITypeSymbol)"/>.</item>
+    ///   <see cref="SymbolHelper.GetCrossAssemblyOriginKey(ITypeSymbol)"/>.</item>
     ///   <item>Otherwise the assembly's metadata name is collected so the
     ///   target can later raise <see cref="DiagnosticCodes.CrossPackageResolution"/>
     ///   (MS0007) at the consumer site.</item>
@@ -190,7 +190,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
             foreach (var type in emittedAssemblyTypes)
             {
-                origins[type.GetStableFullName()] = new IrTypeOrigin(
+                origins[type.GetCrossAssemblyOriginKey()] = new IrTypeOrigin(
                     PackageId: packageInfo.Name,
                     Namespace: type.ContainingNamespace.IsGlobalNamespace
                         ? null
