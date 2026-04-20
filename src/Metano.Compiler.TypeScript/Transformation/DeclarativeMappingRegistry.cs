@@ -31,6 +31,10 @@ public sealed class DeclarativeMappingRegistry
     > _propertiesByFullName;
     private readonly IReadOnlyDictionary<string, IReadOnlySet<string>> _chainMethodsByWrapper;
 
+    // Returned by GetChainMethodNames on a miss so the hot wrap-receiver
+    // detection path does not allocate a fresh HashSet every call.
+    private static readonly IReadOnlySet<string> EmptyChainMethods = new HashSet<string>();
+
     private DeclarativeMappingRegistry(
         IReadOnlyDictionary<
             (string, string),
@@ -80,9 +84,7 @@ public sealed class DeclarativeMappingRegistry
     /// of these names, no re-wrapping is needed.
     /// </summary>
     public IReadOnlySet<string> GetChainMethodNames(string wrapReceiver) =>
-        _chainMethodsByWrapper.TryGetValue(wrapReceiver, out var set)
-            ? set
-            : (IReadOnlySet<string>)new HashSet<string>();
+        _chainMethodsByWrapper.TryGetValue(wrapReceiver, out var set) ? set : EmptyChainMethods;
 
     /// <summary>
     /// Test-only factory: builds a registry directly from hand-written

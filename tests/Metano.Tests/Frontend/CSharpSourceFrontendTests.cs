@@ -908,7 +908,44 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
-    public async Task DeclarativeMappings_DicionaryHandlesPresentEvenWhenCurrentAssemblyHasNoAttributes()
+    public async Task DeclarativeMappings_MutuallyExclusiveJsNameAndJsTemplateWarns()
+    {
+        // Set both JsMethod (rename) and JsTemplate on the same attribute:
+        // the frontend must surface MS0004 and keep JsTemplate, so the
+        // target never sees a mapping entry with both populated.
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: MapMethod(typeof(AcmeUnique.Mappings.Conflicted), "Run",
+                JsMethod = "run", JsTemplate = "$0.run()")]
+
+            namespace AcmeUnique.Mappings
+            {
+                public class Conflicted
+                {
+                    public void Run() {}
+                }
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        var warning = ir.Diagnostics.SingleOrDefault(d =>
+            d.Code == DiagnosticCodes.ConflictingAttributes
+            && d.Message.Contains("Conflicted")
+            && d.Message.Contains("Run")
+        );
+        await Assert.That(warning).IsNotNull();
+
+        var key = ("AcmeUnique.Mappings.Conflicted", "Run");
+        await Assert.That(ir.DeclarativeMethodMappings!).ContainsKey(key);
+        var entry = ir.DeclarativeMethodMappings![key][0];
+        await Assert.That(entry.JsName).IsNull();
+        await Assert.That(entry.JsTemplate).IsEqualTo("$0.run()");
+    }
+
+    [Test]
+    public async Task DeclarativeMappings_DictionaryHandlesPresentEvenWhenCurrentAssemblyHasNoAttributes()
     {
         // Metano.Runtime is on every consumer's reference set, so the
         // inherited tables are never empty. This test just pins the IR

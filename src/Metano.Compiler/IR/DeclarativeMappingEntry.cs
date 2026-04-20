@@ -2,9 +2,12 @@ namespace Metano.Compiler.IR;
 
 /// <summary>
 /// One declarative mapping entry extracted from <c>[MapMethod]</c> or
-/// <c>[MapProperty]</c>. Either <see cref="JsName"/> (simple rename) or
-/// <see cref="JsTemplate"/> is set, never both — the frontend enforces the
-/// mutual exclusivity when it reads the attribute.
+/// <c>[MapProperty]</c>. <see cref="JsName"/> represents a simple rename;
+/// <see cref="JsTemplate"/> represents template-based lowering. The two
+/// are mutually exclusive — when both are set on the attribute the
+/// frontend raises <see cref="Diagnostics.DiagnosticCodes.ConflictingAttributes"/>
+/// (MS0004) and keeps <see cref="JsTemplate"/>, so every constructed entry
+/// has at most one of the two populated.
 ///
 /// <see cref="WhenArg0StringEquals"/> is an optional literal-argument filter:
 /// when set, the entry only matches a call site whose first argument is a

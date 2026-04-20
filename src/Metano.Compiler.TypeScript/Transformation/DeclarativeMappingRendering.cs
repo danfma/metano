@@ -6,10 +6,10 @@ namespace Metano.Transformation;
 /// <summary>
 /// Pure-TS rendering helpers shared by <see cref="BclMapper"/> (legacy Roslyn-driven
 /// path) and <see cref="Metano.TypeScript.Bridge.IrToTsBclMapper"/> (IR-driven path).
-/// Everything here operates only on <see cref="TsExpression"/>s, strings, and
-/// <see cref="DeclarativeMappingRegistry"/>; it is free of any Roslyn or IR
-/// dependency, so both mappers can share the same behavior for arg-literal
-/// matching, wrap-receiver expansion and runtime-import parsing.
+/// Operates on <see cref="TsExpression"/>s, strings, and the IR-backed
+/// <see cref="DeclarativeMappingEntry"/> / <see cref="DeclarativeMappingRegistry"/>;
+/// free of any Roslyn dependency so both mappers can share the same behavior for
+/// arg-literal matching and wrap-receiver expansion.
 /// </summary>
 internal static class DeclarativeMappingRendering
 {

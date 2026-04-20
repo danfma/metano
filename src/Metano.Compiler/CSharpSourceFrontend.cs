@@ -105,7 +105,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         var declarativeMappings = compilation is null
             ? default
-            : BuildDeclarativeMappings(compilation);
+            : BuildDeclarativeMappings(compilation, diagnostics);
 
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
@@ -232,7 +232,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             DeclarativeMappingEntry
         > Properties,
         IReadOnlyDictionary<string, IReadOnlySet<string>> ChainMethodsByWrapper
-    ) BuildDeclarativeMappings(Compilation compilation)
+    ) BuildDeclarativeMappings(Compilation compilation, List<MetanoDiagnostic> diagnostics)
     {
         var methods = new Dictionary<(string, string), List<DeclarativeMappingEntry>>();
         var properties = new Dictionary<(string, string), DeclarativeMappingEntry>();
@@ -251,10 +251,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 switch (attr.AttributeClass?.Name)
                 {
                     case "MapMethodAttribute":
-                        TryRegisterMapping(attr, "JsMethod", methods);
+                        TryRegisterMapping(attr, "JsMethod", methods, diagnostics);
                         break;
                     case "MapPropertyAttribute":
-                        TryRegisterProperty(attr, "JsProperty", properties);
+                        TryRegisterProperty(attr, "JsProperty", properties, diagnostics);
                         break;
                 }
             }
@@ -291,14 +291,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static void TryRegisterMapping(
         AttributeData attr,
         string renameNamedArg,
-        Dictionary<(string, string), List<DeclarativeMappingEntry>> target
+        Dictionary<(string, string), List<DeclarativeMappingEntry>> target,
+        List<MetanoDiagnostic> diagnostics
     )
     {
         var key = ReadMappingKey(attr);
         if (key is null)
             return;
 
-        var entry = ReadMappingEntry(attr, renameNamedArg);
+        var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
         if (entry is null)
             return;
 
@@ -313,14 +314,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static void TryRegisterProperty(
         AttributeData attr,
         string renameNamedArg,
-        Dictionary<(string, string), DeclarativeMappingEntry> target
+        Dictionary<(string, string), DeclarativeMappingEntry> target,
+        List<MetanoDiagnostic> diagnostics
     )
     {
         var key = ReadMappingKey(attr);
         if (key is null)
             return;
 
-        var entry = ReadMappingEntry(attr, renameNamedArg);
+        var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
         if (entry is null)
             return;
 
@@ -342,7 +344,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
     private static DeclarativeMappingEntry? ReadMappingEntry(
         AttributeData attr,
-        string renameNamedArg
+        string renameNamedArg,
+        List<MetanoDiagnostic> diagnostics
     )
     {
         string? jsName = null;
@@ -374,6 +377,31 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         if (jsName is null && jsTemplate is null)
             return null;
+
+        // JsName and JsTemplate are mutually exclusive — template takes
+        // precedence (it's the more specific lowering form). Surface MS0004
+        // so a user who meant only one of the two can spot the conflict.
+        if (jsName is not null && jsTemplate is not null)
+        {
+            var target =
+                attr.ConstructorArguments.Length >= 2
+                && attr.ConstructorArguments[0].Value is INamedTypeSymbol owner
+                && attr.ConstructorArguments[1].Value is string memberName
+                    ? $"{owner.ToDisplayString()}.{memberName}"
+                    : attr.AttributeClass?.ToDisplayString() ?? "<unknown>";
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.ConflictingAttributes,
+                    $"Declarative mapping on '{target}' sets both "
+                        + $"{renameNamedArg} ('{jsName}') and JsTemplate ('{jsTemplate}') — "
+                        + $"these are mutually exclusive. Keeping JsTemplate and ignoring "
+                        + $"{renameNamedArg}.",
+                    attr.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+                )
+            );
+            jsName = null;
+        }
 
         return new DeclarativeMappingEntry(
             jsName,
