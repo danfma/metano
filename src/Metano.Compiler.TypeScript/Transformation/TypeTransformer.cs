@@ -188,10 +188,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         _pathNaming = new PathNaming(ir.LocalRootNamespace);
 
-        // Read declarative [MapMethod]/[MapProperty] from the current assembly + every
-        // referenced assembly. The registry is consulted by BclMapper before its hardcoded
-        // lowering rules.
-        var declarativeMappings = DeclarativeMappingRegistry.BuildFromCompilation(compilation);
+        var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
 
         _context = new TypeScriptTransformContext(
             compilation,

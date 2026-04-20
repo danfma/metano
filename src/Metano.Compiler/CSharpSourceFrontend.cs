@@ -103,6 +103,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         var assemblyWideTranspile = compilation is not null && compilation.HasTranspileAssembly();
 
+        var declarativeMappings = compilation is null
+            ? default
+            : BuildDeclarativeMappings(compilation);
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: compilation is null
@@ -123,7 +127,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             Diagnostics: diagnostics,
             LocalRootNamespace: compilation is null
                 ? ""
-                : ComputeLocalRootNamespace(compilation, assemblyWideTranspile)
+                : ComputeLocalRootNamespace(compilation, assemblyWideTranspile),
+            DeclarativeMethodMappings: declarativeMappings.Methods,
+            DeclarativePropertyMappings: declarativeMappings.Properties,
+            ChainMethodsByWrapper: declarativeMappings.ChainMethodsByWrapper
         );
     }
 
@@ -202,6 +209,179 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         programType = containingType;
         return true;
+    }
+
+    /// <summary>
+    /// Reads <c>[assembly: MapMethod]</c> / <c>[assembly: MapProperty]</c>
+    /// declarations from the current assembly plus every referenced
+    /// assembly and indexes them by
+    /// (<see cref="SymbolHelper.GetStableFullName"/>, member-name). Also
+    /// computes the per-wrapper set of mapped JS method names so the target
+    /// can recognize already-wrapped receivers. Mirrors the legacy
+    /// <c>DeclarativeMappingRegistry.BuildFromCompilation</c> attribute
+    /// walk, dropping the symbol-keyed dictionaries whose Roslyn consumers
+    /// retired with ADR-0013.
+    /// </summary>
+    private static (
+        IReadOnlyDictionary<
+            (string DeclaringTypeFullName, string MemberName),
+            IReadOnlyList<DeclarativeMappingEntry>
+        > Methods,
+        IReadOnlyDictionary<
+            (string DeclaringTypeFullName, string MemberName),
+            DeclarativeMappingEntry
+        > Properties,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> ChainMethodsByWrapper
+    ) BuildDeclarativeMappings(Compilation compilation)
+    {
+        var methods = new Dictionary<(string, string), List<DeclarativeMappingEntry>>();
+        var properties = new Dictionary<(string, string), DeclarativeMappingEntry>();
+
+        var assemblies = new List<IAssemblySymbol> { compilation.Assembly };
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly)
+                assemblies.Add(assembly);
+        }
+
+        foreach (var assembly in assemblies)
+        {
+            foreach (var attr in assembly.GetAttributes())
+            {
+                switch (attr.AttributeClass?.Name)
+                {
+                    case "MapMethodAttribute":
+                        TryRegisterMapping(attr, "JsMethod", methods);
+                        break;
+                    case "MapPropertyAttribute":
+                        TryRegisterProperty(attr, "JsProperty", properties);
+                        break;
+                }
+            }
+        }
+
+        var chainMethodsByWrapper = new Dictionary<string, HashSet<string>>();
+        foreach (var entries in methods.Values)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry.WrapReceiver is null || entry.JsName is null)
+                    continue;
+                if (!chainMethodsByWrapper.TryGetValue(entry.WrapReceiver, out var set))
+                {
+                    set = [];
+                    chainMethodsByWrapper[entry.WrapReceiver] = set;
+                }
+                set.Add(entry.JsName);
+            }
+        }
+
+        var readonlyMethods = methods.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlyList<DeclarativeMappingEntry>)kv.Value
+        );
+        var readonlyChains = chainMethodsByWrapper.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlySet<string>)kv.Value
+        );
+
+        return (readonlyMethods, properties, readonlyChains);
+    }
+
+    private static void TryRegisterMapping(
+        AttributeData attr,
+        string renameNamedArg,
+        Dictionary<(string, string), List<DeclarativeMappingEntry>> target
+    )
+    {
+        var key = ReadMappingKey(attr);
+        if (key is null)
+            return;
+
+        var entry = ReadMappingEntry(attr, renameNamedArg);
+        if (entry is null)
+            return;
+
+        if (!target.TryGetValue(key.Value, out var list))
+        {
+            list = [];
+            target[key.Value] = list;
+        }
+        list.Add(entry);
+    }
+
+    private static void TryRegisterProperty(
+        AttributeData attr,
+        string renameNamedArg,
+        Dictionary<(string, string), DeclarativeMappingEntry> target
+    )
+    {
+        var key = ReadMappingKey(attr);
+        if (key is null)
+            return;
+
+        var entry = ReadMappingEntry(attr, renameNamedArg);
+        if (entry is null)
+            return;
+
+        target[key.Value] = entry;
+    }
+
+    private static (string DeclaringTypeFullName, string MemberName)? ReadMappingKey(
+        AttributeData attr
+    )
+    {
+        if (attr.ConstructorArguments.Length < 2)
+            return null;
+        if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol declaringType)
+            return null;
+        if (attr.ConstructorArguments[1].Value is not string memberName)
+            return null;
+        return (declaringType.GetStableFullName(), memberName);
+    }
+
+    private static DeclarativeMappingEntry? ReadMappingEntry(
+        AttributeData attr,
+        string renameNamedArg
+    )
+    {
+        string? jsName = null;
+        string? jsTemplate = null;
+        string? whenArg0StringEquals = null;
+        string? wrapReceiver = null;
+        string? runtimeImports = null;
+        foreach (var named in attr.NamedArguments)
+        {
+            switch (named.Key)
+            {
+                case var k when k == renameNamedArg:
+                    jsName = named.Value.Value as string;
+                    break;
+                case "JsTemplate":
+                    jsTemplate = named.Value.Value as string;
+                    break;
+                case "WhenArg0StringEquals":
+                    whenArg0StringEquals = named.Value.Value as string;
+                    break;
+                case "WrapReceiver":
+                    wrapReceiver = named.Value.Value as string;
+                    break;
+                case "RuntimeImports":
+                    runtimeImports = named.Value.Value as string;
+                    break;
+            }
+        }
+
+        if (jsName is null && jsTemplate is null)
+            return null;
+
+        return new DeclarativeMappingEntry(
+            jsName,
+            jsTemplate,
+            whenArg0StringEquals,
+            wrapReceiver,
+            runtimeImports
+        );
     }
 
     /// <summary>

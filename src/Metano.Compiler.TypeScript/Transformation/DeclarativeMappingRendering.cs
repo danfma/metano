@@ -1,3 +1,4 @@
+using Metano.Compiler.IR;
 using Metano.TypeScript.AST;
 
 namespace Metano.Transformation;
@@ -12,13 +13,6 @@ namespace Metano.Transformation;
 /// </summary>
 internal static class DeclarativeMappingRendering
 {
-    internal static IReadOnlyList<string> SplitRuntimeImports(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return [];
-        return raw!.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
-    }
-
     /// <summary>
     /// Whether a mapping entry's optional arg-literal filter matches the given call
     /// site. An entry without a filter matches anything; an entry with
