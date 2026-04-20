@@ -1,4 +1,5 @@
 using Metano.Compiler.Extraction;
+using Metano.Compiler.IR;
 using Metano.Transformation;
 using Metano.TypeScript;
 using Metano.TypeScript.AST;

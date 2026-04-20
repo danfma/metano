@@ -1,5 +1,6 @@
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.IR;
 using Metano.Tests.IR;
 
 namespace Metano.Tests.Frontend;
@@ -774,5 +775,155 @@ public class CSharpSourceFrontendTests
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
         await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Domain");
+    }
+
+    // Tests below declare their own user types so the assertions aren't
+    // diluted by the many [MapMethod]/[MapProperty] declarations Metano.Runtime
+    // ships for BCL types like List<T>, Guid, Dictionary, etc.
+
+    [Test]
+    public async Task DeclarativeMethodMappings_IndexesCurrentAssemblyMapMethod()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: MapMethod(
+                typeof(AcmeUnique.Mappings.UniqueWidget),
+                "Execute",
+                JsMethod = "run"
+            )]
+
+            namespace AcmeUnique.Mappings
+            {
+                public class UniqueWidget
+                {
+                    public void Execute() {}
+                }
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.DeclarativeMethodMappings).IsNotNull();
+        var key = ("AcmeUnique.Mappings.UniqueWidget", "Execute");
+        await Assert.That(ir.DeclarativeMethodMappings!).ContainsKey(key);
+        var entries = ir.DeclarativeMethodMappings![key];
+        await Assert.That(entries.Count).IsEqualTo(1);
+        await Assert.That(entries[0].JsName).IsEqualTo("run");
+    }
+
+    [Test]
+    public async Task DeclarativeMethodMappings_GroupsOverloadsByLiteralFilter()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: MapMethod(typeof(AcmeUnique.Mappings.Formatter), "Render",
+                JsTemplate = "$0.render($1)")]
+            [assembly: MapMethod(typeof(AcmeUnique.Mappings.Formatter), "Render",
+                WhenArg0StringEquals = "fast",
+                JsTemplate = "$0.fastRender()")]
+
+            namespace AcmeUnique.Mappings
+            {
+                public class Formatter
+                {
+                    public string Render(string mode) => "";
+                }
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        var key = ("AcmeUnique.Mappings.Formatter", "Render");
+        await Assert.That(ir.DeclarativeMethodMappings!).ContainsKey(key);
+        var entries = ir.DeclarativeMethodMappings![key];
+        await Assert.That(entries.Count).IsEqualTo(2);
+        await Assert.That(entries[0].WhenArg0StringEquals).IsNull();
+        await Assert.That(entries[1].WhenArg0StringEquals).IsEqualTo("fast");
+    }
+
+    [Test]
+    public async Task DeclarativePropertyMappings_IndexesMapProperty()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: MapProperty(
+                typeof(AcmeUnique.Mappings.Container),
+                "ItemCount",
+                JsProperty = "size"
+            )]
+
+            namespace AcmeUnique.Mappings
+            {
+                public class Container
+                {
+                    public int ItemCount => 0;
+                }
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        var key = ("AcmeUnique.Mappings.Container", "ItemCount");
+        await Assert.That(ir.DeclarativePropertyMappings!).ContainsKey(key);
+        var entry = ir.DeclarativePropertyMappings![key];
+        await Assert.That(entry.JsName).IsEqualTo("size");
+    }
+
+    [Test]
+    public async Task ChainMethodsByWrapper_CollectsJsNamesByWrapper()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: MapMethod(typeof(AcmeUnique.Mappings.Widget), "Add",
+                JsMethod = "appendThing", WrapReceiver = "uniqueWrap")]
+            [assembly: MapMethod(typeof(AcmeUnique.Mappings.Widget), "Remove",
+                JsMethod = "dropThing", WrapReceiver = "uniqueWrap")]
+            [assembly: MapMethod(typeof(AcmeUnique.Mappings.Widget), "Sort",
+                JsTemplate = "$0.reorderThings()", WrapReceiver = "uniqueWrap")]
+
+            namespace AcmeUnique.Mappings
+            {
+                public class Widget
+                {
+                    public void Add() {}
+                    public void Remove() {}
+                    public void Sort() {}
+                }
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.ChainMethodsByWrapper).IsNotNull();
+        await Assert.That(ir.ChainMethodsByWrapper!).ContainsKey("uniqueWrap");
+        var names = ir.ChainMethodsByWrapper!["uniqueWrap"];
+        // JsTemplate-only entries are excluded — wrap detection needs a JsName.
+        await Assert.That(names).Contains("appendThing");
+        await Assert.That(names).Contains("dropThing");
+        await Assert.That(names.Contains("reorderThings")).IsFalse();
+    }
+
+    [Test]
+    public async Task DeclarativeMappings_DicionaryHandlesPresentEvenWhenCurrentAssemblyHasNoAttributes()
+    {
+        // Metano.Runtime is on every consumer's reference set, so the
+        // inherited tables are never empty. This test just pins the IR
+        // contract: the dictionaries are always non-null after extraction,
+        // so callers can safely do `ir.DeclarativeMethodMappings ?? empty`.
+        var compilation = IrTestHelper.Compile(
+            """
+            public class Marker {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.DeclarativeMethodMappings).IsNotNull();
+        await Assert.That(ir.DeclarativePropertyMappings).IsNotNull();
+        await Assert.That(ir.ChainMethodsByWrapper).IsNotNull();
     }
 }

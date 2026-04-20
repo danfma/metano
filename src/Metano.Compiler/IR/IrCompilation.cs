@@ -67,8 +67,24 @@ namespace Metano.Compiler.IR;
 /// stay short. This value is target-agnostic provided the target uses
 /// dot-separated namespace segments for file-system layout (TypeScript,
 /// Dart). Targets using alternate layout schemes must compute their own
-/// root independently. Appended at the end of the record so adding new
-/// state cannot shift downstream positional arguments.</param>
+/// root independently.</param>
+/// <param name="DeclarativeMethodMappings">Index of
+/// <c>[MapMethod]</c> entries keyed by
+/// (<see cref="SymbolHelper.GetStableFullName"/> of the declaring type,
+/// method name). Multiple entries per key are allowed when
+/// <see cref="DeclarativeMappingEntry.WhenArg0StringEquals"/> discriminates
+/// between literal-argument shapes.</param>
+/// <param name="DeclarativePropertyMappings">Index of
+/// <c>[MapProperty]</c> entries keyed the same way as
+/// <paramref name="DeclarativeMethodMappings"/>. Property mappings don't
+/// use literal-argument filters so storage is single-entry-per-key.</param>
+/// <param name="ChainMethodsByWrapper">Per-wrapper set of JS method names
+/// used to recognize "already wrapped" receivers when a mapping with a
+/// <see cref="DeclarativeMappingEntry.WrapReceiver"/> spec is about to be
+/// expanded — if the receiver is a call whose callee property matches one
+/// of the names, no re-wrapping is needed. Appended at the end with
+/// nullable defaults so adding new IR state cannot shift downstream
+/// positional arguments.</param>
 public sealed record IrCompilation(
     string AssemblyName,
     string? PackageName,
@@ -80,5 +96,14 @@ public sealed record IrCompilation(
     IReadOnlyDictionary<string, IrBclExport> BclExports,
     IReadOnlySet<string> AssembliesNeedingEmitPackage,
     IReadOnlyList<MetanoDiagnostic> Diagnostics,
-    string LocalRootNamespace = ""
+    string LocalRootNamespace = "",
+    IReadOnlyDictionary<
+        (string DeclaringTypeFullName, string MemberName),
+        IReadOnlyList<DeclarativeMappingEntry>
+    >? DeclarativeMethodMappings = null,
+    IReadOnlyDictionary<
+        (string DeclaringTypeFullName, string MemberName),
+        DeclarativeMappingEntry
+    >? DeclarativePropertyMappings = null,
+    IReadOnlyDictionary<string, IReadOnlySet<string>>? ChainMethodsByWrapper = null
 );
