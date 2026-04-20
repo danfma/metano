@@ -136,34 +136,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.ExternalImports,
             StringComparer.Ordinal
         );
-        foreach (var t in EnumeratePublicTopLevelTypes(compilation.Assembly.GlobalNamespace))
-        {
-            var import = SymbolHelper.GetImport(t);
-            if (import is null)
-                continue;
-            var tsName = GetTsTypeName(t);
-            if (tsName == t.Name)
-                continue;
-            var entry = new IrExternalImport(
-                Name: import.Name,
-                From: import.From,
-                IsDefault: import.AsDefault,
-                Version: import.Version
-            );
-            RegisterExternalImportMapping(
-                tsName,
-                entry,
-                t.ToDisplayString(),
-                t.Locations.FirstOrDefault()
-            );
-        }
-
-        // Discover transpilable types from referenced assemblies (those that declare
-        // both [TranspileAssembly] and [EmitPackage(JavaScript)]). Populates
-        // _crossAssemblyTypeMap and augments _externalImportMap with [Import] entries
-        // from the referenced assemblies. Must run after the local _externalImportMap
-        // is built so it only adds, never overwrites local entries.
-        DiscoverCrossAssemblyTypes();
+        RegisterTsNameAliases();
 
         // Build the explicit per-compilation context that replaces TypeMapper statics.
         var crossPackageMisses = new HashSet<string>();
@@ -305,19 +278,22 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
     /// <summary>
-    /// Walks <see cref="Compilation.References"/> and, for each referenced assembly that
-    /// declares <em>both</em> <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>,
-    /// registers the TS-name alias for any <c>[Import]</c>-annotated type whose
-    /// <c>[Name(TypeScript)]</c> override differs from the C# source name. The
-    /// C#-source-name keys for cross-assembly <c>[Import]</c> types are produced
-    /// by the frontend via <see cref="IrCompilation.ExternalImports"/>; the
-    /// non-<c>[Import]</c> cross-assembly origin map is likewise frontend-built
-    /// (<see cref="IrCompilation.CrossAssemblyOrigins"/>), so this pass stays
-    /// target-specific only because <c>[Name(TypeScript)]</c> resolution needs
-    /// the active target's naming policy.
+    /// Registers the <c>[Name(TypeScript)]</c> alias into
+    /// <see cref="_externalImportMap"/> for every <c>[Import]</c>-annotated
+    /// type whose TS name differs from the C# source name. Walks the
+    /// current assembly plus every referenced assembly that opts into
+    /// transpilation via <c>[TranspileAssembly]</c> and declares an
+    /// <c>[EmitPackage]</c> for the active target.
+    /// <para>
+    /// The C#-source-name keys are already produced by the frontend via
+    /// <see cref="IrCompilation.ExternalImports"/>; only TS-name aliasing
+    /// stays on the target side, pending a target-aware frontend.
+    /// </para>
     /// </summary>
-    private void DiscoverCrossAssemblyTypes()
+    private void RegisterTsNameAliases()
     {
+        RegisterTsNameAliasesForAssembly(compilation.Assembly);
+
         foreach (var reference in compilation.References)
         {
             if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
@@ -338,69 +314,45 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             )
                 continue;
 
-            var assemblyTypes = new List<INamedTypeSymbol>();
-            CollectTypesFromNamespace(asm.GlobalNamespace, assemblyTypes);
-
-            foreach (var type in assemblyTypes)
-            {
-                var import = SymbolHelper.GetImport(type);
-                if (import is null)
-                    continue;
-
-                var tsName = GetTsTypeName(type);
-                if (tsName == type.Name)
-                    continue;
-
-                var entry = new IrExternalImport(
-                    Name: import.Name,
-                    From: import.From,
-                    IsDefault: import.AsDefault,
-                    Version: import.Version
-                );
-                RegisterExternalImportMapping(
-                    tsName,
-                    entry,
-                    type.ToDisplayString(),
-                    type.Locations.FirstOrDefault()
-                );
-            }
+            RegisterTsNameAliasesForAssembly(asm);
         }
     }
 
-    /// <summary>
-    /// Recursively walks an <see cref="INamespaceSymbol"/> and collects every public
-    /// top-level type whose declaration would be transpiled (passes <see cref="SymbolHelper.IsTranspilable"/>
-    /// with assembly-wide opt-in). Nested types are skipped — they're processed by
-    /// their containing type as companion namespaces.
-    /// </summary>
-    private static void CollectTypesFromNamespace(INamespaceSymbol ns, List<INamedTypeSymbol> sink)
+    private void RegisterTsNameAliasesForAssembly(IAssemblySymbol assembly)
     {
-        foreach (var member in ns.GetMembers())
+        foreach (var type in EnumeratePublicTopLevelTypes(assembly.GlobalNamespace))
         {
-            switch (member)
-            {
-                case INamespaceSymbol childNs:
-                    CollectTypesFromNamespace(childNs, sink);
-                    break;
-                case INamedTypeSymbol type
-                    when type.ContainingType is null
-                        && type.DeclaredAccessibility == Accessibility.Public
-                        && !SymbolHelper.HasNoTranspile(type)
-                        && !SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript):
-                    sink.Add(type);
-                    break;
-            }
+            var import = SymbolHelper.GetImport(type);
+            if (import is null)
+                continue;
+
+            var tsName = GetTsTypeName(type);
+            if (tsName == type.Name)
+                continue;
+
+            var entry = new IrExternalImport(
+                Name: import.Name,
+                From: import.From,
+                IsDefault: import.AsDefault,
+                Version: import.Version
+            );
+            RegisterExternalImportMapping(
+                tsName,
+                entry,
+                type.ToDisplayString(),
+                type.Locations.FirstOrDefault()
+            );
         }
     }
 
     /// <summary>
-    /// Yields every public top-level type reachable from <paramref name="ns"/>,
-    /// without applying the <c>[NoTranspile]</c> / <c>[NoEmit]</c> filters that
-    /// <see cref="CollectTypesFromNamespace"/> uses for emission discovery.
-    /// Mirrors the frontend's <c>CollectPublicTopLevelTypes</c> walk so the
-    /// TS-name aliasing pass can register every <c>[Import]</c> type the IR
-    /// already covers, including placeholders that the user did not mark with
-    /// <c>[Transpile]</c>.
+    /// Yields every public top-level type reachable from
+    /// <paramref name="ns"/>. Mirrors the frontend's walker so the TS-name
+    /// aliasing pass can register every <c>[Import]</c> type the IR
+    /// already covers, including placeholders that the user did not mark
+    /// with <c>[Transpile]</c>. No <c>[NoTranspile]</c>/<c>[NoEmit]</c>
+    /// filter is applied because an <c>[Import]</c> is an external binding
+    /// — emission gating is irrelevant for its TS-name alias.
     /// </summary>
     private static IEnumerable<INamedTypeSymbol> EnumeratePublicTopLevelTypes(INamespaceSymbol ns)
     {
