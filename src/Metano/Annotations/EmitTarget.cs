@@ -17,4 +17,7 @@ public enum EmitTarget
 {
     /// <summary>The TypeScript / JavaScript target (npm package name).</summary>
     JavaScript = 0,
+
+    /// <summary>The Dart / Flutter target (pub.dev package name).</summary>
+    Dart = 1,
 }

@@ -21,6 +21,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
 {
     public string Name => "typescript";
 
+    public TargetLanguage Language => TargetLanguage.TypeScript;
+
     /// <summary>
     /// The TS AST source files produced by the most recent <see cref="Transform"/> call.
     /// Empty until Transform is invoked.

@@ -124,19 +124,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // Seed the external-import map from the frontend. The IR covers every
         // [Import] type from the current assembly, plus those from referenced
         // assemblies that opt into transpilation ([TranspileAssembly]) and
-        // declare an [EmitPackage] for the active target — keyed by C# simple
-        // name, with MS0003 collisions surfaced through the host's diagnostic
-        // merge. The TS-name aliasing below is a target concern that stays
-        // here until the frontend gains target awareness — it must walk every
-        // public top-level [Import] type (mirroring the frontend's walker),
-        // not just `transpilableTypes`, so an [Import] placeholder without
-        // [Transpile] in a project that does not declare
-        // [assembly: TranspileAssembly] still gets its TS-name alias.
+        // declare an [EmitPackage] for the active target — keyed by both the
+        // C# source name and, when it differs, the per-target [Name(target, …)]
+        // alias. MS0003 collisions are surfaced through the host's diagnostic
+        // merge.
         _externalImportMap = new Dictionary<string, IrExternalImport>(
             ir.ExternalImports,
             StringComparer.Ordinal
         );
-        RegisterTsNameAliases();
 
         // Build the explicit per-compilation context that replaces TypeMapper statics.
         var crossPackageMisses = new HashSet<string>();
@@ -276,102 +271,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             "TypeScriptTransformContext is not yet initialized — TransformAll() must "
                 + "complete its setup phase before any per-type helper runs."
         );
-
-    /// <summary>
-    /// Registers the <c>[Name(TypeScript)]</c> alias into
-    /// <see cref="_externalImportMap"/> for every <c>[Import]</c>-annotated
-    /// type whose TS name differs from the C# source name. Walks the
-    /// current assembly plus every referenced assembly that opts into
-    /// transpilation via <c>[TranspileAssembly]</c> and declares an
-    /// <c>[EmitPackage]</c> for the active target.
-    /// <para>
-    /// The C#-source-name keys are already produced by the frontend via
-    /// <see cref="IrCompilation.ExternalImports"/>; only TS-name aliasing
-    /// stays on the target side, pending a target-aware frontend.
-    /// </para>
-    /// </summary>
-    private void RegisterTsNameAliases()
-    {
-        RegisterTsNameAliasesForAssembly(compilation.Assembly);
-
-        foreach (var reference in compilation.References)
-        {
-            if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
-                continue;
-            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
-                continue;
-
-            var hasTranspileAssembly = asm.GetAttributes()
-                .Any(a =>
-                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
-                );
-            if (!hasTranspileAssembly)
-                continue;
-
-            if (
-                SymbolHelper.GetEmitPackageInfo(asm, targetEnumValue: (int)EmitTarget.JavaScript)
-                is null
-            )
-                continue;
-
-            RegisterTsNameAliasesForAssembly(asm);
-        }
-    }
-
-    private void RegisterTsNameAliasesForAssembly(IAssemblySymbol assembly)
-    {
-        foreach (var type in EnumeratePublicTopLevelTypes(assembly.GlobalNamespace))
-        {
-            var import = SymbolHelper.GetImport(type);
-            if (import is null)
-                continue;
-
-            var tsName = GetTsTypeName(type);
-            if (tsName == type.Name)
-                continue;
-
-            var entry = new IrExternalImport(
-                Name: import.Name,
-                From: import.From,
-                IsDefault: import.AsDefault,
-                Version: import.Version
-            );
-            RegisterExternalImportMapping(
-                tsName,
-                entry,
-                type.ToDisplayString(),
-                type.Locations.FirstOrDefault()
-            );
-        }
-    }
-
-    /// <summary>
-    /// Yields every public top-level type reachable from
-    /// <paramref name="ns"/>. Mirrors the frontend's walker so the TS-name
-    /// aliasing pass can register every <c>[Import]</c> type the IR
-    /// already covers, including placeholders that the user did not mark
-    /// with <c>[Transpile]</c>. No <c>[NoTranspile]</c>/<c>[NoEmit]</c>
-    /// filter is applied because an <c>[Import]</c> is an external binding
-    /// — emission gating is irrelevant for its TS-name alias.
-    /// </summary>
-    private static IEnumerable<INamedTypeSymbol> EnumeratePublicTopLevelTypes(INamespaceSymbol ns)
-    {
-        foreach (var member in ns.GetMembers())
-        {
-            switch (member)
-            {
-                case INamespaceSymbol childNs:
-                    foreach (var nested in EnumeratePublicTopLevelTypes(childNs))
-                        yield return nested;
-                    break;
-                case INamedTypeSymbol type
-                    when type.ContainingType is null
-                        && type.DeclaredAccessibility == Accessibility.Public:
-                    yield return type;
-                    break;
-            }
-        }
-    }
 
     private IReadOnlyList<INamedTypeSymbol> DiscoverTranspilableTypes()
     {
@@ -678,34 +577,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string FileName,
         List<INamedTypeSymbol> Types
     );
-
-    private void RegisterExternalImportMapping(
-        string key,
-        IrExternalImport entry,
-        string ownerDisplayName,
-        Location? location
-    )
-    {
-        if (!_externalImportMap.TryGetValue(key, out var existing))
-        {
-            _externalImportMap[key] = entry;
-            return;
-        }
-
-        if (existing == entry)
-            return;
-
-        _diagnostics.Add(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.AmbiguousConstruct,
-                $"External import name collision for '{key}'. Keeping '{existing.From}' "
-                    + $"('{existing.Name}') and ignoring conflicting mapping from "
-                    + $"'{ownerDisplayName}' to '{entry.From}' ('{entry.Name}').",
-                location
-            )
-        );
-    }
 
     /// <summary>
     /// Returns the TypeScript name for a type. Uses [Name] override if present, otherwise the C# name as-is.
