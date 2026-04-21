@@ -36,8 +36,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
     public async Task<IrCompilation> ExtractAsync(
         string projectPath,
-        TargetLanguage target = TargetLanguage.TypeScript,
-        CancellationToken ct = default
+        CancellationToken ct = default,
+        TargetLanguage target = TargetLanguage.TypeScript
     )
     {
         var assemblyName = Path.GetFileNameWithoutExtension(projectPath);
