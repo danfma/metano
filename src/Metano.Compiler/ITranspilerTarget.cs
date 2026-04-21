@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -17,6 +18,15 @@ public interface ITranspilerTarget
 {
     /// <summary>Short name used in CLI/log messages (e.g., "typescript", "dart").</summary>
     string Name { get; }
+
+    /// <summary>
+    /// The <see cref="TargetLanguage"/> this backend emits for. The host
+    /// passes it to the active <see cref="ISourceFrontend"/> so
+    /// target-specific resolution (per-target <c>[Name]</c>, per-target
+    /// <c>[NoEmit]</c>, …) happens once during extraction instead of being
+    /// duplicated inside every target.
+    /// </summary>
+    TargetLanguage Language { get; }
 
     /// <summary>
     /// Produces the set of files (plus diagnostics) the host should emit. Targets

@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
@@ -62,6 +63,17 @@ public interface ISourceFrontend
     /// list.</summary>
     /// <param name="projectPath">Path to the entry source artifact (e.g.,
     /// a <c>.csproj</c> for the C# frontend).</param>
+    /// <param name="target">The backend the extraction is being performed
+    /// for. Drives target-specific resolution (per-target <c>[Name]</c>
+    /// aliases, per-target <c>[NoEmit]</c> filters) so the resulting IR
+    /// already carries the names and emission decisions the backend will
+    /// use. Defaults to <see cref="TargetLanguage.TypeScript"/> for
+    /// backwards compatibility with tests and any callers that predate the
+    /// parameter.</param>
     /// <param name="ct">Cancellation token.</param>
-    Task<IrCompilation> ExtractAsync(string projectPath, CancellationToken ct = default);
+    Task<IrCompilation> ExtractAsync(
+        string projectPath,
+        TargetLanguage target = TargetLanguage.TypeScript,
+        CancellationToken ct = default
+    );
 }

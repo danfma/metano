@@ -36,6 +36,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
     public async Task<IrCompilation> ExtractAsync(
         string projectPath,
+        TargetLanguage target = TargetLanguage.TypeScript,
         CancellationToken ct = default
     )
     {
@@ -49,7 +50,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         return BuildIrCompilation(
             compilation,
             fallbackAssemblyName: assemblyName,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            target: target
         );
     }
 
@@ -62,21 +64,26 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// <see cref="LoadedCompilation"/>, resets <see cref="LoadErrorCount"/>
     /// to <c>0</c>, and returns the populated record.
     /// </summary>
-    public IrCompilation ExtractFromCompilation(Compilation compilation)
+    public IrCompilation ExtractFromCompilation(
+        Compilation compilation,
+        TargetLanguage target = TargetLanguage.TypeScript
+    )
     {
         LoadedCompilation = compilation;
         LoadErrorCount = 0;
         return BuildIrCompilation(
             compilation,
             fallbackAssemblyName: compilation.AssemblyName ?? "",
-            diagnostics: new List<MetanoDiagnostic>()
+            diagnostics: new List<MetanoDiagnostic>(),
+            target: target
         );
     }
 
     private static IrCompilation BuildIrCompilation(
         Compilation? compilation,
         string fallbackAssemblyName,
-        List<MetanoDiagnostic> diagnostics
+        List<MetanoDiagnostic> diagnostics,
+        TargetLanguage target
     )
     {
         // Fields beyond what's already populated stay empty during the
@@ -85,7 +92,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // onto `IrCompilation`.
         IReadOnlyDictionary<string, IrExternalImport> externalImports = compilation is null
             ? new Dictionary<string, IrExternalImport>(StringComparer.Ordinal)
-            : BuildExternalImports(compilation, diagnostics);
+            : BuildExternalImports(compilation, target, diagnostics);
 
         IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins;
         IReadOnlySet<string> assembliesNeedingEmitPackage;
@@ -97,7 +104,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         else
         {
             (crossAssemblyOrigins, assembliesNeedingEmitPackage) = BuildCrossAssemblyState(
-                compilation
+                compilation,
+                target
             );
         }
 
@@ -113,7 +121,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 ? null
                 : SymbolHelper.GetEmitPackage(
                     compilation.Assembly,
-                    targetEnumValue: (int)EmitTarget.JavaScript
+                    targetEnumValue: (int)target.ToEmitTarget()
                 ),
             AssemblyWideTranspile: assemblyWideTranspile,
             Modules: Array.Empty<IrModule>(),
@@ -443,15 +451,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     ///   target can later raise <see cref="DiagnosticCodes.CrossPackageResolution"/>
     ///   (MS0007) at the consumer site.</item>
     /// </list>
-    /// The active target is currently hardcoded to TypeScript / JavaScript
-    /// (<c>EmitTarget</c> integer value <c>0</c>) — every consumer of this
-    /// information today is JS-bound; introducing target awareness on the
-    /// frontend is a separate concern bundled with the contract flip.
+    /// <paramref name="target"/> drives the per-target <c>[NoEmit]</c>
+    /// filter so a Dart-specific <c>[NoEmit]</c> cannot poison the
+    /// TypeScript origin table (and vice versa).
     /// </summary>
     private static (
         IReadOnlyDictionary<string, IrTypeOrigin> CrossAssemblyOrigins,
         IReadOnlySet<string> AssembliesNeedingEmitPackage
-    ) BuildCrossAssemblyState(Compilation compilation)
+    ) BuildCrossAssemblyState(Compilation compilation, TargetLanguage target)
     {
         var origins = new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal);
         var needingPackage = new HashSet<string>(StringComparer.Ordinal);
@@ -459,6 +466,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         foreach (
             var (asm, packageInfo) in EnumerateTranspilableReferencedAssemblies(
                 compilation,
+                target,
                 onTranspilableWithoutEmitPackage: name => needingPackage.Add(name)
             )
         )
@@ -481,7 +489,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 .Where(type =>
                     SymbolHelper.GetImport(type) is null
                     && !SymbolHelper.HasNoTranspile(type)
-                    && !SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript)
+                    && !SymbolHelper.HasNoEmit(type, target)
                 )
                 .ToList();
 
@@ -509,12 +517,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// (<c>[TranspileAssembly]</c>) and declared an <c>[EmitPackage]</c>
     /// for the active target, surfacing those carrying
     /// <c>[Import("name", from)]</c> as <see cref="IrExternalImport"/>
-    /// entries keyed by the C# type's simple source name. The local
-    /// assembly is walked first so on collision its entry wins, matching
-    /// the legacy ordering in
-    /// <c>TypeTransformer.DiscoverCrossAssemblyTypes</c>. Per-target
-    /// <c>[Name]</c> aliasing remains on the consumer side until later
-    /// migration steps wire it through the IR.
+    /// entries keyed by the C# type's simple source name <em>and</em> by
+    /// the per-target <c>[Name(target, …)]</c> alias when it differs —
+    /// both keys point at the same <see cref="IrExternalImport"/> value so
+    /// the backend can resolve imports by whichever name it is holding
+    /// (source, emitted, or either after rename). Retires the duplicate
+    /// walker that used to live in <c>TypeTransformer.RegisterTsNameAliases</c>.
+    /// The local assembly is walked first so on collision its entry wins,
+    /// matching the legacy ordering in
+    /// <c>TypeTransformer.DiscoverCrossAssemblyTypes</c>.
     /// <para>
     /// Conflict policy: first mapping wins and any divergent
     /// re-registration produces a
@@ -524,15 +535,16 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// </summary>
     private static Dictionary<string, IrExternalImport> BuildExternalImports(
         Compilation compilation,
+        TargetLanguage target,
         List<MetanoDiagnostic> diagnostics
     )
     {
         var map = new Dictionary<string, IrExternalImport>(StringComparer.Ordinal);
 
-        AddImportsFromAssembly(compilation.Assembly, map, diagnostics);
+        AddImportsFromAssembly(compilation.Assembly, target, map, diagnostics);
 
-        foreach (var (asm, _) in EnumerateTranspilableReferencedAssemblies(compilation))
-            AddImportsFromAssembly(asm, map, diagnostics);
+        foreach (var (asm, _) in EnumerateTranspilableReferencedAssemblies(compilation, target))
+            AddImportsFromAssembly(asm, target, map, diagnostics);
 
         return map;
     }
@@ -554,9 +566,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         SymbolHelper.EmitPackageInfo PackageInfo
     )> EnumerateTranspilableReferencedAssemblies(
         Compilation compilation,
+        TargetLanguage target,
         Action<string>? onTranspilableWithoutEmitPackage = null
     )
     {
+        var emitTargetValue = (int)target.ToEmitTarget();
         foreach (var reference in compilation.References)
         {
             if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
@@ -571,10 +585,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             if (!hasTranspileAssembly)
                 continue;
 
-            var packageInfo = SymbolHelper.GetEmitPackageInfo(
-                asm,
-                targetEnumValue: (int)EmitTarget.JavaScript
-            );
+            var packageInfo = SymbolHelper.GetEmitPackageInfo(asm, emitTargetValue);
             if (packageInfo is null)
             {
                 onTranspilableWithoutEmitPackage?.Invoke(asm.Name);
@@ -588,12 +599,19 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// <summary>
     /// Walks <paramref name="assembly"/>'s public top-level types and
     /// registers any <c>[Import]</c>-annotated entry into
-    /// <paramref name="map"/> under the C# source name. Mirrors the
-    /// legacy <c>TypeTransformer.RegisterExternalImportMapping</c>
+    /// <paramref name="map"/> under the C# source name plus, when a
+    /// <c>[Name(target, …)]</c> alias for the active
+    /// <paramref name="target"/> differs from the source name, that alias
+    /// too. Both keys point at the same <see cref="IrExternalImport"/>
+    /// value so the backend can look the import up by whichever name it
+    /// is holding. A <c>[Name(…)]</c> targeted at any language other than
+    /// <paramref name="target"/> is deliberately ignored on this pass.
+    /// Mirrors the legacy <c>TypeTransformer.RegisterExternalImportMapping</c>
     /// conflict policy (first mapping wins; collisions produce MS0003).
     /// </summary>
     private static void AddImportsFromAssembly(
         IAssemblySymbol assembly,
+        TargetLanguage target,
         Dictionary<string, IrExternalImport> map,
         List<MetanoDiagnostic> diagnostics
     )
@@ -616,27 +634,58 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     Version: import.Version
                 );
 
-                if (map.TryGetValue(type.Name, out var existing))
-                {
-                    if (existing == entry)
-                        return;
+                // Register under the C# source name first so it remains
+                // the canonical lookup key for callers that only know the
+                // C# identifier.
+                TryRegisterImport(type.Name, entry, type, map, diagnostics);
 
-                    diagnostics.Add(
-                        new MetanoDiagnostic(
-                            MetanoDiagnosticSeverity.Warning,
-                            DiagnosticCodes.AmbiguousConstruct,
-                            $"External import name collision for '{type.Name}'. Keeping "
-                                + $"'{existing.From}' ('{existing.Name}') and ignoring "
-                                + $"conflicting mapping from '{type.ToDisplayString()}' to "
-                                + $"'{entry.From}' ('{entry.Name}').",
-                            type.Locations.FirstOrDefault()
-                        )
-                    );
-                    return;
-                }
-
-                map[type.Name] = entry;
+                // Additionally register the per-target [Name(target, …)]
+                // alias so the backend can resolve an import by the
+                // emitted identifier without re-reading Roslyn. Skip when
+                // the alias collapses to the source name (no-op) or is
+                // absent.
+                var targetName = SymbolHelper.GetNameOverride(type, target);
+                if (targetName is not null && targetName != type.Name)
+                    TryRegisterImport(targetName, entry, type, map, diagnostics);
             }
+        );
+    }
+
+    /// <summary>
+    /// Inserts <paramref name="entry"/> into <paramref name="map"/> under
+    /// <paramref name="key"/>, enforcing the first-wins conflict policy:
+    /// a value-equal re-registration is a silent no-op (the same
+    /// <see cref="IrExternalImport"/> can legitimately land twice — once
+    /// under the source name and once under its per-target alias), while
+    /// any divergent re-registration is reported as MS0003 and dropped.
+    /// </summary>
+    private static void TryRegisterImport(
+        string key,
+        IrExternalImport entry,
+        INamedTypeSymbol owner,
+        Dictionary<string, IrExternalImport> map,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        if (!map.TryGetValue(key, out var existing))
+        {
+            map[key] = entry;
+            return;
+        }
+
+        if (existing == entry)
+            return;
+
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.AmbiguousConstruct,
+                $"External import name collision for '{key}'. Keeping "
+                    + $"'{existing.From}' ('{existing.Name}') and ignoring "
+                    + $"conflicting mapping from '{owner.ToDisplayString()}' to "
+                    + $"'{entry.From}' ('{entry.Name}').",
+                owner.Locations.FirstOrDefault()
+            )
         );
     }
 

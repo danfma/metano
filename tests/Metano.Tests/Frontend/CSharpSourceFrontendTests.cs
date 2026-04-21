@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
@@ -148,6 +149,137 @@ public class CSharpSourceFrontendTests
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
         await Assert.That(ir.ExternalImports.ContainsKey("Plain")).IsFalse();
+    }
+
+    [Test]
+    public async Task ExternalImports_RegisterTargetSpecificNameAlias()
+    {
+        // The type's C# source identifier is HonoStub but its TS-facing
+        // [Name(TypeScript, "Hono")] alias is what user code emits when the
+        // import is resolved — the frontend must register both keys so the
+        // backend can look the entry up by either name without re-walking
+        // Roslyn for the alias.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Import("Hono", from: "hono")]
+            [Name(TargetLanguage.TypeScript, "Hono")]
+            public class HonoStub {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.ExternalImports).ContainsKey("HonoStub");
+        await Assert.That(ir.ExternalImports).ContainsKey("Hono");
+        await Assert.That(ir.ExternalImports["HonoStub"]).IsEqualTo(ir.ExternalImports["Hono"]);
+    }
+
+    [Test]
+    public async Task ExternalImports_IgnoreAliasForOtherTarget()
+    {
+        // A [Name(Dart, …)] override must not leak into the TS run — the
+        // frontend is invoked with TargetLanguage.TypeScript (the test
+        // default) so only the C# source name key exists on the map.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Import("Widget", from: "flutter/widgets")]
+            [Name(TargetLanguage.Dart, "FlutterWidget")]
+            public class Widget {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.ExternalImports).ContainsKey("Widget");
+        await Assert.That(ir.ExternalImports.ContainsKey("FlutterWidget")).IsFalse();
+    }
+
+    [Test]
+    public async Task ExternalImports_UseTargetSpecificAliasWhenExtractingForDart()
+    {
+        // When the frontend is invoked for Dart, the same type's Dart alias
+        // wins and its TS alias is ignored — mirror of the case above so
+        // target awareness is exercised in both directions.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Import("Widget", from: "flutter/widgets")]
+            [Name(TargetLanguage.TypeScript, "TsWidget")]
+            [Name(TargetLanguage.Dart, "FlutterWidget")]
+            public class Widget {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(
+            compilation,
+            TargetLanguage.Dart
+        );
+
+        await Assert.That(ir.ExternalImports).ContainsKey("Widget");
+        await Assert.That(ir.ExternalImports).ContainsKey("FlutterWidget");
+        await Assert.That(ir.ExternalImports.ContainsKey("TsWidget")).IsFalse();
+    }
+
+    [Test]
+    public async Task ExternalImports_UntargetedNameAliasRegistersRegardlessOfTarget()
+    {
+        // An untargeted [Name("X")] applies to every target via
+        // SymbolHelper.GetNameOverride's fallback branch, so both a
+        // TypeScript and a Dart extraction must register the same alias
+        // alongside the C# source name.
+        var source = """
+            [Import("Widget", from: "pkg")]
+            [Name("AliasedWidget")]
+            public class Widget {}
+            """;
+
+        var tsIr = new CSharpSourceFrontend().ExtractFromCompilation(IrTestHelper.Compile(source));
+        await Assert.That(tsIr.ExternalImports).ContainsKey("Widget");
+        await Assert.That(tsIr.ExternalImports).ContainsKey("AliasedWidget");
+
+        var dartIr = new CSharpSourceFrontend().ExtractFromCompilation(
+            IrTestHelper.Compile(source),
+            TargetLanguage.Dart
+        );
+        await Assert.That(dartIr.ExternalImports).ContainsKey("Widget");
+        await Assert.That(dartIr.ExternalImports).ContainsKey("AliasedWidget");
+    }
+
+    [Test]
+    public async Task ExternalImports_AliasCollisionRaisesMS0003()
+    {
+        // Two [Import] types collide on the TS alias: the first wins and
+        // the second registration produces MS0003 with the alias key in
+        // the diagnostic message.
+        var compilation = IrTestHelper.Compile(
+            """
+            namespace Alpha
+            {
+                [Import("FirstWidget", from: "alpha")]
+                [Name(TargetLanguage.TypeScript, "SharedWidget")]
+                public class AlphaWidget {}
+            }
+
+            namespace Beta
+            {
+                [Import("SecondWidget", from: "beta")]
+                [Name(TargetLanguage.TypeScript, "SharedWidget")]
+                public class BetaWidget {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.ExternalImports).ContainsKey("SharedWidget");
+        // First walker visit wins. CollectTopLevelTypes visits namespaces
+        // in declaration/alphabetical order, so Alpha wins.
+        await Assert.That(ir.ExternalImports["SharedWidget"].From).IsEqualTo("alpha");
+
+        var warning = ir.Diagnostics.SingleOrDefault(d =>
+            d.Code == DiagnosticCodes.AmbiguousConstruct && d.Message.Contains("SharedWidget")
+        );
+        await Assert.That(warning).IsNotNull();
+        await Assert.That(warning!.Message).Contains("beta");
     }
 
     [Test]

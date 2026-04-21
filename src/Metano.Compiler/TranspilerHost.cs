@@ -33,7 +33,7 @@ public static class TranspilerHost
 
         var totalSw = Stopwatch.StartNew();
         var compileSw = Stopwatch.StartNew();
-        var ir = await frontend.ExtractAsync(projectPath);
+        var ir = await frontend.ExtractAsync(projectPath, target.Language);
         var compilation = frontend.LoadedCompilation;
         var roslynErrorCount = frontend.LoadErrorCount;
 

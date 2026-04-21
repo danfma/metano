@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.IR;
 using Metano.Dart.AST;
@@ -12,6 +13,8 @@ namespace Metano.Dart;
 public sealed class DartTarget : ITranspilerTarget
 {
     public string Name => "dart";
+
+    public TargetLanguage Language => TargetLanguage.Dart;
 
     public IReadOnlyList<DartSourceFile> LastSourceFiles { get; private set; } = [];
 
