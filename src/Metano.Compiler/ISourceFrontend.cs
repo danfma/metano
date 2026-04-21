@@ -73,7 +73,7 @@ public interface ISourceFrontend
     /// <param name="ct">Cancellation token.</param>
     Task<IrCompilation> ExtractAsync(
         string projectPath,
-        TargetLanguage target = TargetLanguage.TypeScript,
-        CancellationToken ct = default
+        CancellationToken ct = default,
+        TargetLanguage target = TargetLanguage.TypeScript
     );
 }

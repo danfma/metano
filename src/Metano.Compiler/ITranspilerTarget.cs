@@ -24,9 +24,12 @@ public interface ITranspilerTarget
     /// passes it to the active <see cref="ISourceFrontend"/> so
     /// target-specific resolution (per-target <c>[Name]</c>, per-target
     /// <c>[NoEmit]</c>, …) happens once during extraction instead of being
-    /// duplicated inside every target.
+    /// duplicated inside every target. Default keeps
+    /// <see cref="TargetLanguage.TypeScript"/> so third-party targets that
+    /// predate this member keep compiling until they opt in; in-tree
+    /// targets override with their actual language.
     /// </summary>
-    TargetLanguage Language { get; }
+    TargetLanguage Language => TargetLanguage.TypeScript;
 
     /// <summary>
     /// Produces the set of files (plus diagnostics) the host should emit. Targets
