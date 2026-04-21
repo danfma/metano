@@ -1095,4 +1095,87 @@ public class CSharpSourceFrontendTests
         await Assert.That(ir.DeclarativePropertyMappings).IsNotNull();
         await Assert.That(ir.ChainMethodsByWrapper).IsNotNull();
     }
+
+    [Test]
+    public async Task TypeNamesBySymbol_HonorsPerTargetNameOverride()
+    {
+        // TS extraction picks up the TS alias; Dart extraction flips to
+        // the Dart alias. The dict keys off the stable full name so
+        // ResolveTsName on the target side stays a single lookup.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            [Name(TargetLanguage.TypeScript, "TsWidget")]
+            [Name(TargetLanguage.Dart, "DartWidget")]
+            public class Widget {}
+            """
+        );
+
+        var widget = compilation.GetTypeByMetadataName("Widget");
+        await Assert.That(widget).IsNotNull();
+        var key = widget!.GetCrossAssemblyOriginKey();
+
+        var tsIr = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(tsIr.TypeNamesBySymbol).IsNotNull();
+        await Assert.That(tsIr.TypeNamesBySymbol!).ContainsKey(key);
+        await Assert.That(tsIr.TypeNamesBySymbol![key]).IsEqualTo("TsWidget");
+
+        var dartIr = new CSharpSourceFrontend().ExtractFromCompilation(
+            compilation,
+            TargetLanguage.Dart
+        );
+        await Assert.That(dartIr.TypeNamesBySymbol![key]).IsEqualTo("DartWidget");
+    }
+
+    [Test]
+    public async Task TypeNamesBySymbol_FallsBackToSourceNameWhenNoOverride()
+    {
+        // A transpilable type without a [Name] override lands in the dict
+        // under its source name — callers rely on this so they can treat
+        // the dict as the single source of truth for emitted names of
+        // every type the frontend knows about.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public class Plain {}
+            """
+        );
+
+        var plain = compilation.GetTypeByMetadataName("Plain");
+        await Assert.That(plain).IsNotNull();
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        var key = plain!.GetCrossAssemblyOriginKey();
+
+        await Assert.That(ir.TypeNamesBySymbol!).ContainsKey(key);
+        await Assert.That(ir.TypeNamesBySymbol![key]).IsEqualTo("Plain");
+    }
+
+    [Test]
+    public async Task TypeNamesBySymbol_HonorsNestedTypeNameOverride()
+    {
+        // Nested [Transpile] types with per-target [Name(…)] overrides
+        // must enter the dict too — otherwise the target's ResolveTsName
+        // falls back to the C# name and the rename is silently dropped
+        // at the class emission + guard paths.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public class Outer
+            {
+                [Transpile]
+                [Name(TargetLanguage.TypeScript, "RenamedInner")]
+                public class Inner {}
+            }
+            """
+        );
+
+        var inner = compilation.GetTypeByMetadataName("Outer+Inner");
+        await Assert.That(inner).IsNotNull();
+        var key = inner!.GetCrossAssemblyOriginKey();
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.TypeNamesBySymbol!).ContainsKey(key);
+        await Assert.That(ir.TypeNamesBySymbol![key]).IsEqualTo("RenamedInner");
+    }
 }

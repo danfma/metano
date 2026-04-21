@@ -213,7 +213,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
 
         statements.Add(
             new TsClass(
-                TypeTransformer.GetTsTypeName(type),
+                _context.ResolveTsName(type),
                 constructor,
                 classMembers,
                 Extends: extendsType,
@@ -316,7 +316,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         if (opName is null)
             return [];
 
-        var typeName = TypeTransformer.GetTsTypeName(type);
+        var typeName = _context.ResolveTsName(type);
 
         if (irOp.Overloads is { Count: > 0 } siblings)
         {

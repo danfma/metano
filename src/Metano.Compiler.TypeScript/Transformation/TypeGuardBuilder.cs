@@ -44,7 +44,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (SymbolHelper.HasImport(type))
             return null;
 
-        var tsName = TypeTransformer.GetTsTypeName(type);
+        var tsName = _context.ResolveTsName(type);
         var guardName = $"is{tsName}";
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
 

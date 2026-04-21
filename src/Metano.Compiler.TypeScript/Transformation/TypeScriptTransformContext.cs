@@ -1,3 +1,4 @@
+using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
@@ -33,6 +34,7 @@ public sealed class TypeScriptTransformContext(
     IReadOnlyDictionary<string, IrExternalImport> externalImportMap,
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
+    IReadOnlyDictionary<string, string> typeNamesBySymbol,
     PathNaming pathNaming,
     DeclarativeMappingRegistry declarativeMappings,
     Action<MetanoDiagnostic> reportDiagnostic
@@ -47,9 +49,23 @@ public sealed class TypeScriptTransformContext(
         externalImportMap;
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> GuardNameToTypeMap { get; } = guardNameToTypeMap;
+    public IReadOnlyDictionary<string, string> TypeNamesBySymbol { get; } = typeNamesBySymbol;
     public PathNaming PathNaming { get; } = pathNaming;
     public DeclarativeMappingRegistry DeclarativeMappings { get; } = declarativeMappings;
     public Action<MetanoDiagnostic> ReportDiagnostic { get; } = reportDiagnostic;
+
+    /// <summary>
+    /// Resolves the target-facing TypeScript name for a Roslyn type symbol.
+    /// Reads the frontend-populated <see cref="TypeNamesBySymbol"/> dictionary
+    /// so <c>[Name(TypeScript, …)]</c> overrides are honored; falls back to
+    /// <see cref="ISymbol.Name"/> for BCL types and anything the frontend did
+    /// not precompute (mirrors the legacy <c>TypeTransformer.GetTsTypeName</c>
+    /// contract that this helper replaces).
+    /// </summary>
+    public string ResolveTsName(INamedTypeSymbol type) =>
+        TypeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var name)
+            ? name
+            : type.Name;
 
     /// <summary>
     /// Reports MS0001 (UnsupportedFeature) for an IR-pipeline body the bridge

@@ -92,7 +92,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (members.Count > 0)
         {
             statements.Add(
-                new TsNamespaceDeclaration(GetTsTypeName(parent), Functions: [], Members: members)
+                new TsNamespaceDeclaration(
+                    Context.ResolveTsName(parent),
+                    Functions: [],
+                    Members: members
+                )
             );
         }
     }
@@ -110,13 +114,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // IR rather than redoing the same probe.
         _assemblyWideTranspile = ir.AssemblyWideTranspile;
 
+        var typeNamesBySymbol =
+            ir.TypeNamesBySymbol ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        string ResolveTsName(INamedTypeSymbol t) =>
+            typeNamesBySymbol.TryGetValue(t.GetCrossAssemblyOriginKey(), out var n) ? n : t.Name;
+
         var transpilableTypes = DiscoverTranspilableTypes();
         // Map by both C# name and TS name (when [Name] override differs)
         _transpilableTypeMap = new Dictionary<string, INamedTypeSymbol>();
         foreach (var t in transpilableTypes)
         {
             _transpilableTypeMap[t.Name] = t;
-            var tsName = GetTsTypeName(t);
+            var tsName = ResolveTsName(t);
             if (tsName != t.Name)
                 _transpilableTypeMap[tsName] = t;
         }
@@ -150,7 +159,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         _guardNameToTypeMap = new Dictionary<string, string>();
         foreach (var t in transpilableTypes)
         {
-            var tsName = GetTsTypeName(t);
+            var tsName = ResolveTsName(t);
             _guardNameToTypeMap[$"is{tsName}"] = tsName;
         }
 
@@ -166,6 +175,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _externalImportMap,
             ir.BclExports,
             _guardNameToTypeMap,
+            ir.TypeNamesBySymbol ?? new Dictionary<string, string>(StringComparer.Ordinal),
             _pathNaming,
             declarativeMappings,
             _diagnostics.Add
@@ -459,6 +469,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             Context.ExternalImportMap,
             Context.BclExportMap,
             Context.GuardNameToTypeMap,
+            Context.TypeNamesBySymbol,
             Context.PathNaming,
             Context.TypeMapping!,
             irRequirements
@@ -534,7 +545,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var fileName =
                 explicitFile is not null && explicitFile.Length > 0
                     ? SymbolHelper.ToKebabCase(explicitFile)
-                    : SymbolHelper.ToKebabCase(GetTsTypeName(type));
+                    : SymbolHelper.ToKebabCase(Context.ResolveTsName(type));
 
             // MS0008: when a type opts into [EmitInFile], the file name must be unique
             // per namespace. If we've seen the same file name in a different namespace,
@@ -577,14 +588,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string FileName,
         List<INamedTypeSymbol> Types
     );
-
-    /// <summary>
-    /// Returns the TypeScript name for a type. Uses [Name] override if present, otherwise the C# name as-is.
-    /// </summary>
-    internal static string GetTsTypeName(INamedTypeSymbol type)
-    {
-        return SymbolHelper.GetNameOverride(type, TargetLanguage.TypeScript) ?? type.Name;
-    }
 
     /// <summary>
     /// Lowers an <c>[ExportedAsModule]</c> static class (or any static class

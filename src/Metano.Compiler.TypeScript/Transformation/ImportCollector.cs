@@ -25,6 +25,7 @@ public sealed class ImportCollector(
     IReadOnlyDictionary<string, IrExternalImport> externalImportMap,
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
+    IReadOnlyDictionary<string, string> typeNamesBySymbol,
     PathNaming pathNaming,
     TypeMappingContext typeMappingContext,
     IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null
@@ -32,6 +33,11 @@ public sealed class ImportCollector(
 {
     private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap =
         transpilableTypeMap;
+    private readonly IReadOnlyDictionary<string, string> _typeNamesBySymbol = typeNamesBySymbol;
+
+    private string ResolveTsName(INamedTypeSymbol type) =>
+        _typeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var n) ? n : type.Name;
+
     private readonly IReadOnlyDictionary<string, IrExternalImport> _externalImportMap =
         externalImportMap;
     private readonly IReadOnlyDictionary<string, IrBclExport> _bclExportMap = bclExportMap;
@@ -58,7 +64,7 @@ public sealed class ImportCollector(
             crossPackageOrigins
         );
 
-        var tsTypeName = TypeTransformer.GetTsTypeName(currentType);
+        var tsTypeName = ResolveTsName(currentType);
         referencedTypes.Remove(currentType.Name);
         referencedTypes.Remove(tsTypeName);
         referencedTypes.Remove($"is{tsTypeName}"); // own guard — don't import
@@ -325,7 +331,7 @@ public sealed class ImportCollector(
             if (!importedNames.Add(typeName))
                 continue;
 
-            var targetTsName = TypeTransformer.GetTsTypeName(referencedSymbol);
+            var targetTsName = ResolveTsName(referencedSymbol);
             // Path is computed against the FILE name (not the type name) so multiple
             // types co-located in the same file resolve to the same import path.
             var importPath = _pathNaming.ComputeRelativeImportPath(
@@ -474,13 +480,13 @@ public sealed class ImportCollector(
     /// own TS name (which itself honors <c>[Name]</c>). Used by the import collector
     /// to elide self-imports for types co-located in the same file.
     /// </summary>
-    private static string GetFileName(INamedTypeSymbol type)
+    private string GetFileName(INamedTypeSymbol type)
     {
         var explicitFile = SymbolHelper.GetEmitInFile(type);
         var name =
             explicitFile is not null && explicitFile.Length > 0
                 ? explicitFile
-                : TypeTransformer.GetTsTypeName(type);
+                : ResolveTsName(type);
         return SymbolHelper.ToKebabCase(name);
     }
 

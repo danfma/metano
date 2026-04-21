@@ -32,9 +32,10 @@ public static class IrToTsNamingPolicy
     public static string ToParameterName(string irName) => TypeScriptNaming.ToCamelCase(irName);
 
     /// <summary>
-    /// The type name is not renamed — matches <c>TypeTransformer.GetTsTypeName</c>
-    /// which honors <c>[Name]</c> on the symbol. The extractor already places name
-    /// overrides into <see cref="IrAttribute"/> entries; this helper looks them up.
+    /// Resolves the emitted type name from the IR's <see cref="IrAttribute"/>
+    /// entries (which already carry <c>[Name]</c> overrides). Mirrors the
+    /// per-target resolution the frontend now ships via
+    /// <see cref="IrCompilation.TypeNamesBySymbol"/> for Roslyn-keyed paths.
     /// </summary>
     public static string ToTypeName(string irName, IReadOnlyList<IrAttribute>? attributes)
     {

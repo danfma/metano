@@ -115,6 +115,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ? default
             : BuildDeclarativeMappings(compilation, diagnostics);
 
+        var typeNamesBySymbol = compilation is null
+            ? null
+            : BuildTypeNamesBySymbol(compilation, target, assemblyWideTranspile);
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: compilation is null
@@ -138,7 +142,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 : ComputeLocalRootNamespace(compilation, assemblyWideTranspile),
             DeclarativeMethodMappings: declarativeMappings.Methods,
             DeclarativePropertyMappings: declarativeMappings.Properties,
-            ChainMethodsByWrapper: declarativeMappings.ChainMethodsByWrapper
+            ChainMethodsByWrapper: declarativeMappings.ChainMethodsByWrapper,
+            TypeNamesBySymbol: typeNamesBySymbol
         );
     }
 
@@ -217,6 +222,96 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         programType = containingType;
         return true;
+    }
+
+    /// <summary>
+    /// Pre-resolves the target-facing emitted name for every type the
+    /// backend may look up by Roslyn symbol. Covers transpilable types
+    /// from the current assembly, transpilable types from referenced
+    /// assemblies that declared <c>[EmitPackage]</c> for the active
+    /// target, and <c>[Import]</c> placeholders from any public top-level
+    /// symbol in scope. The resulting dictionary is keyed by
+    /// <see cref="SymbolHelper.GetStableFullName"/> so backends resolve
+    /// target names through a single code path (a symbol-keyed dict
+    /// lookup) instead of duplicating
+    /// <see cref="SymbolHelper.GetNameOverride"/> in every bridge.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> BuildTypeNamesBySymbol(
+        Compilation compilation,
+        TargetLanguage target,
+        bool assemblyWideTranspile
+    )
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var currentAssembly = compilation.Assembly;
+
+        // Keys are assembly-qualified (same shape as
+        // IrCompilation.CrossAssemblyOrigins) so two referenced assemblies
+        // that expose types with identical stable full names cannot
+        // collapse each other's target-name override.
+        void RegisterSymbol(INamedTypeSymbol type)
+        {
+            var key = type.GetCrossAssemblyOriginKey();
+            if (map.ContainsKey(key))
+                return;
+            map[key] = SymbolHelper.GetNameOverride(type, target) ?? type.Name;
+        }
+
+        // Visits every top-level type and every transpilable nested type so
+        // `[Name(target, …)]` overrides on nested declarations end up in the
+        // map too. Nested types still reach `context.ResolveTsName` via
+        // `TransformNestedTypes` / `IrToTsClassEmitter`.
+        void Visit(INamedTypeSymbol type, Action<INamedTypeSymbol> register)
+        {
+            register(type);
+            foreach (var nested in type.GetTypeMembers())
+                Visit(nested, register);
+        }
+
+        // Current assembly — every transpilable type (matches the target-side
+        // DiscoverTranspilableTypes + nested-emission filter) plus every
+        // `[Import]` placeholder.
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+                Visit(
+                    type,
+                    sym =>
+                    {
+                        if (
+                            SymbolHelper.IsTranspilable(sym, assemblyWideTranspile, currentAssembly)
+                        )
+                            RegisterSymbol(sym);
+                        else if (
+                            sym.DeclaredAccessibility == Accessibility.Public
+                            && SymbolHelper.GetImport(sym) is not null
+                        )
+                            RegisterSymbol(sym);
+                    }
+                )
+        );
+
+        // Referenced assemblies that opted into transpilation with an
+        // [EmitPackage] for the active target — mirrors the cross-assembly
+        // origin walk so cross-package type references resolve through the
+        // same dict. Recurses into nested types as well.
+        foreach (var (asm, _) in EnumerateTranspilableReferencedAssemblies(compilation, target))
+        {
+            CollectTopLevelTypes(
+                asm.GlobalNamespace,
+                type =>
+                    Visit(
+                        type,
+                        sym =>
+                        {
+                            if (sym.DeclaredAccessibility == Accessibility.Public)
+                                RegisterSymbol(sym);
+                        }
+                    )
+            );
+        }
+
+        return map;
     }
 
     /// <summary>

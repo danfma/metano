@@ -61,7 +61,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         // Per-type: private _typeName? field + get typeName() lazy getter
         foreach (var targetType in serializableTypes)
         {
-            var tsTypeName = TypeTransformer.GetTsTypeName(targetType);
+            var tsTypeName = _context.ResolveTsName(targetType);
             var fieldName = "_" + TypeScriptNaming.ToCamelCase(tsTypeName);
             var getterName = TypeScriptNaming.ToCamelCase(tsTypeName);
             var runtimeJsonOrigin = new TsTypeOrigin("metano-runtime", "system/json");
@@ -224,7 +224,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             && SymbolHelper.IsTranspilable(baseType)
         )
         {
-            var baseTsName = TypeTransformer.GetTsTypeName(baseType);
+            var baseTsName = _context.ResolveTsName(baseType);
             var baseGetterName = TypeScriptNaming.ToCamelCase(baseTsName);
             baseProperty = new TsObjectProperty(
                 "base",
@@ -560,7 +560,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 var tsTypeName =
                     named.ToDisplayString() == "System.Guid"
                         ? "UUID"
-                        : TypeTransformer.GetTsTypeName(named);
+                        : _context.ResolveTsName(named);
                 return new TsObjectLiteral([
                     new TsObjectProperty("kind", new TsStringLiteral("branded")),
                     new TsObjectProperty(
@@ -572,7 +572,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
             case "enum":
             {
-                var tsTypeName = TypeTransformer.GetTsTypeName((INamedTypeSymbol)type);
+                var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
                 return new TsObjectLiteral([
                     new TsObjectProperty("kind", new TsStringLiteral("enum")),
                     new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
@@ -581,7 +581,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
             case "numericEnum":
             {
-                var tsTypeName = TypeTransformer.GetTsTypeName((INamedTypeSymbol)type);
+                var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
                 return new TsObjectLiteral([
                     new TsObjectProperty("kind", new TsStringLiteral("numericEnum")),
                     new TsObjectProperty("values", new TsIdentifier(tsTypeName)),

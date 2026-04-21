@@ -85,6 +85,18 @@ namespace Metano.Compiler.IR;
 /// of the names, no re-wrapping is needed. Appended at the end with
 /// nullable defaults so adding new IR state cannot shift downstream
 /// positional arguments.</param>
+/// <param name="TypeNamesBySymbol">Dictionary keyed by the
+/// assembly-qualified stable full name
+/// (<see cref="SymbolHelper.GetCrossAssemblyOriginKey"/>) giving the
+/// target-facing emitted name for every transpilable type, every nested
+/// transpilable type, and every <c>[Import]</c>-annotated type the
+/// frontend surfaced — resolved once via the active
+/// <see cref="Annotations.TargetLanguage"/>. Backends consult this
+/// dictionary instead of re-reading <c>[Name(target, …)]</c> themselves,
+/// so per-target naming policy stays co-located with the rest of the
+/// extraction pass. Qualifying by assembly prevents two referenced
+/// assemblies that expose types with identical stable full names from
+/// silently overwriting each other's override.</param>
 public sealed record IrCompilation(
     string AssemblyName,
     string? PackageName,
@@ -105,5 +117,6 @@ public sealed record IrCompilation(
         (string DeclaringTypeFullName, string MemberName),
         DeclarativeMappingEntry
     >? DeclarativePropertyMappings = null,
-    IReadOnlyDictionary<string, IReadOnlySet<string>>? ChainMethodsByWrapper = null
+    IReadOnlyDictionary<string, IReadOnlySet<string>>? ChainMethodsByWrapper = null,
+    IReadOnlyDictionary<string, string>? TypeNamesBySymbol = null
 );
