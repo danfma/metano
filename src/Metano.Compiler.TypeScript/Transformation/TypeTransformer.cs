@@ -175,7 +175,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _externalImportMap,
             ir.BclExports,
             _guardNameToTypeMap,
-            ir.TypeNamesBySymbol ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            typeNamesBySymbol,
             _pathNaming,
             declarativeMappings,
             _diagnostics.Add
