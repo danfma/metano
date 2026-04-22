@@ -21,29 +21,16 @@ namespace Metano.Transformation;
 /// </list>
 /// </summary>
 public sealed class ImportCollector(
-    IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap,
-    IReadOnlyDictionary<string, IrExternalImport> externalImportMap,
-    IReadOnlyDictionary<string, IrBclExport> bclExportMap,
-    IReadOnlyDictionary<string, string> guardNameToTypeMap,
-    IReadOnlyDictionary<string, string> typeNamesBySymbol,
-    PathNaming pathNaming,
-    TypeMappingContext typeMappingContext,
+    TypeScriptTransformContext context,
     IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null
 )
 {
-    private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap =
-        transpilableTypeMap;
-    private readonly IReadOnlyDictionary<string, string> _typeNamesBySymbol = typeNamesBySymbol;
-
-    private string ResolveTsName(INamedTypeSymbol type) =>
-        _typeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var n) ? n : type.Name;
-
-    private readonly IReadOnlyDictionary<string, IrExternalImport> _externalImportMap =
-        externalImportMap;
-    private readonly IReadOnlyDictionary<string, IrBclExport> _bclExportMap = bclExportMap;
-    private readonly IReadOnlyDictionary<string, string> _guardNameToTypeMap = guardNameToTypeMap;
-    private readonly PathNaming _pathNaming = pathNaming;
-    private readonly TypeMappingContext _typeMappingContext = typeMappingContext;
+    private readonly TypeScriptTransformContext _context = context;
+    private readonly TypeMappingContext _typeMappingContext =
+        context.TypeMapping
+        ?? throw new InvalidOperationException(
+            "ImportCollector requires TypeScriptTransformContext.TypeMapping to be set."
+        );
     private readonly IReadOnlySet<IrRuntimeRequirement>? _irRuntimeRequirements =
         irRuntimeRequirements;
 
@@ -64,7 +51,7 @@ public sealed class ImportCollector(
             crossPackageOrigins
         );
 
-        var tsTypeName = ResolveTsName(currentType);
+        var tsTypeName = _context.ResolveTsName(currentType);
         referencedTypes.Remove(currentType.Name);
         referencedTypes.Remove(tsTypeName);
         referencedTypes.Remove($"is{tsTypeName}"); // own guard — don't import
@@ -74,8 +61,8 @@ public sealed class ImportCollector(
         // Use the project's root namespace so same-namespace imports produce relative paths
         // instead of barrel aliases.
         var currentNs = PathNaming.GetNamespace(currentType);
-        if (currentNs.Length == 0 && _pathNaming.RootNamespace.Length > 0)
-            currentNs = _pathNaming.RootNamespace;
+        if (currentNs.Length == 0 && _context.PathNaming.RootNamespace.Length > 0)
+            currentNs = _context.PathNaming.RootNamespace;
         // The current file's "key" — file name + namespace — used to elide self-imports
         // for types co-located via [EmitInFile]. Without this, a multi-type file would
         // try to import its sibling types from their individual paths (which don't
@@ -205,7 +192,7 @@ public sealed class ImportCollector(
 
         // Per-specifier dedup inside a bucket. The outer `importedNames` set dedupes
         // by the *referenced* identifier (the key used to look up the symbol), but
-        // `_transpilableTypeMap` is dual-keyed by C# name AND TS name when [Name]
+        // `_context.TranspilableTypeMap` is dual-keyed by C# name AND TS name when [Name]
         // diverges, so two distinct lookup keys can resolve to the same `targetTsName`
         // and attempt to add it twice. Without this guard the output would be
         // `import { Foo, Foo } from "..."`. Also: if a specifier is observed as both
@@ -262,7 +249,9 @@ public sealed class ImportCollector(
             // BCL export mapping (e.g., decimal → Decimal from "decimal.js").
             // Not bucketed: each BCL mapping can land on a distinct external package,
             // and the cross-package merge strategy doesn't apply here.
-            var bclEntry = _bclExportMap.Values.FirstOrDefault(e => e.ExportedName == typeName);
+            var bclEntry = _context.BclExportMap.Values.FirstOrDefault(e =>
+                e.ExportedName == typeName
+            );
             if (
                 bclEntry is not null
                 && bclEntry.FromPackage.Length > 0
@@ -277,7 +266,7 @@ public sealed class ImportCollector(
             // Not bucketed: default imports never merge (`import Foo from "..."` is
             // one-name-only) and named externals come from arbitrary modules.
             if (
-                _externalImportMap.TryGetValue(typeName, out var extImport)
+                _context.ExternalImportMap.TryGetValue(typeName, out var extImport)
                 && importedNames.Add(typeName)
             )
             {
@@ -296,8 +285,8 @@ public sealed class ImportCollector(
             // and `isCurrency` ends up with a single `import { Currency, isCurrency }`
             // line instead of two.
             if (
-                _guardNameToTypeMap.TryGetValue(typeName, out var guardedTypeName)
-                && _transpilableTypeMap.TryGetValue(guardedTypeName, out var guardedSymbol)
+                _context.GuardNameToTypeMap.TryGetValue(typeName, out var guardedTypeName)
+                && _context.TranspilableTypeMap.TryGetValue(guardedTypeName, out var guardedSymbol)
                 && importedNames.Add(typeName)
             )
             {
@@ -307,7 +296,7 @@ public sealed class ImportCollector(
                 var guardFileName = GetFileName(guardedSymbol);
                 if (guardNs == currentNs && guardFileName == currentFileName)
                     continue; // same file
-                var guardPath = _pathNaming.ComputeRelativeImportPath(
+                var guardPath = _context.PathNaming.ComputeRelativeImportPath(
                     currentNs,
                     guardNs,
                     guardFileName
@@ -318,7 +307,7 @@ public sealed class ImportCollector(
             }
 
             // Transpilable type within the project
-            if (!_transpilableTypeMap.TryGetValue(typeName, out var referencedSymbol))
+            if (!_context.TranspilableTypeMap.TryGetValue(typeName, out var referencedSymbol))
                 continue;
 
             // Skip types co-located in the same file via [EmitInFile] — they're
@@ -331,10 +320,10 @@ public sealed class ImportCollector(
             if (!importedNames.Add(typeName))
                 continue;
 
-            var targetTsName = ResolveTsName(referencedSymbol);
+            var targetTsName = _context.ResolveTsName(referencedSymbol);
             // Path is computed against the FILE name (not the type name) so multiple
             // types co-located in the same file resolve to the same import path.
-            var importPath = _pathNaming.ComputeRelativeImportPath(
+            var importPath = _context.PathNaming.ComputeRelativeImportPath(
                 currentNs,
                 targetNs,
                 targetFileName
@@ -486,7 +475,7 @@ public sealed class ImportCollector(
         var name =
             explicitFile is not null && explicitFile.Length > 0
                 ? explicitFile
-                : ResolveTsName(type);
+                : _context.ResolveTsName(type);
         return SymbolHelper.ToKebabCase(name);
     }
 

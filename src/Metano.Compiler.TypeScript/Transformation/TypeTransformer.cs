@@ -464,16 +464,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // types in the same file aren't imported anyway (they're locally declared).
         var primaryType = group.Types[0];
         var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
-        var imports = new ImportCollector(
-            Context.TranspilableTypeMap,
-            Context.ExternalImportMap,
-            Context.BclExportMap,
-            Context.GuardNameToTypeMap,
-            Context.TypeNamesBySymbol,
-            Context.PathNaming,
-            Context.TypeMapping!,
-            irRequirements
-        ).Collect(primaryType, statements);
+        var imports = new ImportCollector(Context, irRequirements).Collect(primaryType, statements);
         statements.InsertRange(0, imports);
 
         var relativePath = Context.PathNaming.GetRelativePath(group.Namespace, group.FileName);
