@@ -155,14 +155,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         // All callers now use the explicit TypeMappingContext — no static assignment needed.
 
-        // Build guard name → type name map for cross-file guard imports
-        _guardNameToTypeMap = new Dictionary<string, string>();
-        foreach (var t in transpilableTypes)
-        {
-            var tsName = ResolveTsName(t);
-            _guardNameToTypeMap[$"is{tsName}"] = tsName;
-        }
-
         _pathNaming = new PathNaming(ir.LocalRootNamespace);
 
         var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
@@ -174,8 +166,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _transpilableTypeMap,
             _externalImportMap,
             ir.BclExports,
-            _guardNameToTypeMap,
             typeNamesBySymbol,
+            ir.GuardableTypeKeys ?? new HashSet<string>(StringComparer.Ordinal),
             _pathNaming,
             declarativeMappings,
             _diagnostics.Add
@@ -255,12 +247,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private IMethodSymbol? _syntheticEntryPoint;
     private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
     private Dictionary<string, IrExternalImport> _externalImportMap = [];
-
-    /// <summary>
-    /// Maps guard function names (e.g., "isCurrency") to the type they guard (e.g., "Currency").
-    /// Used to resolve imports for cross-file guard calls.
-    /// </summary>
-    private Dictionary<string, string> _guardNameToTypeMap = [];
     private PathNaming _pathNaming = new("");
 
     /// <summary>

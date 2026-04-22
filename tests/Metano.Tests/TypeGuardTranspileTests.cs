@@ -253,4 +253,33 @@ public class TypeGuardTranspileTests
         await Assert.That(output).Contains("typeof v.count === \"number\"");
         await Assert.That(output).Contains("typeof v.name === \"string\"");
     }
+
+    [Test]
+    public async Task Guard_ForRenamedTypeImportedCrossFile_ResolvesViaTsName()
+    {
+        // A type with [Name(TS, "Ticker")] + [GenerateGuard] emits
+        // `isTicker`. A sibling record whose own guard references the
+        // aliased type's guard must import `isTicker` via its alias —
+        // this exercises the dual-keying invariant on
+        // _transpilableTypeMap + GuardableTypeKeys that
+        // TryResolveGuardImport relies on.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile, StringEnum, GenerateGuard]
+                [Name(TargetLanguage.TypeScript, "Ticker")]
+                public enum Symbol { Brl, Usd }
+
+                [Transpile, GenerateGuard]
+                public record Quote(int Cents, Symbol Kind);
+            }
+            """
+        );
+
+        var quoteKey = result.Keys.Single(k => k.EndsWith("quote.ts"));
+        var quote = result[quoteKey];
+        await Assert.That(quote).Contains("isTicker");
+        await Assert.That(quote).Contains("Ticker");
+    }
 }

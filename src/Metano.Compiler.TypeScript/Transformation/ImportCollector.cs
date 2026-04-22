@@ -285,8 +285,7 @@ public sealed class ImportCollector(
             // and `isCurrency` ends up with a single `import { Currency, isCurrency }`
             // line instead of two.
             if (
-                _context.GuardNameToTypeMap.TryGetValue(typeName, out var guardedTypeName)
-                && _context.TranspilableTypeMap.TryGetValue(guardedTypeName, out var guardedSymbol)
+                _context.TryResolveGuardImport(typeName, out var guardedSymbol)
                 && importedNames.Add(typeName)
             )
             {

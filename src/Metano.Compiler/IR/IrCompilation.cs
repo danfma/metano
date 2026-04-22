@@ -97,6 +97,13 @@ namespace Metano.Compiler.IR;
 /// extraction pass. Qualifying by assembly prevents two referenced
 /// assemblies that expose types with identical stable full names from
 /// silently overwriting each other's override.</param>
+/// <param name="GuardableTypeKeys">Set of assembly-qualified stable full
+/// names (same shape as <paramref name="TypeNamesBySymbol"/> keys) for
+/// every transpilable type carrying <c>[GenerateGuard]</c>. Backends pair
+/// this with their own guard-naming convention (TypeScript: <c>is{Name}</c>)
+/// so each target owns the prefix but the set of guardable types stays
+/// source-truth. Current-assembly, top-level only — matches the scope
+/// <c>TypeTransformer</c> used inline.</param>
 public sealed record IrCompilation(
     string AssemblyName,
     string? PackageName,
@@ -118,5 +125,6 @@ public sealed record IrCompilation(
         DeclarativeMappingEntry
     >? DeclarativePropertyMappings = null,
     IReadOnlyDictionary<string, IReadOnlySet<string>>? ChainMethodsByWrapper = null,
-    IReadOnlyDictionary<string, string>? TypeNamesBySymbol = null
+    IReadOnlyDictionary<string, string>? TypeNamesBySymbol = null,
+    IReadOnlySet<string>? GuardableTypeKeys = null
 );

@@ -119,6 +119,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ? null
             : BuildTypeNamesBySymbol(compilation, target, assemblyWideTranspile);
 
+        var guardableTypeKeys = compilation is null
+            ? null
+            : BuildGuardableTypeKeys(compilation, assemblyWideTranspile);
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: compilation is null
@@ -143,7 +147,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             DeclarativeMethodMappings: declarativeMappings.Methods,
             DeclarativePropertyMappings: declarativeMappings.Properties,
             ChainMethodsByWrapper: declarativeMappings.ChainMethodsByWrapper,
-            TypeNamesBySymbol: typeNamesBySymbol
+            TypeNamesBySymbol: typeNamesBySymbol,
+            GuardableTypeKeys: guardableTypeKeys
         );
     }
 
@@ -318,6 +323,41 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         }
 
         return map;
+    }
+
+    /// <summary>
+    /// Collects the assembly-qualified stable full name of every
+    /// transpilable top-level type in the current assembly that declares
+    /// <c>[GenerateGuard]</c>. Backends pair this set with their own
+    /// guard-naming convention (TypeScript: <c>is{Name}</c>) to decide
+    /// when a referenced identifier is actually a guard import, without
+    /// re-reading the attribute at every call site. Current-assembly /
+    /// top-level only — mirrors the top-level transpilable set the
+    /// legacy <c>_guardNameToTypeMap</c> init loop walked, minus the
+    /// synthetic Program type (C# 9+ top-level statements) which can
+    /// never carry <c>[GenerateGuard]</c>.
+    /// </summary>
+    private static IReadOnlySet<string> BuildGuardableTypeKeys(
+        Compilation compilation,
+        bool assemblyWideTranspile
+    )
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        var currentAssembly = compilation.Assembly;
+
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+            {
+                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                    return;
+                if (!SymbolHelper.HasGenerateGuard(type))
+                    return;
+                keys.Add(type.GetCrossAssemblyOriginKey());
+            }
+        );
+
+        return keys;
     }
 
     /// <summary>

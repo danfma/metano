@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
@@ -33,8 +34,8 @@ public sealed class TypeScriptTransformContext(
     IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap,
     IReadOnlyDictionary<string, IrExternalImport> externalImportMap,
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
-    IReadOnlyDictionary<string, string> guardNameToTypeMap,
     IReadOnlyDictionary<string, string> typeNamesBySymbol,
+    IReadOnlySet<string> guardableTypeKeys,
     PathNaming pathNaming,
     DeclarativeMappingRegistry declarativeMappings,
     Action<MetanoDiagnostic> reportDiagnostic
@@ -48,11 +49,38 @@ public sealed class TypeScriptTransformContext(
     public IReadOnlyDictionary<string, IrExternalImport> ExternalImportMap { get; } =
         externalImportMap;
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
-    public IReadOnlyDictionary<string, string> GuardNameToTypeMap { get; } = guardNameToTypeMap;
     public IReadOnlyDictionary<string, string> TypeNamesBySymbol { get; } = typeNamesBySymbol;
+    public IReadOnlySet<string> GuardableTypeKeys { get; } = guardableTypeKeys;
     public PathNaming PathNaming { get; } = pathNaming;
     public DeclarativeMappingRegistry DeclarativeMappings { get; } = declarativeMappings;
     public Action<MetanoDiagnostic> ReportDiagnostic { get; } = reportDiagnostic;
+
+    /// <summary>
+    /// Recognizes a referenced identifier as the TypeScript guard
+    /// function for a transpilable type — i.e. an <c>is{Name}</c>
+    /// import where the underlying type is in
+    /// <see cref="GuardableTypeKeys"/>. Returns the guarded type's
+    /// Roslyn symbol so callers can compute file paths / namespaces
+    /// without re-looking it up. The <c>is</c> prefix is the TypeScript
+    /// naming convention and stays target-local; the IR ships only the
+    /// guardable-type set.
+    /// </summary>
+    public bool TryResolveGuardImport(
+        string candidate,
+        [NotNullWhen(true)] out INamedTypeSymbol? guardedSymbol
+    )
+    {
+        guardedSymbol = null;
+        if (!candidate.StartsWith("is", StringComparison.Ordinal) || candidate.Length <= 2)
+            return false;
+        var guessedTsName = candidate[2..];
+        if (!TranspilableTypeMap.TryGetValue(guessedTsName, out var resolved))
+            return false;
+        if (!GuardableTypeKeys.Contains(resolved.GetCrossAssemblyOriginKey()))
+            return false;
+        guardedSymbol = resolved;
+        return true;
+    }
 
     /// <summary>
     /// Resolves the target-facing TypeScript name for a Roslyn type symbol.
