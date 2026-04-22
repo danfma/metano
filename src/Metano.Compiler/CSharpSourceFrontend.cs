@@ -193,7 +193,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         );
 
-        if (assemblyWideTranspile && TryGetTopLevelEntryPoint(compilation, out _, out var programType))
+        if (
+            assemblyWideTranspile
+            && TryGetTopLevelEntryPoint(compilation, out _, out var programType)
+        )
             transpilable.Add(programType);
 
         return ComputeRootNamespaceFromTypes(transpilable);
@@ -439,7 +442,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         );
 
-        if (assemblyWideTranspile && TryGetTopLevelEntryPoint(compilation, out _, out var programType))
+        if (
+            assemblyWideTranspile
+            && TryGetTopLevelEntryPoint(compilation, out _, out var programType)
+        )
             Register(programType);
 
         return map;
@@ -518,13 +524,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         if (!assemblyWideTranspile)
             return null;
-        if (
-            !TryGetTopLevelEntryPoint(
-                compilation,
-                out var entryPointMethod,
-                out var programType
-            )
-        )
+        if (!TryGetTopLevelEntryPoint(compilation, out var entryPointMethod, out var programType))
             return null;
 
         return new IrEntryPointInfo(Method: entryPointMethod!, ContainingType: programType);
