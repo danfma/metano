@@ -23,16 +23,11 @@ public sealed class DartTarget : ITranspilerTarget
         if (compilation is null)
             throw new NotSupportedException(
                 "DartTarget currently requires a Roslyn-backed source frontend; "
-                    + "compilation was null. The Roslyn dependency will go away once the "
-                    + "Dart transformer reads everything it needs from IrCompilation."
+                    + "compilation was null. The Roslyn dependency will go away once every "
+                    + "Dart per-type extractor also reads its inputs from IrCompilation."
             );
 
-        // The Dart prototype still drives discovery off the Roslyn compilation;
-        // the IR is accepted to honor the contract and used opportunistically
-        // by helpers as they migrate.
-        _ = ir;
-
-        var transformer = new DartTransformer(compilation);
+        var transformer = new DartTransformer(ir, compilation);
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
 

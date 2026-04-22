@@ -1,3 +1,5 @@
+using Metano.Annotations;
+using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Dart.Transformation;
 using Microsoft.CodeAnalysis;
@@ -506,7 +508,11 @@ public class DartBackendTests
                 "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
             );
 
-        var transformer = new DartTransformer(compilation);
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(
+            compilation,
+            TargetLanguage.Dart
+        );
+        var transformer = new DartTransformer(ir, compilation);
         var files = transformer.TransformAll();
         var printer = new Metano.Dart.Printer();
         var result = new Dictionary<string, string>();
