@@ -31,7 +31,7 @@ public sealed class TypeScriptTransformContext(
     Compilation compilation,
     IAssemblySymbol? currentAssembly,
     bool assemblyWideTranspile,
-    IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap,
+    IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypes,
     IReadOnlyDictionary<string, IrExternalImport> externalImportMap,
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, string> typeNamesBySymbol,
@@ -44,8 +44,21 @@ public sealed class TypeScriptTransformContext(
     public Compilation Compilation { get; } = compilation;
     public IAssemblySymbol? CurrentAssembly { get; } = currentAssembly;
     public bool AssemblyWideTranspile { get; } = assemblyWideTranspile;
-    public IReadOnlyDictionary<string, INamedTypeSymbol> TranspilableTypeMap { get; } =
-        transpilableTypeMap;
+
+    /// <summary>
+    /// Frontend-built projection of every current-assembly top-level
+    /// transpilable type, indexed under both its C# source name and its
+    /// TS alias. Resolves a bare identifier (walked out of the generated
+    /// target AST) to <see cref="IrTranspilableTypeRef"/> emit metadata
+    /// — origin key, namespace, on-disk file name, string-enum flag —
+    /// without going back to the Roslyn symbol table. Consulted by the
+    /// import collector (to decide whether to emit a local import) and
+    /// the guard builder (to decide whether a field type has its own
+    /// guard to recurse into).
+    /// </summary>
+    public IReadOnlyDictionary<string, IrTranspilableTypeRef> TranspilableTypes { get; } =
+        transpilableTypes;
+
     public IReadOnlyDictionary<string, IrExternalImport> ExternalImportMap { get; } =
         externalImportMap;
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
@@ -60,25 +73,25 @@ public sealed class TypeScriptTransformContext(
     /// function for a transpilable type — i.e. an <c>is{Name}</c>
     /// import where the underlying type is in
     /// <see cref="GuardableTypeKeys"/>. Returns the guarded type's
-    /// Roslyn symbol so callers can compute file paths / namespaces
+    /// IR projection so callers can compute file paths / namespaces
     /// without re-looking it up. The <c>is</c> prefix is the TypeScript
     /// naming convention and stays target-local; the IR ships only the
     /// guardable-type set.
     /// </summary>
     public bool TryResolveGuardImport(
         string candidate,
-        [NotNullWhen(true)] out INamedTypeSymbol? guardedSymbol
+        [NotNullWhen(true)] out IrTranspilableTypeRef? guarded
     )
     {
-        guardedSymbol = null;
+        guarded = null;
         if (!candidate.StartsWith("is", StringComparison.Ordinal) || candidate.Length <= 2)
             return false;
         var guessedTsName = candidate[2..];
-        if (!TranspilableTypeMap.TryGetValue(guessedTsName, out var resolved))
+        if (!TranspilableTypes.TryGetValue(guessedTsName, out var resolved))
             return false;
-        if (!GuardableTypeKeys.Contains(resolved.GetCrossAssemblyOriginKey()))
+        if (!GuardableTypeKeys.Contains(resolved.Key))
             return false;
-        guardedSymbol = resolved;
+        guarded = resolved;
         return true;
     }
 

@@ -1178,4 +1178,43 @@ public class CSharpSourceFrontendTests
         await Assert.That(ir.TypeNamesBySymbol!).ContainsKey(key);
         await Assert.That(ir.TypeNamesBySymbol![key]).IsEqualTo("RenamedInner");
     }
+
+    [Test]
+    public async Task TranspilableTypes_ProjectsDualKeys_ForRenamedType()
+    {
+        // The projection must index a [Name(TypeScript, "Ticker")] type
+        // under both its C# source name AND its TS alias — the target's
+        // import collector looks up identifiers walked out of the
+        // generated AST, which can come in as either form depending on
+        // whether the reference was emitted by the bridge (TS alias) or
+        // by a template / expression body that kept the C# name.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            [Name(TargetLanguage.TypeScript, "Ticker")]
+            public class Clock {}
+            """
+        );
+
+        var clock = compilation.GetTypeByMetadataName("Clock");
+        await Assert.That(clock).IsNotNull();
+        var key = clock!.GetCrossAssemblyOriginKey();
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.TranspilableTypes).IsNotNull();
+        await Assert.That(ir.TranspilableTypes!).ContainsKey("Clock");
+        await Assert.That(ir.TranspilableTypes!).ContainsKey("Ticker");
+
+        var fromSource = ir.TranspilableTypes!["Clock"];
+        var fromAlias = ir.TranspilableTypes!["Ticker"];
+
+        // Both keys resolve to the same projection — consumers can treat
+        // either identifier flavor as equivalent for emit metadata.
+        await Assert.That(fromSource).IsEqualTo(fromAlias);
+        await Assert.That(fromSource.Key).IsEqualTo(key);
+        await Assert.That(fromSource.TsName).IsEqualTo("Ticker");
+        await Assert.That(fromSource.FileName).IsEqualTo("ticker");
+        await Assert.That(fromSource.Namespace).IsEqualTo("");
+        await Assert.That(fromSource.IsStringEnum).IsFalse();
+    }
 }

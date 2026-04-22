@@ -118,15 +118,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.TypeNamesBySymbol ?? new Dictionary<string, string>(StringComparer.Ordinal);
 
         var transpilableTypes = DiscoverTranspilableTypes();
-        // Map by both C# name and TS name (when [Name] override differs)
-        _transpilableTypeMap = new Dictionary<string, INamedTypeSymbol>();
-        foreach (var t in transpilableTypes)
-        {
-            _transpilableTypeMap[t.Name] = t;
-            var tsName = TypeScriptTransformContext.ResolveTsName(typeNamesBySymbol, t);
-            if (tsName != t.Name)
-                _transpilableTypeMap[tsName] = t;
-        }
 
         // Seed the external-import map from the frontend. The IR covers every
         // [Import] type from the current assembly, plus those from referenced
@@ -161,7 +152,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             compilation,
             _currentAssembly,
             _assemblyWideTranspile,
-            _transpilableTypeMap,
+            ir.TranspilableTypes
+                ?? new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal),
             _externalImportMap,
             ir.BclExports,
             typeNamesBySymbol,
@@ -243,7 +235,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <c>[ExportedAsModule]</c> + <c>[ModuleEntryPoint]</c>.
     /// </summary>
     private IMethodSymbol? _syntheticEntryPoint;
-    private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
     private Dictionary<string, IrExternalImport> _externalImportMap = [];
     private PathNaming _pathNaming = new("");
 

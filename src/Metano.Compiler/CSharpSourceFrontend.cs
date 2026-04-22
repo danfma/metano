@@ -123,6 +123,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ? null
             : BuildGuardableTypeKeys(compilation, assemblyWideTranspile);
 
+        var transpilableTypes = compilation is null
+            ? null
+            : BuildTranspilableTypes(compilation, target, assemblyWideTranspile);
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: compilation is null
@@ -148,7 +152,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             DeclarativePropertyMappings: declarativeMappings.Properties,
             ChainMethodsByWrapper: declarativeMappings.ChainMethodsByWrapper,
             TypeNamesBySymbol: typeNamesBySymbol,
-            GuardableTypeKeys: guardableTypeKeys
+            GuardableTypeKeys: guardableTypeKeys,
+            TranspilableTypes: transpilableTypes
         );
     }
 
@@ -358,6 +363,66 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         );
 
         return keys;
+    }
+
+    /// <summary>
+    /// Projects every current-assembly top-level transpilable type to an
+    /// <see cref="IrTranspilableTypeRef"/> and indexes it under both its
+    /// C# source name and its target-facing TS name (when
+    /// <c>[Name(target, …)]</c> diverges). Lets the backend resolve a
+    /// bare identifier walked out of the generated AST into emit
+    /// metadata — origin key, namespace, on-disk file name, string-enum
+    /// flag — without going back to the Roslyn symbol table. Current
+    /// assembly, top-level only, nested types excluded. The synthetic
+    /// C# 9+ top-level <c>Program</c> type is included under
+    /// <c>[assembly: TranspileAssembly]</c> so the target's import
+    /// collector resolves module-entry references consistently with
+    /// every other transpilable type.
+    /// </summary>
+    private static IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildTranspilableTypes(
+        Compilation compilation,
+        TargetLanguage target,
+        bool assemblyWideTranspile
+    )
+    {
+        var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        var currentAssembly = compilation.Assembly;
+
+        void Register(INamedTypeSymbol type)
+        {
+            var tsName = SymbolHelper.GetNameOverride(type, target) ?? type.Name;
+            var ns = type.ContainingNamespace.IsGlobalNamespace
+                ? ""
+                : type.ContainingNamespace.ToDisplayString();
+            var emitInFile = SymbolHelper.GetEmitInFile(type);
+            var fileBase = emitInFile is { Length: > 0 } ? emitInFile : tsName;
+            var fileName = SymbolHelper.ToKebabCase(fileBase);
+            var entry = new IrTranspilableTypeRef(
+                Key: type.GetCrossAssemblyOriginKey(),
+                TsName: tsName,
+                Namespace: ns,
+                FileName: fileName,
+                IsStringEnum: SymbolHelper.HasStringEnum(type)
+            );
+            map.TryAdd(type.Name, entry);
+            if (tsName != type.Name)
+                map.TryAdd(tsName, entry);
+        }
+
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+            {
+                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                    return;
+                Register(type);
+            }
+        );
+
+        if (assemblyWideTranspile && TryGetTopLevelProgramType(compilation, out var programType))
+            Register(programType);
+
+        return map;
     }
 
     /// <summary>

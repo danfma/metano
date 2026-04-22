@@ -104,6 +104,17 @@ namespace Metano.Compiler.IR;
 /// so each target owns the prefix but the set of guardable types stays
 /// source-truth. Current-assembly, top-level only — matches the scope
 /// <c>TypeTransformer</c> used inline.</param>
+/// <param name="TranspilableTypes">Dictionary of
+/// <see cref="IrTranspilableTypeRef"/> entries keyed by bare identifier —
+/// both the C# source name and, when it differs, the per-target
+/// <c>[Name(target, …)]</c> alias. Lets the backend resolve an identifier
+/// walked out of the generated target AST (import collector, guard
+/// builder) into emit metadata without going back to the Roslyn symbol
+/// table. Current-assembly top-level transpilable types only, with the
+/// synthetic C# 9+ top-level <c>Program</c> type included under
+/// <c>[assembly: TranspileAssembly]</c>. Appended with a nullable default
+/// so adding the projection cannot shift downstream positional
+/// arguments.</param>
 public sealed record IrCompilation(
     string AssemblyName,
     string? PackageName,
@@ -126,5 +137,6 @@ public sealed record IrCompilation(
     >? DeclarativePropertyMappings = null,
     IReadOnlyDictionary<string, IReadOnlySet<string>>? ChainMethodsByWrapper = null,
     IReadOnlyDictionary<string, string>? TypeNamesBySymbol = null,
-    IReadOnlySet<string>? GuardableTypeKeys = null
+    IReadOnlySet<string>? GuardableTypeKeys = null,
+    IReadOnlyDictionary<string, IrTranspilableTypeRef>? TranspilableTypes = null
 );
