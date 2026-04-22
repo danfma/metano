@@ -127,18 +127,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.TranspilableTypeEntries ?? Array.Empty<IrTranspilableTypeEntry>();
         var transpilableTypes = transpilableTypeEntries.Select(e => e.Symbol).ToList();
 
-        // Seed the external-import map from the frontend. The IR covers every
-        // [Import] type from the current assembly, plus those from referenced
-        // assemblies that opt into transpilation ([TranspileAssembly]) and
-        // declare an [EmitPackage] for the active target — keyed by both the
-        // C# source name and, when it differs, the per-target [Name(target, …)]
-        // alias. MS0003 collisions are surfaced through the host's diagnostic
-        // merge.
-        _externalImportMap = new Dictionary<string, IrExternalImport>(
-            ir.ExternalImports,
-            StringComparer.Ordinal
-        );
-
         // Build the explicit per-compilation context that replaces TypeMapper statics.
         var crossPackageMisses = new HashSet<string>();
         var usedCrossPackages = new Dictionary<string, string>();
@@ -162,7 +150,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _assemblyWideTranspile,
             ir.TranspilableTypes
                 ?? new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal),
-            _externalImportMap,
+            ir.ExternalImports,
             ir.BclExports,
             typeNamesBySymbol,
             ir.GuardableTypeKeys ?? new HashSet<string>(StringComparer.Ordinal),
@@ -235,7 +223,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
-    private Dictionary<string, IrExternalImport> _externalImportMap = [];
     private PathNaming _pathNaming = new("");
 
     /// <summary>
