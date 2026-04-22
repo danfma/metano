@@ -404,9 +404,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 FileName: fileName,
                 IsStringEnum: SymbolHelper.HasStringEnum(type)
             );
-            map.TryAdd(type.Name, entry);
+            // Last-wins on bare-identifier collision — matches the legacy
+            // `_transpilableTypeMap[...] = ...` assignments the target side
+            // ran inline. Two top-level types in different namespaces with
+            // the same simple name, or an alias that shadows another type's
+            // source name, stay resolvable (to whichever registered last)
+            // instead of silently dropping the second entry.
+            map[type.Name] = entry;
             if (tsName != type.Name)
-                map.TryAdd(tsName, entry);
+                map[tsName] = entry;
         }
 
         CollectTopLevelTypes(
