@@ -127,6 +127,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ? null
             : BuildTranspilableTypes(compilation, target, assemblyWideTranspile);
 
+        var entryPoint = compilation is null
+            ? null
+            : BuildEntryPointInfo(compilation, assemblyWideTranspile);
+
+        var transpilableTypeEntries = compilation is null
+            ? null
+            : BuildTranspilableTypeEntries(compilation, assemblyWideTranspile, entryPoint);
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: compilation is null
@@ -153,7 +161,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ChainMethodsByWrapper: declarativeMappings.ChainMethodsByWrapper,
             TypeNamesBySymbol: typeNamesBySymbol,
             GuardableTypeKeys: guardableTypeKeys,
-            TranspilableTypes: transpilableTypes
+            TranspilableTypes: transpilableTypes,
+            TranspilableTypeEntries: transpilableTypeEntries,
+            EntryPoint: entryPoint
         );
     }
 
@@ -429,6 +439,90 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             Register(programType);
 
         return map;
+    }
+
+    /// <summary>
+    /// Builds the ordered list of current-assembly top-level transpilable
+    /// types the backend should emit. Replaces the syntax-tree walk
+    /// <c>TypeTransformer.DiscoverTranspilableTypes</c> used inline on the
+    /// target side. The C# 9+ synthetic <c>Program</c> type is appended
+    /// when <paramref name="entryPoint"/> is non-null and
+    /// <c>[assembly: TranspileAssembly]</c> is set — matching the retired
+    /// target-side logic exactly, so the grouping / routing loop in
+    /// <c>TransformAll</c> sees the same types in the same order.
+    /// </summary>
+    private static IReadOnlyList<IrTranspilableTypeEntry> BuildTranspilableTypeEntries(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        IrEntryPointInfo? entryPoint
+    )
+    {
+        var entries = new List<IrTranspilableTypeEntry>();
+        var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var currentAssembly = compilation.Assembly;
+
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+            {
+                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                    return;
+                if (!seen.Add(type))
+                    return;
+                entries.Add(
+                    new IrTranspilableTypeEntry(
+                        Symbol: type,
+                        Key: type.GetCrossAssemblyOriginKey(),
+                        IsSyntheticProgram: false
+                    )
+                );
+            }
+        );
+
+        // Synthetic Program appended last, matching the retired
+        // DiscoverTranspilableTypes ordering. De-dupe against `seen` so an
+        // explicit `[Transpile] class Program` doesn't collide with the
+        // synthetic routing flag.
+        if (entryPoint is not null && seen.Add(entryPoint.ContainingType))
+        {
+            entries.Add(
+                new IrTranspilableTypeEntry(
+                    Symbol: entryPoint.ContainingType,
+                    Key: entryPoint.ContainingType.GetCrossAssemblyOriginKey(),
+                    IsSyntheticProgram: true
+                )
+            );
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// Detects the C# 9+ top-level-statement entry point and returns the
+    /// synthesized method + containing type. Returns <c>null</c> when
+    /// <c>[assembly: TranspileAssembly]</c> is absent, the compilation has
+    /// no <c>GlobalStatementSyntax</c>, Roslyn reports no entry point, or
+    /// the containing type opts out via <c>[ExportedAsModule]</c>. Reuses
+    /// <see cref="TryGetTopLevelProgramType"/> so the detection logic
+    /// stays in one place.
+    /// </summary>
+    private static IrEntryPointInfo? BuildEntryPointInfo(
+        Compilation compilation,
+        bool assemblyWideTranspile
+    )
+    {
+        if (!assemblyWideTranspile)
+            return null;
+        if (compilation is not CSharpCompilation csharpComp)
+            return null;
+        if (!TryGetTopLevelProgramType(compilation, out var programType))
+            return null;
+
+        var entryPoint = csharpComp.GetEntryPoint(CancellationToken.None);
+        if (entryPoint is null)
+            return null;
+
+        return new IrEntryPointInfo(Method: entryPoint, ContainingType: programType);
     }
 
     /// <summary>

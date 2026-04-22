@@ -117,7 +117,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var typeNamesBySymbol =
             ir.TypeNamesBySymbol ?? new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var transpilableTypes = DiscoverTranspilableTypes();
+        // Frontend owns discovery now — read the ordered entry list off the
+        // IR and project it back to raw symbols for the existing per-type
+        // emission helpers (GroupTypesByFile, BuildTypeStatements). The
+        // synthetic-Program flag + the separate EntryPoint record carry the
+        // routing metadata that used to live on the target-side
+        // `_syntheticEntryPoint` field.
+        var transpilableTypeEntries =
+            ir.TranspilableTypeEntries ?? Array.Empty<IrTranspilableTypeEntry>();
+        var transpilableTypes = transpilableTypeEntries.Select(e => e.Symbol).ToList();
 
         // Seed the external-import map from the frontend. The IR covers every
         // [Import] type from the current assembly, plus those from referenced
@@ -227,14 +235,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
-
-    /// <summary>
-    /// The compiler-synthesized entry point method from C# 9+ top-level statements.
-    /// When set, the containing type is routed through
-    /// <see cref="EmitTopLevelStatements"/> as an implicit
-    /// <c>[ExportedAsModule]</c> + <c>[ModuleEntryPoint]</c>.
-    /// </summary>
-    private IMethodSymbol? _syntheticEntryPoint;
     private Dictionary<string, IrExternalImport> _externalImportMap = [];
     private PathNaming _pathNaming = new("");
 
@@ -256,67 +256,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             "TypeScriptTransformContext is not yet initialized — TransformAll() must "
                 + "complete its setup phase before any per-type helper runs."
         );
-
-    private IReadOnlyList<INamedTypeSymbol> DiscoverTranspilableTypes()
-    {
-        var types = new List<INamedTypeSymbol>();
-        var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var model = compilation.GetSemanticModel(tree);
-            var root = tree.GetRoot();
-
-            foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
-            {
-                var symbol = model.GetDeclaredSymbol(typeDecl);
-                if (symbol is not INamedTypeSymbol namedType)
-                    continue;
-                // Skip nested types — they're processed by their containing type as companion namespaces
-                if (namedType.ContainingType is not null)
-                    continue;
-                if (
-                    !SymbolHelper.IsTranspilable(
-                        namedType,
-                        _assemblyWideTranspile,
-                        _currentAssembly
-                    )
-                )
-                    continue;
-                if (!seen.Add(namedType))
-                    continue;
-                types.Add(namedType);
-            }
-        }
-
-        // Detect C# 9+ top-level statements. Only fires when the syntax tree
-        // actually contains GlobalStatementSyntax — an explicit `static void Main()`
-        // in a Program class (traditional entry point) must NOT be routed through
-        // TransformTopLevelStatements, because there are no global statements to walk.
-        if (_assemblyWideTranspile && compilation is CSharpCompilation csharpComp)
-        {
-            var hasGlobalStatements = compilation.SyntaxTrees.Any(t =>
-                t.GetRoot().DescendantNodes().OfType<GlobalStatementSyntax>().Any()
-            );
-
-            if (hasGlobalStatements)
-            {
-                var entryPoint = csharpComp.GetEntryPoint(System.Threading.CancellationToken.None);
-                if (
-                    entryPoint is not null
-                    && entryPoint.ContainingType is { } programType
-                    && !SymbolHelper.HasExportedAsModule(programType)
-                    && seen.Add(programType)
-                )
-                {
-                    types.Add(programType);
-                    _syntheticEntryPoint = entryPoint;
-                }
-            }
-        }
-
-        return types;
-    }
 
     /// <summary>
     /// Builds the top-level statements for a single type into <paramref name="sink"/>,
@@ -362,12 +301,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             new JsonSerializerContextTransformer(Context).Transform(type, sink);
         }
         else if (
-            _syntheticEntryPoint is not null
-            && SymbolEqualityComparer.Default.Equals(type, _syntheticEntryPoint.ContainingType)
+            ir.EntryPoint is not null
+            && SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType)
         )
         {
             // C# 9+ top-level statements → unwrap as module-level code
-            EmitTopLevelStatements(_syntheticEntryPoint, sink);
+            EmitTopLevelStatements(ir.EntryPoint.Method, sink);
         }
         else if (
             (SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic
@@ -472,16 +411,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // as module-level code by EmitTopLevelStatements; the IR class
             // extraction would produce an irrelevant shape, so skip it.
             if (
-                _syntheticEntryPoint is not null
-                && SymbolEqualityComparer.Default.Equals(type, _syntheticEntryPoint.ContainingType)
+                ir.EntryPoint is not null
+                && SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType)
             )
                 continue;
 
-            var ir = GetOrExtractIr(type, irCache);
-            if (ir is null)
+            var typeIr = GetOrExtractIr(type, irCache);
+            if (typeIr is null)
                 continue;
 
-            foreach (var req in IrRuntimeRequirementScanner.Scan(ir))
+            foreach (var req in IrRuntimeRequirementScanner.Scan(typeIr))
                 acc.Add(req);
         }
         return acc;

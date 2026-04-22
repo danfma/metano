@@ -115,6 +115,22 @@ namespace Metano.Compiler.IR;
 /// <c>[assembly: TranspileAssembly]</c>. Appended with a nullable default
 /// so adding the projection cannot shift downstream positional
 /// arguments.</param>
+/// <param name="TranspilableTypeEntries">Ordered list of every
+/// current-assembly top-level transpilable type the backend should
+/// emit. Replaces the target-side syntax-tree walk
+/// (<c>TypeTransformer.DiscoverTranspilableTypes</c>) so discovery and
+/// order stay frontend-owned. Each entry carries the Roslyn
+/// <see cref="IrTranspilableTypeEntry.Symbol"/> (needed by per-type
+/// bridges and nested-type walking) plus the synthetic-Program flag so
+/// the target can route top-level-statement emission without a separate
+/// symbol comparison.</param>
+/// <param name="EntryPoint">Top-level-statement entry-point metadata
+/// when the current assembly declares <c>[assembly: TranspileAssembly]</c>
+/// and contains C# 9+ global statements; <c>null</c> otherwise.
+/// Backends pair this with the <c>IsSyntheticProgram</c> flag on
+/// <see cref="TranspilableTypeEntries"/> to route the containing type's
+/// emission through top-level-statement rendering instead of the
+/// regular class path.</param>
 public sealed record IrCompilation(
     string AssemblyName,
     string? PackageName,
@@ -138,5 +154,7 @@ public sealed record IrCompilation(
     IReadOnlyDictionary<string, IReadOnlySet<string>>? ChainMethodsByWrapper = null,
     IReadOnlyDictionary<string, string>? TypeNamesBySymbol = null,
     IReadOnlySet<string>? GuardableTypeKeys = null,
-    IReadOnlyDictionary<string, IrTranspilableTypeRef>? TranspilableTypes = null
+    IReadOnlyDictionary<string, IrTranspilableTypeRef>? TranspilableTypes = null,
+    IReadOnlyList<IrTranspilableTypeEntry>? TranspilableTypeEntries = null,
+    IrEntryPointInfo? EntryPoint = null
 );

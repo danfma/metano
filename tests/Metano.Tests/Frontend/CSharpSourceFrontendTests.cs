@@ -3,6 +3,7 @@ using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Tests.IR;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Tests.Frontend;
 
@@ -1216,5 +1217,111 @@ public class CSharpSourceFrontendTests
         await Assert.That(fromSource.FileName).IsEqualTo("ticker");
         await Assert.That(fromSource.Namespace).IsEqualTo("");
         await Assert.That(fromSource.IsStringEnum).IsFalse();
+    }
+
+    [Test]
+    public async Task EntryPointInfoIsPopulatedForTopLevelStatements()
+    {
+        // C# 9+ top-level statements under [assembly: TranspileAssembly]
+        // produce an entry point the target routes through
+        // EmitTopLevelStatements. The IR must surface both the
+        // synthesized method and its containing type so the target
+        // doesn't need to re-detect them.
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: TranspileAssembly]
+
+            System.Console.WriteLine("Hello");
+            """,
+            OutputKind.ConsoleApplication
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.EntryPoint).IsNotNull();
+        await Assert.That(ir.EntryPoint!.Method).IsNotNull();
+        await Assert.That(ir.EntryPoint.ContainingType).IsNotNull();
+        // The synthesized method's containing type is what routes through
+        // top-level-statement emission — Roslyn names it "Program".
+        await Assert.That(ir.EntryPoint.ContainingType.Name).IsEqualTo("Program");
+    }
+
+    [Test]
+    public async Task EntryPointInfoIsNullForTraditionalMain()
+    {
+        // A traditional static Main + no [assembly: TranspileAssembly]
+        // must not produce an entry-point record — the target's
+        // top-level-statement routing should stay inert.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public static class App
+            {
+                public static void Main() {}
+            }
+            """,
+            OutputKind.ConsoleApplication
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.EntryPoint).IsNull();
+    }
+
+    [Test]
+    public async Task TranspilableTypeEntriesIncludesSyntheticProgram()
+    {
+        // Under [assembly: TranspileAssembly] with top-level statements,
+        // the synthetic Program type is appended to the entry list with
+        // IsSyntheticProgram=true so the target routes it through
+        // top-level-statement emission. Regular transpilable types carry
+        // IsSyntheticProgram=false.
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: TranspileAssembly]
+
+            System.Console.WriteLine("boot");
+
+            namespace App
+            {
+                public record Greeting(string Message);
+            }
+            """,
+            OutputKind.ConsoleApplication
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.TranspilableTypeEntries).IsNotNull();
+
+        var synthetic = ir.TranspilableTypeEntries!.SingleOrDefault(e => e.IsSyntheticProgram);
+        await Assert.That(synthetic).IsNotNull();
+        await Assert.That(synthetic!.Symbol.Name).IsEqualTo("Program");
+
+        var greeting = ir.TranspilableTypeEntries!.SingleOrDefault(e =>
+            e.Symbol.Name == "Greeting"
+        );
+        await Assert.That(greeting).IsNotNull();
+        await Assert.That(greeting!.IsSyntheticProgram).IsFalse();
+    }
+
+    [Test]
+    public async Task ExportedAsModuleOnProgramOptsOutOfSyntheticRouting()
+    {
+        // `[ExportedAsModule]` on a `Program` partial opts the synthetic
+        // entry-point routing out. The IR entry-point record must be null
+        // so top-level-statement bodies fall through to the regular
+        // module-emission path.
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: TranspileAssembly]
+
+            System.Console.WriteLine("boot");
+
+            [ExportedAsModule]
+            public static partial class Program {}
+            """,
+            OutputKind.ConsoleApplication
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.EntryPoint).IsNull();
     }
 }
