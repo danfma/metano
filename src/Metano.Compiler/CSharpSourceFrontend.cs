@@ -574,12 +574,32 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         new(
             MetanoDiagnosticSeverity.Error,
             DiagnosticCodes.OptionalRequiresNullable,
-            $"[Optional] on {kind} '{symbol.ContainingSymbol.Name}.{symbol.Name}' requires a "
-                + $"nullable C# type. The attribute relies on the TS consumer emitting "
-                + $"'undefined' collapsing to C# 'null'; a non-nullable target cannot "
-                + $"represent the absent case. Make the type nullable (e.g., 'string?').",
+            $"[Optional] on {kind} {FormatMemberPath(symbol)} requires a nullable C# type. The "
+                + $"attribute relies on the TS consumer emitting 'undefined' collapsing to C# "
+                + $"'null'; a non-nullable target cannot represent the absent case. Make the "
+                + $"type nullable (e.g., 'string?').",
             symbol.Locations.FirstOrDefault()
         );
+
+    /// <summary>
+    /// Builds a human-readable path for the diagnostic message. For a
+    /// property returns <c>TypeName.PropertyName</c>; for a parameter
+    /// returns <c>TypeName.MethodName(paramName)</c> (or
+    /// <c>TypeName(paramName)</c> when the containing method is a
+    /// constructor). Avoids the <c>.ctor.paramName</c> shape the Roslyn
+    /// <see cref="ISymbol.Name"/> pair would produce for constructor
+    /// parameters, which is hard to act on.
+    /// </summary>
+    private static string FormatMemberPath(ISymbol symbol) =>
+        symbol switch
+        {
+            IPropertySymbol prop => $"'{prop.ContainingType?.Name ?? string.Empty}.{prop.Name}'",
+            IParameterSymbol { ContainingSymbol: IMethodSymbol method } p => method.MethodKind
+            == MethodKind.Constructor
+                ? $"'{method.ContainingType?.Name ?? string.Empty}({p.Name})'"
+                : $"'{method.ContainingType?.Name ?? string.Empty}.{method.Name}({p.Name})'",
+            _ => $"'{symbol.ContainingSymbol?.Name ?? string.Empty}.{symbol.Name}'",
+        };
 
     /// <summary>
     /// Detects the C# 9+ top-level-statement entry point and returns the

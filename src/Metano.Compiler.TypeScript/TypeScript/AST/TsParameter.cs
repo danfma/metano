@@ -7,4 +7,9 @@ namespace Metano.TypeScript.AST;
 /// infer the type from the call-site context. Non-lambda parameters always carry a
 /// non-null Type — only the lambda handler currently produces null.
 /// </summary>
-public sealed record TsParameter(string Name, TsType? Type);
+/// <param name="Optional">When <c>true</c> the parameter is rendered
+/// with a <c>?</c> suffix (<c>name?: Type</c>) — the optional-parameter
+/// form that lets the TS caller omit it. Set by
+/// <c>[Optional]</c>-tagged parameters on <c>[PlainObject]</c> instance
+/// methods (and any future emission site that honors the attribute).</param>
+public sealed record TsParameter(string Name, TsType? Type, bool Optional = false);

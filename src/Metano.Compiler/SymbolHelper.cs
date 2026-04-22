@@ -210,8 +210,19 @@ public static class SymbolHelper
     /// <c>Metano.Annotations.TypeScript</c> namespace. TS-specific
     /// attribute — callers outside the TS target should treat
     /// <c>true</c> as a no-op (the field stays nullable either way).
+    /// Matches on the fully-qualified namespace so the unrelated
+    /// <c>System.Runtime.InteropServices.OptionalAttribute</c> (which
+    /// shares the same short name and is used by COM interop) is not
+    /// mistaken for the Metano variant.
     /// </summary>
-    public static bool HasOptional(this ISymbol symbol) => HasAttribute(symbol, "Optional");
+    public static bool HasOptional(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is "OptionalAttribute" or "Optional"
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
+                    == "Metano.Annotations.TypeScript"
+            );
 
     /// <summary>
     /// Reads the file name from <c>[EmitInFile("name")]</c> on a type symbol, or null

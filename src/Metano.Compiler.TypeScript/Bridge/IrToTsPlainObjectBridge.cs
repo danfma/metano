@@ -93,7 +93,8 @@ public static class IrToTsPlainObjectBridge
         parameters.AddRange(
             method.Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type)
+                IrToTsTypeMapper.Map(p.Type),
+                Optional: p.IsOptional
             ))
         );
 

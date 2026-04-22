@@ -1198,6 +1198,8 @@ public sealed class Printer(string indent = "  ")
             p =>
             {
                 _sb.Write(p.Name);
+                if (p.Optional)
+                    _sb.Write("?");
                 // Null Type → skip the annotation entirely (used by lambdas whose source
                 // parameter is a [NoEmit] type, so TypeScript can infer from context).
                 if (p.Type is not null)

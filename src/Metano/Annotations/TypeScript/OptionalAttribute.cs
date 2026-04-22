@@ -9,7 +9,7 @@ namespace Metano.Annotations.TypeScript;
 /// collapsing to <c>null</c> on the C# side via the loose-equality
 /// null-check convention documented in ADR-0014. A non-nullable C# type
 /// cannot safely represent a possibly-absent value and raises
-/// <c>MS0009</c> at extraction time.
+/// <c>MS0010</c> at extraction time.
 /// <para>
 /// This attribute is TypeScript-specific — Dart and other targets have
 /// no separate "absent" vs "null" distinction and treat it as a no-op
@@ -27,7 +27,7 @@ namespace Metano.Annotations.TypeScript;
 ///     nullable — the default).</item>
 ///   <item><c>[Optional] string?</c> → <c>name?: string | null</c>
 ///     (optional presence, nullable).</item>
-///   <item><c>[Optional] string</c> → <c>MS0009</c> — the non-nullable
+///   <item><c>[Optional] string</c> → <c>MS0010</c> — the non-nullable
 ///     combination is rejected.</item>
 /// </list>
 /// </para>

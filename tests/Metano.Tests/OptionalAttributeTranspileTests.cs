@@ -126,4 +126,104 @@ public class OptionalAttributeTranspileTests
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.OptionalRequiresNullable))
             .IsFalse();
     }
+
+    // ─── Method / constructor parameter coverage ─────────────
+
+    [Test]
+    public async Task Optional_OnInterfaceMethodParameter_EmitsOptionalParamForm()
+    {
+        // [Optional] on an interface method parameter lowers to the TS
+        // optional-parameter form (`name?: string | null`) so the
+        // consumer can call the method without supplying that argument
+        // at all.
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile]
+            public interface IGreeter
+            {
+                string Greet([Optional] string? salutation);
+            }
+            """
+        );
+
+        var output = result["i-greeter.ts"];
+        await Assert.That(output).Contains("salutation?: string | null");
+    }
+
+    [Test]
+    public async Task Optional_OnPlainObjectMethodParameter_EmitsOptionalParamForm()
+    {
+        // [PlainObject] instance methods lower to standalone exported
+        // functions whose first parameter is `self: T` followed by the
+        // C# parameters. [Optional] on the C# parameter surfaces as the
+        // TS `?` suffix on the corresponding function parameter.
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, PlainObject]
+            public record UserDto(string Name)
+            {
+                public string Display([Optional] string? prefix) => prefix + Name;
+            }
+            """
+        );
+
+        var output = result["user-dto.ts"];
+        await Assert.That(output).Contains("prefix?: string | null");
+    }
+
+    [Test]
+    public async Task Optional_OnConstructorParameter_EmitsMs0010WithConstructorPath()
+    {
+        // [Optional] on a non-nullable constructor parameter fails with
+        // MS0010, and the message identifies the constructor as
+        // `TypeName(paramName)` rather than the raw `.ctor.paramName`
+        // the symbol pair would produce.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, PlainObject]
+            public record UserDto([Optional] string Name);
+            """
+        );
+
+        var ms0010 = diagnostics.FirstOrDefault(d =>
+            d.Code == DiagnosticCodes.OptionalRequiresNullable
+        );
+        await Assert.That(ms0010).IsNotNull();
+        await Assert.That(ms0010!.Message).Contains("UserDto(Name)");
+        await Assert.That(ms0010.Message).DoesNotContain(".ctor");
+    }
+
+    [Test]
+    public async Task Optional_OnPropertyDiagnostic_NamesContainingType()
+    {
+        // Property-side MS0010 message should include the containing
+        // type so a user can jump to it directly.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile]
+            public interface IWidget
+            {
+                [Optional] string Name { get; }
+            }
+            """
+        );
+
+        var ms0010 = diagnostics.FirstOrDefault(d =>
+            d.Code == DiagnosticCodes.OptionalRequiresNullable
+        );
+        await Assert.That(ms0010).IsNotNull();
+        await Assert.That(ms0010!.Message).Contains("IWidget.Name");
+    }
 }
