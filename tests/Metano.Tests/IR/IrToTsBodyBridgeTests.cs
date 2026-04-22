@@ -84,10 +84,12 @@ public class IrToTsBodyBridgeTests
     }
 
     [Test]
-    public async Task IsNullPattern_LowersToStrictEquality()
+    public async Task IsNullPattern_LowersToLooseEquality()
     {
+        // `is null` uses `== null` (loose) so the check also matches JS
+        // `undefined`, protecting C# consumers against TS-side undefined.
         var ts = PrintMethodFromIr("bool IsNull(object? x) => x is null;");
-        await Assert.That(ts).Contains("x === null");
+        await Assert.That(ts).Contains("x == null");
     }
 
     [Test]
@@ -223,8 +225,10 @@ public class IrToTsBodyBridgeTests
     [Test]
     public async Task NotPattern_LowersToNegation()
     {
+        // `is not null` wraps the loose-equality constant test so the
+        // negation also excludes `undefined` on the JS side.
         var ts = PrintMethodFromIr("bool NotNull(object? x) => x is not null;");
-        await Assert.That(ts).Contains("!(x === null)");
+        await Assert.That(ts).Contains("!(x == null)");
     }
 
     [Test]

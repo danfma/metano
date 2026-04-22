@@ -4,7 +4,7 @@ export class OperationResult<T> {
   constructor(readonly success: boolean, readonly value: T | null, readonly errorCode: string | null = null, readonly errorMessage: string | null = null) { }
 
   get hasValue(): boolean {
-    return this.success && !(this.value === null);
+    return this.success && !(this.value == null);
   }
 
   static ok<T>(value: T): OperationResult<T> {

@@ -11,13 +11,13 @@ app.get("/todos", (c) => c.json(store.all()));
 app.get("/todos/:id", (c) => {
   const id = c.req.param("id");
 
-  if (id === null) {
+  if (id == null) {
     return c.notFound();
   }
 
   const stored = store.get(id);
 
-  return stored === null ? c.notFound() : c.json(stored);
+  return stored == null ? c.notFound() : c.json(stored);
 });
 
 app.post("/todos", async (c) => {
@@ -30,20 +30,20 @@ app.post("/todos", async (c) => {
 app.patch("/todos/:id", async (c) => {
   const id = c.req.param("id");
 
-  if (id === null) {
+  if (id == null) {
     return c.notFound();
   }
 
   const patch = await c.req.json();
   const updated = store.update(id, patch);
 
-  return updated === null ? c.notFound() : c.json(updated);
+  return updated == null ? c.notFound() : c.json(updated);
 });
 
 app.delete("/todos/:id", (c) => {
   const id = c.req.param("id");
 
-  if (id === null) {
+  if (id == null) {
     return c.notFound();
   }
 

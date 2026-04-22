@@ -116,7 +116,11 @@ public static class IrToTsExpressionBridge
             bin.Operator,
             isLeft: false
         );
-        return new TsBinaryExpression(left, BinaryOperatorToken(bin.Operator), right);
+        return new TsBinaryExpression(
+            left,
+            BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
+            right
+        );
     }
 
     /// <summary>
@@ -370,7 +374,11 @@ public static class IrToTsExpressionBridge
         switch (node.Pattern)
         {
             case IrConstantPattern constant:
-                return new TsBinaryExpression(lowered, "===", Map(constant.Value, bclRegistry));
+                return new TsBinaryExpression(
+                    lowered,
+                    BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
+                    Map(constant.Value, bclRegistry)
+                );
             case IrTypePattern typePat when typePat.DesignatorName is null:
                 return BuildTypeTest(lowered, typePat.Type);
             case IrDiscardPattern:
@@ -549,7 +557,7 @@ public static class IrToTsExpressionBridge
         {
             IrConstantPattern constant => new TsBinaryExpression(
                 value,
-                "===",
+                BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
                 Map(constant.Value, bclRegistry)
             ),
             IrTypePattern typePat => BuildTypeTest(value, typePat.Type),
@@ -825,7 +833,33 @@ public static class IrToTsExpressionBridge
             ? f.ToString(null, CultureInfo.InvariantCulture)
             : value?.ToString() ?? "0";
 
-    private static string BinaryOperatorToken(IrBinaryOp op) =>
+    /// <summary>
+    /// True when either side of a binary comparison is the IR null
+    /// literal. Pairs with the loose <c>==</c> / <c>!=</c> emission path
+    /// so <c>x == null</c> matches both <c>null</c> and <c>undefined</c>
+    /// on the JS side — necessary for TS consumers that may produce
+    /// <c>undefined</c> (absent optional property, uninitialized field)
+    /// where the C# contract only knows about <c>null</c>.
+    /// </summary>
+    private static bool IsNullCompare(IrExpression? left, IrExpression? right) =>
+        left is IrLiteral { Kind: IrLiteralKind.Null }
+        || right is IrLiteral { Kind: IrLiteralKind.Null };
+
+    /// <summary>
+    /// Picks the JS operator token for an IR binary operator. Equal /
+    /// NotEqual normally lower to strict <c>===</c> / <c>!==</c>, but
+    /// when either operand is a null literal the bridge emits the loose
+    /// <c>==</c> / <c>!=</c> form so that a TS consumer reading the
+    /// compared expression cannot be tripped by an <c>undefined</c> that
+    /// came across the boundary (Kotlin/JS uses the same strategy). C#
+    /// does not expose <c>undefined</c>, so this relaxation is safe for
+    /// round-trip semantics — only the JS-visible check broadens.
+    /// </summary>
+    private static string BinaryOperatorToken(
+        IrBinaryOp op,
+        IrExpression? left = null,
+        IrExpression? right = null
+    ) =>
         op switch
         {
             IrBinaryOp.Add => "+",
@@ -833,8 +867,8 @@ public static class IrToTsExpressionBridge
             IrBinaryOp.Multiply => "*",
             IrBinaryOp.Divide => "/",
             IrBinaryOp.Modulo => "%",
-            IrBinaryOp.Equal => "===",
-            IrBinaryOp.NotEqual => "!==",
+            IrBinaryOp.Equal => IsNullCompare(left, right) ? "==" : "===",
+            IrBinaryOp.NotEqual => IsNullCompare(left, right) ? "!=" : "!==",
             IrBinaryOp.LessThan => "<",
             IrBinaryOp.LessThanOrEqual => "<=",
             IrBinaryOp.GreaterThan => ">",

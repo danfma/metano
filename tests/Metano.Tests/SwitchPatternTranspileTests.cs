@@ -61,8 +61,13 @@ public class SwitchPatternTranspileTests
     // ─── Is pattern ─────────────────────────────────────────
 
     [Test]
-    public async Task IsNull_GeneratesStrictEquality()
+    public async Task IsNull_GeneratesLooseEquality()
     {
+        // `is null` lowers to `== null` (loose) so the check also matches
+        // a JS-side `undefined` — necessary when a TS consumer produces an
+        // absent optional property or an uninitialized field. C# does not
+        // expose `undefined`, so relaxing the comparison is safe for
+        // round-trip semantics and matches Kotlin/JS behavior.
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
@@ -78,12 +83,16 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["checker.ts"];
-        await Assert.That(output).Contains("value === null");
+        await Assert.That(output).Contains("value == null");
     }
 
     [Test]
-    public async Task IsNotNull_GeneratesNegatedEquality()
+    public async Task IsNotNull_GeneratesNegatedLooseEquality()
     {
+        // `is not null` lowers to `!(value == null)` so the negation also
+        // excludes `undefined`. Pairs with `IsNull_GeneratesLooseEquality`
+        // — both sides of the C# pattern collapse to the same loose
+        // comparison on the TS side.
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
@@ -99,7 +108,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["checker.ts"];
-        await Assert.That(output).Contains("!(value === null)");
+        await Assert.That(output).Contains("!(value == null)");
     }
 
     [Test]

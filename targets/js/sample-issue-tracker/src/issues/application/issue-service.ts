@@ -38,13 +38,13 @@ export class IssueService {
   async loadAsync(issueId: IssueId): Promise<OperationResult<Issue>> {
     const issue = await this._repository.getByIdAsync(issueId);
 
-    return issue === null ? OperationResult.fail("issue_not_found", `Issue ${issueId} was not found.`) : OperationResult.ok(issue);
+    return issue == null ? OperationResult.fail("issue_not_found", `Issue ${issueId} was not found.`) : OperationResult.ok(issue);
   }
 
   async assignAsync(issueId: IssueId, assigneeId: UserId): Promise<OperationResult<Issue>> {
     const loadResult = await this.loadAsync(issueId);
 
-    if (!loadResult.hasValue || loadResult.value === null) {
+    if (!loadResult.hasValue || loadResult.value == null) {
       return loadResult;
     }
 
@@ -57,7 +57,7 @@ export class IssueService {
   async planSprintAsync(issueId: IssueId, sprintKey: string): Promise<OperationResult<Issue>> {
     const loadResult = await this.loadAsync(issueId);
 
-    if (!loadResult.hasValue || loadResult.value === null) {
+    if (!loadResult.hasValue || loadResult.value == null) {
       return loadResult;
     }
 
@@ -70,7 +70,7 @@ export class IssueService {
   private async addCommentAsyncIssueIdAuthorIdMessage(issueId: IssueId, authorId: UserId, message: string): Promise<OperationResult<Issue>> {
     const loadResult = await this.loadAsync(issueId);
 
-    if (!loadResult.hasValue || loadResult.value === null) {
+    if (!loadResult.hasValue || loadResult.value == null) {
       return loadResult;
     }
 
@@ -101,7 +101,7 @@ export class IssueService {
   async transitionAsync(issueId: IssueId, nextStatus: IssueStatus, actorId: UserId): Promise<OperationResult<Issue>> {
     const loadResult = await this.loadAsync(issueId);
 
-    if (!loadResult.hasValue || loadResult.value === null) {
+    if (!loadResult.hasValue || loadResult.value == null) {
       return loadResult;
     }
 

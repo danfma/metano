@@ -41,21 +41,21 @@ export class TodoStore {
   update(id: string, patch: UpdateTodoDto): StoredTodo | null {
     const existing = (this._items.find((t: StoredTodo) => t.id === id) ?? null);
 
-    if (existing === null) {
+    if (existing == null) {
       return null;
     }
 
     let item = existing.item;
 
-    if (!(patch.title === null)) {
+    if (!(patch.title == null)) {
       item = item.with({ title: patch.title });
     }
 
-    if (!(patch.priority === null)) {
+    if (!(patch.priority == null)) {
       item = item.with({ priority: patch.priority });
     }
 
-    if (!(patch.completed === null)) {
+    if (!(patch.completed == null)) {
       item = item.with({ completed: patch.completed });
     }
 
@@ -72,7 +72,7 @@ export class TodoStore {
   remove(id: string): boolean {
     const existing = (this._items.find((t: StoredTodo) => t.id === id) ?? null);
 
-    if (existing === null) {
+    if (existing == null) {
       return false;
     }
 
