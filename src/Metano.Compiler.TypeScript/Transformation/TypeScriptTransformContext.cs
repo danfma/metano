@@ -85,12 +85,12 @@ public sealed class TypeScriptTransformContext(
     /// <summary>
     /// Resolves the target-facing TypeScript name for a Roslyn type
     /// symbol without needing a constructed
-    /// <see cref="TypeScriptTransformContext"/>. Used during the early
-    /// setup phase of <c>TypeTransformer.TransformAll</c> where the
-    /// context does not yet exist; in every other call site prefer the
-    /// instance method so future changes stay in one place.
+    /// <see cref="TypeScriptTransformContext"/> instance. Used during
+    /// the early setup phase of <c>TypeTransformer.TransformAll</c>
+    /// where the context does not yet exist; in every other call site
+    /// prefer the instance method so future changes stay in one place.
     /// </summary>
-    public static string ResolveTsName(
+    internal static string ResolveTsName(
         IReadOnlyDictionary<string, string>? typeNamesBySymbol,
         INamedTypeSymbol type
     ) =>
