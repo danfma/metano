@@ -10,17 +10,19 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Dart.Transformation;
 
 /// <summary>
-/// Orchestrates Dart emission: discovers <c>[Transpile]</c>-annotated types in the
-/// compilation, extracts each into IR, routes to the appropriate Dart bridge, and
-/// assembles the resulting <see cref="DartSourceFile"/>s with their imports.
+/// Orchestrates Dart emission: reads the ordered transpilable-type list
+/// off the shared <see cref="IrCompilation"/>, extracts each into IR,
+/// routes to the appropriate Dart bridge, and assembles the resulting
+/// <see cref="DartSourceFile"/>s with their imports.
 /// <para>
 /// This is a prototype — currently handles enums, interfaces, and plain class shapes
 /// (no method bodies). Records/operators/exceptions need expression extraction, which
 /// lands in Phase 5.
 /// </para>
 /// </summary>
-public sealed class DartTransformer(Compilation compilation)
+public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 {
+    private readonly IrCompilation _ir = ir;
     private readonly Compilation _compilation = compilation;
     private readonly List<MetanoDiagnostic> _diagnostics = new();
 
@@ -147,35 +149,26 @@ public sealed class DartTransformer(Compilation compilation)
 
     // ── Discovery ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Flattens the frontend-owned ordered top-level transpilable-type
+    /// list (<see cref="IrCompilation.TranspilableTypeEntries"/>) plus
+    /// every nested transpilable type under each entry into a single
+    /// emission list. The Dart prototype emits one file per type (no
+    /// companion-namespace wrapping like the TS target), so nested types
+    /// join the flat list here — <see cref="CollectNested"/> recurses
+    /// into them using the frontend-reported
+    /// <see cref="IrCompilation.AssemblyWideTranspile"/> flag.
+    /// </summary>
     private List<INamedTypeSymbol> DiscoverTranspilableTypes()
     {
-        var assemblyWide = _compilation
-            .Assembly.GetAttributes()
-            .Any(a =>
-                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
-            );
-
+        var entries = _ir.TranspilableTypeEntries ?? Array.Empty<IrTranspilableTypeEntry>();
         var result = new List<INamedTypeSymbol>();
-        Walk(_compilation.Assembly.GlobalNamespace);
-        return result;
-
-        void Walk(INamespaceSymbol ns)
+        foreach (var entry in entries)
         {
-            foreach (var member in ns.GetMembers())
-            {
-                switch (member)
-                {
-                    case INamespaceSymbol inner:
-                        Walk(inner);
-                        break;
-                    case INamedTypeSymbol type:
-                        if (IsTranspilable(type, assemblyWide))
-                            result.Add(type);
-                        CollectNested(type, assemblyWide, result);
-                        break;
-                }
-            }
+            result.Add(entry.Symbol);
+            CollectNested(entry.Symbol, _ir.AssemblyWideTranspile, result);
         }
+        return result;
     }
 
     /// <summary>
