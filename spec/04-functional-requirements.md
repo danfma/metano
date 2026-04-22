@@ -65,7 +65,9 @@ requirement uses a stable identifier in the format `FR-XXX`.
   DTO-like shape output is desired.
 - **FR-022** The system shall allow static classes to be emitted as TypeScript
   modules when explicitly configured.
-- **FR-023** The system shall allow generation of type guards when requested.
+- **FR-023** The system shall allow generation of type guards when requested,
+  emitting both a narrowing predicate (`isT`) and a throwing assertion
+  companion (`assertT(value, message?)`) for every guardable type.
 - **FR-024** The system shall allow multiple types to be grouped into a single
   TypeScript file when explicitly configured.
 - **FR-025** The system shall allow declaration of external imports and

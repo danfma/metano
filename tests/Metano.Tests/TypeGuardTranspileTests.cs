@@ -282,4 +282,128 @@ public class TypeGuardTranspileTests
         await Assert.That(quote).Contains("isTicker");
         await Assert.That(quote).Contains("Ticker");
     }
+
+    // ─── assertT throwing variant ────────────────────────────
+
+    [Test]
+    public async Task Record_EmitsAssertCompanionAlongsideIs()
+    {
+        // Every [GenerateGuard] type now emits the throwing assertT
+        // companion — wraps isT, throws TypeError when the check fails.
+        // Kept inline (no runtime helper import) so guards stay zero-dep
+        // and tree-shakable per ADR-0009's accepted trade-offs.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, GenerateGuard]
+            public record Point(int X, int Y);
+            """
+        );
+
+        var output = result["point.ts"];
+        await Assert
+            .That(output)
+            .Contains("export function assertPoint(value: unknown, message?: string)");
+        await Assert.That(output).Contains(": asserts value is Point");
+        await Assert.That(output).Contains("if (!isPoint(value))");
+        await Assert.That(output).Contains("throw new TypeError");
+        await Assert.That(output).Contains("\"Value is not a Point\"");
+    }
+
+    [Test]
+    public async Task StringEnum_EmitsAssertCompanion()
+    {
+        // The assertT path must work uniformly across every guardable
+        // kind — enums, interfaces, records — because the companion
+        // builder runs after the predicate builder has produced isT
+        // regardless of the shape.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, StringEnum, GenerateGuard]
+            public enum Currency { Brl, Usd }
+            """
+        );
+
+        var output = result["currency.ts"];
+        await Assert.That(output).Contains("export function assertCurrency");
+        await Assert.That(output).Contains(": asserts value is Currency");
+        await Assert.That(output).Contains("if (!isCurrency(value))");
+    }
+
+    [Test]
+    public async Task Interface_EmitsAssertCompanion()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, GenerateGuard]
+            public interface IGreeting
+            {
+                string Message { get; }
+            }
+            """
+        );
+
+        var output = result["i-greeting.ts"];
+        await Assert.That(output).Contains("export function assertIGreeting");
+        await Assert.That(output).Contains(": asserts value is IGreeting");
+        await Assert.That(output).Contains("if (!isIGreeting(value))");
+    }
+
+    [Test]
+    public async Task Assert_RenamedTypeKeepsTsNameInErrorMessage()
+    {
+        // [Name(TypeScript, "Ticker")] renames the emitted type AND the
+        // guard — the assertT error message must use the TS name so
+        // consumers see the name they'll encounter in the generated
+        // module, not the C# symbol name.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, GenerateGuard]
+            [Name(TargetLanguage.TypeScript, "Ticker")]
+            public record Clock(string Id);
+            """
+        );
+
+        var output = result["ticker.ts"];
+        await Assert.That(output).Contains("export function assertTicker");
+        await Assert.That(output).Contains("\"Value is not a Ticker\"");
+    }
+
+    [Test]
+    public async Task Assert_AcceptsCallerSuppliedMessage()
+    {
+        // The message parameter is optional; when supplied, it overrides
+        // the default via the `??` coalesce so callers can inject
+        // context-specific failure messages (e.g., "request body invalid:
+        // expected TodoPatch").
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, GenerateGuard]
+            public record Widget(int Id);
+            """
+        );
+
+        var output = result["widget.ts"];
+        await Assert.That(output).Contains("message ?? \"Value is not a Widget\"");
+    }
+
+    [Test]
+    public async Task Assert_NotEmittedForException()
+    {
+        // Exception types don't get isT (ADR-0009: exceptions are thrown,
+        // not guarded). The assertT companion inherits that — no assertT
+        // emits for exception types either.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, GenerateGuard]
+            public class AppError : Exception
+            {
+                public AppError(string message) : base(message) {}
+            }
+            """
+        );
+
+        var output = result["app-error.ts"];
+        await Assert.That(output).DoesNotContain("isAppError");
+        await Assert.That(output).DoesNotContain("assertAppError");
+    }
 }

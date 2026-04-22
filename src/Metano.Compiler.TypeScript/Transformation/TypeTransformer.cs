@@ -317,11 +317,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (sink.Count == startCount)
             return false;
 
-        // Generate type guard function when [GenerateGuard] is present
+        // Generate type guard functions when [GenerateGuard] is present.
+        // The builder returns both isT (narrowing predicate) and assertT
+        // (throwing variant) so a consumer can pick either path depending
+        // on whether missed narrowing should be an exception (trust
+        // boundary) or a branch (conditional handling).
         if (SymbolHelper.HasGenerateGuard(type))
         {
-            var guard = new TypeGuardBuilder(Context).Generate(type);
-            if (guard is not null)
+            foreach (var guard in new TypeGuardBuilder(Context).Generate(type))
                 sink.Add(guard);
         }
 

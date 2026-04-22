@@ -38,7 +38,7 @@ annotations.
 
 | Attribute | Purpose |
 | --- | --- |
-| `GenerateGuardAttribute` | Generates runtime type guards. |
+| `GenerateGuardAttribute` | Generates a runtime `isT` type guard plus a throwing `assertT(value, message?)` companion that wraps it. |
 
 ## Packaging and Interop
 
