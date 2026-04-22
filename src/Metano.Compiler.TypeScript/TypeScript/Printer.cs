@@ -731,6 +731,8 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsTypePredicateType predicate:
+                if (predicate.IsAsserts)
+                    _sb.Write("asserts ");
                 _sb.Write(predicate.ParameterName);
                 _sb.Write(" is ");
                 PrintType(predicate.Type);

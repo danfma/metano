@@ -78,7 +78,7 @@ TypeScript backend — the normative surface of the product today.
 | Packaging | Subdirectory-aware `package.json` imports/exports (`--src-root`) | Planned | When output targets a subdirectory of the source tree, dist paths and export subpaths must include the correct prefix (FR-030). |
 | Cross-package | Import/export subpaths derived from namespace instead of file layout | Planned/Correction | Spec-mandated behavior; current implementation requires correction. |
 | Serialization | `JsonSerializerContext` transpilation | Implemented | JSON names resolved at transpile time. |
-| Validation | Generated type guards | Implemented | Via `[GenerateGuard]`. |
+| Validation | Generated type guards | Implemented | Via `[GenerateGuard]` — emits `isT` predicate and `assertT(value, message?)` throwing companion. |
 | Diagnostics | Stable `MS0001`-`MS0008` catalog | Implemented | See diagnostic catalog. |
 | Cycles | Generated TS cyclic import detection | Implemented | Reported as `MS0005`. |
 

@@ -11,6 +11,22 @@ export interface CreateTodoDto {
   readonly priority: Priority;
 }
 
+export function isCreateTodoDto(value: unknown): value is CreateTodoDto {
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  const v = value as any;
+
+  return typeof v.title === "string" && true;
+}
+
+export function assertCreateTodoDto(value: unknown, message?: string): asserts value is CreateTodoDto {
+  if (!isCreateTodoDto(value)) {
+    throw new TypeError(message ?? "Value is not a CreateTodoDto");
+  }
+}
+
 export interface UpdateTodoDto {
   readonly title: string | null;
   readonly priority: Priority | null;

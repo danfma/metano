@@ -1,3 +1,3 @@
 export { JsonContext } from "./json-context";
-export { TodoStore } from "./todos";
+export { assertCreateTodoDto, isCreateTodoDto, TodoStore } from "./todos";
 export type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "./todos";

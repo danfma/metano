@@ -123,13 +123,56 @@ namespace barrel. The `TsTypePredicateType` AST node carries the
   default, and enabling it couples the build to tsc quirks that differ
   from esbuild / Bun / tsgo.
 
+## Addendum (2026-04-22) — `assertT` throwing companion
+
+Every `[GenerateGuard]` type now emits a second function alongside
+`isT`: `assertT(value: unknown, message?: string): asserts value is T`.
+The body is a thin wrapper that negates `isT` and throws
+`TypeError(message ?? "Value is not a TName")`. Consumers use `isT` in
+conditional branches and `assertT` at trust boundaries (parsing JSON,
+accepting `unknown` from a network handler, validating request
+bodies) where a missed narrowing should fail loudly.
+
+Kept inline — no `metano-runtime` helper. The assertion is four lines
+of TS; importing a helper would couple every guarded type to the
+runtime package and defeat the zero-dep / tree-shakable trade-off
+accepted above. Error messages include the TS-facing type name (so
+`[Name(TypeScript, "Ticker")]` surfaces as `"Value is not a Ticker"`,
+matching the name consumers actually see in the generated module).
+
+Field-path threading ("Money.amount was not a number") is **not**
+included in the initial emission — the existing shape check builds a
+single AND-chain expression, and surfacing which conjunct failed
+requires rewriting the chain into sequential `if (!check) throw`
+statements. Deferred until users ask for it; the basic error message
+already covers the common "reject and surface" case at boundaries.
+
+Shipping `assertT` also surfaced a latent bug that had no user today:
+the `instanceof` fast path was emitted unconditionally for records,
+including `[PlainObject]` records that lower to bare TS interfaces
+(no class at runtime). The fast path now skips when
+`SymbolHelper.HasPlainObject(type)` is true — shape validation alone
+narrows those correctly.
+
+The `[Discriminator("Kind")]` attribute (issue #24, part 2) stays in
+scope for a follow-up PR: short-circuits the guard on a nominated
+enum field before walking the rest of the shape, which matters more
+when types get wide. The assertion companion composes with that
+optimization automatically (it still wraps `isT`).
+
 ## References
 
-- `src/Metano.Compiler.TypeScript/Transformation/TypeGuardBuilder.cs`
-- `src/Metano.Compiler.TypeScript/TypeScript/AST/TsTypePredicateType.cs`
+- `src/Metano.Compiler.TypeScript/Transformation/TypeGuardBuilder.cs` —
+  `Generate` now returns `[isT, assertT]`; `GenerateAssert` builds the
+  throwing companion.
+- `src/Metano.Compiler.TypeScript/TypeScript/AST/TsTypePredicateType.cs` —
+  extended with an `IsAsserts` flag for `asserts value is T` emission.
 - `src/Metano/Annotations/GenerateGuardAttribute.cs`
 - `targets/js/metano-runtime/src/type-checking/primitive-type-checks.ts` —
   `isInt32`, `isString`, etc.
-- `tests/Metano.Tests/TypeGuardTranspileTests.cs`
+- `tests/Metano.Tests/TypeGuardTranspileTests.cs` — isT + assertT matrix.
+- `targets/js/sample-todo-service/test/guards.test.ts` — end-to-end bun
+  test that exercises `assertCreateTodoDto` at a mock trust boundary.
 - [Issue #24](https://github.com/danfma/metano/issues/24) — `assertX`
-  throwing variant + discriminated unions (tracked follow-ups).
+  throwing variant (shipped) + discriminated unions (tracked
+  follow-up).

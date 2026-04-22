@@ -32,32 +32,94 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         );
 
     /// <summary>
-    /// Returns null when the type doesn't need a guard (exceptions, ExportedAsModule,
-    /// types with extension members, types imported from external modules).
+    /// Returns the pair of functions emitted for a <c>[GenerateGuard]</c>
+    /// type: <c>isT(value): value is T</c> (narrowing predicate) and
+    /// <c>assertT(value, message?): asserts value is T</c> (throwing
+    /// variant that wraps <c>isT</c>). Consumers typically use the first
+    /// in conditionals and the second at trust boundaries (parsing JSON,
+    /// accepting <c>unknown</c> from a network handler) where an
+    /// exception is the natural failure mode. Returns an empty list when
+    /// the type doesn't need a guard (exceptions, ExportedAsModule,
+    /// types with extension members, types imported from external
+    /// modules).
     /// </summary>
-    public TsFunction? Generate(INamedTypeSymbol type)
+    public IReadOnlyList<TsFunction> Generate(INamedTypeSymbol type)
     {
         if (TypeTransformer.IsExceptionType(type))
-            return null;
+            return [];
         if (SymbolHelper.HasExportedAsModule(type) || TypeTransformer.HasExtensionMembers(type))
-            return null;
+            return [];
         if (SymbolHelper.HasImport(type))
-            return null;
+            return [];
 
         var tsName = _context.ResolveTsName(type);
         var guardName = $"is{tsName}";
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
 
+        TsFunction? guard = null;
         if (type.TypeKind == TypeKind.Enum)
-            return GenerateEnumGuard(type, guardName, tsName, valueParam);
+            guard = GenerateEnumGuard(type, guardName, tsName, valueParam);
+        else if (type.TypeKind == TypeKind.Interface)
+            guard = GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: false);
+        else if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
+        {
+            // [PlainObject] records/classes emit as bare TS interfaces —
+            // no class is available at runtime, so the `instanceof` fast
+            // path would reference an identifier that only exists in the
+            // type position and fail with TS2693. Shape validation still
+            // narrows correctly for those. Regular records keep the fast
+            // path.
+            var useInstanceof = !SymbolHelper.HasPlainObject(type);
+            guard = GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof);
+        }
 
-        if (type.TypeKind == TypeKind.Interface)
-            return GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: false);
+        if (guard is null)
+            return [];
 
-        if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
-            return GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: true);
+        return [guard, GenerateAssert(tsName, guardName)];
+    }
 
-        return null;
+    /// <summary>
+    /// Builds the throwing <c>assertT</c> companion for the predicate
+    /// <c>isT</c> generated on the same type. The body is a thin wrapper
+    /// that negates <c>isT</c> and throws <see cref="TypeError"/> with
+    /// either the caller-supplied <paramref name="message"/> parameter
+    /// or a default <c>"Value is not a TName"</c> fallback. Kept inline
+    /// (no <c>metano-runtime</c> helper) so the guard stays zero-dep
+    /// and tree-shakable, matching ADR-0009's accepted trade-off.
+    /// </summary>
+    private static TsFunction GenerateAssert(string tsName, string guardName)
+    {
+        var valueParam = new TsParameter("value", new TsNamedType("unknown"));
+        var messageParam = new TsParameter("message", new TsNamedType("string"), Optional: true);
+
+        // throw new TypeError(message ?? "Value is not a TName");
+        var defaultMessage = new TsStringLiteral($"Value is not a {tsName}");
+        var throwStmt = new TsThrowStatement(
+            new TsNewExpression(
+                new TsIdentifier("TypeError"),
+                [new TsBinaryExpression(new TsIdentifier("message"), "??", defaultMessage)]
+            )
+        );
+
+        // if (!isT(value)) { throw ... }
+        var body = new List<TsStatement>
+        {
+            new TsIfStatement(
+                new TsUnaryExpression(
+                    "!",
+                    new TsCallExpression(new TsIdentifier(guardName), [new TsIdentifier("value")])
+                ),
+                [throwStmt]
+            ),
+        };
+
+        return new TsFunction(
+            $"assert{tsName}",
+            [valueParam, messageParam],
+            new TsTypePredicateType("value", new TsNamedType(tsName), IsAsserts: true),
+            body
+        );
     }
 
     private static TsFunction GenerateEnumGuard(

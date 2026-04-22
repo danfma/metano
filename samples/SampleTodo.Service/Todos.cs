@@ -12,8 +12,13 @@ public record StoredTodo(string Id, TodoItem Item);
 
 /// <summary>
 /// POST /todos request body. Plain shape; no methods, no equality.
+/// <c>[GenerateGuard]</c> produces both <c>isCreateTodoDto</c> and
+/// <c>assertCreateTodoDto</c> so the Hono handler can validate the
+/// incoming JSON at the trust boundary and reject malformed bodies
+/// with a clear TypeError instead of letting partial shapes flow
+/// downstream.
 /// </summary>
-[PlainObject, EmitInFile("todos")]
+[PlainObject, EmitInFile("todos"), GenerateGuard]
 public record CreateTodoDto(string Title, Priority Priority);
 
 /// <summary>
