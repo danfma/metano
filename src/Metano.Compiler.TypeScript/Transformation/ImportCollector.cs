@@ -191,10 +191,10 @@ public sealed class ImportCollector(
         >(StringComparer.Ordinal);
 
         // Per-specifier dedup inside a bucket. The outer `importedNames` set dedupes
-        // by the *referenced* identifier (the key used to look up the symbol), but
-        // `_context.TranspilableTypeMap` is dual-keyed by C# name AND TS name when [Name]
-        // diverges, so two distinct lookup keys can resolve to the same `targetTsName`
-        // and attempt to add it twice. Without this guard the output would be
+        // by the *referenced* identifier (the key used to look up the entry), but
+        // `_context.TranspilableTypes` is dual-keyed by C# name AND TS name when [Name]
+        // diverges, so two distinct lookup keys can resolve to the same `TsName` and
+        // attempt to add it twice. Without this guard the output would be
         // `import { Foo, Foo } from "..."`. Also: if a specifier is observed as both
         // value and type-only across iterations, the value form wins — type-only is
         // the narrower claim, and runtime-imported names must not be demoted to
@@ -285,20 +285,18 @@ public sealed class ImportCollector(
             // and `isCurrency` ends up with a single `import { Currency, isCurrency }`
             // line instead of two.
             if (
-                _context.TryResolveGuardImport(typeName, out var guardedSymbol)
+                _context.TryResolveGuardImport(typeName, out var guarded)
                 && importedNames.Add(typeName)
             )
             {
-                var guardNs = PathNaming.GetNamespace(guardedSymbol);
                 // Use the file name (not the type name) when computing the path so a
                 // guard for a [EmitInFile]-grouped type points at the merged file.
-                var guardFileName = GetFileName(guardedSymbol);
-                if (guardNs == currentNs && guardFileName == currentFileName)
+                if (guarded.Namespace == currentNs && guarded.FileName == currentFileName)
                     continue; // same file
                 var guardPath = _context.PathNaming.ComputeRelativeImportPath(
                     currentNs,
-                    guardNs,
-                    guardFileName
+                    guarded.Namespace,
+                    guarded.FileName
                 );
                 // Guards are functions → always imported as values, never type-only.
                 AddLocal(guardPath, typeName, typeOnly: false);
@@ -306,31 +304,27 @@ public sealed class ImportCollector(
             }
 
             // Transpilable type within the project
-            if (!_context.TranspilableTypeMap.TryGetValue(typeName, out var referencedSymbol))
+            if (!_context.TranspilableTypes.TryGetValue(typeName, out var referencedRef))
                 continue;
 
             // Skip types co-located in the same file via [EmitInFile] — they're
             // declared locally in the merged source, no import needed.
-            var targetNs = PathNaming.GetNamespace(referencedSymbol);
-            var targetFileName = GetFileName(referencedSymbol);
-            if (targetNs == currentNs && targetFileName == currentFileName)
+            if (referencedRef.Namespace == currentNs && referencedRef.FileName == currentFileName)
                 continue;
 
             if (!importedNames.Add(typeName))
                 continue;
 
-            var targetTsName = _context.ResolveTsName(referencedSymbol);
             // Path is computed against the FILE name (not the type name) so multiple
             // types co-located in the same file resolve to the same import path.
             var importPath = _context.PathNaming.ComputeRelativeImportPath(
                 currentNs,
-                targetNs,
-                targetFileName
+                referencedRef.Namespace,
+                referencedRef.FileName
             );
             // StringEnums generate const objects — always import as value
-            var isStringEnum = SymbolHelper.HasStringEnum(referencedSymbol);
-            var typeOnly = !valueTypes.Contains(typeName) && !isStringEnum;
-            AddLocal(importPath, targetTsName, typeOnly);
+            var typeOnly = !valueTypes.Contains(typeName) && !referencedRef.IsStringEnum;
+            AddLocal(importPath, referencedRef.TsName, typeOnly);
         }
 
         // Emit one merged TsImport per bucketed local path. Three-case form:

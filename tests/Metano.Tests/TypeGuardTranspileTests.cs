@@ -261,7 +261,7 @@ public class TypeGuardTranspileTests
         // `isTicker`. A sibling record whose own guard references the
         // aliased type's guard must import `isTicker` via its alias —
         // this exercises the dual-keying invariant on
-        // _transpilableTypeMap + GuardableTypeKeys that
+        // IrCompilation.TranspilableTypes + GuardableTypeKeys that
         // TryResolveGuardImport relies on.
         var result = TranspileHelper.Transpile(
             """

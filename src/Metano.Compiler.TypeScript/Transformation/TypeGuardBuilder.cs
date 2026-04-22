@@ -19,7 +19,7 @@ namespace Metano.Transformation;
 /// </list>
 ///
 /// Field checks recurse into other transpilable guards via the context's
-/// <see cref="TypeScriptTransformContext.TranspilableTypeMap"/>.
+/// <see cref="TypeScriptTransformContext.TranspilableTypes"/>.
 /// </summary>
 public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 {
@@ -315,7 +315,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             ),
 
             // Transpilable named type → call guard recursively
-            TsNamedType { Name: var n } when _context.TranspilableTypeMap.ContainsKey(n) =>
+            TsNamedType { Name: var n } when _context.TranspilableTypes.ContainsKey(n) =>
                 new TsCallExpression(new TsIdentifier($"is{n}"), [fieldAccess]),
 
             // Union with null (nullable) → field == null || innerCheck
