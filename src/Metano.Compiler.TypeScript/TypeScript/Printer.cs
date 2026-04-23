@@ -236,6 +236,13 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(n.IsDefault ? $"export default {n.Name};" : $"export {{ {n.Name} }};");
                 _sb.WriteLn();
                 break;
+            case TsExportImportAlias n:
+                // `export import Alias = Target;` — namespace aliasing
+                // under --namespace-barrels. Valid only inside a
+                // `namespace { … }` block; the root barrel generator
+                // never emits this at file scope.
+                _sb.Write($"export import {n.Alias} = {n.Target};");
+                break;
         }
     }
 
@@ -244,7 +251,17 @@ public sealed class Printer(string indent = "  ")
         _sb.Write("import ");
         if (import.TypeOnly)
             _sb.Write("type ");
-        if (import.IsDefault)
+        if (import.IsNamespace)
+        {
+            // `import * as Foo from "...";` — namespace import, single
+            // alias in Names[0]. Used by the root barrel generated under
+            // --namespace-barrels to bind a subpath's exports under a
+            // local identifier so the outer namespace block can re-export
+            // it via TsExportImportAlias.
+            _sb.Write("* as ");
+            _sb.Write(import.Names[0]);
+        }
+        else if (import.IsDefault)
         {
             // `import Foo from "...";` — single name, no braces.
             _sb.Write(import.Names[0]);

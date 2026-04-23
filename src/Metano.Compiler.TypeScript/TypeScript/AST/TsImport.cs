@@ -23,5 +23,6 @@ public sealed record TsImport(
     string From,
     bool TypeOnly = false,
     bool IsDefault = false,
-    IReadOnlySet<string>? TypeOnlyNames = null
+    IReadOnlySet<string>? TypeOnlyNames = null,
+    bool IsNamespace = false
 ) : TsTopLevel;

@@ -4,6 +4,13 @@
     <IsPackable>false</IsPackable>
     <MetanoOutputDir>../../targets/js/sample-issue-tracker/src</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
+    <!--
+      Opt into the root namespace barrel (ADR-0006 follow-up, issue #22)
+      so consumers can import `{ Issues, Planning, SharedKernel }` from
+      the package root in addition to the existing leaf barrels. The
+      aggregation shape stays tree-shakable under current bundlers.
+    -->
+    <MetanoNamespaceBarrels>true</MetanoNamespaceBarrels>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
   </PropertyGroup>
 

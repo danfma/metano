@@ -79,9 +79,9 @@ barrel via `export * from "./issues/domain"; export * from "./planning/domain"; 
 — defeats tree-shaking as described above. An alternative shape using
 `export namespace` blocks to mirror the C# hierarchy preserves
 tree-shaking in principle but changes every consumer's import surface.
-Neither is acceptable as the default, so the feature is tracked as an
-**opt-in flag** (`--namespace-barrels`) in
-[issue #22](https://github.com/danfma/metano/issues/22).
+Neither is acceptable as the default, so the feature ships as an
+**opt-in flag** (`--namespace-barrels`, MSBuild property
+`MetanoNamespaceBarrels`) — see the addendum below.
 
 `CyclicReferenceDetector` normalizes `#`, `#/...`, and `./...` in its
 graph, so cycles across any of the three forms surface as MS0005
@@ -140,3 +140,67 @@ diagnostics before tsgo chokes on them.
   `specs/same-namespace-relative-imports-plan.md`) were removed as part
   of the documentation reorganization (issue #14). `git log --follow`
   preserves them if the full plan text is ever needed.
+
+## Addendum (2026-04-23) — `--namespace-barrels` opt-in
+
+Ships the root-barrel follow-up tracked in issue #22. Packages that
+opt in via `--namespace-barrels` (CLI) or `<MetanoNamespaceBarrels>true</MetanoNamespaceBarrels>`
+(MSBuild, routed through `Metano.Build.targets`) receive an
+additional `src/index.ts` that aggregates every leaf barrel under
+nested `export namespace` blocks mirroring the C# namespace hierarchy:
+
+```ts
+import * as $Issues_Application from "./issues/application";
+import * as $Issues_Domain from "./issues/domain";
+import * as $Planning_Domain from "./planning/domain";
+import * as $SharedKernel from "./shared-kernel";
+
+export namespace Issues {
+  export import Application = $Issues_Application;
+  export import Domain = $Issues_Domain;
+}
+export namespace Planning {
+  export import Domain = $Planning_Domain;
+}
+export import SharedKernel = $SharedKernel;
+```
+
+Consumers can then write `import { Issues, Planning, SharedKernel } from "@scope/pkg"`
+and walk into nested namespaces. Leaf barrels continue to emit so the
+existing `import { Issue } from "@scope/pkg/issues/domain"` path keeps
+working — the root barrel is strictly additive.
+
+Tree-shaking stays intact. Each subpath binds to a single
+`import * as` identifier; bundlers that can't follow an
+`export * from "./**"` chain handle namespace imports + named
+re-exports just fine. Verified on Bun + tsgo; the approach matches
+the pattern shipped by `@effect/platform` and other TS-heavy
+libraries.
+
+When the project already has types at the bare root (a non-empty
+root `index.ts` leaf), the namespace-aggregation statements are
+**appended** to that existing barrel so bare-root exports and the
+namespace-aggregation block coexist in a single file.
+
+The import alias follows the convention `$<SegmentA>_<SegmentB>_…`
+(PascalCased path segments joined with `_`, prefixed with `$`).
+The `$` prefix keeps the local binding distinct from any namespace
+name surfaced in the `export import` statement — single-segment
+leaves (`shared-kernel` → `$SharedKernel`) would otherwise collide
+with the re-exported identifier and trip a TDZ
+`Cannot access 'X' before initialization` at runtime.
+
+The flag is **not** flipped on by default. Two concerns stay open:
+
+- Tree-shaking claim needs verification across the wider toolchain
+  matrix (webpack, rspack, Parcel) before we'd switch the default.
+  Bun, tsgo, esbuild, Vite all drop unused branches correctly in
+  spot checks.
+- Surface cost: flipping the default changes every downstream
+  consumer's import surface. A major-version bump with migration
+  notes is the right vehicle, not a minor-version toggle.
+
+`SampleIssueTracker` opts into the flag via
+`MetanoNamespaceBarrels` in its `.csproj` so the generated
+`targets/js/sample-issue-tracker/src/index.ts` exercises the shape
+end-to-end (see `test/namespace-barrels.test.ts`).

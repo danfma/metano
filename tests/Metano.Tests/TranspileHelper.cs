@@ -128,12 +128,17 @@ public static class TranspileHelper
     private static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
-    ) TranspileCore(CSharpCompilation compilation, bool useIrBodies = true)
+    ) TranspileCore(
+        CSharpCompilation compilation,
+        bool useIrBodies = true,
+        bool namespaceBarrels = false
+    )
     {
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
         var transformer = new TypeTransformer(ir, compilation)
         {
             UseIrBodiesWhenCovered = useIrBodies,
+            NamespaceBarrels = namespaceBarrels,
         };
         var files = transformer.TransformAll();
         var printer = new Printer();
@@ -170,6 +175,22 @@ public static class TranspileHelper
     /// </summary>
     public static Dictionary<string, string> TranspileConsoleApp(string csharpSource) =>
         Transpile(csharpSource, OutputKind.ConsoleApplication);
+
+    /// <summary>
+    /// Variant of <see cref="Transpile"/> that enables the
+    /// <c>--namespace-barrels</c> opt-in — exercises the root
+    /// <c>src/index.ts</c> emission path with nested
+    /// <c>export namespace</c> blocks.
+    /// </summary>
+    public static Dictionary<string, string> TranspileWithNamespaceBarrels(string csharpSource)
+    {
+        var compilation = CompileAssembly(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary
+        );
+        return TranspileCore(compilation, namespaceBarrels: true).Files;
+    }
 
     /// <summary>
     /// Like <see cref="Transpile"/> but enables the Phase 5.10b IR-driven body pipeline.

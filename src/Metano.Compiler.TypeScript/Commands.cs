@@ -16,6 +16,7 @@ public class Commands
     /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
     /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
     /// <param name="skipPackageJson">Skip generating/updating package.json</param>
+    /// <param name="namespaceBarrels">Emit an additional src/index.ts root barrel mirroring the C# namespace hierarchy via `export namespace` blocks (opt-in; see ADR-0006).</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -25,10 +26,11 @@ public class Commands
         string? packageRoot = null,
         string dist = "./dist",
         string? srcRoot = null,
-        bool skipPackageJson = false
+        bool skipPackageJson = false,
+        bool namespaceBarrels = false
     )
     {
-        var target = new TypeScriptTarget();
+        var target = new TypeScriptTarget { NamespaceBarrels = namespaceBarrels };
 
         var options = new TranspileOptions(
             ProjectPath: project,

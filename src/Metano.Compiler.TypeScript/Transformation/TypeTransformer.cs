@@ -33,6 +33,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public bool UseIrBodiesWhenCovered { get; init; } = true;
 
     /// <summary>
+    /// Forwarded to <see cref="BarrelFileGenerator.Generate"/>. When
+    /// <c>true</c>, the generator emits <c>src/index.ts</c> mirroring
+    /// the C# namespace hierarchy via <c>export namespace</c> blocks
+    /// (opt-in; see ADR-0006 + issue #22).
+    /// </summary>
+    public bool NamespaceBarrels { get; init; }
+
+    /// <summary>
     /// Diagnostics collected during transformation. Includes warnings about unsupported
     /// language features and other issues that the user should know about.
     /// </summary>
@@ -178,7 +186,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         // Generate index.ts barrel files per namespace folder
-        var indexFiles = BarrelFileGenerator.Generate(files);
+        var indexFiles = BarrelFileGenerator.Generate(files, NamespaceBarrels);
         files.AddRange(indexFiles);
 
         // Detect cyclic #/ imports between the generated files and emit MS0005

@@ -45,6 +45,9 @@
       <_MetanoArgs Condition="'$(MetanoSkipPackageJson)' == 'true'"
         >$(_MetanoArgs) --skip-package-json</_MetanoArgs
       >
+      <_MetanoArgs Condition="'$(MetanoNamespaceBarrels)' == 'true'"
+        >$(_MetanoArgs) --namespace-barrels</_MetanoArgs
+      >
       <_MetanoArgs Condition="'$(MetanoExtraArgs)' != ''"
         >$(_MetanoArgs) $(MetanoExtraArgs)</_MetanoArgs
       >

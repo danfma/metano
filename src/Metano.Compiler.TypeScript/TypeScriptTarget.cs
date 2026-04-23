@@ -53,6 +53,16 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// </summary>
     public bool LastIsExecutable { get; private set; }
 
+    /// <summary>
+    /// When <c>true</c>, <see cref="BarrelFileGenerator"/> emits an
+    /// additional <c>src/index.ts</c> root barrel that aggregates every
+    /// leaf barrel under nested <c>export namespace</c> blocks mirroring
+    /// the C# namespace hierarchy. Opt-in via <c>--namespace-barrels</c>;
+    /// the default stays leaf-only so tree-shaking under current
+    /// bundlers continues to work without surprises (see ADR-0006).
+    /// </summary>
+    public bool NamespaceBarrels { get; init; }
+
     public TargetOutput Transform(IrCompilation ir, Compilation? compilation)
     {
         if (compilation is null)
@@ -62,7 +72,10 @@ public sealed class TypeScriptTarget : ITranspilerTarget
                     + "TypeScript transformer reads everything it needs from IrCompilation."
             );
 
-        var transformer = new TypeTransformer(ir, compilation);
+        var transformer = new TypeTransformer(ir, compilation)
+        {
+            NamespaceBarrels = NamespaceBarrels,
+        };
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
         // Prefer the frontend-populated package name; the underlying Roslyn read
