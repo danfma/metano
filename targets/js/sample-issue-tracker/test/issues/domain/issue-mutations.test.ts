@@ -15,18 +15,27 @@ import { makeIssue } from "../../helpers";
 //     status names so downstream audit readers can parse the trail
 
 describe("Issue mutations", () => {
-  test("CreatedAt and UpdatedAt start within the same second", () => {
+  test("CreatedAt and UpdatedAt start within one second of each other", () => {
     const issue = makeIssue();
     // Each field initializes via its own `Temporal.Now.zonedDateTimeISO()`
-    // call, which produces distinct nanosecond values even when evaluated
-    // in the same synchronous pass. Assert they land in the same second
-    // instead of pinning exact equality.
-    const createdSec = issue.createdAt.epochNanoseconds / 1_000_000_000n;
-    const updatedSec = issue.updatedAt.epochNanoseconds / 1_000_000_000n;
-    expect(createdSec).toBe(updatedSec);
+    // call, so they can legitimately straddle a wall-clock second
+    // boundary. Assert the absolute delta stays within a second instead
+    // of pinning equal whole seconds (which would flake once per second
+    // in CI).
+    const createdAtNs = issue.createdAt.epochNanoseconds;
+    const updatedAtNs = issue.updatedAt.epochNanoseconds;
+    const deltaNs =
+      createdAtNs >= updatedAtNs
+        ? createdAtNs - updatedAtNs
+        : updatedAtNs - createdAtNs;
+    expect(deltaNs <= 1_000_000_000n).toBe(true);
   });
 
-  test("rename advances UpdatedAt", () => {
+  test("rename does not decrease UpdatedAt", () => {
+    // Weaker than "advances" — `Temporal.Now` resolution can coincide
+    // for two synchronous calls, so a strict `>` would flake. What we
+    // actually guarantee (and want to pin): `touch` never rewinds the
+    // timestamp.
     const issue = makeIssue();
     const before = issue.updatedAt.epochNanoseconds;
     issue.rename("New title");

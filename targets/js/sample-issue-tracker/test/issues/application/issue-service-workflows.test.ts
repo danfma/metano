@@ -129,7 +129,7 @@ describe("IssueService workflows", () => {
     expect(readyHigh.items[0]?.status).toBe(IssueStatus.Ready);
   });
 
-  test("invalid status transition surfaces as thrown InvalidOperation", async () => {
+  test("invalid status transition surfaces as a thrown Error", async () => {
     const { service } = buildService();
     const created = await service.createAsync(
       "Task",
@@ -138,15 +138,18 @@ describe("IssueService workflows", () => {
       IssuePriority.Medium,
     );
     // Backlog → Done is disallowed; the underlying Issue.transitionTo
-    // throws and the async wrapper propagates. OperationResult shape
-    // doesn't swallow runtime exceptions today — this test pins that
-    // expectation so a future change to the dispatcher surfaces.
+    // throws (the C# `InvalidOperationException` lowers to a plain JS
+    // `Error`) and the async wrapper propagates the rejection.
+    // OperationResult shape doesn't swallow runtime exceptions today —
+    // this test pins that expectation so a future change to the
+    // dispatcher surfaces. The message format is part of the contract
+    // so assert against it instead of just `toThrow()`.
     await expect(
       service.transitionAsync(
         created.value!.id,
         IssueStatus.Done,
         UserId.create("alice"),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/Cannot transition issue from/);
   });
 });
