@@ -219,7 +219,7 @@ public static class SymbolHelper
         symbol
             .GetAttributes()
             .Any(a =>
-                a.AttributeClass?.Name is "OptionalAttribute" or "Optional"
+                a.AttributeClass?.Name is ("OptionalAttribute" or "Optional")
                 && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
                     == "Metano.Annotations.TypeScript"
             );
@@ -239,7 +239,7 @@ public static class SymbolHelper
         symbol
             .GetAttributes()
             .Where(a =>
-                a.AttributeClass?.Name is "DiscriminatorAttribute" or "Discriminator"
+                a.AttributeClass?.Name is ("DiscriminatorAttribute" or "Discriminator")
                 && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
                     == "Metano.Annotations.TypeScript"
             )

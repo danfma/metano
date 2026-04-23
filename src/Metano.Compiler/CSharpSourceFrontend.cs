@@ -569,6 +569,31 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             VisitTypeForOptional(nested, assemblyWideTranspile, currentAssembly, diagnostics);
     }
 
+    /// <summary>
+    /// Mirrors the inclusion rules
+    /// <c>TypeGuardBuilder.GetAllFieldsForGuard</c> applies to
+    /// properties. Returns <c>false</c> for implicitly-declared,
+    /// static, <c>private</c> / <c>internal</c> / <c>NotApplicable</c>
+    /// accessibility, and <c>[Ignore(TypeScript)]</c>-suppressed
+    /// members. Used by <c>ValidateDiscriminatorAttribute</c> to
+    /// reject discriminators pointing at a member that won't appear
+    /// in the emitted TS shape.
+    /// </summary>
+    private static bool IsGuardVisibleProperty(IPropertySymbol prop)
+    {
+        if (prop.IsImplicitlyDeclared)
+            return false;
+        if (prop.IsStatic)
+            return false;
+        if (SymbolHelper.HasIgnore(prop, TargetLanguage.TypeScript))
+            return false;
+        return prop.DeclaredAccessibility
+            is Accessibility.Public
+                or Accessibility.Protected
+                or Accessibility.ProtectedOrInternal
+                or Accessibility.ProtectedAndInternal;
+    }
+
     private static bool IsNullableType(ITypeSymbol type) =>
         type.NullableAnnotation == NullableAnnotation.Annotated
         || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
@@ -653,6 +678,31 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                             + $"'{fieldName}' property typed as a [StringEnum], or remove the "
                             + $"attribute.",
                         type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+            else if (!IsGuardVisibleProperty(property))
+            {
+                // The guard emits `v.<field>` access unconditionally when
+                // the attribute is present. A private / internal / static
+                // / implicitly-declared / [Ignore(TS)] member isn't part
+                // of the TS shape the guard walks, so the short-circuit
+                // would access a phantom field and reject every payload.
+                // Match the inclusion rules
+                // (TypeGuardBuilder.IsGuardVisible + static/implicit/
+                // Ignore filter) so the discriminator can only point at
+                // a member that actually surfaces in the emitted
+                // interface.
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidDiscriminator,
+                        $"[Discriminator(\"{fieldName}\")] on '{type.Name}' references "
+                            + $"'{type.Name}.{fieldName}', which isn't guard-visible (private, "
+                            + $"static, implicit, or [Ignore(TypeScript)]-ed). The discriminator "
+                            + $"must be a public instance property that participates in the "
+                            + $"emitted TS shape so the guard can narrow against it.",
+                        property.Locations.FirstOrDefault()
                     )
                 );
             }
