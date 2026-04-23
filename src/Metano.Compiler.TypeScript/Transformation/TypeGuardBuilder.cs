@@ -231,8 +231,37 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             )
         );
 
-        // Field checks
-        var fields = GetAllFieldsForGuard(type);
+        // [Discriminator("FieldName")] short-circuit: check the named
+        // field against the type's TS name (convention: enum member
+        // name matches the type's TS name — e.g., Circle class tags
+        // `Kind` and the emitted guard expects `v.kind === "Circle"`).
+        // Runs before shape validation so a mismatch exits the guard
+        // immediately instead of walking every field. The frontend
+        // validator (MS0011) guarantees the discriminant is a present
+        // non-nullable StringEnum, so the literal comparison is safe.
+        var discriminatorFieldName = SymbolHelper.GetDiscriminatorFieldName(type);
+        var discriminatorCamel = discriminatorFieldName is not null
+            ? TypeScriptNaming.ToCamelCase(discriminatorFieldName)
+            : null;
+        if (discriminatorFieldName is not null && discriminatorCamel is not null)
+        {
+            body.Add(
+                new TsIfStatement(
+                    new TsBinaryExpression(
+                        new TsPropertyAccess(new TsIdentifier("v"), discriminatorCamel),
+                        "!==",
+                        new TsStringLiteral(tsName)
+                    ),
+                    [new TsReturnStatement(new TsLiteral("false"))]
+                )
+            );
+        }
+
+        // Field checks — skip the discriminator (already narrowed above)
+        // to avoid redundant recursion into isKind(v.kind).
+        var fields = GetAllFieldsForGuard(type)
+            .Where(f => !string.Equals(f.Name, discriminatorCamel, StringComparison.Ordinal))
+            .ToList();
         if (fields.Count > 0)
         {
             TsExpression fieldChecks = fields

@@ -95,4 +95,13 @@ public static class DiagnosticCodes
     /// behavior. The fix is to make the C# type nullable
     /// (<c>[Optional] string? Name</c>).</summary>
     public const string OptionalRequiresNullable = "MS0010";
+
+    /// <summary>MS0011 — <c>[Discriminator("FieldName")]</c> (from
+    /// <c>Metano.Annotations.TypeScript</c>) refers to a field that
+    /// either doesn't exist on the annotated type, isn't a
+    /// <c>[StringEnum]</c>, or is nullable. The short-circuit guard
+    /// emission relies on the field being a present, non-null
+    /// StringEnum so the discriminant check can narrow the rest of
+    /// the shape.</summary>
+    public const string InvalidDiscriminator = "MS0011";
 }

@@ -154,25 +154,68 @@ including `[PlainObject]` records that lower to bare TS interfaces
 `SymbolHelper.HasPlainObject(type)` is true — shape validation alone
 narrows those correctly.
 
-The `[Discriminator("Kind")]` attribute (issue #24, part 2) stays in
-scope for a follow-up PR: short-circuits the guard on a nominated
-enum field before walking the rest of the shape, which matters more
-when types get wide. The assertion companion composes with that
-optimization automatically (it still wraps `isT`).
+## Addendum (2026-04-23) — `[Discriminator("FieldName")]` short-circuit
+
+Types annotated with `[Discriminator("FieldName")]` (from
+`Metano.Annotations.TypeScript`) short-circuit the generated guard on
+a nominated field before walking the rest of the shape. The check
+emits as a literal comparison — `if (v.kind !== "TypeName") return
+false;` — placed immediately after the null/object gate. When the
+discriminator matches, the remaining field checks still run so
+reserved fields stay validated.
+
+The expected discriminator value follows a **type-name convention**:
+the emitted check compares against the type's TS name (after
+`[Name(TypeScript, …)]` resolution). A `Circle` class tagged
+`[Discriminator("Kind")]` expects `v.kind === "Circle"`; a class
+renamed via `[Name(TypeScript, "Round")]` expects `v.kind === "Round"`.
+This keeps the attribute surface minimal — no second argument for the
+expected value — at the cost of requiring the enum member name to
+match the type name. The convention is enforced at runtime (a
+mismatch rejects every payload); the frontend validator only checks
+field shape, not enum-member-to-type-name alignment.
+
+Frontend validator emits `MS0011` when the `[Discriminator]` field is
+missing on the type, not a `[StringEnum]`, or nullable — any of those
+would produce a guard that can't narrow safely. The short-circuit
+lowering runs after the null-safety gates so the discriminator access
+is always on an object, and the field itself has no null guard of its
+own.
+
+The discriminator field is also **skipped from the general field
+loop** — the literal comparison above is strictly tighter than the
+`isKind(v.kind)` recursive call the default emission would produce,
+so re-checking would be dead code and drag in an extra runtime import
+for the enum guard.
+
+The sealed-hierarchy follow-up (issue #24, part 3 — union type guard
+that switches on a shared discriminant across multiple subtypes) stays
+out of scope. Metano doesn't model sealed hierarchies at the IR layer
+today; adding one is a separate design conversation.
 
 ## References
 
 - `src/Metano.Compiler.TypeScript/Transformation/TypeGuardBuilder.cs` —
-  `Generate` now returns `[isT, assertT]`; `GenerateAssert` builds the
-  throwing companion.
+  `Generate` returns `[isT, assertT]`; `GenerateAssert` builds the
+  throwing companion; `GenerateShapeGuard` emits the discriminator
+  short-circuit when `[Discriminator]` is present and filters the
+  field out of the remaining shape loop.
 - `src/Metano.Compiler.TypeScript/TypeScript/AST/TsTypePredicateType.cs` —
   extended with an `IsAsserts` flag for `asserts value is T` emission.
 - `src/Metano/Annotations/GenerateGuardAttribute.cs`
+- `src/Metano/Annotations/TypeScript/DiscriminatorAttribute.cs` —
+  TS-specific attribute, namespaced away from cross-target annotations.
+- `src/Metano.Compiler/CSharpSourceFrontend.cs` —
+  `ValidateDiscriminatorAttribute` raises MS0011 for invalid uses.
 - `targets/js/metano-runtime/src/type-checking/primitive-type-checks.ts` —
   `isInt32`, `isString`, etc.
-- `tests/Metano.Tests/TypeGuardTranspileTests.cs` — isT + assertT matrix.
-- `targets/js/sample-todo-service/test/guards.test.ts` — end-to-end bun
-  test that exercises `assertCreateTodoDto` at a mock trust boundary.
+- `tests/Metano.Tests/TypeGuardTranspileTests.cs` — isT + assertT +
+  discriminator matrix.
+- `targets/js/sample-todo-service/test/guards.test.ts` — bun test
+  exercising `assertCreateTodoDto` at a mock trust boundary.
+- `targets/js/sample-todo-service/test/events.test.ts` — bun test
+  demonstrating discriminator-based narrowing between `TodoCreated`
+  and `TodoUpdated` variants that share the `TodoEventKind` enum.
 - [Issue #24](https://github.com/danfma/metano/issues/24) — `assertX`
-  throwing variant (shipped) + discriminated unions (tracked
-  follow-up).
+  throwing variant (shipped) + `[Discriminator]` short-circuit
+  (shipped) + sealed-hierarchy union guard (deferred).

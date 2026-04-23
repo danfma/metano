@@ -225,6 +225,30 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// Reads <c>[Discriminator("FieldName")]</c> from the
+    /// <c>Metano.Annotations.TypeScript</c> namespace. Returns the
+    /// discriminant field name (original C# casing) when the attribute
+    /// is present, or <c>null</c> otherwise. Namespace-qualified match
+    /// so unrelated <c>[Discriminator]</c> attributes from other
+    /// libraries cannot be mistaken for the Metano variant. Callers
+    /// outside the TypeScript target should treat a non-null result as
+    /// a no-op (Dart / Kotlin have no equivalent narrowing
+    /// convention).
+    /// </summary>
+    public static string? GetDiscriminatorFieldName(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Where(a =>
+                a.AttributeClass?.Name is "DiscriminatorAttribute" or "Discriminator"
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
+                    == "Metano.Annotations.TypeScript"
+            )
+            .Select(a =>
+                a.ConstructorArguments.Length > 0 ? a.ConstructorArguments[0].Value as string : null
+            )
+            .FirstOrDefault(s => s is not null);
+
+    /// <summary>
     /// Reads the file name from <c>[EmitInFile("name")]</c> on a type symbol, or null
     /// when the attribute isn't present (in which case the type takes its own name as
     /// the file).

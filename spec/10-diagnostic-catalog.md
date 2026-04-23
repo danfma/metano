@@ -12,7 +12,7 @@ Each diagnostic carries:
 - message;
 - optional source location.
 
-The current stable code range is **`MS0001` through `MS0008`**.
+The current stable code range is **`MS0001` through `MS0011`**.
 
 ## Stable Codes
 
@@ -26,6 +26,9 @@ The current stable code range is **`MS0001` through `MS0008`**.
 | `MS0006` | `InvalidModuleEntryPoint` | Invalid use of `[ModuleEntryPoint]`, including incompatible signature or conflicting setup. |
 | `MS0007` | `CrossPackageResolution` | Cross-package resolution failure, including missing or divergent package identity metadata. |
 | `MS0008` | `EmitInFileConflict` | Conflicting `[EmitInFile]` grouping would make output placement ambiguous. |
+| `MS0009` | `FrontendLoadFailure` | Source frontend failed to load or compile the project. |
+| `MS0010` | `OptionalRequiresNullable` | `[Optional]` was applied to a non-nullable parameter or property. |
+| `MS0011` | `InvalidDiscriminator` | `[Discriminator("FieldName")]` references a field that is missing, not a `[StringEnum]`, or nullable. |
 
 ## Product Significance
 

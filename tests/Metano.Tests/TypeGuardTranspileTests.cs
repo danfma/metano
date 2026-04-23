@@ -406,4 +406,161 @@ public class TypeGuardTranspileTests
         await Assert.That(output).DoesNotContain("isAppError");
         await Assert.That(output).DoesNotContain("assertAppError");
     }
+
+    // ─── [Discriminator] short-circuit guard ─────────────────
+
+    [Test]
+    public async Task Discriminator_ShortCircuitsOnNamedField()
+    {
+        // [Discriminator("Kind")] tags `Kind` as the narrowing field.
+        // Convention: expected value is the type's TS name
+        // (Circle ↔ "Circle"). Generated guard checks
+        // `v.kind !== "Circle"` before walking the remaining shape so
+        // a mismatched body exits without traversing every field.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public record Circle(ShapeKind Kind, double Radius);
+            """
+        );
+
+        var output = result["circle.ts"];
+        await Assert.That(output).Contains("if (v.kind !== \"Circle\")");
+        await Assert.That(output).Contains("return false");
+    }
+
+    [Test]
+    public async Task Discriminator_RemovesSelfFromFieldChecks()
+    {
+        // The discriminator narrows the field by literal comparison, so
+        // the generated guard must skip the redundant isKind(v.kind)
+        // call that GetAllFieldsForGuard would otherwise emit — avoids
+        // a double-check plus the extra import it would pull in.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public record Circle(ShapeKind Kind, double Radius);
+            """
+        );
+
+        var output = result["circle.ts"];
+        await Assert.That(output).DoesNotContain("isShapeKind(v.kind)");
+        // radius is still validated
+        await Assert.That(output).Contains("typeof v.radius === \"number\"");
+    }
+
+    [Test]
+    public async Task Discriminator_HonorsNameOverride()
+    {
+        // [Name(TypeScript, "Round")] renames the emitted type. The
+        // discriminator expected value tracks the TS name so consumer
+        // code keyed by the renamed variant continues to narrow — the
+        // check emits `v.kind !== "Round"`.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { [Name("Round")] Round, Square }
+
+            [Transpile, GenerateGuard]
+            [Name(TargetLanguage.TypeScript, "Round")]
+            [Discriminator("Kind")]
+            public record Circle(ShapeKind Kind, double Radius);
+            """
+        );
+
+        var output = result["round.ts"];
+        await Assert.That(output).Contains("if (v.kind !== \"Round\")");
+    }
+
+    [Test]
+    public async Task Discriminator_MissingField_EmitsMs0011()
+    {
+        // [Discriminator("Kind")] must refer to an existing property.
+        // If the name is wrong (typo, removed field), the frontend
+        // validator raises MS0011 pointing at the offending type.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, GenerateGuard]
+            [Discriminator("DoesNotExist")]
+            public record Circle(double Radius);
+            """
+        );
+
+        var ms0011 = diagnostics.FirstOrDefault(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidDiscriminator
+        );
+        await Assert.That(ms0011).IsNotNull();
+        await Assert.That(ms0011!.Message).Contains("DoesNotExist");
+        await Assert.That(ms0011.Message).Contains("Circle");
+    }
+
+    [Test]
+    public async Task Discriminator_NonStringEnumField_EmitsMs0011()
+    {
+        // [Discriminator] requires the referenced field to carry
+        // [StringEnum] so the narrowing compiles to a literal
+        // comparison. Numeric enums (or any non-string-valued type)
+        // raise MS0011.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public record Circle(ShapeKind Kind, double Radius);
+            """
+        );
+
+        var ms0011 = diagnostics.FirstOrDefault(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidDiscriminator
+        );
+        await Assert.That(ms0011).IsNotNull();
+        await Assert.That(ms0011!.Message).Contains("not a [StringEnum]");
+    }
+
+    [Test]
+    public async Task Discriminator_NullableField_EmitsMs0011()
+    {
+        // The discriminant must be present on every instance so the
+        // guard can narrow without a null check of its own. Nullable
+        // discriminators raise MS0011.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public record Circle(ShapeKind? Kind, double Radius);
+            """
+        );
+
+        var ms0011 = diagnostics.FirstOrDefault(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidDiscriminator
+        );
+        await Assert.That(ms0011).IsNotNull();
+        await Assert.That(ms0011!.Message).Contains("nullable");
+    }
 }

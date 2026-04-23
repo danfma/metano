@@ -136,7 +136,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             : BuildTranspilableTypeEntries(compilation, assemblyWideTranspile, entryPoint);
 
         if (compilation is not null)
+        {
             ValidateOptionalAttribute(compilation, assemblyWideTranspile, diagnostics);
+            ValidateDiscriminatorAttribute(compilation, assemblyWideTranspile, diagnostics);
+        }
 
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
@@ -600,6 +603,97 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 : $"'{method.ContainingType?.Name ?? string.Empty}.{method.Name}({p.Name})'",
             _ => $"'{symbol.ContainingSymbol?.Name ?? string.Empty}.{symbol.Name}'",
         };
+
+    /// <summary>
+    /// Walks every transpilable type carrying
+    /// <c>[Discriminator("FieldName")]</c> and emits <c>MS0011</c>
+    /// when the referenced field is missing, not a <c>[StringEnum]</c>,
+    /// or nullable. The short-circuit guard emission relies on a
+    /// present non-null string-valued discriminant; without those
+    /// guarantees the generated narrowing would silently miss-fire.
+    /// Runs on every target (not just TypeScript) because the
+    /// attribute is a validation failure regardless of active backend.
+    /// </summary>
+    private static void ValidateDiscriminatorAttribute(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+                VisitTypeForDiscriminator(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        );
+    }
+
+    private static void VisitTypeForDiscriminator(
+        INamedTypeSymbol type,
+        bool assemblyWideTranspile,
+        IAssemblySymbol currentAssembly,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+            return;
+
+        var fieldName = SymbolHelper.GetDiscriminatorFieldName(type);
+        if (fieldName is not null)
+        {
+            var property = type.GetMembers(fieldName).OfType<IPropertySymbol>().FirstOrDefault();
+            if (property is null)
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidDiscriminator,
+                        $"[Discriminator(\"{fieldName}\")] on '{type.Name}' refers to a property "
+                            + $"that doesn't exist on the type. Add a "
+                            + $"'{fieldName}' property typed as a [StringEnum], or remove the "
+                            + $"attribute.",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+            else if (IsNullableType(property.Type))
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidDiscriminator,
+                        $"[Discriminator(\"{fieldName}\")] on '{type.Name}' references a "
+                            + $"nullable field. The discriminant must be present on every "
+                            + $"instance so the guard can narrow without a null guard of its "
+                            + $"own. Make '{type.Name}.{fieldName}' non-nullable.",
+                        property.Locations.FirstOrDefault()
+                    )
+                );
+            }
+            else if (!SymbolHelper.HasStringEnum(property.Type))
+            {
+                // Check after nullability so a nullable StringEnum
+                // (which shouldn't reach here but could via unusual
+                // patterns) gets the more actionable nullable
+                // diagnostic instead.
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidDiscriminator,
+                        $"[Discriminator(\"{fieldName}\")] on '{type.Name}' references "
+                            + $"'{type.Name}.{fieldName}', which is not a [StringEnum]. The "
+                            + $"short-circuit guard relies on a string-valued discriminant so "
+                            + $"the narrowing compiles to a direct literal comparison — mark "
+                            + $"the enum with [StringEnum] or pick a different field.",
+                        property.Locations.FirstOrDefault()
+                    )
+                );
+            }
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForDiscriminator(nested, assemblyWideTranspile, currentAssembly, diagnostics);
+    }
 
     /// <summary>
     /// Detects the C# 9+ top-level-statement entry point and returns the
