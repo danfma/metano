@@ -18,7 +18,7 @@ export function isCreateTodoDto(value: unknown): value is CreateTodoDto {
 
   const v = value as any;
 
-  return typeof v.title === "string" && true;
+  return typeof v.title === "string" && v.priority != null;
 }
 
 export function assertCreateTodoDto(value: unknown, message?: string): asserts value is CreateTodoDto {

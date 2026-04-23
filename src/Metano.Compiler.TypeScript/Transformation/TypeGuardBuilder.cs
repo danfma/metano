@@ -412,7 +412,21 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
             TsAnyType or TsVoidType or TsPromiseType => new TsLiteral("true"),
 
-            // Unknown type — accept anything
+            // Cross-package / cross-assembly named type that didn't
+            // match any specific case above — the TranspilableTypes
+            // dict only carries current-assembly entries, so referenced
+            // enums / records land here. Full recursion into their
+            // guards requires cross-package guard resolution (tracked
+            // as a follow-up); for now emit a presence check so the
+            // field can't silently be missing from the input. Uses the
+            // loose-equality convention from ADR-0014 so `undefined`
+            // and `null` collapse to the same "absent" case.
+            TsNamedType => new TsBinaryExpression(fieldAccess, "!=", new TsLiteral("null")),
+
+            // Unknown shape the switch doesn't cover — accept anything.
+            // Reaches this branch only for TsType variants the builder
+            // does not know about (new AST kinds); safer to keep the
+            // field permissive than to reject valid shapes.
             _ => new TsLiteral("true"),
         };
     }

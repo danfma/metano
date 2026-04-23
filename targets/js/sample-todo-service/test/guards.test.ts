@@ -13,6 +13,23 @@ describe("CreateTodoDto guards", () => {
     expect(isCreateTodoDto(body)).toBe(false);
   });
 
+  test("isCreateTodoDto rejects a missing priority", () => {
+    // Cross-package types fall back to a presence check today — full
+    // cross-package guard recursion is tracked as a follow-up. The
+    // presence check at minimum rejects objects that omit the field
+    // entirely, so the handler can't silently accept `{title: "x"}`.
+    const body: unknown = { title: "Buy milk" };
+    expect(isCreateTodoDto(body)).toBe(false);
+  });
+
+  test("isCreateTodoDto rejects a null priority", () => {
+    // Loose-equality `!= null` convention from ADR-0014 catches both
+    // `null` and `undefined`, so an explicitly-null priority is also
+    // rejected (CreateTodoDto.Priority is non-nullable on the C# side).
+    const body: unknown = { title: "Buy milk", priority: null };
+    expect(isCreateTodoDto(body)).toBe(false);
+  });
+
   test("isCreateTodoDto rejects null and non-objects", () => {
     expect(isCreateTodoDto(null)).toBe(false);
     expect(isCreateTodoDto(undefined)).toBe(false);
