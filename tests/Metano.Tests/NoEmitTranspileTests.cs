@@ -118,4 +118,98 @@ public class NoEmitTranspileTests
         // Negative: no `c: ...` form anywhere.
         await Assert.That(output).DoesNotContain("c: I");
     }
+
+    [Test]
+    public async Task NoEmitType_BindingLib_WithoutTranspileAssembly_SurfacesNameOverride()
+    {
+        // DOM binding pattern on feat/jsx: the binding library is a
+        // plain-C# project with no `[assembly: TranspileAssembly]` and
+        // no `[assembly: EmitPackage]`. Every type is individually
+        // marked `[NoEmit, Name("…")]` so Metano knows about them via
+        // Roslyn metadata alone. The untargeted `[Name]` override must
+        // still surface at reference sites on the consumer side.
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            [NoEmit, Name("HTMLElement")]
+            public abstract class HtmlElement {}
+            """,
+            """
+            [assembly: TranspileAssembly]
+
+            public class Renderer
+            {
+                public HtmlElement? Target { get; set; }
+            }
+            """
+        );
+
+        var output = result["renderer.ts"];
+        await Assert.That(output).Contains("HTMLElement");
+        await Assert.That(output).DoesNotContain("HtmlElement");
+    }
+
+    [Test]
+    public async Task NoEmitType_CrossAssembly_SurfacesUntargetedNameOverride()
+    {
+        // Mirrors the DOM binding pattern on feat/jsx: `[NoEmit,
+        // Name("HTMLElement")]` lives in a separate library; the
+        // consumer references it as a parameter/property type. The
+        // untargeted `[Name]` override must cross the assembly
+        // boundary and surface at the reference site so the generated
+        // TS interoperates with lib.dom.d.ts rather than using the C#
+        // symbol name.
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("dom-bindings")]
+
+            [NoEmit, Name("HTMLElement")]
+            public abstract class HtmlElement {}
+            """,
+            """
+            [assembly: TranspileAssembly]
+
+            public class Renderer
+            {
+                public HtmlElement? Target { get; set; }
+
+                public void Attach(HtmlElement element) {}
+            }
+            """
+        );
+
+        var output = result["renderer.ts"];
+        await Assert.That(output).Contains("HTMLElement");
+        await Assert.That(output).DoesNotContain("HtmlElement");
+    }
+
+    [Test]
+    public async Task NoEmitType_WithUntargetedNameOverride_SurfacesOverrideAtReferenceSites()
+    {
+        // A `[NoEmit, Name("HTMLElement")]` ambient stub (DOM binding
+        // pattern) must surface the override at every type-reference
+        // site. Untargeted `[Name]` — the single-arg overload — is
+        // already picked up at extraction time via BuildQualifiedName;
+        // this test pins the behavior so a later refactor doesn't
+        // accidentally drop it for NoEmit types.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            [NoEmit, Name("HTMLElement")]
+            public abstract class HtmlElement {}
+
+            public class Renderer
+            {
+                public HtmlElement? Target { get; set; }
+
+                public void Attach(HtmlElement element) {}
+            }
+            """
+        );
+
+        var output = result["renderer.ts"];
+        await Assert.That(output).Contains("HTMLElement");
+        await Assert.That(output).DoesNotContain("HtmlElement");
+    }
 }
