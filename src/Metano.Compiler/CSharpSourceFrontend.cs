@@ -302,7 +302,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         // Current assembly — every transpilable type (matches the target-side
         // DiscoverTranspilableTypes + nested-emission filter) plus every
-        // `[Import]` placeholder the public-only walker would see.
+        // `[Import]` placeholder the public-only walker would see, PLUS
+        // every `[NoEmit]` public type so `[Name(target, …)]` overrides on
+        // ambient declarations propagate to references. `[NoEmit]` means
+        // "no .ts file emits" — it does NOT mean "callers should hallucinate
+        // the C# name at reference sites." Without this, a DOM binding stub
+        // like `[NoEmit, Name("HTMLElement")] HtmlElement` would surface as
+        // `HtmlElement` in generated TS, losing the rename that makes the
+        // stub interoperate with lib.dom.d.ts.
         CollectTopLevelTypes(
             currentAssembly.GlobalNamespace,
             type =>
@@ -316,7 +323,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                             RegisterSymbol(sym);
                         else if (
                             sym.DeclaredAccessibility == Accessibility.Public
-                            && SymbolHelper.GetImport(sym) is not null
+                            && (
+                                SymbolHelper.GetImport(sym) is not null
+                                || SymbolHelper.HasNoEmit(sym)
+                                || SymbolHelper.HasNoEmit(sym, target)
+                            )
                         )
                             RegisterSymbol(sym);
                     }
@@ -325,10 +336,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         // Referenced assemblies that opted into transpilation with an
         // [EmitPackage] for the active target. Mirrors the
-        // BuildCrossAssemblyState filter so the same set of emittable types
-        // ends up in the dict — [NoTranspile] / [NoEmit(target)] types are
-        // excluded, [Import] placeholders on the referenced side are still
-        // registered so consumers can resolve their alias by symbol.
+        // BuildCrossAssemblyState filter so the same set of emittable
+        // types ends up in the dict. `[NoTranspile]` types are excluded
+        // (the producer explicitly opted out). `[NoEmit]` types ARE
+        // registered so their `[Name]` overrides surface at reference
+        // sites on the consumer side — the emission pipeline filters
+        // them through its own paths (TranspilableTypeEntries,
+        // GuardableTypeKeys), so the dict stays reference-resolution
+        // scope. `[Import]` placeholders on the referenced side stay
+        // registered under the same rationale.
         foreach (var (asm, _) in EnumerateTranspilableReferencedAssemblies(compilation, target))
         {
             CollectTopLevelTypes(
@@ -341,8 +357,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                             if (sym.DeclaredAccessibility != Accessibility.Public)
                                 return;
                             if (SymbolHelper.HasNoTranspile(sym))
-                                return;
-                            if (SymbolHelper.HasNoEmit(sym, target))
                                 return;
                             RegisterSymbol(sym);
                         }

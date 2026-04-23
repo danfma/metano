@@ -1324,4 +1324,56 @@ public class CSharpSourceFrontendTests
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
         await Assert.That(ir.EntryPoint).IsNull();
     }
+
+    [Test]
+    public async Task TypeNamesBySymbol_HonorsNameOverrideOnNoEmitType()
+    {
+        // `[NoEmit]` suppresses file emission but should NOT block
+        // name-resolution — a `[Name(target, …)]` override on the same
+        // symbol must still reach the dict so references to the type
+        // use the renamed identifier. Previous behavior skipped NoEmit
+        // types entirely, leaking the C# name into generated TS for
+        // ambient bindings like `[NoEmit, Name("HTMLElement")]
+        // HtmlElement`.
+        var compilation = IrTestHelper.Compile(
+            """
+            #nullable enable
+
+            [NoEmit]
+            [Name(TargetLanguage.TypeScript, "HTMLElement")]
+            public abstract class HtmlElement {}
+            """
+        );
+
+        var htmlElement = compilation.GetTypeByMetadataName("HtmlElement");
+        await Assert.That(htmlElement).IsNotNull();
+        var key = htmlElement!.GetCrossAssemblyOriginKey();
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.TypeNamesBySymbol).IsNotNull();
+        await Assert.That(ir.TypeNamesBySymbol!).ContainsKey(key);
+        await Assert.That(ir.TypeNamesBySymbol![key]).IsEqualTo("HTMLElement");
+    }
+
+    [Test]
+    public async Task TypeNamesBySymbol_RegistersNoEmitTypeEvenWithoutNameOverride()
+    {
+        // Without an override the name falls back to the C# symbol
+        // name — still registered so references resolve through the
+        // dict instead of going through a separate hallucination path.
+        var compilation = IrTestHelper.Compile(
+            """
+            [NoEmit]
+            public abstract class EventTarget {}
+            """
+        );
+
+        var eventTarget = compilation.GetTypeByMetadataName("EventTarget");
+        await Assert.That(eventTarget).IsNotNull();
+        var key = eventTarget!.GetCrossAssemblyOriginKey();
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        await Assert.That(ir.TypeNamesBySymbol!).ContainsKey(key);
+        await Assert.That(ir.TypeNamesBySymbol![key]).IsEqualTo("EventTarget");
+    }
 }
