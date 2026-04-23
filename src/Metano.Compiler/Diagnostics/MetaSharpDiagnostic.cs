@@ -104,4 +104,15 @@ public static class DiagnosticCodes
     /// StringEnum so the discriminant check can narrow the rest of
     /// the shape.</summary>
     public const string InvalidDiscriminator = "MS0011";
+
+    /// <summary>MS0012 — <c>[External]</c> (from
+    /// <c>Metano.Annotations.TypeScript</c>) was applied to a
+    /// non-static class, or combined with <c>[Transpile]</c>. The
+    /// attribute marks a stub for runtime globals — the target class
+    /// emits no file and every static member access flattens to a
+    /// bare identifier. Non-static types have no static surface to
+    /// flatten, and combining with <c>[Transpile]</c> forces the
+    /// transpiler to simultaneously honor "no emission" and "full
+    /// emission" which are incompatible.</summary>
+    public const string InvalidExternal = "MS0012";
 }

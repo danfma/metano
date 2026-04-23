@@ -12,7 +12,7 @@ Each diagnostic carries:
 - message;
 - optional source location.
 
-The current stable code range is **`MS0001` through `MS0011`**.
+The current stable code range is **`MS0001` through `MS0012`**.
 
 ## Stable Codes
 
@@ -29,6 +29,7 @@ The current stable code range is **`MS0001` through `MS0011`**.
 | `MS0009` | `FrontendLoadFailure` | Source frontend failed to load or compile the project. |
 | `MS0010` | `OptionalRequiresNullable` | `[Optional]` was applied to a non-nullable parameter or property. |
 | `MS0011` | `InvalidDiscriminator` | `[Discriminator("FieldName")]` references a field that is missing, not a `[StringEnum]`, or nullable. |
+| `MS0012` | `InvalidExternal` | `[External]` was applied to a non-static class or combined with `[Transpile]`. |
 
 ## Product Significance
 

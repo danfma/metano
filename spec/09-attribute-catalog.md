@@ -40,6 +40,7 @@ annotations.
 | --- | --- |
 | `GenerateGuardAttribute` | Generates a runtime `isT` type guard plus a throwing `assertT(value, message?)` companion that wraps it. |
 | `DiscriminatorAttribute` (TypeScript) | Names a `[StringEnum]` field as the discriminator; the generated `isT` short-circuits on a literal comparison against the type name before walking the remaining shape. |
+| `ExternalAttribute` (TypeScript) | Marks a static class as a stub for runtime-available JS globals — the class emits no file and static member access flattens to a bare identifier (`Js.Document` → `document`). |
 
 ## Packaging and Interop
 

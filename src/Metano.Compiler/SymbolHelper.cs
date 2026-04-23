@@ -225,6 +225,24 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// Reads <c>[External]</c> from the
+    /// <c>Metano.Annotations.TypeScript</c> namespace. TS-specific
+    /// attribute marking a static class as a stub for runtime globals
+    /// — static member access on such a class flattens to a bare
+    /// identifier (no enclosing type qualifier). Namespace-qualified
+    /// match so unrelated <c>[External]</c> attributes from other
+    /// libraries are not mistaken for the Metano variant.
+    /// </summary>
+    public static bool HasExternal(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is ("ExternalAttribute" or "External")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
+                    == "Metano.Annotations.TypeScript"
+            );
+
+    /// <summary>
     /// Reads <c>[Discriminator("FieldName")]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. Returns the
     /// discriminant field name (original C# casing) when the attribute
@@ -419,6 +437,13 @@ public static class SymbolHelper
         if (HasNoTranspile(symbol))
             return false;
         if (HasNoEmit(symbol))
+            return false;
+        // `[External]` is emission-scope "no emit" — the static class
+        // is a stub for runtime globals and must never produce a .ts
+        // file. Kept separate from `[NoEmit]` so the attribute
+        // semantics stay explicit at the source-code layer; the
+        // effect on discovery is identical.
+        if (HasExternal(symbol))
             return false;
         if (HasTranspile(symbol))
             return true;

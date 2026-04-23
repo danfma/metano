@@ -139,6 +139,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         {
             ValidateOptionalAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateDiscriminatorAttribute(compilation, assemblyWideTranspile, diagnostics);
+            ValidateExternalAttribute(compilation, diagnostics);
         }
 
         return new IrCompilation(
@@ -327,6 +328,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                                 SymbolHelper.GetImport(sym) is not null
                                 || SymbolHelper.HasNoEmit(sym)
                                 || SymbolHelper.HasNoEmit(sym, target)
+                                || SymbolHelper.HasExternal(sym)
                             )
                         )
                             RegisterSymbol(sym);
@@ -757,6 +759,69 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         foreach (var nested in type.GetTypeMembers())
             VisitTypeForDiscriminator(nested, assemblyWideTranspile, currentAssembly, diagnostics);
+    }
+
+    /// <summary>
+    /// Walks the current assembly and emits <c>MS0012</c> for every
+    /// misuse of <c>[External]</c> (from
+    /// <c>Metano.Annotations.TypeScript</c>): applied to a non-static
+    /// class, or combined with <c>[Transpile]</c>. Runs regardless of
+    /// target since the attribute's invariants are semantic (the
+    /// transpiler cannot simultaneously honor "no emission" and "full
+    /// emission" on the same type).
+    /// </summary>
+    private static void ValidateExternalAttribute(
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type => VisitTypeForExternal(type, diagnostics)
+        );
+    }
+
+    private static void VisitTypeForExternal(
+        INamedTypeSymbol type,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        if (type.HasExternal())
+        {
+            if (!type.IsStatic)
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidExternal,
+                        $"[External] on '{type.Name}' requires a static class. The attribute "
+                            + $"only flattens static member access — non-static types have no "
+                            + $"static surface to flatten. Mark the class 'static' or remove "
+                            + $"[External].",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+            if (SymbolHelper.HasTranspile(type))
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidExternal,
+                        $"[External] on '{type.Name}' conflicts with [Transpile]. "
+                            + $"[External] marks a stub for runtime globals (no emission, "
+                            + $"flattened access); [Transpile] asks for full emission. Pick "
+                            + $"one — ambient bindings drop [Transpile], emitted helpers drop "
+                            + $"[External].",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForExternal(nested, diagnostics);
     }
 
     /// <summary>
