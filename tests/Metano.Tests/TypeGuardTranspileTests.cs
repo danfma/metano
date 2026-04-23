@@ -431,8 +431,19 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["circle.ts"];
-        await Assert.That(output).Contains("if (v.kind !== \"Circle\")");
-        await Assert.That(output).Contains("return false");
+        // Assert the full if/return block (not just the condition and a
+        // bare `return false`) so a regression that drops the return
+        // statement but keeps any other `return false` elsewhere in the
+        // function (e.g., the null/object gate) can't silently pass.
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                  if (v.kind !== "Circle") {
+                    return false;
+                  }
+                """
+            );
     }
 
     [Test]

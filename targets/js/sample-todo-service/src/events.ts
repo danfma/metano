@@ -50,7 +50,7 @@ export function isTodoUpdated(value: unknown): value is TodoUpdated {
     return false;
   }
 
-  return typeof v.id === "string" && v.title == null || typeof v.title === "string" && v.completed == null || typeof v.completed === "boolean";
+  return typeof v.id === "string" && (v.title == null || typeof v.title === "string") && (v.completed == null || typeof v.completed === "boolean");
 }
 
 export function assertTodoUpdated(value: unknown, message?: string): asserts value is TodoUpdated {
