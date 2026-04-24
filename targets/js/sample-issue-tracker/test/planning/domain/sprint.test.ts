@@ -28,15 +28,7 @@ describe("Sprint", () => {
     expect(sprint.durationDays).toBe(1);
   });
 
-  test.skip("isActiveOn includes start and end dates", () => {
-    // SKIPPED: tracked in issue #90. Generated TS lowers
-    // C# `date >= startDate && date <= endDate` to raw JS `>=` / `<=`,
-    // which Temporal.PlainDate rejects at runtime with
-    //   `TypeError: Do not use built-in arithmetic operators with
-    //    Temporal objects. When comparing, use
-    //    Temporal.PlainDate.compare(obj1, obj2) […]`
-    // Unskip this block when the lowering routes Temporal comparisons
-    // through `Temporal.PlainDate.compare`.
+  test("isActiveOn includes start and end dates", () => {
     const sprint = new Sprint(
       "SPRINT-1",
       "Iteration 1",

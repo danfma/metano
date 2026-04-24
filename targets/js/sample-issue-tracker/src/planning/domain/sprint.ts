@@ -20,7 +20,7 @@ export class Sprint {
   }
 
   isActiveOn(date: Temporal.PlainDate): boolean {
-    return date >= this.startDate && date <= this.endDate;
+    return Temporal.PlainDate.compare(date, this.startDate) >= 0 && Temporal.PlainDate.compare(date, this.endDate) <= 0;
   }
 
   rename(newName: string): void {

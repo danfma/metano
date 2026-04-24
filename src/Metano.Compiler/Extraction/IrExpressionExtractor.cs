@@ -581,8 +581,80 @@ public sealed class IrExpressionExtractor
             return BuildDecimalBinaryCall(bin, decimalMethod);
         }
 
+        // Temporal types reject the built-in relational operators at
+        // runtime ("TypeError: Do not use built-in arithmetic operators
+        // with Temporal objects"). Rewrite `a > b` to
+        // `Temporal.PlainDate.compare(a, b) > 0` (and the other three
+        // relational operators) so the generated code runs. Equality
+        // stays on the existing library-helper path.
+        if (
+            MapRelationalOp(bin.Kind()) is { } relOp
+            && GetTemporalTypeName(bin.Left, bin.Right) is { } temporalTypeName
+        )
+        {
+            return BuildTemporalCompareCall(bin, relOp, temporalTypeName);
+        }
+
         var op = MapBinaryOp(bin.Kind());
         return new IrBinaryExpression(Extract(bin.Left), op, Extract(bin.Right));
+    }
+
+    /// <summary>
+    /// Returns the target Temporal subtype name
+    /// (<c>Temporal.PlainDate</c>, <c>Temporal.PlainDateTime</c>, …)
+    /// when either operand of a binary expression is one of the
+    /// Temporal-backed BCL types. Returns <c>null</c> otherwise so
+    /// the caller falls through to the regular operator lowering.
+    /// </summary>
+    private string? GetTemporalTypeName(ExpressionSyntax left, ExpressionSyntax right) =>
+        GetTemporalTypeName(left) ?? GetTemporalTypeName(right);
+
+    private string? GetTemporalTypeName(ExpressionSyntax expression)
+    {
+        var info = _semantic.GetTypeInfo(expression);
+        var type = info.ConvertedType ?? info.Type;
+        if (type is null)
+            return null;
+        // BCL types map to Temporal subtypes. `DateTime` / `TimeSpan`
+        // carry `SpecialType`s so `OriginalDefinition.ToDisplayString`
+        // is the reliable key here rather than the `SpecialType.None`
+        // fast path.
+        return type.OriginalDefinition.ToDisplayString() switch
+        {
+            "System.DateTime" => "Temporal.PlainDateTime",
+            "System.DateTimeOffset" => "Temporal.ZonedDateTime",
+            "System.DateOnly" => "Temporal.PlainDate",
+            "System.TimeOnly" => "Temporal.PlainTime",
+            "System.TimeSpan" => "Temporal.Duration",
+            _ => null,
+        };
+    }
+
+    private static IrBinaryOp? MapRelationalOp(SyntaxKind kind) =>
+        kind switch
+        {
+            SyntaxKind.GreaterThanExpression => IrBinaryOp.GreaterThan,
+            SyntaxKind.GreaterThanOrEqualExpression => IrBinaryOp.GreaterThanOrEqual,
+            SyntaxKind.LessThanExpression => IrBinaryOp.LessThan,
+            SyntaxKind.LessThanOrEqualExpression => IrBinaryOp.LessThanOrEqual,
+            _ => null,
+        };
+
+    private IrExpression BuildTemporalCompareCall(
+        BinaryExpressionSyntax bin,
+        IrBinaryOp op,
+        string temporalTypeName
+    )
+    {
+        // Emit the qualified Temporal type name as an IrTypeReference
+        // so the bridge preserves the original PascalCase (type
+        // references bypass the camelCase member-access policy that
+        // would otherwise turn `.PlainDate` into `.plainDate`).
+        var call = new IrCallExpression(
+            new IrMemberAccess(new IrTypeReference(temporalTypeName), "compare"),
+            [new IrArgument(Extract(bin.Left)), new IrArgument(Extract(bin.Right))]
+        );
+        return new IrBinaryExpression(call, op, new IrLiteral(0, IrLiteralKind.Int32));
     }
 
     private bool IsDecimalOperand(ExpressionSyntax expr)
