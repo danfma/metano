@@ -145,4 +145,28 @@ public class TemporalRelationalLoweringTests
         await Assert.That(output).Contains("return a >= b;");
         await Assert.That(output).DoesNotContain("compare");
     }
+
+    [Test]
+    public async Task NullableDateOnly_Compare_UnwrapsAndLowers()
+    {
+        // `DateOnly?` reaches the extractor as
+        // `System.Nullable<DateOnly>`; the rewrite peels the
+        // nullable wrapper before looking up the Temporal mapping so
+        // the compare form still emits instead of falling back to a
+        // raw operator that Temporal would reject at runtime.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public class Scheduler
+            {
+                public bool OnOrAfter(System.DateOnly? a, System.DateOnly? b) =>
+                    a >= b;
+            }
+            """
+        );
+
+        var output = result["scheduler.ts"];
+        await Assert.That(output).Contains("Temporal.PlainDate.compare(a, b) >= 0");
+    }
 }

@@ -586,9 +586,16 @@ public sealed class IrExpressionExtractor
         // with Temporal objects"). Rewrite `a > b` to
         // `Temporal.PlainDate.compare(a, b) > 0` (and the other three
         // relational operators) so the generated code runs. Equality
-        // stays on the existing library-helper path.
+        // stays on the existing library-helper path. The lowering is
+        // TypeScript-specific — Dart uses a native `DateTime` with
+        // working relational operators and Kotlin consumers will
+        // surface different receivers entirely — so the rewrite only
+        // fires for the TypeScript target or when the extractor is
+        // running target-agnostic (unit tests that do not pin a
+        // specific backend).
         if (
-            MapRelationalOp(bin.Kind()) is { } relOp
+            (_target is null or Metano.Annotations.TargetLanguage.TypeScript)
+            && MapRelationalOp(bin.Kind()) is { } relOp
             && GetTemporalTypeName(bin.Left, bin.Right) is { } temporalTypeName
         )
         {
@@ -615,6 +622,21 @@ public sealed class IrExpressionExtractor
         var type = info.ConvertedType ?? info.Type;
         if (type is null)
             return null;
+
+        // Nullable-value wrappers (`DateOnly?`, `TimeSpan?`, …) still
+        // trip the same runtime error when the inner value is used in
+        // a relational operator. Peel `System.Nullable<T>` so the
+        // underlying Temporal-backed type resolves against the map
+        // below.
+        if (
+            type is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+                TypeArguments: [{ } inner],
+            }
+        )
+            type = inner;
+
         // BCL types map to Temporal subtypes. `DateTime` / `TimeSpan`
         // carry `SpecialType`s so `OriginalDefinition.ToDisplayString`
         // is the reliable key here rather than the `SpecialType.None`

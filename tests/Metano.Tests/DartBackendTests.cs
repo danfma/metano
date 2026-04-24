@@ -473,6 +473,30 @@ public class DartBackendTests
         await Assert.That(dart).Contains("static late int count;");
     }
 
+    [Test]
+    public async Task TemporalRelationalLowering_DoesNotLeakIntoDartTarget()
+    {
+        // The TypeScript-specific `Temporal.*.compare(...) op 0`
+        // rewrite lives in the shared extractor. It must not fire for
+        // the Dart target — Dart's native `DateTime` supports the raw
+        // relational operators, so the generated Dart should emit
+        // `a >= b` as-is and never reference the `Temporal` runtime.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class Scheduler
+            {
+                public bool OnOrAfter(System.DateOnly a, System.DateOnly b) => a >= b;
+            }
+            """
+        );
+
+        var dart = files["scheduler.dart"];
+        await Assert.That(dart).Contains("a >= b");
+        await Assert.That(dart).DoesNotContain("Temporal");
+        await Assert.That(dart).DoesNotContain("compare");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (
