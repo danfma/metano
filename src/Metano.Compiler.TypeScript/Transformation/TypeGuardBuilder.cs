@@ -40,14 +40,18 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     /// accepting <c>unknown</c> from a network handler) where an
     /// exception is the natural failure mode. Returns an empty list when
     /// the type doesn't need a guard (exceptions, ExportedAsModule,
-    /// types with extension members, types imported from external
-    /// modules).
+    /// Erasable, types with extension members, types imported from
+    /// external modules).
     /// </summary>
     public IReadOnlyList<TsFunction> Generate(INamedTypeSymbol type)
     {
         if (TypeTransformer.IsExceptionType(type))
             return [];
-        if (SymbolHelper.HasExportedAsModule(type) || TypeTransformer.HasExtensionMembers(type))
+        if (
+            SymbolHelper.HasExportedAsModule(type)
+            || SymbolHelper.HasErasable(type)
+            || TypeTransformer.HasExtensionMembers(type)
+        )
             return [];
         if (SymbolHelper.HasImport(type))
             return [];

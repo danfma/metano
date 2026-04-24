@@ -6,7 +6,7 @@ namespace SampleCounter;
 // `lib/main.dart`, and we don't have a BCL mapping for `Console.WriteLine` on
 // Dart yet — emitting `Console.writeLine(...)` literally would fail
 // `dart analyze`.
-[ExportedAsModule]
+[Erasable]
 [NoEmit(TargetLanguage.Dart)]
 public static class Program
 {

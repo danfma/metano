@@ -4,7 +4,7 @@ using SampleIssueTracker.SharedKernel;
 
 namespace SampleIssueTracker.Issues.Application;
 
-[ExportedAsModule]
+[Erasable]
 public static class IssueQueries
 {
     public static IReadOnlyList<Issue> OpenIssues(IReadOnlyList<Issue> issues) =>

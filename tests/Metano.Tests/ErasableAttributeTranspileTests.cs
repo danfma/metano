@@ -5,10 +5,11 @@ namespace Metano.Tests;
 /// <summary>
 /// Tests for <c>[Erasable]</c> from <c>Metano.Annotations</c>. The
 /// attribute marks a static class whose scope vanishes at the call
-/// site: the class emits no file, static member access flattens to a
-/// bare identifier. Members inside emit per their own attributes.
-/// Covers the flatten, the no-file contract, and the MS0015
-/// validation surface.
+/// site: static member access flattens to a bare identifier and the
+/// class's members project as top-level exports in a file named
+/// after the class (no TypeScript class wrapper). Covers the
+/// flatten, the module-style emission, and the MS0015 validation
+/// surface.
 /// </summary>
 public class ErasableAttributeTranspileTests
 {
@@ -47,28 +48,59 @@ public class ErasableAttributeTranspileTests
     }
 
     [Test]
-    public async Task Erasable_Class_EmitsNoFile()
+    public async Task Erasable_Methods_EmitAsTopLevelExports()
     {
-        // `[Erasable]` classes are compile-time sugar — no .ts file
-        // emits for them even when the class lives in a transpilable
-        // assembly.
+        // Plain methods on an `[Erasable]` static class lower to
+        // top-level `export function` declarations inside a file named
+        // after the class. The TypeScript class wrapper is dropped so
+        // the call-site flatten (`MathUtils.Add` → `add`) references
+        // a defined export.
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
             [Erasable]
-            public static class Constants
+            public static class MathUtils
             {
-                public static double Pi => 3.14;
+                public static int Add(int a, int b) => a + b;
             }
-
-            public class Placeholder {}
             """
         );
 
-        await Assert.That(result).DoesNotContainKey("constants.ts");
-        await Assert.That(result).ContainsKey("placeholder.ts");
+        await Assert.That(result).ContainsKey("math-utils.ts");
+        var output = result["math-utils.ts"];
+        await Assert.That(output).Contains("export function add(a: number, b: number)");
+        await Assert.That(output).DoesNotContain("class MathUtils");
+    }
+
+    [Test]
+    public async Task Erasable_MethodCall_AccessFlattensAtCallSite()
+    {
+        // `MathUtils.Add(1, 2)` on the C# side lowers to `add(1, 2)`
+        // at the call site — the enclosing class qualifier is dropped
+        // and the generated top-level function is the import target.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable]
+            public static class MathUtils
+            {
+                public static int Add(int a, int b) => a + b;
+            }
+
+            public class Calculator
+            {
+                public int Sum() => MathUtils.Add(1, 2);
+            }
+            """
+        );
+
+        var output = result["calculator.ts"];
+        await Assert.That(output).Contains("add(1, 2)");
+        await Assert.That(output).DoesNotContain("MathUtils.add");
     }
 
     // ─── Diagnostics (MS0015) ────────────────────────────────

@@ -462,18 +462,14 @@ public static class SymbolHelper
             return false;
         if (HasNoEmit(symbol))
             return false;
-        // `[External]` and `[Erasable]` are emission-scope "no emit"
-        // in the initial slice. Both mark a static class the
-        // compiler must not produce a .ts file for — runtime-provided
-        // stub vs. compile-time sugar container, respectively. A
-        // follow-up slice introduces per-member emission inside an
-        // `[Erasable]` class (plain bodies projected as top-level
-        // exports); until then every accessible member must be
-        // external, templated, or resolvable at the call site so the
-        // flattened identifier has a defining source.
+        // `[External]` is emission-scope "no emit": the class is a
+        // stub for runtime globals and must never produce a .ts file.
+        // `[Erasable]` participates in transpilation instead — its
+        // members project as top-level exports in a file named after
+        // the class, while static member access flattens at the call
+        // site. Both are kept separate from `[NoEmit]` so the
+        // attribute semantics stay explicit at the source-code layer.
         if (HasExternal(symbol))
-            return false;
-        if (HasErasable(symbol))
             return false;
         if (HasTranspile(symbol))
             return true;

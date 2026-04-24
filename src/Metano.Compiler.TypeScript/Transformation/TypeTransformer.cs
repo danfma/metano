@@ -304,7 +304,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             EmitTopLevelStatements(ir.EntryPoint.Method, sink);
         }
         else if (
-            (SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic
+            (
+                SymbolHelper.HasExportedAsModule(type)
+                || SymbolHelper.HasErasable(type)
+                || HasExtensionMembers(type)
+            ) && type.IsStatic
         )
         {
             TryEmitModuleViaIr(type, sink);

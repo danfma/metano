@@ -2,7 +2,7 @@ using Metano.Annotations;
 using SampleTodo.Service;
 using SampleTodo.Service.Js.Hono;
 
-[ExportedAsModule]
+[Erasable]
 public static class Program
 {
     [ModuleEntryPoint, ExportVarFromBody("app", AsDefault = true, InPlace = false)]
