@@ -129,10 +129,18 @@ public sealed record IrTupleTypeRef(IReadOnlyList<IrTypeRef> Elements) : IrTypeR
 
 /// <summary>
 /// A function/delegate type (C# <c>Action&lt;T&gt;</c>, <c>Func&lt;T,R&gt;</c>,
-/// or any custom delegate).
+/// or any custom delegate). <paramref name="ThisType"/> holds the
+/// synthetic JavaScript <c>this</c> receiver when the delegate's
+/// first parameter carried <c>[This]</c>; the parameter itself is
+/// dropped from <paramref name="Parameters"/> so each backend emits
+/// the shape it prefers (TypeScript inserts a <c>(this: T, …)</c>
+/// annotation; Dart re-introduces the parameter positionally).
 /// </summary>
-public sealed record IrFunctionTypeRef(IReadOnlyList<IrParameter> Parameters, IrTypeRef ReturnType)
-    : IrTypeRef;
+public sealed record IrFunctionTypeRef(
+    IReadOnlyList<IrParameter> Parameters,
+    IrTypeRef ReturnType,
+    IrTypeRef? ThisType = null
+) : IrTypeRef;
 
 /// <summary>
 /// An asynchronous result (C# <c>Task&lt;T&gt;</c>, <c>ValueTask&lt;T&gt;</c>).

@@ -12,7 +12,7 @@ Each diagnostic carries:
 - message;
 - optional source location.
 
-The current stable code range is **`MS0001` through `MS0017`**, with
+The current stable code range is **`MS0001` through `MS0018`**, with
 `MS0013` reserved for the upcoming `[NoEmit]` redefinition slice
 (see ADR-0015).
 
@@ -36,6 +36,7 @@ The current stable code range is **`MS0001` through `MS0017`**, with
 | `MS0015` | `InvalidErasable` | `[Erasable]` was applied to a non-static class, or combined with `[Transpile]`. |
 | `MS0016` | `InvalidInline` | `[Inline]` was applied to an unsupported shape (instance or mutable field, field without initializer, block-bodied property, non-static property, or any other target). |
 | `MS0017` | `InterfacePrefixCollision` | Stripping the `I` prefix from an interface name (under `--strip-interface-prefix`) would collide with another top-level type in the same namespace. Keeps the prefix so the consumer surface stays compilable. |
+| `MS0018` | `InvalidThis` | `[This]` (from `Metano.Annotations`) was applied outside the first positional parameter, or combined with `ref` / `out` / `params`. |
 
 ## Reserved Codes
 

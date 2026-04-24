@@ -248,6 +248,24 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// Reads <c>[This]</c> from <c>Metano.Annotations</c>. Marks
+    /// the first parameter of a delegate (or inlinable method) as
+    /// the JavaScript <c>this</c> receiver so backends that support
+    /// the rebind can drop the parameter from the positional list
+    /// and emit it as the function type's synthetic <c>this</c>
+    /// annotation. Namespace-qualified match so unrelated
+    /// <c>[This]</c> attributes from other libraries are not
+    /// mistaken for the Metano variant.
+    /// </summary>
+    public static bool HasThis(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is ("ThisAttribute" or "This")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+            );
+
+    /// <summary>
     /// Reads <c>[Inline]</c> from <c>Metano.Annotations</c>. Marks
     /// a <c>static readonly</c> field or a <c>static</c> property
     /// for use-site substitution — every reference to the member is

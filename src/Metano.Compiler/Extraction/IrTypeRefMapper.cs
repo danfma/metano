@@ -441,15 +441,29 @@ public static class IrTypeRefMapper
         if (invoke is null)
             return new IrFunctionTypeRef([], new IrPrimitiveTypeRef(IrPrimitive.Void));
 
-        var parameters = invoke
-            .Parameters.Select(p => new IrParameter(p.Name, Map(p.Type, originResolver)))
+        // `[This]` on the first parameter promotes it to the
+        // synthetic `this` receiver slot. The parameter itself is
+        // dropped from the positional list so each backend picks
+        // the emission shape it prefers — TypeScript prepends a
+        // `(this: T, …)` annotation, Dart re-introduces the
+        // parameter as a regular positional arg in its bridge.
+        IrTypeRef? thisType = null;
+        var sourceParameters = invoke.Parameters;
+        if (sourceParameters.Length > 0 && SymbolHelper.HasThis(sourceParameters[0]))
+        {
+            thisType = Map(sourceParameters[0].Type, originResolver);
+            sourceParameters = sourceParameters.RemoveAt(0);
+        }
+
+        var parameters = sourceParameters
+            .Select(p => new IrParameter(p.Name, Map(p.Type, originResolver)))
             .ToList();
 
         var returnType = invoke.ReturnsVoid
             ? new IrPrimitiveTypeRef(IrPrimitive.Void)
             : Map(invoke.ReturnType, originResolver);
 
-        return new IrFunctionTypeRef(parameters, returnType);
+        return new IrFunctionTypeRef(parameters, returnType, thisType);
     }
 
     /// <summary>

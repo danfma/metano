@@ -27,7 +27,8 @@ public static class IrToTsTypeMapper
             IrTupleTypeRef t => new TsTupleType(t.Elements.Select(e => Map(e, overrides)).ToList()),
             IrFunctionTypeRef f => new TsFunctionType(
                 f.Parameters.Select(p => MapParameter(p, overrides)).ToList(),
-                Map(f.ReturnType, overrides)
+                Map(f.ReturnType, overrides),
+                f.ThisType is null ? null : Map(f.ThisType, overrides)
             ),
             IrPromiseTypeRef pr => new TsPromiseType(Map(pr.ResultType, overrides)),
             IrGeneratorTypeRef g => new TsNamedType("Generator", [Map(g.YieldType, overrides)]),

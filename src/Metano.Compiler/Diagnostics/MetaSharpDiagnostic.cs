@@ -128,6 +128,18 @@ public static class DiagnosticCodes
     /// literal form without a separate analyzer pass.</summary>
     public const string InvalidConstant = "MS0014";
 
+    /// <summary>MS0018 — <c>[This]</c> (from
+    /// <c>Metano.Annotations</c>) was applied to a parameter that
+    /// cannot act as the JavaScript <c>this</c> receiver. Valid
+    /// placement is strictly the first positional parameter of a
+    /// delegate or inlinable method, without <c>ref</c> /
+    /// <c>out</c> / <c>params</c> modifiers. The diagnostic surfaces
+    /// misuses such as applying the attribute to a later parameter,
+    /// to a <c>ref</c> / <c>out</c> / <c>params</c> slot, or to a
+    /// parameter list whose emitted shape would leave the function
+    /// without a receiver to bind to.</summary>
+    public const string InvalidThis = "MS0018";
+
     /// <summary>MS0017 — Stripping the <c>I</c> prefix from an
     /// interface name would collide with another top-level type in
     /// the same namespace. Emitted only when

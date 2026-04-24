@@ -142,6 +142,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateExternalAttribute(compilation, diagnostics);
             ValidateConstantAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateInlineAttribute(compilation, diagnostics);
+            ValidateThisAttribute(compilation, diagnostics);
         }
 
         return new IrCompilation(
@@ -1133,6 +1134,88 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Validates <c>[This]</c> from <c>Metano.Annotations</c>. The
+    /// attribute may decorate only the first parameter of a
+    /// delegate or method, and never a <c>ref</c> / <c>out</c> /
+    /// <c>params</c> slot — any other shape surfaces
+    /// <c>MS0018 InvalidThis</c>. The pass walks every type in the
+    /// current assembly: custom delegate types (the invoke
+    /// method's parameters) and ordinary methods alike.
+    /// </summary>
+    private static void ValidateThisAttribute(
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type => VisitTypeForThis(type, diagnostics)
+        );
+    }
+
+    private static void VisitTypeForThis(INamedTypeSymbol type, List<MetanoDiagnostic> diagnostics)
+    {
+        // Delegate types expose their parameter list via the synthesized
+        // Invoke method — a plain `.GetMembers()` walk over
+        // IMethodSymbol covers both ordinary methods and delegate
+        // invokes in one pass.
+        foreach (var member in type.GetMembers())
+        {
+            if (member is IMethodSymbol method)
+                ValidateMethodParametersForThis(method, diagnostics);
+        }
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForThis(nested, diagnostics);
+    }
+
+    private static void ValidateMethodParametersForThis(
+        IMethodSymbol method,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        for (var i = 0; i < method.Parameters.Length; i++)
+        {
+            var parameter = method.Parameters[i];
+            if (!parameter.HasThis())
+                continue;
+            if (i != 0)
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidThis,
+                        $"[This] on parameter '{parameter.Name}' of "
+                            + $"{FormatMemberPath(method)} is only valid on the first "
+                            + $"positional parameter. The attribute promotes the first "
+                            + $"slot to the synthetic JavaScript 'this' receiver; later "
+                            + $"parameters cannot take that role.",
+                        parameter.Locations.FirstOrDefault()
+                    )
+                );
+                continue;
+            }
+            if (
+                parameter.RefKind is RefKind.Ref or RefKind.Out or RefKind.RefReadOnly
+                || parameter.IsParams
+            )
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidThis,
+                        $"[This] on parameter '{parameter.Name}' of "
+                            + $"{FormatMemberPath(method)} cannot be combined with "
+                            + $"'ref' / 'out' / 'params'. The receiver is passed by "
+                            + $"value at the JavaScript boundary.",
+                        parameter.Locations.FirstOrDefault()
+                    )
+                );
+            }
+        }
     }
 
     /// <summary>

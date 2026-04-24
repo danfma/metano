@@ -1,7 +1,7 @@
 # Attribute Catalog
 
 This appendix lists the currently available Metano annotations relevant to the
-transpilation model. The current codebase exposes **25 attribute types** in
+transpilation model. The current codebase exposes **26 attribute types** in
 `Metano.Annotations`, plus the supporting `EmitTarget` enum used by some
 annotations.
 
@@ -45,6 +45,7 @@ annotations.
 | `ExternalAttribute` (TypeScript) | Marks a `static class` as a stub for runtime-available JS globals — the class emits no file and static member access flattens to a bare identifier. Attribute usage now accepts method/property/field targets so the family can grow; the per-member declaration-suppression lowering and the split from class-level flatten ship in a follow-up slice. |
 | `ConstantAttribute` | Applied to a parameter or field; the value must be a compile-time constant literal. Violations surface as MS0014 `InvalidConstant`. Enables literal-type narrowing in `[Emit]` templates and safe `[Inline]` expansion. |
 | `InlineAttribute` | Applied to a `static readonly` field or a `static` property with an expression-bodied getter; every reference substitutes the member's initializer (or getter expression) at the call site. Method / extension inlining and static-class propagation ship in a follow-up slice. Violations surface as MS0016 `InvalidInline`. |
+| `ThisAttribute` | Applied to the first parameter of a delegate or inlinable method; promotes the slot to the synthetic JavaScript `this` receiver. The parameter is dropped from the emitted TS positional list and re-introduced as the function type's `this` annotation (`(this: T, …) => R`). Lambda / method-group / body-rewrite emission lands in a follow-up slice. Violations surface as MS0018 `InvalidThis`. |
 
 ## Packaging and Interop
 

@@ -761,6 +761,13 @@ public sealed class Printer(string indent = "  ")
 
             case TsFunctionType funcType:
                 _sb.Write("(");
+                if (funcType.ThisType is { } thisType)
+                {
+                    _sb.Write("this: ");
+                    PrintType(thisType);
+                    if (funcType.Parameters.Count > 0)
+                        _sb.Write(", ");
+                }
                 PrintParameters(funcType.Parameters);
                 _sb.Write(") => ");
                 PrintType(funcType.ReturnType);
