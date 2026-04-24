@@ -141,6 +141,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateDiscriminatorAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateExternalAttribute(compilation, diagnostics);
             ValidateConstantAttribute(compilation, assemblyWideTranspile, diagnostics);
+            ValidateInlineAttribute(compilation, diagnostics);
         }
 
         return new IrCompilation(
@@ -854,6 +855,166 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         foreach (var nested in type.GetTypeMembers())
             VisitTypeForExternal(nested, diagnostics);
+    }
+
+    /// <summary>
+    /// Validates <c>[Inline]</c> from <c>Metano.Annotations</c>. The
+    /// attribute's contract is enforced at declaration time:
+    /// <list type="bullet">
+    ///   <item>Fields must be <c>static readonly</c> with an
+    ///   initializer. Instance fields, mutable fields, and fields
+    ///   without an initializer have nothing to substitute at the
+    ///   call site.</item>
+    ///   <item>Properties must be <c>static</c> and expose an
+    ///   expression-bodied getter (either the property's own
+    ///   <c>=&gt;</c> form or an expression-bodied <c>get</c>
+    ///   accessor). Block-bodied getters fall outside the covered
+    ///   substitution surface and are deferred to a follow-up
+    ///   slice.</item>
+    /// </list>
+    /// Violations raise <c>MS0016 InvalidInline</c>. Recursion
+    /// between <c>[Inline]</c> members is handled at extraction time
+    /// (the extractor's cycle set bails out before the second
+    /// re-entry); the recursion-specific diagnostic ships alongside
+    /// the follow-up slice that adds method inlining.
+    /// </summary>
+    private static void ValidateInlineAttribute(
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type => VisitTypeForInline(type, diagnostics)
+        );
+    }
+
+    private static void VisitTypeForInline(
+        INamedTypeSymbol type,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        foreach (var member in type.GetMembers())
+        {
+            if (!SymbolHelper.HasInline(member))
+                continue;
+
+            switch (member)
+            {
+                case IFieldSymbol field:
+                    if (!field.IsStatic || !field.IsReadOnly)
+                    {
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.InvalidInline,
+                                $"[Inline] on field {FormatMemberPath(field)} requires a "
+                                    + $"'static readonly' field with an initializer. "
+                                    + $"Instance or mutable fields cannot satisfy the "
+                                    + $"substitution contract — the value must be fixed.",
+                                field.Locations.FirstOrDefault()
+                            )
+                        );
+                        break;
+                    }
+                    if (!HasFieldInitializer(field))
+                    {
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.InvalidInline,
+                                $"[Inline] on field {FormatMemberPath(field)} requires an "
+                                    + $"initializer. Without one there is no expression "
+                                    + $"to substitute at the call site.",
+                                field.Locations.FirstOrDefault()
+                            )
+                        );
+                    }
+                    break;
+                case IPropertySymbol property:
+                    if (!property.IsStatic)
+                    {
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.InvalidInline,
+                                $"[Inline] on property {FormatMemberPath(property)} requires "
+                                    + $"a 'static' property. Instance properties cannot be "
+                                    + $"substituted at the call site without a receiver.",
+                                property.Locations.FirstOrDefault()
+                            )
+                        );
+                        break;
+                    }
+                    if (!HasExpressionBodiedGetter(property))
+                    {
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.InvalidInline,
+                                $"[Inline] on property {FormatMemberPath(property)} requires "
+                                    + $"an expression-bodied getter ('=> expression' or "
+                                    + $"'get => expression'). Block-bodied accessors are "
+                                    + $"outside the covered substitution surface.",
+                                property.Locations.FirstOrDefault()
+                            )
+                        );
+                    }
+                    break;
+                default:
+                    diagnostics.Add(
+                        new MetanoDiagnostic(
+                            MetanoDiagnosticSeverity.Error,
+                            DiagnosticCodes.InvalidInline,
+                            $"[Inline] on {FormatMemberPath(member)} applies only to "
+                                + $"'static readonly' fields and 'static' properties with "
+                                + $"an expression-bodied getter.",
+                            member.Locations.FirstOrDefault()
+                        )
+                    );
+                    break;
+            }
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForInline(nested, diagnostics);
+    }
+
+    private static bool HasFieldInitializer(IFieldSymbol field)
+    {
+        foreach (var reference in field.DeclaringSyntaxReferences)
+        {
+            if (
+                reference.GetSyntax() is VariableDeclaratorSyntax declarator
+                && declarator.Initializer is not null
+            )
+                return true;
+        }
+        return false;
+    }
+
+    private static bool HasExpressionBodiedGetter(IPropertySymbol property)
+    {
+        foreach (var reference in property.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax() is not PropertyDeclarationSyntax decl)
+                continue;
+            if (decl.ExpressionBody is not null)
+                return true;
+            if (decl.AccessorList is { } accessorList)
+            {
+                foreach (var accessor in accessorList.Accessors)
+                {
+                    if (
+                        accessor.IsKind(SyntaxKind.GetAccessorDeclaration)
+                        && accessor.ExpressionBody is not null
+                    )
+                        return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>

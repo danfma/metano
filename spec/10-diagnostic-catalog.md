@@ -12,8 +12,8 @@ Each diagnostic carries:
 - message;
 - optional source location.
 
-The current stable code range is **`MS0001` through `MS0015`**, with
-`MS0013` and `MS0016` reserved for the upcoming attribute-family slices
+The current stable code range is **`MS0001` through `MS0016`**, with
+`MS0013` reserved for the upcoming `[NoEmit]` redefinition slice
 (see ADR-0015).
 
 ## Stable Codes
@@ -34,6 +34,7 @@ The current stable code range is **`MS0001` through `MS0015`**, with
 | `MS0012` | `InvalidExternal` | `[External]` was applied to a non-static class, or combined with `[Transpile]`. |
 | `MS0014` | `InvalidConstant` | `[Constant]` argument or initializer is not a compile-time constant literal. |
 | `MS0015` | `InvalidErasable` | `[Erasable]` was applied to a non-static class, or combined with `[Transpile]`. |
+| `MS0016` | `InvalidInline` | `[Inline]` was applied to an unsupported shape (instance or mutable field, field without initializer, block-bodied property, non-static property, or any other target). |
 
 ## Reserved Codes
 
@@ -45,7 +46,6 @@ stable across the stack, not as a promise of shipped behavior.
 | Code | Symbolic name | Slice |
 | --- | --- | --- |
 | `MS0013` | `NoEmitReferencedByTranspiledCode` | `[NoEmit]` redefinition (painting diagnostic) |
-| `MS0016` | `InvalidInline` | `[Inline]` validator |
 
 ## Product Significance
 

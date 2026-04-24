@@ -248,6 +248,23 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// Reads <c>[Inline]</c> from <c>Metano.Annotations</c>. Marks
+    /// a <c>static readonly</c> field or a <c>static</c> property
+    /// for use-site substitution — every reference to the member is
+    /// replaced by its initializer (or getter expression) before
+    /// lowering. Namespace-qualified match so unrelated
+    /// <c>[Inline]</c> attributes from other libraries are not
+    /// mistaken for the Metano variant.
+    /// </summary>
+    public static bool HasInline(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is ("InlineAttribute" or "Inline")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+            );
+
+    /// <summary>
     /// Reads <c>[Constant]</c> from <c>Metano.Annotations</c>. Marks
     /// a parameter or field whose value must be a compile-time
     /// constant literal. Used by downstream lowering

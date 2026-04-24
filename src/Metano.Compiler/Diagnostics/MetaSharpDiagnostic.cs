@@ -128,6 +128,18 @@ public static class DiagnosticCodes
     /// literal form without a separate analyzer pass.</summary>
     public const string InvalidConstant = "MS0014";
 
+    /// <summary>MS0016 — <c>[Inline]</c> (from
+    /// <c>Metano.Annotations</c>) was applied to an unsupported
+    /// shape or its expansion introduced a cycle. Valid targets are
+    /// <c>static readonly</c> fields with an initializer and
+    /// <c>static</c> properties with an expression-bodied getter.
+    /// Instance members, mutable fields, methods, properties with
+    /// block-bodied accessors, and any member whose initializer
+    /// references another <c>[Inline]</c> member that (transitively)
+    /// references the original all surface here so downstream
+    /// substitution stays bounded.</summary>
+    public const string InvalidInline = "MS0016";
+
     /// <summary>MS0015 — <c>[Erasable]</c> (from
     /// <c>Metano.Annotations</c>) was applied to a non-static class,
     /// or combined with <c>[Transpile]</c>. The attribute marks a

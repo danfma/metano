@@ -25,6 +25,15 @@ public sealed class IrExpressionExtractor(
     private readonly IrTypeOriginResolver? _originResolver = originResolver;
     private readonly Metano.Annotations.TargetLanguage? _target = target;
 
+    /// <summary>
+    /// Tracks the set of <c>[Inline]</c> members currently being
+    /// expanded so cyclic references (<c>[Inline] A =&gt; B</c>,
+    /// <c>[Inline] B =&gt; A</c>) bail out rather than recurse
+    /// indefinitely. Populated on entry into
+    /// <see cref="TryExpandInlineAccess"/> and cleared on exit.
+    /// </summary>
+    private readonly HashSet<ISymbol> _inlineExpanding = new(SymbolEqualityComparer.Default);
+
     public IrExpression Extract(ExpressionSyntax expression) =>
         expression switch
         {
@@ -397,6 +406,14 @@ public sealed class IrExpressionExtractor(
         var symbol = _semantic.GetSymbolInfo(id).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
             return new IrTypeReference(id.Identifier.ValueText);
+
+        // `[Inline]` member referenced without an explicit qualifier
+        // (same-type static access, extension receiver, etc.). Expand
+        // before synthesizing any member-access wrapper so the
+        // initializer flows through as if it had been written at the
+        // call site.
+        if (TryExpandInlineAccess(symbol) is { } inlined)
+            return inlined;
 
         // Instance member reached through the implicit-this shorthand: promote to
         // an explicit this.Member access so backends don't have to rediscover the
@@ -802,8 +819,84 @@ public sealed class IrExpressionExtractor(
                 return target;
         }
 
+        // `[Inline]` fields and properties substitute their initializer
+        // (or getter body) at every access site. When expansion
+        // succeeds, the member access is replaced by the extracted
+        // initializer expression; otherwise fall through to the normal
+        // access path so diagnostics still surface at validation time.
+        if (TryExpandInlineAccess(symbol) is { } inlined)
+            return inlined;
+
         var origin = BuildOrigin(_semantic.GetSymbolInfo(member).Symbol);
         return new IrMemberAccess(target, name, origin);
+    }
+
+    /// <summary>
+    /// If <paramref name="symbol"/> carries <c>[Inline]</c> and resolves
+    /// to a supported shape (<c>static readonly</c> field with
+    /// initializer, or <c>static</c> property with an expression-bodied
+    /// getter), returns the extracted initializer expression.
+    /// Guards against recursion by tracking in-progress symbols in
+    /// <see cref="_inlineExpanding"/>. Unsupported shapes and cycles
+    /// return <c>null</c> so the caller falls back to a regular
+    /// access; the validator surfaces the diagnostic separately.
+    /// </summary>
+    private IrExpression? TryExpandInlineAccess(ISymbol? symbol)
+    {
+        if (symbol is null || !SymbolHelper.HasInline(symbol))
+            return null;
+        if (!_inlineExpanding.Add(symbol))
+            return null;
+        try
+        {
+            var initializer = TryFindInlineInitializer(symbol);
+            if (initializer is null)
+                return null;
+
+            // Reuse the declaring syntax tree's SemanticModel so
+            // constant folding + symbol resolution inside the
+            // initializer reflect the declaration site, not the call
+            // site. The extractor is stateless beyond the cycle set,
+            // so a transient instance is safe to spin up.
+            var extractor = new IrExpressionExtractor(
+                _semantic.Compilation.GetSemanticModel(initializer.SyntaxTree),
+                _originResolver,
+                _target
+            );
+            return extractor.Extract(initializer);
+        }
+        finally
+        {
+            _inlineExpanding.Remove(symbol);
+        }
+    }
+
+    private static ExpressionSyntax? TryFindInlineInitializer(ISymbol symbol)
+    {
+        foreach (var reference in symbol.DeclaringSyntaxReferences)
+        {
+            switch (reference.GetSyntax())
+            {
+                case VariableDeclaratorSyntax declarator
+                    when declarator.Initializer?.Value is { } fieldInit:
+                    return fieldInit;
+                case PropertyDeclarationSyntax prop
+                    when prop.ExpressionBody?.Expression is { } arrow:
+                    return arrow;
+                case PropertyDeclarationSyntax prop
+                    when prop.AccessorList?.Accessors is { } accessors:
+                    foreach (var accessor in accessors)
+                    {
+                        if (
+                            accessor.IsKind(SyntaxKind.GetAccessorDeclaration)
+                            && accessor.ExpressionBody?.Expression is { } body
+                        )
+                            return body;
+                    }
+                    break;
+            }
+        }
+        return null;
     }
 
     private IrExpression ExtractInvocation(InvocationExpressionSyntax inv)

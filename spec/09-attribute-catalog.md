@@ -1,10 +1,9 @@
 # Attribute Catalog
 
 This appendix lists the currently available Metano annotations relevant to the
-transpilation model. The current codebase exposes **24 attribute types** in
+transpilation model. The current codebase exposes **25 attribute types** in
 `Metano.Annotations`, plus the supporting `EmitTarget` enum used by some
-annotations. Additional entries tagged *(planned)* below are reserved for the
-upcoming attribute-family slices (see ADR-0015) and are not yet shipped.
+annotations.
 
 ## Type Selection and Inclusion
 
@@ -45,7 +44,7 @@ upcoming attribute-family slices (see ADR-0015) and are not yet shipped.
 | `DiscriminatorAttribute` (TypeScript) | Names a `[StringEnum]` field as the discriminator; the generated `isT` short-circuits on a literal comparison against the type name before walking the remaining shape. |
 | `ExternalAttribute` (TypeScript) | Marks a `static class` as a stub for runtime-available JS globals — the class emits no file and static member access flattens to a bare identifier. Attribute usage now accepts method/property/field targets so the family can grow; the per-member declaration-suppression lowering and the split from class-level flatten ship in a follow-up slice. |
 | `ConstantAttribute` | Applied to a parameter or field; the value must be a compile-time constant literal. Violations surface as MS0014 `InvalidConstant`. Enables literal-type narrowing in `[Emit]` templates and safe `[Inline]` expansion. |
-| `InlineAttribute` *(planned)* | Will apply to a static readonly field, an expression-bodied method / extension, or a static class to request expansion at every use site. See ADR-0015. |
+| `InlineAttribute` | Applied to a `static readonly` field or a `static` property with an expression-bodied getter; every reference substitutes the member's initializer (or getter expression) at the call site. Method / extension inlining and static-class propagation ship in a follow-up slice. Violations surface as MS0016 `InvalidInline`. |
 
 ## Packaging and Interop
 
