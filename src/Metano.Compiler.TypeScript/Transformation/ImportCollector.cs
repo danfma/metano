@@ -852,6 +852,14 @@ public sealed class ImportCollector(
                 {
                     names.Add(callId.Name);
                     valueNames.Add(callId.Name);
+                    // `bindReceiver` is the metano-runtime helper the
+                    // TS bridge emits around lambdas bound to a
+                    // `[This]`-bearing delegate. Route it through the
+                    // runtime-helper bucket so the collector emits
+                    // the matching import without threading a new
+                    // IrRuntimeRequirement through the frontend.
+                    if (callId.Name == "bindReceiver")
+                        runtimeHelpers.Add("bindReceiver");
                 }
                 // Static method calls like Enumerable.from(...)
                 else if (

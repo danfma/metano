@@ -6,3 +6,4 @@ export * from "./linq/index.ts";
 export * from "./json/index.ts";
 export * from "./uuid.ts";
 export * from "./delegates.ts";
+export * from "./bind-receiver.ts";

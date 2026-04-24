@@ -265,13 +265,27 @@ public sealed record IrYieldExpression(IrExpression? Value) : IrExpression;
 // -- Lambdas --
 
 /// <summary>
-/// Lambda/anonymous function expression.
+/// Lambda/anonymous function expression. When the lambda targets a
+/// delegate whose first parameter carries <c>[This]</c>, the
+/// extractor sets <paramref name="UsesThis"/> to <c>true</c> and
+/// records the receiver type under <paramref name="ThisType"/>; the
+/// lambda's first parameter stays in <paramref name="Parameters"/>
+/// so the TypeScript bridge can hand the arrow to the
+/// <c>bindReceiver</c> runtime helper, which captures the
+/// dispatcher's JS <c>this</c> and forwards it into that parameter.
+/// The arrow itself keeps lexical <c>this</c>, so any reference to
+/// the enclosing C# class's <c>this</c> inside the body resolves
+/// through ordinary closure capture. Backends that do not have a
+/// JS-style <c>this</c> rebinding (Dart, Kotlin) ignore the flag
+/// and emit the positional parameters as written.
 /// </summary>
 public sealed record IrLambdaExpression(
     IReadOnlyList<IrParameter> Parameters,
     IrTypeRef? ReturnType,
     IReadOnlyList<IrStatement> Body,
-    bool IsAsync = false
+    bool IsAsync = false,
+    bool UsesThis = false,
+    IrTypeRef? ThisType = null
 ) : IrExpression;
 
 // -- Collection literals --

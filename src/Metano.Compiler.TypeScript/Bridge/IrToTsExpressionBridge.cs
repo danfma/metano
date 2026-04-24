@@ -370,7 +370,20 @@ public static class IrToTsExpressionBridge
             ))
             .ToList();
         var body = IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry);
-        return new TsArrowFunction(parameters, body, Async: lambda.IsAsync);
+        var arrow = new TsArrowFunction(parameters, body, Async: lambda.IsAsync);
+        // Lambdas bound to a `[This]`-bearing delegate: wrap the arrow
+        // in a runtime `bindReceiver(...)` call. The helper's
+        // `function`-keyword trampoline picks up the runtime `this`
+        // from the caller and forwards it as the first positional
+        // argument to the arrow — the arrow itself stays
+        // lexically-scoped so any `this` captured from the enclosing
+        // C# class still resolves through ordinary closure
+        // semantics. Zero body rewriting needed; the arrow's
+        // receiver parameter (e.g. `self`) carries the runtime
+        // `this`.
+        if (lambda.UsesThis)
+            return new TsCallExpression(new TsIdentifier("bindReceiver"), [arrow]);
+        return arrow;
     }
 
     /// <summary>

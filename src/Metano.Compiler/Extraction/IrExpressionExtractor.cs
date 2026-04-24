@@ -40,7 +40,7 @@ public sealed class IrExpressionExtractor
     )
         : this(semanticModel, originResolver, target, inlineExpanding: null) { }
 
-    private IrExpressionExtractor(
+    internal IrExpressionExtractor(
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver,
         Metano.Annotations.TargetLanguage? target,
@@ -52,6 +52,8 @@ public sealed class IrExpressionExtractor
         _target = target;
         _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
     }
+
+    internal HashSet<ISymbol> InlineExpandingSet => _inlineExpanding;
 
     public IrExpression Extract(ExpressionSyntax expression) =>
         expression switch
@@ -1199,26 +1201,67 @@ public sealed class IrExpressionExtractor
 
     private IrExpression ExtractSimpleLambda(SimpleLambdaExpressionSyntax lambda)
     {
+        var receiverType = ResolveLambdaReceiverType(lambda);
         var parameter = BuildLambdaParameter(lambda.Parameter);
         var body = ExtractLambdaBody(lambda.Body);
         return new IrLambdaExpression(
             [parameter],
             ReturnType: null,
             Body: body,
-            IsAsync: lambda.AsyncKeyword.ValueText == "async"
+            IsAsync: lambda.AsyncKeyword.ValueText == "async",
+            UsesThis: receiverType is not null,
+            ThisType: receiverType
         );
     }
 
     private IrExpression ExtractParenthesizedLambda(ParenthesizedLambdaExpressionSyntax lambda)
     {
+        var receiverType = ResolveLambdaReceiverType(lambda);
         var parameters = lambda.ParameterList.Parameters.Select(BuildLambdaParameter).ToList();
         var body = ExtractLambdaBody(lambda.Body);
         return new IrLambdaExpression(
             parameters,
             ReturnType: null,
             Body: body,
-            IsAsync: lambda.AsyncKeyword.ValueText == "async"
+            IsAsync: lambda.AsyncKeyword.ValueText == "async",
+            UsesThis: receiverType is not null,
+            ThisType: receiverType
         );
+    }
+
+    /// <summary>
+    /// Returns the receiver type for a lambda whose target delegate
+    /// declares <c>[This]</c> on its first parameter, so the TS
+    /// bridge can wrap the emitted arrow in a <c>bindReceiver</c>
+    /// runtime helper call. Returns <c>null</c> otherwise — the
+    /// lambda emits as a plain arrow.
+    /// <para>
+    /// The arrow's first parameter stays in the positional list so
+    /// the runtime wrapper can forward the dispatcher's JS
+    /// <c>this</c> into it; the lambda body never mentions the
+    /// keyword <c>this</c> itself, so an outer <c>this</c> captured
+    /// from the enclosing C# class continues to resolve through
+    /// lexical closure (<c>const self = this</c> is emitted by the
+    /// runtime helper, not by the generated lambda).
+    /// </para>
+    /// </summary>
+    private IrTypeRef? ResolveLambdaReceiverType(ExpressionSyntax lambdaSyntax)
+    {
+        if (
+            _semantic.GetTypeInfo(lambdaSyntax).ConvertedType
+            is not INamedTypeSymbol
+            {
+                TypeKind: TypeKind.Delegate,
+                DelegateInvokeMethod: IMethodSymbol invoke,
+            }
+        )
+            return null;
+        if (invoke.Parameters.Length == 0)
+            return null;
+        var receiverParam = invoke.Parameters[0];
+        if (!SymbolHelper.HasThis(receiverParam))
+            return null;
+        return IrTypeRefMapper.Map(receiverParam.Type, _originResolver, _target);
     }
 
     private IrTypeRef ResolveParameterType(ParameterSyntax parameter)
