@@ -456,8 +456,25 @@ public static class SymbolHelper
         return false;
     }
 
-    public static bool HasInlineWrapper(this ISymbol symbol) =>
-        HasAttribute(symbol, "InlineWrapper");
+    /// <summary>
+    /// Reads <c>[Branded]</c> or its predecessor
+    /// <c>[InlineWrapper]</c> from <c>Metano.Annotations</c>. Both
+    /// attributes mark a value-like struct as a branded primitive
+    /// companion on the TS side — identical semantics, different
+    /// names for the same shape. Accepting either here lets callers
+    /// migrate to <c>[Branded]</c> without breaking pre-existing
+    /// <c>[InlineWrapper]</c> usages.
+    /// </summary>
+    public static bool HasBranded(this ISymbol symbol) =>
+        HasAttribute(symbol, "Branded") || HasAttribute(symbol, "InlineWrapper");
+
+    /// <summary>
+    /// Legacy alias preserved so older call sites keep compiling
+    /// after the <c>[InlineWrapper]</c> → <c>[Branded]</c> rename.
+    /// Delegates to <see cref="HasBranded"/> so adding <c>[Branded]</c>
+    /// on a type is equivalent to the historical attribute.
+    /// </summary>
+    public static bool HasInlineWrapper(this ISymbol symbol) => HasBranded(symbol);
 
     /// <summary>
     /// Determines if a type should be transpiled, considering:

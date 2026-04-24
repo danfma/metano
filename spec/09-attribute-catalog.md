@@ -1,7 +1,7 @@
 # Attribute Catalog
 
 This appendix lists the currently available Metano annotations relevant to the
-transpilation model. The current codebase exposes **23 attribute types** in
+transpilation model. The current codebase exposes **24 attribute types** in
 `Metano.Annotations`, plus the supporting `EmitTarget` enum used by some
 annotations. Additional entries tagged *(planned)* below are reserved for the
 upcoming attribute-family slices (see ADR-0015) and are not yet shipped.
@@ -23,7 +23,8 @@ upcoming attribute-family slices (see ADR-0015) and are not yet shipped.
 | `IgnoreAttribute` | Omits a member from output. |
 | `StringEnumAttribute` | Emits enum output as string-based TS representation. |
 | `PlainObjectAttribute` | Emits object shape without class wrapper semantics. |
-| `InlineWrapperAttribute` | Emits wrapper types using branded/opaque-style semantics. *(Planned rename to `BrandedAttribute` per ADR-0015.)* |
+| `BrandedAttribute` | Emits wrapper types using branded/opaque-style semantics. Successor of `InlineWrapperAttribute` — both attributes carry identical behavior while the legacy name stays supported. |
+| `InlineWrapperAttribute` | Predecessor of `BrandedAttribute`; kept working for existing callers. Prefer `[Branded]` in new code. |
 | `EmitInFileAttribute` | Co-locates multiple types in a single output file. |
 
 ## Modules and Top-Level Emission
