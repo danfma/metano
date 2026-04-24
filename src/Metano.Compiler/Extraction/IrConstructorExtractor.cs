@@ -82,7 +82,8 @@ public static class IrConstructorExtractor
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         p.HasExplicitDefaultValue,
                         ExtractDefaultValue(p, compilation, originResolver),
-                        IsOptional: p.HasOptional()
+                        IsOptional: p.HasOptional(),
+                        IsConstant: p.HasConstant()
                     ),
                     promotion,
                     PromotedVisibility: promotedVisibility,

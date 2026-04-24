@@ -140,6 +140,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateOptionalAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateDiscriminatorAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateExternalAttribute(compilation, diagnostics);
+            ValidateConstantAttribute(compilation, assemblyWideTranspile, diagnostics);
         }
 
         return new IrCompilation(
@@ -853,6 +854,187 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         foreach (var nested in type.GetTypeMembers())
             VisitTypeForExternal(nested, diagnostics);
+    }
+
+    /// <summary>
+    /// Validates <c>[Constant]</c> from <c>Metano.Annotations</c>.
+    /// Two checks:
+    /// <list type="bullet">
+    ///   <item>Fields decorated with <c>[Constant]</c> must have an
+    ///   initializer that Roslyn recognizes as a compile-time constant
+    ///   (<see cref="IFieldSymbol.HasConstantValue"/> or a
+    ///   <c>readonly</c> initializer resolvable through
+    ///   <see cref="SemanticModel.GetConstantValue(SyntaxNode, CancellationToken)"/>).</item>
+    ///   <item>Every call site whose target method exposes a
+    ///   <c>[Constant]</c> parameter must pass a constant-valued
+    ///   argument in that position.</item>
+    /// </list>
+    /// Both failures raise <c>MS0014 InvalidConstant</c>. The checks
+    /// run once per compilation and span every syntax tree reachable
+    /// from the current assembly so referenced-assembly consumers
+    /// still surface their own violations.
+    /// </summary>
+    private static void ValidateConstantAttribute(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+
+        // Field-level check: decorated field initializer must reduce
+        // to a Roslyn constant.
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type => VisitTypeForConstantFields(type, compilation, diagnostics)
+        );
+
+        // Call-site check: walk every invocation + object-creation
+        // + constructor-initializer across the compilation's syntax
+        // trees and verify args passed to `[Constant]` parameters
+        // are constant-valued.
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var semanticModel = compilation.GetSemanticModel(tree);
+            var root = tree.GetRoot();
+
+            foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                ValidateConstantCallSite(
+                    invocation.ArgumentList,
+                    semanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol,
+                    semanticModel,
+                    diagnostics
+                );
+
+            foreach (
+                var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()
+            )
+                ValidateConstantCallSite(
+                    creation.ArgumentList,
+                    semanticModel.GetSymbolInfo(creation).Symbol as IMethodSymbol,
+                    semanticModel,
+                    diagnostics
+                );
+
+            foreach (
+                var creation in root.DescendantNodes()
+                    .OfType<ImplicitObjectCreationExpressionSyntax>()
+            )
+                ValidateConstantCallSite(
+                    creation.ArgumentList,
+                    semanticModel.GetSymbolInfo(creation).Symbol as IMethodSymbol,
+                    semanticModel,
+                    diagnostics
+                );
+        }
+    }
+
+    private static void VisitTypeForConstantFields(
+        INamedTypeSymbol type,
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        foreach (var member in type.GetMembers())
+        {
+            if (member is not IFieldSymbol field || !field.HasConstant())
+                continue;
+            if (IsFieldInitializerConstant(field, compilation))
+                continue;
+
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.InvalidConstant,
+                    $"[Constant] on field {FormatMemberPath(field)} requires a compile-time "
+                        + $"constant initializer. Use a literal token, a 'const' local or "
+                        + $"field, or a 'readonly' field whose initializer is itself constant.",
+                    field.Locations.FirstOrDefault()
+                )
+            );
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForConstantFields(nested, compilation, diagnostics);
+    }
+
+    private static bool IsFieldInitializerConstant(IFieldSymbol field, Compilation compilation)
+    {
+        // `const` fields always satisfy the contract — Roslyn only
+        // accepts them when the initializer folds to a primitive.
+        if (field.HasConstantValue)
+            return true;
+
+        // `readonly` fields need a syntax probe: if the declaration's
+        // initializer reduces to a Roslyn constant in its own
+        // SemanticModel, the value is known at compile time and the
+        // attribute's contract is satisfied.
+        foreach (var reference in field.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax() is not VariableDeclaratorSyntax declarator)
+                continue;
+            if (declarator.Initializer?.Value is not { } initializer)
+                continue;
+            var semanticModel = compilation.GetSemanticModel(declarator.SyntaxTree);
+            if (semanticModel.GetConstantValue(initializer).HasValue)
+                return true;
+        }
+        return false;
+    }
+
+    private static void ValidateConstantCallSite(
+        BaseArgumentListSyntax? argumentList,
+        IMethodSymbol? target,
+        SemanticModel semanticModel,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        if (argumentList is null || target is null)
+            return;
+        if (!target.Parameters.Any(p => p.HasConstant()))
+            return;
+
+        var arguments = argumentList.Arguments;
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var argument = arguments[i];
+            var parameter = ResolveParameter(argument, arguments, i, target);
+            if (parameter is null || !parameter.HasConstant())
+                continue;
+            if (semanticModel.GetConstantValue(argument.Expression).HasValue)
+                continue;
+
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.InvalidConstant,
+                    $"Argument passed to [Constant] parameter '{parameter.Name}' of "
+                        + $"{FormatMemberPath(target)} is not a compile-time constant. "
+                        + $"Use a literal, a 'const' local/field, or a 'readonly' field "
+                        + $"whose initializer is itself constant.",
+                    argument.GetLocation()
+                )
+            );
+        }
+    }
+
+    private static IParameterSymbol? ResolveParameter(
+        ArgumentSyntax argument,
+        SeparatedSyntaxList<ArgumentSyntax> arguments,
+        int positionalIndex,
+        IMethodSymbol target
+    )
+    {
+        // Named argument: look the parameter up by its identifier.
+        if (argument.NameColon?.Name.Identifier.ValueText is { } named)
+            return target.Parameters.FirstOrDefault(p => p.Name == named);
+        // Positional argument: map by position, clamping at the last
+        // parameter so variadic (`params`) slots resolve to the array
+        // parameter rather than walking off the end.
+        if (target.Parameters.Length == 0)
+            return null;
+        var index = Math.Min(positionalIndex, target.Parameters.Length - 1);
+        return target.Parameters[index];
     }
 
     /// <summary>

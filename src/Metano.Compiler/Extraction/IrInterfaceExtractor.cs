@@ -98,7 +98,8 @@ public static class IrInterfaceExtractor
             .Parameters.Select(p => new IrParameter(
                 p.Name,
                 IrTypeRefMapper.Map(p.Type, originResolver),
-                IsOptional: p.HasOptional()
+                IsOptional: p.HasOptional(),
+                IsConstant: p.HasConstant()
             ))
             .ToList();
 

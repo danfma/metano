@@ -22,6 +22,14 @@ namespace Metano.Compiler.IR;
 /// requires the parameter to already be nullable — the extractor
 /// emits <c>MS0010</c> for <c>[Optional]</c> on a non-nullable
 /// type.</param>
+/// <param name="IsConstant">Whether the parameter carries
+/// <c>[Constant]</c> (from <c>Metano.Annotations</c>). When
+/// <c>true</c>, every call-site argument must be a compile-time
+/// constant literal; the frontend validator emits <c>MS0014</c> for
+/// violations. Downstream lowering (<c>[Emit]</c> templates,
+/// <c>[Inline]</c> expansion) relies on the flag to guarantee the
+/// value is reducible to a literal without a separate analyzer
+/// pass.</param>
 public sealed record IrParameter(
     string Name,
     IrTypeRef Type,
@@ -29,5 +37,6 @@ public sealed record IrParameter(
     IrExpression? DefaultValue = null,
     bool IsParams = false,
     bool HasExplicitType = true,
-    bool IsOptional = false
+    bool IsOptional = false,
+    bool IsConstant = false
 );

@@ -13,8 +13,8 @@ Each diagnostic carries:
 - optional source location.
 
 The current stable code range is **`MS0001` through `MS0015`**, with
-`MS0013`, `MS0014`, and `MS0016` reserved for the upcoming attribute-family
-slices (see ADR-0015).
+`MS0013` and `MS0016` reserved for the upcoming attribute-family slices
+(see ADR-0015).
 
 ## Stable Codes
 
@@ -32,6 +32,7 @@ slices (see ADR-0015).
 | `MS0010` | `OptionalRequiresNullable` | `[Optional]` was applied to a non-nullable parameter or property. |
 | `MS0011` | `InvalidDiscriminator` | `[Discriminator("FieldName")]` references a field that is missing, not a `[StringEnum]`, or nullable. |
 | `MS0012` | `InvalidExternal` | `[External]` was applied to a non-static class, or combined with `[Transpile]`. |
+| `MS0014` | `InvalidConstant` | `[Constant]` argument or initializer is not a compile-time constant literal. |
 | `MS0015` | `InvalidErasable` | `[Erasable]` was applied to a non-static class, or combined with `[Transpile]`. |
 
 ## Reserved Codes
@@ -44,7 +45,6 @@ stable across the stack, not as a promise of shipped behavior.
 | Code | Symbolic name | Slice |
 | --- | --- | --- |
 | `MS0013` | `NoEmitReferencedByTranspiledCode` | `[NoEmit]` redefinition (painting diagnostic) |
-| `MS0014` | `InvalidConstant` | `[Constant]` validator |
 | `MS0016` | `InvalidInline` | `[Inline]` validator |
 
 ## Product Significance

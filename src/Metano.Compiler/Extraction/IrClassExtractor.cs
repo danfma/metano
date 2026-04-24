@@ -341,7 +341,8 @@ public static class IrClassExtractor
             field.IsStatic,
             IrTypeRefMapper.Map(field.Type, originResolver, target),
             IsReadonly: field.IsReadOnly,
-            Initializer: initializer
+            Initializer: initializer,
+            IsConstant: field.HasConstant()
         )
         {
             Attributes = IrAttributeExtractor.Extract(field),

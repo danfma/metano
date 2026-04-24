@@ -60,7 +60,8 @@ public sealed record IrFieldDeclaration(
     IrTypeRef Type,
     bool IsReadonly,
     IrExpression? Initializer = null,
-    bool IsCapturedByCtor = false
+    bool IsCapturedByCtor = false,
+    bool IsConstant = false
 ) : IrMemberDeclaration(Name, Visibility, IsStatic);
 
 /// <summary>

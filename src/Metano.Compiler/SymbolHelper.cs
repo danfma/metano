@@ -248,6 +248,23 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// Reads <c>[Constant]</c> from <c>Metano.Annotations</c>. Marks
+    /// a parameter or field whose value must be a compile-time
+    /// constant literal. Used by downstream lowering
+    /// (<c>[Emit]</c> / <c>[Inline]</c>) to guarantee the value is
+    /// known at compile time. Namespace-qualified match so unrelated
+    /// <c>[Constant]</c> attributes from other libraries are not
+    /// mistaken for the Metano variant.
+    /// </summary>
+    public static bool HasConstant(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is ("ConstantAttribute" or "Constant")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+            );
+
+    /// <summary>
     /// Reads <c>[Erasable]</c> from <c>Metano.Annotations</c>. Static
     /// class whose scope vanishes at every call site — no
     /// <c>.ts</c> file, and static member access drops the enclosing

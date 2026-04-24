@@ -148,7 +148,8 @@ public static class IrModuleFunctionExtractor
         var parameters = prop
             .Parameters.Select(p => new IrParameter(
                 p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver)
+                IrTypeRefMapper.Map(p.Type, originResolver),
+                IsConstant: p.HasConstant()
             ))
             .ToList();
 
@@ -241,7 +242,8 @@ public static class IrModuleFunctionExtractor
                 p.Name,
                 IrTypeRefMapper.Map(p.Type, originResolver),
                 HasDefaultValue: p.HasExplicitDefaultValue,
-                DefaultValue: ExtractDefaultValue(p, compilation, originResolver)
+                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                IsConstant: p.HasConstant()
             ))
         );
 
@@ -338,7 +340,8 @@ public static class IrModuleFunctionExtractor
                 p.Name,
                 IrTypeRefMapper.Map(p.Type, originResolver),
                 HasDefaultValue: p.HasExplicitDefaultValue,
-                DefaultValue: ExtractDefaultValue(p, compilation, originResolver)
+                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                IsConstant: p.HasConstant()
             ))
             .ToList();
 
