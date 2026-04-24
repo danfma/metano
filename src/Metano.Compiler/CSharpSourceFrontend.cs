@@ -1199,7 +1199,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 continue;
             }
             if (
-                parameter.RefKind is RefKind.Ref or RefKind.Out or RefKind.RefReadOnly
+                parameter.RefKind is RefKind.Ref or RefKind.Out or RefKind.In or RefKind.RefReadOnly
                 || parameter.IsParams
             )
             {
@@ -1209,8 +1209,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         DiagnosticCodes.InvalidThis,
                         $"[This] on parameter '{parameter.Name}' of "
                             + $"{FormatMemberPath(method)} cannot be combined with "
-                            + $"'ref' / 'out' / 'params'. The receiver is passed by "
-                            + $"value at the JavaScript boundary.",
+                            + $"'ref' / 'out' / 'in' / 'params'. The receiver is passed "
+                            + $"by value at the JavaScript boundary.",
                         parameter.Locations.FirstOrDefault()
                     )
                 );

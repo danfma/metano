@@ -461,6 +461,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 break;
             case IrFunctionTypeRef fn:
                 CollectTypeParamRefs(fn.ReturnType, acc);
+                if (fn.ThisType is { } thisType)
+                    CollectTypeParamRefs(thisType, acc);
                 foreach (var p in fn.Parameters)
                     CollectTypeParamRefs(p.Type, acc);
                 break;

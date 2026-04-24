@@ -19,8 +19,7 @@ internal static class IrTypeRefSignatures
             IrMapTypeRef m => $"map<{Describe(m.KeyType)},{Describe(m.ValueType)}>",
             IrSetTypeRef s => $"set<{Describe(s.ElementType)}>",
             IrTupleTypeRef t => $"tuple<{string.Join(",", t.Elements.Select(Describe))}>",
-            IrFunctionTypeRef f =>
-                $"fn<{string.Join(",", f.Parameters.Select(p => Describe(p.Type)))}->{Describe(f.ReturnType)}>",
+            IrFunctionTypeRef f => BuildFunctionSignature(f),
             IrPromiseTypeRef pr => $"promise<{Describe(pr.ResultType)}>",
             IrGeneratorTypeRef g => $"gen<{Describe(g.YieldType)}>",
             IrIterableTypeRef i => $"iter<{Describe(i.ElementType)}>",
@@ -33,4 +32,23 @@ internal static class IrTypeRefSignatures
             IrUnknownTypeRef => "unknown",
             _ => "?",
         };
+
+    /// <summary>
+    /// Describes an <see cref="IrFunctionTypeRef"/>. Keeps the
+    /// historical <c>fn&lt;p1,p2-&gt;R&gt;</c> shape when the ref has
+    /// no synthetic <c>this</c> receiver; prefixes with
+    /// <c>this:T,</c> when <see cref="IrFunctionTypeRef.ThisType"/> is
+    /// populated so the signature key distinguishes delegates that
+    /// rebind <c>this</c> from shape-compatible siblings that don't.
+    /// </summary>
+    private static string BuildFunctionSignature(IrFunctionTypeRef f)
+    {
+        var positional = string.Join(",", f.Parameters.Select(p => Describe(p.Type)));
+        var args = f.ThisType is { } thisType
+            ? positional.Length == 0
+                ? $"this:{Describe(thisType)}"
+                : $"this:{Describe(thisType)},{positional}"
+            : positional;
+        return $"fn<{args}->{Describe(f.ReturnType)}>";
+    }
 }

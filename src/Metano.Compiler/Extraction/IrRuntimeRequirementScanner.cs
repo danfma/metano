@@ -238,6 +238,8 @@ public static class IrRuntimeRequirementScanner
                     ScanTypeRef(e, acc);
                 break;
             case IrFunctionTypeRef f:
+                if (f.ThisType is { } thisType)
+                    ScanTypeRef(thisType, acc);
                 foreach (var p in f.Parameters)
                     ScanTypeRef(p.Type, acc);
                 ScanTypeRef(f.ReturnType, acc);

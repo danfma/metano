@@ -32,7 +32,7 @@ public static class IrToDartTypeMapper
                 [Map(kv.KeyType), Map(kv.ValueType)]
             ),
             IrFunctionTypeRef f => new DartFunctionType(
-                f.Parameters.Select(p => new DartParameter(p.Name, Map(p.Type))).ToList(),
+                BuildDartFunctionParameters(f),
                 Map(f.ReturnType)
             ),
             IrPromiseTypeRef pr => new DartNamedType("Future", [Map(pr.ResultType)]),
@@ -59,6 +59,24 @@ public static class IrToDartTypeMapper
             : null;
 
         return new DartNamedType(named.Name, args, origin);
+    }
+
+    /// <summary>
+    /// Materializes the Dart parameter list for a function type. Dart
+    /// has no JS-style <c>this</c> rebind, so when the IR carries a
+    /// <see cref="IrFunctionTypeRef.ThisType"/> (promoted by the TS
+    /// backend contract for <c>[This]</c>), the Dart bridge
+    /// re-introduces it as a regular positional parameter at
+    /// index 0 — the attribute degrades to a no-op on this backend
+    /// rather than silently dropping the receiver from the signature.
+    /// </summary>
+    private static IReadOnlyList<DartParameter> BuildDartFunctionParameters(IrFunctionTypeRef f)
+    {
+        var parameters = new List<DartParameter>(f.Parameters.Count + (f.ThisType is null ? 0 : 1));
+        if (f.ThisType is { } thisType)
+            parameters.Add(new DartParameter("self", Map(thisType)));
+        parameters.AddRange(f.Parameters.Select(p => new DartParameter(p.Name, Map(p.Type))));
+        return parameters;
     }
 
     private static DartType MapPrimitive(IrPrimitive primitive) =>

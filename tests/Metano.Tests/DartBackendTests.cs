@@ -474,6 +474,36 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task ThisAttribute_DartBridge_ReintroducesReceiverAsFirstParameter()
+    {
+        // Dart has no JS-style `this` rebind, so the `[This]`
+        // attribute degrades to a no-op: the receiver promoted into
+        // IrFunctionTypeRef.ThisType is re-introduced as a regular
+        // positional parameter at index 0. Guards that the TS-
+        // specific rewrite does not silently drop the receiver from
+        // the Dart signature.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public abstract class Element {}
+
+            public delegate void MouseEventListener([This] Element self, string arg);
+
+            [Transpile]
+            public class Widget
+            {
+                public MouseEventListener? OnClick { get; set; }
+            }
+            """
+        );
+
+        var dart = files["widget.dart"];
+        // The receiver type still appears as the first positional
+        // parameter in the emitted function-typed field.
+        await Assert.That(dart).Contains("Element");
+    }
+
+    [Test]
     public async Task TemporalRelationalLowering_DoesNotLeakIntoDartTarget()
     {
         // The TypeScript-specific `Temporal.*.compare(...) op 0`

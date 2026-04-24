@@ -82,6 +82,28 @@ public class ThisAttributeTranspileTests
     }
 
     [Test]
+    public async Task This_OnInParameter_EmitsMs0018()
+    {
+        // `in` parameters pass by readonly-reference at the CLR
+        // level; they cannot act as the JS `this` receiver at the
+        // boundary. Guard alongside `ref` / `out` / `ref readonly`.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public abstract class Element {}
+
+            public delegate void InListener([This] in Element self, string arg);
+            """
+        );
+
+        var ms0018 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidThis);
+        await Assert.That(ms0018).IsNotNull();
+        await Assert.That(ms0018!.Message).Contains("'in'");
+    }
+
+    [Test]
     public async Task This_OnParamsParameter_EmitsMs0018()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
