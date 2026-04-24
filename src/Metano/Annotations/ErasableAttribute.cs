@@ -1,37 +1,31 @@
 namespace Metano.Annotations;
 
 /// <summary>
-/// Marks a <c>static class</c> whose scope vanishes at every call site.
-/// The class itself emits no <c>.ts</c> file, and every static member
-/// access drops the enclosing class name
-/// (<c>HtmlElementType.Div</c> → <c>Div</c>) so the members read as if
-/// they were declared at file scope.
+/// Marks a <c>static class</c> whose scope vanishes at the call site:
+/// static member access drops the enclosing class name
+/// (<c>Constants.Pi</c> → <c>Pi</c>), and the class itself emits no
+/// <c>.ts</c> file. Intended for compile-time container types whose
+/// members are either runtime-provided, template-emitted
+/// (<c>[Emit]</c>), or constant literals the consumer resolves at use
+/// site.
 /// <para>
-/// Members inside an <c>[Erasable]</c> class emit according to their
-/// own attributes, not by inheritance from the container:
+/// In the initial slice, every member on an <c>[Erasable]</c> class
+/// must already resolve without emitting a declaration (literal
+/// return, <c>[Emit]</c> template, or member that will become
+/// <c>[External]</c> / <c>[Inline]</c> once those attributes ship).
+/// The broader member-emission contract (plain bodies projected as
+/// top-level exports, <c>[Inline]</c> expansion, MS0015 member-level
+/// validation) lands in follow-up slices alongside those attributes.
 /// </para>
-/// <list type="bullet">
-///   <item><description>Plain method body → top-level
-///   <c>export function</c> in a file named after the class.</description></item>
-///   <item><description><c>[External]</c> member → no declaration
-///   emitted; the runtime provides the symbol.</description></item>
-///   <item><description><c>[Emit("…")]</c> member → template expansion
-///   at each call site, no free-standing declaration.</description></item>
-///   <item><description><c>[Inline]</c> field/property → initializer
-///   substitutes each access.</description></item>
-///   <item><description><c>[Ignore]</c> member → dropped.</description></item>
-/// </list>
 /// <para>
-/// Applies only to <c>static class</c>. Non-static targets raise
-/// <c>MS0015 InvalidErasable</c>. Members that cannot satisfy one of
-/// the emission contracts above also raise <c>MS0015</c> — the
-/// transpiler refuses to guess the intended lowering.
+/// Applies only to <c>static class</c>. Non-static targets and
+/// combinations with <c>[Transpile]</c> raise
+/// <c>MS0015 InvalidErasable</c>.
 /// </para>
 /// <para>
 /// <c>[Erasable]</c> lives in <see cref="Metano.Annotations"/> because
 /// the semantic (scope erasure at call site) is meaningful for every
-/// target, even if the call-site flatten only shows in languages whose
-/// natural shape supports top-level declarations.
+/// target; per-target lowering is defined by each backend.
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]

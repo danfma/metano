@@ -115,12 +115,16 @@ public static class DiagnosticCodes
     public const string InvalidExternal = "MS0012";
 
     /// <summary>MS0015 — <c>[Erasable]</c> (from
-    /// <c>Metano.Annotations</c>) was applied to a non-static class, or
-    /// combined with <c>[Transpile]</c>. The attribute marks a static
-    /// class whose scope vanishes at the call site — the class emits
-    /// no file and member access flattens to a bare identifier.
-    /// Non-static targets have no static surface to flatten, and
-    /// <c>[Transpile]</c> asks for full emission which is
-    /// incompatible with the no-file contract.</summary>
+    /// <c>Metano.Annotations</c>) was applied to a non-static class,
+    /// or combined with <c>[Transpile]</c>. The attribute marks a
+    /// static class whose scope vanishes at the call site — the
+    /// class emits no file and member access flattens to a bare
+    /// identifier. Non-static targets have no static surface to
+    /// flatten, and <c>[Transpile]</c> asks for full emission which
+    /// is incompatible with the no-file contract. Member-level
+    /// emission contracts inside an <c>[Erasable]</c> class (plain
+    /// bodies projected as top-level exports, <c>[Inline]</c>
+    /// expansion) are enforced in a follow-up slice; this code does
+    /// not yet surface them.</summary>
     public const string InvalidErasable = "MS0015";
 }

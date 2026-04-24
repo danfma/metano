@@ -17,9 +17,10 @@ public class ErasableAttributeTranspileTests
     [Test]
     public async Task Erasable_StaticMember_AccessFlattensToIdentifier()
     {
-        // `Constants.Pi` on the C# side should lower to a bare `Pi`
-        // identifier on the TS side because `Constants` is `[Erasable]`
-        // — the enclosing class qualifier is dropped at the call site.
+        // `Constants.Pi` on the C# side should lower to a bare `pi`
+        // identifier on the TS side (camelCased per the TS naming
+        // policy) because `Constants` is `[Erasable]` — the enclosing
+        // class qualifier is dropped at the call site.
         var result = TranspileHelper.TranspileWithLibrary(
             """
             using Metano.Annotations;
