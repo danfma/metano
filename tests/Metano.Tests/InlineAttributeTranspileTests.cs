@@ -102,6 +102,48 @@ public class InlineAttributeTranspileTests
         await Assert.That(output).DoesNotContain("HtmlElementType.");
     }
 
+    // ─── Cross-assembly ───────────────────────────────────────
+
+    [Test]
+    public async Task Inline_CrossAssembly_DoesNotCrashAndSkipsExpansion()
+    {
+        // Regression for issue #109: an [Inline] member declared in a
+        // referenced assembly carries a SyntaxTree that belongs to
+        // the declaring compilation, not ours. Calling
+        // GetSemanticModel on that tree used to throw
+        // ArgumentException. Cross-assembly inline expansion is
+        // deferred to a follow-up — for now the transpiler must bail
+        // out cleanly and fall back to a regular member access.
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+
+            [Erasable]
+            public static class Constants
+            {
+                [Inline]
+                public static int Answer => 42;
+            }
+            """,
+            """
+            [assembly: TranspileAssembly]
+
+            public class Asker
+            {
+                public int Ask() => Constants.Answer;
+            }
+            """
+        );
+
+        // The consumer still emits without crashing. Inline expansion
+        // does NOT happen across the assembly boundary in this slice,
+        // so the caller sees the Erasable-class-flattened bare
+        // identifier; the follow-up will wire cross-assembly
+        // expansion so the literal substitutes properly.
+        var output = result["asker.ts"];
+        await Assert.That(output).Contains("return answer;");
+    }
+
     // ─── Diagnostics (MS0016) ─────────────────────────────────
 
     [Test]

@@ -955,6 +955,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             var initializer = TryFindInlineInitializerExpression(start);
             if (initializer is null)
                 return false;
+            // Cross-assembly guard: an `[Inline]` member pulled from
+            // a referenced assembly carries a SyntaxTree that belongs
+            // to the declaring compilation, not ours. The cycle walk
+            // cannot inspect initializers outside the current
+            // compilation — skip them. A follow-up slice covers the
+            // cross-assembly case.
+            if (!compilation.ContainsSyntaxTree(initializer.SyntaxTree))
+                return false;
             var semanticModel = compilation.GetSemanticModel(initializer.SyntaxTree);
             foreach (var identifier in initializer.DescendantNodesAndSelf().OfType<NameSyntax>())
             {

@@ -872,6 +872,18 @@ public sealed class IrExpressionExtractor
             if (initializer is null)
                 return null;
 
+            // Cross-assembly guard: when the `[Inline]` member lives
+            // in a referenced assembly, its SyntaxTree belongs to the
+            // declaring compilation, not ours. Calling
+            // `GetSemanticModel` with a tree the current compilation
+            // does not own throws `ArgumentException` ("SyntaxTree is
+            // not part of the compilation"). Cross-assembly inline
+            // substitution is tracked as a follow-up — for now the
+            // caller falls through to a regular member access so the
+            // transpiler does not crash.
+            if (!_semantic.Compilation.ContainsSyntaxTree(initializer.SyntaxTree))
+                return null;
+
             // Reuse the declaring syntax tree's SemanticModel so
             // constant folding + symbol resolution inside the
             // initializer reflect the declaration site, not the call
