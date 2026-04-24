@@ -329,6 +329,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                                 || SymbolHelper.HasNoEmit(sym)
                                 || SymbolHelper.HasNoEmit(sym, target)
                                 || SymbolHelper.HasExternal(sym)
+                                || SymbolHelper.HasErasable(sym)
                             )
                         )
                             RegisterSymbol(sym);
@@ -796,8 +797,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         MetanoDiagnosticSeverity.Error,
                         DiagnosticCodes.InvalidExternal,
                         $"[External] on '{type.Name}' requires a static class. The attribute "
-                            + $"only flattens static member access — non-static types have no "
-                            + $"static surface to flatten. Mark the class 'static' or remove "
+                            + $"marks a stub for runtime globals — non-static types have no "
+                            + $"static surface to declare. Mark the class 'static' or remove "
                             + $"[External].",
                         type.Locations.FirstOrDefault()
                     )
@@ -810,10 +811,40 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         MetanoDiagnosticSeverity.Error,
                         DiagnosticCodes.InvalidExternal,
                         $"[External] on '{type.Name}' conflicts with [Transpile]. "
-                            + $"[External] marks a stub for runtime globals (no emission, "
-                            + $"flattened access); [Transpile] asks for full emission. Pick "
-                            + $"one — ambient bindings drop [Transpile], emitted helpers drop "
-                            + $"[External].",
+                            + $"[External] marks a stub for runtime globals (no emission); "
+                            + $"[Transpile] asks for full emission. Pick one — ambient "
+                            + $"bindings drop [Transpile], emitted helpers drop [External].",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+        }
+
+        if (SymbolHelper.HasErasable(type))
+        {
+            if (!type.IsStatic)
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidErasable,
+                        $"[Erasable] on '{type.Name}' requires a static class. The attribute "
+                            + $"marks a class whose scope vanishes at the call site — "
+                            + $"non-static types carry instance state that cannot be erased. "
+                            + $"Mark the class 'static' or remove [Erasable].",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+            if (SymbolHelper.HasTranspile(type))
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidErasable,
+                        $"[Erasable] on '{type.Name}' conflicts with [Transpile]. "
+                            + $"[Erasable] asks for no file emission and call-site scope "
+                            + $"erasure; [Transpile] asks for full emission. Pick one.",
                         type.Locations.FirstOrDefault()
                     )
                 );

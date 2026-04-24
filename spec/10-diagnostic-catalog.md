@@ -12,7 +12,7 @@ Each diagnostic carries:
 - message;
 - optional source location.
 
-The current stable code range is **`MS0001` through `MS0012`**.
+The current stable code range is **`MS0001` through `MS0016`**.
 
 ## Stable Codes
 
@@ -29,7 +29,11 @@ The current stable code range is **`MS0001` through `MS0012`**.
 | `MS0009` | `FrontendLoadFailure` | Source frontend failed to load or compile the project. |
 | `MS0010` | `OptionalRequiresNullable` | `[Optional]` was applied to a non-nullable parameter or property. |
 | `MS0011` | `InvalidDiscriminator` | `[Discriminator("FieldName")]` references a field that is missing, not a `[StringEnum]`, or nullable. |
-| `MS0012` | `InvalidExternal` | `[External]` was applied to a non-static class or combined with `[Transpile]`. |
+| `MS0012` | `InvalidExternal` | `[External]` is malformed — class-level use combined with `[Transpile]`, or member-level use on a symbol that is not suppressible. |
+| `MS0013` | `NoEmitReferencedByTranspiledCode` | A `[NoEmit]` type is referenced from transpiled code, which breaks the `.NET-only` painting. Migrate the referenced type to `[External]` (runtime-provided) or mark the caller `[NoTranspile]`. |
+| `MS0014` | `InvalidConstant` | `[Constant]` argument or initializer is not a compile-time constant literal. |
+| `MS0015` | `InvalidErasable` | `[Erasable]` was applied to a non-static class, or a member inside an `[Erasable]` class cannot satisfy the emission contract (requires a body, `[External]`, `[Emit]`, `[Inline]`, or `[Ignore]`). |
+| `MS0016` | `InvalidInline` | `[Inline]` is malformed — field is not `static readonly`, method has a multi-statement body, or expansion introduces a recursion cycle. |
 
 ## Product Significance
 

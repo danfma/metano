@@ -227,11 +227,14 @@ public static class SymbolHelper
     /// <summary>
     /// Reads <c>[External]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. TS-specific
-    /// attribute marking a static class as a stub for runtime globals
-    /// — static member access on such a class flattens to a bare
-    /// identifier (no enclosing type qualifier). Namespace-qualified
-    /// match so unrelated <c>[External]</c> attributes from other
-    /// libraries are not mistaken for the Metano variant.
+    /// attribute marking the symbol as runtime-provided — no
+    /// declaration is emitted for it. On a class, call-site access
+    /// keeps the class-qualified form (scope-erasure lives on
+    /// <see cref="HasErasable"/>). On a member, the declaration is
+    /// suppressed but access goes through whatever enclosing
+    /// expression holds it. Namespace-qualified match so unrelated
+    /// <c>[External]</c> attributes from other libraries are not
+    /// mistaken for the Metano variant.
     /// </summary>
     public static bool HasExternal(this ISymbol symbol) =>
         symbol
@@ -240,6 +243,25 @@ public static class SymbolHelper
                 a.AttributeClass?.Name is ("ExternalAttribute" or "External")
                 && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
                     == "Metano.Annotations.TypeScript"
+            );
+
+    /// <summary>
+    /// Reads <c>[Erasable]</c> from <c>Metano.Annotations</c>. Static
+    /// class whose scope vanishes at every call site — no
+    /// <c>.ts</c> file, and static member access drops the enclosing
+    /// class name (<c>HtmlElementType.Div</c> → <c>Div</c>). Members
+    /// inside emit per their own attributes (plain body → top-level
+    /// function, <c>[External]</c> → ambient, <c>[Emit]</c> → template,
+    /// <c>[Inline]</c> → expansion, <c>[Ignore]</c> → dropped).
+    /// Subsumes <c>[ExportedAsModule]</c> (deprecated) and fixes the
+    /// latent call-site flatten bug.
+    /// </summary>
+    public static bool HasErasable(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is ("ErasableAttribute" or "Erasable")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
             );
 
     /// <summary>
@@ -438,12 +460,15 @@ public static class SymbolHelper
             return false;
         if (HasNoEmit(symbol))
             return false;
-        // `[External]` is emission-scope "no emit" — the static class
-        // is a stub for runtime globals and must never produce a .ts
-        // file. Kept separate from `[NoEmit]` so the attribute
-        // semantics stay explicit at the source-code layer; the
-        // effect on discovery is identical.
+        // `[External]` and `[Erasable]` are emission-scope "no emit".
+        // Both mark the class as something the compiler must not
+        // produce a .ts file for (runtime-provided vs. compile-time
+        // sugar, respectively). Kept separate from `[NoEmit]` so the
+        // attribute semantics stay explicit at the source-code layer;
+        // the effect on discovery is identical.
         if (HasExternal(symbol))
+            return false;
+        if (HasErasable(symbol))
             return false;
         if (HasTranspile(symbol))
             return true;

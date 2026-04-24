@@ -109,10 +109,18 @@ public static class DiagnosticCodes
     /// <c>Metano.Annotations.TypeScript</c>) was applied to a
     /// non-static class, or combined with <c>[Transpile]</c>. The
     /// attribute marks a stub for runtime globals — the target class
-    /// emits no file and every static member access flattens to a
-    /// bare identifier. Non-static types have no static surface to
-    /// flatten, and combining with <c>[Transpile]</c> forces the
-    /// transpiler to simultaneously honor "no emission" and "full
-    /// emission" which are incompatible.</summary>
+    /// emits no file. Non-static types and combinations with
+    /// <c>[Transpile]</c> force the transpiler to simultaneously honor
+    /// "no emission" and "full emission", which are incompatible.</summary>
     public const string InvalidExternal = "MS0012";
+
+    /// <summary>MS0015 — <c>[Erasable]</c> (from
+    /// <c>Metano.Annotations</c>) was applied to a non-static class, or
+    /// combined with <c>[Transpile]</c>. The attribute marks a static
+    /// class whose scope vanishes at the call site — the class emits
+    /// no file and member access flattens to a bare identifier.
+    /// Non-static targets have no static surface to flatten, and
+    /// <c>[Transpile]</c> asks for full emission which is
+    /// incompatible with the no-file contract.</summary>
+    public const string InvalidErasable = "MS0015";
 }
