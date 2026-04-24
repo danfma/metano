@@ -930,12 +930,15 @@ public sealed class IrExpressionExtractor(
         // `[Name("x")]` (target-aware) is resolved once here so backends
         // consult the emitted name instead of re-scanning attributes.
         var emittedName = SymbolHelper.GetNameOverride(symbol, _target);
-        // `[External]` (TS-specific) marks a static class as a stub for
-        // runtime globals — static member access on such a class flattens
-        // to a bare identifier. Flag the declaring type here so the
-        // bridge can drop the enclosing type reference without re-reading
-        // Roslyn attributes.
-        var isDeclaringTypeExternal = SymbolHelper.HasExternal(symbol.ContainingType);
+        // `[External]` (TS-specific, class-level legacy) and
+        // `[Erasable]` (cross-target) both cause static member access
+        // to flatten to a bare identifier — the enclosing class name
+        // is dropped at the call site. Flag the declaring type here
+        // so the bridge can honor the rewrite without re-reading
+        // Roslyn attributes at lowering time.
+        var isDeclaringTypeExternal =
+            SymbolHelper.HasExternal(symbol.ContainingType)
+            || SymbolHelper.HasErasable(symbol.ContainingType);
         return new IrMemberOrigin(
             declaringTypeName,
             symbol.Name,
