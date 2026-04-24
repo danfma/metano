@@ -81,6 +81,37 @@ public class BrandedAttributeTranspileTests
     }
 
     [Test]
+    public async Task Branded_FromForeignNamespace_DoesNotTriggerBrandLowering()
+    {
+        // A third-party `[Branded]` attribute living in a different
+        // namespace must NOT be mistaken for the Metano variant — the
+        // short-name match would otherwise silently rewrite the struct
+        // as a branded primitive and break consumer assumptions.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            namespace ThirdParty
+            {
+                [System.AttributeUsage(System.AttributeTargets.Struct)]
+                public sealed class BrandedAttribute : System.Attribute {}
+            }
+
+            [Transpile]
+            [ThirdParty.Branded]
+            public readonly record struct Regular(string Value);
+            """
+        );
+
+        var output = result["regular.ts"];
+        // No brand-type alias, no companion namespace — the struct
+        // falls through to the regular record emission path.
+        await Assert.That(output).DoesNotContain("__brand");
+        await Assert.That(output).DoesNotContain("export namespace Regular");
+    }
+
+    [Test]
     public async Task Branded_AndInlineWrapper_BehaveIdentically()
     {
         // Same struct body, one marked [Branded] the other

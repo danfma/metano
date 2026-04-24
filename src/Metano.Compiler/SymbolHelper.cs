@@ -464,9 +464,27 @@ public static class SymbolHelper
     /// names for the same shape. Accepting either here lets callers
     /// migrate to <c>[Branded]</c> without breaking pre-existing
     /// <c>[InlineWrapper]</c> usages.
+    /// <para>
+    /// Namespace-qualified match so unrelated <c>[Branded]</c> or
+    /// <c>[InlineWrapper]</c> attributes shipped by third-party
+    /// assemblies are not mistaken for the Metano variants — the
+    /// short name <c>Branded</c> is generic enough that a collision
+    /// would silently rewrite types into branded primitives.
+    /// </para>
     /// </summary>
     public static bool HasBranded(this ISymbol symbol) =>
-        HasAttribute(symbol, "Branded") || HasAttribute(symbol, "InlineWrapper");
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name
+                    is (
+                        "BrandedAttribute"
+                        or "Branded"
+                        or "InlineWrapperAttribute"
+                        or "InlineWrapper"
+                    )
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+            );
 
     /// <summary>
     /// Legacy alias preserved so older call sites keep compiling
