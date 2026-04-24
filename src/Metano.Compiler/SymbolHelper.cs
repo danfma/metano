@@ -228,13 +228,15 @@ public static class SymbolHelper
     /// Reads <c>[External]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. TS-specific
     /// attribute marking the symbol as runtime-provided — no
-    /// declaration is emitted for it. On a class, call-site access
-    /// keeps the class-qualified form (scope-erasure lives on
-    /// <see cref="HasErasable"/>). On a member, the declaration is
-    /// suppressed but access goes through whatever enclosing
-    /// expression holds it. Namespace-qualified match so unrelated
-    /// <c>[External]</c> attributes from other libraries are not
-    /// mistaken for the Metano variant.
+    /// declaration is emitted for it. This helper only answers
+    /// whether the attribute is present; the exact call-site shape
+    /// (flatten vs. class-qualified access, per-member vs. class
+    /// scope) is decided by the lowering pipeline. In the current
+    /// slice, class-level <c>[External]</c> flattens static member
+    /// access at the bridge; per-member lowering ships alongside the
+    /// <c>[NoEmit]</c> redefinition. Namespace-qualified match so
+    /// unrelated <c>[External]</c> attributes from other libraries
+    /// are not mistaken for the Metano variant.
     /// </summary>
     public static bool HasExternal(this ISymbol symbol) =>
         symbol
@@ -460,12 +462,15 @@ public static class SymbolHelper
             return false;
         if (HasNoEmit(symbol))
             return false;
-        // `[External]` and `[Erasable]` are emission-scope "no emit".
-        // Both mark the class as something the compiler must not
-        // produce a .ts file for (runtime-provided vs. compile-time
-        // sugar, respectively). Kept separate from `[NoEmit]` so the
-        // attribute semantics stay explicit at the source-code layer;
-        // the effect on discovery is identical.
+        // `[External]` and `[Erasable]` are emission-scope "no emit"
+        // in the initial slice. Both mark a static class the
+        // compiler must not produce a .ts file for — runtime-provided
+        // stub vs. compile-time sugar container, respectively. A
+        // follow-up slice introduces per-member emission inside an
+        // `[Erasable]` class (plain bodies projected as top-level
+        // exports); until then every accessible member must be
+        // external, templated, or resolvable at the call site so the
+        // flattened identifier has a defining source.
         if (HasExternal(symbol))
             return false;
         if (HasErasable(symbol))

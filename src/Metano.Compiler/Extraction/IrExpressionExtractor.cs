@@ -930,15 +930,15 @@ public sealed class IrExpressionExtractor(
         // `[Name("x")]` (target-aware) is resolved once here so backends
         // consult the emitted name instead of re-scanning attributes.
         var emittedName = SymbolHelper.GetNameOverride(symbol, _target);
-        // `[External]` (TS-specific, class-level legacy) and
-        // `[Erasable]` (cross-target) both cause static member access
-        // to flatten to a bare identifier — the enclosing class name
-        // is dropped at the call site. Flag the declaring type here
-        // so the bridge can honor the rewrite without re-reading
-        // Roslyn attributes at lowering time.
-        var isDeclaringTypeExternal =
-            SymbolHelper.HasExternal(symbol.ContainingType)
-            || SymbolHelper.HasErasable(symbol.ContainingType);
+        // `[External]` (TS-specific) and `[Erasable]`
+        // (cross-target) both cause static member access to flatten
+        // to a bare identifier at the call site, but they express
+        // different intents (runtime-provided stub vs. compile-time
+        // sugar container). The flags stay distinct so later slices
+        // can diverge their lowering paths without churn; today's
+        // bridge honors either to drop the enclosing type reference.
+        var isDeclaringTypeExternal = SymbolHelper.HasExternal(symbol.ContainingType);
+        var isDeclaringTypeErasable = SymbolHelper.HasErasable(symbol.ContainingType);
         return new IrMemberOrigin(
             declaringTypeName,
             symbol.Name,
@@ -948,7 +948,8 @@ public sealed class IrExpressionExtractor(
             EmittedName: emittedName,
             IsPlainObjectInstanceMethod: isPlainObjectInstanceMethod,
             IsStringEnumMember: isStringEnumMember,
-            IsDeclaringTypeExternal: isDeclaringTypeExternal
+            IsDeclaringTypeExternal: isDeclaringTypeExternal,
+            IsDeclaringTypeErasable: isDeclaringTypeErasable
         );
     }
 

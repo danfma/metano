@@ -240,15 +240,18 @@ public static class IrToTsExpressionBridge
             memberName = TypeScriptNaming.ToCamelCase(ma.MemberName);
         else
             memberName = TypeScriptNaming.ToCamelCaseMember(ma.MemberName);
-        // `[External]` declaring type: the class exists only to group
-        // runtime globals on the C# side. Static member access flattens
-        // to the bare identifier (no enclosing type qualifier) so
-        // `Js.Document` lowers to `document` and feeds cleanly into
-        // `document.getElementById(…)` at the call site. Instance access
-        // (which is ill-formed on a static class anyway) falls through
-        // to the normal property-access path.
+        // `[External]` and `[Erasable]` declaring types: the class
+        // vanishes at the call site. `[External]` groups runtime
+        // globals; `[Erasable]` marks compile-time sugar containers.
+        // Both lower static member access to the bare identifier
+        // (no enclosing type qualifier) so `Js.Document` → `document`
+        // feeds cleanly into `document.getElementById(…)`, and a
+        // `Constants.Pi` access on an `[Erasable]` catalog lowers to
+        // just `Pi`. Instance access (ill-formed on a static class)
+        // falls through to the normal property-access path.
         if (
-            ma.Origin is { IsDeclaringTypeExternal: true, IsStatic: true }
+            ma.Origin is { IsStatic: true } origin
+            && (origin.IsDeclaringTypeExternal || origin.IsDeclaringTypeErasable)
             && ma.Target is IrTypeReference
         )
             return new TsIdentifier(memberName);

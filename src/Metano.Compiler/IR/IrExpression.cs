@@ -82,7 +82,8 @@ public sealed record IrMemberOrigin(
     string? EmittedName = null,
     bool IsPlainObjectInstanceMethod = false,
     bool IsStringEnumMember = false,
-    bool IsDeclaringTypeExternal = false
+    bool IsDeclaringTypeExternal = false,
+    bool IsDeclaringTypeErasable = false
 );
 
 /// <summary>
