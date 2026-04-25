@@ -320,6 +320,281 @@ public class ThisAttributeTranspileTests
     }
 
     [Test]
+    public async Task This_MethodGroupAssignment_WrapsReferenceInBindReceiver()
+    {
+        // Slice C: assigning a method group to a `[This]`-bearing
+        // delegate must wrap the reference in `bindReceiver`. The
+        // extractor detects the method-group → delegate conversion
+        // (identical mechanism to lambda target-type detection) and
+        // funnels the runtime `this` into the named handler's first
+        // parameter at every invocation.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public abstract class Element
+            {
+                public string InnerHtml { get; set; } = "";
+            }
+
+            public delegate void Listener([This] Element self, string arg);
+
+            public class Widget
+            {
+                public Listener? OnClick { get; set; }
+
+                private void Handler(Element self, string arg)
+                {
+                    self.InnerHtml = arg;
+                }
+
+                public void Register()
+                {
+                    OnClick = Handler;
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        // Instance method group must `.bind(this)` before the
+        // bindReceiver wrap so the body's own `this` survives the
+        // dispatcher's runtime rebinding. Otherwise the C# method
+        // body would see `this === undefined` and any field access
+        // (`this.someState`) would crash at runtime.
+        await Assert.That(output).Contains("bindReceiver(this.handler.bind(this))");
+        await Assert.That(output).Contains("import { bindReceiver }");
+    }
+
+    [Test]
+    public async Task This_StaticMethodGroupAssignment_WrapsReferenceInBindReceiver()
+    {
+        // Static method group: the reference goes through the
+        // class-qualified path. Same wrap applies — the static
+        // method call would otherwise lose the dispatcher's `this`.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public abstract class Element
+            {
+                public string InnerHtml { get; set; } = "";
+            }
+
+            public delegate void Listener([This] Element self);
+
+            public class Handlers
+            {
+                public static void OnLoad(Element self)
+                {
+                    self.InnerHtml = "ready";
+                }
+            }
+
+            public class Widget
+            {
+                public Listener? OnLoad { get; set; }
+
+                public void Register()
+                {
+                    OnLoad = Handlers.OnLoad;
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        await Assert.That(output).Contains("bindReceiver(Handlers.onLoad)");
+    }
+
+    [Test]
+    public async Task This_MethodGroupForPlainDelegate_NotWrapped()
+    {
+        // Regression guard: method groups assigned to plain (non-
+        // `[This]`) delegates stay on the bare-reference path.
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            [assembly: TranspileAssembly]
+
+            public class Widget
+            {
+                public Action<string>? Handler { get; set; }
+
+                private void Run(string s) {}
+
+                public void Register()
+                {
+                    Handler = Run;
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        await Assert.That(output).Contains("this.handler = this.run");
+        await Assert.That(output).DoesNotContain("bindReceiver");
+    }
+
+    [Test]
+    public async Task This_DirectInvocation_LowersThroughDotCall()
+    {
+        // Slice C: invoking a `[This]`-bearing delegate directly from
+        // C# routes through `.call(receiver, ...rest)` so the JS
+        // dispatcher sets `this` to the first argument before the
+        // bindReceiver trampoline forwards it. Without the
+        // `.call(...)` shape, the delegate fires with `this ===
+        // undefined` at the wrapper boundary.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public abstract class Element
+            {
+                public string InnerHtml { get; set; } = "";
+            }
+
+            public delegate void Listener([This] Element self, string arg);
+
+            public class Widget
+            {
+                public void Trigger(Listener handler, Element target)
+                {
+                    handler(target, "fired");
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        await Assert.That(output).Contains("handler.call(target, \"fired\")");
+        await Assert.That(output).DoesNotContain("handler(target, \"fired\")");
+    }
+
+    [Test]
+    public async Task This_CrossAssembly_DelegateReadFromReferencedLibrary()
+    {
+        // Slice D: a `[This]`-bearing delegate declared in a
+        // referenced library must propagate the attribute to consumer
+        // emission. The library project ships the delegate; the
+        // consumer assigns a lambda to a property typed by it.
+        // SymbolHelper.HasThis already does namespace-qualified
+        // matching against `Metano.Annotations`, so reading the
+        // attribute off a CompilationReference symbol works
+        // automatically — this test pins the behavior end-to-end so
+        // a future refactor cannot quietly drop it.
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+
+            public abstract class Element
+            {
+                public string InnerHtml { get; set; } = "";
+            }
+
+            public delegate void Listener([This] Element self, string arg);
+
+            public class Widget
+            {
+                public Listener? OnClick { get; set; }
+            }
+            """,
+            """
+            [assembly: TranspileAssembly]
+
+            public class Consumer
+            {
+                public void Wire(Widget w)
+                {
+                    w.OnClick = (self, arg) => self.InnerHtml = arg;
+                }
+            }
+            """
+        );
+
+        var output = result["consumer.ts"];
+        await Assert.That(output).Contains("bindReceiver((self: Element, arg: string)");
+        await Assert.That(output).Contains("self.innerHtml = arg");
+        await Assert.That(output).Contains("import { bindReceiver }");
+    }
+
+    [Test]
+    public async Task This_GenericMethodGroupAssignment_WrapsReferenceInBindReceiver()
+    {
+        // Generic method-group references go through GenericNameSyntax
+        // extraction; that path must reuse the same wrap helper as
+        // ordinary identifier extraction so `Handler<int>` lands in
+        // `bindReceiver(...)` like `Handler` does.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public abstract class Element
+            {
+                public string InnerHtml { get; set; } = "";
+            }
+
+            public delegate void Listener([This] Element self, string arg);
+
+            public class Widget
+            {
+                public Listener? OnClick { get; set; }
+
+                private void Handler<T>(Element self, string arg)
+                {
+                    self.InnerHtml = arg;
+                }
+
+                public void Register()
+                {
+                    OnClick = Handler<int>;
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        await Assert.That(output).Contains("bindReceiver(this.handler.bind(this))");
+    }
+
+    [Test]
+    public async Task This_DirectInvocation_NamedReceiverArgument_LowersThroughDotCall()
+    {
+        // Named-argument invocation must still produce the correct
+        // `.call(...)` shape: the receiver is identified by parameter
+        // name, not by syntactic position.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public abstract class Element
+            {
+                public string InnerHtml { get; set; } = "";
+            }
+
+            public delegate void Listener([This] Element self, string arg);
+
+            public class Widget
+            {
+                public void Trigger(Listener handler, Element target)
+                {
+                    handler(arg: "fired", self: target);
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        // Receiver picked by name → first arg of `.call`.
+        await Assert.That(output).Contains("handler.call(target, \"fired\")");
+    }
+
+    [Test]
     public async Task This_LambdaCapturingOuterClassThis_KeepsLexicalBinding()
     {
         // The core motivation for `bindReceiver` vs. a

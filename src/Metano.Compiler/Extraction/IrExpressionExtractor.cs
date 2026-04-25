@@ -403,23 +403,35 @@ public sealed class IrExpressionExtractor
             && symbol.ContainingType is not null
             && !IsLocalLikeSymbol(symbol)
         )
-            return new IrMemberAccess(
-                new IrThisExpression(),
-                generic.Identifier.ValueText,
-                BuildOrigin(symbol)
+            return WrapMethodGroupForThisDelegate(
+                generic,
+                symbol,
+                new IrMemberAccess(
+                    new IrThisExpression(),
+                    generic.Identifier.ValueText,
+                    BuildOrigin(symbol)
+                )
             );
 
         if (
             symbol is { IsStatic: true } and (IPropertySymbol or IFieldSymbol or IMethodSymbol)
             && symbol.ContainingType is not null
         )
-            return new IrMemberAccess(
-                new IrTypeReference(symbol.ContainingType.Name),
-                generic.Identifier.ValueText,
-                BuildOrigin(symbol)
+            return WrapMethodGroupForThisDelegate(
+                generic,
+                symbol,
+                new IrMemberAccess(
+                    new IrTypeReference(symbol.ContainingType.Name),
+                    generic.Identifier.ValueText,
+                    BuildOrigin(symbol)
+                )
             );
 
-        return new IrIdentifier(generic.Identifier.ValueText);
+        return WrapMethodGroupForThisDelegate(
+            generic,
+            symbol,
+            new IrIdentifier(generic.Identifier.ValueText)
+        );
     }
 
     private IrExpression ExtractIdentifierName(IdentifierNameSyntax id)
@@ -447,11 +459,12 @@ public sealed class IrExpressionExtractor
             && !IsLocalLikeSymbol(symbol)
         )
         {
-            return new IrMemberAccess(
+            var memberAccess = new IrMemberAccess(
                 new IrThisExpression(),
                 id.Identifier.ValueText,
                 BuildOrigin(symbol)
             );
+            return WrapMethodGroupForThisDelegate(id, symbol, memberAccess);
         }
 
         // Static member of the enclosing (or any other) type reached without a
@@ -464,14 +477,19 @@ public sealed class IrExpressionExtractor
             && symbol.ContainingType is not null
         )
         {
-            return new IrMemberAccess(
+            var staticAccess = new IrMemberAccess(
                 new IrTypeReference(symbol.ContainingType.Name),
                 id.Identifier.ValueText,
                 BuildOrigin(symbol)
             );
+            return WrapMethodGroupForThisDelegate(id, symbol, staticAccess);
         }
 
-        return new IrIdentifier(id.Identifier.ValueText);
+        return WrapMethodGroupForThisDelegate(
+            id,
+            symbol,
+            new IrIdentifier(id.Identifier.ValueText)
+        );
     }
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
@@ -943,7 +961,65 @@ public sealed class IrExpressionExtractor
             return inlined;
 
         var origin = BuildOrigin(_semantic.GetSymbolInfo(member).Symbol);
-        return new IrMemberAccess(target, name, origin);
+        var memberAccess = new IrMemberAccess(target, name, origin);
+        return WrapMethodGroupForThisDelegate(member, symbol, memberAccess);
+    }
+
+    /// <summary>
+    /// Method-group conversion to a <c>[This]</c>-bearing delegate: a
+    /// reference like <c>button.OnClick = handler</c> (or the static
+    /// equivalent) implicitly funnels the dispatcher's JS <c>this</c>
+    /// into the method's first parameter at every invocation. The
+    /// extractor wraps the method reference in a runtime
+    /// <c>bindReceiver(...)</c> call so the resulting TS function
+    /// rebinds <c>this</c> the same way a <c>[This]</c> lambda does.
+    /// Plain identifier references (calls or non-delegate uses)
+    /// fall through unchanged.
+    /// <para>
+    /// Instance method-group references additionally
+    /// <c>.bind(receiver)</c> the inner reference before handing it
+    /// to <c>bindReceiver</c>. C# method groups capture the instance
+    /// as the call-time receiver, so a subsequent <c>fn(args)</c>
+    /// dispatch inside <c>bindReceiver</c>'s trampoline must already
+    /// know which object owns the method — otherwise the body's own
+    /// <c>this</c> would be lost. Static method groups skip the
+    /// <c>.bind</c> step (no instance to capture).
+    /// </para>
+    /// </summary>
+    private IrExpression WrapMethodGroupForThisDelegate(
+        ExpressionSyntax expression,
+        ISymbol? symbol,
+        IrExpression reference
+    )
+    {
+        if (symbol is not IMethodSymbol method)
+            return reference;
+        if (
+            _semantic.GetTypeInfo(expression).ConvertedType
+            is not INamedTypeSymbol
+            {
+                TypeKind: TypeKind.Delegate,
+                DelegateInvokeMethod: IMethodSymbol invoke,
+            }
+        )
+            return reference;
+        if (invoke.Parameters.Length == 0 || !SymbolHelper.HasThis(invoke.Parameters[0]))
+            return reference;
+
+        var inner = reference;
+        if (
+            !method.IsStatic
+            && reference is IrMemberAccess { Target: { } receiver } memberAccess
+            && receiver is not IrTypeReference
+        )
+        {
+            inner = new IrCallExpression(
+                new IrMemberAccess(memberAccess, "bind"),
+                [new IrArgument(receiver)]
+            );
+        }
+
+        return new IrCallExpression(new IrIdentifier("bindReceiver"), [new IrArgument(inner)]);
     }
 
     /// <summary>
@@ -1086,7 +1162,94 @@ public sealed class IrExpressionExtractor
             typeArguments = symbol
                 .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
                 .ToList();
+
+        // Direct invocation of a `[This]`-bearing delegate from C#:
+        // `listener(button, "click")` lowers to
+        // `listener.call(button, "click")` so the JS dispatch sets
+        // `this` to the first argument before the runtime trampoline
+        // (bindReceiver) forwards it back. Without `.call`, the
+        // delegate fires with `this === undefined` and the body's
+        // receiver parameter receives whatever the caller passed in
+        // a normal positional slot, which the runtime helper
+        // expects to be `this`.
+        if (
+            symbol is { MethodKind: MethodKind.DelegateInvoke }
+            && symbol.Parameters.Length > 0
+            && SymbolHelper.HasThis(symbol.Parameters[0])
+            && args.Count > 0
+            && IsSafeForCallRewrite(inv)
+        )
+        {
+            var receiverIndex = FindReceiverArgumentIndex(symbol, inv.ArgumentList);
+            if (receiverIndex >= 0)
+            {
+                var receiver = args[receiverIndex].Value;
+                var rest = args.Where((_, i) => i != receiverIndex).Select(a => a).ToList();
+                return new IrCallExpression(
+                    new IrMemberAccess(target, "call"),
+                    [new IrArgument(receiver), .. rest]
+                );
+            }
+        }
+
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol));
+    }
+
+    /// <summary>
+    /// Guards the direct-invocation <c>.call(...)</c> rewrite against
+    /// receiver expressions whose precedence does not survive the
+    /// property-access wrap. <c>(a ?? b)(args)</c> /
+    /// <c>(cond ? a : b)(args)</c> would print as
+    /// <c>a ?? b.call(args)</c> / <c>cond ? a : b.call(args)</c>
+    /// without an extra paren, changing the parse. Until the IR
+    /// gains a parenthesizing wrapper, the rewrite skips these
+    /// shapes and falls back to the plain call (the runtime
+    /// `bindReceiver` trampoline still receives `this === undefined`,
+    /// matching the legacy behavior — a smaller, documented gap).
+    /// </summary>
+    private static bool IsSafeForCallRewrite(InvocationExpressionSyntax inv)
+    {
+        var target = inv.Expression;
+        while (target is ParenthesizedExpressionSyntax paren)
+            target = paren.Expression;
+        return target
+            is not (
+                ConditionalExpressionSyntax
+                or BinaryExpressionSyntax
+                or AssignmentExpressionSyntax
+                or AwaitExpressionSyntax
+            );
+    }
+
+    /// <summary>
+    /// Returns the syntactic argument index that corresponds to the
+    /// first parameter of <paramref name="symbol"/> (the
+    /// <c>[This]</c> receiver). Honors named arguments by matching
+    /// <see cref="ArgumentSyntax.NameColon"/> against the parameter
+    /// name; positional arguments fall through to index 0. Returns
+    /// <c>-1</c> when the receiver slot cannot be located, which
+    /// signals the caller to skip the <c>.call(...)</c> rewrite
+    /// and emit the plain delegate invocation (still semantically
+    /// off, but no worse than the pre-rewrite behavior).
+    /// </summary>
+    private static int FindReceiverArgumentIndex(
+        IMethodSymbol symbol,
+        ArgumentListSyntax argumentList
+    )
+    {
+        var receiverName = symbol.Parameters[0].Name;
+        for (var i = 0; i < argumentList.Arguments.Count; i++)
+        {
+            var arg = argumentList.Arguments[i];
+            if (arg.NameColon?.Name.Identifier.ValueText == receiverName)
+                return i;
+        }
+        if (argumentList.Arguments.All(a => a.NameColon is null))
+            return 0;
+        // Mixed positional + named where the named arg targets a
+        // non-receiver slot: cannot safely identify the receiver
+        // syntactic position. Bail out.
+        return -1;
     }
 
     private IrExpression? TryRewriteMathDecimalCall(
