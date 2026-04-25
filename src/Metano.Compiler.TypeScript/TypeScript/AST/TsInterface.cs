@@ -5,5 +5,6 @@ public sealed record TsInterface(
     IReadOnlyList<TsProperty> Properties,
     bool Exported = true,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null,
-    IReadOnlyList<TsInterfaceMethod>? Methods = null
+    IReadOnlyList<TsInterfaceMethod>? Methods = null,
+    IReadOnlyList<TsType>? Extends = null
 ) : TsTopLevel;

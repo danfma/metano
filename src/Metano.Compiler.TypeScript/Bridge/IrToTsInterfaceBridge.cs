@@ -45,15 +45,39 @@ public static class IrToTsInterfaceBridge
         // consequently the file name + import collector).
         var tsName = nameOverride ?? IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var typeParams = ConvertTypeParameters(ir.TypeParameters);
+        var extends = BuildExtends(ir.BaseInterfaces);
 
         statements.Add(
             new TsInterface(
                 tsName,
                 properties,
                 TypeParameters: typeParams,
-                Methods: methods.Count > 0 ? methods : null
+                Methods: methods.Count > 0 ? methods : null,
+                Extends: extends
             )
         );
+    }
+
+    /// <summary>
+    /// Convert IR base-interface references into TS extends entries.
+    /// Mirrors <c>IrToTsClassBridge.BuildImplements</c>: drops named
+    /// references that are not transpilable (e.g. <c>[NoEmit]</c> or
+    /// BCL types without an <c>[ExportFromBcl]</c> mapping) so the
+    /// emitted clause only references types that exist at the target
+    /// layer.
+    /// </summary>
+    public static IReadOnlyList<TsType>? BuildExtends(IReadOnlyList<IrTypeRef>? baseInterfaces)
+    {
+        if (baseInterfaces is not { Count: > 0 } bases)
+            return null;
+        var result = new List<TsType>();
+        foreach (var iface in bases)
+        {
+            if (iface is IrNamedTypeRef { Semantics.IsTranspilable: false })
+                continue;
+            result.Add(IrToTsTypeMapper.Map(iface));
+        }
+        return result.Count > 0 ? result : null;
     }
 
     private static TsProperty ConvertProperty(IrPropertyDeclaration prop)

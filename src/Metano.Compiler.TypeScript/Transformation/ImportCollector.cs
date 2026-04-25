@@ -498,6 +498,9 @@ public sealed class ImportCollector(
         {
             case TsInterface iface:
                 CollectFromTypeParameters(iface.TypeParameters, names, crossPackageOrigins);
+                if (iface.Extends is not null)
+                    foreach (var baseRef in iface.Extends)
+                        CollectFromType(baseRef, names, crossPackageOrigins);
                 foreach (var prop in iface.Properties)
                     CollectFromType(prop.Type, names, crossPackageOrigins);
                 if (iface.Methods is not null)

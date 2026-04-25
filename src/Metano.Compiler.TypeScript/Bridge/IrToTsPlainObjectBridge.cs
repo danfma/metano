@@ -52,7 +52,9 @@ public static class IrToTsPlainObjectBridge
             }
         }
 
-        sink.Add(new TsInterface(tsName, properties));
+        sink.Add(
+            new TsInterface(tsName, properties, Extends: IrToTsClassBridge.BuildImplements(ir))
+        );
 
         if (ir.Members is { Count: > 0 } members)
         {
