@@ -109,17 +109,17 @@ public class InterfaceInheritanceTests
     [Test]
     public async Task CollectionLikeBase_NormalizesArrayShorthandToNamedArray()
     {
-        // `IEnumerable<T>` / `IList<T>` / `ICollection<T>` map to
-        // `IrArrayTypeRef` (T[]). The TS printer's array shorthand
-        // is illegal in a heritage clause (`extends T[]` doesn't
-        // parse). The bridge rewrites it to the named `Array<T>`
-        // form, which TS accepts.
+        // `IList<T>` / `ICollection<T>` map to `IrArrayTypeRef`
+        // (T[]) via the existing collection-like rule. The TS
+        // printer's array shorthand is illegal in a heritage clause
+        // (`extends T[]` doesn't parse); the bridge rewrites it to
+        // the named `Array<T>` form, which TS accepts.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
 
             [Transpile]
-            public interface IRows<T> : IEnumerable<T>
+            public interface IRows<T> : IList<T>
             {
                 int Count { get; }
             }
