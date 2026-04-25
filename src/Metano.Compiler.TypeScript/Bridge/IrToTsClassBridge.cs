@@ -808,13 +808,19 @@ internal static class IrToTsClassBridge
             field.Initializer is not null && !field.IsCapturedByCtor
                 ? IrToTsExpressionBridge.Map(field.Initializer, bclRegistry)
                 : null;
-        initializer ??= ComputeDefaultInitializer(field.Type);
+        // Static fields with an explicit initializer are the canonical
+        // shape (`static readonly Zero = new Counter(0)`); the
+        // default-initializer fallback only makes sense for instance
+        // fields that the constructor would otherwise leave undefined.
+        if (!field.IsStatic)
+            initializer ??= ComputeDefaultInitializer(field.Type);
 
         return new TsFieldMember(
             name,
             tsType,
             initializer,
             field.IsReadonly,
+            Static: field.IsStatic,
             Accessibility: MapAccessibility(field.Visibility)
         );
     }
