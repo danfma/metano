@@ -183,6 +183,7 @@ public static class IrToTsExpressionBridge
                 or IrBinaryOp.BitwiseXorAssign
                 or IrBinaryOp.LeftShiftAssign
                 or IrBinaryOp.RightShiftAssign
+                or IrBinaryOp.UnsignedRightShiftAssign
                 or IrBinaryOp.NullCoalescingAssign
                 or IrBinaryOp.NullCoalescing;
 
@@ -921,6 +922,7 @@ public static class IrToTsExpressionBridge
             IrBinaryOp.BitwiseXorAssign => "^=",
             IrBinaryOp.LeftShiftAssign => "<<=",
             IrBinaryOp.RightShiftAssign => ">>=",
+            IrBinaryOp.UnsignedRightShiftAssign => ">>>=",
             IrBinaryOp.NullCoalescingAssign => "??=",
             _ => "?",
         };

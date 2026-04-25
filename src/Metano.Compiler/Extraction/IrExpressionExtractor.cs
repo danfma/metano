@@ -159,38 +159,133 @@ public sealed class IrExpressionExtractor
                 return LowerConditionalBinding(head, nested.WhenNotNull);
 
             case AssignmentExpressionSyntax assign
-                when assign.Left is MemberBindingExpressionSyntax memberBinding:
-                // `a?.b = c` lowers to `a != null && (a.b = c)`.
-                // TypeScript has no optional-chained assignment, so
-                // the null-guard becomes an inline short-circuit
-                // expression. The receiver is evaluated only once
-                // when it is a simple identifier / member access (the
-                // overwhelming majority of real call sites); a
-                // side-effecting receiver would re-evaluate, which is
-                // documented as a known edge case until the IR
-                // grows a let-binding shape that can host the temp.
-                var assignedValue = Extract(assign.Right);
-                var memberName = memberBinding.Name.Identifier.ValueText;
-                var memberOrigin = BuildOrigin(_semantic.GetSymbolInfo(memberBinding).Symbol);
-                var memberWrite = new IrBinaryExpression(
-                    new IrMemberAccess(receiver, memberName, memberOrigin),
-                    MapAssignmentOp(assign.Kind()),
-                    assignedValue
-                );
-                return new IrBinaryExpression(
-                    new IrBinaryExpression(
-                        receiver,
-                        IrBinaryOp.NotEqual,
-                        new IrLiteral(null, IrLiteralKind.Null)
-                    ),
-                    IrBinaryOp.LogicalAnd,
-                    memberWrite
-                );
+                when TryLowerNullConditionalAssignment(receiver, assign) is { } shortCircuit:
+                return shortCircuit;
 
             default:
                 return new IrUnsupportedExpression($"ConditionalAccess({whenNotNull.Kind()})");
         }
     }
+
+    /// <summary>
+    /// Lowers <c>a?.b = c</c> (and nested forms like
+    /// <c>a?.b.c = d</c> or <c>a?.items[0] = e</c>) into the
+    /// short-circuit shape
+    /// <c>a != null &amp;&amp; (a.b = c)</c> when the receiver shape
+    /// supports duplicate evaluation. Returns <c>null</c> when the
+    /// rewrite is unsafe — the caller falls through to
+    /// <see cref="IrUnsupportedExpression"/> with the original
+    /// diagnostic message so a future slice can broaden the
+    /// supported surface without touching this path again.
+    /// <para>
+    /// Guards in place:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item>The lowering uses TypeScript's <c>&amp;&amp;</c> short-circuit
+    ///   semantics (assignment expression evaluates to the value);
+    ///   Dart requires a boolean RHS, so the rewrite only fires for
+    ///   the TypeScript target (or when no target was specified —
+    ///   matches the existing extractor convention).</item>
+    ///   <item>The receiver is referenced twice in the emitted code
+    ///   (null-check + member write). Side-effecting receivers
+    ///   (method calls, property accesses with a getter, indexers)
+    ///   would re-evaluate. Restrict the rewrite to receivers whose
+    ///   IR shape is a chain of pure identifier / <c>this</c> /
+    ///   member-access nodes; complex receivers fall through to
+    ///   the unsupported path until the IR grows a let-binding
+    ///   shape that can host the temp.</item>
+    ///   <item>Event-style left-hand sides (<c>+=</c>/<c>-=</c> on
+    ///   an <c>IEventSymbol</c>) need the runtime
+    ///   <c>delegateAdd</c>/<c>delegateRemove</c> dispatch from
+    ///   <see cref="ExtractAssignment"/>. Bail out so the
+    ///   diagnostic surfaces instead of silently emitting a plain
+    ///   compound assignment.</item>
+    /// </list>
+    /// </summary>
+    private IrExpression? TryLowerNullConditionalAssignment(
+        IrExpression receiver,
+        AssignmentExpressionSyntax assign
+    )
+    {
+        if (_target is not null && _target != Metano.Annotations.TargetLanguage.TypeScript)
+            return null;
+        if (!IsSimpleReceiver(receiver))
+            return null;
+        if (RebindAssignmentTarget(assign.Left, receiver) is not { } rebound)
+            return null;
+        // Reject event accessors — the dedicated `event += handler`
+        // path in `ExtractAssignment` synthesizes
+        // `delegateAdd`/`delegateRemove` calls that this lowering
+        // does not reproduce.
+        if (_semantic.GetSymbolInfo(assign.Left).Symbol is IEventSymbol)
+            return null;
+
+        var memberWrite = new IrBinaryExpression(
+            rebound,
+            MapAssignmentOp(assign.Kind()),
+            Extract(assign.Right)
+        );
+        return new IrBinaryExpression(
+            new IrBinaryExpression(
+                receiver,
+                IrBinaryOp.NotEqual,
+                new IrLiteral(null, IrLiteralKind.Null)
+            ),
+            IrBinaryOp.LogicalAnd,
+            memberWrite
+        );
+    }
+
+    /// <summary>
+    /// Recursively rewrites a null-conditional assignment's
+    /// left-hand side (which carries an
+    /// <see cref="MemberBindingExpressionSyntax"/> at its leaf) into
+    /// an <see cref="IrMemberAccess"/> / <see cref="IrElementAccess"/>
+    /// chain rooted on the supplied receiver. Returns <c>null</c>
+    /// when the shape is outside the covered subset (e.g., a
+    /// pointer-element-binding, a conditional access nested inside
+    /// the assignment target).
+    /// </summary>
+    private IrExpression? RebindAssignmentTarget(ExpressionSyntax target, IrExpression receiver) =>
+        target switch
+        {
+            MemberBindingExpressionSyntax mb => new IrMemberAccess(
+                receiver,
+                mb.Name.Identifier.ValueText,
+                BuildOrigin(_semantic.GetSymbolInfo(mb).Symbol)
+            ),
+            MemberAccessExpressionSyntax ma
+                when RebindAssignmentTarget(ma.Expression, receiver) is { } inner =>
+                new IrMemberAccess(
+                    inner,
+                    ma.Name.Identifier.ValueText,
+                    BuildOrigin(_semantic.GetSymbolInfo(ma).Symbol)
+                ),
+            ElementAccessExpressionSyntax ea
+                when RebindAssignmentTarget(ea.Expression, receiver) is { } inner =>
+                new IrElementAccess(inner, Extract(ea.ArgumentList.Arguments[0].Expression)),
+            _ => null,
+        };
+
+    /// <summary>
+    /// True for IR shapes that can be referenced twice in the
+    /// generated code without observable side effects: identifiers,
+    /// <c>this</c>, and chains of plain field-style member accesses
+    /// rooted at one of those. Property getters and method calls
+    /// are intentionally excluded — re-evaluating them under a
+    /// duplicated null-conditional receiver would diverge from the
+    /// C# semantics where the receiver is evaluated exactly once.
+    /// </summary>
+    private static bool IsSimpleReceiver(IrExpression expression) =>
+        expression switch
+        {
+            IrIdentifier => true,
+            IrThisExpression => true,
+            IrBaseExpression => true,
+            IrTypeReference => true,
+            IrMemberAccess ma => IsSimpleReceiver(ma.Target),
+            _ => false,
+        };
 
     private IrExpression ExtractCollectionExpression(CollectionExpressionSyntax coll)
     {
@@ -898,6 +993,8 @@ public sealed class IrExpressionExtractor
             SyntaxKind.ExclusiveOrAssignmentExpression => IrBinaryOp.BitwiseXorAssign,
             SyntaxKind.LeftShiftAssignmentExpression => IrBinaryOp.LeftShiftAssign,
             SyntaxKind.RightShiftAssignmentExpression => IrBinaryOp.RightShiftAssign,
+            SyntaxKind.UnsignedRightShiftAssignmentExpression =>
+                IrBinaryOp.UnsignedRightShiftAssign,
             SyntaxKind.CoalesceAssignmentExpression => IrBinaryOp.NullCoalescingAssign,
             _ => IrBinaryOp.Assign,
         };

@@ -212,6 +212,7 @@ public enum IrBinaryOp
     BitwiseXorAssign,
     LeftShiftAssign,
     RightShiftAssign,
+    UnsignedRightShiftAssign,
     NullCoalescingAssign,
 }
 

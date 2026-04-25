@@ -72,6 +72,45 @@ public class NullConditionalAssignmentTests
     }
 
     [Test]
+    public async Task NullConditionalNestedMemberAssignment_LowersThroughShortCircuit()
+    {
+        // `a?.b.c = d` parses as ConditionalAccess(a, Assignment(MemberAccess(MemberBinding(b), c), d)).
+        // The lowering rebinds the inner MemberBinding root onto the
+        // receiver and reuses the same short-circuit shape.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Inner
+            {
+                public string Value { get; set; } = "";
+            }
+
+            [Transpile]
+            public class Outer
+            {
+                public Inner Inner { get; set; } = new();
+            }
+
+            [Transpile]
+            public class Container
+            {
+                public Outer? Outer { get; set; }
+
+                public void Set()
+                {
+                    Outer?.Inner.Value = "x";
+                }
+            }
+            """
+        );
+
+        var output = result["container.ts"];
+        await Assert
+            .That(output)
+            .Contains("this.outer != null && (this.outer.inner.value = \"x\")");
+    }
+
+    [Test]
     public async Task NullConditionalCompoundAssignment_LowersWithMatchingOperator()
     {
         // `a?.b += c` keeps the original C# operator (`+=`) on the

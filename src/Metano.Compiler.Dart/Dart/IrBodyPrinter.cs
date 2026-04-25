@@ -783,6 +783,7 @@ public static class IrBodyPrinter
             IrBinaryOp.BitwiseXorAssign => "^=",
             IrBinaryOp.LeftShiftAssign => "<<=",
             IrBinaryOp.RightShiftAssign => ">>=",
+            IrBinaryOp.UnsignedRightShiftAssign => ">>>=",
             IrBinaryOp.NullCoalescingAssign => "??=",
             _ => "/* ?? */",
         };
