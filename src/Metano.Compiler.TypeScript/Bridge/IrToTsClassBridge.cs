@@ -39,16 +39,32 @@ internal static class IrToTsClassBridge
     /// interface that doesn't get emitted alongside the class. Returns
     /// <c>null</c> when nothing remains so the printer elides the clause.
     /// </summary>
-    public static IReadOnlyList<TsType>? BuildImplements(IrClassDeclaration ir)
+    public static IReadOnlyList<TsType>? BuildImplements(IrClassDeclaration ir) =>
+        ConvertHeritageList(ir.Interfaces);
+
+    /// <summary>
+    /// Lowers a list of IR base / interface references into TS heritage
+    /// entries. Drops named refs flagged <c>IsTranspilable: false</c>
+    /// (e.g. <c>[NoEmit]</c> or unmapped BCL interfaces) and rewrites
+    /// the array shorthand <c>T[]</c> (produced when a base maps
+    /// through <see cref="IrArrayTypeRef"/> for collection-like BCL
+    /// types) into <c>Array&lt;T&gt;</c>: TypeScript rejects
+    /// <c>extends T[]</c> / <c>implements T[]</c> in heritage clauses,
+    /// but accepts the named <c>Array</c> form.
+    /// </summary>
+    public static IReadOnlyList<TsType>? ConvertHeritageList(IReadOnlyList<IrTypeRef>? references)
     {
-        if (ir.Interfaces is not { Count: > 0 } ifaces)
+        if (references is not { Count: > 0 } refs)
             return null;
         var result = new List<TsType>();
-        foreach (var iface in ifaces)
+        foreach (var reference in refs)
         {
-            if (iface is IrNamedTypeRef { Semantics.IsTranspilable: false })
+            if (reference is IrNamedTypeRef { Semantics.IsTranspilable: false })
                 continue;
-            result.Add(IrToTsTypeMapper.Map(iface));
+            var mapped = IrToTsTypeMapper.Map(reference);
+            result.Add(
+                mapped is TsArrayType array ? new TsNamedType("Array", [array.ElementType]) : mapped
+            );
         }
         return result.Count > 0 ? result : null;
     }

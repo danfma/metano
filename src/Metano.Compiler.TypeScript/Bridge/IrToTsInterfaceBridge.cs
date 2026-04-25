@@ -60,25 +60,13 @@ public static class IrToTsInterfaceBridge
 
     /// <summary>
     /// Convert IR base-interface references into TS extends entries.
-    /// Mirrors <c>IrToTsClassBridge.BuildImplements</c>: drops named
-    /// references that are not transpilable (e.g. <c>[NoEmit]</c> or
-    /// BCL types without an <c>[ExportFromBcl]</c> mapping) so the
-    /// emitted clause only references types that exist at the target
-    /// layer.
+    /// Delegates to <see cref="IrToTsClassBridge.ConvertHeritageList"/>
+    /// so the same filtering and array-shorthand normalization apply
+    /// to both <c>extends</c> (interface) and <c>implements</c>
+    /// (class) clauses.
     /// </summary>
-    public static IReadOnlyList<TsType>? BuildExtends(IReadOnlyList<IrTypeRef>? baseInterfaces)
-    {
-        if (baseInterfaces is not { Count: > 0 } bases)
-            return null;
-        var result = new List<TsType>();
-        foreach (var iface in bases)
-        {
-            if (iface is IrNamedTypeRef { Semantics.IsTranspilable: false })
-                continue;
-            result.Add(IrToTsTypeMapper.Map(iface));
-        }
-        return result.Count > 0 ? result : null;
-    }
+    public static IReadOnlyList<TsType>? BuildExtends(IReadOnlyList<IrTypeRef>? baseInterfaces) =>
+        IrToTsClassBridge.ConvertHeritageList(baseInterfaces);
 
     private static TsProperty ConvertProperty(IrPropertyDeclaration prop)
     {
