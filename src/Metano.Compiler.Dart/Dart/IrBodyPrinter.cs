@@ -252,7 +252,7 @@ public static class IrBodyPrinter
                 sb.Append(']');
                 break;
             case IrCallExpression call:
-                PrintExpression(sb, call.Target);
+                PrintCallTarget(sb, call.Target);
                 if (call.IsOptional)
                     sb.Append("?.call");
                 sb.Append('(');
@@ -360,6 +360,35 @@ public static class IrBodyPrinter
                 break;
         }
     }
+
+    /// <summary>
+    /// Print a call target, wrapping it in parentheses when its node
+    /// kind has lower precedence than the call. Required because the
+    /// IR may surface low-precedence shapes as the call target (e.g.
+    /// <c>(a ?? b)?.Invoke()</c> lowers to a call whose target is a
+    /// binary expression — printed bare it would parse as
+    /// <c>a ?? b()</c>).
+    /// </summary>
+    private static void PrintCallTarget(StringBuilder sb, IrExpression target)
+    {
+        if (CallTargetRequiresParens(target))
+        {
+            sb.Append('(');
+            PrintExpression(sb, target);
+            sb.Append(')');
+        }
+        else
+        {
+            PrintExpression(sb, target);
+        }
+    }
+
+    private static bool CallTargetRequiresParens(IrExpression expression) =>
+        expression
+            is IrBinaryExpression
+                or IrConditionalExpression
+                or IrAwaitExpression
+                or IrLambdaExpression;
 
     /// <summary>
     /// Dart renders <c>x is Foo</c> natively. A type-with-designator (<c>x is Foo f</c>)

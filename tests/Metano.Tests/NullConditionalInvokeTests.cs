@@ -234,6 +234,104 @@ public class NullConditionalInvokeTests
     }
 
     [Test]
+    public async Task NullConditionalInvoke_ChainedAccess_PreservesEachShortCircuit()
+    {
+        // `a?.b?.c?.Invoke()` must short-circuit at every step and
+        // still drop the trailing `.Invoke` indirection. The TS form
+        // is `a?.b?.c?.()` — optional-call composes with the
+        // optional-chain prefix.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Inner
+            {
+                public Action? Handler;
+            }
+
+            [Transpile]
+            public class Middle
+            {
+                public Inner? Inner;
+            }
+
+            [Transpile]
+            public class Outer
+            {
+                public Middle? Middle;
+
+                public void Fire()
+                {
+                    Middle?.Inner?.Handler?.Invoke();
+                }
+            }
+            """
+        );
+
+        var output = result["outer.ts"];
+        await Assert.That(output).Contains("this.middle?.inner?.handler?.()");
+        await Assert.That(output).DoesNotContain("Invoke");
+    }
+
+    [Test]
+    public async Task NullConditionalInvoke_LowPrecedenceReceiver_ParenthesizesCallee()
+    {
+        // `(handler ?? fallback)?.Invoke()` lowers to a call whose
+        // callee is a binary expression. The printer must wrap it in
+        // parens or the output parses as `handler ?? fallback?.()`
+        // instead of `(handler ?? fallback)?.()`.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Widget
+            {
+                public Action? Handler;
+                public Action? Fallback;
+
+                public void Fire()
+                {
+                    (Handler ?? Fallback)?.Invoke();
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        await Assert.That(output).Contains("(this.handler ?? this.fallback)?.()");
+    }
+
+    [Test]
+    public async Task DirectInvoke_LowPrecedenceReceiver_ParenthesizesCallee()
+    {
+        // `(handler ?? fallback).Invoke()` becomes a plain call whose
+        // callee is a binary expression. Without parens the call
+        // would bind only to `fallback`.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Widget
+            {
+                public Action Handler { get; }
+                public Action Fallback { get; }
+
+                public Widget(Action handler, Action fallback)
+                {
+                    Handler = handler;
+                    Fallback = fallback;
+                }
+
+                public void Fire()
+                {
+                    (Handler ?? Fallback).Invoke();
+                }
+            }
+            """
+        );
+
+        var output = result["widget.ts"];
+        await Assert.That(output).Contains("(this.handler ?? this.fallback)()");
+    }
+
+    [Test]
     public async Task NullConditionalInvoke_DartTarget_LowersToOptionalCallMethod()
     {
         var (files, _) = TranspileDart(

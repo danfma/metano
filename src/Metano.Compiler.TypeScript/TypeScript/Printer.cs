@@ -905,6 +905,35 @@ public sealed class Printer(string indent = "  ")
 
     // ─── Expressions ────────────────────────────────────────
 
+    /// <summary>
+    /// Print a call/optional-call callee, wrapping it in parentheses
+    /// when its node kind has lower precedence than the call itself.
+    /// Required because the IR may surface low-precedence shapes as
+    /// the call target (e.g. <c>(a ?? b)?.Invoke()</c> lowers to a
+    /// call whose callee is a binary expression — printed bare it
+    /// would parse as <c>a ?? b()</c>).
+    /// </summary>
+    private void PrintCallCallee(TsExpression callee)
+    {
+        if (CalleeRequiresParens(callee))
+        {
+            _sb.Write("(");
+            PrintExpression(callee);
+            _sb.Write(")");
+        }
+        else
+        {
+            PrintExpression(callee);
+        }
+    }
+
+    private static bool CalleeRequiresParens(TsExpression expression) =>
+        expression
+            is TsBinaryExpression
+                or TsConditionalExpression
+                or TsAwaitExpression
+                or TsArrowFunction;
+
     private void PrintExpression(TsExpression expr)
     {
         switch (expr)
@@ -960,7 +989,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsCallExpression call:
-                PrintExpression(call.Callee);
+                PrintCallCallee(call.Callee);
                 if (call.Optional)
                     _sb.Write("?.");
                 _sb.Write("(");
