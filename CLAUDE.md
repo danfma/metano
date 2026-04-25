@@ -179,7 +179,7 @@ Rules:
 
 ### Workflow
 
-- **Review before commit.** Always run the `simplify` skill (code review with 3 agents: reuse, quality, efficiency) on the diff BEFORE committing or declaring a feature complete. Fix findings first, then commit.
+- **Review before commit (dual agents).** Always pair `compiler-man` and `bob` on every code review BEFORE committing or declaring a feature complete. `compiler-man` owns semantic correctness, AST/IR shape, lowering, and pipeline coverage. `bob` owns Clean Code and design quality — naming, method size, condition complexity, blank-line discipline, and pattern application. Run them in parallel (single message, two `Agent` tool calls), then fix findings before committing.
 - **Worktree per issue.** Use `git worktree add ../Metano-issue-{N} -b <branch> main` for branch work. Never switch branches in the main working directory — other agents may be working there concurrently.
 - **Commit references.** When working on a GitHub issue, add `(#N)` at the end of the commit title and `Closes #N` (or `Part of #N` for partial work) in the commit body.
 - **No AI attribution in commits.** Never add Co-Authored-By or similar references unless explicitly allowed.
