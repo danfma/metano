@@ -986,7 +986,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TypeKind.Enum => IrEnumExtractor.Extract(type),
             TypeKind.Interface => IrInterfaceExtractor.Extract(
                 type,
-                target: TargetLanguage.TypeScript
+                Context.OriginResolver,
+                TargetLanguage.TypeScript
             ),
             TypeKind.Class or TypeKind.Struct => IrClassExtractor.Extract(
                 type,

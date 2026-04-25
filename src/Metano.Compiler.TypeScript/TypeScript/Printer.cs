@@ -338,6 +338,16 @@ public sealed class Printer(string indent = "  ")
         _sb.Write("interface ");
         _sb.Write(iface.Name);
         PrintTypeParameters(iface.TypeParameters);
+        if (iface.Extends is { Count: > 0 } extends)
+        {
+            _sb.Write(" extends ");
+            for (var i = 0; i < extends.Count; i++)
+            {
+                if (i > 0)
+                    _sb.Write(", ");
+                PrintType(extends[i]);
+            }
+        }
         _sb.WriteBlock(() =>
         {
             foreach (var prop in iface.Properties)
