@@ -158,6 +158,35 @@ public sealed class IrExpressionExtractor
 
                 return LowerConditionalBinding(head, nested.WhenNotNull);
 
+            case AssignmentExpressionSyntax assign
+                when assign.Left is MemberBindingExpressionSyntax memberBinding:
+                // `a?.b = c` lowers to `a != null && (a.b = c)`.
+                // TypeScript has no optional-chained assignment, so
+                // the null-guard becomes an inline short-circuit
+                // expression. The receiver is evaluated only once
+                // when it is a simple identifier / member access (the
+                // overwhelming majority of real call sites); a
+                // side-effecting receiver would re-evaluate, which is
+                // documented as a known edge case until the IR
+                // grows a let-binding shape that can host the temp.
+                var assignedValue = Extract(assign.Right);
+                var memberName = memberBinding.Name.Identifier.ValueText;
+                var memberOrigin = BuildOrigin(_semantic.GetSymbolInfo(memberBinding).Symbol);
+                var memberWrite = new IrBinaryExpression(
+                    new IrMemberAccess(receiver, memberName, memberOrigin),
+                    MapAssignmentOp(assign.Kind()),
+                    assignedValue
+                );
+                return new IrBinaryExpression(
+                    new IrBinaryExpression(
+                        receiver,
+                        IrBinaryOp.NotEqual,
+                        new IrLiteral(null, IrLiteralKind.Null)
+                    ),
+                    IrBinaryOp.LogicalAnd,
+                    memberWrite
+                );
+
             default:
                 return new IrUnsupportedExpression($"ConditionalAccess({whenNotNull.Kind()})");
         }
