@@ -44,13 +44,19 @@ public static class RoslynTypeQueries
             || fullName.StartsWith("System.Collections.Immutable.ImmutableHashSet");
     }
 
+    /// <summary>
+    /// True for BCL types that map to a TypeScript <c>Array</c> at the
+    /// IR level. <c>IEnumerable&lt;T&gt;</c> is intentionally excluded
+    /// — it represents a lazy sequence and lowers to
+    /// <c>IrIterableTypeRef</c> (TS <c>Iterable&lt;T&gt;</c>) instead;
+    /// see the dedicated branch in <see cref="Metano.Compiler.Extraction.IrTypeRefMapper"/>.
+    /// </summary>
     public static bool IsCollectionLike(this INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
         return fullName.StartsWith("System.Collections.Generic.List")
             || fullName.StartsWith("System.Collections.Generic.IList")
             || fullName.StartsWith("System.Collections.Generic.IReadOnlyList")
-            || fullName.StartsWith("System.Collections.Generic.IEnumerable")
             || fullName.StartsWith("System.Collections.Generic.ICollection")
             || fullName.StartsWith("System.Collections.Immutable.ImmutableList")
             || fullName.StartsWith("System.Collections.Immutable.ImmutableArray")

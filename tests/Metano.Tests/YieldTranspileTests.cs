@@ -51,8 +51,12 @@ public class YieldTranspileTests
     }
 
     [Test]
-    public async Task IEnumerableWithoutYield_RemainsArrayMapping()
+    public async Task IEnumerableWithoutYield_MapsToIterable()
     {
+        // Non-iterator methods returning `IEnumerable<T>` lower to
+        // `Iterable<T>` — the lazy-sequence semantics match. Only
+        // iterator (yield-bearing) methods route through
+        // `MapForGeneratorReturn` and emit `Generator<T>`.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -64,7 +68,7 @@ public class YieldTranspileTests
         );
 
         var output = result["snapshot-provider.ts"];
-        await Assert.That(output).Contains("snapshot(): number[]");
+        await Assert.That(output).Contains("snapshot(): Iterable<number>");
         await Assert.That(output).DoesNotContain("*snapshot(");
     }
 }

@@ -165,9 +165,17 @@ public static class IrTypeRefMapper
                     Map(named.TypeArguments[1], originResolver)
                 );
 
-            // IReadOnlyCollection<T> → Iterable
+            // IEnumerable<T> / IReadOnlyCollection<T> → Iterable.
+            // C# `IEnumerable<T>` is a lazy, read-only, forward-only
+            // sequence — the closest TS surface is `Iterable<T>`,
+            // not `Array<T>`. Iterator return types (yield) take a
+            // separate path through `MapForGeneratorReturn` and
+            // lower to `Generator<T>` instead.
             if (
-                fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection")
+                (
+                    fullName.StartsWith("System.Collections.Generic.IEnumerable")
+                    || fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection")
+                )
                 && named.TypeArguments.Length > 0
             )
                 return new IrIterableTypeRef(Map(named.TypeArguments[0], originResolver));

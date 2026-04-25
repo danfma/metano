@@ -75,7 +75,7 @@ public class ExtensionTranspileTests
         );
 
         var output = result["enumerable-ext.ts"];
-        await Assert.That(output).Contains("function isEmpty<T>(source: T[]): boolean");
+        await Assert.That(output).Contains("function isEmpty<T>(source: Iterable<T>): boolean");
     }
 
     // ─── C# 14 extension blocks ─────────────────────────────
