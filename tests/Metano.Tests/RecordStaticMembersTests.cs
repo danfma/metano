@@ -92,6 +92,57 @@ public class RecordStaticMembersTests
     }
 
     [Test]
+    public async Task PlainObjectRecordWithReservedNameOverride_EscapesIdentifier()
+    {
+        // `[Name("delete")]` (or any reserved-word override) cannot
+        // surface verbatim as a top-level `export const` — the TS
+        // parser rejects reserved identifiers in declaration
+        // position. The bridge appends a trailing underscore to
+        // keep the emitted file compilable.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [PlainObject]
+            public sealed record Counter(int Count)
+            {
+                [Name("delete")]
+                public static readonly string Marker = "x";
+            }
+            """
+        );
+
+        var output = result["counter.ts"];
+        await Assert.That(output).Contains("export const delete_");
+    }
+
+    [Test]
+    public async Task PlainObjectRecordWithPrivateStaticField_DoesNotExport()
+    {
+        // Top-level exports leak the symbol to every consumer of the
+        // module. Private/protected static fields stay confined to
+        // C#; nothing about a `[PlainObject]` wire shape implies
+        // those should suddenly become module-public.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [PlainObject]
+            public sealed record Counter(int Count)
+            {
+                private static readonly string Internal = "secret";
+            }
+            """
+        );
+
+        var output = result["counter.ts"];
+        await Assert.That(output).DoesNotContain("internal");
+        await Assert.That(output).DoesNotContain("\"secret\"");
+    }
+
+    [Test]
     public async Task PlainObjectRecordWithMutableStaticField_EmitsTopLevelExportLet()
     {
         // Mutable static fields (no `readonly`) lower to a `let`

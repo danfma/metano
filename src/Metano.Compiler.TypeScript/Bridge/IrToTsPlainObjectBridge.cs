@@ -94,7 +94,15 @@ public static class IrToTsPlainObjectBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        if (field.Visibility is IrVisibility.Internal or IrVisibility.PrivateProtected)
+        // Top-level `export const/let` declarations make the symbol
+        // public to every consumer of the module. C# accessibility
+        // beyond `public` (private / protected / internal /
+        // protected-internal / private-protected) cannot project
+        // onto an export — emitting them would leak implementation
+        // details and contradict the C# surface. Restrict the
+        // emission to `public` static fields; other visibilities
+        // stay confined to whatever C#-side consumers exist.
+        if (field.Visibility != IrVisibility.Public)
             return;
         if (field.Initializer is null)
             return;
@@ -105,8 +113,13 @@ public static class IrToTsPlainObjectBridge
         // surfaces under the same identifier shape as the rest of
         // the module's members. Using `ToTypeName` here would
         // PascalCase the export and disagree with every other field
-        // in the codebase.
-        var name = IrToTsNamingPolicy.ToInterfaceMemberName(field.Name, field.Attributes);
+        // in the codebase. The override path (`[Name("delete")]`)
+        // bypasses `ToCamelCase`'s reserved-word escape; reapply it
+        // here because a top-level `const` / `let` cannot use a
+        // reserved identifier (unlike class members, which can).
+        var name = TypeScriptNaming.EscapeIfReserved(
+            IrToTsNamingPolicy.ToInterfaceMemberName(field.Name, field.Attributes)
+        );
         var initializer = IrToTsExpressionBridge.Map(field.Initializer, bclRegistry);
         // `readonly` C# fields lower to a `const` declaration; the
         // rare mutable-static case (a top-level cache or counter)

@@ -110,4 +110,15 @@ public static class TypeScriptNaming
     ];
 
     private static bool IsReservedWord(string name) => JsReservedWords.Contains(name);
+
+    /// <summary>
+    /// Appends a trailing underscore to <paramref name="name"/> when
+    /// it is a JavaScript / TypeScript reserved word, leaving any
+    /// other identifier unchanged. Used at top-level declaration
+    /// sites (<c>export const/let/function</c>) where the language
+    /// does not accept reserved identifiers — distinct from class
+    /// members and property keys, which can carry reserved names
+    /// freely.
+    /// </summary>
+    public static string EscapeIfReserved(string name) => IsReservedWord(name) ? name + "_" : name;
 }
