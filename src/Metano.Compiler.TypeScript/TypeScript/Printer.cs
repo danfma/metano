@@ -341,12 +341,7 @@ public sealed class Printer(string indent = "  ")
         if (iface.Extends is { Count: > 0 } extends)
         {
             _sb.Write(" extends ");
-            for (var i = 0; i < extends.Count; i++)
-            {
-                if (i > 0)
-                    _sb.Write(", ");
-                PrintType(extends[i]);
-            }
+            _sb.WriteList(extends, PrintType);
         }
         _sb.WriteBlock(() =>
         {

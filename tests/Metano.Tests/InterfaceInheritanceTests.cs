@@ -107,6 +107,31 @@ public class InterfaceInheritanceTests
     }
 
     [Test]
+    public async Task CollectionLikeBase_NormalizesArrayShorthandToNamedArray()
+    {
+        // `IEnumerable<T>` / `IList<T>` / `ICollection<T>` map to
+        // `IrArrayTypeRef` (T[]). The TS printer's array shorthand
+        // is illegal in a heritage clause (`extends T[]` doesn't
+        // parse). The bridge rewrites it to the named `Array<T>`
+        // form, which TS accepts.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public interface IRows<T> : IEnumerable<T>
+            {
+                int Count { get; }
+            }
+            """
+        );
+
+        var output = result["i-rows.ts"];
+        await Assert.That(output).Contains("interface IRows<T> extends Array<T>");
+        await Assert.That(output).DoesNotContain("extends T[]");
+    }
+
+    [Test]
     public async Task NameOverrideOnBase_AppliesToExtendsEntry()
     {
         var result = TranspileHelper.Transpile(
