@@ -58,15 +58,54 @@ public static class IrToTsPlainObjectBridge
         {
             foreach (var member in members)
             {
-                if (member is not IrMethodDeclaration method)
-                    continue;
-                if (method.IsStatic)
-                    continue;
-                EmitInstanceMethod(method, tsName, sink, bclRegistry);
+                switch (member)
+                {
+                    case IrMethodDeclaration method when !method.IsStatic:
+                        EmitInstanceMethod(method, tsName, sink, bclRegistry);
+                        break;
+                    case IrFieldDeclaration field when field.IsStatic:
+                        EmitStaticField(field, sink, bclRegistry);
+                        break;
+                    // Static methods + instance fields stay deferred:
+                    // static methods on a `[PlainObject]` record can land
+                    // in a follow-up alongside any other "shared
+                    // utilities" emission convention; instance fields on
+                    // an interface-shaped record cannot carry a class
+                    // body, so they would need either a separate
+                    // top-level helper or a redesign of the wire shape.
+                }
             }
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Emits a record's <c>static readonly</c> field as a top-level
+    /// <c>export const</c> in the same module file as the
+    /// <c>[PlainObject]</c> interface. Honors <c>[Name]</c> overrides
+    /// the same way every other surface does. The field's initializer
+    /// flows through the standard expression bridge, so a record
+    /// constructor call reads back as the matching object literal.
+    /// </summary>
+    private static void EmitStaticField(
+        IrFieldDeclaration field,
+        List<TsTopLevel> sink,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        if (field.Visibility is IrVisibility.Internal or IrVisibility.PrivateProtected)
+            return;
+        if (field.Initializer is null)
+            return;
+
+        var name = IrToTsNamingPolicy.ToTypeName(field.Name, field.Attributes);
+        var initializer = IrToTsExpressionBridge.Map(field.Initializer, bclRegistry);
+        sink.Add(
+            new TsTopLevelStatement(
+                new TsVariableDeclaration(name, initializer, Const: true, Exported: true)
+            )
+        );
     }
 
     private static void EmitInstanceMethod(
