@@ -313,7 +313,7 @@ public static class IrToTsExpressionBridge
                 return mapped;
         }
 
-        return new TsCallExpression(Map(call.Target, bclRegistry), loweredArgs);
+        return new TsCallExpression(Map(call.Target, bclRegistry), loweredArgs, call.IsOptional);
     }
 
     private static string? TsTypeArgName(IrTypeRef type) =>

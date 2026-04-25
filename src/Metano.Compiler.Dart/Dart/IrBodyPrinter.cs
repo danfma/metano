@@ -253,6 +253,8 @@ public static class IrBodyPrinter
                 break;
             case IrCallExpression call:
                 PrintExpression(sb, call.Target);
+                if (call.IsOptional)
+                    sb.Append("?.call");
                 sb.Append('(');
                 PrintArgs(sb, call.Arguments);
                 sb.Append(')');

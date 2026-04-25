@@ -961,6 +961,8 @@ public sealed class Printer(string indent = "  ")
 
             case TsCallExpression call:
                 PrintExpression(call.Callee);
+                if (call.Optional)
+                    _sb.Write("?.");
                 _sb.Write("(");
                 _sb.WriteList(call.Arguments, PrintExpression);
                 _sb.Write(")");

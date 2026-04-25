@@ -149,6 +149,32 @@ public sealed class IrExpressionExtractor
                 when inv.Expression is MemberBindingExpressionSyntax mbCall:
                 var methodSymbol = _semantic.GetSymbolInfo(inv).Symbol;
                 var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+
+                // `handler?.Invoke(args)` lowers to a delegate
+                // optional call. The `.Invoke` member binding has no
+                // runtime counterpart in JS/TS — the delegate is the
+                // function — so the IR drops the binding name and
+                // marks the call as optional. The Dart bridge
+                // re-introduces the explicit `.call` segment because
+                // Dart's optional-call shape is `receiver?.call(...)`.
+                //
+                // `[This]`-bearing delegates fall through: the
+                // first parameter rebinds JS `this`, so the binding
+                // must remain visible to whatever lowering decides
+                // to wire the receiver argument into the runtime
+                // trampoline.
+                if (
+                    methodSymbol is IMethodSymbol delegateMethod
+                    && IsDelegateInvoke(delegateMethod)
+                    && !HasThisParameter(delegateMethod)
+                )
+                    return new IrCallExpression(
+                        receiver,
+                        args,
+                        Origin: BuildOrigin(methodSymbol),
+                        IsOptional: true
+                    );
+
                 var chainTarget = new IrOptionalChain(receiver, mbCall.Name.Identifier.ValueText);
 
                 return new IrCallExpression(chainTarget, args, Origin: BuildOrigin(methodSymbol));
@@ -266,6 +292,34 @@ public sealed class IrExpressionExtractor
                 new IrElementAccess(inner, Extract(ea.ArgumentList.Arguments[0].Expression)),
             _ => null,
         };
+
+    /// <summary>
+    /// True when <paramref name="method"/> is a delegate's
+    /// synthesized <c>Invoke</c> method. C# manufactures this
+    /// member on every delegate type; it has no JS/TS counterpart
+    /// because the delegate IS the function. The extractor uses
+    /// the predicate at two sites:
+    /// <list type="bullet">
+    ///   <item><c>handler?.Invoke(args)</c> lowers to a
+    ///   delegate-typed optional call (<see cref="IrCallExpression"/>
+    ///   with <c>IsOptional = true</c>).</item>
+    ///   <item><c>handler.Invoke(args)</c> drops the <c>.Invoke</c>
+    ///   indirection and lowers to a plain call on the delegate
+    ///   receiver.</item>
+    /// </list>
+    /// </summary>
+    private static bool IsDelegateInvoke(IMethodSymbol method) =>
+        method.MethodKind == MethodKind.DelegateInvoke;
+
+    /// <summary>
+    /// True when the delegate's first parameter carries
+    /// <c>[This]</c> — i.e. the receiver is rebound as JS
+    /// <c>this</c> at the call site. The Invoke shortcuts must
+    /// fall through for these so the existing
+    /// <c>delegate.call(receiver, ...)</c> rewrite still runs.
+    /// </summary>
+    private static bool HasThisParameter(IMethodSymbol method) =>
+        method.Parameters.Length > 0 && SymbolHelper.HasThis(method.Parameters[0]);
 
     /// <summary>
     /// True for IR shapes that can be referenced twice in the
@@ -1233,6 +1287,31 @@ public sealed class IrExpressionExtractor
     private IrExpression ExtractInvocation(InvocationExpressionSyntax inv)
     {
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
+
+        // `handler.Invoke(args)` lowers to `handler(args)` — the
+        // synthesized `Invoke` member has no runtime counterpart in
+        // JS/TS because the delegate IS the function. Drop the
+        // `.Invoke` indirection at the source-level so consumers
+        // read the dispatch as a plain function call. The Dart
+        // bridge re-introduces the explicit `.call(...)` segment;
+        // routing through the call below is fine because the
+        // bridge's call lowering handles the receiver shape.
+        //
+        // `[This]`-bearing delegates fall through to the rewrite
+        // further down (line 1357 onward), which produces the
+        // `delegate.call(receiver, ...)` shape that JS needs to
+        // rebind `this` before the runtime trampoline forwards it.
+        if (
+            symbol is { } invoke
+            && IsDelegateInvoke(invoke)
+            && !HasThisParameter(invoke)
+            && inv.Expression is MemberAccessExpressionSyntax invokeMember
+        )
+        {
+            var receiver = Extract(invokeMember.Expression);
+            var invokeArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+            return new IrCallExpression(receiver, invokeArgs, Origin: BuildOrigin(symbol));
+        }
 
         // `decimal.Parse(s)` → `new Decimal(s)`.
         if (

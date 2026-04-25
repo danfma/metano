@@ -125,7 +125,8 @@ public sealed record IrCallExpression(
     IrExpression Target,
     IReadOnlyList<IrArgument> Arguments,
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
-    IrMemberOrigin? Origin = null
+    IrMemberOrigin? Origin = null,
+    bool IsOptional = false
 ) : IrExpression;
 
 /// <summary>
