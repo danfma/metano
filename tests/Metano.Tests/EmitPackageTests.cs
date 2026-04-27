@@ -94,8 +94,16 @@ public class EmitPackageTests
     }
 
     [Test]
-    public async Task ExistingFileWithDivergentName_WarnsAndOverwrites()
+    public async Task ExistingFileWithDivergentName_WarnsAndPreservesExisting()
     {
+        // Per #136, the transpiler is a write-if-missing
+        // collaborator: a hand-edited package.json#name survives
+        // every regeneration. When [EmitPackage] disagrees, we
+        // surface MS0007 so the consumer can re-align the two
+        // sources, but we never silently flip the name back —
+        // doing so would invalidate links / docs / cross-package
+        // imports the consumer may have already published with the
+        // existing name.
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
@@ -112,9 +120,9 @@ public class EmitPackageTests
         );
 
         var pkg = ReadJson(tempDir);
-        // Authoritative wins.
-        await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("new-name");
-        // And the writer reported MS0007.
+        // Existing name preserved.
+        await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("old-name");
+        // Writer still reported MS0007 so the divergence is visible.
         await Assert
             .That(diags.Any(d => d.Code == DiagnosticCodes.CrossPackageResolution))
             .IsTrue();
@@ -568,6 +576,215 @@ public class EmitPackageTests
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey("./domain")).IsTrue();
         await Assert.That(exports.ContainsKey(".")).IsFalse();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    // ── Write-if-missing rule for hand-curated fields ────────────────
+
+    [Test]
+    public async Task ExistingTypeField_PreservedAcrossRegeneration()
+    {
+        // A consumer who set `"type": "commonjs"` (or "module" — the
+        // default — explicitly) keeps that value. The transpiler used
+        // to flip the field back to "module" on every run, which
+        // destroyed CJS dual-build configurations.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """{ "name": "consumer", "type": "commonjs" }"""
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")]
+        );
+
+        var pkg = ReadJson(tempDir);
+        await Assert.That(pkg["type"]?.GetValue<string>()).IsEqualTo("commonjs");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task MissingTypeField_SeededAsModule()
+    {
+        // First-run behavior is unchanged: when the consumer has
+        // not picked a value, the transpiler seeds "module" since
+        // every emitted file is ESM.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")]
+        );
+
+        var pkg = ReadJson(tempDir);
+        await Assert.That(pkg["type"]?.GetValue<string>()).IsEqualTo("module");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task ExistingSideEffectsArray_PreservedAcrossRegeneration()
+    {
+        // Hand-curated `sideEffects: [...]` (e.g. listing CSS imports
+        // for tree-shakers) survives. The transpiler seeded `false`
+        // unconditionally before, which clobbered carefully tuned
+        // bundler hints.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "sideEffects": ["./styles.css", "./register.ts"]
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")]
+        );
+
+        var pkg = ReadJson(tempDir);
+        var sideEffects = pkg["sideEffects"] as JsonArray;
+        await Assert.That(sideEffects).IsNotNull();
+        await Assert.That(sideEffects!.Count).IsEqualTo(2);
+        await Assert.That(sideEffects[0]?.GetValue<string>()).IsEqualTo("./styles.css");
+        await Assert.That(sideEffects[1]?.GetValue<string>()).IsEqualTo("./register.ts");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task UserAddedExport_SurvivesRegeneration()
+    {
+        // The user added a "./styles.css" export that points
+        // outside the dist tree. The transpiler must not strip it
+        // when refreshing transpiler-managed entries.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "exports": {
+                "./styles.css": "./assets/styles.css",
+                ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.ContainsKey("./styles.css")).IsTrue();
+        await Assert.That(exports.ContainsKey(".")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task UserAddedConditionalField_PreservedOnTranspilerKey()
+    {
+        // The consumer augmented the transpiler-managed `.` entry
+        // with a `require` condition (e.g. CJS dual build). The
+        // per-key deep-merge must refresh `types` and `import`
+        // without erasing `require`.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "exports": {
+                ".": {
+                  "types": "./dist/index.d.ts",
+                  "import": "./dist/index.js",
+                  "require": "./dist/index.cjs"
+                }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var rootExport = pkg["exports"]?[".".AsSpan().ToString()] as JsonObject;
+
+        await Assert.That(rootExport).IsNotNull();
+        await Assert.That(rootExport!["types"]?.GetValue<string>()).IsEqualTo("./dist/index.d.ts");
+        await Assert.That(rootExport["import"]?.GetValue<string>()).IsEqualTo("./dist/index.js");
+        await Assert.That(rootExport["require"]?.GetValue<string>()).IsEqualTo("./dist/index.cjs");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task ExecutableConsumer_PreservesExistingExports()
+    {
+        // Executables don't get transpiler-emitted exports, so the
+        // writer must leave the consumer's hand-curated `exports`
+        // object untouched. The pre-fix behavior unconditionally
+        // removed the field on every run.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "exports": {
+                "./styles.css": "./assets/styles.css"
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("program.ts", [], "")],
+            authoritativePackageName: "consumer",
+            isExecutable: true
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.ContainsKey("./styles.css")).IsTrue();
 
         Directory.Delete(tempDir, recursive: true);
     }

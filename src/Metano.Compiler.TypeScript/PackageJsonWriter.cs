@@ -143,54 +143,24 @@ public static class PackageJsonWriter
             };
         }
 
-        // [EmitPackage] is the source of truth for the package name when present.
-        if (authoritativePackageName is not null)
-        {
-            var existingName = root["name"]?.GetValue<string>();
-            if (existingName is not null && existingName != authoritativePackageName)
-            {
-                diagnostics.Add(
-                    new MetanoDiagnostic(
-                        MetanoDiagnosticSeverity.Warning,
-                        DiagnosticCodes.CrossPackageResolution,
-                        $"package.json#name '{existingName}' diverges from "
-                            + $"[assembly: EmitPackage(\"{authoritativePackageName}\")]. "
-                            + $"Overwriting with the attribute value — consumers will import via "
-                            + $"'{authoritativePackageName}'."
-                    )
-                );
-            }
-            root["name"] = authoritativePackageName;
-        }
+        ApplyAuthoritativePackageName(root, authoritativePackageName, diagnostics);
 
-        // Apply controlled fields
-        root["type"] = "module";
-        root["sideEffects"] = false;
+        // Seed defaults when the consumer has not picked their own
+        // values. The transpiler must not flip a hand-curated `type`
+        // or `sideEffects` value back on every regeneration.
+        WriteIfMissing(root, "type", "module");
+        WriteIfMissing(root, "sideEffects", false);
 
-        // Replace transpiler-managed entries while preserving user-defined ones.
-        // For imports, the transpiler manages "#" and "#/*" — stale aliases are removed.
+        // Imports: the transpiler owns `#` and `#/*` — stale aliases
+        // are removed; user-defined keys survive.
         HashSet<string> managedImportKeys = ["#", "#/*"];
         ReplacePreservingUserEntries(root, "imports", imports, managedImportKeys);
 
-        // Exports are fully transpiler-controlled — replace entirely.
-        if (exports is not null)
+        // Exports merge additively — see `MergeTranspilerManagedExports`
+        // for the shape-detection rule and the deep-merge contract.
+        if (exports is { Count: > 0 })
         {
-            if (root["exports"] is JsonObject existingExports)
-            {
-                // Replace in-place to preserve key ordering.
-                foreach (var k in existingExports.Select(e => e.Key).ToList())
-                    existingExports.Remove(k);
-                foreach (var (ek, ev) in exports)
-                    existingExports[ek] = ev?.DeepClone();
-            }
-            else
-            {
-                root["exports"] = exports;
-            }
-        }
-        else
-        {
-            root.Remove("exports");
+            MergeTranspilerManagedExports(root, exports, distDirRelativeToPackageRoot);
         }
 
         // Merge auto-generated cross-package dependencies into the existing
@@ -207,6 +177,158 @@ public static class PackageJsonWriter
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
         return diagnostics;
+    }
+
+    /// <summary>
+    /// Seeds <c>package.json#name</c> from <c>[assembly: EmitPackage(...)]</c>
+    /// on first creation. When the file already declares a name the
+    /// existing value wins; on divergence we surface MS0007 so the
+    /// consumer can re-align the two sources, but we never silently
+    /// overwrite a hand-edited name (a published package may have
+    /// links / docs / consumers tied to it).
+    /// </summary>
+    private static void ApplyAuthoritativePackageName(
+        JsonObject root,
+        string? authoritativePackageName,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        if (authoritativePackageName is null)
+            return;
+
+        var existingName = root["name"]?.GetValue<string>();
+        if (existingName is null)
+        {
+            root["name"] = authoritativePackageName;
+            return;
+        }
+
+        if (existingName == authoritativePackageName)
+            return;
+
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.CrossPackageResolution,
+                $"package.json#name '{existingName}' diverges from "
+                    + $"[assembly: EmitPackage(\"{authoritativePackageName}\")]. "
+                    + $"The existing name was preserved; consumers keep importing via "
+                    + $"'{existingName}'. Update either the attribute or package.json#name "
+                    + $"to align them."
+            )
+        );
+    }
+
+    /// <summary>Seeds <paramref name="key"/> only when missing.</summary>
+    /// <remarks>
+    /// Used for scalar defaults like <c>type</c> and <c>sideEffects</c>:
+    /// once the consumer has set a value by hand, the transpiler never
+    /// overwrites it on regeneration.
+    /// </remarks>
+    private static void WriteIfMissing(JsonObject root, string key, JsonNode? value)
+    {
+        if (root.ContainsKey(key))
+            return;
+        root[key] = value;
+    }
+
+    /// <inheritdoc cref="WriteIfMissing(JsonObject, string, JsonNode?)"/>
+    private static void WriteIfMissing(JsonObject root, string key, bool value)
+    {
+        if (root.ContainsKey(key))
+            return;
+        root[key] = value;
+    }
+
+    /// <summary>
+    /// Merges the transpiler-emitted exports into the existing
+    /// <c>exports</c> object. Two rules combine to keep user
+    /// customizations intact across regenerations:
+    /// <list type="number">
+    ///   <item><b>Stale removal.</b> An existing entry whose key is
+    ///   not in <paramref name="generated"/> is dropped only when
+    ///   its value passes <see cref="IsTranspilerEmittedExportEntry"/>
+    ///   (looks like a previous transpiler output). User-added
+    ///   subpaths pointing outside the dist tree (assets, shims)
+    ///   survive.</item>
+    ///   <item><b>Per-key deep-merge.</b> When a generated key is
+    ///   already present, the transpiler's <c>types</c>/<c>import</c>
+    ///   fields refresh in place and any extra conditional fields
+    ///   the consumer added (e.g. <c>require</c>, <c>default</c>)
+    ///   stay untouched.</item>
+    /// </list>
+    /// </summary>
+    private static void MergeTranspilerManagedExports(
+        JsonObject root,
+        JsonObject generated,
+        string distRelative
+    )
+    {
+        var transpilerDistPrefix = "./" + NormalizePath(distRelative).TrimEnd('/');
+
+        if (root["exports"] is not JsonObject existing)
+        {
+            root["exports"] = generated;
+            return;
+        }
+
+        DropStaleTranspilerEntries(existing, generated, transpilerDistPrefix);
+        MergeGeneratedEntries(existing, generated);
+    }
+
+    private static void DropStaleTranspilerEntries(
+        JsonObject existing,
+        JsonObject generated,
+        string transpilerDistPrefix
+    )
+    {
+        foreach (var (entryKey, entryValue) in existing.ToList())
+        {
+            if (generated.ContainsKey(entryKey))
+                continue;
+            if (IsTranspilerEmittedExportEntry(entryValue, transpilerDistPrefix))
+                existing.Remove(entryKey);
+        }
+    }
+
+    private static void MergeGeneratedEntries(JsonObject existing, JsonObject generated)
+    {
+        foreach (var (entryKey, entryValue) in generated)
+        {
+            if (
+                existing[entryKey] is JsonObject existingEntry
+                && entryValue is JsonObject generatedEntry
+            )
+            {
+                foreach (var (fieldKey, fieldValue) in generatedEntry)
+                    existingEntry[fieldKey] = fieldValue?.DeepClone();
+            }
+            else
+            {
+                existing[entryKey] = entryValue?.DeepClone();
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when an exports-entry value has the structural shape the
+    /// transpiler emits: a JSON object whose <c>types</c> and
+    /// <c>import</c> strings both point into the package's dist
+    /// directory. Used to tell stale transpiler outputs apart from
+    /// user-added entries that happen to live alongside them.
+    /// </summary>
+    private static bool IsTranspilerEmittedExportEntry(JsonNode? value, string transpilerDistPrefix)
+    {
+        if (value is not JsonObject obj)
+            return false;
+
+        var types = obj["types"]?.GetValue<string>();
+        var import = obj["import"]?.GetValue<string>();
+        if (types is null || import is null)
+            return false;
+
+        return types.StartsWith(transpilerDistPrefix, StringComparison.Ordinal)
+            && import.StartsWith(transpilerDistPrefix, StringComparison.Ordinal);
     }
 
     /// <summary>
