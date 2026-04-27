@@ -157,8 +157,11 @@ public static class PackageJsonWriter
         ReplacePreservingUserEntries(root, "imports", imports, managedImportKeys);
 
         // Exports merge additively — see `MergeTranspilerManagedExports`
-        // for the shape-detection rule and the deep-merge contract.
-        if (exports is { Count: > 0 })
+        // for the shape-detection rule and the deep-merge contract. Run
+        // even when `exports` is empty (library that no longer emits
+        // any barrel) so stale transpiler-shaped entries from a prior
+        // run still get pruned while user-added subpaths survive.
+        if (exports is not null)
         {
             MergeTranspilerManagedExports(root, exports, distDirRelativeToPackageRoot);
         }
@@ -264,7 +267,13 @@ public static class PackageJsonWriter
         string distRelative
     )
     {
-        var transpilerDistPrefix = "./" + NormalizePath(distRelative).TrimEnd('/');
+        // Trailing slash is mandatory: with a bare `./dist` prefix,
+        // `StartsWith` would also match sibling directories like
+        // `./dist2/...` or `./dist-cjs/...` and misclassify the
+        // consumer's hand-curated exports there as stale transpiler
+        // output. The slash anchors the comparison to the directory
+        // boundary.
+        var transpilerDistPrefix = "./" + NormalizePath(distRelative).TrimEnd('/') + "/";
 
         if (root["exports"] is not JsonObject existing)
         {
@@ -322,13 +331,29 @@ public static class PackageJsonWriter
         if (value is not JsonObject obj)
             return false;
 
-        var types = obj["types"]?.GetValue<string>();
-        var import = obj["import"]?.GetValue<string>();
+        var types = ReadStringField(obj, "types");
+        var import = ReadStringField(obj, "import");
         if (types is null || import is null)
             return false;
 
         return types.StartsWith(transpilerDistPrefix, StringComparison.Ordinal)
             && import.StartsWith(transpilerDistPrefix, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Reads a string-valued field from an exports-entry object,
+    /// returning null when the field is absent or holds a non-string
+    /// node (object, array, number). Defensive read: a hand-edited
+    /// <c>package.json</c> may put any JSON shape under
+    /// <c>types</c>/<c>import</c>, and <see cref="JsonValue.GetValue{T}"/>
+    /// throws on a type mismatch — crashing the transpiler on
+    /// merely-unusual user input is not acceptable.
+    /// </summary>
+    private static string? ReadStringField(JsonObject obj, string fieldName)
+    {
+        if (obj[fieldName] is not JsonValue value)
+            return null;
+        return value.TryGetValue<string>(out var s) ? s : null;
     }
 
     /// <summary>

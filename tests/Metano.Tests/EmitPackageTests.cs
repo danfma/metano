@@ -789,6 +789,131 @@ public class EmitPackageTests
         Directory.Delete(tempDir, recursive: true);
     }
 
+    [Test]
+    public async Task SiblingDistDirectoryExport_NotMisclassifiedAsStale()
+    {
+        // Path-boundary check: with `./dist` as the transpiler dist
+        // prefix, a hand-curated entry pointing into a sibling
+        // directory like `./dist-cjs/...` must not be misclassified
+        // as transpiler-emitted via a substring match.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "exports": {
+                "./cjs": {
+                  "types": "./dist-cjs/index.d.ts",
+                  "import": "./dist-cjs/index.js"
+                },
+                ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.ContainsKey("./cjs")).IsTrue();
+        await Assert.That(exports.ContainsKey(".")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task LibraryWithoutBarrels_PrunesStaleTranspilerEntries()
+    {
+        // Library generation that no longer emits any barrel still
+        // needs the merge pass: previously transpiler-shaped entries
+        // from an earlier run point at deleted dist files and must
+        // be dropped, while user-added subpaths survive.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "exports": {
+                ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+                "./styles.css": "./assets/styles.css"
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("internal.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.ContainsKey(".")).IsFalse();
+        await Assert.That(exports.ContainsKey("./styles.css")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task NonStringExportFields_DoNotCrashWriter()
+    {
+        // Defensive read: a hand-edited entry might put a JSON
+        // object or array under `types` / `import` (e.g. nested
+        // conditional exports). The writer must classify the entry
+        // as user-curated and preserve it instead of crashing on
+        // the type mismatch.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "exports": {
+                "./nested": {
+                  "types": { "default": "./types/nested.d.ts" },
+                  "import": "./dist/nested.js"
+                }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var exports = pkg["exports"] as JsonObject;
+
+        await Assert.That(exports).IsNotNull();
+        await Assert.That(exports!.ContainsKey("./nested")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"metasharp-test-{Guid.NewGuid():N}");
