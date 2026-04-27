@@ -38,31 +38,41 @@ enable = false
 #
 # Custom auto-labelers run BEFORE defaults, so listing them here
 # routes our commit titles to the appropriate categories. Each
-# pattern accepts an optional scope (`feat(ts):`, `fix(core):`).
+# pattern accepts an optional scope (`feat(ts):`, `fix(core):`)
+# and an optional `!` breaking-change marker (`feat!:`,
+# `feat(ts)!:`). The scope class uses `[^)]+` instead of `.+` so a
+# stray colon or parenthesis later in the title cannot push the
+# regex past the closing paren of the scope.
+#
+# Type-prefixed labelers also accept the `!` marker so a breaking
+# feature gets BOTH the `feature` label and (via the dedicated
+# breaking-change labeler below) the `breaking-change` label —
+# dotnet-releaser fires every matching auto-labeler, so the same
+# commit can land in two categories.
 [[changelog.autolabeler]]
 label = "breaking-change"
-title = '^[A-Za-z]+(\(.+\))?!:'
+title = '^[A-Za-z]+(\([^)]+\))?!:'
 
 [[changelog.autolabeler]]
 label = "feature"
-title = '^[Ff]eat(\(.+\))?:'
+title = '^[Ff]eat(\([^)]+\))?!?:'
 
 [[changelog.autolabeler]]
 label = "bugfix"
-title = '^[Ff]ix(\(.+\))?:'
+title = '^[Ff]ix(\([^)]+\))?!?:'
 
 [[changelog.autolabeler]]
 label = "enhancement"
-title = '^([Rr]efactor|[Pp]erf|[Ss]tyle)(\(.+\))?:'
+title = '^([Rr]efactor|[Pp]erf|[Ss]tyle)(\([^)]+\))?!?:'
 
 [[changelog.autolabeler]]
 label = "maintenance"
-title = '^([Cc]hore|[Bb]uild|[Cc]i)(\(.+\))?:'
+title = '^([Cc]hore|[Bb]uild|[Cc]i)(\([^)]+\))?!?:'
 
 [[changelog.autolabeler]]
 label = "tests"
-title = '^[Tt]est(\(.+\))?:'
+title = '^[Tt]est(\([^)]+\))?!?:'
 
 [[changelog.autolabeler]]
 label = "documentation"
-title = '^[Dd]ocs(\(.+\))?:'
+title = '^[Dd]ocs(\([^)]+\))?!?:'
