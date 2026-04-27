@@ -26,3 +26,43 @@ enable = false
 # Coverage is not yet supported for Testing Platform (TUnit) projects.
 [coverage]
 enable = false
+
+# ── Changelog ────────────────────────────────────────────────────
+#
+# We use Conventional Commits (`feat:`, `fix:`, `chore:`, etc.) as the
+# canonical commit format. dotnet-releaser's built-in auto-labelers
+# expect imperative-English titles ("Add foo", "Fix bar"), so without
+# the entries below `feat:` and friends would fall through to the
+# catch-all `misc` label and every feature would land under "🧰 Misc"
+# in the release notes (which is what happened up to v0.8.0).
+#
+# Custom auto-labelers run BEFORE defaults, so listing them here
+# routes our commit titles to the appropriate categories. Each
+# pattern accepts an optional scope (`feat(ts):`, `fix(core):`).
+[[changelog.autolabeler]]
+label = "breaking-change"
+title = '^[A-Za-z]+(\(.+\))?!:'
+
+[[changelog.autolabeler]]
+label = "feature"
+title = '^[Ff]eat(\(.+\))?:'
+
+[[changelog.autolabeler]]
+label = "bugfix"
+title = '^[Ff]ix(\(.+\))?:'
+
+[[changelog.autolabeler]]
+label = "enhancement"
+title = '^([Rr]efactor|[Pp]erf|[Ss]tyle)(\(.+\))?:'
+
+[[changelog.autolabeler]]
+label = "maintenance"
+title = '^([Cc]hore|[Bb]uild|[Cc]i)(\(.+\))?:'
+
+[[changelog.autolabeler]]
+label = "tests"
+title = '^[Tt]est(\(.+\))?:'
+
+[[changelog.autolabeler]]
+label = "documentation"
+title = '^[Dd]ocs(\(.+\))?:'
