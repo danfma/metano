@@ -14,11 +14,7 @@ export function pipe<T, A, B>(
   op1: OperatorFn<T, A>,
   op2: OperatorFn<A, B>,
 ): Iterable<B>;
-export function pipe<T, A, B>(
-  source: Iterable<T>,
-  op1: OperatorFn<T, A>,
-  op2: TerminalFn<A, B>,
-): B;
+export function pipe<T, A, B>(source: Iterable<T>, op1: OperatorFn<T, A>, op2: TerminalFn<A, B>): B;
 export function pipe<T, A, B, C>(
   source: Iterable<T>,
   op1: OperatorFn<T, A>,

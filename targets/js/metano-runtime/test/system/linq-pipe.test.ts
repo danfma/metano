@@ -180,6 +180,33 @@ describe("linq-pipe operators", () => {
     expect(set.size).toBe(3);
   });
 
+  test("re-enumerable — chain can be iterated multiple times (.NET LINQ parity)", () => {
+    const items = [1, 2, 3, 4, 5];
+    const chain = pipe(
+      items,
+      where<number>((x) => x % 2 === 0),
+      select((x) => x * 10),
+    );
+
+    expect([...chain]).toEqual([20, 40]);
+    // Second enumeration runs the operators afresh against `items`.
+    expect([...chain]).toEqual([20, 40]);
+    // Mutate source between enumerations — observable through the lazy chain.
+    items.push(6);
+    expect([...chain]).toEqual([20, 40, 60]);
+  });
+
+  test("re-enumerable — orderBy re-sorts on each enumeration", () => {
+    const items = [3, 1, 2];
+    const sorted = pipe(
+      items,
+      orderBy<number, number>((x) => x),
+    );
+    expect([...sorted]).toEqual([1, 2, 3]);
+    items.push(0);
+    expect([...sorted]).toEqual([0, 1, 2, 3]);
+  });
+
   test("lazy semantics — generators not executed until terminal", () => {
     let calls = 0;
     function* counter(): Iterable<number> {
