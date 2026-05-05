@@ -12,6 +12,7 @@
  * Short-circuit terminals (`first`, `take(n)`) stop iterating as soon
  * as their result is determined.
  */
+import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 import type {
   AppendOp,
@@ -28,9 +29,47 @@ import type {
   SkipWhileOp,
   TakeOp,
   TakeWhileOp,
+  ThenByDescendingOp,
+  ThenByOp,
   WhereOp,
   ZipOp,
 } from "./types.ts";
+
+/**
+ * Internal Iterable carrier capturing the chain of comparers built by
+ * `orderBy` / `thenBy` / `thenByDescending`. Sort runs lazily on
+ * enumeration so composite multi-key sorts collapse to a single
+ * `Array.sort` with a chained comparator that respects key declaration
+ * order.
+ */
+type Comparer<T> = (a: T, b: T) => number;
+
+class OrderedIter<T> implements Iterable<T> {
+  constructor(
+    readonly source: Iterable<T>,
+    readonly comparers: readonly Comparer<T>[],
+  ) {}
+
+  *[Symbol.iterator](): Iterator<T> {
+    const arr = [...this.source];
+    arr.sort((a, b) => {
+      for (const cmp of this.comparers) {
+        const r = cmp(a, b);
+        if (r !== 0) return r;
+      }
+      return 0;
+    });
+    yield* arr;
+  }
+}
+
+function ascendingComparer<T, K>(keySelector: (item: T) => K): Comparer<T> {
+  return (a, b) => compareKeys(keySelector(a), keySelector(b));
+}
+
+function descendingComparer<T, K>(keySelector: (item: T) => K): Comparer<T> {
+  return (a, b) => -compareKeys(keySelector(a), keySelector(b));
+}
 
 export function where<T>(
   predicate: (item: T, index: number) => boolean,
@@ -248,22 +287,15 @@ export function reverse<T>(): ReverseOp<T> {
   };
 }
 
-export function orderBy<T, K>(keySelector: (item: T) => K, queryable?: QueryableMeta): OrderByOp<T, K> {
+export function orderBy<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): OrderByOp<T, K> {
   return {
     kind: "orderBy",
     keySelector,
     queryable,
-    apply: (source) => ({
-      *[Symbol.iterator]() {
-        const buffer = [...source];
-        buffer.sort((a, b) => {
-          const ka = keySelector(a);
-          const kb = keySelector(b);
-          return ka < kb ? -1 : ka > kb ? 1 : 0;
-        });
-        for (const item of buffer) yield item;
-      },
-    }),
+    apply: (source) => new OrderedIter(source, [ascendingComparer(keySelector)]),
   };
 }
 
@@ -275,17 +307,48 @@ export function orderByDescending<T, K>(
     kind: "orderByDescending",
     keySelector,
     queryable,
-    apply: (source) => ({
-      *[Symbol.iterator]() {
-        const buffer = [...source];
-        buffer.sort((a, b) => {
-          const ka = keySelector(a);
-          const kb = keySelector(b);
-          return ka < kb ? 1 : ka > kb ? -1 : 0;
-        });
-        for (const item of buffer) yield item;
-      },
-    }),
+    apply: (source) => new OrderedIter(source, [descendingComparer(keySelector)]),
+  };
+}
+
+/**
+ * Secondary sort applied after `orderBy` / `orderByDescending`. Reaches
+ * back into the upstream `OrderedIter` to extend its comparer list, so
+ * the final sort uses every key in declaration order. Calling `thenBy`
+ * without a prior orderBy degenerates to a single-key sort by the
+ * provided key.
+ */
+export function thenBy<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): ThenByOp<T, K> {
+  return {
+    kind: "thenBy",
+    keySelector,
+    queryable,
+    apply: (source) => {
+      const cmp = ascendingComparer(keySelector);
+      return source instanceof OrderedIter
+        ? new OrderedIter(source.source, [...source.comparers, cmp])
+        : new OrderedIter(source, [cmp]);
+    },
+  };
+}
+
+export function thenByDescending<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): ThenByDescendingOp<T, K> {
+  return {
+    kind: "thenByDescending",
+    keySelector,
+    queryable,
+    apply: (source) => {
+      const cmp = descendingComparer(keySelector);
+      return source instanceof OrderedIter
+        ? new OrderedIter(source.source, [...source.comparers, cmp])
+        : new OrderedIter(source, [cmp]);
+    },
   };
 }
 

@@ -44,12 +44,14 @@ public sealed class ImportCollector(
         var runtimeHelpers = new HashSet<string>(); // identifiers from TsTemplate.RuntimeImports
         var crossPackageOrigins = new Dictionary<string, TsTypeOrigin>(); // name → cross-package origin
         var templateExternals = new List<IrExternalImport>();
+        var linqPipeHelpers = new HashSet<string>(StringComparer.Ordinal);
         var sink = new ImportCollectionSink(
             referencedTypes,
             valueTypes,
             runtimeHelpers,
             crossPackageOrigins,
-            templateExternals
+            templateExternals,
+            linqPipeHelpers
         );
         CollectReferencedTypeNames(statements, sink);
 
@@ -143,6 +145,20 @@ public sealed class ImportCollector(
         if (runtimeHelpers.Count > 0)
         {
             imports.Add(new TsImport(runtimeHelpers.OrderBy(n => n).ToArray(), "metano-runtime"));
+        }
+
+        // LINQ pipe helpers from TsLinqCall — `linq` itself + every
+        // operator factory the chain uses. Live in the dedicated
+        // subpath so bundlers tree-shake unused operators across the
+        // whole runtime, not just the top-level `metano-runtime` entry.
+        if (linqPipeHelpers.Count > 0)
+        {
+            imports.Add(
+                new TsImport(
+                    linqPipeHelpers.OrderBy(n => n).ToArray(),
+                    "metano-runtime/system/linq-pipe"
+                )
+            );
         }
 
         // Track what we've already imported to avoid duplicates downstream.
@@ -945,6 +961,16 @@ public sealed class ImportCollector(
                 foreach (var arg in newExpr.Arguments)
                     CollectFromExpression(arg, sink);
                 break;
+            case TsLinqCall linq:
+                // Tree-shakeable LINQ pipe helpers — register every
+                // helper the chain uses. The dedicated `linqPipeHelpers`
+                // bucket emits a single named-import line from
+                // `metano-runtime/system/linq-pipe`.
+                foreach (var helper in linq.Helpers)
+                    sink.LinqPipeHelpers.Add(helper);
+                foreach (var arg in linq.Args)
+                    CollectFromExpression(arg, sink);
+                break;
             case TsCallExpression call:
                 // Function calls may reference guard functions (e.g., isCurrency)
                 if (call.Callee is TsIdentifier callId)
@@ -1120,5 +1146,6 @@ internal sealed record ImportCollectionSink(
     HashSet<string> ValueNames,
     HashSet<string> RuntimeHelpers,
     Dictionary<string, TsTypeOrigin> CrossPackageOrigins,
-    List<IrExternalImport> TemplateExternals
+    List<IrExternalImport> TemplateExternals,
+    HashSet<string> LinqPipeHelpers
 );

@@ -37,6 +37,8 @@ export type OperatorKind =
   | "reverse"
   | "orderBy"
   | "orderByDescending"
+  | "thenBy"
+  | "thenByDescending"
   | "zip";
 
 export type TerminalKind =
@@ -48,12 +50,15 @@ export type TerminalKind =
   | "last"
   | "lastOrDefault"
   | "single"
+  | "singleOrDefault"
   | "any"
   | "all"
   | "count"
   | "sum"
   | "min"
   | "max"
+  | "minBy"
+  | "maxBy"
   | "average"
   | "contains"
   | "aggregate";
@@ -155,6 +160,18 @@ export interface OrderByDescendingOp<T, K> extends OperatorBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
+export interface ThenByOp<T, K> extends OperatorBase<T, T> {
+  readonly kind: "thenBy";
+  readonly keySelector: (item: T) => K;
+  readonly queryable?: QueryableMeta;
+}
+
+export interface ThenByDescendingOp<T, K> extends OperatorBase<T, T> {
+  readonly kind: "thenByDescending";
+  readonly keySelector: (item: T) => K;
+  readonly queryable?: QueryableMeta;
+}
+
 export interface ZipOp<T, U, R> extends OperatorBase<T, R> {
   readonly kind: "zip";
   readonly other: Iterable<U>;
@@ -179,6 +196,8 @@ export type AnyOperator =
   | ReverseOp<unknown>
   | OrderByOp<unknown, unknown>
   | OrderByDescendingOp<unknown, unknown>
+  | ThenByOp<unknown, unknown>
+  | ThenByDescendingOp<unknown, unknown>
   | ZipOp<unknown, unknown, unknown>;
 
 /**
@@ -239,6 +258,13 @@ export interface SingleTerm<T> extends TerminalBase<T, T> {
   readonly queryable?: QueryableMeta;
 }
 
+export interface SingleOrDefaultTerm<T> extends TerminalBase<T, T | null> {
+  readonly kind: "singleOrDefault";
+  readonly predicate?: (item: T) => boolean;
+  readonly defaultValue: T | null;
+  readonly queryable?: QueryableMeta;
+}
+
 export interface AnyTerm<T> extends TerminalBase<T, boolean> {
   readonly kind: "any";
   readonly predicate?: (item: T) => boolean;
@@ -275,6 +301,18 @@ export interface MaxTerm<T> extends TerminalBase<T, number> {
   readonly queryable?: QueryableMeta;
 }
 
+export interface MinByTerm<T, K> extends TerminalBase<T, T> {
+  readonly kind: "minBy";
+  readonly keySelector: (item: T) => K;
+  readonly queryable?: QueryableMeta;
+}
+
+export interface MaxByTerm<T, K> extends TerminalBase<T, T> {
+  readonly kind: "maxBy";
+  readonly keySelector: (item: T) => K;
+  readonly queryable?: QueryableMeta;
+}
+
 export interface AverageTerm<T> extends TerminalBase<T, number> {
   readonly kind: "average";
   readonly selector?: (item: T) => number;
@@ -302,12 +340,15 @@ export type AnyTerminal =
   | LastTerm<unknown>
   | LastOrDefaultTerm<unknown>
   | SingleTerm<unknown>
+  | SingleOrDefaultTerm<unknown>
   | AnyTerm<unknown>
   | AllTerm<unknown>
   | CountTerm<unknown>
   | SumTerm<unknown>
   | MinTerm<unknown>
   | MaxTerm<unknown>
+  | MinByTerm<unknown, unknown>
+  | MaxByTerm<unknown, unknown>
   | AverageTerm<unknown>
   | ContainsTerm<unknown>
   | AggregateTerm<unknown, unknown>;

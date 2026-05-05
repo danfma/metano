@@ -21,8 +21,11 @@ import type {
   FirstTerm,
   LastOrDefaultTerm,
   LastTerm,
+  MaxByTerm,
   MaxTerm,
+  MinByTerm,
   MinTerm,
+  SingleOrDefaultTerm,
   SingleTerm,
   SumTerm,
   ToArrayTerm,
@@ -64,7 +67,10 @@ export function toSet<T>(): ToSetTerm<T> {
   };
 }
 
-export function first<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): FirstTerm<T> {
+export function first<T>(
+  predicate?: (item: T) => boolean,
+  queryable?: QueryableMeta,
+): FirstTerm<T> {
   return {
     kind: "first",
     predicate,
@@ -130,7 +136,33 @@ export function lastOrDefault<T>(
   };
 }
 
-export function single<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): SingleTerm<T> {
+export function singleOrDefault<T>(
+  predicate?: (item: T) => boolean,
+  defaultValue: T | null = null,
+  queryable?: QueryableMeta,
+): SingleOrDefaultTerm<T> {
+  return {
+    kind: "singleOrDefault",
+    predicate,
+    defaultValue,
+    queryable,
+    apply: (source) => {
+      let result: T | null = defaultValue;
+      let count = 0;
+      for (const item of source)
+        if (!predicate || predicate(item)) {
+          result = item;
+          if (++count > 1) throw new Error("Sequence contains more than one matching element");
+        }
+      return result;
+    },
+  };
+}
+
+export function single<T>(
+  predicate?: (item: T) => boolean,
+  queryable?: QueryableMeta,
+): SingleTerm<T> {
   return {
     kind: "single",
     predicate,
@@ -173,7 +205,10 @@ export function all<T>(predicate: (item: T) => boolean, queryable?: QueryableMet
   };
 }
 
-export function count<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): CountTerm<T> {
+export function count<T>(
+  predicate?: (item: T) => boolean,
+  queryable?: QueryableMeta,
+): CountTerm<T> {
   return {
     kind: "count",
     predicate,
@@ -231,7 +266,62 @@ export function max<T>(selector?: (item: T) => number, queryable?: QueryableMeta
   };
 }
 
-export function average<T>(selector?: (item: T) => number, queryable?: QueryableMeta): AverageTerm<T> {
+export function minBy<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): MinByTerm<T, K> {
+  return {
+    kind: "minBy",
+    keySelector,
+    queryable,
+    apply: (source) => {
+      let result: T | undefined;
+      let minKey: K | undefined;
+      let found = false;
+      for (const item of source) {
+        const key = keySelector(item);
+        if (!found || (key as unknown as number) < (minKey as unknown as number)) {
+          result = item;
+          minKey = key;
+          found = true;
+        }
+      }
+      if (!found) throw new Error("Sequence contains no elements");
+      return result!;
+    },
+  };
+}
+
+export function maxBy<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): MaxByTerm<T, K> {
+  return {
+    kind: "maxBy",
+    keySelector,
+    queryable,
+    apply: (source) => {
+      let result: T | undefined;
+      let maxKey: K | undefined;
+      let found = false;
+      for (const item of source) {
+        const key = keySelector(item);
+        if (!found || (key as unknown as number) > (maxKey as unknown as number)) {
+          result = item;
+          maxKey = key;
+          found = true;
+        }
+      }
+      if (!found) throw new Error("Sequence contains no elements");
+      return result!;
+    },
+  };
+}
+
+export function average<T>(
+  selector?: (item: T) => number,
+  queryable?: QueryableMeta,
+): AverageTerm<T> {
   return {
     kind: "average",
     selector,

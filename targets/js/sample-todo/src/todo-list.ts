@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Enumerable, isString } from "metano-runtime";
+import { isString } from "metano-runtime";
+import { any, count, firstOrDefault, linq } from "metano-runtime/system/linq-pipe";
 import type { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 
@@ -17,7 +18,10 @@ export class TodoList {
   }
 
   get pendingCount(): number {
-    return Enumerable.from(this._items).count((i: TodoItem) => !i.completed);
+    return linq(
+      this._items,
+      count((i: TodoItem) => !i.completed),
+    );
   }
 
   private addTitlePriority(title: string, priority: Priority): void {
@@ -62,10 +66,16 @@ export class TodoList {
   }
 
   findByTitle(title: string): TodoItem | null {
-    return Enumerable.from(this._items).firstOrDefault((i: TodoItem) => i.title === title);
+    return linq(
+      this._items,
+      firstOrDefault((i: TodoItem) => i.title === title),
+    );
   }
 
   hasPending(): boolean {
-    return Enumerable.from(this._items).any((i: TodoItem) => !i.completed);
+    return linq(
+      this._items,
+      any((i: TodoItem) => !i.completed),
+    );
   }
 }

@@ -56,8 +56,11 @@ public class ForEachTranspileTests
 
         var output = result["filter.ts"];
         await Assert.That(output).Contains("for (const x of");
-        await Assert.That(output).Contains(".where(");
-        await Assert.That(output).Contains(".select(");
+        // After #20 the LINQ chain lowers to the pipe form: a single
+        // `linq(source, where(...), select(...))` call instead of a
+        // fluent `.where().select()` chain on `Enumerable.from(...)`.
+        await Assert.That(output).Contains("linq(source, where(");
+        await Assert.That(output).Contains("select(");
     }
 
     [Test]
