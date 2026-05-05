@@ -9,7 +9,7 @@
  * Short-circuit terminals (`first`, `any`, `contains`) stop iterating
  * as soon as the answer is known.
  */
-import type { ExprTree } from "./expr-tree.ts";
+import type { QueryableMeta } from "./expr-tree.ts";
 import type {
   AggregateTerm,
   AllTerm,
@@ -40,15 +40,15 @@ export function toArray<T>(): ToArrayTerm<T> {
 export function toMap<T, K, V>(
   keySelector: (item: T) => K,
   valueSelector: (item: T) => V,
-  keyExpression?: ExprTree,
-  valueExpression?: ExprTree,
+  keyQueryable?: QueryableMeta,
+  valueQueryable?: QueryableMeta,
 ): ToMapTerm<T, K, V> {
   return {
     kind: "toMap",
     keySelector,
     valueSelector,
-    keyExpression,
-    valueExpression,
+    keyQueryable,
+    valueQueryable,
     apply: (source) => {
       const m = new Map<K, V>();
       for (const item of source) m.set(keySelector(item), valueSelector(item));
@@ -64,11 +64,11 @@ export function toSet<T>(): ToSetTerm<T> {
   };
 }
 
-export function first<T>(predicate?: (item: T) => boolean, expression?: ExprTree): FirstTerm<T> {
+export function first<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): FirstTerm<T> {
   return {
     kind: "first",
     predicate,
-    expression,
+    queryable,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return item;
       throw new Error("Sequence contains no matching element");
@@ -79,13 +79,13 @@ export function first<T>(predicate?: (item: T) => boolean, expression?: ExprTree
 export function firstOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue: T | null = null,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): FirstOrDefaultTerm<T> {
   return {
     kind: "firstOrDefault",
     predicate,
     defaultValue,
-    expression,
+    queryable,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return item;
       return defaultValue;
@@ -93,11 +93,11 @@ export function firstOrDefault<T>(
   };
 }
 
-export function last<T>(predicate?: (item: T) => boolean, expression?: ExprTree): LastTerm<T> {
+export function last<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): LastTerm<T> {
   return {
     kind: "last",
     predicate,
-    expression,
+    queryable,
     apply: (source) => {
       let result: T | undefined;
       let found = false;
@@ -115,13 +115,13 @@ export function last<T>(predicate?: (item: T) => boolean, expression?: ExprTree)
 export function lastOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue: T | null = null,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): LastOrDefaultTerm<T> {
   return {
     kind: "lastOrDefault",
     predicate,
     defaultValue,
-    expression,
+    queryable,
     apply: (source) => {
       let result: T | null = defaultValue;
       for (const item of source) if (!predicate || predicate(item)) result = item;
@@ -130,11 +130,11 @@ export function lastOrDefault<T>(
   };
 }
 
-export function single<T>(predicate?: (item: T) => boolean, expression?: ExprTree): SingleTerm<T> {
+export function single<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): SingleTerm<T> {
   return {
     kind: "single",
     predicate,
-    expression,
+    queryable,
     apply: (source) => {
       let result: T | undefined;
       let count = 0;
@@ -149,11 +149,11 @@ export function single<T>(predicate?: (item: T) => boolean, expression?: ExprTre
   };
 }
 
-export function any<T>(predicate?: (item: T) => boolean, expression?: ExprTree): AnyTerm<T> {
+export function any<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): AnyTerm<T> {
   return {
     kind: "any",
     predicate,
-    expression,
+    queryable,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return true;
       return false;
@@ -161,11 +161,11 @@ export function any<T>(predicate?: (item: T) => boolean, expression?: ExprTree):
   };
 }
 
-export function all<T>(predicate: (item: T) => boolean, expression?: ExprTree): AllTerm<T> {
+export function all<T>(predicate: (item: T) => boolean, queryable?: QueryableMeta): AllTerm<T> {
   return {
     kind: "all",
     predicate,
-    expression,
+    queryable,
     apply: (source) => {
       for (const item of source) if (!predicate(item)) return false;
       return true;
@@ -173,11 +173,11 @@ export function all<T>(predicate: (item: T) => boolean, expression?: ExprTree): 
   };
 }
 
-export function count<T>(predicate?: (item: T) => boolean, expression?: ExprTree): CountTerm<T> {
+export function count<T>(predicate?: (item: T) => boolean, queryable?: QueryableMeta): CountTerm<T> {
   return {
     kind: "count",
     predicate,
-    expression,
+    queryable,
     apply: (source) => {
       let n = 0;
       for (const item of source) if (!predicate || predicate(item)) n++;
@@ -186,11 +186,11 @@ export function count<T>(predicate?: (item: T) => boolean, expression?: ExprTree
   };
 }
 
-export function sum<T>(selector?: (item: T) => number, expression?: ExprTree): SumTerm<T> {
+export function sum<T>(selector?: (item: T) => number, queryable?: QueryableMeta): SumTerm<T> {
   return {
     kind: "sum",
     selector,
-    expression,
+    queryable,
     apply: (source) => {
       let total = 0;
       for (const item of source) total += selector ? selector(item) : (item as unknown as number);
@@ -199,11 +199,11 @@ export function sum<T>(selector?: (item: T) => number, expression?: ExprTree): S
   };
 }
 
-export function min<T>(selector?: (item: T) => number, expression?: ExprTree): MinTerm<T> {
+export function min<T>(selector?: (item: T) => number, queryable?: QueryableMeta): MinTerm<T> {
   return {
     kind: "min",
     selector,
-    expression,
+    queryable,
     apply: (source) => {
       let result = Number.POSITIVE_INFINITY;
       for (const item of source) {
@@ -215,11 +215,11 @@ export function min<T>(selector?: (item: T) => number, expression?: ExprTree): M
   };
 }
 
-export function max<T>(selector?: (item: T) => number, expression?: ExprTree): MaxTerm<T> {
+export function max<T>(selector?: (item: T) => number, queryable?: QueryableMeta): MaxTerm<T> {
   return {
     kind: "max",
     selector,
-    expression,
+    queryable,
     apply: (source) => {
       let result = Number.NEGATIVE_INFINITY;
       for (const item of source) {
@@ -231,11 +231,11 @@ export function max<T>(selector?: (item: T) => number, expression?: ExprTree): M
   };
 }
 
-export function average<T>(selector?: (item: T) => number, expression?: ExprTree): AverageTerm<T> {
+export function average<T>(selector?: (item: T) => number, queryable?: QueryableMeta): AverageTerm<T> {
   return {
     kind: "average",
     selector,
-    expression,
+    queryable,
     apply: (source) => {
       let total = 0;
       let n = 0;

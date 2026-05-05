@@ -207,43 +207,68 @@ describe("linq-pipe operators", () => {
     expect([...sorted]).toEqual([0, 1, 2, 3]);
   });
 
-  test("descriptor carries optional expression tree for IQueryable providers", () => {
-    // The compiler populates `expression` when the call site uses an
-    // opt-in [Queryable] surface. Hand-author the tree here to pin the
-    // shape consumers will see.
+  test("descriptor carries optional queryable meta (tree + captures)", () => {
+    // The compiler populates `queryable` when the call site uses an
+    // opt-in IQueryable surface. Hand-author here to pin the shape
+    // consumers will see.
     const w = where<{ age: number }>(
       (u) => u.age > 18,
       {
-        kind: "binary",
-        op: ">",
-        left: {
-          kind: "member",
-          target: { kind: "param", name: "u", type: "User" },
-          member: "age",
+        tree: {
+          kind: "binary",
+          op: ">",
+          left: {
+            kind: "member",
+            target: { kind: "param", name: "u", type: "User" },
+            member: "age",
+          },
+          right: { kind: "literal", value: 18, type: "number" },
         },
-        right: { kind: "literal", value: 18, type: "int" },
       },
     );
 
-    expect(w.expression).toBeDefined();
-    expect(w.expression!.kind).toBe("binary");
-    if (w.expression?.kind === "binary") {
-      expect(w.expression.op).toBe(">");
-      expect(w.expression.left.kind).toBe("member");
-      expect(w.expression.right.kind).toBe("literal");
+    expect(w.queryable).toBeDefined();
+    expect(w.queryable!.tree.kind).toBe("binary");
+    if (w.queryable?.tree.kind === "binary") {
+      expect(w.queryable.tree.op).toBe(">");
+      expect(w.queryable.tree.left.kind).toBe("member");
+      expect(w.queryable.tree.right.kind).toBe("literal");
     }
 
-    // Runtime path still works through the closure when no provider
-    // intercepts.
+    // Runtime path still works through the closure when no provider intercepts.
     expect(w.predicate({ age: 20 }, 0)).toBe(true);
     expect(w.predicate({ age: 5 }, 0)).toBe(false);
   });
 
-  test("expression slot is absent for plain LINQ-to-Objects calls", () => {
-    // No second argument → no `expression` field. Runtime ignores it and
-    // walks the closure directly.
+  test("queryable meta carries closure captures for runtime resolution", () => {
+    const minAge = 18;
+    const w = where<{ age: number }>(
+      (u) => u.age > minAge,
+      {
+        tree: {
+          kind: "binary",
+          op: ">",
+          left: {
+            kind: "member",
+            target: { kind: "param", name: "u" },
+            member: "age",
+          },
+          right: { kind: "capture", name: "minAge", type: "number" },
+        },
+        captures: { minAge },
+      },
+    );
+
+    expect(w.queryable!.captures).toBeDefined();
+    expect(w.queryable!.captures!.minAge).toBe(18);
+    // Closure path keeps working — provider that ignores the tree falls
+    // back to running the predicate directly.
+    expect(w.predicate({ age: 30 }, 0)).toBe(true);
+  });
+
+  test("queryable slot is absent for plain LINQ-to-Objects calls", () => {
     const w = where<number>((x) => x > 0);
-    expect(w.expression).toBeUndefined();
+    expect(w.queryable).toBeUndefined();
   });
 
   test("descriptor introspection — IQueryable provider can read kind + lambdas", () => {

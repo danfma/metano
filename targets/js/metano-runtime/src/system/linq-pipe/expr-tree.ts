@@ -47,6 +47,20 @@ export interface ExprParam {
   readonly type?: string;
 }
 
+/**
+ * Reference to a closure-captured local — `(u) => u.age > minAge`
+ * captures `minAge` from the outer scope. Provider reads `name` and
+ * looks the runtime value up via the descriptor's separate `captures`
+ * record (avoids burning the value into the tree, lets the same tree
+ * re-bind to different capture environments).
+ */
+export interface ExprCapture {
+  readonly kind: "capture";
+  readonly name: string;
+  /** C# / TS type emitted by the compiler when known. */
+  readonly type?: string;
+}
+
 /** Constant value: literal, captured const, default. */
 export interface ExprLiteral {
   readonly kind: "literal";
@@ -111,6 +125,7 @@ export interface ExprNew {
 /** Discriminated union of every supported node. */
 export type ExprTree =
   | ExprParam
+  | ExprCapture
   | ExprLiteral
   | ExprMember
   | ExprCall
@@ -119,3 +134,14 @@ export type ExprTree =
   | ExprConditional
   | ExprLambda
   | ExprNew;
+
+/**
+ * Bundle threaded by the compiler when an opt-in queryable surface is
+ * detected (`IQueryable<T>` receiver or `[Queryable]` attribute).
+ * Carries the lambda's expression tree plus any closure captures the
+ * provider needs to evaluate at translation time.
+ */
+export interface QueryableMeta {
+  readonly tree: ExprTree;
+  readonly captures?: Readonly<Record<string, unknown>>;
+}
