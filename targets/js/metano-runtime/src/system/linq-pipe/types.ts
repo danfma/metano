@@ -1,3 +1,5 @@
+import type { ExprTree } from "./expr-tree.ts";
+
 /**
  * Descriptor-based LINQ runtime — prototype for #20.
  *
@@ -60,6 +62,12 @@ export type TerminalKind =
  * Common shape every composition operator shares: a discriminator (`kind`)
  * + a runtime walker (`apply`). Concrete descriptors extend this with the
  * operator's typed parameters so providers can read them without casting.
+ *
+ * Operators that accept a lambda also carry an optional `expression`
+ * field. Populated by the compiler when the call site uses an opt-in
+ * IQueryable surface (`[Queryable]` attribute on the C# side, or a
+ * BCL `Expression<Func<…>>` parameter type). Absent for plain LINQ-to-
+ * Objects calls — providers fall back to running the closure.
  */
 export interface OperatorBase<T, R> {
   readonly kind: OperatorKind;
@@ -69,16 +77,19 @@ export interface OperatorBase<T, R> {
 export interface WhereOp<T> extends OperatorBase<T, T> {
   readonly kind: "where";
   readonly predicate: (item: T, index: number) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface SelectOp<T, R> extends OperatorBase<T, R> {
   readonly kind: "select";
   readonly selector: (item: T, index: number) => R;
+  readonly expression?: ExprTree;
 }
 
 export interface SelectManyOp<T, R> extends OperatorBase<T, R> {
   readonly kind: "selectMany";
   readonly selector: (item: T, index: number) => Iterable<R>;
+  readonly expression?: ExprTree;
 }
 
 export interface TakeOp<T> extends OperatorBase<T, T> {
@@ -94,11 +105,13 @@ export interface SkipOp<T> extends OperatorBase<T, T> {
 export interface TakeWhileOp<T> extends OperatorBase<T, T> {
   readonly kind: "takeWhile";
   readonly predicate: (item: T, index: number) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface SkipWhileOp<T> extends OperatorBase<T, T> {
   readonly kind: "skipWhile";
   readonly predicate: (item: T, index: number) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface DistinctOp<T> extends OperatorBase<T, T> {
@@ -108,6 +121,7 @@ export interface DistinctOp<T> extends OperatorBase<T, T> {
 export interface DistinctByOp<T, K> extends OperatorBase<T, T> {
   readonly kind: "distinctBy";
   readonly keySelector: (item: T) => K;
+  readonly expression?: ExprTree;
 }
 
 export interface ConcatOp<T> extends OperatorBase<T, T> {
@@ -132,17 +146,20 @@ export interface ReverseOp<T> extends OperatorBase<T, T> {
 export interface OrderByOp<T, K> extends OperatorBase<T, T> {
   readonly kind: "orderBy";
   readonly keySelector: (item: T) => K;
+  readonly expression?: ExprTree;
 }
 
 export interface OrderByDescendingOp<T, K> extends OperatorBase<T, T> {
   readonly kind: "orderByDescending";
   readonly keySelector: (item: T) => K;
+  readonly expression?: ExprTree;
 }
 
 export interface ZipOp<T, U, R> extends OperatorBase<T, R> {
   readonly kind: "zip";
   readonly other: Iterable<U>;
   readonly resultSelector: (first: T, second: U) => R;
+  readonly expression?: ExprTree;
 }
 
 /** Discriminated union of every composition operator. */
@@ -182,6 +199,8 @@ export interface ToMapTerm<T, K, V> extends TerminalBase<T, Map<K, V>> {
   readonly kind: "toMap";
   readonly keySelector: (item: T) => K;
   readonly valueSelector: (item: T) => V;
+  readonly keyExpression?: ExprTree;
+  readonly valueExpression?: ExprTree;
 }
 
 export interface ToSetTerm<T> extends TerminalBase<T, Set<T>> {
@@ -191,63 +210,75 @@ export interface ToSetTerm<T> extends TerminalBase<T, Set<T>> {
 export interface FirstTerm<T> extends TerminalBase<T, T> {
   readonly kind: "first";
   readonly predicate?: (item: T) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface FirstOrDefaultTerm<T> extends TerminalBase<T, T | null> {
   readonly kind: "firstOrDefault";
   readonly predicate?: (item: T) => boolean;
   readonly defaultValue: T | null;
+  readonly expression?: ExprTree;
 }
 
 export interface LastTerm<T> extends TerminalBase<T, T> {
   readonly kind: "last";
   readonly predicate?: (item: T) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface LastOrDefaultTerm<T> extends TerminalBase<T, T | null> {
   readonly kind: "lastOrDefault";
   readonly predicate?: (item: T) => boolean;
   readonly defaultValue: T | null;
+  readonly expression?: ExprTree;
 }
 
 export interface SingleTerm<T> extends TerminalBase<T, T> {
   readonly kind: "single";
   readonly predicate?: (item: T) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface AnyTerm<T> extends TerminalBase<T, boolean> {
   readonly kind: "any";
   readonly predicate?: (item: T) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface AllTerm<T> extends TerminalBase<T, boolean> {
   readonly kind: "all";
   readonly predicate: (item: T) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface CountTerm<T> extends TerminalBase<T, number> {
   readonly kind: "count";
   readonly predicate?: (item: T) => boolean;
+  readonly expression?: ExprTree;
 }
 
 export interface SumTerm<T> extends TerminalBase<T, number> {
   readonly kind: "sum";
   readonly selector?: (item: T) => number;
+  readonly expression?: ExprTree;
 }
 
 export interface MinTerm<T> extends TerminalBase<T, number> {
   readonly kind: "min";
   readonly selector?: (item: T) => number;
+  readonly expression?: ExprTree;
 }
 
 export interface MaxTerm<T> extends TerminalBase<T, number> {
   readonly kind: "max";
   readonly selector?: (item: T) => number;
+  readonly expression?: ExprTree;
 }
 
 export interface AverageTerm<T> extends TerminalBase<T, number> {
   readonly kind: "average";
   readonly selector?: (item: T) => number;
+  readonly expression?: ExprTree;
 }
 
 export interface ContainsTerm<T> extends TerminalBase<T, boolean> {

@@ -16,12 +16,7 @@
  * route to SQL / GraphQL / other query backends without touching the
  * runtime call site.
  */
-import type {
-  AnyOperator,
-  AnyTerminal,
-  OperatorBase,
-  TerminalBase,
-} from "./types.ts";
+import type { AnyOperator, AnyTerminal, OperatorBase, TerminalBase } from "./types.ts";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function linq<T>(source: Iterable<T>): Iterable<T>;

@@ -12,6 +12,7 @@
  * Short-circuit terminals (`first`, `take(n)`) stop iterating as soon
  * as their result is determined.
  */
+import type { ExprTree } from "./expr-tree.ts";
 import type {
   AppendOp,
   ConcatOp,
@@ -31,10 +32,14 @@ import type {
   ZipOp,
 } from "./types.ts";
 
-export function where<T>(predicate: (item: T, index: number) => boolean): WhereOp<T> {
+export function where<T>(
+  predicate: (item: T, index: number) => boolean,
+  expression?: ExprTree,
+): WhereOp<T> {
   return {
     kind: "where",
     predicate,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -44,10 +49,14 @@ export function where<T>(predicate: (item: T, index: number) => boolean): WhereO
   };
 }
 
-export function select<T, R>(selector: (item: T, index: number) => R): SelectOp<T, R> {
+export function select<T, R>(
+  selector: (item: T, index: number) => R,
+  expression?: ExprTree,
+): SelectOp<T, R> {
   return {
     kind: "select",
     selector,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -59,10 +68,12 @@ export function select<T, R>(selector: (item: T, index: number) => R): SelectOp<
 
 export function selectMany<T, R>(
   selector: (item: T, index: number) => Iterable<R>,
+  expression?: ExprTree,
 ): SelectManyOp<T, R> {
   return {
     kind: "selectMany",
     selector,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -107,10 +118,12 @@ export function skip<T>(count: number): SkipOp<T> {
 
 export function takeWhile<T>(
   predicate: (item: T, index: number) => boolean,
+  expression?: ExprTree,
 ): TakeWhileOp<T> {
   return {
     kind: "takeWhile",
     predicate,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -125,10 +138,12 @@ export function takeWhile<T>(
 
 export function skipWhile<T>(
   predicate: (item: T, index: number) => boolean,
+  expression?: ExprTree,
 ): SkipWhileOp<T> {
   return {
     kind: "skipWhile",
     predicate,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -159,10 +174,14 @@ export function distinct<T>(): DistinctOp<T> {
   };
 }
 
-export function distinctBy<T, K>(keySelector: (item: T) => K): DistinctByOp<T, K> {
+export function distinctBy<T, K>(
+  keySelector: (item: T) => K,
+  expression?: ExprTree,
+): DistinctByOp<T, K> {
   return {
     kind: "distinctBy",
     keySelector,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const seen = new Set<K>();
@@ -229,10 +248,14 @@ export function reverse<T>(): ReverseOp<T> {
   };
 }
 
-export function orderBy<T, K>(keySelector: (item: T) => K): OrderByOp<T, K> {
+export function orderBy<T, K>(
+  keySelector: (item: T) => K,
+  expression?: ExprTree,
+): OrderByOp<T, K> {
   return {
     kind: "orderBy",
     keySelector,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const buffer = [...source];
@@ -249,10 +272,12 @@ export function orderBy<T, K>(keySelector: (item: T) => K): OrderByOp<T, K> {
 
 export function orderByDescending<T, K>(
   keySelector: (item: T) => K,
+  expression?: ExprTree,
 ): OrderByDescendingOp<T, K> {
   return {
     kind: "orderByDescending",
     keySelector,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const buffer = [...source];
@@ -270,11 +295,13 @@ export function orderByDescending<T, K>(
 export function zip<T, U, R>(
   other: Iterable<U>,
   resultSelector: (first: T, second: U) => R,
+  expression?: ExprTree,
 ): ZipOp<T, U, R> {
   return {
     kind: "zip",
     other,
     resultSelector,
+    expression,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const itA = source[Symbol.iterator]();

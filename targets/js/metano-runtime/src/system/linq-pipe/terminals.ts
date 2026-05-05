@@ -9,6 +9,7 @@
  * Short-circuit terminals (`first`, `any`, `contains`) stop iterating
  * as soon as the answer is known.
  */
+import type { ExprTree } from "./expr-tree.ts";
 import type {
   AggregateTerm,
   AllTerm,
@@ -39,11 +40,15 @@ export function toArray<T>(): ToArrayTerm<T> {
 export function toMap<T, K, V>(
   keySelector: (item: T) => K,
   valueSelector: (item: T) => V,
+  keyExpression?: ExprTree,
+  valueExpression?: ExprTree,
 ): ToMapTerm<T, K, V> {
   return {
     kind: "toMap",
     keySelector,
     valueSelector,
+    keyExpression,
+    valueExpression,
     apply: (source) => {
       const m = new Map<K, V>();
       for (const item of source) m.set(keySelector(item), valueSelector(item));
@@ -59,10 +64,14 @@ export function toSet<T>(): ToSetTerm<T> {
   };
 }
 
-export function first<T>(predicate?: (item: T) => boolean): FirstTerm<T> {
+export function first<T>(
+  predicate?: (item: T) => boolean,
+  expression?: ExprTree,
+): FirstTerm<T> {
   return {
     kind: "first",
     predicate,
+    expression,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return item;
       throw new Error("Sequence contains no matching element");
@@ -73,11 +82,13 @@ export function first<T>(predicate?: (item: T) => boolean): FirstTerm<T> {
 export function firstOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue: T | null = null,
+  expression?: ExprTree,
 ): FirstOrDefaultTerm<T> {
   return {
     kind: "firstOrDefault",
     predicate,
     defaultValue,
+    expression,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return item;
       return defaultValue;
@@ -85,10 +96,14 @@ export function firstOrDefault<T>(
   };
 }
 
-export function last<T>(predicate?: (item: T) => boolean): LastTerm<T> {
+export function last<T>(
+  predicate?: (item: T) => boolean,
+  expression?: ExprTree,
+): LastTerm<T> {
   return {
     kind: "last",
     predicate,
+    expression,
     apply: (source) => {
       let result: T | undefined;
       let found = false;
@@ -106,11 +121,13 @@ export function last<T>(predicate?: (item: T) => boolean): LastTerm<T> {
 export function lastOrDefault<T>(
   predicate?: (item: T) => boolean,
   defaultValue: T | null = null,
+  expression?: ExprTree,
 ): LastOrDefaultTerm<T> {
   return {
     kind: "lastOrDefault",
     predicate,
     defaultValue,
+    expression,
     apply: (source) => {
       let result: T | null = defaultValue;
       for (const item of source) if (!predicate || predicate(item)) result = item;
@@ -119,10 +136,14 @@ export function lastOrDefault<T>(
   };
 }
 
-export function single<T>(predicate?: (item: T) => boolean): SingleTerm<T> {
+export function single<T>(
+  predicate?: (item: T) => boolean,
+  expression?: ExprTree,
+): SingleTerm<T> {
   return {
     kind: "single",
     predicate,
+    expression,
     apply: (source) => {
       let result: T | undefined;
       let count = 0;
@@ -137,10 +158,14 @@ export function single<T>(predicate?: (item: T) => boolean): SingleTerm<T> {
   };
 }
 
-export function any<T>(predicate?: (item: T) => boolean): AnyTerm<T> {
+export function any<T>(
+  predicate?: (item: T) => boolean,
+  expression?: ExprTree,
+): AnyTerm<T> {
   return {
     kind: "any",
     predicate,
+    expression,
     apply: (source) => {
       for (const item of source) if (!predicate || predicate(item)) return true;
       return false;
@@ -148,10 +173,14 @@ export function any<T>(predicate?: (item: T) => boolean): AnyTerm<T> {
   };
 }
 
-export function all<T>(predicate: (item: T) => boolean): AllTerm<T> {
+export function all<T>(
+  predicate: (item: T) => boolean,
+  expression?: ExprTree,
+): AllTerm<T> {
   return {
     kind: "all",
     predicate,
+    expression,
     apply: (source) => {
       for (const item of source) if (!predicate(item)) return false;
       return true;
@@ -159,10 +188,14 @@ export function all<T>(predicate: (item: T) => boolean): AllTerm<T> {
   };
 }
 
-export function count<T>(predicate?: (item: T) => boolean): CountTerm<T> {
+export function count<T>(
+  predicate?: (item: T) => boolean,
+  expression?: ExprTree,
+): CountTerm<T> {
   return {
     kind: "count",
     predicate,
+    expression,
     apply: (source) => {
       let n = 0;
       for (const item of source) if (!predicate || predicate(item)) n++;
@@ -171,10 +204,14 @@ export function count<T>(predicate?: (item: T) => boolean): CountTerm<T> {
   };
 }
 
-export function sum<T>(selector?: (item: T) => number): SumTerm<T> {
+export function sum<T>(
+  selector?: (item: T) => number,
+  expression?: ExprTree,
+): SumTerm<T> {
   return {
     kind: "sum",
     selector,
+    expression,
     apply: (source) => {
       let total = 0;
       for (const item of source) total += selector ? selector(item) : (item as unknown as number);
@@ -183,10 +220,14 @@ export function sum<T>(selector?: (item: T) => number): SumTerm<T> {
   };
 }
 
-export function min<T>(selector?: (item: T) => number): MinTerm<T> {
+export function min<T>(
+  selector?: (item: T) => number,
+  expression?: ExprTree,
+): MinTerm<T> {
   return {
     kind: "min",
     selector,
+    expression,
     apply: (source) => {
       let result = Number.POSITIVE_INFINITY;
       for (const item of source) {
@@ -198,10 +239,14 @@ export function min<T>(selector?: (item: T) => number): MinTerm<T> {
   };
 }
 
-export function max<T>(selector?: (item: T) => number): MaxTerm<T> {
+export function max<T>(
+  selector?: (item: T) => number,
+  expression?: ExprTree,
+): MaxTerm<T> {
   return {
     kind: "max",
     selector,
+    expression,
     apply: (source) => {
       let result = Number.NEGATIVE_INFINITY;
       for (const item of source) {
@@ -213,10 +258,14 @@ export function max<T>(selector?: (item: T) => number): MaxTerm<T> {
   };
 }
 
-export function average<T>(selector?: (item: T) => number): AverageTerm<T> {
+export function average<T>(
+  selector?: (item: T) => number,
+  expression?: ExprTree,
+): AverageTerm<T> {
   return {
     kind: "average",
     selector,
+    expression,
     apply: (source) => {
       let total = 0;
       let n = 0;
@@ -241,10 +290,7 @@ export function contains<T>(value: T): ContainsTerm<T> {
   };
 }
 
-export function aggregate<T, A>(
-  seed: A,
-  accumulator: (acc: A, item: T) => A,
-): AggregateTerm<T, A> {
+export function aggregate<T, A>(seed: A, accumulator: (acc: A, item: T) => A): AggregateTerm<T, A> {
   return {
     kind: "aggregate",
     seed,
