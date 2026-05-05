@@ -19,6 +19,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./system/json": "./dist/system/json/index.js",
+    "./system/linq-pipe": "./dist/system/linq-pipe/index.js",
     "./*": "./dist/*"
   },
   "imports": {
