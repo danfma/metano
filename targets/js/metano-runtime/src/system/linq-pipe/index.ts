@@ -24,6 +24,21 @@ export { linq, stages } from "./linq.ts";
 export type { Stage } from "./linq.ts";
 
 export type {
+  BinaryOp,
+  ExprBinary,
+  ExprCall,
+  ExprConditional,
+  ExprLambda,
+  ExprLiteral,
+  ExprMember,
+  ExprNew,
+  ExprParam,
+  ExprTree,
+  ExprUnary,
+  UnaryOp,
+} from "./expr-tree.ts";
+
+export type {
   AnyOperator,
   AnyTerminal,
   OperatorBase,

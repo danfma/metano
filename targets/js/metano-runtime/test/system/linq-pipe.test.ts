@@ -207,6 +207,45 @@ describe("linq-pipe operators", () => {
     expect([...sorted]).toEqual([0, 1, 2, 3]);
   });
 
+  test("descriptor carries optional expression tree for IQueryable providers", () => {
+    // The compiler populates `expression` when the call site uses an
+    // opt-in [Queryable] surface. Hand-author the tree here to pin the
+    // shape consumers will see.
+    const w = where<{ age: number }>(
+      (u) => u.age > 18,
+      {
+        kind: "binary",
+        op: ">",
+        left: {
+          kind: "member",
+          target: { kind: "param", name: "u", type: "User" },
+          member: "age",
+        },
+        right: { kind: "literal", value: 18, type: "int" },
+      },
+    );
+
+    expect(w.expression).toBeDefined();
+    expect(w.expression!.kind).toBe("binary");
+    if (w.expression?.kind === "binary") {
+      expect(w.expression.op).toBe(">");
+      expect(w.expression.left.kind).toBe("member");
+      expect(w.expression.right.kind).toBe("literal");
+    }
+
+    // Runtime path still works through the closure when no provider
+    // intercepts.
+    expect(w.predicate({ age: 20 }, 0)).toBe(true);
+    expect(w.predicate({ age: 5 }, 0)).toBe(false);
+  });
+
+  test("expression slot is absent for plain LINQ-to-Objects calls", () => {
+    // No second argument → no `expression` field. Runtime ignores it and
+    // walks the closure directly.
+    const w = where<number>((x) => x > 0);
+    expect(w.expression).toBeUndefined();
+  });
+
   test("descriptor introspection — IQueryable provider can read kind + lambdas", () => {
     // Each operator/terminal returns a tagged descriptor. A future
     // IQueryable provider walks the chain by `kind` to translate to
