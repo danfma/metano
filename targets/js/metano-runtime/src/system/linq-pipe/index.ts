@@ -1,15 +1,18 @@
 /**
- * Pipe-based LINQ runtime — prototype barrel for #20.
+ * Descriptor-based LINQ runtime — prototype barrel for #20.
  *
  * Tree-shakeable alternative to the legacy `system/linq/` runtime: each
- * operator is a standalone function the bundler drops when unused.
+ * operator is a standalone factory the bundler drops when unused. Every
+ * factory returns a tagged descriptor (`kind` + lambdas + `apply`) so
+ * runtime walks via `apply` while a future IQueryable provider can
+ * introspect the chain by reading `kind` and the captured lambdas.
  *
  * Usage:
  *
  * ```ts
- * import { pipe, where, select, toArray } from "metano-runtime/system/linq-pipe";
+ * import { linq, where, select, toArray } from "metano-runtime/system/linq-pipe";
  *
- * const result = pipe(
+ * const result = linq(
  *   items,
  *   where(x => x.active),
  *   select(x => x.name),
@@ -17,8 +20,50 @@
  * );
  * ```
  */
-export { pipe } from "./pipe.ts";
-export type { OperatorFn, TerminalFn } from "./types.ts";
+export { linq, stages } from "./linq.ts";
+export type { Stage } from "./linq.ts";
+
+export type {
+  AnyOperator,
+  AnyTerminal,
+  OperatorBase,
+  OperatorKind,
+  TerminalBase,
+  TerminalKind,
+  AppendOp,
+  ConcatOp,
+  DistinctByOp,
+  DistinctOp,
+  OrderByDescendingOp,
+  OrderByOp,
+  PrependOp,
+  ReverseOp,
+  SelectManyOp,
+  SelectOp,
+  SkipOp,
+  SkipWhileOp,
+  TakeOp,
+  TakeWhileOp,
+  WhereOp,
+  ZipOp,
+  AggregateTerm,
+  AllTerm,
+  AnyTerm,
+  AverageTerm,
+  ContainsTerm,
+  CountTerm,
+  FirstOrDefaultTerm,
+  FirstTerm,
+  LastOrDefaultTerm,
+  LastTerm,
+  MaxTerm,
+  MinTerm,
+  SingleTerm,
+  SumTerm,
+  ToArrayTerm,
+  ToMapTerm,
+  ToSetTerm,
+} from "./types.ts";
 
 export {
   where,

@@ -14,7 +14,7 @@ import {
   last,
   orderBy,
   orderByDescending,
-  pipe,
+  linq,
   select,
   selectMany,
   skip,
@@ -31,7 +31,7 @@ import {
 
 describe("linq-pipe operators", () => {
   test("where + select + toArray", () => {
-    const result = pipe(
+    const result = linq(
       [1, 2, 3, 4, 5],
       where((x) => x % 2 === 0),
       select((x) => x * 10),
@@ -48,25 +48,25 @@ describe("linq-pipe operators", () => {
         yield i;
       }
     }
-    const result = pipe(infinite(), take<number>(3), toArray());
+    const result = linq(infinite(), take<number>(3), toArray());
     expect(result).toEqual([0, 1, 2]);
     expect(visited).toBe(3);
   });
 
   test("skip", () => {
-    expect(pipe([1, 2, 3, 4, 5], skip<number>(2), toArray())).toEqual([3, 4, 5]);
+    expect(linq([1, 2, 3, 4, 5], skip<number>(2), toArray())).toEqual([3, 4, 5]);
   });
 
   test("takeWhile + skipWhile", () => {
     expect(
-      pipe(
+      linq(
         [1, 2, 3, 4, 1],
         takeWhile<number>((x) => x < 3),
         toArray(),
       ),
     ).toEqual([1, 2]);
     expect(
-      pipe(
+      linq(
         [1, 2, 3, 4, 1],
         skipWhile<number>((x) => x < 3),
         toArray(),
@@ -75,7 +75,7 @@ describe("linq-pipe operators", () => {
   });
 
   test("distinct + distinctBy", () => {
-    expect(pipe([1, 1, 2, 3, 2], distinct<number>(), toArray())).toEqual([1, 2, 3]);
+    expect(linq([1, 1, 2, 3, 2], distinct<number>(), toArray())).toEqual([1, 2, 3]);
     type Person = { id: number; name: string };
     const people: Person[] = [
       { id: 1, name: "a" },
@@ -83,7 +83,7 @@ describe("linq-pipe operators", () => {
       { id: 1, name: "c" },
     ];
     expect(
-      pipe(
+      linq(
         people,
         distinctBy((p) => p.id),
         toArray(),
@@ -96,7 +96,7 @@ describe("linq-pipe operators", () => {
 
   test("selectMany flattens", () => {
     expect(
-      pipe(
+      linq(
         [1, 2, 3],
         selectMany((x) => [x, x * 10]),
         toArray(),
@@ -106,14 +106,14 @@ describe("linq-pipe operators", () => {
 
   test("orderBy / orderByDescending", () => {
     expect(
-      pipe(
+      linq(
         [3, 1, 2],
         orderBy<number, number>((x) => x),
         toArray(),
       ),
     ).toEqual([1, 2, 3]);
     expect(
-      pipe(
+      linq(
         [3, 1, 2],
         orderByDescending<number, number>((x) => x),
         toArray(),
@@ -122,13 +122,13 @@ describe("linq-pipe operators", () => {
   });
 
   test("concat + append + prepend", () => {
-    expect(pipe([1, 2], concat([3, 4]), toArray())).toEqual([1, 2, 3, 4]);
-    expect(pipe([1, 2], append<number>(99), toArray())).toEqual([1, 2, 99]);
+    expect(linq([1, 2], concat([3, 4]), toArray())).toEqual([1, 2, 3, 4]);
+    expect(linq([1, 2], append<number>(99), toArray())).toEqual([1, 2, 99]);
   });
 
   test("zip", () => {
     expect(
-      pipe(
+      linq(
         [1, 2, 3],
         zip([10, 20, 30], (a: number, b: number) => a + b),
         toArray(),
@@ -137,27 +137,27 @@ describe("linq-pipe operators", () => {
   });
 
   test("first / firstOrDefault", () => {
-    expect(pipe([1, 2, 3], first<number>())).toBe(1);
-    expect(pipe([1, 2, 3], firstOrDefault<number>((x) => x > 10))).toBeNull();
-    expect(() => pipe([] as number[], first<number>())).toThrow();
+    expect(linq([1, 2, 3], first<number>())).toBe(1);
+    expect(linq([1, 2, 3], firstOrDefault<number>((x) => x > 10))).toBeNull();
+    expect(() => linq([] as number[], first<number>())).toThrow();
   });
 
   test("last", () => {
-    expect(pipe([1, 2, 3], last<number>())).toBe(3);
+    expect(linq([1, 2, 3], last<number>())).toBe(3);
   });
 
   test("any / all / count / contains", () => {
-    expect(pipe([1, 2, 3], any<number>((x) => x > 2))).toBe(true);
-    expect(pipe([1, 2, 3], any<number>((x) => x > 10))).toBe(false);
-    expect(pipe([1, 2, 3], all<number>((x) => x > 0))).toBe(true);
-    expect(pipe([1, 2, 3], all<number>((x) => x > 1))).toBe(false);
-    expect(pipe([1, 2, 3], count<number>())).toBe(3);
-    expect(pipe([1, 2, 3], contains<number>(2))).toBe(true);
+    expect(linq([1, 2, 3], any<number>((x) => x > 2))).toBe(true);
+    expect(linq([1, 2, 3], any<number>((x) => x > 10))).toBe(false);
+    expect(linq([1, 2, 3], all<number>((x) => x > 0))).toBe(true);
+    expect(linq([1, 2, 3], all<number>((x) => x > 1))).toBe(false);
+    expect(linq([1, 2, 3], count<number>())).toBe(3);
+    expect(linq([1, 2, 3], contains<number>(2))).toBe(true);
   });
 
   test("sum + aggregate", () => {
-    expect(pipe([1, 2, 3], sum<number>())).toBe(6);
-    expect(pipe([1, 2, 3], aggregate(0, (a: number, b: number) => a + b * 2))).toBe(12);
+    expect(linq([1, 2, 3], sum<number>())).toBe(6);
+    expect(linq([1, 2, 3], aggregate(0, (a: number, b: number) => a + b * 2))).toBe(12);
   });
 
   test("toMap / toSet", () => {
@@ -166,7 +166,7 @@ describe("linq-pipe operators", () => {
       { id: 1, name: "a" },
       { id: 2, name: "b" },
     ];
-    const map = pipe(
+    const map = linq(
       items,
       toMap(
         (i: Item) => i.id,
@@ -176,13 +176,13 @@ describe("linq-pipe operators", () => {
     expect(map.get(1)).toBe("a");
     expect(map.get(2)).toBe("b");
 
-    const set = pipe([1, 2, 2, 3], toSet<number>());
+    const set = linq([1, 2, 2, 3], toSet<number>());
     expect(set.size).toBe(3);
   });
 
   test("re-enumerable — chain can be iterated multiple times (.NET LINQ parity)", () => {
     const items = [1, 2, 3, 4, 5];
-    const chain = pipe(
+    const chain = linq(
       items,
       where<number>((x) => x % 2 === 0),
       select((x) => x * 10),
@@ -198,13 +198,41 @@ describe("linq-pipe operators", () => {
 
   test("re-enumerable — orderBy re-sorts on each enumeration", () => {
     const items = [3, 1, 2];
-    const sorted = pipe(
+    const sorted = linq(
       items,
       orderBy<number, number>((x) => x),
     );
     expect([...sorted]).toEqual([1, 2, 3]);
     items.push(0);
     expect([...sorted]).toEqual([0, 1, 2, 3]);
+  });
+
+  test("descriptor introspection — IQueryable provider can read kind + lambdas", () => {
+    // Each operator/terminal returns a tagged descriptor. A future
+    // IQueryable provider walks the chain by `kind` to translate to
+    // SQL/GraphQL/etc. without parsing closure source — the lambdas
+    // sit in well-named fields.
+    const w = where<number>((x) => x > 0);
+    expect(w.kind).toBe("where");
+    expect(typeof w.predicate).toBe("function");
+    expect(w.predicate(1, 0)).toBe(true);
+    expect(w.predicate(-1, 0)).toBe(false);
+
+    const s = select<number, string>((x) => x.toString());
+    expect(s.kind).toBe("select");
+    expect(s.selector(42, 0)).toBe("42");
+
+    const t = take<number>(5);
+    expect(t.kind).toBe("take");
+    expect(t.count).toBe(5);
+
+    const oba = orderBy<number, number>((x) => x);
+    expect(oba.kind).toBe("orderBy");
+    expect(oba.keySelector(7)).toBe(7);
+
+    const term = count<number>((x) => x % 2 === 0);
+    expect(term.kind).toBe("count");
+    expect(term.predicate?.(2)).toBe(true);
   });
 
   test("lazy semantics — generators not executed until terminal", () => {
@@ -215,7 +243,7 @@ describe("linq-pipe operators", () => {
         yield i;
       }
     }
-    pipe(
+    linq(
       counter(),
       where<number>((x) => x % 2 === 0),
       select((x) => x * 2),
