@@ -4,7 +4,7 @@ namespace Metano.TypeScript.AST;
 /// Specialized call to the LINQ pipe runtime entry point. Lowers to
 /// <c>linq(source, op1(args), op2(args), opN(args))</c> and instructs
 /// the import collector to bundle <see cref="Helpers"/> as a named
-/// import from the <c>metano-runtime/system/linq-pipe</c> subpath.
+/// import from the <c>metano-runtime/system/linq</c> subpath.
 ///
 /// <para>
 /// Helpers always include the entry point itself (<c>linq</c>) plus

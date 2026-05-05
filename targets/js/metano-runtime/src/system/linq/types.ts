@@ -39,6 +39,7 @@ export type OperatorKind =
   | "orderByDescending"
   | "thenBy"
   | "thenByDescending"
+  | "groupBy"
   | "zip";
 
 export type TerminalKind =
@@ -179,6 +180,22 @@ export interface ZipOp<T, U, R> extends OperatorBase<T, R> {
   readonly queryable?: QueryableMeta;
 }
 
+/**
+ * Group elements by a key. Each yielded item is an
+ * <see cref="Grouping{K, T}"/> — an Iterable that also exposes the
+ * shared key. Bundlers can drop the operator if the consumer never
+ * imports it.
+ */
+export interface Grouping<K, T> extends Iterable<T> {
+  readonly key: K;
+}
+
+export interface GroupByOp<T, K> extends OperatorBase<T, Grouping<K, T>> {
+  readonly kind: "groupBy";
+  readonly keySelector: (item: T) => K;
+  readonly queryable?: QueryableMeta;
+}
+
 /** Discriminated union of every composition operator. */
 export type AnyOperator =
   | WhereOp<unknown>
@@ -198,6 +215,7 @@ export type AnyOperator =
   | OrderByDescendingOp<unknown, unknown>
   | ThenByOp<unknown, unknown>
   | ThenByDescendingOp<unknown, unknown>
+  | GroupByOp<unknown, unknown>
   | ZipOp<unknown, unknown, unknown>;
 
 /**

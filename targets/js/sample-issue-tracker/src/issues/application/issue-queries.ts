@@ -1,7 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Enumerable, type Grouping } from "metano-runtime";
+import type { Grouping } from "metano-runtime";
 import {
   count,
+  groupBy,
   linq,
   orderBy,
   orderByDescending,
@@ -9,8 +10,9 @@ import {
   thenBy,
   thenByDescending,
   toArray,
+  toMap,
   where,
-} from "metano-runtime/system/linq-pipe";
+} from "metano-runtime/system/linq";
 import { IssuePriority, IssueStatus, type Issue } from "#/issues/domain";
 import type { UserId } from "#/shared-kernel";
 
@@ -25,12 +27,14 @@ export function openIssues(issues: Issue[]): Issue[] {
 }
 
 export function statusCounts(issues: Issue[]): Map<IssueStatus, number> {
-  return Enumerable.from(issues)
-    .groupBy((issue: Issue) => issue.status)
-    .toMap(
+  return linq(
+    issues,
+    groupBy((issue: Issue) => issue.status),
+    toMap(
       (group: Grouping<IssueStatus, Issue>) => group.key,
       (group: Grouping<IssueStatus, Issue>) => linq(group, count()),
-    );
+    ),
+  );
 }
 
 export function issuesForAssignee(issues: Issue[], assigneeId: UserId): Issue[] {

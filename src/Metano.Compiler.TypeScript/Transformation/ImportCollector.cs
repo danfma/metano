@@ -117,12 +117,10 @@ public sealed class ImportCollector(
         foreach (var name in imp.Names)
             alreadyImported.Add(name);
 
-        if (referencedTypes.Contains("Enumerable") && !alreadyImported.Contains("Enumerable"))
-        {
-            imports.Add(new TsImport(["Enumerable"], "metano-runtime"));
-            alreadyImported.Add("Enumerable");
-        }
-
+        // `Grouping<K,T>` is shipped from `metano-runtime/system/linq` (the pipe
+        // runtime) and re-exported from the root `metano-runtime` barrel.
+        // Pull it in as a type-only import when the consumer file references
+        // it but didn't go through the LINQ-pipe import path.
         if (referencedTypes.Contains("Grouping") && !alreadyImported.Contains("Grouping"))
         {
             imports.Add(new TsImport(["Grouping"], "metano-runtime", TypeOnly: true));
@@ -156,7 +154,7 @@ public sealed class ImportCollector(
             imports.Add(
                 new TsImport(
                     linqPipeHelpers.OrderBy(n => n).ToArray(),
-                    "metano-runtime/system/linq-pipe"
+                    "metano-runtime/system/linq"
                 )
             );
         }
@@ -965,7 +963,7 @@ public sealed class ImportCollector(
                 // Tree-shakeable LINQ pipe helpers — register every
                 // helper the chain uses. The dedicated `linqPipeHelpers`
                 // bucket emits a single named-import line from
-                // `metano-runtime/system/linq-pipe`.
+                // `metano-runtime/system/linq`.
                 foreach (var helper in linq.Helpers)
                     sink.LinqPipeHelpers.Add(helper);
                 foreach (var arg in linq.Args)
