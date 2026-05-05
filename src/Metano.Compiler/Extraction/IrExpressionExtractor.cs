@@ -3142,7 +3142,8 @@ public sealed class IrExpressionExtractor
                 return null;
 
             var args = current.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
-            stages.Add(new IrLinqStage(op, args));
+            var queryable = TryCaptureQueryableMeta(current, sym, memberAccess);
+            stages.Add(new IrLinqStage(op, args, queryable));
 
             if (memberAccess.Expression is InvocationExpressionSyntax innerInv)
             {
@@ -3162,6 +3163,116 @@ public sealed class IrExpressionExtractor
         var source = Extract(sourceSyntax);
         return new IrLinqChain(source, stages);
     }
+
+    /// <summary>
+    /// Detects whether <paramref name="stage"/> opted into expression-tree
+    /// capture and, if so, walks the principal lambda's body into an
+    /// <see cref="IrQueryableMeta"/>. Capture triggers are:
+    /// <list type="bullet">
+    ///   <item>The chain receiver implements <c>System.Linq.IQueryable&lt;T&gt;</c>.</item>
+    ///   <item>The stage method or its argument parameter carries
+    ///   <c>[Queryable]</c>.</item>
+    ///   <item>The argument parameter type is <c>System.Linq.Expressions.Expression&lt;…&gt;</c>.</item>
+    /// </list>
+    /// Returns null when no trigger fires or the lambda body uses syntax
+    /// outside the Phase B MVP subset; the caller drops the queryable
+    /// surface and the lambda flows as a plain closure.
+    /// </summary>
+    private IrQueryableMeta? TryCaptureQueryableMeta(
+        InvocationExpressionSyntax stage,
+        IMethodSymbol? stageMethod,
+        MemberAccessExpressionSyntax memberAccess
+    )
+    {
+        if (stageMethod is null)
+            return null;
+
+        var receiverIsQueryable = ReceiverIsIQueryable(memberAccess.Expression);
+        var methodHasQueryable = HasQueryableAttribute(stageMethod);
+
+        for (var i = 0; i < stage.ArgumentList.Arguments.Count; i++)
+        {
+            var argSyntax = stage.ArgumentList.Arguments[i];
+            if (argSyntax.Expression is not LambdaExpressionSyntax lambda)
+                continue;
+
+            var paramSymbol = ResolveStageParameter(stageMethod, i);
+            if (!ShouldCaptureExpressionTree(receiverIsQueryable, methodHasQueryable, paramSymbol))
+                continue;
+
+            var walker = new IrExpressionTreeExtractor(_semantic, _originResolver, _target, this);
+            var meta = walker.TryExtract(lambda);
+            if (meta is not null)
+                return meta;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Maps a call-site argument index to the parameter symbol on the
+    /// underlying static method. Extension calls reduce the receiver
+    /// onto a synthesized first parameter, so the unreduced static
+    /// definition's slot is one position to the right.
+    /// </summary>
+    private static IParameterSymbol? ResolveStageParameter(IMethodSymbol stageMethod, int argIndex)
+    {
+        var reduced = stageMethod.ReducedFrom ?? stageMethod;
+        var isReducedExtension =
+            stageMethod.IsExtensionMethod
+            && !SymbolEqualityComparer.Default.Equals(reduced, stageMethod);
+        var paramIndex = isReducedExtension ? argIndex + 1 : argIndex;
+        if (paramIndex >= reduced.Parameters.Length)
+            return null;
+        return reduced.Parameters[paramIndex];
+    }
+
+    private static bool ShouldCaptureExpressionTree(
+        bool receiverIsQueryable,
+        bool methodHasQueryable,
+        IParameterSymbol? paramSymbol
+    )
+    {
+        if (receiverIsQueryable || methodHasQueryable)
+            return true;
+        if (paramSymbol is null)
+            return false;
+        return HasQueryableAttribute(paramSymbol) || IsExpressionDelegateType(paramSymbol.Type);
+    }
+
+    private static bool HasQueryableAttribute(ISymbol symbol)
+    {
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (attr.AttributeClass?.ToDisplayString() == "Metano.Annotations.QueryableAttribute")
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsExpressionDelegateType(ITypeSymbol type) =>
+        type is INamedTypeSymbol named
+        && named.OriginalDefinition.ToDisplayString()
+            == "System.Linq.Expressions.Expression<TDelegate>";
+
+    private bool ReceiverIsIQueryable(ExpressionSyntax receiverSyntax)
+    {
+        var receiverType = _semantic.GetTypeInfo(receiverSyntax).Type;
+        if (receiverType is null)
+            return false;
+        if (IsIQueryableNamed(receiverType as INamedTypeSymbol))
+            return true;
+        foreach (var iface in receiverType.AllInterfaces)
+        {
+            if (IsIQueryableNamed(iface))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsIQueryableNamed(INamedTypeSymbol? type) =>
+        type is not null
+        && type.OriginalDefinition.ToDisplayString() == "System.Linq.IQueryable<T>";
 }
 
 /// <summary>

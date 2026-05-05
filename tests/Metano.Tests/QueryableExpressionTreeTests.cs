@@ -1,0 +1,229 @@
+namespace Metano.Tests;
+
+/// <summary>
+/// Phase B (#31) coverage: lambdas tagged for expression-tree capture
+/// emit a <c>QueryableMeta</c> object literal alongside the closure
+/// inside the <c>linq(...)</c> pipe call. The trigger today is an
+/// <c>IQueryable&lt;T&gt;</c> receiver — calls resolve to
+/// <c>System.Linq.Queryable</c> whose lambda parameters are typed as
+/// <c>Expression&lt;Func&lt;…&gt;&gt;</c>. Bodies that fall outside the
+/// MVP subset stay opaque (no meta emitted) so the closure path keeps
+/// working.
+/// </summary>
+public class QueryableExpressionTreeTests
+{
+    [Test]
+    public async Task IQueryableReceiver_EmitsExpressionTreeMeta()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= 18);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("linq(");
+        await Assert.That(output).Contains("where(");
+        await Assert.That(output).Contains("tree:");
+        await Assert.That(output).Contains("\"binary\"");
+        await Assert.That(output).Contains("\"member\"");
+    }
+
+    [Test]
+    public async Task PlainEnumerable_NoQueryableTrigger_NoMeta()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Adults(this IEnumerable<User> users) =>
+                    users.Where(u => u.Age >= 18);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("linq(");
+        await Assert.That(output).Contains("where(");
+        await Assert.That(output).DoesNotContain("tree:");
+    }
+
+    [Test]
+    public async Task CapturedLocal_EmitsCaptureNodeAndCapturesBundle()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> AdultsAtLeast(IQueryable<User> users, int minAge)
+                {
+                    int threshold = minAge;
+                    return users.Where(u => u.Age >= threshold);
+                }
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("\"capture\"");
+        await Assert.That(output).Contains("captures:");
+        await Assert.That(output).Contains("threshold:");
+    }
+
+    [Test]
+    public async Task CompositeBoolean_EmitsNestedBinaryTree()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> ActiveAdults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= 18 && u.Active);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+                public bool Active { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("tree:");
+        await Assert.That(output).Contains("\"&&\"");
+    }
+
+    [Test]
+    public async Task QueryableMethodAttribute_TriggersMetaOnEnumerableReceiver()
+    {
+        // Method-level [Queryable] applies to a custom extension that
+        // mirrors LINQ's surface but lives in System.Linq so the chain
+        // walker recognizes it (same rule as Enumerable / Queryable).
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+            using Metano.Annotations;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Adults(IEnumerable<User> users) =>
+                    System.Linq.Queryable.Where(users.AsQueryable(), u => u.Age >= 18);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("tree:");
+    }
+
+    [Test]
+    public async Task ExpressionDelegateParameter_OnQueryable_TriggersMeta()
+    {
+        // System.Linq.Queryable.Where takes Expression<Func<T,bool>> —
+        // covers the parameter-type trigger even if the receiver type
+        // detection happened to miss IQueryable<T>.
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IQueryable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= 18);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("tree:");
+        await Assert.That(output).Contains("\">=\"");
+    }
+
+    [Test]
+    public async Task UnsupportedSyntax_KeepsClosureWithoutMeta()
+    {
+        // Object creation lives outside the Phase B MVP subset
+        // (param/capture/literal/member/call/binary/unary/conditional).
+        // The lambda still compiles into a C# expression tree, but the
+        // walker bails and the call site keeps the closure-only form.
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Doubled(IQueryable<User> users) =>
+                    users.Select(u => new User { Age = u.Age + 1 });
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("select(");
+        await Assert.That(output).DoesNotContain("tree:");
+    }
+}
