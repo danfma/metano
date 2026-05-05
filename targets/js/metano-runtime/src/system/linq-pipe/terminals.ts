@@ -155,10 +155,7 @@ export function contains<T>(item: T): TerminalFn<T, boolean> {
   };
 }
 
-export function aggregate<T, A>(
-  seed: A,
-  accumulator: (acc: A, item: T) => A,
-): TerminalFn<T, A> {
+export function aggregate<T, A>(seed: A, accumulator: (acc: A, item: T) => A): TerminalFn<T, A> {
   return (source) => {
     let result = seed;
     for (const item of source) result = accumulator(result, item);
