@@ -12,7 +12,7 @@
  * Short-circuit terminals (`first`, `take(n)`) stop iterating as soon
  * as their result is determined.
  */
-import type { ExprTree } from "./expr-tree.ts";
+import type { QueryableMeta } from "./expr-tree.ts";
 import type {
   AppendOp,
   ConcatOp,
@@ -34,12 +34,12 @@ import type {
 
 export function where<T>(
   predicate: (item: T, index: number) => boolean,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): WhereOp<T> {
   return {
     kind: "where",
     predicate,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -51,12 +51,12 @@ export function where<T>(
 
 export function select<T, R>(
   selector: (item: T, index: number) => R,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): SelectOp<T, R> {
   return {
     kind: "select",
     selector,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -68,12 +68,12 @@ export function select<T, R>(
 
 export function selectMany<T, R>(
   selector: (item: T, index: number) => Iterable<R>,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): SelectManyOp<T, R> {
   return {
     kind: "selectMany",
     selector,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -118,12 +118,12 @@ export function skip<T>(count: number): SkipOp<T> {
 
 export function takeWhile<T>(
   predicate: (item: T, index: number) => boolean,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): TakeWhileOp<T> {
   return {
     kind: "takeWhile",
     predicate,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -138,12 +138,12 @@ export function takeWhile<T>(
 
 export function skipWhile<T>(
   predicate: (item: T, index: number) => boolean,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): SkipWhileOp<T> {
   return {
     kind: "skipWhile",
     predicate,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         let i = 0;
@@ -176,12 +176,12 @@ export function distinct<T>(): DistinctOp<T> {
 
 export function distinctBy<T, K>(
   keySelector: (item: T) => K,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): DistinctByOp<T, K> {
   return {
     kind: "distinctBy",
     keySelector,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const seen = new Set<K>();
@@ -248,11 +248,11 @@ export function reverse<T>(): ReverseOp<T> {
   };
 }
 
-export function orderBy<T, K>(keySelector: (item: T) => K, expression?: ExprTree): OrderByOp<T, K> {
+export function orderBy<T, K>(keySelector: (item: T) => K, queryable?: QueryableMeta): OrderByOp<T, K> {
   return {
     kind: "orderBy",
     keySelector,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const buffer = [...source];
@@ -269,12 +269,12 @@ export function orderBy<T, K>(keySelector: (item: T) => K, expression?: ExprTree
 
 export function orderByDescending<T, K>(
   keySelector: (item: T) => K,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): OrderByDescendingOp<T, K> {
   return {
     kind: "orderByDescending",
     keySelector,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const buffer = [...source];
@@ -292,13 +292,13 @@ export function orderByDescending<T, K>(
 export function zip<T, U, R>(
   other: Iterable<U>,
   resultSelector: (first: T, second: U) => R,
-  expression?: ExprTree,
+  queryable?: QueryableMeta,
 ): ZipOp<T, U, R> {
   return {
     kind: "zip",
     other,
     resultSelector,
-    expression,
+    queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
         const itA = source[Symbol.iterator]();

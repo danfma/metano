@@ -27,6 +27,7 @@ export type {
   BinaryOp,
   ExprBinary,
   ExprCall,
+  ExprCapture,
   ExprConditional,
   ExprLambda,
   ExprLiteral,
@@ -35,6 +36,7 @@ export type {
   ExprParam,
   ExprTree,
   ExprUnary,
+  QueryableMeta,
   UnaryOp,
 } from "./expr-tree.ts";
 
