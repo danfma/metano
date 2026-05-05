@@ -50,6 +50,8 @@ export type {
   ConcatOp,
   DistinctByOp,
   DistinctOp,
+  GroupByOp,
+  Grouping,
   OrderByDescendingOp,
   OrderByOp,
   ThenByDescendingOp,
