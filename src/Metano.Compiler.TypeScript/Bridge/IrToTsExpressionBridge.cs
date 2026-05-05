@@ -408,14 +408,99 @@ public static class IrToTsExpressionBridge
             var emittedName = IrLinqMapping.EmittedName(stage.Operator);
             importedHelpers.Add(emittedName);
             var stageArgs = stage.Arguments.Select(a => Map(a, bclRegistry)).ToList();
-            // Phase B (#31) appends a QueryableMeta object literal as an
-            // extra trailing argument when stage.Queryable is set; for
-            // Phase A the closure-only call shape is enough.
+            if (stage.Queryable is { } queryable)
+                stageArgs.Add(MapQueryableMeta(queryable, bclRegistry));
             args.Add(new TsCallExpression(new TsIdentifier(emittedName), stageArgs));
         }
 
         return new TsLinqCall(args, importedHelpers);
     }
+
+    /// <summary>
+    /// Lowers an <see cref="IrQueryableMeta"/> into the runtime
+    /// <c>QueryableMeta</c> object literal — <c>{ tree, captures? }</c>.
+    /// The <c>tree</c> recursively materializes the
+    /// <see cref="IrExprTreeNode"/> shape; <c>captures</c> emits a
+    /// dictionary keyed by capture name whose values are the bridged
+    /// IR expressions (e.g. closure locals, parameters).
+    /// </summary>
+    private static TsExpression MapQueryableMeta(
+        IrQueryableMeta meta,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var props = new List<TsObjectProperty> { new("tree", MapExprTree(meta.Tree)) };
+        if (meta.Captures is { Count: > 0 } captures)
+        {
+            var captureProps = captures
+                .Select(c => new TsObjectProperty(c.Name, Map(c.Value, bclRegistry)))
+                .ToList();
+            props.Add(new TsObjectProperty("captures", new TsObjectLiteral(captureProps)));
+        }
+        return new TsObjectLiteral(props);
+    }
+
+    private static TsExpression MapExprTree(IrExprTreeNode node) =>
+        node switch
+        {
+            IrExprParam p => TreeNode("param", ("name", new TsStringLiteral(p.Name))),
+            IrExprCapture c => TreeNode("capture", ("name", new TsStringLiteral(c.Name))),
+            IrExprLiteral lit => TreeNode("literal", ("value", MapLiteralValue(lit.Value))),
+            IrExprMember m => TreeNode(
+                "member",
+                ("target", MapExprTree(m.Target)),
+                ("member", new TsStringLiteral(TypeScriptNaming.ToCamelCaseMember(m.Member)))
+            ),
+            IrExprCall call => TreeNode(
+                "call",
+                ("target", call.Target is null ? new TsLiteral("null") : MapExprTree(call.Target)),
+                ("method", new TsStringLiteral(TypeScriptNaming.ToCamelCase(call.Method))),
+                ("args", new TsArrayLiteral(call.Args.Select(MapExprTree).ToList()))
+            ),
+            IrExprBinary bin => TreeNode(
+                "binary",
+                ("op", new TsStringLiteral(bin.Op)),
+                ("left", MapExprTree(bin.Left)),
+                ("right", MapExprTree(bin.Right))
+            ),
+            IrExprUnary un => TreeNode(
+                "unary",
+                ("op", new TsStringLiteral(un.Op)),
+                ("operand", MapExprTree(un.Operand))
+            ),
+            IrExprConditional cond => TreeNode(
+                "conditional",
+                ("condition", MapExprTree(cond.Condition)),
+                ("whenTrue", MapExprTree(cond.WhenTrue)),
+                ("whenFalse", MapExprTree(cond.WhenFalse))
+            ),
+            _ => throw new InvalidOperationException(
+                $"Unsupported IrExprTreeNode shape: {node.GetType().Name}"
+            ),
+        };
+
+    private static TsObjectLiteral TreeNode(
+        string kind,
+        params (string Key, TsExpression Value)[] fields
+    )
+    {
+        var props = new List<TsObjectProperty>(fields.Length + 1)
+        {
+            new("kind", new TsStringLiteral(kind)),
+        };
+        foreach (var (key, value) in fields)
+            props.Add(new TsObjectProperty(key, value));
+        return new TsObjectLiteral(props);
+    }
+
+    private static TsExpression MapLiteralValue(object? value) =>
+        value switch
+        {
+            null => new TsLiteral("null"),
+            bool b => new TsLiteral(b ? "true" : "false"),
+            string s => new TsStringLiteral(s),
+            _ => new TsLiteral(value.ToString() ?? "null"),
+        };
 
     private static TsExpression MapLambda(
         IrLambdaExpression lambda,

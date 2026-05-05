@@ -231,4 +231,14 @@ public static class DiagnosticCodes
     /// Drop the modifier and pass / return the value directly, or wrap
     /// the call in a helper that materializes the result.</summary>
     public const string InvalidEmit = "MS0023";
+
+    /// <summary>MS0024 — a lambda body flagged for expression-tree
+    /// capture (via <c>[Queryable]</c>, an <c>Expression&lt;Func&lt;…&gt;&gt;</c>
+    /// parameter, or an <c>IQueryable&lt;T&gt;</c> receiver) uses a syntax
+    /// shape outside the Phase B / #31 MVP subset
+    /// (param / capture / literal / member / call / binary / unary /
+    /// conditional). Refactor the body into the supported subset, or
+    /// drop the queryable surface so the lambda flows through as an
+    /// opaque closure.</summary>
+    public const string UnsupportedQueryableBody = "MS0024";
 }
