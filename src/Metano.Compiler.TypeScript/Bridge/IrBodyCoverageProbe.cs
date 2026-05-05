@@ -92,6 +92,8 @@ public static class IrBodyCoverageProbe
             IrArrayLiteral arr => arr.Elements.All(IsCoveredExpression),
             IrYieldExpression ye => ye.Value is null || IsCoveredExpression(ye.Value),
             IrOptionalChain chain => IsCoveredExpression(chain.Target),
+            IrLinqChain linq => IsCoveredExpression(linq.Source)
+                && linq.Stages.All(s => s.Arguments.All(IsCoveredExpression)),
             _ => false,
         };
 

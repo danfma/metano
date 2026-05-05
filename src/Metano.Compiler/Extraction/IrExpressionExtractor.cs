@@ -1553,6 +1553,16 @@ public sealed class IrExpressionExtractor
     {
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
 
+        // LINQ chain detection (#20 pipe lowering). When this invocation
+        // is the OUTERMOST stage of a System.Linq.Enumerable / Queryable
+        // call chain whose every step has a pipe-runtime counterpart,
+        // fold the entire chain into a single IrLinqChain — the bridge
+        // emits one `linq(source, op1(...), op2(...), opN(...))` call.
+        // Inner stages are walked here via syntax (not via Extract
+        // recursion) so the legacy fluent emission path stays clean.
+        if (TryExtractLinqChain(inv, symbol) is { } linqChain)
+            return linqChain;
+
         // `handler.Invoke(args)` lowers to `handler(args)` — the
         // synthesized `Invoke` member has no runtime counterpart in
         // JS/TS because the delegate IS the function. Drop the
@@ -3056,6 +3066,95 @@ public sealed class IrExpressionExtractor
         }
 
         return new IrCastExpression(inner, ExtractTargetType(cast));
+    }
+
+    // ─── LINQ chain (pipe lowering) ────────────────────────────────────
+
+    /// <summary>
+    /// Attempts to fold the LINQ chain rooted at <paramref name="inv"/>
+    /// into a single <see cref="IrLinqChain"/>. Returns null when the
+    /// invocation is not a LINQ call, is not the outermost stage of its
+    /// chain, or contains a method without a pipe-runtime counterpart —
+    /// in those cases the legacy fluent emission path takes over.
+    /// </summary>
+    private IrExpression? TryExtractLinqChain(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol? symbol
+    )
+    {
+        if (!IrLinqMapping.TryResolve(symbol, out _))
+            return null;
+        if (!IsOutermostLinqCall(inv))
+            return null;
+        return BuildLinqChain(inv);
+    }
+
+    /// <summary>
+    /// True when this invocation is the outermost LINQ call of its
+    /// chain — i.e. the parent context is not another LINQ stage.
+    /// Detection: parent is not a member-access whose grandparent is
+    /// itself a LINQ invocation.
+    /// </summary>
+    private bool IsOutermostLinqCall(InvocationExpressionSyntax inv)
+    {
+        if (inv.Parent is not MemberAccessExpressionSyntax member)
+            return true;
+        if (member.Parent is not InvocationExpressionSyntax outer)
+            return true;
+        var outerSymbol = _semantic.GetSymbolInfo(outer).Symbol as IMethodSymbol;
+        return !IrLinqMapping.TryResolve(outerSymbol, out _);
+    }
+
+    /// <summary>
+    /// Walks the chain inward from <paramref name="outermost"/> via raw
+    /// syntax, collecting one <see cref="IrLinqStage"/> per LINQ call.
+    /// The walk stops at the first non-LINQ receiver — that becomes the
+    /// chain's <see cref="IrLinqChain.Source"/>. Stages are reversed so
+    /// they appear in source-to-terminal order in the IR (matches the
+    /// emission shape <c>linq(source, op1, op2, ..., opN)</c>).
+    /// </summary>
+    private IrLinqChain? BuildLinqChain(InvocationExpressionSyntax outermost)
+    {
+        var stages = new List<IrLinqStage>();
+        InvocationExpressionSyntax? current = outermost;
+        ExpressionSyntax? sourceSyntax = null;
+
+        while (current is not null)
+        {
+            var sym = _semantic.GetSymbolInfo(current).Symbol as IMethodSymbol;
+            if (!IrLinqMapping.TryResolve(sym, out var op))
+            {
+                // Hit a non-LINQ method (or one without a pipe
+                // counterpart) — abandon chain walking and let the
+                // legacy fluent path handle the whole expression. The
+                // outermost ExtractInvocation will fall through after
+                // this returns null.
+                return null;
+            }
+
+            if (current.Expression is not MemberAccessExpressionSyntax memberAccess)
+                return null; // static-direct calls (e.g. Enumerable.Where(items, p)) — MVP only handles extension form.
+
+            var args = current.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
+            stages.Add(new IrLinqStage(op, args));
+
+            if (memberAccess.Expression is InvocationExpressionSyntax innerInv)
+            {
+                current = innerInv;
+            }
+            else
+            {
+                sourceSyntax = memberAccess.Expression;
+                current = null;
+            }
+        }
+
+        if (sourceSyntax is null)
+            return null;
+
+        stages.Reverse();
+        var source = Extract(sourceSyntax);
+        return new IrLinqChain(source, stages);
     }
 }
 

@@ -1083,6 +1083,12 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(")");
                 break;
 
+            case TsLinqCall linq:
+                _sb.Write("linq(");
+                _sb.WriteList(linq.Args, PrintExpression);
+                _sb.Write(")");
+                break;
+
             case TsObjectLiteral obj:
                 PrintObjectLiteral(obj);
                 break;

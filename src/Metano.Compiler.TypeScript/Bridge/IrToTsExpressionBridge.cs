@@ -85,6 +85,7 @@ public static class IrToTsExpressionBridge
                 ),
                 Array.Empty<TsExpression>()
             ),
+            IrLinqChain chain => MapLinqChain(chain, bclRegistry),
             IrUnsupportedExpression u => new TsIdentifier(
                 $"/* TODO: unsupported IR expression {u.Kind} */"
             ),
@@ -383,6 +384,37 @@ public static class IrToTsExpressionBridge
         )
             return null;
         return IrToTsTypeMapper.Map(p.Type);
+    }
+
+    /// <summary>
+    /// Lowers an <see cref="IrLinqChain"/> to the pipe-form runtime call:
+    /// <c>linq(source, op1(...), op2(...), opN(...))</c>. Each stage maps
+    /// to a single function call against the corresponding pipe operator.
+    /// The wrapping <c>linq</c> + each operator name are registered as
+    /// runtime imports from <c>metano-runtime/system/linq-pipe</c> so the
+    /// import collector picks them up alongside the existing helper
+    /// imports (Enumerable, HashSet, …).
+    /// </summary>
+    private static TsExpression MapLinqChain(
+        IrLinqChain chain,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var args = new List<TsExpression> { Map(chain.Source, bclRegistry) };
+        var importedHelpers = new HashSet<string>(StringComparer.Ordinal) { "linq" };
+
+        foreach (var stage in chain.Stages)
+        {
+            var emittedName = IrLinqMapping.EmittedName(stage.Operator);
+            importedHelpers.Add(emittedName);
+            var stageArgs = stage.Arguments.Select(a => Map(a, bclRegistry)).ToList();
+            // Phase B (#31) appends a QueryableMeta object literal as an
+            // extra trailing argument when stage.Queryable is set; for
+            // Phase A the closure-only call shape is enough.
+            args.Add(new TsCallExpression(new TsIdentifier(emittedName), stageArgs));
+        }
+
+        return new TsLinqCall(args, importedHelpers);
     }
 
     private static TsExpression MapLambda(

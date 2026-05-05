@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Enumerable, UUID, listRemove } from "metano-runtime";
+import { UUID, listRemove } from "metano-runtime";
+import { firstOrDefault, linq, orderBy, toArray } from "metano-runtime/system/linq-pipe";
 import { TodoItem, type Priority } from "sample-todo";
 
 export interface StoredTodo {
@@ -43,13 +44,18 @@ export class TodoStore {
   constructor() {}
 
   all(): StoredTodo[] {
-    return Enumerable.from(this._items)
-      .orderBy((t: StoredTodo) => t.id)
-      .toArray();
+    return linq(
+      this._items,
+      orderBy((t: StoredTodo) => t.id),
+      toArray(),
+    );
   }
 
   get(id: string): StoredTodo | null {
-    return Enumerable.from(this._items).firstOrDefault((t: StoredTodo) => t.id === id);
+    return linq(
+      this._items,
+      firstOrDefault((t: StoredTodo) => t.id === id),
+    );
   }
 
   add(dto: CreateTodoDto): StoredTodo {
