@@ -9,7 +9,7 @@ import {
   thenBy,
   toArray,
   where,
-} from "metano-runtime/system/linq-pipe";
+} from "metano-runtime/system/linq";
 import type { Issue, IssueId, IssuePriority, IssueStatus } from "#/issues/domain";
 import { PageResult, type PageRequest, type UserId } from "#/shared-kernel";
 import type { IIssueRepository } from "./i-issue-repository";

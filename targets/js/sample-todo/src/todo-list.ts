@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { isString } from "metano-runtime";
-import { any, count, firstOrDefault, linq } from "metano-runtime/system/linq-pipe";
+import { any, count, firstOrDefault, linq } from "metano-runtime/system/linq";
 import type { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 

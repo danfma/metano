@@ -3077,10 +3077,7 @@ public sealed class IrExpressionExtractor
     /// chain, or contains a method without a pipe-runtime counterpart —
     /// in those cases the legacy fluent emission path takes over.
     /// </summary>
-    private IrExpression? TryExtractLinqChain(
-        InvocationExpressionSyntax inv,
-        IMethodSymbol? symbol
-    )
+    private IrExpression? TryExtractLinqChain(InvocationExpressionSyntax inv, IMethodSymbol? symbol)
     {
         if (!IrLinqMapping.TryResolve(symbol, out _))
             return null;
@@ -3124,12 +3121,13 @@ public sealed class IrExpressionExtractor
             var sym = _semantic.GetSymbolInfo(current).Symbol as IMethodSymbol;
             if (!IrLinqMapping.TryResolve(sym, out var op))
             {
-                // Hit a non-LINQ method (or one without a pipe
-                // counterpart) — abandon chain walking and let the
-                // legacy fluent path handle the whole expression. The
-                // outermost ExtractInvocation will fall through after
-                // this returns null.
-                return null;
+                // Inner call isn't a recognized LINQ method — its
+                // result is the chain source (e.g. a domain helper
+                // that returns IReadOnlyList<T> followed by a single
+                // .Contains(x)). Stop walking; whatever stages were
+                // already collected stay as the chain.
+                sourceSyntax = current;
+                break;
             }
 
             if (current.Expression is not MemberAccessExpressionSyntax memberAccess)

@@ -33,6 +33,8 @@ import type {
   ThenByOp,
   WhereOp,
   ZipOp,
+  GroupByOp,
+  Grouping,
 } from "./types.ts";
 
 /**
@@ -349,6 +351,44 @@ export function thenByDescending<T, K>(
         ? new OrderedIter(source.source, [...source.comparers, cmp])
         : new OrderedIter(source, [cmp]);
     },
+  };
+}
+
+/**
+ * Groups elements by a key. Yields one <see cref="Grouping{K, T}"/> per
+ * distinct key — an Iterable carrying the shared key on `key` plus the
+ * items in source order. Materializes the source to bucket items but
+ * each enumeration of the result re-runs the bucketing.
+ */
+export function groupBy<T, K>(
+  keySelector: (item: T) => K,
+  queryable?: QueryableMeta,
+): GroupByOp<T, K> {
+  return {
+    kind: "groupBy",
+    keySelector,
+    queryable,
+    apply: (source) => ({
+      *[Symbol.iterator]() {
+        const buckets = new Map<K, T[]>();
+        for (const item of source) {
+          const k = keySelector(item);
+          let bucket = buckets.get(k);
+          if (bucket === undefined) {
+            bucket = [];
+            buckets.set(k, bucket);
+          }
+          bucket.push(item);
+        }
+        for (const [key, items] of buckets) {
+          // `Grouping` is `Iterable<T> & { key }` — wrap the bucket
+          // array (Iterable) with the key field via Object.assign so
+          // consumers can `for…of` the grouping AND read `.key`.
+          const grouping = Object.assign(items, { key }) as unknown as Grouping<K, T>;
+          yield grouping;
+        }
+      },
+    }),
   };
 }
 

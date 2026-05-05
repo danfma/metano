@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { UUID, listRemove } from "metano-runtime";
-import { firstOrDefault, linq, orderBy, toArray } from "metano-runtime/system/linq-pipe";
+import { firstOrDefault, linq, orderBy, toArray } from "metano-runtime/system/linq";
 import { TodoItem, type Priority } from "sample-todo";
 
 export interface StoredTodo {

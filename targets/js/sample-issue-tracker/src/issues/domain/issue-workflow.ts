@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Enumerable } from "metano-runtime";
+import { contains, linq } from "metano-runtime/system/linq";
 import type { Issue } from "./issue";
 import { IssuePriority } from "./issue-priority";
 import { IssueStatus } from "./issue-status";
@@ -20,7 +20,7 @@ export class IssueWorkflow {
   }
 
   static canTransition(currentStatus: IssueStatus, nextStatus: IssueStatus): boolean {
-    return Enumerable.from(IssueWorkflow.getAllowedTransitions(currentStatus)).contains(nextStatus);
+    return linq(IssueWorkflow.getAllowedTransitions(currentStatus), contains(nextStatus));
   }
 
   static describeLane(issue: Issue): string {

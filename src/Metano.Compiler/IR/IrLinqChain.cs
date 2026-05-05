@@ -21,6 +21,7 @@ public enum IrLinqOperator
     OrderByDescending,
     ThenBy,
     ThenByDescending,
+    GroupBy,
     Take,
     Skip,
     TakeWhile,

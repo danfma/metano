@@ -27,9 +27,9 @@ import {
   toSet,
   where,
   zip,
-} from "../../src/system/linq-pipe/index.ts";
+} from "../../src/system/linq/index.ts";
 
-describe("linq-pipe operators", () => {
+describe("linq operators", () => {
   test("where + select + toArray", () => {
     const result = linq(
       [1, 2, 3, 4, 5],

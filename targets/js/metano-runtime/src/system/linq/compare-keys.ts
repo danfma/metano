@@ -1,29 +1,33 @@
 /**
  * Generic key comparator that handles primitives, Temporal types, and
- * objects with a custom compareTo() method.
+ * objects with a custom `compare()` method (or whose constructor exposes
+ * a static `compare(a, b)` — Temporal API shape).
  *
- * Returns negative if a < b, positive if a > b, 0 if equal.
+ * Returns negative when `a < b`, positive when `a > b`, zero when equal.
  */
 export function compareKeys(a: unknown, b: unknown): number {
   if (a === b) return 0;
   if (a == null) return b == null ? 0 : -1;
   if (b == null) return 1;
 
-  // Objects with compareTo() (e.g., Temporal types)
-  if (typeof a === "object" && a !== null && typeof (a as any).compare === "function") {
-    return (a as any).compare(b);
+  // Object with instance compareTo() / compare() — common .NET-style
+  // ergonomics surface when the consumer ports a C# IComparable.
+  if (typeof a === "object" && typeof (a as { compare?: unknown }).compare === "function") {
+    return (a as { compare: (other: unknown) => number }).compare(b);
   }
 
-  // Temporal types expose static compare() — try to detect via constructor
-  if (typeof a === "object" && a !== null) {
-    const ctor = (a as any).constructor;
+  // Temporal types expose static compare() on the constructor.
+  if (typeof a === "object") {
+    const ctor = (a as { constructor?: unknown }).constructor as
+      | { compare?: (x: unknown, y: unknown) => number }
+      | undefined;
     if (ctor && typeof ctor.compare === "function") {
       return ctor.compare(a, b);
     }
   }
 
-  // Primitives (string, number, bigint, boolean): use < / >
-  if (a < (b as any)) return -1;
-  if (a > (b as any)) return 1;
+  // Primitives (string, number, bigint, boolean): default `<` / `>`.
+  if ((a as never) < (b as never)) return -1;
+  if ((a as never) > (b as never)) return 1;
   return 0;
 }

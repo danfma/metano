@@ -391,7 +391,7 @@ public static class IrToTsExpressionBridge
     /// <c>linq(source, op1(...), op2(...), opN(...))</c>. Each stage maps
     /// to a single function call against the corresponding pipe operator.
     /// The wrapping <c>linq</c> + each operator name are registered as
-    /// runtime imports from <c>metano-runtime/system/linq-pipe</c> so the
+    /// runtime imports from <c>metano-runtime/system/linq</c> so the
     /// import collector picks them up alongside the existing helper
     /// imports (Enumerable, HashSet, …).
     /// </summary>
