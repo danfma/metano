@@ -64,10 +64,7 @@ export function toSet<T>(): ToSetTerm<T> {
   };
 }
 
-export function first<T>(
-  predicate?: (item: T) => boolean,
-  expression?: ExprTree,
-): FirstTerm<T> {
+export function first<T>(predicate?: (item: T) => boolean, expression?: ExprTree): FirstTerm<T> {
   return {
     kind: "first",
     predicate,
@@ -96,10 +93,7 @@ export function firstOrDefault<T>(
   };
 }
 
-export function last<T>(
-  predicate?: (item: T) => boolean,
-  expression?: ExprTree,
-): LastTerm<T> {
+export function last<T>(predicate?: (item: T) => boolean, expression?: ExprTree): LastTerm<T> {
   return {
     kind: "last",
     predicate,
@@ -136,10 +130,7 @@ export function lastOrDefault<T>(
   };
 }
 
-export function single<T>(
-  predicate?: (item: T) => boolean,
-  expression?: ExprTree,
-): SingleTerm<T> {
+export function single<T>(predicate?: (item: T) => boolean, expression?: ExprTree): SingleTerm<T> {
   return {
     kind: "single",
     predicate,
@@ -158,10 +149,7 @@ export function single<T>(
   };
 }
 
-export function any<T>(
-  predicate?: (item: T) => boolean,
-  expression?: ExprTree,
-): AnyTerm<T> {
+export function any<T>(predicate?: (item: T) => boolean, expression?: ExprTree): AnyTerm<T> {
   return {
     kind: "any",
     predicate,
@@ -173,10 +161,7 @@ export function any<T>(
   };
 }
 
-export function all<T>(
-  predicate: (item: T) => boolean,
-  expression?: ExprTree,
-): AllTerm<T> {
+export function all<T>(predicate: (item: T) => boolean, expression?: ExprTree): AllTerm<T> {
   return {
     kind: "all",
     predicate,
@@ -188,10 +173,7 @@ export function all<T>(
   };
 }
 
-export function count<T>(
-  predicate?: (item: T) => boolean,
-  expression?: ExprTree,
-): CountTerm<T> {
+export function count<T>(predicate?: (item: T) => boolean, expression?: ExprTree): CountTerm<T> {
   return {
     kind: "count",
     predicate,
@@ -204,10 +186,7 @@ export function count<T>(
   };
 }
 
-export function sum<T>(
-  selector?: (item: T) => number,
-  expression?: ExprTree,
-): SumTerm<T> {
+export function sum<T>(selector?: (item: T) => number, expression?: ExprTree): SumTerm<T> {
   return {
     kind: "sum",
     selector,
@@ -220,10 +199,7 @@ export function sum<T>(
   };
 }
 
-export function min<T>(
-  selector?: (item: T) => number,
-  expression?: ExprTree,
-): MinTerm<T> {
+export function min<T>(selector?: (item: T) => number, expression?: ExprTree): MinTerm<T> {
   return {
     kind: "min",
     selector,
@@ -239,10 +215,7 @@ export function min<T>(
   };
 }
 
-export function max<T>(
-  selector?: (item: T) => number,
-  expression?: ExprTree,
-): MaxTerm<T> {
+export function max<T>(selector?: (item: T) => number, expression?: ExprTree): MaxTerm<T> {
   return {
     kind: "max",
     selector,
@@ -258,10 +231,7 @@ export function max<T>(
   };
 }
 
-export function average<T>(
-  selector?: (item: T) => number,
-  expression?: ExprTree,
-): AverageTerm<T> {
+export function average<T>(selector?: (item: T) => number, expression?: ExprTree): AverageTerm<T> {
   return {
     kind: "average",
     selector,

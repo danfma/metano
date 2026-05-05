@@ -248,10 +248,7 @@ export function reverse<T>(): ReverseOp<T> {
   };
 }
 
-export function orderBy<T, K>(
-  keySelector: (item: T) => K,
-  expression?: ExprTree,
-): OrderByOp<T, K> {
+export function orderBy<T, K>(keySelector: (item: T) => K, expression?: ExprTree): OrderByOp<T, K> {
   return {
     kind: "orderBy",
     keySelector,
