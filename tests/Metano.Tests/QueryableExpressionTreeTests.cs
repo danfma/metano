@@ -134,22 +134,22 @@ public class QueryableExpressionTreeTests
     }
 
     [Test]
-    public async Task QueryableMethodAttribute_TriggersMetaOnEnumerableReceiver()
+    public async Task AsQueryableLift_TriggersMetaOnEnumerableSource()
     {
-        // Method-level [Queryable] applies to a custom extension that
-        // mirrors LINQ's surface but lives in System.Linq so the chain
-        // walker recognizes it (same rule as Enumerable / Queryable).
+        // Calling AsQueryable() on a plain IEnumerable lifts the chain
+        // into Queryable.Where (Expression<Func<…>> parameter), which
+        // fires the queryable trigger even though the original source
+        // was a plain Enumerable.
         var result = TranspileHelper.TranspileWithIrBodies(
             """
             using System.Collections.Generic;
             using System.Linq;
-            using Metano.Annotations;
 
             [Transpile]
             public static class UserExt
             {
                 public static IEnumerable<User> Adults(IEnumerable<User> users) =>
-                    System.Linq.Queryable.Where(users.AsQueryable(), u => u.Age >= 18);
+                    users.AsQueryable().Where(u => u.Age >= 18);
             }
 
             [Transpile]
