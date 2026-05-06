@@ -3,7 +3,7 @@ namespace Metano.Compiler.IR;
 /// <summary>
 /// IR shape of a lambda body captured for IQueryable analysis. Mirrors
 /// the runtime <c>ExprTree</c> union in
-/// <c>metano-runtime/system/linq-pipe/expr-tree.ts</c> — the bridge
+/// <c>metano-runtime/system/linq/expr-tree.ts</c> — the bridge
 /// lowers each variant to the matching TS object literal.
 ///
 /// <para>
