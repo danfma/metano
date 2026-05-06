@@ -233,9 +233,17 @@ internal sealed class IrExpressionTreeExtractor
         return new IrExprCapture(existing.Name, existing.Type);
     }
 
+    /// <summary>
+    /// Resolves the type of <paramref name="expr"/> for tree emission.
+    /// Prefers <c>ConvertedType</c> so contextual conversions (e.g.
+    /// <c>1</c> binding to a <c>long</c> parameter) keep the actual
+    /// expression type the provider sees, falling back to the static
+    /// <c>Type</c> when no conversion is in play.
+    /// </summary>
     private IrTypeRef? MapType(ExpressionSyntax expr)
     {
-        var t = _semantic.GetTypeInfo(expr).Type;
+        var info = _semantic.GetTypeInfo(expr);
+        var t = info.ConvertedType ?? info.Type;
         return t is null ? null : IrTypeRefMapper.Map(t, _originResolver, _target);
     }
 }

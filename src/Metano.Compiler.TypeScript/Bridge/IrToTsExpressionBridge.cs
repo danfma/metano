@@ -443,18 +443,38 @@ public static class IrToTsExpressionBridge
     private static TsExpression MapExprTree(IrExprTreeNode node) =>
         node switch
         {
-            IrExprParam p => TreeNode("param", ("name", new TsStringLiteral(p.Name))),
-            IrExprCapture c => TreeNode("capture", ("name", new TsStringLiteral(c.Name))),
-            IrExprLiteral lit => TreeNode("literal", ("value", MapLiteralValue(lit.Value))),
+            IrExprParam p => TreeNode(
+                "param",
+                ("name", new TsStringLiteral(p.Name)),
+                ("type", MapOptionalType(p.Type))
+            ),
+            IrExprCapture c => TreeNode(
+                "capture",
+                ("name", new TsStringLiteral(c.Name)),
+                ("type", MapOptionalType(c.Type))
+            ),
+            IrExprLiteral lit => TreeNode(
+                "literal",
+                ("value", MapLiteralValue(lit.Value)),
+                ("type", MapOptionalType(lit.Type))
+            ),
+            // Member access on the lowered TS object lines up with the
+            // member-casing rule (no reserved-word escape) used elsewhere
+            // in the bridge.
             IrExprMember m => TreeNode(
                 "member",
                 ("target", MapExprTree(m.Target)),
                 ("member", new TsStringLiteral(TypeScriptNaming.ToCamelCaseMember(m.Member)))
             ),
+            // Method names follow the same member-casing rule so the
+            // tree's `method` matches the actual TS property emitted on
+            // the lowered runtime surface; ToCamelCase would escape JS
+            // reserved words (e.g. Delete -> delete_) which would
+            // diverge from the call site.
             IrExprCall call => TreeNode(
                 "call",
                 ("target", call.Target is null ? new TsLiteral("null") : MapExprTree(call.Target)),
-                ("method", new TsStringLiteral(TypeScriptNaming.ToCamelCase(call.Method))),
+                ("method", new TsStringLiteral(TypeScriptNaming.ToCamelCaseMember(call.Method))),
                 ("args", new TsArrayLiteral(call.Args.Select(MapExprTree).ToList()))
             ),
             IrExprBinary bin => TreeNode(
@@ -479,9 +499,18 @@ public static class IrToTsExpressionBridge
             ),
         };
 
+    /// <summary>
+    /// Builds an object literal entry for <paramref name="type"/> when
+    /// non-null. Skipped fields land as <c>(key, null)</c> tuples that
+    /// <see cref="TreeNode"/> filters out, keeping the emitted JS object
+    /// minimal.
+    /// </summary>
+    private static TsExpression? MapOptionalType(IrTypeRef? type) =>
+        type is null ? null : new TsStringLiteral(Printer.RenderType(IrToTsTypeMapper.Map(type)));
+
     private static TsObjectLiteral TreeNode(
         string kind,
-        params (string Key, TsExpression Value)[] fields
+        params (string Key, TsExpression? Value)[] fields
     )
     {
         var props = new List<TsObjectProperty>(fields.Length + 1)
@@ -489,7 +518,10 @@ public static class IrToTsExpressionBridge
             new("kind", new TsStringLiteral(kind)),
         };
         foreach (var (key, value) in fields)
-            props.Add(new TsObjectProperty(key, value));
+        {
+            if (value is not null)
+                props.Add(new TsObjectProperty(key, value));
+        }
         return new TsObjectLiteral(props);
     }
 
@@ -499,6 +531,9 @@ public static class IrToTsExpressionBridge
             null => new TsLiteral("null"),
             bool b => new TsLiteral(b ? "true" : "false"),
             string s => new TsStringLiteral(s),
+            char c => new TsStringLiteral(c.ToString()),
+            Enum e => new TsStringLiteral(e.ToString()),
+            IFormattable f => new TsLiteral(f.ToString(null, CultureInfo.InvariantCulture)),
             _ => new TsLiteral(value.ToString() ?? "null"),
         };
 
