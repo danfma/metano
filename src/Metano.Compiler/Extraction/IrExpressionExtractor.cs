@@ -3240,15 +3240,12 @@ public sealed class IrExpressionExtractor
         return HasQueryableAttribute(paramSymbol) || IsExpressionDelegateType(paramSymbol.Type);
     }
 
-    private static bool HasQueryableAttribute(ISymbol symbol)
-    {
-        foreach (var attr in symbol.GetAttributes())
-        {
-            if (attr.AttributeClass?.ToDisplayString() == "Metano.Annotations.QueryableAttribute")
-                return true;
-        }
-        return false;
-    }
+    private static bool HasQueryableAttribute(ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(attr =>
+                attr.AttributeClass?.ToDisplayString() == "Metano.Annotations.QueryableAttribute"
+            );
 
     private static bool IsExpressionDelegateType(ITypeSymbol type) =>
         type is INamedTypeSymbol named
@@ -3260,14 +3257,8 @@ public sealed class IrExpressionExtractor
         var receiverType = _semantic.GetTypeInfo(receiverSyntax).Type;
         if (receiverType is null)
             return false;
-        if (IsIQueryableNamed(receiverType as INamedTypeSymbol))
-            return true;
-        foreach (var iface in receiverType.AllInterfaces)
-        {
-            if (IsIQueryableNamed(iface))
-                return true;
-        }
-        return false;
+        return IsIQueryableNamed(receiverType as INamedTypeSymbol)
+            || receiverType.AllInterfaces.Any(IsIQueryableNamed);
     }
 
     private static bool IsIQueryableNamed(INamedTypeSymbol? type) =>
