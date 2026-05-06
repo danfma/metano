@@ -70,8 +70,9 @@ export type TerminalKind =
  * + a runtime walker (`apply`). Concrete descriptors extend this with the
  * operator's typed parameters so providers can read them without casting.
  *
- * Operators that accept a lambda also carry an optional `expression`
- * field. Populated by the compiler when the call site uses an opt-in
+ * Operators that accept a lambda also carry an optional `queryable`
+ * field of shape `QueryableMeta` (`{ tree, captures? }`). Populated
+ * by the compiler when the call site uses an opt-in
  * IQueryable surface (`[Queryable]` attribute on the C# side, or a
  * BCL `Expression<Func<…>>` parameter type). Absent for plain LINQ-to-
  * Objects calls — providers fall back to running the closure.

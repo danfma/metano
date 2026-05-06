@@ -3,7 +3,7 @@ namespace Metano.Compiler.IR;
 /// <summary>
 /// Strongly-typed catalog of LINQ operators the pipe-form lowering
 /// supports. Each value maps 1:1 to a function exported from
-/// <c>metano-runtime/system/linq-pipe</c> and to a Roslyn method name on
+/// <c>metano-runtime/system/linq</c> and to a Roslyn method name on
 /// <c>System.Linq.Enumerable</c> / <c>System.Linq.Queryable</c>.
 /// <para>
 /// The two-way translation lives in helpers attached to this enum so the

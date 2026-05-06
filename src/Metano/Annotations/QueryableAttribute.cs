@@ -5,7 +5,8 @@ namespace Metano.Annotations;
 /// expression-tree capture. When applied, the transpiler walks each
 /// lambda body via the Roslyn semantic model and emits an IR expression
 /// tree alongside the runtime closure — landing in the descriptor's
-/// optional <c>expression</c> field on the TypeScript side.
+/// optional <c>queryable</c> field (<c>QueryableMeta</c>) on the
+/// TypeScript-side descriptor.
 ///
 /// <code>
 /// public static class IQueryableExt
@@ -36,7 +37,7 @@ namespace Metano.Annotations;
 /// <para>
 /// Without this attribute, lambdas keep the legacy LINQ-to-Objects
 /// behavior — closures with no expression tree. Providers that need
-/// introspection check for the <c>expression</c> field before falling
+/// introspection check for the <c>queryable</c> field before falling
 /// back to runtime walking.
 /// </para>
 ///
@@ -48,7 +49,7 @@ namespace Metano.Annotations;
 ///
 /// <para>
 /// Captured trees follow the MVP shape declared in
-/// <c>metano-runtime/system/linq-pipe/expr-tree.ts</c>: param / literal /
+/// <c>metano-runtime/system/linq/expr-tree.ts</c>: param / literal /
 /// member / call / binary / unary / conditional / lambda / new. Bodies
 /// outside that subset emit a diagnostic so the user can refactor or
 /// drop <c>[Queryable]</c>.

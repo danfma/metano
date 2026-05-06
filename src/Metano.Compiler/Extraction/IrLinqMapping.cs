@@ -12,7 +12,7 @@ namespace Metano.Compiler.Extraction;
 /// <para>
 /// The table covers <c>System.Linq.Enumerable</c> +
 /// <c>System.Linq.Queryable</c> methods with a direct counterpart in
-/// the runtime <c>system/linq-pipe</c> module. Methods with no pipe
+/// the runtime <c>system/linq</c> module. Methods with no pipe
 /// equivalent (e.g. <c>Cast&lt;T&gt;</c>, <c>OfType&lt;T&gt;</c>,
 /// <c>SequenceEqual</c>) deliberately stay out — the chain walker
 /// short-circuits when it hits one and the legacy fluent emission path
