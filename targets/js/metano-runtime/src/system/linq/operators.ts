@@ -12,6 +12,7 @@
  * Short-circuit terminals (`first`, `take(n)`) stop iterating as soon
  * as their result is determined.
  */
+import { HashSet } from "../collections/hash-set.ts";
 import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 import type {
@@ -204,7 +205,7 @@ export function distinct<T>(): DistinctOp<T> {
     kind: "distinct",
     apply: (source) => ({
       *[Symbol.iterator]() {
-        const seen = new Set<T>();
+        const seen = new HashSet<T>();
         for (const item of source)
           if (!seen.has(item)) {
             seen.add(item);
@@ -225,7 +226,7 @@ export function distinctBy<T, K>(
     queryable,
     apply: (source) => ({
       *[Symbol.iterator]() {
-        const seen = new Set<K>();
+        const seen = new HashSet<K>();
         for (const item of source) {
           const key = keySelector(item);
           if (!seen.has(key)) {
@@ -406,11 +407,16 @@ export function zip<T, U, R>(
       *[Symbol.iterator]() {
         const itA = source[Symbol.iterator]();
         const itB = other[Symbol.iterator]();
-        while (true) {
-          const a = itA.next();
-          const b = itB.next();
-          if (a.done || b.done) return;
-          yield resultSelector(a.value, b.value);
+        try {
+          while (true) {
+            const a = itA.next();
+            const b = itB.next();
+            if (a.done || b.done) return;
+            yield resultSelector(a.value, b.value);
+          }
+        } finally {
+          itA.return?.();
+          itB.return?.();
         }
       },
     }),

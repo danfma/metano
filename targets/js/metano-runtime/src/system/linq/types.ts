@@ -1,3 +1,4 @@
+import type { HashSet } from "../collections/hash-set.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 
 /**
@@ -240,7 +241,7 @@ export interface ToMapTerm<T, K, V> extends TerminalBase<T, Map<K, V>> {
   readonly valueQueryable?: QueryableMeta;
 }
 
-export interface ToSetTerm<T> extends TerminalBase<T, Set<T>> {
+export interface ToSetTerm<T> extends TerminalBase<T, HashSet<T>> {
   readonly kind: "toSet";
 }
 
