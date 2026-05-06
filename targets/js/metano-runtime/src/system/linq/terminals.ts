@@ -9,6 +9,8 @@
  * Short-circuit terminals (`first`, `any`, `contains`) stop iterating
  * as soon as the answer is known.
  */
+import { HashSet } from "../collections/hash-set.ts";
+import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 import type {
   AggregateTerm,
@@ -40,9 +42,9 @@ export function toArray<T>(): ToArrayTerm<T> {
   };
 }
 
-export function toMap<T, K, V>(
+export function toMap<T, K, V = T>(
   keySelector: (item: T) => K,
-  valueSelector: (item: T) => V,
+  valueSelector: (item: T) => V = ((item: T) => item) as unknown as (item: T) => V,
   keyQueryable?: QueryableMeta,
   valueQueryable?: QueryableMeta,
 ): ToMapTerm<T, K, V> {
@@ -63,7 +65,7 @@ export function toMap<T, K, V>(
 export function toSet<T>(): ToSetTerm<T> {
   return {
     kind: "toSet",
-    apply: (source) => new Set(source),
+    apply: (source) => new HashSet(source),
   };
 }
 
@@ -280,7 +282,7 @@ export function minBy<T, K>(
       let found = false;
       for (const item of source) {
         const key = keySelector(item);
-        if (!found || (key as unknown as number) < (minKey as unknown as number)) {
+        if (!found || compareKeys(key, minKey as K) < 0) {
           result = item;
           minKey = key;
           found = true;
@@ -306,7 +308,7 @@ export function maxBy<T, K>(
       let found = false;
       for (const item of source) {
         const key = keySelector(item);
-        if (!found || (key as unknown as number) > (maxKey as unknown as number)) {
+        if (!found || compareKeys(key, maxKey as K) > 0) {
           result = item;
           maxKey = key;
           found = true;

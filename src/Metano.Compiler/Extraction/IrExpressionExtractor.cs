@@ -3133,6 +3133,14 @@ public sealed class IrExpressionExtractor
             if (current.Expression is not MemberAccessExpressionSyntax memberAccess)
                 return null; // static-direct calls (e.g. Enumerable.Where(items, p)) — MVP only handles extension form.
 
+            // Static call syntax (`Enumerable.Where(items, p)`) also matches
+            // MemberAccess. Detect it by the receiver expression resolving
+            // to a type symbol — extension form's receiver always resolves
+            // to a value (parameter, local, member). Bail to legacy fluent
+            // emission so the call shape stays correct.
+            if (_semantic.GetSymbolInfo(memberAccess.Expression).Symbol is INamedTypeSymbol)
+                return null;
+
             var args = current.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
             stages.Add(new IrLinqStage(op, args));
 
