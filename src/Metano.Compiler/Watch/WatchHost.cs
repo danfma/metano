@@ -50,20 +50,26 @@ public static class WatchHost
                 $"Cannot derive watch directory from project path '{fullProjectPath}'."
             );
 
-        Console.WriteLine($"Metano: watching {watchDir} for .cs / .csproj changes …");
+        Console.WriteLine(
+            $"Metano: watching {watchDir} for .cs / .csproj / .props / .targets changes …"
+        );
         Console.WriteLine("  (Ctrl+C to exit)");
 
         await SafeRun(runOnce);
 
         using var watcher = CreateWatcher(watchDir);
         var changeSignal = new SemaphoreSlim(0, int.MaxValue);
-        var lastEventAtUtc = DateTime.UtcNow;
+        // The watcher fires events on background threads; the wait loop
+        // reads the timestamp on the consumer thread. Store ticks in a
+        // long behind Volatile.Read/Write so the debounce always sees
+        // the latest value and never tears on 32-bit.
+        var lastEventAtUtcTicks = DateTime.UtcNow.Ticks;
 
         void OnFileEvent(string path)
         {
             if (!IsRelevant(path))
                 return;
-            lastEventAtUtc = DateTime.UtcNow;
+            Volatile.Write(ref lastEventAtUtcTicks, DateTime.UtcNow.Ticks);
             changeSignal.Release();
         }
 
@@ -98,7 +104,10 @@ public static class WatchHost
             while (!cancellationToken.IsCancellationRequested)
             {
                 await changeSignal.WaitAsync(cancellationToken);
-                await WaitForQuietPeriod(() => lastEventAtUtc, cancellationToken);
+                await WaitForQuietPeriod(
+                    () => new DateTime(Volatile.Read(ref lastEventAtUtcTicks), DateTimeKind.Utc),
+                    cancellationToken
+                );
                 Drain(changeSignal);
 
                 Console.WriteLine();
@@ -128,14 +137,26 @@ public static class WatchHost
                 | NotifyFilters.Size,
         };
 
+    /// <summary>
+    /// Sleeps just long enough for the burst to settle. Always delays
+    /// for the *remaining* quiet-period (DebounceMs minus elapsed
+    /// since the last event) instead of a fixed slice — without that
+    /// adjustment the effective debounce drifts up to nearly 2×
+    /// <see cref="DebounceMs"/> when an event lands right after a
+    /// delay starts.
+    /// </summary>
     private static async Task WaitForQuietPeriod(
         Func<DateTime> lastEventAtUtc,
         CancellationToken cancellationToken
     )
     {
-        while ((DateTime.UtcNow - lastEventAtUtc()).TotalMilliseconds < DebounceMs)
+        while (true)
         {
-            await Task.Delay(DebounceMs, cancellationToken);
+            var elapsed = (DateTime.UtcNow - lastEventAtUtc()).TotalMilliseconds;
+            var remaining = DebounceMs - elapsed;
+            if (remaining <= 0)
+                return;
+            await Task.Delay((int)Math.Ceiling(remaining), cancellationToken);
         }
     }
 
