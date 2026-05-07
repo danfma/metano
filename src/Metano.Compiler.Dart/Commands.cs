@@ -14,6 +14,7 @@ public class Commands
     /// <param name="clean">-c, Clean output directory before generating.</param>
     /// <param name="filePrefix">Opaque text written verbatim at the top of every generated file, followed by a single newline. Use for `// @generated` provenance markers or Dart linter directives.</param>
     /// <param name="dryRun">Run the full pipeline but do NOT write any files. Print a preflight summary (file count + total line count + per-file paths) instead.</param>
+    /// <param name="noCache">Disable the incremental cache. Forces a full transpilation even when sources, references, and outputs are byte-identical to the previous run.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -21,7 +22,8 @@ public class Commands
         bool time = false,
         bool clean = false,
         string? filePrefix = null,
-        bool dryRun = false
+        bool dryRun = false,
+        bool noCache = false
     )
     {
         var target = new DartTarget();
@@ -32,7 +34,8 @@ public class Commands
             ShowTimings: time,
             Clean: clean,
             FilePrefix: filePrefix,
-            DryRun: dryRun
+            DryRun: dryRun,
+            NoCache: noCache
         );
 
         var result = await TranspilerHost.RunAsync(options, target);

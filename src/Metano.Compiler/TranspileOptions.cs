@@ -10,5 +10,6 @@ public sealed record TranspileOptions(
     bool ShowTimings = false,
     bool Clean = false,
     string? FilePrefix = null,
-    bool DryRun = false
+    bool DryRun = false,
+    bool NoCache = false
 );

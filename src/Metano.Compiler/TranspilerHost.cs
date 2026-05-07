@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Metano.Compiler.Caching;
 using Metano.Compiler.Diagnostics;
 
 namespace Metano.Compiler;
@@ -51,6 +52,29 @@ public static class TranspilerHost
 
         if (options.ShowTimings)
             Console.WriteLine($"  Compilation: {compileSw.ElapsedMilliseconds}ms");
+
+        // Incremental cache short-circuit (#21 / ADR-0021): if every C#
+        // syntax tree, every metadata reference, and every output file
+        // matches the previously cached fingerprint, skip the rest of
+        // the pipeline. --clean (which already wiped the output dir
+        // including .metano-cache.json) and --no-cache opt out.
+        var sourceHashes = CacheKeyBuilder.ComputeSourceHashes(compilation);
+        var referenceFingerprints = CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
+        if (
+            ShouldAttemptCache(options)
+            && TryShortCircuitFromCache(
+                outputDir,
+                target.Language.ToString(),
+                sourceHashes,
+                referenceFingerprints,
+                options.ShowTimings,
+                totalSw,
+                out var cachedFiles
+            )
+        )
+        {
+            return new TranspileResult(true, cachedFiles, 0, 0);
+        }
 
         var transpileSw = Stopwatch.StartNew();
         var output = target.Transform(ir, compilation);
@@ -106,7 +130,78 @@ public static class TranspilerHost
 
         Console.WriteLine($"Metano: {output.Files.Count} file(s) generated in {outputDir}");
 
+        WriteCacheIfEnabled(
+            options,
+            target,
+            outputDir,
+            output.Files,
+            sourceHashes,
+            referenceFingerprints
+        );
+
         return new TranspileResult(true, output.Files, warningCount, 0);
+    }
+
+    private static bool ShouldAttemptCache(TranspileOptions options) =>
+        !options.NoCache && !options.DryRun && !options.Clean;
+
+    private static void WriteCacheIfEnabled(
+        TranspileOptions options,
+        ITranspilerTarget target,
+        string outputDir,
+        IReadOnlyList<GeneratedFile> files,
+        IReadOnlyDictionary<string, string> sourceHashes,
+        IReadOnlyDictionary<string, string> referenceFingerprints
+    )
+    {
+        if (options.NoCache || options.DryRun)
+            return;
+        var prefixBlock = string.IsNullOrEmpty(options.FilePrefix)
+            ? null
+            : options.FilePrefix + "\n";
+        var outputHashes = CacheKeyBuilder.HashGeneratedContent(files, prefixBlock);
+        var cache = new TranspilationCache(
+            FormatVersion: TranspilationCache.CurrentFormatVersion,
+            Target: target.Language.ToString(),
+            SourceHashes: sourceHashes,
+            ReferenceFingerprints: referenceFingerprints,
+            OutputHashes: outputHashes
+        );
+        cache.Write(outputDir);
+    }
+
+    private static bool TryShortCircuitFromCache(
+        string outputDir,
+        string targetLanguage,
+        IReadOnlyDictionary<string, string> sourceHashes,
+        IReadOnlyDictionary<string, string> referenceFingerprints,
+        bool showTimings,
+        Stopwatch totalSw,
+        out IReadOnlyList<GeneratedFile> cachedFiles
+    )
+    {
+        cachedFiles = [];
+        var cache = TranspilationCache.TryRead(outputDir);
+        if (cache is null)
+            return false;
+        if (!string.Equals(cache.Target, targetLanguage, StringComparison.Ordinal))
+            return false;
+        if (!CacheKeyBuilder.DictionariesEqual(cache.SourceHashes, sourceHashes))
+            return false;
+        if (!CacheKeyBuilder.DictionariesEqual(cache.ReferenceFingerprints, referenceFingerprints))
+            return false;
+        if (!CacheKeyBuilder.OutputsStillValid(outputDir, cache.OutputHashes))
+            return false;
+
+        cachedFiles = CacheKeyBuilder.RehydrateFiles(outputDir, cache.OutputHashes);
+
+        totalSw.Stop();
+        Console.WriteLine(
+            $"Metano: incremental cache hit — {cache.OutputHashes.Count} output file(s) reused, no work to do."
+        );
+        if (showTimings)
+            Console.WriteLine($"  Total: {totalSw.ElapsedMilliseconds}ms");
+        return true;
     }
 
     private static void PrintDryRunSummary(string outputDir, IReadOnlyList<GeneratedFile> files)
