@@ -43,14 +43,23 @@ export function productColumn(memberName: string): string {
  * column itself is REAL on the SQL side (lossy, suitable for the
  * sample's scale).
  */
-export function mapProductRow(row: Record<string, unknown>): Product {
+export interface ProductRow {
+  id: number;
+  name: string;
+  display_name: string;
+  unit_price: number;
+  stock_count: number;
+  is_active: number;
+}
+
+export function mapProductRow(row: ProductRow): Product {
   return new Product(
-    Number(row["id"]),
-    String(row["name"]),
-    String(row["display_name"]),
-    new Decimal(Number(row["unit_price"])),
-    Number(row["stock_count"]),
-    Boolean(row["is_active"]),
+    row.id,
+    row.name,
+    row.display_name,
+    new Decimal(row.unit_price),
+    row.stock_count,
+    Boolean(row.is_active),
   );
 }
 

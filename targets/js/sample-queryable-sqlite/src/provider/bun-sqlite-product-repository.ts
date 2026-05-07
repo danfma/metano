@@ -16,7 +16,7 @@ import type { Database } from "bun:sqlite";
 import { getStages } from "metano-runtime";
 import type { Product } from "#/product";
 import type { IProductRepository } from "#/provider/i-product-repository";
-import { mapProductRow, productColumn, SEED_ROWS } from "#/provider/db";
+import { mapProductRow, productColumn, type ProductRow, SEED_ROWS } from "#/provider/db";
 import {
   type Stage,
   type TranslatedQuery,
@@ -68,10 +68,7 @@ export class BunSqliteProductRepository implements IProductRepository {
         if (!(err instanceof UntranslatableTreeError)) throw err;
       }
     }
-    let n = 0;
-    // biome-ignore lint/correctness/noUnusedVariables: counter only needs to advance the iterator
-    for (const _ of query) n++;
-    return n;
+    return Array.from(query).length;
   }
 
   firstOrDefault(query: Iterable<Product>): Product | null {
@@ -95,28 +92,37 @@ export class BunSqliteProductRepository implements IProductRepository {
   private executeRows(stages: readonly Stage[]): Product[] {
     const translated = translateChain(TABLE, productColumn, stages);
     const stmt = this.db.query(translated.sql);
-    // biome-ignore lint/suspicious/noExplicitAny: bind union is wider than ours by construction
-    const rawRows = stmt.all(...(translated.params as any[])) as Record<string, unknown>[];
+    const rawRows = stmt.all(...bindable(translated.params)) as ProductRow[];
     if (translated.projected) {
-      // biome-ignore lint/suspicious/noExplicitAny: projection narrows to a single column
-      return rawRows.map((row) => Object.values(row)[0]) as any;
+      return rawRows.map((row) => Object.values(row)[0]) as Product[];
     }
     return rawRows.map(mapProductRow);
   }
 
   private executeCount(translated: TranslatedQuery): number {
     const stmt = this.db.query(translated.sql);
-    // biome-ignore lint/suspicious/noExplicitAny: same — bind union shape
-    const row = stmt.get(...(translated.params as any[])) as { c?: number } | null;
+    const row = stmt.get(...bindable(translated.params)) as { c?: number } | null;
     return row?.c ?? 0;
   }
 
   private executeFirst(translated: TranslatedQuery): Product | undefined {
     const stmt = this.db.query(translated.sql);
-    // biome-ignore lint/suspicious/noExplicitAny: same — bind union shape
-    const row = stmt.get(...(translated.params as any[])) as Record<string, unknown> | null;
+    const row = stmt.get(...bindable(translated.params)) as ProductRow | null;
     return row === null ? undefined : mapProductRow(row);
   }
+}
+
+/**
+ * `bun:sqlite`'s bind signature is a strict union (numbers, strings,
+ * booleans, bigints, Buffer, null). The translator pre-coerces values
+ * via its own `toBindable` helper so the runtime cast here is safe;
+ * the named helper isolates the cast to a single spot instead of
+ * littering each call site with biome-ignore comments.
+ */
+type SqliteBindable = number | string | bigint | boolean | Buffer | null;
+
+function bindable(params: readonly unknown[]): SqliteBindable[] {
+  return params as SqliteBindable[];
 }
 
 function toEntity(row: (typeof SEED_ROWS)[number]): Product {
