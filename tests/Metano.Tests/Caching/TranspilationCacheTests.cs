@@ -50,7 +50,8 @@ public class TranspilationCacheTests
         await Assert.That(roundTripped!.FormatVersion).IsEqualTo(original.FormatVersion);
         await Assert.That(roundTripped.Target).IsEqualTo("TypeScript");
         await Assert.That(roundTripped.SourceHashes["/proj/src/Foo.cs"]).IsEqualTo("abc123");
-        await Assert.That(roundTripped.ReferenceFingerprints["/refs/Bar.dll"])
+        await Assert
+            .That(roundTripped.ReferenceFingerprints["/refs/Bar.dll"])
             .IsEqualTo("12345:6789");
         await Assert.That(roundTripped.OutputHashes["src/foo.ts"]).IsEqualTo("def456");
     }
@@ -108,8 +109,14 @@ public class TranspilationCacheTests
 
         var firstRun = CacheKeyBuilder.HashGeneratedContent(files, prefixBlock: null);
         var secondRun = CacheKeyBuilder.HashGeneratedContent(files, prefixBlock: null);
-        var withSamePrefix = CacheKeyBuilder.HashGeneratedContent(files, prefixBlock: "// header\n");
-        var withDifferentPrefix = CacheKeyBuilder.HashGeneratedContent(files, prefixBlock: "// changed\n");
+        var withSamePrefix = CacheKeyBuilder.HashGeneratedContent(
+            files,
+            prefixBlock: "// header\n"
+        );
+        var withDifferentPrefix = CacheKeyBuilder.HashGeneratedContent(
+            files,
+            prefixBlock: "// changed\n"
+        );
 
         await Assert.That(firstRun["a.ts"]).IsEqualTo(secondRun["a.ts"]);
         await Assert.That(withSamePrefix["a.ts"]).IsNotEqualTo(firstRun["a.ts"]);
@@ -182,7 +189,10 @@ public class TranspilationCacheTests
 
     private string MakeTempDir()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "metano-cache-test-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(
+            Path.GetTempPath(),
+            "metano-cache-test-" + Guid.NewGuid().ToString("N")
+        );
         Directory.CreateDirectory(dir);
         _tempDirs.Add(dir);
         return dir;
