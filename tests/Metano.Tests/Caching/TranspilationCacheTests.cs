@@ -50,7 +50,8 @@ public class TranspilationCacheTests
         await Assert.That(roundTripped).IsNotNull();
         await Assert.That(roundTripped!.FormatVersion).IsEqualTo(original.FormatVersion);
         await Assert.That(roundTripped.Target).IsEqualTo("TypeScript");
-        await Assert.That(roundTripped.ConfigurationFingerprint)
+        await Assert
+            .That(roundTripped.ConfigurationFingerprint)
             .IsEqualTo("namespaceBarrels=False;stripInterfacePrefix=False");
         await Assert.That(roundTripped.SourceHashes["/proj/src/Foo.cs"]).IsEqualTo("abc123");
         await Assert

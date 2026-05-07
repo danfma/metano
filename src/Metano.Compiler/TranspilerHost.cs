@@ -213,7 +213,13 @@ public static class TranspilerHost
             return false;
         if (!string.Equals(cache.Target, targetLanguage, StringComparison.Ordinal))
             return false;
-        if (!string.Equals(cache.ConfigurationFingerprint, configFingerprint, StringComparison.Ordinal))
+        if (
+            !string.Equals(
+                cache.ConfigurationFingerprint,
+                configFingerprint,
+                StringComparison.Ordinal
+            )
+        )
             return false;
         if (!CacheKeyBuilder.DictionariesEqual(cache.SourceHashes, sourceHashes))
             return false;
@@ -221,7 +227,11 @@ public static class TranspilerHost
             return false;
 
         var prefixBlock = string.IsNullOrEmpty(filePrefix) ? null : filePrefix + "\n";
-        var rehydrated = CacheKeyBuilder.ValidateAndRehydrate(outputDir, cache.OutputHashes, prefixBlock);
+        var rehydrated = CacheKeyBuilder.ValidateAndRehydrate(
+            outputDir,
+            cache.OutputHashes,
+            prefixBlock
+        );
         if (rehydrated is null)
             return false;
 
