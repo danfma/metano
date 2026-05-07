@@ -10,7 +10,9 @@ namespace Metano.Compiler.Caching;
 /// SHA-256 hashes from the Roslyn syntax trees, reference fingerprints from
 /// the metadata reference file paths (size + last-write-time tuple — fast and
 /// good enough to spot a swap or rebuild), and on-disk output hashes by
-/// re-hashing the files the previous run pinned in the cache.
+/// re-hashing the files the previous run pinned in the cache. Output reads
+/// stream through <see cref="SHA256.HashData(Stream)"/> so a 50 MB generated
+/// file does not balloon into a managed string.
 /// </summary>
 public static class CacheKeyBuilder
 {
@@ -24,8 +26,10 @@ public static class CacheKeyBuilder
             // anything on disk and cannot be re-read on a subsequent run.
             if (string.IsNullOrEmpty(tree.FilePath))
                 continue;
-            var text = tree.GetText().ToString();
-            hashes[NormalizePath(tree.FilePath)] = Sha256(text);
+            var checksum = tree.GetText().GetChecksum();
+            // Roslyn computes the checksum from the underlying SourceText
+            // stream incrementally — no full-file string materialization.
+            hashes[NormalizePath(tree.FilePath)] = HexEncode(checksum.AsSpan());
         }
         return hashes;
     }
@@ -69,43 +73,55 @@ public static class CacheKeyBuilder
             var content = string.IsNullOrEmpty(prefixBlock)
                 ? file.Content
                 : prefixBlock + file.Content;
-            hashes[file.RelativePath] = Sha256(content);
+            hashes[file.RelativePath] = HashUtf8(content);
         }
         return hashes;
     }
 
-    public static bool OutputsStillValid(
-        string outputDir,
-        IReadOnlyDictionary<string, string> expectedHashes
-    )
-    {
-        foreach (var (relativePath, expected) in expectedHashes)
-        {
-            if (!MatchesOnDisk(ResolveOutputPath(outputDir, relativePath), expected))
-                return false;
-        }
-        return true;
-    }
-
     /// <summary>
-    /// Reads each cached output file from disk and returns it as a
-    /// <see cref="GeneratedFile"/>, so the host can populate
-    /// <c>TranspileResult.Files</c> on a cache hit (callers that read it
-    /// post-run keep seeing every emitted artifact, not an empty list).
+    /// In one disk pass per cached output: validates that every cached
+    /// path is safe (no rooted, no <c>..</c>) and points at a file with
+    /// the recorded hash, while collecting <see cref="GeneratedFile"/>
+    /// entries for the host to return on a cache hit. Returns
+    /// <see langword="null"/> on first mismatch / missing file / bad path
+    /// — the host treats that as a cache miss and falls through to the
+    /// full pipeline.
     /// </summary>
-    public static IReadOnlyList<GeneratedFile> RehydrateFiles(
+    public static IReadOnlyList<GeneratedFile>? ValidateAndRehydrate(
         string outputDir,
-        IReadOnlyDictionary<string, string> outputHashes
+        IReadOnlyDictionary<string, string> outputHashes,
+        string? prefixBlock
     )
     {
-        var files = new List<GeneratedFile>(outputHashes.Count);
-        foreach (var relativePath in outputHashes.Keys)
+        var rehydrated = new List<GeneratedFile>(outputHashes.Count);
+        foreach (var (relativePath, expectedHash) in outputHashes)
         {
-            var path = ResolveOutputPath(outputDir, relativePath);
-            if (File.Exists(path))
-                files.Add(new GeneratedFile(relativePath, File.ReadAllText(path)));
+            if (!IsSafeRelativePath(relativePath))
+                return null;
+            var fullPath = ResolveOutputPath(outputDir, relativePath);
+            if (!File.Exists(fullPath))
+                return null;
+
+            // Read once: hash + capture content for rehydration. Streamed
+            // hash so large outputs don't allocate a full-file string.
+            string content;
+            using (var stream = File.OpenRead(fullPath))
+            {
+                var actualHash = HexEncode(SHA256.HashData(stream));
+                if (actualHash != expectedHash)
+                    return null;
+            }
+            content = File.ReadAllText(fullPath);
+            // Strip the prefix block so rehydrated GeneratedFile.Content
+            // matches what target.Transform would produce — the host
+            // re-applies the prefix at write time on the full-pipeline
+            // path, so callers reading TranspileResult.Files see the
+            // same shape regardless of cache hit / miss.
+            if (!string.IsNullOrEmpty(prefixBlock) && content.StartsWith(prefixBlock))
+                content = content[prefixBlock.Length..];
+            rehydrated.Add(new GeneratedFile(relativePath, content));
         }
-        return files;
+        return rehydrated;
     }
 
     public static bool DictionariesEqual(
@@ -125,22 +141,36 @@ public static class CacheKeyBuilder
         return true;
     }
 
-    private static bool MatchesOnDisk(string path, string expectedHash)
+    /// <summary>
+    /// Rejects rooted paths and any segment equal to <c>..</c> so a
+    /// hand-edited cache file cannot point <c>OutputsStillValid</c> /
+    /// <c>RehydrateFiles</c> at arbitrary disk locations.
+    /// </summary>
+    private static bool IsSafeRelativePath(string relativePath)
     {
-        if (!File.Exists(path))
+        if (string.IsNullOrEmpty(relativePath))
             return false;
-        return Sha256(File.ReadAllText(path)) == expectedHash;
+        if (Path.IsPathRooted(relativePath))
+            return false;
+        foreach (var segment in relativePath.Split('/', '\\'))
+        {
+            if (segment == "..")
+                return false;
+        }
+        return true;
     }
 
     private static string ResolveOutputPath(string outputDir, string relativePath) =>
         Path.Combine(outputDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
 
-    private static string Sha256(string content)
+    private static string HashUtf8(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash);
+        return HexEncode(hash);
     }
+
+    private static string HexEncode(ReadOnlySpan<byte> bytes) => Convert.ToHexString(bytes);
 
     private static string NormalizePath(string path) => Path.GetFullPath(path);
 }

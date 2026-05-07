@@ -28,13 +28,22 @@ The cache file lives at `<outputDir>/.metano-cache.json`. Shape:
 
 ```json
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "target": "TypeScript",
+  "configurationFingerprint": "target=namespaceBarrels=False;stripInterfacePrefix=False;filePrefix=",
   "sourceHashes":           { "<absolute .cs path>": "<sha256-hex>" },
   "referenceFingerprints":  { "<absolute .dll path>": "<length>:<lastWriteTimeUtc.ticks>" },
   "outputHashes":           { "<relative output path>": "<sha256-hex>" }
 }
 ```
+
+The `configurationFingerprint` mixes the host's `--file-prefix` with each
+target's per-run flags exposed via the new
+`ITranspilerTarget.ConfigurationFingerprint` property (the TypeScript
+target pins `NamespaceBarrels` and `StripInterfacePrefix`; the Dart
+target has no flags today and returns the empty string). Flag flips
+invalidate the cache even when sources and references are
+byte-identical.
 
 `TranspilerHost.RunAsync` short-circuits the pipeline when **all** of
 the following match the cached fingerprint:
@@ -46,9 +55,20 @@ the following match the cached fingerprint:
 
 If anything diverges, the host runs the full pipeline and overwrites
 the cache file at the end. `--clean` wipes the output directory
-(including the cache file), so a clean run always rebuilds. `--no-cache`
-opts the run out of both reading and writing the cache. `--dry-run`
-also opts out of cache writes — there are no on-disk files to pin.
+(including the cache file) before the run, so a clean run always
+rebuilds, but the post-run write still happens — the next run gets a
+fresh cache to consult. `--no-cache` opts the run out of both reading
+and writing. `--dry-run` opts out of writes — there are no on-disk
+files to pin.
+
+The cache hit path validates and rehydrates outputs in a single disk
+pass: each cached path is checked for traversal segments
+(`..` / rooted), opened once, streamed through `SHA256.HashData`, and
+then read back as text for the rehydrated `GeneratedFile`. The host
+strips the file-prefix block when present so
+`TranspileResult.Files` on a cache hit matches what
+`target.Transform` would return on a full run (no prefix — the host
+adds it at write time).
 
 ### Why source-hash + reference-fingerprint, not type-level sig hashes (yet)
 

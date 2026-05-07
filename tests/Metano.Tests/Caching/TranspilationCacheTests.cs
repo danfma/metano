@@ -29,6 +29,7 @@ public class TranspilationCacheTests
         var original = new TranspilationCache(
             FormatVersion: TranspilationCache.CurrentFormatVersion,
             Target: "TypeScript",
+            ConfigurationFingerprint: "namespaceBarrels=False;stripInterfacePrefix=False",
             SourceHashes: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["/proj/src/Foo.cs"] = "abc123",
@@ -49,6 +50,8 @@ public class TranspilationCacheTests
         await Assert.That(roundTripped).IsNotNull();
         await Assert.That(roundTripped!.FormatVersion).IsEqualTo(original.FormatVersion);
         await Assert.That(roundTripped.Target).IsEqualTo("TypeScript");
+        await Assert.That(roundTripped.ConfigurationFingerprint)
+            .IsEqualTo("namespaceBarrels=False;stripInterfacePrefix=False");
         await Assert.That(roundTripped.SourceHashes["/proj/src/Foo.cs"]).IsEqualTo("abc123");
         await Assert
             .That(roundTripped.ReferenceFingerprints["/refs/Bar.dll"])
@@ -74,9 +77,28 @@ public class TranspilationCacheTests
             {
               "formatVersion": 999,
               "target": "TypeScript",
+              "configurationFingerprint": "",
               "sourceHashes": {},
               "referenceFingerprints": {},
               "outputHashes": {}
+            }
+            """
+        );
+
+        var cache = TranspilationCache.TryRead(dir);
+        await Assert.That(cache).IsNull();
+    }
+
+    [Test]
+    public async Task TryRead_ReturnsNull_WhenRequiredSectionMissing()
+    {
+        var dir = MakeTempDir();
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, TranspilationCache.FileName),
+            $$"""
+            {
+              "formatVersion": {{TranspilationCache.CurrentFormatVersion}},
+              "target": "TypeScript"
             }
             """
         );
@@ -124,7 +146,7 @@ public class TranspilationCacheTests
     }
 
     [Test]
-    public async Task OutputsStillValid_DetectsMissingFile()
+    public async Task ValidateAndRehydrate_ReturnsNull_WhenFileMissing()
     {
         var dir = MakeTempDir();
         await File.WriteAllTextAsync(Path.Combine(dir, "alive.ts"), "x");
@@ -135,11 +157,12 @@ public class TranspilationCacheTests
             ["missing.ts"] = "anything",
         };
 
-        await Assert.That(CacheKeyBuilder.OutputsStillValid(dir, expected)).IsFalse();
+        var result = CacheKeyBuilder.ValidateAndRehydrate(dir, expected, prefixBlock: null);
+        await Assert.That(result).IsNull();
     }
 
     [Test]
-    public async Task OutputsStillValid_DetectsModifiedFile()
+    public async Task ValidateAndRehydrate_ReturnsNull_WhenFileModified()
     {
         var dir = MakeTempDir();
         await File.WriteAllTextAsync(Path.Combine(dir, "edited.ts"), "original");
@@ -149,25 +172,12 @@ public class TranspilationCacheTests
             ["edited.ts"] = Sha256("not-the-current-content"),
         };
 
-        await Assert.That(CacheKeyBuilder.OutputsStillValid(dir, expected)).IsFalse();
+        var result = CacheKeyBuilder.ValidateAndRehydrate(dir, expected, prefixBlock: null);
+        await Assert.That(result).IsNull();
     }
 
     [Test]
-    public async Task OutputsStillValid_TrueWhenAllHashesMatch()
-    {
-        var dir = MakeTempDir();
-        await File.WriteAllTextAsync(Path.Combine(dir, "match.ts"), "match");
-
-        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["match.ts"] = Sha256("match"),
-        };
-
-        await Assert.That(CacheKeyBuilder.OutputsStillValid(dir, expected)).IsTrue();
-    }
-
-    [Test]
-    public async Task RehydrateFiles_ReadsContentFromDisk_PreservesRelativePathOrder()
+    public async Task ValidateAndRehydrate_ReturnsFiles_WhenAllHashesMatch()
     {
         var dir = MakeTempDir();
         await File.WriteAllTextAsync(Path.Combine(dir, "first.ts"), "alpha");
@@ -180,11 +190,57 @@ public class TranspilationCacheTests
             ["nested/second.ts"] = Sha256("beta"),
         };
 
-        var rehydrated = CacheKeyBuilder.RehydrateFiles(dir, hashes);
+        var rehydrated = CacheKeyBuilder.ValidateAndRehydrate(dir, hashes, prefixBlock: null);
 
-        await Assert.That(rehydrated.Count).IsEqualTo(2);
-        await Assert.That(rehydrated[0].Content).IsEqualTo("alpha");
-        await Assert.That(rehydrated[1].Content).IsEqualTo("beta");
+        await Assert.That(rehydrated).IsNotNull();
+        await Assert.That(rehydrated!.Count).IsEqualTo(2);
+        await Assert.That(rehydrated.Any(f => f.Content == "alpha")).IsTrue();
+        await Assert.That(rehydrated.Any(f => f.Content == "beta")).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateAndRehydrate_StripsPrefix_FromOnDiskContent()
+    {
+        var dir = MakeTempDir();
+        var prefix = "// header\n";
+        var raw = "export const x = 1;\n";
+        await File.WriteAllTextAsync(Path.Combine(dir, "prefixed.ts"), prefix + raw);
+
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["prefixed.ts"] = Sha256(prefix + raw),
+        };
+
+        var rehydrated = CacheKeyBuilder.ValidateAndRehydrate(dir, hashes, prefixBlock: prefix);
+
+        await Assert.That(rehydrated).IsNotNull();
+        await Assert.That(rehydrated![0].Content).IsEqualTo(raw);
+    }
+
+    [Test]
+    public async Task ValidateAndRehydrate_RejectsRootedPath()
+    {
+        var dir = MakeTempDir();
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["/etc/passwd"] = "anything",
+        };
+
+        var result = CacheKeyBuilder.ValidateAndRehydrate(dir, hashes, prefixBlock: null);
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task ValidateAndRehydrate_RejectsParentSegment()
+    {
+        var dir = MakeTempDir();
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["../escape.ts"] = "anything",
+        };
+
+        var result = CacheKeyBuilder.ValidateAndRehydrate(dir, hashes, prefixBlock: null);
+        await Assert.That(result).IsNull();
     }
 
     private string MakeTempDir()
