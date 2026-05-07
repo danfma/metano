@@ -11,11 +11,12 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// mutable <see cref="ICollection{T}"/>. Add semantics are <c>TryAdd</c>-style
 /// (duplicate inserts are silently ignored).
 /// </summary>
-internal sealed class ConcurrentHashSet<T>(IEqualityComparer<T>? comparer = null)
-    : ICollection<T>
+internal sealed class ConcurrentHashSet<T>(IEqualityComparer<T>? comparer = null) : ICollection<T>
     where T : notnull
 {
-    private readonly ConcurrentDictionary<T, byte> _store = new(comparer ?? EqualityComparer<T>.Default);
+    private readonly ConcurrentDictionary<T, byte> _store = new(
+        comparer ?? EqualityComparer<T>.Default
+    );
 
     public int Count => _store.Count;
     public bool IsReadOnly => false;
