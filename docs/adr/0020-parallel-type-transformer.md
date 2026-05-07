@@ -47,9 +47,10 @@ sinks listed above are made thread-safe at their declaration site
 rather than at every call site:
 
 - `TypeMappingContext.CrossPackageMisses` becomes
-  `ICollection<string>` backed by
-  `ConcurrentDictionary<string, byte>.Keys`. The dictionary is used
-  as a set; the value slot stays unused.
+  `ICollection<string>` backed by a small `ConcurrentHashSet<T>`
+  wrapper around `ConcurrentDictionary<T, byte>` (the BCL ships no
+  concurrent `HashSet`, and `ConcurrentDictionary.Keys` is read-only,
+  so a wrapper is required to expose `Add`).
 - `TypeMappingContext.UsedCrossPackages` becomes
   `IDictionary<string, string>` backed by
   `ConcurrentDictionary<string, string>`. The single call site in

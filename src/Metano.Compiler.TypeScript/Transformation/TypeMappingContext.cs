@@ -1,7 +1,39 @@
+using System.Collections;
 using System.Collections.Concurrent;
 using Metano.Compiler.IR;
 
 namespace Metano.Compiler.TypeScript.Transformation;
+
+/// <summary>
+/// Minimal thread-safe set built on top of <see cref="ConcurrentDictionary{TKey, TValue}"/>.
+/// The .NET BCL does not ship a concurrent <c>HashSet</c>; the dictionary's
+/// <c>Keys</c> property is read-only, so it cannot be used directly to back a
+/// mutable <see cref="ICollection{T}"/>. Add semantics are <c>TryAdd</c>-style
+/// (duplicate inserts are silently ignored).
+/// </summary>
+internal sealed class ConcurrentHashSet<T>(IEqualityComparer<T>? comparer = null)
+    : ICollection<T>
+    where T : notnull
+{
+    private readonly ConcurrentDictionary<T, byte> _store = new(comparer ?? EqualityComparer<T>.Default);
+
+    public int Count => _store.Count;
+    public bool IsReadOnly => false;
+
+    public void Add(T item) => _store.TryAdd(item, 0);
+
+    public void Clear() => _store.Clear();
+
+    public bool Contains(T item) => _store.ContainsKey(item);
+
+    public void CopyTo(T[] array, int arrayIndex) => _store.Keys.CopyTo(array, arrayIndex);
+
+    public bool Remove(T item) => _store.TryRemove(item, out _);
+
+    public IEnumerator<T> GetEnumerator() => _store.Keys.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+}
 
 /// <summary>
 /// Aggregates the per-compilation mutable state that <see cref="TypeMapper"/> needs during
@@ -56,13 +88,12 @@ public sealed class TypeMappingContext(
         assembliesNeedingEmitPackage;
 
     /// <summary>
-    /// Cross-package origins the resolver could not match. Backed by a
-    /// <see cref="ConcurrentDictionary{TKey, TValue}"/> keyed by FQN so writes
-    /// from parallel worker threads stay safe; the value slot is unused
-    /// (the dictionary is consumed as a set).
+    /// Cross-package origins the resolver could not match. Defaults to a
+    /// <see cref="ConcurrentHashSet{T}"/> so writes from parallel worker
+    /// threads stay safe.
     /// </summary>
     public ICollection<string> CrossPackageMisses { get; } =
-        crossPackageMisses ?? new ConcurrentDictionary<string, byte>(StringComparer.Ordinal).Keys;
+        crossPackageMisses ?? new ConcurrentHashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// Cross-package npm dependencies the run touched, keyed by package name and

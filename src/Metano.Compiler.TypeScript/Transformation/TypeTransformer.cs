@@ -205,14 +205,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             );
 
         // Build the explicit per-compilation context that replaces TypeMapper statics.
-        var crossPackageMisses = new HashSet<string>();
-        var usedCrossPackages = new Dictionary<string, string>();
+        // Omit the optional sinks so the context provisions concurrent defaults
+        // (ConcurrentHashSet for misses, ConcurrentDictionary for used packages) —
+        // the per-group transform loop below fans out across worker threads.
         var typeMappingContext = new TypeMappingContext(
             ir.BclExports,
             ir.CrossAssemblyOrigins,
-            ir.AssembliesNeedingEmitPackage,
-            crossPackageMisses,
-            usedCrossPackages
+            ir.AssembliesNeedingEmitPackage
         );
 
         // All callers now use the explicit TypeMappingContext — no static assignment needed.
@@ -278,13 +277,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // shared TypeScriptTransformContext (immutable after the setup
             // above), publishes its own per-group AsyncLocal slots for
             // UsingAliases, and only writes back into thread-safe sinks
-            // (TypeMapping.CrossPackageMisses / UsedCrossPackages are
-            // ConcurrentDictionary-backed; _diagnostics is guarded by a
-            // lock). Parallel.ForEach captures the current ExecutionContext
-            // per iteration so AsyncLocal writes inside a worker stay
-            // isolated. The result list preserves source order via the
-            // group index so downstream barrels and golden tests stay
-            // deterministic.
+            // (TypeMapping.CrossPackageMisses is a ConcurrentHashSet,
+            // UsedCrossPackages is ConcurrentDictionary-backed, and
+            // _diagnostics is guarded by a lock). Parallel.For captures the
+            // ambient ExecutionContext when each iteration starts so
+            // AsyncLocal writes inside a worker stay isolated. The result
+            // list preserves source order via the group index so downstream
+            // barrels and golden tests stay deterministic.
             var groups = GroupTypesByFile(transpilableTypes);
             var perGroupResults = new TsSourceFile?[groups.Count];
             Parallel.For(
