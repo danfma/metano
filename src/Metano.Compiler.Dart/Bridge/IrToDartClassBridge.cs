@@ -1,5 +1,5 @@
-using Metano.Compiler.IR;
 using Metano.Compiler.Dart.AST;
+using Metano.Compiler.IR;
 
 namespace Metano.Compiler.Dart.Bridge;
 

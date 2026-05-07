@@ -1,7 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler;
-using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Dart.Transformation;
+using Metano.Compiler.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 

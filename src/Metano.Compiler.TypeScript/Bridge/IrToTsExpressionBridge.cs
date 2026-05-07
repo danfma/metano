@@ -2,8 +2,8 @@ using System.Globalization;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
-using Metano.Compiler.TypeScript.Transformation;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -346,7 +346,7 @@ public static class IrToTsExpressionBridge
     /// `value?.member` becomes the TS optional chaining `value?.member` —
     /// the AST doesn't have a dedicated node, so we suffix the receiver
     /// text with `?` and let the printer emit it verbatim. Mirrors the
-    /// legacy <see cref="Metano.Compiler.Mappings.OptionalChainingHandler"/>
+    /// legacy <see cref="Metano.Compiler.TypeScript.Transformation.OptionalChainingHandler"/>
     /// shape so call-sites stay byte-for-byte identical.
     /// </summary>
     private static TsExpression MapOptionalChain(

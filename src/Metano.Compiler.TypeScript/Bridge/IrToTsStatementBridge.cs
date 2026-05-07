@@ -1,8 +1,8 @@
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
-using Metano.Compiler.TypeScript.Transformation;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 

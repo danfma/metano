@@ -38,12 +38,15 @@ The folder names line up with what each member *is*, and the rule
 
 - **`IR/`** holds pure IR data records only. No behavior, no Roslyn
   symbols. Anything that walks IR or reaches into Roslyn moves out.
-- **`Analysis/`** absorbs every pure walker over already-extracted
-  IR — `IrRuntimeRequirementScanner`, `IrEqualityClassifier`, and
-  `IrTypeDependencyGraph` (the last had its own one-class folder
-  before; consolidating signals "these have the same job"). The
-  cache (#21), watch (#18), and per-target bridges all consume the
-  same `Analysis/` surface.
+- **`Analysis/`** absorbs every walker that runs *after* the
+  Roslyn → IR extraction pass — `IrRuntimeRequirementScanner`
+  (pure IR walker), `IrEqualityClassifier` (pure IR walker), and
+  `IrTypeDependencyGraph` (still reads Roslyn symbols via
+  `IrCompilation.TranspilableTypeEntries` today; ADR-0018's
+  follow-up has it switching to pure IR once body-level extraction
+  populates `IrCompilation.Modules`). The cache (#21), watch
+  (#18), and per-target bridges all consume the same `Analysis/`
+  surface.
 - **`Mappings/`** carries the declarative BCL mapping schema —
   `DeclarativeMappingRegistry` (target-shared registry, was
   mis-namespaced in `Transformation/`) and `DeclarativeMappingEntry`
