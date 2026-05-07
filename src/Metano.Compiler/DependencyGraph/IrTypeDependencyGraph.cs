@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -97,10 +98,19 @@ public sealed class IrTypeDependencyGraph
                     stack.Push(next);
             }
         }
+        // Cycles (A → B → A) re-add the seed via a neighbor; strip
+        // it back out so the documented "excludes the seed" contract
+        // holds even when the graph contains cycles.
+        visited.Remove(typeFqn);
         return visited;
     }
 
-    private static readonly IReadOnlySet<string> EmptySet = new HashSet<string>();
+    /// <summary>
+    /// Shared empty-set sentinel returned by lookups that miss. Held
+    /// as <see cref="ImmutableHashSet{T}.Empty"/> so a caller cannot
+    /// downcast and mutate the singleton out from under everyone else.
+    /// </summary>
+    private static readonly IReadOnlySet<string> EmptySet = ImmutableHashSet<string>.Empty;
 
     /// <summary>
     /// Builds the graph from the transpilable type entries of an
@@ -163,18 +173,23 @@ public sealed class IrTypeDependencyGraph
     }
 
     /// <summary>
-    /// Canonical FQN used as the graph key — Roslyn's
-    /// <c>ToDisplayString</c> minus generic parameters so a
-    /// constructed reference like <c>List&lt;User&gt;</c> resolves to
-    /// the same key as the type's own definition (<c>User</c>).
+    /// Canonical FQN used as the graph key. Built from
+    /// <see cref="ISymbol.OriginalDefinition"/> so a constructed
+    /// reference like <c>List&lt;User&gt;</c> resolves to the same
+    /// key as the type's own definition. The display format keeps
+    /// the namespace + every containing type (so nested types like
+    /// <c>Outer.Inner</c> stay distinct) and the type-parameter
+    /// names (so generic arities don't collapse — <c>Foo</c> and
+    /// <c>Foo&lt;T&gt;</c> are different keys).
     /// </summary>
-    public static string QualifiedName(INamedTypeSymbol symbol)
-    {
-        var unbound = symbol.OriginalDefinition;
-        var ns = unbound.ContainingNamespace;
-        var name = unbound.Name;
-        return ns is null || ns.IsGlobalNamespace ? name : $"{ns.ToDisplayString()}.{name}";
-    }
+    public static string QualifiedName(INamedTypeSymbol symbol) =>
+        symbol.OriginalDefinition.ToDisplayString(QualifiedNameFormat);
+
+    private static readonly SymbolDisplayFormat QualifiedNameFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.ExpandNullable
+    );
 
     // -- Roslyn symbol walking -----------------------------------------------
 
@@ -257,7 +272,16 @@ public sealed class IrTypeDependencyGraph
         string selfFqn
     )
     {
-        var fqn = QualifiedName(symbol);
+        // Roll the reference up to its top-level containing type so a
+        // dependency on a nested type attributes back to the unit of
+        // invalidation the cache actually emits (the cache regenerates
+        // the top-level entry's output file as a whole, including
+        // every nested type co-located with it).
+        var topLevel = symbol;
+        while (topLevel.ContainingType is not null)
+            topLevel = topLevel.ContainingType;
+
+        var fqn = QualifiedName(topLevel);
         if (fqn == selfFqn || !ownTypes.Contains(fqn))
             return;
         acc.Add(fqn);
