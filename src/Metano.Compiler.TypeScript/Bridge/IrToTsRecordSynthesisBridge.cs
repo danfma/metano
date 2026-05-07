@@ -56,16 +56,18 @@ public static class IrToTsRecordSynthesisBridge
             "instanceof",
             new TsIdentifier(GetTypeName(ir))
         );
-        foreach (var param in ctorParams)
+        // The IR ctor param list mirrors the TS-lowered ctorParams in
+        // declaration order, so we lift each TS param's IR type by
+        // positional index rather than by name (TS names are
+        // camelCased while the IR keeps the C# casing).
+        var irTypes = ir.Constructor?.Parameters.Select(p => p.Parameter.Type).ToList();
+        for (var i = 0; i < ctorParams.Count; i++)
         {
+            var irType = irTypes is not null && i < irTypes.Count ? irTypes[i] : null;
             condition = new TsBinaryExpression(
                 condition,
                 "&&",
-                new TsBinaryExpression(
-                    new TsPropertyAccess(new TsIdentifier("this"), param.Name),
-                    "===",
-                    new TsPropertyAccess(new TsIdentifier("other"), param.Name)
-                )
+                FieldEquality(ctorParams[i], irType)
             );
         }
         return new TsMethodMember(
@@ -75,6 +77,65 @@ public static class IrToTsRecordSynthesisBridge
             [new TsReturnStatement(condition)]
         );
     }
+
+    /// <summary>
+    /// Emits the per-field comparison inside the synthesized
+    /// <c>equals</c>. Primitive / enum / branded / type-parameter
+    /// fields use <c>===</c>; everything else (nested records, BCL
+    /// value wrappers like <c>Decimal</c> / <c>Temporal</c>, plain
+    /// classes, arrays, maps, …) routes through the runtime
+    /// <c>valueEquals</c> helper so wrappers carrying their own
+    /// <c>equals</c> contract compare structurally instead of by
+    /// reference.
+    /// </summary>
+    private static TsExpression FieldEquality(TsConstructorParam param, IrTypeRef? irType)
+    {
+        var self = new TsPropertyAccess(new TsIdentifier("this"), param.Name);
+        var other = new TsPropertyAccess(new TsIdentifier("other"), param.Name);
+        if (UseStrictEquality(irType))
+            return new TsBinaryExpression(self, "===", other);
+        return new TsCallExpression(new TsIdentifier("valueEquals"), [self, other]);
+    }
+
+    private static bool UseStrictEquality(IrTypeRef? type) =>
+        type switch
+        {
+            null => true,
+            IrPrimitiveTypeRef p => UseStrictEqualityForPrimitive(p.Primitive),
+            IrTypeParameterRef => true,
+            IrNullableTypeRef nullable => UseStrictEquality(nullable.Inner),
+            IrNamedTypeRef named => UseStrictEqualityForNamed(named),
+            _ => false,
+        };
+
+    /// <summary>
+    /// JS treats some C# primitives as object values at runtime — the
+    /// BCL mappings lower <c>Decimal</c> to <c>decimal.js</c>'s
+    /// <c>Decimal</c> class, the date / time family to Temporal
+    /// objects, and <c>Guid</c> to the runtime's <c>UUID</c> class.
+    /// Those wrappers expose <c>equals</c> contracts and need to
+    /// route through <c>valueEquals</c>; the rest are real JS
+    /// primitives where <c>===</c> is correct and faster.
+    /// </summary>
+    private static bool UseStrictEqualityForPrimitive(IrPrimitive p) =>
+        p switch
+        {
+            IrPrimitive.Decimal => false,
+            IrPrimitive.Guid => false,
+            IrPrimitive.DateTime => false,
+            IrPrimitive.DateTimeOffset => false,
+            IrPrimitive.DateOnly => false,
+            IrPrimitive.TimeOnly => false,
+            IrPrimitive.TimeSpan => false,
+            _ => true,
+        };
+
+    private static bool UseStrictEqualityForNamed(IrNamedTypeRef named) =>
+        named.Semantics?.Kind
+            is IrNamedTypeKind.StringEnum
+                or IrNamedTypeKind.NumericEnum
+                or IrNamedTypeKind.Branded;
+
 
     // ── hashCode ─────────────────────────────────────────────────────────
 

@@ -109,14 +109,14 @@ public class EndToEndOutputTests
         // regression in the multi-type emission, decimal mapping, or self-import
         // elision shows up as a clear diff.
         var expected =
-            "import { HashCode } from \"metano-runtime\";\n"
+            "import { HashCode, valueEquals } from \"metano-runtime\";\n"
             + "import { Decimal } from \"decimal.js\";\n"
             + "\n"
             + "export class Issue {\n"
             + "  constructor(readonly title: string, readonly status: IssueStatus, readonly estimatedCost: Decimal) { }\n"
             + "\n"
             + "  equals(other: any): boolean {\n"
-            + "    return other instanceof Issue && this.title === other.title && this.status === other.status && this.estimatedCost === other.estimatedCost;\n"
+            + "    return other instanceof Issue && this.title === other.title && this.status === other.status && valueEquals(this.estimatedCost, other.estimatedCost);\n"
             + "  }\n"
             + "\n"
             + "  hashCode(): number {\n"

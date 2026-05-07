@@ -88,8 +88,61 @@ public static class IrRuntimeRequirementScanner
         // [PlainObject] records are emitted as bare interfaces / object literals — no
         // synthesized equals/hashCode/with — so the helper isn't needed.
         if (c.Semantics.IsRecord && !c.Semantics.IsPlainObject)
+        {
             acc.Add(new IrRuntimeRequirement("HashCode", IrRuntimeCategory.Hashing));
+            // The synthesized `equals` falls back to `valueEquals` for
+            // every constructor parameter whose type is not strictly
+            // primitive / enum / branded / type-parameter so wrapper
+            // types (Decimal, Temporal, nested records) compare via
+            // their own `equals` contract instead of `===`. Mirror the
+            // bridge's UseStrictEquality decision here so the import
+            // line lands only when a non-strict field actually exists.
+            if (c.Constructor is { Parameters.Count: > 0 } ctor && HasNonStrictField(ctor))
+                acc.Add(new IrRuntimeRequirement("ValueEquals", IrRuntimeCategory.Equality));
+        }
     }
+
+    private static bool HasNonStrictField(IrConstructorDeclaration ctor)
+    {
+        foreach (var p in ctor.Parameters)
+        {
+            if (!IsStrictlyComparable(p.Parameter.Type))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsStrictlyComparable(IrTypeRef type) =>
+        type switch
+        {
+            IrPrimitiveTypeRef p => IsStrictPrimitive(p.Primitive),
+            IrTypeParameterRef => true,
+            IrNullableTypeRef nullable => IsStrictlyComparable(nullable.Inner),
+            IrNamedTypeRef named => named.Semantics?.Kind
+                is IrNamedTypeKind.StringEnum
+                    or IrNamedTypeKind.NumericEnum
+                    or IrNamedTypeKind.Branded,
+            _ => false,
+        };
+
+    /// <summary>
+    /// Mirrors the bridge's primitive-strictness whitelist (see
+    /// <c>IrToTsRecordSynthesisBridge.UseStrictEqualityForPrimitive</c>).
+    /// Decimal / date-time / Guid lower to JS object wrappers that
+    /// expose their own <c>equals</c> contract, so a record carrying
+    /// any of them needs the runtime <c>valueEquals</c> import.
+    /// </summary>
+    private static bool IsStrictPrimitive(IrPrimitive p) =>
+        p
+            is not (
+                IrPrimitive.Decimal
+                or IrPrimitive.Guid
+                or IrPrimitive.DateTime
+                or IrPrimitive.DateTimeOffset
+                or IrPrimitive.DateOnly
+                or IrPrimitive.TimeOnly
+                or IrPrimitive.TimeSpan
+            );
 
     private static void ScanInterface(IrInterfaceDeclaration i, HashSet<IrRuntimeRequirement> acc)
     {
