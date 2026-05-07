@@ -1,0 +1,41 @@
+{
+  "name": "sample-queryable-sqlite",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
+    },
+    "#": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0",
+    "metano-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native-preview": "^7.0.0-dev.20260225.1"
+  },
+  "scripts": {
+    "generate": "dotnet run --project ../../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj -- -p ../../../samples/SampleQueryableSqlite/SampleQueryableSqlite.csproj -o ./src --time",
+    "build": "tsgo -b .",
+    "test": "bun test"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./provider": {
+      "types": "./dist/provider/index.d.ts",
+      "import": "./dist/provider/index.js"
+    }
+  }
+}

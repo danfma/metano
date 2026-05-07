@@ -11,5 +11,6 @@
     { "path": "./targets/js/sample-counter-v4/tsconfig.app.json" },
     { "path": "./targets/js/sample-counter-v5/tsconfig.json" },
     { "path": "./targets/js/sample-queryable-arrays/tsconfig.json" },
+    { "path": "./targets/js/sample-queryable-sqlite/tsconfig.json" },
   ],
 }

@@ -27,6 +27,8 @@ import {
   toSet,
   where,
   zip,
+  getStages,
+  LINQ_STAGES,
 } from "../../src/system/linq/index.ts";
 
 describe("linq operators", () => {
@@ -297,6 +299,25 @@ describe("linq operators", () => {
     const term = count<number>((x) => x % 2 === 0);
     expect(term.kind).toBe("count");
     expect(term.predicate?.(2)).toBe(true);
+  });
+
+  test("getStages — chain descriptors stay reachable on the result", () => {
+    const whereOp = where<number>((x) => x > 2);
+    const selectOp = select((x: number) => x * 10);
+    const result = linq([1, 2, 3, 4, 5], whereOp, selectOp);
+
+    const introspected = getStages(result);
+    expect(introspected).toBeDefined();
+    expect(introspected).toEqual([whereOp, selectOp]);
+    // Symbol slot is non-enumerable so JSON.stringify / spread copies
+    // do not leak the chain into the wire shape.
+    expect(Object.getOwnPropertyDescriptor(result, LINQ_STAGES)?.enumerable).toBe(false);
+  });
+
+  test("getStages — primitive result (terminal scalar) has no chain", () => {
+    const total = linq([1, 2, 3], sum<number>());
+    expect(typeof total).toBe("number");
+    expect(getStages(total)).toBeUndefined();
   });
 
   test("lazy semantics — generators not executed until terminal", () => {

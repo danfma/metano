@@ -19,7 +19,7 @@
  * );
  * ```
  */
-export { linq, stages } from "./linq.ts";
+export { LINQ_STAGES, getStages, linq, stages } from "./linq.ts";
 export type { Stage } from "./linq.ts";
 
 export type {

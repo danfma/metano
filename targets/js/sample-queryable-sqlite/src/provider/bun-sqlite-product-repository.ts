@@ -1,0 +1,131 @@
+/**
+ * Concrete <see cref="IProductRepository"/> backed by `bun:sqlite`.
+ *
+ * The C# user code calls into the repository methods after composing
+ * an `IQueryable<Product>` chain (`repo.Products.Where(...)`); on the
+ * TS side that lowers to a `linq(...)` call which materializes the
+ * iterable AND attaches the descriptor list via the runtime's
+ * `LINQ_STAGES` symbol (#200). The repository reads the stage list,
+ * routes it through the SQL translator, and runs the resulting
+ * statement via `bun:sqlite`. When the chain has no introspectable
+ * stages or the translator rejects a stage, the repository falls
+ * back to the iterable's closure path so the call still produces the
+ * correct result.
+ */
+import type { Database } from "bun:sqlite";
+import { getStages } from "metano-runtime";
+import type { Product } from "#/product";
+import type { IProductRepository } from "#/provider/i-product-repository";
+import { mapProductRow, productColumn, SEED_ROWS } from "#/provider/db";
+import {
+  type Stage,
+  type TranslatedQuery,
+  translateChain,
+  UntranslatableTreeError,
+} from "#/provider/sqlite-translator";
+
+const TABLE = "products";
+
+export class BunSqliteProductRepository implements IProductRepository {
+  /**
+   * Surface the seeded array as the `Products` queryable. The C#
+   * user code chains `Where` / `OrderBy` / etc on top of it; those
+   * lower to <c>linq(repo.products, where(...))</c> on the TS side,
+   * which materializes the iterable while exposing the descriptor
+   * list for SQL translation.
+   */
+  readonly products: Iterable<Product>;
+
+  constructor(private readonly db: Database) {
+    this.products = SEED_ROWS.map(toEntity);
+  }
+
+  toArray(query: Iterable<Product>): Product[] {
+    const stages = getStages(query);
+    if (stages !== undefined) {
+      try {
+        return this.executeRows(stages);
+      } catch (err) {
+        if (!(err instanceof UntranslatableTreeError)) throw err;
+      }
+    }
+    return Array.from(query);
+  }
+
+  count(query: Iterable<Product>): number {
+    const stages = getStages(query);
+    if (stages !== undefined) {
+      try {
+        const translated = translateChain(TABLE, productColumn, [
+          ...stages,
+          // Synthesize a count terminal so the translator wraps the
+          // query with `COUNT(*)` even when the chain only carried
+          // composition stages.
+          { kind: "count" } as Stage,
+        ]);
+        return this.executeCount(translated);
+      } catch (err) {
+        if (!(err instanceof UntranslatableTreeError)) throw err;
+      }
+    }
+    let n = 0;
+    // biome-ignore lint/correctness/noUnusedVariables: counter only needs to advance the iterator
+    for (const _ of query) n++;
+    return n;
+  }
+
+  firstOrDefault(query: Iterable<Product>): Product | null {
+    const stages = getStages(query);
+    if (stages !== undefined) {
+      try {
+        const translated = translateChain(TABLE, productColumn, [
+          ...stages,
+          { kind: "firstOrDefault" } as Stage,
+        ]);
+        const row = this.executeFirst(translated);
+        return row === undefined ? null : row;
+      } catch (err) {
+        if (!(err instanceof UntranslatableTreeError)) throw err;
+      }
+    }
+    for (const item of query) return item;
+    return null;
+  }
+
+  private executeRows(stages: readonly Stage[]): Product[] {
+    const translated = translateChain(TABLE, productColumn, stages);
+    const stmt = this.db.query(translated.sql);
+    // biome-ignore lint/suspicious/noExplicitAny: bind union is wider than ours by construction
+    const rawRows = stmt.all(...(translated.params as any[])) as Record<string, unknown>[];
+    if (translated.projected) {
+      // biome-ignore lint/suspicious/noExplicitAny: projection narrows to a single column
+      return rawRows.map((row) => Object.values(row)[0]) as any;
+    }
+    return rawRows.map(mapProductRow);
+  }
+
+  private executeCount(translated: TranslatedQuery): number {
+    const stmt = this.db.query(translated.sql);
+    // biome-ignore lint/suspicious/noExplicitAny: same — bind union shape
+    const row = stmt.get(...(translated.params as any[])) as { c?: number } | null;
+    return row?.c ?? 0;
+  }
+
+  private executeFirst(translated: TranslatedQuery): Product | undefined {
+    const stmt = this.db.query(translated.sql);
+    // biome-ignore lint/suspicious/noExplicitAny: same — bind union shape
+    const row = stmt.get(...(translated.params as any[])) as Record<string, unknown> | null;
+    return row === null ? undefined : mapProductRow(row);
+  }
+}
+
+function toEntity(row: (typeof SEED_ROWS)[number]): Product {
+  return mapProductRow({
+    id: row.id,
+    name: row.name,
+    display_name: row.displayName,
+    unit_price: row.unitPrice,
+    stock_count: row.stockCount,
+    is_active: row.isActive ? 1 : 0,
+  });
+}

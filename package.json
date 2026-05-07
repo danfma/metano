@@ -22,5 +22,28 @@
     "sample-counter-v4": "bun run --cwd ./targets/js/sample-counter-v4 dev",
     "sample-counter-v5": "bun run --cwd ./targets/js/sample-counter-v5 dev"
   },
-  "type": "module"
+  "type": "module",
+  "name": "sample-queryable-sqlite",
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "types": "./dist/js/sample-queryable-sqlite/src/*.d.ts",
+      "import": "./dist/js/sample-queryable-sqlite/src/*.js",
+      "default": "./targets/js/sample-queryable-sqlite/src/*.ts"
+    },
+    "#": {
+      "types": "./dist/js/sample-queryable-sqlite/src/index.d.ts",
+      "import": "./dist/js/sample-queryable-sqlite/src/index.js",
+      "default": "./targets/js/sample-queryable-sqlite/src/index.ts"
+    }
+  },
+  "exports": {
+    "./js/sample-queryable-sqlite/src": {
+      "types": "./dist/js/sample-queryable-sqlite/src/index.d.ts",
+      "import": "./dist/js/sample-queryable-sqlite/src/index.js"
+    }
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0"
+  }
 }

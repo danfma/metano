@@ -1760,14 +1760,56 @@ export function linq(
   source: unknown,
   ...ops: (OperatorBase<any, any> | TerminalBase<any, any>)[]
 ): unknown {
-  return ops.reduce((acc, op) => op.apply(acc as Iterable<any>) as any, source as any);
+  const result = ops.reduce(
+    (acc, op) => op.apply(acc as Iterable<any>) as any,
+    source as any,
+  );
+  // Attach the original stage list to the materialized result so an
+  // IQueryable-style consumer can introspect the chain. Skipped for
+  // primitive results (terminals like `count` / `sum` return numbers
+  // / booleans where defineProperty would throw).
+  if (result !== null && typeof result === "object") {
+    try {
+      Object.defineProperty(result, LINQ_STAGES, {
+        value: ops,
+        enumerable: false,
+        configurable: true,
+      });
+    } catch {
+      // Frozen objects (e.g. a consumer's pre-frozen Iterable) silently
+      // fall through; introspection will not be available but the
+      // closure path still works.
+    }
+  }
+  return result;
+}
+
+/**
+ * Symbol-keyed slot the runtime attaches to every object-typed result
+ * of {@link linq} so an introspecting consumer (IQueryable provider,
+ * query planner, debugger) can read the descriptor chain without
+ * reaching for closures or hand-rolling a capture helper. Scoped via
+ * `Symbol.for` so multiple module copies (e.g. duplicate npm
+ * resolutions) share the slot.
+ */
+export const LINQ_STAGES = Symbol.for("metano-runtime/system/linq:stages");
+
+/**
+ * Reads the descriptor chain attached by {@link linq} on a query
+ * result. Returns `undefined` when the value is a primitive, was
+ * produced outside this runtime, or had introspection suppressed.
+ */
+export function getStages(query: unknown): Stage[] | undefined {
+  if (query === null || typeof query !== "object") return undefined;
+  const value = (query as Record<symbol, unknown>)[LINQ_STAGES];
+  return Array.isArray(value) ? (value as Stage[]) : undefined;
 }
 
 /**
  * Helper that exposes the raw descriptor chain to an introspecting
- * consumer (IQueryable provider, query planner, debugger). Returns the
- * stages verbatim so the consumer can switch on `kind` and read the
- * captured lambdas + parameters.
+ * consumer when the chain has not yet been handed to {@link linq}.
+ * Returns the stages verbatim so the consumer can switch on `kind`
+ * and read the captured lambdas + parameters.
  */
 export type Stage = AnyOperator | AnyTerminal;
 
