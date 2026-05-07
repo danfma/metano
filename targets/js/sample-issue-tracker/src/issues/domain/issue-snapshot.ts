@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode } from "metano-runtime";
+import { HashCode, valueEquals } from "metano-runtime";
 import type { Decimal } from "decimal.js";
 import type { UserId } from "#/shared-kernel";
 import type { Comment } from "./comment";
@@ -36,9 +36,9 @@ export class IssueSnapshot {
       this.status === other.status &&
       this.assigneeId === other.assigneeId &&
       this.sprintKey === other.sprintKey &&
-      this.createdAt === other.createdAt &&
-      this.updatedAt === other.updatedAt &&
-      this.estimatedHours === other.estimatedHours &&
+      valueEquals(this.createdAt, other.createdAt) &&
+      valueEquals(this.updatedAt, other.updatedAt) &&
+      valueEquals(this.estimatedHours, other.estimatedHours) &&
       this.comments === other.comments
     );
   }

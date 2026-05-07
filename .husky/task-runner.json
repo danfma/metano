@@ -24,6 +24,12 @@
       "group": "pre-push",
       "command": "bash",
       "args": ["-c", "bunx biome check ."]
+    },
+    {
+      "name": "verify-targets-clean",
+      "group": "pre-push",
+      "command": "bash",
+      "args": ["scripts/verify-targets-clean.sh"]
     }
   ]
 }
