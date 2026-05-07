@@ -3121,6 +3121,26 @@ public sealed class IrExpressionExtractor
             var sym = _semantic.GetSymbolInfo(current).Symbol as IMethodSymbol;
             if (!IrLinqMapping.TryResolve(sym, out var op))
             {
+                // AsQueryable is BCL ceremony to lift an IEnumerable into
+                // an IQueryable so the rest of the chain binds to
+                // System.Linq.Queryable (and its Expression<Func<…>>
+                // parameters). The runtime treats both as plain
+                // Iterables, so we drill through it instead of leaving
+                // the call as the chain source.
+                if (
+                    IsAsQueryable(sym)
+                    && current.Expression is MemberAccessExpressionSyntax asqMember
+                )
+                {
+                    if (asqMember.Expression is InvocationExpressionSyntax innerAsq)
+                    {
+                        current = innerAsq;
+                        continue;
+                    }
+                    sourceSyntax = asqMember.Expression;
+                    break;
+                }
+
                 // Inner call isn't a recognized LINQ method — its
                 // result is the chain source (e.g. a domain helper
                 // that returns IReadOnlyList<T> followed by a single
@@ -3264,6 +3284,19 @@ public sealed class IrExpressionExtractor
     private static bool IsIQueryableNamed(INamedTypeSymbol? type) =>
         type is not null
         && type.OriginalDefinition.ToDisplayString() == "System.Linq.IQueryable<T>";
+
+    /// <summary>
+    /// True when <paramref name="symbol"/> is one of the
+    /// <c>AsQueryable</c> overloads on <c>System.Linq.Queryable</c>.
+    /// The BCL uses it purely to bind the next stage to
+    /// <c>System.Linq.Queryable</c> (so lambda parameters become
+    /// <c>Expression&lt;Func&lt;…&gt;&gt;</c>); the JS runtime has no
+    /// such distinction, so the chain walker drops the call and keeps
+    /// its receiver as the chain source.
+    /// </summary>
+    private static bool IsAsQueryable(IMethodSymbol? symbol) =>
+        symbol is { Name: "AsQueryable" }
+        && symbol.ContainingType?.ToDisplayString() == "System.Linq.Queryable";
 }
 
 /// <summary>
