@@ -100,4 +100,13 @@ public sealed class IndentedStringBuilder
     }
 
     public override string ToString() => _sb.ToString().TrimEnd('\n') + "\n";
+
+    /// <summary>
+    /// Returns the buffered text verbatim, with no trailing-newline
+    /// normalization. Used when embedding a fragment (e.g. a single
+    /// type or expression rendered for inclusion in a synthesized raw
+    /// statement) — fragments must not carry a trailing newline that
+    /// the surrounding context would not have produced on its own.
+    /// </summary>
+    public string GetRawString() => _sb.ToString();
 }
