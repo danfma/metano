@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// Origin metadata attached to a <see cref="TsNamedType"/> when its source symbol comes

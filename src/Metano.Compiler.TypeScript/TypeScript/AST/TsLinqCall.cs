@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// Specialized call to the LINQ pipe runtime entry point. Lowers to

@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <param name="Optional">When true the property is rendered with a <c>?</c> suffix
 /// (<c>name?: Type</c>) — used for [PlainObject] interface fields whose source C#

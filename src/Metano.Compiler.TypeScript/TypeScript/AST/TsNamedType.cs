@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// A named TypeScript type reference. <see cref="Origin"/> is non-null when the type

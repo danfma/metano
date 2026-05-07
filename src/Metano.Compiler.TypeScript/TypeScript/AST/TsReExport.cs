@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// Represents a re-export statement: export { Name1, Name2 } from "./Module";

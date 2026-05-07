@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// A method signature in a TypeScript interface: methodName(param: Type): ReturnType;

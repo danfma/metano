@@ -66,6 +66,21 @@ folders (`Metano.Compiler.TypeScript.Transformation`,
 `Metano.Compiler.Dart.Transformation`) — those files are
 target-specific and do not belong in the core.
 
+While doing the move we also normalized every namespace under
+`Metano.Compiler.*` so the .NET convention "namespace starts with
+the project root" actually holds:
+
+- `Metano.TypeScript` / `Metano.TypeScript.AST` /
+  `Metano.TypeScript.Bridge` →
+  `Metano.Compiler.TypeScript` / `.AST` / `.Bridge`.
+- `Metano.Dart` / `Metano.Dart.AST` / `Metano.Dart.Bridge` /
+  `Metano.Dart.Transformation` →
+  `Metano.Compiler.Dart.*`.
+
+The user-facing `Metano.Annotations` namespace stays untouched —
+it lives under the `Metano` package on purpose so consumer code
+only depends on the short form.
+
 The `IR` namespace casing stays. Microsoft's framework guidelines
 flag the choice (`IR` vs `Ir`), but the codebase (and adjacent
 projects like LLVM and Roslyn) treats `IR` as the established

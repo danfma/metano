@@ -1,5 +1,5 @@
 using Metano.Annotations;
-using Metano.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation;

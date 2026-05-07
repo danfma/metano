@@ -1,4 +1,4 @@
-using Metano.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;

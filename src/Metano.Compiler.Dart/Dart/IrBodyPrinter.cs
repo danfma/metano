@@ -2,9 +2,9 @@ using System.Globalization;
 using System.Text;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
-using Metano.Dart.Bridge;
+using Metano.Compiler.Dart.Bridge;
 
-namespace Metano.Dart;
+namespace Metano.Compiler.Dart;
 
 /// <summary>
 /// Renders IR statements and expressions directly as Dart source, appending into a

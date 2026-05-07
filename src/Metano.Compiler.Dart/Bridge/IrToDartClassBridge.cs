@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
-using Metano.Dart.AST;
+using Metano.Compiler.Dart.AST;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Converts an <see cref="IrClassDeclaration"/> into a Dart <see cref="DartClass"/>.

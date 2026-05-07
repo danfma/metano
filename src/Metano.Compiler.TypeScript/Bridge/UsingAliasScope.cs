@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// A bi-directional alias map for the C# <c>using X = Y;</c> directives in

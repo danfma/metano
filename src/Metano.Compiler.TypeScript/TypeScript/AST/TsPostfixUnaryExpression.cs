@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// Postfix unary expression — the operator follows the operand (<c>x++</c>, <c>x--</c>).

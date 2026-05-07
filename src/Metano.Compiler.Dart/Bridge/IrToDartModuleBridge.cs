@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
-using Metano.Dart.AST;
+using Metano.Compiler.Dart.AST;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Lowers <see cref="IrModuleFunction"/>s into top-level <see cref="DartFunction"/>

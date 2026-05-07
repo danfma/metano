@@ -3,7 +3,7 @@ using Metano.Compiler;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.Transformation;
-using Metano.TypeScript;
+using Metano.Compiler.TypeScript;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -358,9 +358,9 @@ public static class TranspileHelper
             compilation,
             TargetLanguage.Dart
         );
-        var transformer = new Metano.Dart.Transformation.DartTransformer(ir, compilation);
+        var transformer = new Metano.Compiler.Dart.Transformation.DartTransformer(ir, compilation);
         var files = transformer.TransformAll();
-        var printer = new Metano.Dart.Printer();
+        var printer = new Metano.Compiler.Dart.Printer();
         var result = new Dictionary<string, string>();
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);

@@ -5,10 +5,10 @@ using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.Transformation;
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Lowers an ordinary C# record / class / struct into a TypeScript class

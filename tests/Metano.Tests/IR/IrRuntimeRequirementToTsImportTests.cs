@@ -1,5 +1,5 @@
 using Metano.Compiler.IR;
-using Metano.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.Bridge;
 
 namespace Metano.Tests.IR;
 

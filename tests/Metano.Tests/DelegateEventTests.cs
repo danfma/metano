@@ -655,9 +655,9 @@ public class DelegateEventTests
             compilation,
             Metano.Annotations.TargetLanguage.Dart
         );
-        var transformer = new Metano.Dart.Transformation.DartTransformer(ir, compilation);
+        var transformer = new Metano.Compiler.Dart.Transformation.DartTransformer(ir, compilation);
         var files = transformer.TransformAll();
-        var printer = new Metano.Dart.Printer();
+        var printer = new Metano.Compiler.Dart.Printer();
         var result = new Dictionary<string, string>();
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);

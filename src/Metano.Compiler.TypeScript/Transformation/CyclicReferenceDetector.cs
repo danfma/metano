@@ -1,5 +1,5 @@
 using Metano.Compiler.Diagnostics;
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Transformation;
 

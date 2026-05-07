@@ -1,11 +1,11 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.IR;
-using Metano.Dart.AST;
-using Metano.Dart.Transformation;
+using Metano.Compiler.Dart.AST;
+using Metano.Compiler.Dart.Transformation;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Dart;
+namespace Metano.Compiler.Dart;
 
 /// <summary>
 /// <see cref="ITranspilerTarget"/> implementation for the Dart/Flutter backend.

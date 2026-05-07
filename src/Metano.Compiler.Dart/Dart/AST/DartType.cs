@@ -1,4 +1,4 @@
-namespace Metano.Dart.AST;
+namespace Metano.Compiler.Dart.AST;
 
 /// <summary>Base record for Dart type references.</summary>
 public abstract record DartType;

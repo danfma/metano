@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
-using Metano.Compiler.IR;
 using Metano.Compiler.Frontend.Roslyn;
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Analysis;

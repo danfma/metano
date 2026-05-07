@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Metano.Compiler.Diagnostics;
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 
 namespace Metano;
 

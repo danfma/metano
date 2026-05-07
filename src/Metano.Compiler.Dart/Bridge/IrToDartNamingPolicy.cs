@@ -1,7 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler.IR;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Centralizes Dart-specific naming rules. Dart follows:

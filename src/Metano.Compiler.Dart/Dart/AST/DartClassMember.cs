@@ -1,4 +1,4 @@
-namespace Metano.Dart.AST;
+namespace Metano.Compiler.Dart.AST;
 
 /// <summary>Base for class members (fields, methods, getters, setters).</summary>
 public abstract record DartClassMember;
