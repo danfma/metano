@@ -7,8 +7,14 @@ namespace Metano.Compiler.DependencyGraph;
 /// <summary>
 /// Type-level dependency graph derived from an <see cref="IrCompilation"/>.
 /// Maps each transpilable type's fully qualified name (FQN — namespace
-/// + simple name, taken from the Roslyn symbol) to the set of FQNs it
-/// references in any of its signatures or member bodies.
+/// + containing types + generic parameters, taken from the Roslyn
+/// symbol) to the set of FQNs it references on its <em>signature
+/// surface</em>: base type, interfaces, ctor / field / property /
+/// method signatures (return type, parameters, generic constraints),
+/// event types, and nested types. Method-body references (calls /
+/// instantiations inside expressions) are <b>not</b> tracked yet —
+/// those go through per-target bridges and stay out of the graph for
+/// this slice; ADR-0018 captures the trade-off.
 ///
 /// <para>
 /// The graph is the shared backbone for:
@@ -51,7 +57,9 @@ public sealed class IrTypeDependencyGraph
 
     /// <summary>
     /// Direct dependencies of <paramref name="typeFqn"/> — the types
-    /// whose IR appears anywhere in its signature or body.
+    /// whose IR appears on its signature surface (see the type-level
+    /// docstring for the exact reach). Method-body references are
+    /// not included by this slice.
     /// </summary>
     public IReadOnlySet<string> DependenciesOf(string typeFqn) =>
         _outEdges.TryGetValue(typeFqn, out var deps) ? deps : EmptySet;
