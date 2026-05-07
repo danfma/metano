@@ -5,7 +5,7 @@ using Metano.TypeScript.AST;
 using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Generates the runtime <c>isFoo(value): value is Foo</c> type guards emitted for types

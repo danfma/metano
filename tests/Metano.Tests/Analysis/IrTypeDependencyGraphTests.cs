@@ -1,5 +1,5 @@
 using Metano.Compiler;
-using Metano.Compiler.DependencyGraph;
+using Metano.Compiler.Analysis;
 using Metano.Tests.IR;
 
 namespace Metano.Tests.DependencyGraph;

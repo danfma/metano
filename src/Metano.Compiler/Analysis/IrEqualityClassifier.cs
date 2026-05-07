@@ -1,4 +1,6 @@
-namespace Metano.Compiler.IR;
+using Metano.Compiler.IR;
+
+namespace Metano.Compiler.Analysis;
 
 /// <summary>
 /// Single source of truth for the per-field equality strategy the

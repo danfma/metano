@@ -1,4 +1,4 @@
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Compile-time naming policies that mirror System.Text.Json.JsonKnownNamingPolicy.

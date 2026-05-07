@@ -1,7 +1,8 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.IR;
-using Metano.Transformation;
+using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.Transformation;
 using Metano.TypeScript;
 using Metano.TypeScript.AST;
 using Microsoft.CodeAnalysis;

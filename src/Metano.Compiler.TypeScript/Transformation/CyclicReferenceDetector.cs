@@ -1,7 +1,7 @@
 using Metano.Compiler.Diagnostics;
 using Metano.TypeScript.AST;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Detects cyclic local-package imports between the generated <see cref="TsSourceFile"/>s

@@ -1,6 +1,8 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
+using Metano.Compiler.Frontend.Roslyn;
+using Metano.Compiler.Mappings;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;

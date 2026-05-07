@@ -2,7 +2,7 @@
 
 Metano maps many C# standard library types to idiomatic target equivalents. This
 reference describes the mature TypeScript backend; the Dart backend has partial
-coverage and is tracked in [Better Flutter Support Plan](better_flutter_support_plan.md).
+coverage and is tracked in [Better Flutter Support Plan](roadmap/better-flutter-support.md).
 This page lists every mapping the transpiler knows about out of the box.
 
 ## Primitives

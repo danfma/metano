@@ -122,7 +122,7 @@ requirement uses a stable identifier in the format `FR-XXX`.
   ambiguous, or unsupported scenarios.
 - **FR-039** The system shall provide stable diagnostic identifiers to support
   troubleshooting and automation, including the stable `MS0001` through
-  `MS0008` catalog.
+  `MS0024` catalog.
 - **FR-040** The system shall fail explicitly when it cannot generate correct
   output within the product's supported rules.
 

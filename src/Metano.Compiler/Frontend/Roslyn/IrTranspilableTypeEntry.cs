@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Compiler.IR;
+namespace Metano.Compiler.Frontend.Roslyn;
 
 /// <summary>
 /// Ordered element of <see cref="IrCompilation.TranspilableTypeEntries"/>.

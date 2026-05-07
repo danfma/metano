@@ -1,5 +1,6 @@
 using Metano.Compiler.IR;
-using Metano.Transformation;
+using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.Transformation;
 using Metano.TypeScript.AST;
 
 namespace Metano.TypeScript.Bridge;

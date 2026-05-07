@@ -1,7 +1,8 @@
 using Metano.Compiler.IR;
+using Metano.Compiler.Mappings;
 using Metano.TypeScript.AST;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Pure-TS rendering helpers shared by <see cref="BclMapper"/> (legacy Roslyn-driven

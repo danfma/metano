@@ -1,8 +1,9 @@
 using System.Collections.Immutable;
 using Metano.Compiler.IR;
+using Metano.Compiler.Frontend.Roslyn;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Compiler.DependencyGraph;
+namespace Metano.Compiler.Analysis;
 
 /// <summary>
 /// Type-level dependency graph derived from an <see cref="IrCompilation"/>.

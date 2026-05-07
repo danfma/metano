@@ -180,7 +180,7 @@ dotnet run --project src/Metano.Compiler.Dart/ -- \
   --clean
 ```
 
-See the [Dart/Flutter roadmap](docs/better_flutter_support_plan.md) and the
+See the [Dart/Flutter roadmap](docs/roadmap/better-flutter-support.md) and the
 [Flutter sample target](targets/flutter/sample_counter/).
 
 ## Documentation

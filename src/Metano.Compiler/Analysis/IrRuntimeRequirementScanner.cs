@@ -1,6 +1,6 @@
 using Metano.Compiler.IR;
 
-namespace Metano.Compiler.Extraction;
+namespace Metano.Compiler.Analysis;
 
 /// <summary>
 /// Walks an IR declaration (type or module) and returns the set of semantic runtime

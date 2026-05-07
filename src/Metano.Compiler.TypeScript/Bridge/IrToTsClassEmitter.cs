@@ -3,7 +3,8 @@ using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
-using Metano.Transformation;
+using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.Transformation;
 using Metano.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 
