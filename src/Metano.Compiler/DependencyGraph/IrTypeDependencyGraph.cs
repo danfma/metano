@@ -1,0 +1,265 @@
+using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis;
+
+namespace Metano.Compiler.DependencyGraph;
+
+/// <summary>
+/// Type-level dependency graph derived from an <see cref="IrCompilation"/>.
+/// Maps each transpilable type's fully qualified name (FQN — namespace
+/// + simple name, taken from the Roslyn symbol) to the set of FQNs it
+/// references in any of its signatures or member bodies.
+///
+/// <para>
+/// The graph is the shared backbone for:
+/// </para>
+/// <list type="bullet">
+///   <item><b>Incremental compilation (#21):</b> "if type T was touched,
+///   which types regenerate?". The cache walks the reverse graph to mark
+///   transitive dependents dirty.</item>
+///   <item><b>Watch mode (#18):</b> a file change resolves to the FQNs
+///   declared in that file; the same reverse-walk yields the set of
+///   files to re-emit.</item>
+/// </list>
+///
+/// <para>
+/// References come from the Roslyn symbols of each transpilable type.
+/// Only types that themselves participate in the compilation's
+/// transpilable set contribute edges — BCL types, types from a
+/// referenced assembly, and primitives are dropped because the
+/// incremental cache cannot regenerate code that does not live in this
+/// project. Foreign assembly changes invalidate consumers via the
+/// cache's separate metadata-hash key.
+/// </para>
+/// </summary>
+public sealed class IrTypeDependencyGraph
+{
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<string>> _outEdges;
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<string>> _inEdges;
+
+    private IrTypeDependencyGraph(
+        IReadOnlyDictionary<string, IReadOnlySet<string>> outEdges,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> inEdges
+    )
+    {
+        _outEdges = outEdges;
+        _inEdges = inEdges;
+    }
+
+    /// <summary>FQNs of every type catalogued in the graph.</summary>
+    public IEnumerable<string> AllTypes => _outEdges.Keys;
+
+    /// <summary>
+    /// Direct dependencies of <paramref name="typeFqn"/> — the types
+    /// whose IR appears anywhere in its signature or body.
+    /// </summary>
+    public IReadOnlySet<string> DependenciesOf(string typeFqn) =>
+        _outEdges.TryGetValue(typeFqn, out var deps) ? deps : EmptySet;
+
+    /// <summary>
+    /// Direct dependents of <paramref name="typeFqn"/> — the types
+    /// that reference it. The reverse of <see cref="DependenciesOf"/>;
+    /// drives incremental invalidation.
+    /// </summary>
+    public IReadOnlySet<string> DependentsOf(string typeFqn) =>
+        _inEdges.TryGetValue(typeFqn, out var deps) ? deps : EmptySet;
+
+    /// <summary>
+    /// Transitive closure of <see cref="DependentsOf"/> — every type
+    /// that reaches <paramref name="typeFqn"/> through any reference
+    /// chain. The set excludes the seed itself; callers that need it
+    /// should add it explicitly.
+    /// </summary>
+    public IReadOnlySet<string> TransitiveDependentsOf(string typeFqn) =>
+        TransitiveClosure(typeFqn, DependentsOf);
+
+    /// <summary>
+    /// Transitive closure of <see cref="DependenciesOf"/>. Excludes
+    /// the seed itself so callers can union it with the seed when
+    /// they need an "everything this type touches" set.
+    /// </summary>
+    public IReadOnlySet<string> TransitiveDependenciesOf(string typeFqn) =>
+        TransitiveClosure(typeFqn, DependenciesOf);
+
+    private IReadOnlySet<string> TransitiveClosure(
+        string typeFqn,
+        Func<string, IReadOnlySet<string>> step
+    )
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var stack = new Stack<string>();
+        stack.Push(typeFqn);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            foreach (var next in step(current))
+            {
+                if (visited.Add(next))
+                    stack.Push(next);
+            }
+        }
+        return visited;
+    }
+
+    private static readonly IReadOnlySet<string> EmptySet = new HashSet<string>();
+
+    /// <summary>
+    /// Builds the graph from the transpilable type entries of an
+    /// <see cref="IrCompilation"/>. References to types outside the
+    /// transpilable set (BCL types, primitives, types from other
+    /// assemblies) are skipped because they cannot be regenerated
+    /// from this compilation's incremental cache — the cache
+    /// invalidates consumers of those via assembly-metadata hashes
+    /// instead.
+    /// </summary>
+    public static IrTypeDependencyGraph Build(IrCompilation compilation)
+    {
+        var entries = compilation.TranspilableTypeEntries ?? Array.Empty<IrTranspilableTypeEntry>();
+        var ownTypes = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in entries)
+            ownTypes.Add(QualifiedName(entry.Symbol));
+
+        var outEdges = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var entry in entries)
+        {
+            var fqn = QualifiedName(entry.Symbol);
+            var deps = new HashSet<string>(StringComparer.Ordinal);
+            CollectFromType(entry.Symbol, deps, ownTypes, fqn);
+            outEdges[fqn] = deps;
+        }
+
+        var inEdges = ReverseEdges(outEdges);
+        return new IrTypeDependencyGraph(
+            outEdges.ToDictionary(
+                kv => kv.Key,
+                kv => (IReadOnlySet<string>)kv.Value,
+                StringComparer.Ordinal
+            ),
+            inEdges
+        );
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlySet<string>> ReverseEdges(
+        Dictionary<string, HashSet<string>> outEdges
+    )
+    {
+        var reverse = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var (consumer, deps) in outEdges)
+        {
+            foreach (var dep in deps)
+            {
+                if (!reverse.TryGetValue(dep, out var dependents))
+                {
+                    dependents = new HashSet<string>(StringComparer.Ordinal);
+                    reverse[dep] = dependents;
+                }
+                dependents.Add(consumer);
+            }
+        }
+        return reverse.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlySet<string>)kv.Value,
+            StringComparer.Ordinal
+        );
+    }
+
+    /// <summary>
+    /// Canonical FQN used as the graph key — Roslyn's
+    /// <c>ToDisplayString</c> minus generic parameters so a
+    /// constructed reference like <c>List&lt;User&gt;</c> resolves to
+    /// the same key as the type's own definition (<c>User</c>).
+    /// </summary>
+    public static string QualifiedName(INamedTypeSymbol symbol)
+    {
+        var unbound = symbol.OriginalDefinition;
+        var ns = unbound.ContainingNamespace;
+        var name = unbound.Name;
+        return ns is null || ns.IsGlobalNamespace ? name : $"{ns.ToDisplayString()}.{name}";
+    }
+
+    // -- Roslyn symbol walking -----------------------------------------------
+
+    private static void CollectFromType(
+        INamedTypeSymbol symbol,
+        HashSet<string> acc,
+        IReadOnlySet<string> ownTypes,
+        string selfFqn
+    )
+    {
+        if (symbol.BaseType is { } baseType)
+            AddIfTranspilable(baseType, acc, ownTypes, selfFqn);
+        foreach (var iface in symbol.Interfaces)
+            AddIfTranspilable(iface, acc, ownTypes, selfFqn);
+
+        foreach (var member in symbol.GetMembers())
+        {
+            switch (member)
+            {
+                case IFieldSymbol field:
+                    CollectFromTypeRef(field.Type, acc, ownTypes, selfFqn);
+                    break;
+                case IPropertySymbol property:
+                    CollectFromTypeRef(property.Type, acc, ownTypes, selfFqn);
+                    break;
+                case IMethodSymbol method:
+                    CollectFromMethod(method, acc, ownTypes, selfFqn);
+                    break;
+                case IEventSymbol evt:
+                    CollectFromTypeRef(evt.Type, acc, ownTypes, selfFqn);
+                    break;
+                case INamedTypeSymbol nested:
+                    CollectFromType(nested, acc, ownTypes, selfFqn);
+                    break;
+            }
+        }
+    }
+
+    private static void CollectFromMethod(
+        IMethodSymbol method,
+        HashSet<string> acc,
+        IReadOnlySet<string> ownTypes,
+        string selfFqn
+    )
+    {
+        CollectFromTypeRef(method.ReturnType, acc, ownTypes, selfFqn);
+        foreach (var p in method.Parameters)
+            CollectFromTypeRef(p.Type, acc, ownTypes, selfFqn);
+        foreach (var tp in method.TypeParameters)
+        foreach (var constraint in tp.ConstraintTypes)
+            CollectFromTypeRef(constraint, acc, ownTypes, selfFqn);
+    }
+
+    private static void CollectFromTypeRef(
+        ITypeSymbol type,
+        HashSet<string> acc,
+        IReadOnlySet<string> ownTypes,
+        string selfFqn
+    )
+    {
+        switch (type)
+        {
+            case INamedTypeSymbol named:
+                AddIfTranspilable(named, acc, ownTypes, selfFqn);
+                foreach (var arg in named.TypeArguments)
+                    CollectFromTypeRef(arg, acc, ownTypes, selfFqn);
+                break;
+            case IArrayTypeSymbol array:
+                CollectFromTypeRef(array.ElementType, acc, ownTypes, selfFqn);
+                break;
+            // Pointer / dynamic / type-parameter references contribute
+            // nothing the cache can act on — skip them.
+        }
+    }
+
+    private static void AddIfTranspilable(
+        INamedTypeSymbol symbol,
+        HashSet<string> acc,
+        IReadOnlySet<string> ownTypes,
+        string selfFqn
+    )
+    {
+        var fqn = QualifiedName(symbol);
+        if (fqn == selfFqn || !ownTypes.Contains(fqn))
+            return;
+        acc.Add(fqn);
+    }
+}
