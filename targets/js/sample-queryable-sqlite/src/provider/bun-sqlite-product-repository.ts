@@ -26,6 +26,14 @@ import {
 
 const TABLE = "products";
 
+/**
+ * Optional sink for the SQL the repository emits before each
+ * execution. Tests leave it undefined for silent runs; the
+ * `bun run .` entry hands `console.log` so the user sees the
+ * generated query alongside the materialized result.
+ */
+export type SqlLogger = (sql: string, params: readonly unknown[]) => void;
+
 export class BunSqliteProductRepository implements IProductRepository {
   /**
    * Surface the seeded array as the `Products` queryable. The C#
@@ -36,7 +44,10 @@ export class BunSqliteProductRepository implements IProductRepository {
    */
   readonly products: Iterable<Product>;
 
-  constructor(private readonly db: Database) {
+  constructor(
+    private readonly db: Database,
+    private readonly logger?: SqlLogger,
+  ) {
     this.products = SEED_ROWS.map(toEntity);
   }
 
@@ -91,6 +102,7 @@ export class BunSqliteProductRepository implements IProductRepository {
 
   private executeRows(stages: readonly Stage[]): Product[] {
     const translated = translateChain(TABLE, productColumn, stages);
+    this.logger?.(translated.sql, translated.params);
     const stmt = this.db.query(translated.sql);
     const rawRows = stmt.all(...bindable(translated.params)) as ProductRow[];
     if (translated.projected) {
@@ -100,12 +112,14 @@ export class BunSqliteProductRepository implements IProductRepository {
   }
 
   private executeCount(translated: TranslatedQuery): number {
+    this.logger?.(translated.sql, translated.params);
     const stmt = this.db.query(translated.sql);
     const row = stmt.get(...bindable(translated.params)) as { c?: number } | null;
     return row?.c ?? 0;
   }
 
   private executeFirst(translated: TranslatedQuery): Product | undefined {
+    this.logger?.(translated.sql, translated.params);
     const stmt = this.db.query(translated.sql);
     const row = stmt.get(...bindable(translated.params)) as ProductRow | null;
     return row === null ? undefined : mapProductRow(row);
