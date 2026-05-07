@@ -14,7 +14,7 @@ export class Column extends Widget {
 
   render(): HTMLElement {
     const div = document.createElement("div");
-    div.setAttribute("style", `display:flex;flex-direction:column;gap:${this._gap}px`);
+    div.setAttribute('style', `display:flex;flex-direction:column;gap:${this._gap}px`);
     for (const child of this._children) {
       div.append(child.render());
     }

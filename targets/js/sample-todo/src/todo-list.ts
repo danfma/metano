@@ -7,7 +7,7 @@ import { TodoItem } from "./todo-item";
 export class TodoList {
   private readonly _items: TodoItem[] = [];
 
-  constructor(readonly name: string) {}
+  constructor(readonly name: string) { }
 
   get items(): TodoItem[] {
     return this._items;
@@ -18,10 +18,7 @@ export class TodoList {
   }
 
   get pendingCount(): number {
-    return linq(
-      this._items,
-      count((i: TodoItem) => !i.completed),
-    );
+    return linq(this._items, count((i: TodoItem) => !i.completed));
   }
 
   private addTitlePriority(title: string, priority: Priority): void {
@@ -40,11 +37,7 @@ export class TodoList {
   add(item: TodoItem): void;
   add(title: string): void;
   add(...args: unknown[]): void {
-    if (
-      args.length === 2 &&
-      isString(args[0]) &&
-      (args[1] === "low" || args[1] === "medium" || args[1] === "high")
-    ) {
+    if (args.length === 2 && isString(args[0]) && (args[1] === "low" || args[1] === "medium" || args[1] === "high")) {
       this.addTitlePriority(args[0] as string, args[1] as Priority);
 
       return;
@@ -66,16 +59,10 @@ export class TodoList {
   }
 
   findByTitle(title: string): TodoItem | null {
-    return linq(
-      this._items,
-      firstOrDefault((i: TodoItem) => i.title === title),
-    );
+    return linq(this._items, firstOrDefault((i: TodoItem) => i.title === title));
   }
 
   hasPending(): boolean {
-    return linq(
-      this._items,
-      any((i: TodoItem) => !i.completed),
-    );
+    return linq(this._items, any((i: TodoItem) => !i.completed));
   }
 }
