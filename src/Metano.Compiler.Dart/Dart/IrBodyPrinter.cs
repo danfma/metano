@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
+using Metano.Compiler.Dart.Bridge;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
-using Metano.Compiler.Dart.Bridge;
 
 namespace Metano.Compiler.Dart;
 

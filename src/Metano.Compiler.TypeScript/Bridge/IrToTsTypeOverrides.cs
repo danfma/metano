@@ -19,7 +19,7 @@ public interface IrToTsTypeOverrides
 /// <summary>
 /// Wraps the frontend-populated
 /// <see cref="IrCompilation.BclExports"/> map (carried through
-/// <see cref="Metano.Compiler.Mappings.TypeMappingContext.BclExportMap"/>)
+/// <see cref="Metano.Compiler.TypeScript.Transformation.TypeMappingContext.BclExportMap"/>)
 /// into the bridge-friendly resolver interface and tracks the package +
 /// version of every override that fires so the package.json writer picks
 /// up the cross-package dependency. Today it only resolves <c>decimal</c>

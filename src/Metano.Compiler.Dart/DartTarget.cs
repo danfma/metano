@@ -1,8 +1,8 @@
 using Metano.Annotations;
 using Metano.Compiler;
-using Metano.Compiler.IR;
 using Metano.Compiler.Dart.AST;
 using Metano.Compiler.Dart.Transformation;
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Dart;

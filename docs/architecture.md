@@ -51,9 +51,11 @@ src/
 │   │                                    expressions, statements, type refs
 │   ├── Extraction/                    ← Roslyn → IR (class, method, expression,
 │   │                                    statement, attribute extractors)
-│   ├── Analysis/                      ← Pure walks over already-extracted IR
-│   │                                    (runtime requirements, equality
-│   │                                    classifier, type dependency graph)
+│   ├── Analysis/                      ← Walks over already-extracted IR /
+│   │                                    Roslyn symbols (runtime requirements,
+│   │                                    equality classifier, type dependency
+│   │                                    graph — the last still reads Roslyn
+│   │                                    today; see ADR-0018 follow-up)
 │   ├── Mappings/                      ← Declarative BCL mappings (registry +
 │   │                                    per-entry record consumed by every
 │   │                                    target's BCL mapper)
@@ -120,9 +122,12 @@ Key contents:
 - `Extraction/` — `IrClassExtractor`, `IrMethodExtractor`, `IrConstructorExtractor`,
   `IrPropertyExtractor`, `IrExpressionExtractor`, `IrStatementExtractor`,
   `IrTypeRefMapper`, `IrAttributeExtractor` (Roslyn → IR)
-- `Analysis/` — `IrRuntimeRequirementScanner`, `IrEqualityClassifier`,
-  `IrTypeDependencyGraph` (pure walks over already-extracted IR; consumed by
-  the cache and the per-target bridges)
+- `Analysis/` — `IrRuntimeRequirementScanner` (pure IR walker),
+  `IrEqualityClassifier` (pure IR walker), `IrTypeDependencyGraph`
+  (still walks Roslyn symbols via `IrCompilation.TranspilableTypeEntries`;
+  switches to pure IR once body-level extraction populates
+  `IrCompilation.Modules` per ADR-0018's follow-up). All three feed the
+  cache and the per-target bridges.
 - `Mappings/` — `DeclarativeMappingRegistry` + `DeclarativeMappingEntry`
   (target-agnostic schema for `[MapMethod]` / `[MapProperty]`; carries
   `JsName`/`JsTemplate`/`DartName`/`DartTemplate` slots so a future Kotlin

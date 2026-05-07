@@ -49,7 +49,7 @@ public static class IrToTsTypeMapper
 
     /// <summary>
     /// Optional name rewriter consulted by <see cref="MapNamed"/>.
-    /// Set by <see cref="Metano.Compiler.Mappings.TypeTransformer"/>
+    /// Set by <see cref="Metano.Compiler.TypeScript.Transformation.TypeTransformer"/>
     /// when <c>--strip-interface-prefix</c> is active so every
     /// named-type reference picks up the stripped identifier at the
     /// emit boundary. Uses <see cref="AsyncLocal{T}"/> so the flow

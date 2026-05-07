@@ -1,13 +1,13 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Dart.AST;
+using Metano.Compiler.Dart.Bridge;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
-using Metano.Compiler.Dart.AST;
-using Metano.Compiler.Dart.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Dart.Transformation;

@@ -807,7 +807,7 @@ public sealed class IrExpressionExtractor
     /// `decimal` context, `150` in a `BigInteger` context — carry through the
     /// `ConvertedType`, and the backend needs that info to pick the right
     /// runtime representation (<c>new Decimal("100")</c>, <c>150n</c>).
-    /// Mirrors the legacy <see cref="Metano.Compiler.Mappings.LiteralHandler"/>
+    /// Mirrors the legacy <see cref="Metano.Compiler.TypeScript.Transformation.LiteralHandler"/>
     /// shape so the IR path produces matching output.
     /// </summary>
     private IrLiteral ClassifyNumericInContext(LiteralExpressionSyntax lit, object? value)
