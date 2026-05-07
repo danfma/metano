@@ -66,7 +66,9 @@ public static class CacheKeyBuilder
         var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var file in files)
         {
-            var content = string.IsNullOrEmpty(prefixBlock) ? file.Content : prefixBlock + file.Content;
+            var content = string.IsNullOrEmpty(prefixBlock)
+                ? file.Content
+                : prefixBlock + file.Content;
             hashes[file.RelativePath] = Sha256(content);
         }
         return hashes;
