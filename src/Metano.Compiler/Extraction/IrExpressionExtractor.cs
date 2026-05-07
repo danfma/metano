@@ -3127,17 +3127,20 @@ public sealed class IrExpressionExtractor
                 // parameters). The runtime treats both as plain
                 // Iterables, so we drill through it instead of leaving
                 // the call as the chain source.
-                if (
-                    IsAsQueryable(sym)
-                    && current.Expression is MemberAccessExpressionSyntax asqMember
-                )
+                if (IsAsQueryable(sym))
                 {
-                    if (asqMember.Expression is InvocationExpressionSyntax innerAsq)
+                    var asqInner = ResolveAsQueryableInner(current);
+                    if (asqInner is null)
                     {
-                        current = innerAsq;
+                        sourceSyntax = current;
+                        break;
+                    }
+                    if (asqInner is InvocationExpressionSyntax asqInv)
+                    {
+                        current = asqInv;
                         continue;
                     }
-                    sourceSyntax = asqMember.Expression;
+                    sourceSyntax = asqInner;
                     break;
                 }
 
@@ -3297,6 +3300,29 @@ public sealed class IrExpressionExtractor
     private static bool IsAsQueryable(IMethodSymbol? symbol) =>
         symbol is { Name: "AsQueryable" }
         && symbol.ContainingType?.ToDisplayString() == "System.Linq.Queryable";
+
+    /// <summary>
+    /// Returns the source expression behind an <c>AsQueryable</c> call,
+    /// covering both syntactic forms:
+    /// <list type="bullet">
+    ///   <item>extension: <c>users.AsQueryable()</c> — receiver is the source;</item>
+    ///   <item>static: <c>Queryable.AsQueryable(users)</c> — first argument is the source.</item>
+    /// </list>
+    /// Returns null for shapes outside the MVP (no member access, no
+    /// argument), so the caller can fall back to treating the
+    /// invocation itself as the chain source.
+    /// </summary>
+    private ExpressionSyntax? ResolveAsQueryableInner(InvocationExpressionSyntax inv)
+    {
+        if (
+            inv.Expression is MemberAccessExpressionSyntax member
+            && _semantic.GetSymbolInfo(member.Expression).Symbol is not INamedTypeSymbol
+        )
+            return member.Expression;
+        if (inv.ArgumentList.Arguments.Count > 0)
+            return inv.ArgumentList.Arguments[0].Expression;
+        return null;
+    }
 }
 
 /// <summary>

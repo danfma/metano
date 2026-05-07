@@ -37,7 +37,7 @@ public sealed class Printer(string indent = "  ")
     {
         _sb.Clear();
         PrintType(type);
-        return _sb.ToString();
+        return _sb.GetRawString();
     }
 
     /// <summary>
@@ -49,7 +49,7 @@ public sealed class Printer(string indent = "  ")
     {
         _sb.Clear();
         PrintExpression(expression);
-        return _sb.ToString();
+        return _sb.GetRawString();
     }
 
     public static string RenderType(TsType type) => new Printer().PrintTypeOnce(type);
@@ -61,7 +61,7 @@ public sealed class Printer(string indent = "  ")
     {
         _sb.Clear();
         PrintType(type);
-        return _sb.ToString();
+        return _sb.GetRawString();
     }
 
     /// <summary>
