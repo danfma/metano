@@ -24,5 +24,6 @@
     <Project Path="samples/SampleCounterV3/SampleCounterV3.csproj" />
     <Project Path="samples/SampleCounterV4/SampleCounterV4.csproj" />
     <Project Path="samples/SampleQueryableArrays/SampleQueryableArrays.csproj" />
+    <Project Path="samples/SampleQueryableSqlite/SampleQueryableSqlite.csproj" />
   </Folder>
 </Solution>
