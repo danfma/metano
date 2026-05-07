@@ -1,7 +1,7 @@
 using Metano.Compiler;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// TypeScript-specific path / namespace helpers used by both the type emitter and the

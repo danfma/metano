@@ -6,12 +6,7 @@ import type { IssueId } from "#/issues/domain";
 export class Sprint {
   private readonly _plannedIssues: HashSet<IssueId> = new HashSet();
 
-  constructor(
-    readonly key: string,
-    public name: string,
-    public startDate: Temporal.PlainDate,
-    public endDate: Temporal.PlainDate,
-  ) {}
+  constructor(readonly key: string, public name: string, public startDate: Temporal.PlainDate, public endDate: Temporal.PlainDate) { }
 
   get plannedIssues(): Iterable<IssueId> {
     return this._plannedIssues;
@@ -26,10 +21,7 @@ export class Sprint {
   }
 
   isActiveOn(date: Temporal.PlainDate): boolean {
-    return (
-      Temporal.PlainDate.compare(date, this.startDate) >= 0 &&
-      Temporal.PlainDate.compare(date, this.endDate) <= 0
-    );
+    return Temporal.PlainDate.compare(date, this.startDate) >= 0 && Temporal.PlainDate.compare(date, this.endDate) <= 0;
   }
 
   rename(newName: string): void {

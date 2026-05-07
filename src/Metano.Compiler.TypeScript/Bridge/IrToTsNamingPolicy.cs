@@ -1,6 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler.IR;
-using Metano.Transformation;
+using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.TypeScript.Bridge;
 

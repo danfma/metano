@@ -2,7 +2,7 @@ using Metano.Annotations;
 using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Reads <c>[ImportAlias]</c> attributes from C# 11 file-scoped class

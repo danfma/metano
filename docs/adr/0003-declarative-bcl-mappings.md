@@ -91,7 +91,10 @@ Dictionaries, Sets, Linq — roughly 140 declarations total.
   `src/Metano/Annotations/MapPropertyAttribute.cs`
 - `src/Metano/Runtime/` — all default mappings by area
 - `src/Metano.Compiler.TypeScript/Bridge/IrToTsBclMapper.cs`
-- `src/Metano.Compiler.TypeScript/Transformation/DeclarativeMappingRegistry.cs`
+- `src/Metano.Compiler/Mappings/DeclarativeMappingRegistry.cs` (moved out of
+  `src/Metano.Compiler.TypeScript/Transformation/` in the 2026-05
+  reorganization — registry is target-agnostic and now lives in core)
+- `src/Metano.Compiler/Mappings/DeclarativeMappingEntry.cs`
 - `tests/Metano.Tests/IR/IrToTsBclMapperTests.cs`
 
 ## Post-refactor note (2026-04)

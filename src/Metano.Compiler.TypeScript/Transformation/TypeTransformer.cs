@@ -2,14 +2,17 @@ using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
+using Metano.Compiler.Frontend.Roslyn;
+using Metano.Compiler.Mappings;
 using Metano.TypeScript.AST;
 using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Transforms C# types annotated with [Transpile] into TypeScript AST source files.

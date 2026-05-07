@@ -47,15 +47,25 @@ src/
 │   ├── Annotations/                   ← [Transpile], [Name], [StringEnum], etc.
 │   └── Runtime/                       ← Declarative [MapMethod]/[MapProperty]
 ├── Metano.Compiler/                   ← Target-agnostic core
-│   ├── IR/                            ← Shared IR: types, members, bodies,
-│   │                                    runtime requirements, diagnostics
+│   ├── IR/                            ← Shared IR records: types, members,
+│   │                                    expressions, statements, type refs
 │   ├── Extraction/                    ← Roslyn → IR (class, method, expression,
-│   │                                    statement, runtime requirement scanner)
+│   │                                    statement, attribute extractors)
+│   ├── Analysis/                      ← Pure walks over already-extracted IR
+│   │                                    (runtime requirements, equality
+│   │                                    classifier, type dependency graph)
+│   ├── Mappings/                      ← Declarative BCL mappings (registry +
+│   │                                    per-entry record consumed by every
+│   │                                    target's BCL mapper)
+│   ├── Frontend/Roslyn/               ← IR records that still carry Roslyn
+│   │                                    symbols — kept under a dedicated
+│   │                                    folder so the migration debt is
+│   │                                    visible at the path level
 │   ├── ITranspilerTarget.cs
 │   ├── TranspilerHost.cs
 │   ├── SymbolHelper.cs
 │   ├── RoslynTypeQueries.cs           ← Shared `IsDictionaryLike()` etc. helpers
-│   └── Diagnostics/                   ← MS0001–MS0008
+│   └── Diagnostics/                   ← MS0001–MS0024
 ├── Metano.Compiler.TypeScript/        ← TypeScript target
 │   ├── Bridge/                        ← IR → TS AST (class emitter, enum,
 │   │                                    interface, module, record synthesis,
@@ -104,15 +114,30 @@ depends on this project and nothing else for the semantic lowering layer.
 
 Key contents:
 
-- `IR/` — modules, type declarations, members, expressions, statements, type
-  references, runtime requirements, diagnostics
+- `IR/` — module, type declarations, members, expressions, statements, type
+  references, runtime requirements (pure data records, no behavior, no
+  Roslyn symbols)
 - `Extraction/` — `IrClassExtractor`, `IrMethodExtractor`, `IrConstructorExtractor`,
   `IrPropertyExtractor`, `IrExpressionExtractor`, `IrStatementExtractor`,
-  `IrRuntimeRequirementScanner`, `IrTypeRefMapper`, `IrAttributeExtractor`
+  `IrTypeRefMapper`, `IrAttributeExtractor` (Roslyn → IR)
+- `Analysis/` — `IrRuntimeRequirementScanner`, `IrEqualityClassifier`,
+  `IrTypeDependencyGraph` (pure walks over already-extracted IR; consumed by
+  the cache and the per-target bridges)
+- `Mappings/` — `DeclarativeMappingRegistry` + `DeclarativeMappingEntry`
+  (target-agnostic schema for `[MapMethod]` / `[MapProperty]`; carries
+  `JsName`/`JsTemplate`/`DartName`/`DartTemplate` slots so a future Kotlin
+  target adds `KotlinName` to the same record)
+- `Frontend/Roslyn/` — `IrTranspilableTypeEntry`, `IrEntryPointInfo` (IR
+  records that still carry `INamedTypeSymbol` / `IMethodSymbol`; the folder
+  name marks the migration debt explicitly so contributors stop reaching
+  for them once per-type IR is fully extracted)
 - `ITranspilerTarget` — the interface every language target implements
 - `TranspilerHost` — orchestrates load → compile → target.Transform → write
 - `SymbolHelper`, `RoslynTypeQueries` — Roslyn helpers shared across targets
-- `MetanoDiagnostic` — diagnostic system with codes `MS0001`–`MS0008`
+- `CSharpSourceFrontend` — owns Roslyn workspace load + the populated
+  `IrCompilation.TranspilableTypeEntries` list of types each target should
+  emit (target's own `Discover*` step now consumes that list)
+- `MetanoDiagnostic` — diagnostic system with codes `MS0001`–`MS0024`
 
 Adding a Kotlin or Swift target means a new project that implements
 `ITranspilerTarget` and depends on `Metano.Compiler` — no changes to the core.

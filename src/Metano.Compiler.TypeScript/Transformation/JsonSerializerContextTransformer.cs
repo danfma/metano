@@ -5,7 +5,7 @@ using Metano.TypeScript.AST;
 using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Transforms a C# <c>JsonSerializerContext</c> subclass into a TypeScript

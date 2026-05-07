@@ -23,10 +23,7 @@ export function isCreateTodoDto(value: unknown): value is CreateTodoDto {
   return typeof v.title === "string" && v.priority != null;
 }
 
-export function assertCreateTodoDto(
-  value: unknown,
-  message?: string,
-): asserts value is CreateTodoDto {
+export function assertCreateTodoDto(value: unknown, message?: string): asserts value is CreateTodoDto {
   if (!isCreateTodoDto(value)) {
     throw new TypeError(message ?? "Value is not a CreateTodoDto");
   }
@@ -41,21 +38,14 @@ export interface UpdateTodoDto {
 export class TodoStore {
   private readonly _items: StoredTodo[] = [];
 
-  constructor() {}
+  constructor() { }
 
   all(): StoredTodo[] {
-    return linq(
-      this._items,
-      orderBy((t: StoredTodo) => t.id),
-      toArray(),
-    );
+    return linq(this._items, orderBy((t: StoredTodo) => t.id), toArray());
   }
 
   get(id: string): StoredTodo | null {
-    return linq(
-      this._items,
-      firstOrDefault((t: StoredTodo) => t.id === id),
-    );
+    return linq(this._items, firstOrDefault((t: StoredTodo) => t.id === id));
   }
 
   add(dto: CreateTodoDto): StoredTodo {
@@ -67,7 +57,7 @@ export class TodoStore {
   }
 
   update(id: string, patch: UpdateTodoDto): StoredTodo | null {
-    const existing = this._items.find((t: StoredTodo) => t.id === id) ?? null;
+    const existing = (this._items.find((t: StoredTodo) => t.id === id) ?? null);
 
     if (existing == null) {
       return null;
@@ -98,7 +88,7 @@ export class TodoStore {
   }
 
   remove(id: string): boolean {
-    const existing = this._items.find((t: StoredTodo) => t.id === id) ?? null;
+    const existing = (this._items.find((t: StoredTodo) => t.id === id) ?? null);
 
     if (existing == null) {
       return false;

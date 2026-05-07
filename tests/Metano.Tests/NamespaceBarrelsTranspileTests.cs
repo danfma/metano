@@ -3,7 +3,7 @@ namespace Metano.Tests;
 /// <summary>
 /// Covers the <c>--namespace-barrels</c> opt-in. Shipping types across
 /// sub-namespaces produces one leaf <c>index.ts</c> per directory by
-/// default; with the flag set, <see cref="Metano.Transformation.BarrelFileGenerator"/>
+/// default; with the flag set, <see cref="Metano.Compiler.Mappings.BarrelFileGenerator"/>
 /// additionally emits a root <c>src/index.ts</c> aggregating the leaves
 /// under nested <c>export namespace</c> blocks. Tree-shaking stays
 /// intact because each subpath is bound to a single namespace import —

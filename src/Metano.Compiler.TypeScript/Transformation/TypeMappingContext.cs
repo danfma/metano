@@ -1,6 +1,6 @@
 using Metano.Compiler.IR;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Aggregates the per-compilation mutable state that <see cref="TypeMapper"/> needs during

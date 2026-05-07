@@ -4,11 +4,12 @@ using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
+using Metano.Compiler.Mappings;
 using Metano.TypeScript.AST;
 using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Immutable shared state passed to every TypeScript-target transformer / builder during a

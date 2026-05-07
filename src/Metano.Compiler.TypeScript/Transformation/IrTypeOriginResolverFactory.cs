@@ -2,7 +2,7 @@ using Metano.Compiler;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Builds an <see cref="IrTypeOriginResolver"/> backed by the IR's

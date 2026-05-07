@@ -1,6 +1,6 @@
 using Metano.TypeScript.AST;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Generates leaf-only `index.ts` barrel files for the TypeScript output.

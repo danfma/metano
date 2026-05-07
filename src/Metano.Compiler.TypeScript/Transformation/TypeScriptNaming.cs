@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// TypeScript/JavaScript-specific naming and attribute helpers:

@@ -2,10 +2,12 @@ using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Dart.AST;
 using Metano.Dart.Bridge;
-using Metano.Transformation;
+using Metano.Compiler.Mappings;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Dart.Transformation;

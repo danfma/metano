@@ -1,5 +1,5 @@
 using Metano.Compiler.IR;
-using Metano.Transformation;
+using Metano.Compiler.Mappings;
 
 namespace Metano.Dart.Bridge;
 

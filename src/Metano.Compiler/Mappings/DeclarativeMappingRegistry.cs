@@ -1,6 +1,6 @@
 using Metano.Compiler.IR;
 
-namespace Metano.Transformation;
+namespace Metano.Compiler.Mappings;
 
 /// <summary>
 /// IR-driven index of declarative BCL mappings surfaced through

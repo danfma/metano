@@ -37,7 +37,7 @@ flowchart TD
 |---|---|
 | [Architecture Overview](architecture.md) | Understand the Roslyn frontend, shared IR, TypeScript/Dart bridges, printers, package writers, and test strategy. |
 | [Architecture Decision Records](adr/) | See why major design choices were made and what constraints they preserve. |
-| [Better Flutter Support Plan](better_flutter_support_plan.md) | Track the experimental Dart/Flutter backend and its remaining gaps. |
+| [Better Flutter Support Plan](roadmap/better-flutter-support.md) | Track the experimental Dart/Flutter backend and its remaining gaps. |
 
 ## At A Glance
 

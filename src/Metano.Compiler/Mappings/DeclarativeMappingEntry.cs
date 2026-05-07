@@ -1,4 +1,4 @@
-namespace Metano.Compiler.IR;
+namespace Metano.Compiler.Mappings;
 
 /// <summary>
 /// One declarative mapping entry extracted from <c>[MapMethod]</c> or

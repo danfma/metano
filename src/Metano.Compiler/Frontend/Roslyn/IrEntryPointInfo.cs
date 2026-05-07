@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Compiler.IR;
+namespace Metano.Compiler.Frontend.Roslyn;
 
 /// <summary>
 /// Describes the compilation's top-level-statement entry point when

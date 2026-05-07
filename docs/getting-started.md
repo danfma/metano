@@ -5,7 +5,7 @@ annotating a C# class, running the transpiler, and consuming the generated
 TypeScript from a Bun project.
 
 This is the TypeScript getting-started path. Metano also has an experimental
-Dart/Flutter backend; see [Better Flutter Support Plan](better_flutter_support_plan.md)
+Dart/Flutter backend; see [Better Flutter Support Plan](roadmap/better-flutter-support.md)
 and the [Flutter sample target](../targets/flutter/sample_counter/) for that
 side of the project.
 

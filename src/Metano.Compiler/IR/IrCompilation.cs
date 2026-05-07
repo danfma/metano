@@ -3,6 +3,8 @@
 // from this nested namespace without needing fully-qualified names.
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Frontend.Roslyn;
+using Metano.Compiler.Mappings;
 
 namespace Metano.Compiler.IR;
 
