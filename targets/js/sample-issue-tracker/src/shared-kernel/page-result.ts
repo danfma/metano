@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode } from "metano-runtime";
+import { HashCode, valueEquals } from "metano-runtime";
 import type { PageRequest } from "./page-request";
 
 export class PageResult<T> {
@@ -22,7 +22,7 @@ export class PageResult<T> {
       other instanceof PageResult &&
       this.items === other.items &&
       this.totalCount === other.totalCount &&
-      this.page === other.page
+      valueEquals(this.page, other.page)
     );
   }
 

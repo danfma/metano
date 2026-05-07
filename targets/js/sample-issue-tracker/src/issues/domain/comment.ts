@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode } from "metano-runtime";
+import { HashCode, valueEquals } from "metano-runtime";
 import { UserId } from "#/shared-kernel";
 
 export class Comment {
@@ -20,7 +20,7 @@ export class Comment {
       other instanceof Comment &&
       this.authorId === other.authorId &&
       this.message === other.message &&
-      this.createdAt === other.createdAt &&
+      valueEquals(this.createdAt, other.createdAt) &&
       this.isSystem === other.isSystem
     );
   }

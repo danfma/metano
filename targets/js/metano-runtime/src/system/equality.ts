@@ -3,7 +3,7 @@
  * Mirror the C# .NET semantics: structural equality for compounds, NaN-equals-NaN for
  * floats, custom `equals(other)` / `hashCode()` methods on user types take precedence.
  *
- * The compiler also calls into <see cref="valueEquals"/> from synthesized record
+ * The compiler also calls into {@link valueEquals} from synthesized record
  * `equals` methods whenever a constructor parameter has a non-primitive type that
  * exposes a value-equality contract (Decimal, Temporal types, nested records, …).
  * The previous lowering used `===` for every field which silently diverged from C#
@@ -172,7 +172,7 @@ export function hashCode(value: unknown): number {
 
 /**
  * Alias the compiler emits inside synthesized record `equals` methods.
- * Same contract as <see cref="equals"/>; the rename keeps the call
+ * Same contract as {@link equals}; the rename keeps the call
  * sites readable next to the surrounding `equals(other)` method
  * declaration (a bare `equals(this.x, other.x)` would shadow into a
  * recursive method-call ambiguity for human readers).

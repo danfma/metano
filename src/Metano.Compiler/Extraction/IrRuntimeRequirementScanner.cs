@@ -106,43 +106,11 @@ public static class IrRuntimeRequirementScanner
     {
         foreach (var p in ctor.Parameters)
         {
-            if (!IsStrictlyComparable(p.Parameter.Type))
+            if (!IrEqualityClassifier.UseStrictEquality(p.Parameter.Type))
                 return true;
         }
         return false;
     }
-
-    private static bool IsStrictlyComparable(IrTypeRef type) =>
-        type switch
-        {
-            IrPrimitiveTypeRef p => IsStrictPrimitive(p.Primitive),
-            IrTypeParameterRef => true,
-            IrNullableTypeRef nullable => IsStrictlyComparable(nullable.Inner),
-            IrNamedTypeRef named => named.Semantics?.Kind
-                is IrNamedTypeKind.StringEnum
-                    or IrNamedTypeKind.NumericEnum
-                    or IrNamedTypeKind.Branded,
-            _ => false,
-        };
-
-    /// <summary>
-    /// Mirrors the bridge's primitive-strictness whitelist (see
-    /// <c>IrToTsRecordSynthesisBridge.UseStrictEqualityForPrimitive</c>).
-    /// Decimal / date-time / Guid lower to JS object wrappers that
-    /// expose their own <c>equals</c> contract, so a record carrying
-    /// any of them needs the runtime <c>valueEquals</c> import.
-    /// </summary>
-    private static bool IsStrictPrimitive(IrPrimitive p) =>
-        p
-            is not (
-                IrPrimitive.Decimal
-                or IrPrimitive.Guid
-                or IrPrimitive.DateTime
-                or IrPrimitive.DateTimeOffset
-                or IrPrimitive.DateOnly
-                or IrPrimitive.TimeOnly
-                or IrPrimitive.TimeSpan
-            );
 
     private static void ScanInterface(IrInterfaceDeclaration i, HashSet<IrRuntimeRequirement> acc)
     {
