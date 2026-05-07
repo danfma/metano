@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode } from "metano-runtime";
+import { HashCode, valueEquals } from "metano-runtime";
 import type { Decimal } from "decimal.js";
 
 export class Product {
@@ -18,7 +18,7 @@ export class Product {
       this.id === other.id &&
       this.name === other.name &&
       this.displayName === other.displayName &&
-      this.unitPrice === other.unitPrice &&
+      valueEquals(this.unitPrice, other.unitPrice) &&
       this.stockCount === other.stockCount &&
       this.isActive === other.isActive
     );

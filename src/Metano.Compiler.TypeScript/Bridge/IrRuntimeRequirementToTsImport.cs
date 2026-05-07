@@ -58,6 +58,7 @@ public static class IrRuntimeRequirementToTsImport
         req.HelperName switch
         {
             "HashCode" => ("metano-runtime", "HashCode", false),
+            "ValueEquals" => ("metano-runtime", "valueEquals", false),
             "Enumerable" => ("metano-runtime", "Enumerable", false),
             "HashSet" => ("metano-runtime", "HashSet", false),
             "UUID" => ("metano-runtime", "UUID", false),

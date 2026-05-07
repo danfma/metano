@@ -3,11 +3,11 @@
  * Mirror the C# .NET semantics: structural equality for compounds, NaN-equals-NaN for
  * floats, custom `equals(other)` / `hashCode()` methods on user types take precedence.
  *
- * These are utility helpers for user code — the compiler does NOT call them. Generated
- * record classes have their own inline `equals(other)` / `hashCode()` methods that
- * compare each captured constructor parameter directly. Use these when you have an
- * arbitrary value of unknown shape and need a structural compare or a content-based
- * hash key (e.g., to feed into a `HashSet<T>` over plain object literals).
+ * The compiler also calls into <see cref="valueEquals"/> from synthesized record
+ * `equals` methods whenever a constructor parameter has a non-primitive type that
+ * exposes a value-equality contract (Decimal, Temporal types, nested records, …).
+ * The previous lowering used `===` for every field which silently diverged from C#
+ * semantics for value-wrapper types — see #202.
  */
 import { HashCode } from "./hash-code.ts";
 
@@ -169,3 +169,12 @@ export function hashCode(value: unknown): number {
   // Primitives.
   return HashCode.combine(value);
 }
+
+/**
+ * Alias the compiler emits inside synthesized record `equals` methods.
+ * Same contract as <see cref="equals"/>; the rename keeps the call
+ * sites readable next to the surrounding `equals(other)` method
+ * declaration (a bare `equals(this.x, other.x)` would shadow into a
+ * recursive method-call ambiguity for human readers).
+ */
+export const valueEquals = equals;
