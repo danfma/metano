@@ -70,7 +70,27 @@ public static class WatchHost
         watcher.Changed += (_, e) => OnFileEvent(e.FullPath);
         watcher.Created += (_, e) => OnFileEvent(e.FullPath);
         watcher.Deleted += (_, e) => OnFileEvent(e.FullPath);
-        watcher.Renamed += (_, e) => OnFileEvent(e.FullPath);
+        // Rename inspects BOTH paths so a rename that strips a relevant
+        // extension (Foo.cs → Foo.txt) or moves the file under bin/obj
+        // still triggers a recompile.
+        watcher.Renamed += (_, e) =>
+        {
+            OnFileEvent(e.OldFullPath);
+            OnFileEvent(e.FullPath);
+        };
+        // FileSystemWatcher's internal buffer can overflow under a high
+        // volume of events, dropping unobserved changes. Surface the
+        // problem to the user instead of silently missing recompiles —
+        // the next manual save will catch up via the cache fingerprint.
+        watcher.Error += (_, e) =>
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Error.WriteLine(
+                $"  Metano: file watcher dropped events ({e.GetException().Message}). "
+                    + "Save once more to force a recompile."
+            );
+            Console.ResetColor();
+        };
         watcher.EnableRaisingEvents = true;
 
         try
@@ -178,10 +198,20 @@ public static class WatchHost
             || ext.Equals(".targets", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Allocation-free scan: <see cref="FileSystemWatcher"/> is chatty
+    /// enough that <see cref="string.Split(char[])"/> per event would
+    /// dominate the GC profile. <see cref="MemoryExtensions"/> tokenises
+    /// the path into separator-bounded slices and we compare each slice
+    /// against the literal directory names without materialising a
+    /// <see cref="string"/>.
+    /// </summary>
     private static bool ContainsBuildArtifactSegment(string path)
     {
-        foreach (var segment in path.Split('/', '\\'))
+        var span = path.AsSpan();
+        foreach (var range in span.SplitAny('/', '\\'))
         {
+            var segment = span[range];
             if (
                 segment.Equals("bin", StringComparison.OrdinalIgnoreCase)
                 || segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
