@@ -1,5 +1,6 @@
 using ConsoleAppFramework;
 using Metano.Compiler;
+using Metano.Compiler.Watch;
 
 namespace Metano;
 
@@ -21,6 +22,7 @@ public class Commands
     /// <param name="filePrefix">Opaque text written verbatim at the top of every generated file, followed by a single newline. Use to inject formatter / lint directives (e.g., a Biome `biome-ignore-all` block, a Prettier `// @prettier-ignore`, a `// @generated` provenance marker).</param>
     /// <param name="dryRun">Run the full pipeline but do NOT write any files. Print a preflight summary (file count + total line count + per-file paths) instead. Useful for CI preflight checks and exploratory runs. Skips the package.json update too.</param>
     /// <param name="noCache">Disable the incremental cache. Forces a full transpilation even when sources, references, and outputs are byte-identical to the previous run.</param>
+    /// <param name="watch">Stay running and re-transpile every time a .cs / .csproj / .props / .targets file under the project directory changes. Combine with the incremental cache (default) for instant re-runs when nothing actually changed.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -35,7 +37,8 @@ public class Commands
         bool stripInterfacePrefix = false,
         string? filePrefix = null,
         bool dryRun = false,
-        bool noCache = false
+        bool noCache = false,
+        bool watch = false
     )
     {
         var target = new TypeScriptTarget
@@ -54,41 +57,61 @@ public class Commands
             NoCache: noCache
         );
 
-        var result = await TranspilerHost.RunAsync(options, target);
-
-        if (!result.Success)
+        async Task RunOnce()
         {
-            Environment.Exit(1);
+            var result = await TranspilerHost.RunAsync(options, target);
+
+            if (!result.Success)
+            {
+                if (!watch)
+                    Environment.Exit(1);
+                return;
+            }
+
+            // Target-specific post-emit: write/merge the consumer's package.json so the
+            // generated barrels are exposed via subpath imports/exports.
+            // Dry-run skips the disk write to keep "no files modified" honest.
+            if (!skipPackageJson && !dryRun && target.LastSourceFiles.Count > 0)
+            {
+                var outputDir = Path.GetFullPath(output);
+
+                var resolvedPackageRoot = packageRoot is not null
+                    ? Path.GetFullPath(packageRoot)
+                    : FindPackageRoot(outputDir);
+
+                var pkgDiagnostics = PackageJsonWriter.UpdateOrCreate(
+                    resolvedPackageRoot,
+                    outputDir,
+                    target.LastSourceFiles,
+                    dist,
+                    authoritativePackageName: target.LastEmitPackageName,
+                    crossPackageDependencies: target.LastCrossPackageDependencies,
+                    isExecutable: target.LastIsExecutable,
+                    srcRoot: srcRoot
+                );
+
+                foreach (var d in pkgDiagnostics)
+                    Console.WriteLine(d.Format());
+
+                Console.WriteLine(
+                    $"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}"
+                );
+            }
+        }
+
+        if (watch)
+        {
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+            await WatchHost.RunAsync(project, RunOnce, cts.Token);
             return;
         }
 
-        // Target-specific post-emit: write/merge the consumer's package.json so the
-        // generated barrels are exposed via subpath imports/exports.
-        // Dry-run skips the disk write to keep "no files modified" honest.
-        if (!skipPackageJson && !dryRun && target.LastSourceFiles.Count > 0)
-        {
-            var outputDir = Path.GetFullPath(output);
-
-            var resolvedPackageRoot = packageRoot is not null
-                ? Path.GetFullPath(packageRoot)
-                : FindPackageRoot(outputDir);
-
-            var pkgDiagnostics = PackageJsonWriter.UpdateOrCreate(
-                resolvedPackageRoot,
-                outputDir,
-                target.LastSourceFiles,
-                dist,
-                authoritativePackageName: target.LastEmitPackageName,
-                crossPackageDependencies: target.LastCrossPackageDependencies,
-                isExecutable: target.LastIsExecutable,
-                srcRoot: srcRoot
-            );
-
-            foreach (var d in pkgDiagnostics)
-                Console.WriteLine(d.Format());
-
-            Console.WriteLine($"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}");
-        }
+        await RunOnce();
     }
 
     /// <summary>
