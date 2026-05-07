@@ -20,6 +20,7 @@ public class Commands
     /// <param name="stripInterfacePrefix">Drop the C# `I` prefix from generated interface names when it is followed by another uppercase letter (opt-in). Collisions with sibling types in the same namespace keep the prefix and emit MS0017.</param>
     /// <param name="filePrefix">Opaque text written verbatim at the top of every generated file, followed by a single newline. Use to inject formatter / lint directives (e.g., a Biome `biome-ignore-all` block, a Prettier `// @prettier-ignore`, a `// @generated` provenance marker).</param>
     /// <param name="dryRun">Run the full pipeline but do NOT write any files. Print a preflight summary (file count + total line count + per-file paths) instead. Useful for CI preflight checks and exploratory runs. Skips the package.json update too.</param>
+    /// <param name="noCache">Disable the incremental cache. Forces a full transpilation even when sources, references, and outputs are byte-identical to the previous run.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -33,7 +34,8 @@ public class Commands
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
         string? filePrefix = null,
-        bool dryRun = false
+        bool dryRun = false,
+        bool noCache = false
     )
     {
         var target = new TypeScriptTarget
@@ -48,7 +50,8 @@ public class Commands
             ShowTimings: time,
             Clean: clean,
             FilePrefix: filePrefix,
-            DryRun: dryRun
+            DryRun: dryRun,
+            NoCache: noCache
         );
 
         var result = await TranspilerHost.RunAsync(options, target);

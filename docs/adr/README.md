@@ -41,3 +41,4 @@ second-guess when they meet the code without the context that led to it.
 | [ADR-0018](0018-type-level-dependency-graph.md)                  | Type-level dependency graph as the backbone for incremental + watch            |
 | [ADR-0019](0019-compiler-folder-reorganization.md)               | `Metano.Compiler` folder split: IR / Analysis / Mappings / Frontend.Roslyn     |
 | [ADR-0020](0020-parallel-type-transformer.md)                    | Parallel `TypeTransformer` per file group + thread-safe shared state           |
+| [ADR-0021](0021-incremental-cache.md)                            | Incremental cache: whole-build short-circuit on source/reference/output match  |
