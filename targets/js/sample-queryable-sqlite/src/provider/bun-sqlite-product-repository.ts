@@ -18,6 +18,7 @@ import type { Product } from "#/product";
 import type { IProductRepository } from "#/provider/i-product-repository";
 import { mapProductRow, productColumn, type ProductRow, SEED_ROWS } from "#/provider/db";
 import {
+  PROJECTION_ALIAS,
   type Stage,
   type TranslatedQuery,
   translateChain,
@@ -106,7 +107,15 @@ export class BunSqliteProductRepository implements IProductRepository {
     const stmt = this.db.query(translated.sql);
     const rawRows = stmt.all(...bindable(translated.params)) as ProductRow[];
     if (translated.projected) {
-      return rawRows.map((row) => Object.values(row)[0]) as Product[];
+      // Projection rows arrive aliased to PROJECTION_ALIAS by the
+      // translator, so the lookup is by stable name rather than
+      // insertion order. Cast widens to Product[] because the
+      // adapter API today returns the entity shape — the C# user
+      // gets a typed scalar projection through `Select` only at the
+      // sample's `ActiveDisplayNames`-style chain.
+      return rawRows.map(
+        (row) => (row as unknown as Record<string, unknown>)[PROJECTION_ALIAS],
+      ) as Product[];
     }
     return rawRows.map(mapProductRow);
   }

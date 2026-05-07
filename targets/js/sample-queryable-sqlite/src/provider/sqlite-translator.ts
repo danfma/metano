@@ -138,16 +138,28 @@ function applyOperator(op: AnyOperator, state: BuildState): void {
       applySelect(op as SelectOp<unknown, unknown>, state);
       return;
     case "orderBy":
-      pushOrder((op as OrderByOp<unknown, unknown>).queryable, state, "ASC", true);
+      pushOrder(op.kind, (op as OrderByOp<unknown, unknown>).queryable, state, "ASC", true);
       return;
     case "orderByDescending":
-      pushOrder((op as OrderByDescendingOp<unknown, unknown>).queryable, state, "DESC", true);
+      pushOrder(
+        op.kind,
+        (op as OrderByDescendingOp<unknown, unknown>).queryable,
+        state,
+        "DESC",
+        true,
+      );
       return;
     case "thenBy":
-      pushOrder((op as ThenByOp<unknown, unknown>).queryable, state, "ASC", false);
+      pushOrder(op.kind, (op as ThenByOp<unknown, unknown>).queryable, state, "ASC", false);
       return;
     case "thenByDescending":
-      pushOrder((op as ThenByDescendingOp<unknown, unknown>).queryable, state, "DESC", false);
+      pushOrder(
+        op.kind,
+        (op as ThenByDescendingOp<unknown, unknown>).queryable,
+        state,
+        "DESC",
+        false,
+      );
       return;
     case "take":
       state.limit = (op as TakeOp<unknown>).count;
@@ -172,19 +184,31 @@ function applySelect(op: SelectOp<unknown, unknown>, state: BuildState): void {
   if (meta.tree.kind !== "member") {
     throw new UntranslatableTreeError("translator: select projection must be a member access");
   }
-  state.selectColumns = [translateMember(meta.tree, meta.captures ?? {}, state)];
+  // Alias the projected column to a stable name so the repository
+  // reads the value off the row by key instead of relying on
+  // Object.values insertion order.
+  const column = translateMember(meta.tree, meta.captures ?? {}, state);
+  state.selectColumns = [`${column} AS ${PROJECTION_ALIAS}`];
 }
 
+/**
+ * Stable alias every projection emits as. The repository looks the
+ * value up by name on the materialized row so the projection path
+ * does not depend on object key order.
+ */
+export const PROJECTION_ALIAS = "value";
+
 function pushOrder(
+  kind: string,
   meta: QueryableMeta | undefined,
   state: BuildState,
   direction: "ASC" | "DESC",
   resetExisting: boolean,
 ): void {
-  const m = requireMeta(meta, "orderBy");
+  const m = requireMeta(meta, kind);
   state.paramName = readParamName(m.tree) ?? "x";
   if (m.tree.kind !== "member") {
-    throw new UntranslatableTreeError("translator: order key must be a member access");
+    throw new UntranslatableTreeError(`translator: '${kind}' key must be a member access`);
   }
   const column = translateMember(m.tree, m.captures ?? {}, state);
   if (resetExisting) state.orderBy = [];
@@ -204,6 +228,17 @@ function renderQuery(
   terminal: AnyTerminal | undefined,
 ): TranslatedQuery {
   const isCount = terminal?.kind === "count";
+
+  // count() with skip/take should only count the windowed rows; the
+  // single-statement form can't express that without wrapping in a
+  // subquery. Refuse the combination so the repository falls back to
+  // the closure path instead of returning a wrong total.
+  if (isCount && (state.limit !== null || state.offset !== null)) {
+    throw new UntranslatableTreeError(
+      "translator: count() combined with take/skip needs a subquery — not supported in this MVP",
+    );
+  }
+
   const select = isCount
     ? "COUNT(*) AS c"
     : state.selectColumns.length === 0
@@ -223,8 +258,14 @@ function renderQuery(
   ) {
     limit = 1;
   }
-  if (limit !== null && !isCount) sql += ` LIMIT ${limit}`;
-  if (state.offset !== null && !isCount) sql += ` OFFSET ${state.offset}`;
+  if (!isCount) {
+    // SQLite rejects OFFSET without LIMIT — emit the well-known
+    // "no upper bound" sentinel (-1) when the consumer asked for
+    // skip-without-take.
+    if (limit !== null) sql += ` LIMIT ${limit}`;
+    else if (state.offset !== null) sql += " LIMIT -1";
+    if (state.offset !== null) sql += ` OFFSET ${state.offset}`;
+  }
 
   const resultShape: TranslatedQuery["resultShape"] = isCount
     ? "count"
