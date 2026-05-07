@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Resolves a C# method/property reference against the declarative mapping

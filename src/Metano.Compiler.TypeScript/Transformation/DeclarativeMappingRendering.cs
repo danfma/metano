@@ -1,12 +1,12 @@
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// Pure-TS rendering helpers shared by <see cref="BclMapper"/> (legacy Roslyn-driven
-/// path) and <see cref="Metano.TypeScript.Bridge.IrToTsBclMapper"/> (IR-driven path).
+/// path) and <see cref="Metano.Compiler.TypeScript.Bridge.IrToTsBclMapper"/> (IR-driven path).
 /// Operates on <see cref="TsExpression"/>s, strings, and the IR-backed
 /// <see cref="DeclarativeMappingEntry"/> / <see cref="DeclarativeMappingRegistry"/>;
 /// free of any Roslyn dependency so both mappers can share the same behavior for

@@ -1,7 +1,7 @@
 using System.Text;
-using Metano.Dart.AST;
+using Metano.Compiler.Dart.AST;
 
-namespace Metano.Dart;
+namespace Metano.Compiler.Dart;
 
 /// <summary>
 /// Renders a <see cref="DartSourceFile"/> to idiomatic Dart source code. The formatter

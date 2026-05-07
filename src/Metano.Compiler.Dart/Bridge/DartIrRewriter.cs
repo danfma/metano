@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Walks an IR statement/expression tree and rewrites every call site or

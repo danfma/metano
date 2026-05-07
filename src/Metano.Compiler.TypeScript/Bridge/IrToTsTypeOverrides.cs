@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Optional resolver passed to <see cref="IrToTsTypeMapper.Map"/> that lets

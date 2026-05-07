@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
-using Metano.Dart.AST;
+using Metano.Compiler.Dart.AST;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Maps target-agnostic <see cref="IrTypeRef"/> values to Dart type references.

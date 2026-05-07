@@ -1,8 +1,8 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Extraction;
-using Metano.TypeScript.AST;
-using Metano.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation;

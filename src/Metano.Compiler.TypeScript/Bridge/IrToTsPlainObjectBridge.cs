@@ -1,9 +1,9 @@
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.Transformation;
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Lowers an <see cref="IrClassDeclaration"/> marked with <c>[PlainObject]</c>

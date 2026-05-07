@@ -1,5 +1,5 @@
 using ConsoleAppFramework;
-using Metano.Dart;
+using Metano.Compiler.Dart;
 using Microsoft.Build.Locator;
 
 // Register MSBuild before any Roslyn workspace types are loaded.

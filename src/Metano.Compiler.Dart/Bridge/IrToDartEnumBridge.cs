@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
-using Metano.Dart.AST;
+using Metano.Compiler.Dart.AST;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Converts an <see cref="IrEnumDeclaration"/> into a Dart <see cref="DartEnum"/>.

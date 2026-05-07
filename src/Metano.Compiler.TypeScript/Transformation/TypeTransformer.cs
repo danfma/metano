@@ -1,13 +1,13 @@
 using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
-using Metano.Compiler.Analysis;
-using Metano.Compiler.IR;
 using Metano.Compiler.Frontend.Roslyn;
+using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
-using Metano.TypeScript.AST;
-using Metano.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;

@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// TypeScript inline object type: <c>{ p1: T1; p2?: T2 }</c>. Carries field

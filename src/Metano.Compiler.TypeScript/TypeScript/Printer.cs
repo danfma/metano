@@ -1,6 +1,6 @@
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 
-namespace Metano.TypeScript;
+namespace Metano.Compiler.TypeScript;
 
 /// <summary>
 /// Walks a TypeScript AST and produces formatted source text.

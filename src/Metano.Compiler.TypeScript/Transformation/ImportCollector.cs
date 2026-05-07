@@ -1,7 +1,7 @@
 using Metano.Compiler;
 using Metano.Compiler.IR;
-using Metano.TypeScript.AST;
-using Metano.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation;

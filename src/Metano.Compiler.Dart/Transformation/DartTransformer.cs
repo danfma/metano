@@ -1,16 +1,16 @@
 using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
-using Metano.Compiler.Analysis;
-using Metano.Compiler.IR;
 using Metano.Compiler.Frontend.Roslyn;
-using Metano.Dart.AST;
-using Metano.Dart.Bridge;
+using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
+using Metano.Compiler.Dart.AST;
+using Metano.Compiler.Dart.Bridge;
 using Microsoft.CodeAnalysis;
 
-namespace Metano.Dart.Transformation;
+namespace Metano.Compiler.Dart.Transformation;
 
 /// <summary>
 /// Orchestrates Dart emission: reads the ordered transpilable-type list

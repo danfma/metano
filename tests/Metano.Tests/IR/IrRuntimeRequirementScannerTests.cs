@@ -1,5 +1,5 @@
-using Metano.Compiler.Extraction;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 

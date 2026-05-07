@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Metano.TypeScript;
+namespace Metano.Compiler.TypeScript;
 
 /// <summary>
 /// A StringBuilder wrapper that tracks indentation level and auto-indents on new lines.

@@ -1,6 +1,6 @@
 using Metano.Compiler.IR;
 
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// A JS expression built from a textual template plus the TypeScript AST nodes (and

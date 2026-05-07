@@ -1,7 +1,7 @@
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Walks an IR body and returns <c>true</c> when every node it contains is within

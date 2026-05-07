@@ -1,8 +1,8 @@
 using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
-using Metano.Dart.AST;
+using Metano.Compiler.Dart.AST;
 
-namespace Metano.Dart.Bridge;
+namespace Metano.Compiler.Dart.Bridge;
 
 /// <summary>
 /// Walks the generated Dart AST for a single file and produces every <see cref="DartImport"/>

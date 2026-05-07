@@ -1,7 +1,7 @@
 using ConsoleAppFramework;
 using Metano.Compiler;
 
-namespace Metano.Dart;
+namespace Metano.Compiler.Dart;
 
 public class Commands
 {

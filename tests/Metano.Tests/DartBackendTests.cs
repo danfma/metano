@@ -1,7 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
-using Metano.Dart.Transformation;
+using Metano.Compiler.Dart.Transformation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -859,7 +859,7 @@ public class DartBackendTests
         );
         var transformer = new DartTransformer(ir, compilation);
         var files = transformer.TransformAll();
-        var printer = new Metano.Dart.Printer();
+        var printer = new Metano.Compiler.Dart.Printer();
         var result = new Dictionary<string, string>();
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);

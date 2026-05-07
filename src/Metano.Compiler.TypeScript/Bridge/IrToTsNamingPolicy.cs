@@ -3,7 +3,7 @@ using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.Transformation;
 
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// TypeScript-specific naming decisions applied when lowering IR to TS AST.

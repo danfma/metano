@@ -1,6 +1,6 @@
 using Metano.Compiler.IR;
 
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Stable, structural <see cref="IrTypeRef"/> signatures used for matching

@@ -1,7 +1,7 @@
 using Metano.Compiler.IR;
-using Metano.TypeScript.AST;
+using Metano.Compiler.TypeScript.AST;
 
-namespace Metano.TypeScript.Bridge;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Produces the runtime <see cref="TsExpression"/> that narrows <c>args[i]</c>

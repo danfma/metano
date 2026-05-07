@@ -1,4 +1,4 @@
-namespace Metano.Dart.AST;
+namespace Metano.Compiler.Dart.AST;
 
 /// <summary>Base for top-level declarations in a Dart file.</summary>
 public abstract record DartTopLevel;

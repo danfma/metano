@@ -1,4 +1,4 @@
-namespace Metano.TypeScript.AST;
+namespace Metano.Compiler.TypeScript.AST;
 
 /// <summary>
 /// A function/method/lambda parameter. <see cref="Type"/> is nullable so that lambda

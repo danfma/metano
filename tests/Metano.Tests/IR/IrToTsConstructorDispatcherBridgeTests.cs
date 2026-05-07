@@ -1,8 +1,8 @@
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
-using Metano.TypeScript;
-using Metano.TypeScript.AST;
-using Metano.TypeScript.Bridge;
+using Metano.Compiler.TypeScript;
+using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 

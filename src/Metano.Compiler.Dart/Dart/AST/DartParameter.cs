@@ -1,4 +1,4 @@
-namespace Metano.Dart.AST;
+namespace Metano.Compiler.Dart.AST;
 
 /// <summary>A method or function parameter.</summary>
 /// <param name="DefaultValue">Optional default expression. When present and
