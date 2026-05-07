@@ -1,12 +1,27 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, valueEquals } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import type { Decimal } from "decimal.js";
 
 export class Product {
-  constructor(readonly id: number, readonly name: string, readonly displayName: string, readonly unitPrice: Decimal, readonly stockCount: number, readonly isActive: boolean) { }
+  constructor(
+    readonly id: number,
+    readonly name: string,
+    readonly displayName: string,
+    readonly unitPrice: Decimal,
+    readonly stockCount: number,
+    readonly isActive: boolean,
+  ) {}
 
   equals(other: any): boolean {
-    return other instanceof Product && this.id === other.id && this.name === other.name && this.displayName === other.displayName && valueEquals(this.unitPrice, other.unitPrice) && this.stockCount === other.stockCount && this.isActive === other.isActive;
+    return (
+      other instanceof Product &&
+      this.id === other.id &&
+      this.name === other.name &&
+      this.displayName === other.displayName &&
+      valueEquals(this.unitPrice, other.unitPrice) &&
+      this.stockCount === other.stockCount &&
+      this.isActive === other.isActive
+    );
   }
 
   hashCode(): number {
@@ -22,6 +37,13 @@ export class Product {
   }
 
   with(overrides?: Partial<Product>): Product {
-    return new Product(overrides?.id ?? this.id, overrides?.name ?? this.name, overrides?.displayName ?? this.displayName, overrides?.unitPrice ?? this.unitPrice, overrides?.stockCount ?? this.stockCount, overrides?.isActive ?? this.isActive);
+    return new Product(
+      overrides?.id ?? this.id,
+      overrides?.name ?? this.name,
+      overrides?.displayName ?? this.displayName,
+      overrides?.unitPrice ?? this.unitPrice,
+      overrides?.stockCount ?? this.stockCount,
+      overrides?.isActive ?? this.isActive,
+    );
   }
 }

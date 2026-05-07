@@ -6,4 +6,4 @@ export const IssuePriority = {
   Urgent: "urgent",
 } as const;
 
-export type IssuePriority = typeof IssuePriority[keyof typeof IssuePriority];
+export type IssuePriority = (typeof IssuePriority)[keyof typeof IssuePriority];

@@ -1,3 +1,2 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-export interface EmptyProps {
-}
+export interface EmptyProps {}
