@@ -114,3 +114,26 @@ The decision recorded here (decompose over monolith, compose via parent
 properties, no formal Visitor) was ratified by the Dart target — the same
 shape now lives in `src/Metano.Compiler.Dart/Bridge/` with no TypeScript
 contamination.
+
+## Thread-safety addendum (2026-05, ADR-0020)
+
+`TypeTransformer` now fans out the per-file-group loop across worker
+threads via `Parallel.For` (#21 / ADR-0020). The handler-decomposition
+shape is what makes that safe: every bridge consumes a
+`TypeScriptTransformContext` whose dictionaries / sets / maps are all
+read-only after the setup phase, and per-group mutable scratch state
+(`UsingAliases`, `NamedTypeRenames`) lives on `AsyncLocal<T>` slots
+that flow per worker. The only mutable shared sinks
+(`_diagnostics`, `TypeMappingContext.CrossPackageMisses`,
+`TypeMappingContext.UsedCrossPackages`) are now thread-safe at their
+declaration site (`lock` for the diagnostic list, `ConcurrentDictionary`
+for the cross-package collections).
+
+**Contract for new bridges**: a bridge introduced under
+`src/Metano.Compiler.TypeScript/Bridge/` or `src/Metano.Compiler.Dart/Bridge/`
+must read its dependencies through the target's transform context and
+must not store mutable state across calls (instance fields are fine
+when the bridge is itself instantiated per call). Anything that
+needs to publish back to the transformer should hand the value to a
+context-provided sink so the locking / concurrency primitive lives
+in one place.

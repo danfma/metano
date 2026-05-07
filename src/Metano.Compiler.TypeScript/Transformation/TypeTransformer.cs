@@ -26,6 +26,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private readonly List<MetanoDiagnostic> _diagnostics = [];
 
     /// <summary>
+    /// Guards <see cref="_diagnostics"/> against parallel writes from the
+    /// per-group transformation loop (#21 — parallel TypeTransformer).
+    /// Adds happen sparsely (one per diagnostic-worthy event), so a
+    /// simple lock keeps order stable without the overhead of swapping
+    /// the backing list to a concurrent collection.
+    /// </summary>
+    private readonly object _diagnosticsLock = new();
+
+    /// <summary>
     /// Forwarded to <see cref="TypeScriptTransformContext.UseIrBodiesWhenCovered"/>.
     /// Always <c>true</c> in production — the IR pipeline is the only path for
     /// method-body lowering now that the legacy transformers are gone. Kept as
@@ -76,7 +85,19 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
     {
-        _diagnostics.Add(diagnostic);
+        lock (_diagnosticsLock)
+            _diagnostics.Add(diagnostic);
+    }
+
+    /// <summary>
+    /// Thread-safe sink for the per-group transformation loop. Wraps
+    /// <see cref="_diagnostics"/> writes inside the per-group lock so
+    /// parallel workers serialise on diagnostic emission.
+    /// </summary>
+    private void AddDiagnostic(MetanoDiagnostic diagnostic)
+    {
+        lock (_diagnosticsLock)
+            _diagnostics.Add(diagnostic);
     }
 
     /// <summary>
@@ -207,7 +228,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.ExternalImports,
             ir.CrossAssemblyOrigins,
             compilation,
-            _diagnostics.Add
+            AddDiagnostic
         );
 
         _context = new TypeScriptTransformContext(
@@ -221,7 +242,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.GuardableTypeKeys ?? new HashSet<string>(StringComparer.Ordinal),
             _pathNaming,
             declarativeMappings,
-            _diagnostics.Add
+            AddDiagnostic
         )
         {
             TypeMapping = typeMappingContext,
@@ -252,10 +273,31 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // (namespace, fileName) so types with the same EmitInFile value
             // but different namespaces don't accidentally collide — that case
             // is rejected later as MS0008.
-            foreach (var group in GroupTypesByFile(transpilableTypes))
+            //
+            // Each group transforms independently: TransformGroup reads the
+            // shared TypeScriptTransformContext (immutable after the setup
+            // above), publishes its own per-group AsyncLocal slots for
+            // UsingAliases, and only writes back into thread-safe sinks
+            // (TypeMapping.CrossPackageMisses / UsedCrossPackages are
+            // ConcurrentDictionary-backed; _diagnostics is guarded by a
+            // lock). Parallel.ForEach captures the current ExecutionContext
+            // per iteration so AsyncLocal writes inside a worker stay
+            // isolated. The result list preserves source order via the
+            // group index so downstream barrels and golden tests stay
+            // deterministic.
+            var groups = GroupTypesByFile(transpilableTypes);
+            var perGroupResults = new TsSourceFile?[groups.Count];
+            Parallel.For(
+                0,
+                groups.Count,
+                index =>
+                {
+                    perGroupResults[index] = TransformGroup(groups[index]);
+                }
+            );
+            for (var i = 0; i < perGroupResults.Length; i++)
             {
-                var file = TransformGroup(group);
-                if (file is not null)
+                if (perGroupResults[i] is { } file)
                     files.Add(file);
             }
         }

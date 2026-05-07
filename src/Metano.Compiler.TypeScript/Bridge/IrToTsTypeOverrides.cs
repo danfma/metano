@@ -33,7 +33,7 @@ public interface IrToTsTypeOverrides
 /// </summary>
 public sealed class BclExportTypeOverrides(
     IReadOnlyDictionary<string, IrBclExport> map,
-    Dictionary<string, string> usedCrossPackages
+    IDictionary<string, string> usedCrossPackages
 ) : IrToTsTypeOverrides
 {
     public TsType? TryResolve(IrTypeRef type)
