@@ -24,7 +24,10 @@ import type { Product } from "#/product";
 import { ProductDemo } from "#/provider/product-demo";
 
 const db = createSeededDatabase();
-const repo = new BunSqliteProductRepository(db);
+const repo = new BunSqliteProductRepository(db, (sql, params) => {
+  const renderedParams = params.length === 0 ? "" : `  -- params: ${JSON.stringify(params)}`;
+  console.log(`  SQL > ${sql}${renderedParams}`);
+});
 
 try {
   printSection("All active products", ProductDemo.activeProducts(repo));
