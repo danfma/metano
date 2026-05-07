@@ -3,6 +3,7 @@
   "type": "module",
   "private": true,
   "sideEffects": false,
+  "main": "./src/main.ts",
   "imports": {
     "#/*": {
       "types": "./dist/*.d.ts",
@@ -26,6 +27,7 @@
   "scripts": {
     "generate": "dotnet run --project ../../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj -- -p ../../../samples/SampleQueryableSqlite/SampleQueryableSqlite.csproj -o ./src --time",
     "build": "tsgo -b .",
+    "start": "bun run src/main.ts",
     "test": "bun test"
   },
   "exports": {

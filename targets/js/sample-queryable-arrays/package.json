@@ -1,6 +1,7 @@
 {
   "name": "sample-queryable-arrays",
   "type": "module",
+  "module": "dist/main.js",
   "private": true,
   "sideEffects": false,
   "imports": {
