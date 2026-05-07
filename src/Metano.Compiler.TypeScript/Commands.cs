@@ -102,12 +102,20 @@ public class Commands
         if (watch)
         {
             using var cts = new CancellationTokenSource();
-            Console.CancelKeyPress += (_, e) =>
+            ConsoleCancelEventHandler handler = (_, e) =>
             {
                 e.Cancel = true;
                 cts.Cancel();
             };
-            await WatchHost.RunAsync(project, RunOnce, cts.Token);
+            Console.CancelKeyPress += handler;
+            try
+            {
+                await WatchHost.RunAsync(project, RunOnce, cts.Token);
+            }
+            finally
+            {
+                Console.CancelKeyPress -= handler;
+            }
             return;
         }
 
