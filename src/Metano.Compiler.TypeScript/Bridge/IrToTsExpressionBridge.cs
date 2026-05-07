@@ -506,7 +506,9 @@ public static class IrToTsExpressionBridge
     /// minimal.
     /// </summary>
     private static TsExpression? MapOptionalType(IrTypeRef? type) =>
-        type is null ? null : new TsStringLiteral(Printer.RenderType(IrToTsTypeMapper.Map(type)));
+        type is null
+            ? null
+            : new TsStringLiteral(Printer.RenderType(IrToTsTypeMapper.Map(type)).TrimEnd('\n'));
 
     private static TsObjectLiteral TreeNode(
         string kind,

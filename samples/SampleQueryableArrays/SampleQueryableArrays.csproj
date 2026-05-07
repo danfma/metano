@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <MetanoOutputDir>../../targets/js/sample-queryable-arrays/src</MetanoOutputDir>
+    <MetanoClean>true</MetanoClean>
+    <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
+    <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
+    <MetanoPostBuildCommand>bunx biome check --write &quot;$(MetanoOutputDir)&quot;</MetanoPostBuildCommand>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
+</Project>
