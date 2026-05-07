@@ -45,4 +45,15 @@ public interface ITranspilerTarget
     /// ignore the parameter entirely; Roslyn-dependent targets should surface a clear
     /// diagnostic when it is unavailable.</param>
     TargetOutput Transform(IrCompilation ir, Compilation? compilation);
+
+    /// <summary>
+    /// Stable fingerprint of every target-specific option that influences
+    /// generated output (e.g. the TypeScript target's <c>NamespaceBarrels</c>
+    /// or <c>StripInterfacePrefix</c> flags). The host folds this into the
+    /// incremental cache key (ADR-0021) so a flag flip invalidates the
+    /// cache even when sources and references are byte-identical. Default
+    /// returns the empty string — targets with no per-run flags have no
+    /// configuration that needs pinning.
+    /// </summary>
+    string ConfigurationFingerprint => string.Empty;
 }

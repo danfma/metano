@@ -13,6 +13,11 @@ namespace Metano.Compiler.Caching;
 /// Cache invariants:
 /// </para>
 /// <list type="bullet">
+///   <item><b>Configuration fingerprint</b>: a stable string mixing the
+///   shared <c>--file-prefix</c> with each target's per-run flags
+///   (e.g., the TypeScript target's <c>NamespaceBarrels</c>,
+///   <c>StripInterfacePrefix</c>). Flag flips invalidate the cache even
+///   when sources and references are byte-identical.</item>
 ///   <item><b>Source hashes</b>: SHA-256 of every C# syntax tree the
 ///   compilation parsed. Catches body edits the type-level dependency
 ///   graph alone would miss (ADR-0018 leaves bodies out of the
@@ -35,12 +40,13 @@ namespace Metano.Compiler.Caching;
 public sealed record TranspilationCache(
     int FormatVersion,
     string Target,
+    string ConfigurationFingerprint,
     IReadOnlyDictionary<string, string> SourceHashes,
     IReadOnlyDictionary<string, string> ReferenceFingerprints,
     IReadOnlyDictionary<string, string> OutputHashes
 )
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
     public const string FileName = ".metano-cache.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -49,6 +55,13 @@ public sealed record TranspilationCache(
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
+    /// <summary>
+    /// Reads <c>.metano-cache.json</c> from <paramref name="outputDir"/>.
+    /// Returns <see langword="null"/> on missing file, format-version
+    /// mismatch, JSON parse failure, or any partially populated section
+    /// (defense against a hand-edited cache with required dictionaries
+    /// stripped to <c>null</c>).
+    /// </summary>
     public static TranspilationCache? TryRead(string outputDir)
     {
         var path = Path.Combine(outputDir, FileName);
@@ -59,7 +72,19 @@ public sealed record TranspilationCache(
         {
             var json = File.ReadAllText(path);
             var cache = JsonSerializer.Deserialize<TranspilationCache>(json, JsonOptions);
-            return cache?.FormatVersion == CurrentFormatVersion ? cache : null;
+            if (cache is null)
+                return null;
+            if (cache.FormatVersion != CurrentFormatVersion)
+                return null;
+            if (
+                cache.Target is null
+                || cache.ConfigurationFingerprint is null
+                || cache.SourceHashes is null
+                || cache.ReferenceFingerprints is null
+                || cache.OutputHashes is null
+            )
+                return null;
+            return cache;
         }
         catch
         {

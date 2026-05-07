@@ -77,6 +77,16 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// </summary>
     public bool StripInterfacePrefix { get; init; }
 
+    /// <summary>
+    /// Cache fingerprint (ADR-0021): pin the two emit-affecting flags so
+    /// flipping either one invalidates the incremental cache. Format is
+    /// keep small + ordered so future additions extend it without
+    /// breaking older caches (the format-version bump in
+    /// <see cref="TranspilationCache"/> handles structural breaks).
+    /// </summary>
+    public string ConfigurationFingerprint =>
+        $"namespaceBarrels={NamespaceBarrels};stripInterfacePrefix={StripInterfacePrefix}";
+
     public TargetOutput Transform(IrCompilation ir, Compilation? compilation)
     {
         if (compilation is null)

@@ -54,26 +54,35 @@ public static class TranspilerHost
             Console.WriteLine($"  Compilation: {compileSw.ElapsedMilliseconds}ms");
 
         // Incremental cache short-circuit (#21 / ADR-0021): if every C#
-        // syntax tree, every metadata reference, and every output file
-        // matches the previously cached fingerprint, skip the rest of
-        // the pipeline. --clean (which already wiped the output dir
-        // including .metano-cache.json) and --no-cache opt out.
-        var sourceHashes = CacheKeyBuilder.ComputeSourceHashes(compilation);
-        var referenceFingerprints = CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
-        if (
-            ShouldAttemptCache(options)
-            && TryShortCircuitFromCache(
-                outputDir,
-                target.Language.ToString(),
-                sourceHashes,
-                referenceFingerprints,
-                options.ShowTimings,
-                totalSw,
-                out var cachedFiles
-            )
-        )
+        // syntax tree, every metadata reference, the target's emit-config
+        // fingerprint, and every output file match the previously cached
+        // fingerprint, skip the rest of the pipeline. --clean (which
+        // already wiped the output dir including .metano-cache.json) and
+        // --no-cache opt out. Hashes are computed lazily so a --no-cache
+        // run does not pay the SHA bill.
+        IReadOnlyDictionary<string, string>? sourceHashes = null;
+        IReadOnlyDictionary<string, string>? referenceFingerprints = null;
+        var configFingerprint = BuildConfigFingerprint(target, options);
+        if (ShouldAttemptCache(options))
         {
-            return new TranspileResult(true, cachedFiles, 0, 0);
+            sourceHashes = CacheKeyBuilder.ComputeSourceHashes(compilation);
+            referenceFingerprints = CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
+            if (
+                TryShortCircuitFromCache(
+                    outputDir,
+                    target.Language.ToString(),
+                    configFingerprint,
+                    sourceHashes,
+                    referenceFingerprints,
+                    options.FilePrefix,
+                    options.ShowTimings,
+                    totalSw,
+                    out var cachedFiles
+                )
+            )
+            {
+                return new TranspileResult(true, cachedFiles, 0, 0);
+            }
         }
 
         var transpileSw = Stopwatch.StartNew();
@@ -135,8 +144,10 @@ public static class TranspilerHost
             target,
             outputDir,
             output.Files,
+            configFingerprint,
             sourceHashes,
-            referenceFingerprints
+            referenceFingerprints,
+            compilation
         );
 
         return new TranspileResult(true, output.Files, warningCount, 0);
@@ -145,13 +156,21 @@ public static class TranspilerHost
     private static bool ShouldAttemptCache(TranspileOptions options) =>
         !options.NoCache && !options.DryRun && !options.Clean;
 
+    private static string BuildConfigFingerprint(
+        ITranspilerTarget target,
+        TranspileOptions options
+    ) =>
+        $"target={target.ConfigurationFingerprint};filePrefix={options.FilePrefix ?? string.Empty}";
+
     private static void WriteCacheIfEnabled(
         TranspileOptions options,
         ITranspilerTarget target,
         string outputDir,
         IReadOnlyList<GeneratedFile> files,
-        IReadOnlyDictionary<string, string> sourceHashes,
-        IReadOnlyDictionary<string, string> referenceFingerprints
+        string configFingerprint,
+        IReadOnlyDictionary<string, string>? sourceHashes,
+        IReadOnlyDictionary<string, string>? referenceFingerprints,
+        Microsoft.CodeAnalysis.Compilation compilation
     )
     {
         if (options.NoCache || options.DryRun)
@@ -160,9 +179,15 @@ public static class TranspilerHost
             ? null
             : options.FilePrefix + "\n";
         var outputHashes = CacheKeyBuilder.HashGeneratedContent(files, prefixBlock);
+        // The read path may have skipped these on a --clean run (no cache
+        // to consult). Compute now so the freshly written cache is
+        // consultable on the next run.
+        sourceHashes ??= CacheKeyBuilder.ComputeSourceHashes(compilation);
+        referenceFingerprints ??= CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
         var cache = new TranspilationCache(
             FormatVersion: TranspilationCache.CurrentFormatVersion,
             Target: target.Language.ToString(),
+            ConfigurationFingerprint: configFingerprint,
             SourceHashes: sourceHashes,
             ReferenceFingerprints: referenceFingerprints,
             OutputHashes: outputHashes
@@ -173,8 +198,10 @@ public static class TranspilerHost
     private static bool TryShortCircuitFromCache(
         string outputDir,
         string targetLanguage,
+        string configFingerprint,
         IReadOnlyDictionary<string, string> sourceHashes,
         IReadOnlyDictionary<string, string> referenceFingerprints,
+        string? filePrefix,
         bool showTimings,
         Stopwatch totalSw,
         out IReadOnlyList<GeneratedFile> cachedFiles
@@ -186,15 +213,19 @@ public static class TranspilerHost
             return false;
         if (!string.Equals(cache.Target, targetLanguage, StringComparison.Ordinal))
             return false;
+        if (!string.Equals(cache.ConfigurationFingerprint, configFingerprint, StringComparison.Ordinal))
+            return false;
         if (!CacheKeyBuilder.DictionariesEqual(cache.SourceHashes, sourceHashes))
             return false;
         if (!CacheKeyBuilder.DictionariesEqual(cache.ReferenceFingerprints, referenceFingerprints))
             return false;
-        if (!CacheKeyBuilder.OutputsStillValid(outputDir, cache.OutputHashes))
+
+        var prefixBlock = string.IsNullOrEmpty(filePrefix) ? null : filePrefix + "\n";
+        var rehydrated = CacheKeyBuilder.ValidateAndRehydrate(outputDir, cache.OutputHashes, prefixBlock);
+        if (rehydrated is null)
             return false;
 
-        cachedFiles = CacheKeyBuilder.RehydrateFiles(outputDir, cache.OutputHashes);
-
+        cachedFiles = rehydrated;
         totalSw.Stop();
         Console.WriteLine(
             $"Metano: incremental cache hit — {cache.OutputHashes.Count} output file(s) reused, no work to do."
