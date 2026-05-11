@@ -37,6 +37,17 @@ namespace Metano.Compiler.Caching;
 /// </summary>
 public static class IrTypeSignatureHasher
 {
+    /// <summary>
+    /// Stable type-display format. <see cref="SymbolDisplayFormat.FullyQualifiedFormat"/>
+    /// pins every namespace + containing-type prefix and expands nullable
+    /// + ref-kind decorations, so a short-name collision in one
+    /// namespace cannot quietly tie two unrelated types to the same
+    /// hash and a future change to Roslyn's default <c>ToDisplayString</c>
+    /// cannot drift the cache key.
+    /// </summary>
+    private static readonly SymbolDisplayFormat StableFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat;
+
     public static string Hash(INamedTypeSymbol symbol)
     {
         var sb = new StringBuilder();
@@ -59,12 +70,12 @@ public static class IrTypeSignatureHasher
         sb.Append("arity=").Append(symbol.Arity).Append('\0');
 
         if (symbol.BaseType is { } baseType)
-            sb.Append("base=").Append(baseType.ToDisplayString()).Append('\0');
+            sb.Append("base=").Append(baseType.ToDisplayString(StableFormat)).Append('\0');
 
         foreach (
-            var iface in symbol.Interfaces.OrderBy(i => i.ToDisplayString(), StringComparer.Ordinal)
+            var iface in symbol.Interfaces.OrderBy(i => i.ToDisplayString(StableFormat), StringComparer.Ordinal)
         )
-            sb.Append("iface=").Append(iface.ToDisplayString()).Append('\0');
+            sb.Append("iface=").Append(iface.ToDisplayString(StableFormat)).Append('\0');
 
         AppendAttributes(sb, symbol.GetAttributes());
 
@@ -91,29 +102,42 @@ public static class IrTypeSignatureHasher
         member switch
         {
             IMethodSymbol m =>
-                $"method:{m.MethodKind}:{m.Name}({string.Join(",", m.Parameters.Select(FormatParam))})->{m.ReturnType.ToDisplayString()};acc={m.DeclaredAccessibility};static={m.IsStatic};virt={m.IsVirtual};over={m.IsOverride};abs={m.IsAbstract}",
+                $"method:{m.MethodKind}:{m.Name}({string.Join(",", m.Parameters.Select(FormatParam))})->{m.ReturnType.ToDisplayString(StableFormat)};acc={m.DeclaredAccessibility};static={m.IsStatic};virt={m.IsVirtual};over={m.IsOverride};abs={m.IsAbstract}",
             IPropertySymbol p =>
-                $"prop:{p.Name}:{p.Type.ToDisplayString()};get={p.GetMethod is not null};set={p.SetMethod is not null};acc={p.DeclaredAccessibility};static={p.IsStatic}",
+                $"prop:{p.Name}:{p.Type.ToDisplayString(StableFormat)};get={p.GetMethod is not null};set={p.SetMethod is not null};acc={p.DeclaredAccessibility};static={p.IsStatic}",
             IFieldSymbol f =>
-                $"field:{f.Name}:{f.Type.ToDisplayString()};acc={f.DeclaredAccessibility};static={f.IsStatic};readonly={f.IsReadOnly};const={f.IsConst}",
+                $"field:{f.Name}:{f.Type.ToDisplayString(StableFormat)};acc={f.DeclaredAccessibility};static={f.IsStatic};readonly={f.IsReadOnly};const={f.IsConst}",
             IEventSymbol e =>
-                $"event:{e.Name}:{e.Type.ToDisplayString()};acc={e.DeclaredAccessibility};static={e.IsStatic}",
+                $"event:{e.Name}:{e.Type.ToDisplayString(StableFormat)};acc={e.DeclaredAccessibility};static={e.IsStatic}",
             _ => $"other:{member.Kind}:{member.Name}",
         };
 
     private static string FormatParam(IParameterSymbol p) =>
-        $"{p.RefKind}:{p.Type.ToDisplayString()}:{(p.IsParams ? "params:" : "")}{(p.HasExplicitDefaultValue ? "default" : "")}";
+        $"{p.RefKind}:{p.Type.ToDisplayString(StableFormat)}:{(p.IsParams ? "params:" : "")}{(p.HasExplicitDefaultValue ? "default" : "")}";
 
     private static void AppendAttributes(StringBuilder sb, IReadOnlyList<AttributeData> attributes)
     {
         var formatted = attributes
             .Where(a => a.AttributeClass is not null)
-            .Select(a =>
-                $"{a.AttributeClass!.ToDisplayString()}({string.Join(",", a.ConstructorArguments.Select(FormatConstant))})"
-            )
+            .Select(FormatAttribute)
             .OrderBy(s => s, StringComparer.Ordinal);
         foreach (var attr in formatted)
             sb.Append("attr=").Append(attr).Append('\0');
+    }
+
+    private static string FormatAttribute(AttributeData a)
+    {
+        var ctorArgs = string.Join(",", a.ConstructorArguments.Select(FormatConstant));
+        // Named arguments (e.g., [Foo(Bar = 1)]) are sorted by key so
+        // the order written in source can't shift the hash, and
+        // included so changes to a named property invalidate the
+        // cache the same way ctor-arg edits do.
+        var namedArgs = string.Join(
+            ",",
+            a.NamedArguments.OrderBy(p => p.Key, StringComparer.Ordinal)
+                .Select(p => $"{p.Key}={FormatConstant(p.Value)}")
+        );
+        return $"{a.AttributeClass!.ToDisplayString(StableFormat)}({ctorArgs}|{namedArgs})";
     }
 
     private static string FormatConstant(TypedConstant constant) =>
@@ -121,6 +145,11 @@ public static class IrTypeSignatureHasher
         {
             TypedConstantKind.Array =>
                 $"[{string.Join(",", constant.Values.Select(FormatConstant))}]",
+            // typeof(T) constants carry an ITypeSymbol whose default
+            // ToString isn't guaranteed to be stable across Roslyn
+            // versions; format with the explicit FullyQualifiedFormat.
+            TypedConstantKind.Type when constant.Value is ITypeSymbol t =>
+                $"typeof({t.ToDisplayString(StableFormat)})",
             _ => constant.Value?.ToString() ?? "null",
         };
 
