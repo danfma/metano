@@ -30,10 +30,12 @@ import type {
   ExprCapture,
   ExprConditional,
   ExprLambda,
+  ExprLet,
   ExprLiteral,
   ExprMember,
   ExprNew,
   ExprParam,
+  ExprRef,
   ExprTree,
   ExprUnary,
   QueryableMeta,
@@ -44,11 +46,18 @@ import type {
  * the closure path resolved the lambda body: the param name is bound
  * to the current item, captures are looked up by name in a flat
  * record (the same shape the compiler emits in `QueryableMeta`).
+ *
+ * `refs` carries the values introduced by enclosing {@link ExprLet}
+ * bindings — the evaluator pushes one entry per binding when it
+ * descends into a `let` node and looks `ref` nodes up against this
+ * record. Callers normally leave it `undefined`; the evaluator
+ * materializes it on demand.
  */
 export interface ExprTreeScope {
   readonly paramName: string;
   readonly paramValue: unknown;
   readonly captures: Readonly<Record<string, unknown>>;
+  readonly refs?: Readonly<Record<string, unknown>>;
 }
 
 /** Default fallback name used when a meta tree has no `param` node. */
@@ -77,6 +86,7 @@ export function readParamName(tree: ExprTree): string | null {
     case "literal":
     case "lambda":
     case "new":
+    case "ref":
       return null;
     case "member":
       return readParamName(tree.target);
@@ -92,6 +102,16 @@ export function readParamName(tree: ExprTree): string | null {
         readParamName(tree.whenTrue) ??
         readParamName(tree.whenFalse)
       );
+    case "let":
+      // Bindings are pre-computed subtrees that may contain the param
+      // reference too (e.g. `$0 = x.profile.age`); scan them before
+      // falling through to the body so a hoisted root still produces
+      // the right parameter name.
+      for (const binding of tree.bindings) {
+        const found = readParamName(binding.value);
+        if (found !== null) return found;
+      }
+      return readParamName(tree.body);
   }
 }
 
@@ -147,6 +167,10 @@ export function evaluateExprTree(tree: ExprTree, scope: ExprTreeScope): unknown 
       return evaluateExprTree(tree.condition, scope)
         ? evaluateExprTree(tree.whenTrue, scope)
         : evaluateExprTree(tree.whenFalse, scope);
+    case "let":
+      return evaluateLet(tree, scope);
+    case "ref":
+      return evaluateRef(tree, scope);
     case "lambda":
     case "new":
       throw new Error(`evaluateExprTree: kind '${tree.kind}' not supported in MVP`);
@@ -288,6 +312,27 @@ function evaluateBinary(node: ExprBinary, scope: ExprTreeScope): unknown {
   }
 }
 
+function evaluateLet(node: ExprLet, scope: ExprTreeScope): unknown {
+  // Evaluate bindings in declaration order so an earlier binding's
+  // value is visible to a later binding (matches how the compiler
+  // emits the $0/$1/… sequence).
+  const refs: Record<string, unknown> = { ...(scope.refs ?? {}) };
+  for (const binding of node.bindings) {
+    refs[binding.name] = evaluateExprTree(binding.value, { ...scope, refs });
+  }
+  return evaluateExprTree(node.body, { ...scope, refs });
+}
+
+function evaluateRef(node: ExprRef, scope: ExprTreeScope): unknown {
+  const refs = scope.refs;
+  if (refs === undefined || !(node.name in refs)) {
+    throw new Error(
+      `evaluateExprTree: ref '${node.name}' resolves outside any enclosing let binding`,
+    );
+  }
+  return refs[node.name];
+}
+
 function evaluateUnary(node: ExprUnary, scope: ExprTreeScope): unknown {
   const operand = evaluateExprTree(node.operand, scope);
   switch (node.op) {
@@ -362,6 +407,10 @@ export abstract class ExprTreeVisitor<R> {
         return this.visitLambda(tree);
       case "new":
         return this.visitNew(tree);
+      case "let":
+        return this.visitLet(tree);
+      case "ref":
+        return this.visitRef(tree);
     }
   }
 
@@ -435,6 +484,29 @@ export abstract class ExprTreeVisitor<R> {
       results.push(this.visit(init.value));
     }
     return this.combine(results);
+  }
+
+  /**
+   * Hoisted common-subexpression wrapper produced by the compiler
+   * (#209). Default behavior recurses through every binding value
+   * (in declaration order) and then the body, threading the children
+   * through {@link combine}.
+   */
+  protected visitLet(node: ExprLet): R {
+    const results: R[] = [];
+    for (const binding of node.bindings) results.push(this.visit(binding.value));
+    results.push(this.visit(node.body));
+    return this.combine(results);
+  }
+
+  /**
+   * Reference to a binding introduced by an enclosing {@link ExprLet}.
+   * Default behavior is to treat it as a leaf — subclasses that build
+   * a SQL/expression dialect should override and emit the alias the
+   * matching binding generated.
+   */
+  protected visitRef(_node: ExprRef): R {
+    return this.leaf();
   }
 
   /**

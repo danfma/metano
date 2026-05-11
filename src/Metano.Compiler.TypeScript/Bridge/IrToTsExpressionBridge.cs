@@ -514,6 +514,30 @@ public static class IrToTsExpressionBridge
                 ("params", new TsArrayLiteral(lambda.Params.Select(MapLambdaParam).ToList())),
                 ("body", MapExprTree(lambda.Body))
             ),
+            // Hoisted common-subexpression wrapper produced by
+            // IrExprTreeHoister (#209). The runtime visitor / evaluator
+            // resolves the bindings then walks the body.
+            IrExprLet let => TreeNode(
+                "let",
+                (
+                    "bindings",
+                    new TsArrayLiteral(
+                        let.Bindings.Select(b =>
+                                (TsExpression)
+                                    new TsObjectLiteral(
+                                        new List<TsObjectProperty>
+                                        {
+                                            new("name", new TsStringLiteral(b.Name)),
+                                            new("value", MapExprTree(b.Value)),
+                                        }
+                                    )
+                            )
+                            .ToList()
+                    )
+                ),
+                ("body", MapExprTree(let.Body))
+            ),
+            IrExprRef refNode => TreeNode("ref", ("name", new TsStringLiteral(refNode.Name))),
             _ => throw new InvalidOperationException(
                 $"Unsupported IrExprTreeNode shape: {node.GetType().Name}"
             ),

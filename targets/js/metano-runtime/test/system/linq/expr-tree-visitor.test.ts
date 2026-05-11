@@ -16,9 +16,11 @@ import type {
   ExprCall,
   ExprCapture,
   ExprConditional,
+  ExprLet,
   ExprLiteral,
   ExprMember,
   ExprParam,
+  ExprRef,
   ExprTree,
   ExprUnary,
   QueryableMeta,
@@ -429,5 +431,161 @@ describe("ExprTreeVisitor subclass", () => {
     expect(() =>
       new BareVisitor().visit({ kind: "literal", value: 1 } satisfies ExprLiteral),
     ).toThrow(/no default leaf value/);
+  });
+});
+
+describe("evaluateExprTree — let/ref hoisting (#209)", () => {
+  test("let body resolves ref against the binding's value", () => {
+    // `let $0 = u.age in $0 >= 18 && $0 < 65` — the hoisted shape the
+    // compiler emits for `u => u.Age >= 18 && u.Age < 65`.
+    const tree: ExprLet = {
+      kind: "let",
+      bindings: [
+        {
+          name: "$0",
+          value: { kind: "member", target: { kind: "param", name: "u" }, member: "age" },
+        },
+      ],
+      body: {
+        kind: "binary",
+        op: "&&",
+        left: {
+          kind: "binary",
+          op: ">=",
+          left: { kind: "ref", name: "$0" },
+          right: { kind: "literal", value: 18 },
+        },
+        right: {
+          kind: "binary",
+          op: "<",
+          left: { kind: "ref", name: "$0" },
+          right: { kind: "literal", value: 65 },
+        },
+      },
+    };
+
+    expect(
+      evaluateExprTree(tree, { paramName: "u", paramValue: { age: 30 }, captures: {} }),
+    ).toBe(true);
+    expect(
+      evaluateExprTree(tree, { paramName: "u", paramValue: { age: 17 }, captures: {} }),
+    ).toBe(false);
+    expect(
+      evaluateExprTree(tree, { paramName: "u", paramValue: { age: 70 }, captures: {} }),
+    ).toBe(false);
+  });
+
+  test("ref outside a let binding throws", () => {
+    const orphan: ExprRef = { kind: "ref", name: "$0" };
+    expect(() => evaluateExprTree(orphan, emptyScope)).toThrow(
+      /ref '\$0' resolves outside any enclosing let binding/,
+    );
+  });
+
+  test("compileLambdaBody handles a let-wrapped lambda body", () => {
+    const meta: QueryableMeta = {
+      tree: {
+        kind: "let",
+        bindings: [
+          {
+            name: "$0",
+            value: { kind: "member", target: { kind: "param", name: "x" }, member: "age" },
+          },
+        ],
+        body: {
+          kind: "binary",
+          op: ">=",
+          left: { kind: "ref", name: "$0" },
+          right: { kind: "literal", value: 18 },
+        },
+      },
+    };
+    const predicate = compileLambdaBody(meta);
+    expect(predicate({ age: 25 })).toBe(true);
+    expect(predicate({ age: 10 })).toBe(false);
+  });
+});
+
+describe("ExprTreeVisitor — let/ref (#209)", () => {
+  test("subclass that overrides visitLet sees bindings and body in order", () => {
+    /**
+     * Logs every entry/exit and the bindings' names so the test can
+     * assert traversal order through the default `visitLet`
+     * implementation (which recurses through each binding value then
+     * the body before returning via `combine`).
+     */
+    class LoggingLetVisitor extends ExprTreeVisitor<string> {
+      readonly log: string[] = [];
+
+      protected override leaf(): string {
+        return "";
+      }
+
+      protected override combine(_results: readonly string[]): string {
+        return "";
+      }
+
+      protected override visitLet(node: ExprLet): string {
+        this.log.push(`let:enter:${node.bindings.map((b) => b.name).join(",")}`);
+        const result = super.visitLet(node);
+        this.log.push(`let:exit`);
+        return result;
+      }
+
+      protected override visitRef(node: ExprRef): string {
+        this.log.push(`ref:${node.name}`);
+        return super.visitRef(node);
+      }
+
+      protected override visitParam(node: ExprParam): string {
+        this.log.push(`param:${node.name}`);
+        return super.visitParam(node);
+      }
+
+      protected override visitMember(node: ExprMember): string {
+        this.log.push(`member:${node.member}`);
+        return super.visitMember(node);
+      }
+    }
+
+    const tree: ExprLet = {
+      kind: "let",
+      bindings: [
+        {
+          name: "$0",
+          value: { kind: "member", target: { kind: "param", name: "u" }, member: "age" },
+        },
+      ],
+      body: {
+        kind: "binary",
+        op: "&&",
+        left: {
+          kind: "binary",
+          op: ">=",
+          left: { kind: "ref", name: "$0" },
+          right: { kind: "literal", value: 18 },
+        },
+        right: {
+          kind: "binary",
+          op: "<",
+          left: { kind: "ref", name: "$0" },
+          right: { kind: "literal", value: 65 },
+        },
+      },
+    };
+    const visitor = new LoggingLetVisitor();
+    visitor.visit(tree);
+
+    // Bindings recurse first (member → param), then the body recurses
+    // through every leaf — the two ref nodes appear in their reading
+    // order inside the && expression.
+    expect(visitor.log).toEqual([
+      "let:enter:$0",
+      "member:age",
+      "param:u",
+      "ref:$0",
+      "ref:$0",
+      "let:exit",
+    ]);
   });
 });

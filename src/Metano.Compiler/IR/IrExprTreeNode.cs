@@ -91,3 +91,30 @@ public sealed record IrExprLambda(IReadOnlyList<IrExprLambdaParam> Params, IrExp
 /// inferred generics with no contextual constraint).
 /// </summary>
 public sealed record IrExprLambdaParam(string Name, IrTypeRef? Type = null);
+
+/// <summary>
+/// Common-subexpression elimination wrapper: <c>let bindings in body</c>.
+/// Emitted by the hoisting pass (#209) when a pure subtree is referenced
+/// more than once inside <see cref="Body"/>. Each binding's value is
+/// evaluated once at provider-translation time; every previously-repeated
+/// occurrence in the body becomes an <see cref="IrExprRef"/> pointing at
+/// the binding's <see cref="IrExprLetBinding.Name"/>.
+/// </summary>
+public sealed record IrExprLet(IReadOnlyList<IrExprLetBinding> Bindings, IrExprTreeNode Body)
+    : IrExprTreeNode;
+
+/// <summary>
+/// A single <c>name = value</c> binding inside an <see cref="IrExprLet"/>.
+/// Names are deterministic, synthetic identifiers (<c>$0</c>, <c>$1</c>, …)
+/// chosen by the hoisting pass; their lexical scope is the surrounding
+/// <see cref="IrExprLet.Body"/>.
+/// </summary>
+public sealed record IrExprLetBinding(string Name, IrExprTreeNode Value);
+
+/// <summary>
+/// Reference to an <see cref="IrExprLetBinding"/> introduced by an
+/// enclosing <see cref="IrExprLet"/>. The runtime visitor resolves
+/// <see cref="Name"/> against the nearest binding scope at evaluation
+/// time.
+/// </summary>
+public sealed record IrExprRef(string Name) : IrExprTreeNode;

@@ -919,4 +919,175 @@ public class QueryableExpressionTreeTests
             )
             .IsEqualTo("");
     }
+
+    /// <summary>
+    /// Pure repeated member chain (size ≥ 2) inside a single lambda gets
+    /// hoisted into a synthetic <c>let</c> wrapper (#209). The walker
+    /// emits one <c>$0</c> binding for <c>x.Profile.Age</c> and every
+    /// previous occurrence becomes a <c>ref</c>.
+    /// </summary>
+    [Test]
+    public async Task RepeatedMemberChain_HoistedIntoLet()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class PersonExt
+            {
+                public static IEnumerable<Person> WorkingAge(IQueryable<Person> people) =>
+                    people.Where(x => x.Profile.Age >= 18 && x.Profile.Age < 65);
+            }
+
+            [Transpile]
+            public class Person
+            {
+                public Profile Profile { get; set; } = new Profile();
+            }
+
+            [Transpile]
+            public class Profile
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["person-ext.ts"];
+        await Assert.That(output).Contains("kind: \"let\"");
+        await Assert.That(output).Contains("name: \"$0\"");
+        await Assert.That(output).Contains("kind: \"ref\"");
+        // Two ref occurrences must appear — one per arm of the &&.
+        var refCount = System.Text.RegularExpressions.Regex.Matches(output, "kind: \"ref\"").Count;
+        await Assert.That(refCount).IsEqualTo(2);
+    }
+
+    /// <summary>
+    /// A subtree that only appears once never qualifies for a hoist —
+    /// the rewrite would inflate the descriptor for zero gain.
+    /// </summary>
+    [Test]
+    public async Task SingleOccurrence_NotHoisted()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class PersonExt
+            {
+                public static IEnumerable<Person> Adults(IQueryable<Person> people) =>
+                    people.Where(x => x.Profile.Age >= 18);
+            }
+
+            [Transpile]
+            public class Person
+            {
+                public Profile Profile { get; set; } = new Profile();
+            }
+
+            [Transpile]
+            public class Profile
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["person-ext.ts"];
+        // Positive shape: chain stays inline as a single member walk.
+        await Assert.That(output).Contains("kind: \"member\"");
+        await Assert.That(output).DoesNotContain("kind: \"let\"");
+        await Assert.That(output).DoesNotContain("kind: \"ref\"");
+    }
+
+    /// <summary>
+    /// A repeated method-call subtree is impure — calls may carry side
+    /// effects — and stays inline. The hoister keeps every call site
+    /// visible to the provider verbatim even when an identical call
+    /// shape appears more than once.
+    /// </summary>
+    [Test]
+    public async Task CallSubtree_NotHoisted()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class PersonExt
+            {
+                // Repeats the bare call `Greet()` twice. Even though the
+                // call shape is identical, hoisting it would change
+                // observable semantics — the provider sees one
+                // invocation aliased into two slots — so the pass
+                // leaves call subtrees inline regardless of repetition.
+                public static IEnumerable<Person> Polite(IQueryable<Person> people) =>
+                    people.Where(x => x.Greet() == "hi" || x.Greet() == "hello");
+            }
+
+            [Transpile]
+            public class Person
+            {
+                public string Greet() => "hi";
+            }
+            """
+        );
+
+        var output = result["person-ext.ts"];
+        // Both call subtrees stay inline as full `kind: "call"` nodes,
+        // never folded into a hoisted binding.
+        var callCount = System
+            .Text.RegularExpressions.Regex.Matches(output, "kind: \"call\"")
+            .Count;
+        await Assert.That(callCount).IsEqualTo(2);
+        // No `ref` node could alias a hoisted call — the body still
+        // spells out each invocation rather than collapsing them.
+        await Assert.That(output).DoesNotContain("kind: \"ref\"");
+    }
+
+    /// <summary>
+    /// A repeated single-node subtree (a bare param) is below the
+    /// <c>MinSizeToHoist</c> threshold — the rewrite would replace one
+    /// param token with a <c>ref</c> node carrying its own
+    /// <c>name</c>/<c>kind</c> fields, inflating rather than shrinking
+    /// the payload.
+    /// </summary>
+    [Test]
+    public async Task SingleNodeRepeat_NotHoisted()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class PersonExt
+            {
+                // Repeated `x` (single param node) AND repeated `0` literal —
+                // neither qualifies because their size is 1.
+                public static IEnumerable<Person> Active(IQueryable<Person> people) =>
+                    people.Where(x => x.Age > 0 && x.Score > 0);
+            }
+
+            [Transpile]
+            public class Person
+            {
+                public int Age { get; set; }
+                public int Score { get; set; }
+            }
+            """
+        );
+
+        var output = result["person-ext.ts"];
+        // Positive shape: the && stays as a binary at the top of the
+        // tree — confirms the body wasn't wrapped in `let`.
+        await Assert.That(output).Contains("kind: \"binary\"");
+        await Assert.That(output).DoesNotContain("kind: \"let\"");
+        await Assert.That(output).DoesNotContain("kind: \"ref\"");
+    }
 }

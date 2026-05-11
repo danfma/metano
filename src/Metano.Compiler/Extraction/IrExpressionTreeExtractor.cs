@@ -118,6 +118,11 @@ internal sealed class IrExpressionTreeExtractor
         if (_failed || tree is null)
             return null;
 
+        // Hoist pure repeated subtrees into a single $0/$1/… binding
+        // wrapper so providers and the wire payload don't carry the
+        // same member chain twice (#209).
+        tree = IrExprTreeHoister.Hoist(tree);
+
         return new IrQueryableMeta(tree, _captureOrder.Count == 0 ? null : _captureOrder.ToList());
     }
 

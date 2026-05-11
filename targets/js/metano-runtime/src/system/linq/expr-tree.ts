@@ -141,6 +141,39 @@ export interface ExprNew {
   readonly initializers?: readonly { readonly name: string; readonly value: ExprTree }[];
 }
 
+/**
+ * Single `name = value` binding inside an {@link ExprLet}. Names are
+ * synthetic identifiers (`$0`, `$1`, …) chosen by the compiler's
+ * hoisting pass; their scope is the surrounding {@link ExprLet.body}.
+ */
+export interface ExprLetBinding {
+  readonly name: string;
+  readonly value: ExprTree;
+}
+
+/**
+ * Common-subexpression wrapper introduced by the compiler when a pure
+ * subtree repeats inside `body` — every previous occurrence is
+ * rewritten as an {@link ExprRef} pointing at the binding's `name`.
+ * Mirrors `let bindings in body` from functional IRs.
+ */
+export interface ExprLet {
+  readonly kind: "let";
+  readonly bindings: readonly ExprLetBinding[];
+  readonly body: ExprTree;
+}
+
+/**
+ * Reference to an {@link ExprLetBinding} introduced by an enclosing
+ * {@link ExprLet}. The evaluator resolves `name` against the nearest
+ * binding scope; providers translate it to the dialect's name for the
+ * shared value (a SQL alias, a query-string variable, …).
+ */
+export interface ExprRef {
+  readonly kind: "ref";
+  readonly name: string;
+}
+
 /** Discriminated union of every supported node. */
 export type ExprTree =
   | ExprParam
@@ -152,7 +185,9 @@ export type ExprTree =
   | ExprUnary
   | ExprConditional
   | ExprLambda
-  | ExprNew;
+  | ExprNew
+  | ExprLet
+  | ExprRef;
 
 /**
  * Bundle threaded by the compiler when an opt-in queryable surface is
