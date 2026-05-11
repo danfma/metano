@@ -34,6 +34,13 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
     public IReadOnlyList<DartSourceFile> TransformAll()
     {
+        // Body extraction (which spawns the queryable-tree walker)
+        // runs here — open the MS0024 sink (#218) so reports land
+        // in this transformer's diagnostics list and surface via
+        // the host's standard merge.
+        using var queryableDiagnosticSink =
+            Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(_diagnostics.Add);
+
         var files = new List<DartSourceFile>();
         var transpilable = DiscoverTranspilableTypes();
 

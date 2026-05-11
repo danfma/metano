@@ -193,6 +193,19 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     public IReadOnlyList<TsSourceFile> TransformAll()
     {
+        // Body extraction (which spawns the queryable-tree walker)
+        // happens here, not in the frontend — open the MS0024 sink
+        // around the whole transform so reports from the walker
+        // (issue #218) land in this transformer's diagnostics list
+        // and surface through the host's standard merge with
+        // <c>ir.Diagnostics</c>. The named using documents the
+        // scope's purpose; it has no other read site.
+        // Route through AddDiagnostic so MS0024 reports from the
+        // parallel per-group transform share the same lock the
+        // rest of the transformer uses — bare-list binding would
+        // mean two distinct monitors over one non-thread-safe list.
+        using var queryableDiagnosticSink = QueryableExtractionDiagnostics.Open(AddDiagnostic);
+
         _currentAssembly = compilation.Assembly;
 
         // The frontend already detects [assembly: TranspileAssembly] (semantic model

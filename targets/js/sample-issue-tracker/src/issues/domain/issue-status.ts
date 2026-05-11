@@ -8,4 +8,4 @@ export const IssueStatus = {
   Cancelled: "cancelled",
 } as const;
 
-export type IssueStatus = (typeof IssueStatus)[keyof typeof IssueStatus];
+export type IssueStatus = typeof IssueStatus[keyof typeof IssueStatus];

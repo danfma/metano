@@ -262,11 +262,11 @@ public class QueryableExpressionTreeTests
     {
         // Drive the walker directly with isExplicitOptIn=true so we
         // exercise the diagnostic path independent of which call-site
-        // signal the trigger detection picks up. The current
-        // architecture only invokes the walker inside recognised LINQ
-        // chains (IrLinqMapping), so an end-to-end scenario for the
-        // explicit branch is limited; this unit test pins the contract
-        // for follow-up work that broadens the trigger surface.
+        // signal the trigger detection picks up. End-to-end coverage
+        // for explicit opt-in via [Queryable] / Expression<Func<…>>
+        // on arbitrary invocations lives in the
+        // CustomMethod_* tests (#218); this unit test pins the
+        // walker contract directly.
         var source = """
             using System.Collections.Generic;
             using System.Linq;
@@ -289,7 +289,7 @@ public class QueryableExpressionTreeTests
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
             .First();
         var model = compilation.GetSemanticModel(syntaxTree);
-        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics))
+        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics.Add))
         {
             var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(
                 model,
@@ -406,6 +406,117 @@ public class QueryableExpressionTreeTests
     }
 
     [Test]
+    public async Task CustomMethod_WithQueryableAttribute_UnsupportedBody_RaisesMS0024()
+    {
+        // #218: A non-LINQ method with [Queryable] on a Func<> parameter
+        // is an explicit opt-in. The walker fires from the general
+        // invocation path (not the LINQ-chain path) and surfaces MS0024
+        // when the lambda body falls outside the MVP subset.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            using Metano.Annotations;
+
+            [Transpile]
+            public class Bag { public int Value { get; set; } }
+
+            [Transpile]
+            public static class Probe
+            {
+                public static Bag Run([Queryable] Func<Bag, Bag> f, Bag b) => f(b);
+
+                public static Bag Call(Bag input) =>
+                    Run(b => new Bag { Value = b.Value + 1 }, input);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsTrue();
+    }
+
+    [Test]
+    public async Task CustomMethod_WithExpressionFuncParam_UnsupportedBody_RaisesMS0024()
+    {
+        // #218: A non-LINQ method whose parameter is Expression<Func<…>>
+        // is an explicit opt-in via the parameter type alone — no
+        // [Queryable] attribute needed.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            using System.Linq.Expressions;
+
+            [Transpile]
+            public class Bag { public int Value { get; set; } }
+
+            [Transpile]
+            public static class Probe
+            {
+                public static Bag Run(Expression<Func<Bag, Bag>> f, Bag b) => f.Compile()(b);
+
+                public static Bag Call(Bag input) =>
+                    Run(b => new Bag { Value = b.Value + 1 }, input);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsTrue();
+    }
+
+    [Test]
+    public async Task CustomMethod_WithQueryableAttribute_SupportedBody_NoDiagnostic()
+    {
+        // #218: Explicit opt-in via [Queryable] with a supported body —
+        // walker succeeds, no MS0024.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            using Metano.Annotations;
+
+            [Transpile]
+            public class Bag { public int Value { get; set; } }
+
+            [Transpile]
+            public static class Probe
+            {
+                public static bool Run([Queryable] Func<Bag, bool> f, Bag b) => f(b);
+
+                public static bool Call(Bag input) =>
+                    Run(b => b.Value >= 18, input);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsFalse();
+    }
+
+    [Test]
+    public async Task CustomMethod_NoQueryableSignal_UnsupportedBody_StaysSilent()
+    {
+        // #218: A plain Func<> parameter with no [Queryable] and no
+        // Expression<Func<…>> signal is NOT an opt-in — even an
+        // unsupported body must bail silently, no MS0024.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile]
+            public class Bag { public int Value { get; set; } }
+
+            [Transpile]
+            public static class Probe
+            {
+                public static Bag Run(Func<Bag, Bag> f, Bag b) => f(b);
+
+                public static Bag Call(Bag input) =>
+                    Run(b => new Bag { Value = b.Value + 1 }, input);
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsFalse();
+    }
+
+    [Test]
     public async Task Walker_ImplicitOptIn_UnsupportedBody_StaysSilent()
     {
         // Same shape as the explicit test but isExplicitOptIn=false —
@@ -432,7 +543,7 @@ public class QueryableExpressionTreeTests
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
             .First();
         var model = compilation.GetSemanticModel(syntaxTree);
-        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics))
+        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics.Add))
         {
             var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(
                 model,

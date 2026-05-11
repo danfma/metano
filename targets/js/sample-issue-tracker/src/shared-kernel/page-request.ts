@@ -2,10 +2,7 @@
 import { HashCode } from "metano-runtime";
 
 export class PageRequest {
-  constructor(
-    readonly number: number = 1,
-    readonly size: number = 20,
-  ) {}
+  constructor(readonly number: number = 1, readonly size: number = 20) { }
 
   get safeNumber(): number {
     return Math.max(1, this.number);

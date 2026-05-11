@@ -1563,6 +1563,16 @@ public sealed class IrExpressionExtractor
         if (TryExtractLinqChain(inv, symbol) is { } linqChain)
             return linqChain;
 
+        // Non-LINQ invocation with an explicit [Queryable] / Expression<Func<…>>
+        // signal on a lambda argument (#218). The walker runs purely for
+        // MS0024 reporting — the resulting meta is discarded because the
+        // surrounding IR shape has no slot for it yet. LINQ chains never
+        // reach here (the check above returned early), and inner LINQ
+        // stages are consumed structurally by BuildLinqChain, so this
+        // path cannot double-report a lambda the chain walker already
+        // covered.
+        ReportQueryableDiagnosticsForExplicitOptIn(inv, symbol);
+
         // `handler.Invoke(args)` lowers to `handler(args)` — the
         // synthesized `Invoke` member has no runtime counterpart in
         // JS/TS because the delegate IS the function. Drop the
@@ -3251,6 +3261,67 @@ public sealed class IrExpressionExtractor
     }
 
     /// <summary>
+    /// Runs the expression-tree walker on every lambda argument whose
+    /// matching parameter explicitly opts into queryable capture
+    /// (<c>[Queryable]</c> attribute or
+    /// <c>Expression&lt;Func&lt;…&gt;&gt;</c> type) (#218). The walker
+    /// is invoked purely for the MS0024 side-effect — the returned
+    /// <see cref="IrQueryableMeta"/> is discarded because the
+    /// surrounding IR has no slot for it on non-LINQ-chain
+    /// invocations.
+    /// <para>
+    /// Mutually exclusive with the LINQ-chain path:
+    /// <see cref="ExtractInvocation"/> returns early on
+    /// <see cref="TryExtractLinqChain"/> hits, and inner LINQ stages
+    /// never reach <see cref="ExtractInvocation"/> because
+    /// <see cref="BuildLinqChain"/> consumes them syntactically. The
+    /// receiver-is-IQueryable signal is intentionally excluded here —
+    /// it remains an implicit opt-in handled by the chain path.
+    /// </para>
+    /// <para>
+    /// Positional argument index is mapped to the parameter slot
+    /// directly via <see cref="ResolveStageParameter"/>. Named-argument
+    /// reordering at the call site is not honoured — matches the
+    /// existing <see cref="TryCaptureQueryableMeta"/> convention.
+    /// </para>
+    /// <para>
+    /// Object-creation calls (<c>new T(...)</c>) are not covered —
+    /// they flow through <c>ExtractObjectCreation</c>, not
+    /// <see cref="ExtractInvocation"/>. Constructor-arg
+    /// <c>[Queryable]</c> opt-ins go unreported and are tracked as
+    /// a #218 follow-up.
+    /// </para>
+    /// </summary>
+    private void ReportQueryableDiagnosticsForExplicitOptIn(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol? symbol
+    )
+    {
+        if (symbol is null)
+            return;
+
+        for (var i = 0; i < inv.ArgumentList.Arguments.Count; i++)
+        {
+            var argSyntax = inv.ArgumentList.Arguments[i];
+            if (argSyntax.Expression is not LambdaExpressionSyntax lambda)
+                continue;
+
+            var paramSymbol = ResolveStageParameter(symbol, i);
+            if (!HasExplicitParameterOptIn(paramSymbol))
+                continue;
+
+            var walker = new IrExpressionTreeExtractor(
+                _semantic,
+                _originResolver,
+                _target,
+                this,
+                isExplicitOptIn: true
+            );
+            walker.TryExtract(lambda);
+        }
+    }
+
+    /// <summary>
     /// Maps a call-site argument index to the parameter symbol on the
     /// underlying static method. Extension calls reduce the receiver
     /// onto a synthesized first parameter, so the unreduced static
@@ -3289,10 +3360,7 @@ public sealed class IrExpressionExtractor
             return false;
         if (trigger.MethodHasQueryable)
             return true;
-        if (trigger.ParamSymbol is null)
-            return false;
-        return HasQueryableAttribute(trigger.ParamSymbol)
-            || IsExpressionDelegateType(trigger.ParamSymbol.Type);
+        return HasExplicitParameterOptIn(trigger.ParamSymbol);
     }
 
     private static bool ShouldCaptureExpressionTree(
@@ -3303,10 +3371,20 @@ public sealed class IrExpressionExtractor
     {
         if (receiverIsQueryable || methodHasQueryable)
             return true;
-        if (paramSymbol is null)
-            return false;
-        return HasQueryableAttribute(paramSymbol) || IsExpressionDelegateType(paramSymbol.Type);
+        return HasExplicitParameterOptIn(paramSymbol);
     }
+
+    /// <summary>
+    /// Parameter-level explicit queryable opt-in test: either the
+    /// parameter itself carries <c>[Queryable]</c> or its declared
+    /// type is <c>System.Linq.Expressions.Expression&lt;Func&lt;…&gt;&gt;</c>.
+    /// Shared by the chain-aware <see cref="TryCaptureQueryableMeta"/>
+    /// path and the broadened general-invocation path
+    /// (<see cref="ReportQueryableDiagnosticsForExplicitOptIn"/>, #218).
+    /// </summary>
+    private static bool HasExplicitParameterOptIn(IParameterSymbol? paramSymbol) =>
+        paramSymbol is not null
+        && (HasQueryableAttribute(paramSymbol) || IsExpressionDelegateType(paramSymbol.Type));
 
     private static bool HasQueryableAttribute(ISymbol symbol) =>
         symbol

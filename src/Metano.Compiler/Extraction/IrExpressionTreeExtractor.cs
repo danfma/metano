@@ -12,21 +12,22 @@ namespace Metano.Compiler.Extraction;
 /// <c>QueryableMeta</c> consumes (Phase B / #31).
 ///
 /// <para>
-/// <b>Reach today.</b> The diagnostic fires only when the
-/// trigger detection in
-/// <see cref="IrExpressionExtractor"/>'s <c>TryCaptureQueryableMeta</c>
-/// runs, and that path is gated by
-/// <c>IrLinqMapping.TryResolve</c> recognising the stage method —
-/// currently <c>System.Linq.Enumerable</c> /
-/// <c>System.Linq.Queryable</c> only. Queryable stages always
-/// have an <c>IQueryable&lt;T&gt;</c> receiver, which the issue
-/// classifies as <em>implicit</em>; Enumerable stages take
-/// <c>Func&lt;…&gt;</c> rather than
-/// <c>Expression&lt;Func&lt;…&gt;&gt;</c> and carry no
-/// <c>[Queryable]</c>. Net effect: in the current build MS0024 has
-/// no production trigger — the plumbing lands ahead of a follow-up
-/// that broadens the trigger surface to recognise custom
-/// <c>[Queryable]</c>-tagged extension methods.
+/// <b>Reach today.</b> The diagnostic fires from two trigger
+/// detection paths in <see cref="IrExpressionExtractor"/>:
+/// <list type="bullet">
+///   <item><c>TryCaptureQueryableMeta</c>, gated by
+///   <c>IrLinqMapping.TryResolve</c>, covers stages inside a
+///   recognised <c>System.Linq.Enumerable</c> /
+///   <c>System.Linq.Queryable</c> chain.</item>
+///   <item><c>ReportQueryableDiagnosticsForExplicitOptIn</c> (#218)
+///   covers <em>any</em> invocation whose lambda argument's
+///   matching parameter carries <c>[Queryable]</c> or is typed
+///   <c>Expression&lt;Func&lt;…&gt;&gt;</c> — independent of
+///   whether the call participates in a LINQ chain. The walker is
+///   invoked purely for the MS0024 side-effect; the resulting meta
+///   is discarded because the surrounding IR has no slot for it on
+///   non-chain calls.</item>
+/// </list>
 /// </para>
 /// <para>
 /// Triggered for stages whose receiver is <c>IQueryable&lt;T&gt;</c>,
