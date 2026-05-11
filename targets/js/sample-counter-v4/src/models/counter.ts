@@ -4,7 +4,7 @@ import { HashCode } from "metano-runtime";
 export class Counter {
   static readonly zero: Counter = new Counter(0);
 
-  constructor(readonly count: number) { }
+  constructor(readonly count: number) {}
 
   increment(): Counter {
     return this.with({ count: this.count + 1 });
