@@ -508,10 +508,72 @@ public static class IrToTsExpressionBridge
                 ("whenTrue", MapExprTree(cond.WhenTrue)),
                 ("whenFalse", MapExprTree(cond.WhenFalse))
             ),
+            IrExprNew newExpr => MapExprNew(newExpr),
+            IrExprLambda lambda => TreeNode(
+                "lambda",
+                ("params", new TsArrayLiteral(lambda.Params.Select(MapLambdaParam).ToList())),
+                ("body", MapExprTree(lambda.Body))
+            ),
             _ => throw new InvalidOperationException(
                 $"Unsupported IrExprTreeNode shape: {node.GetType().Name}"
             ),
         };
+
+    /// <summary>
+    /// Lowers an <see cref="IrExprNew"/> to the runtime <c>ExprNew</c>
+    /// shape. Initializer member names follow the same camelCase rule
+    /// as <see cref="IrExprMember"/> so the emitted <c>name</c> matches
+    /// the lowered TS property the provider would dispatch on at
+    /// runtime.
+    /// </summary>
+    private static TsExpression MapExprNew(IrExprNew newExpr)
+    {
+        var entries = new List<(string, TsExpression?)>
+        {
+            ("type", MapOptionalType(newExpr.Type)),
+            ("args", new TsArrayLiteral(newExpr.Args.Select(MapExprTree).ToList())),
+        };
+        if (newExpr.Initializers is { Count: > 0 } initializers)
+        {
+            var initializerLiterals = initializers
+                .Select(init =>
+                    (TsExpression)
+                        new TsObjectLiteral(
+                            new List<TsObjectProperty>
+                            {
+                                new(
+                                    "name",
+                                    new TsStringLiteral(
+                                        TypeScriptNaming.ToCamelCaseMember(init.Member)
+                                    )
+                                ),
+                                new("value", MapExprTree(init.Value)),
+                            }
+                        )
+                )
+                .ToList();
+            entries.Add(("initializers", new TsArrayLiteral(initializerLiterals)));
+        }
+        return TreeNode("new", entries.ToArray());
+    }
+
+    /// <summary>
+    /// Lowers a nested-lambda parameter to an
+    /// <c>ExprParam</c>-shaped literal — <c>{ kind: "param", name,
+    /// type? }</c>. The runtime <c>ExprLambda.params</c> array is typed
+    /// as <c>readonly ExprParam[]</c>; emitting the full discriminator
+    /// keeps assignment compatibility with the union and lets visitors
+    /// dispatch consistently with top-level params. Parameter names are
+    /// emitted verbatim — the evaluator matches them against
+    /// <see cref="IrExprParam"/> nodes by string identity, so any
+    /// rename would have to flow through both sides in lockstep.
+    /// </summary>
+    private static TsExpression MapLambdaParam(IrExprLambdaParam param) =>
+        TreeNode(
+            "param",
+            ("name", new TsStringLiteral(param.Name)),
+            ("type", MapOptionalType(param.Type))
+        );
 
     /// <summary>
     /// Builds an object-literal entry for <paramref name="type"/> when

@@ -196,12 +196,12 @@ public class QueryableExpressionTreeTests
     }
 
     [Test]
-    public async Task UnsupportedSyntax_KeepsClosureWithoutMeta()
+    public async Task ObjectInitializer_EmitsExprNew_WithInitializers()
     {
-        // Object creation lives outside the Phase B MVP subset
-        // (param/capture/literal/member/call/binary/unary/conditional).
-        // The lambda still compiles into a C# expression tree, but the
-        // walker bails and the call site keeps the closure-only form.
+        // Object-initializer projections (`new User { Age = … }`) land
+        // in the supported subset after #206. The select stage's
+        // queryable meta now carries a `kind: "new"` node with the
+        // initializer assignments laid out as `{ name, value }` pairs.
         var result = TranspileHelper.TranspileWithIrBodies(
             """
             using System.Collections.Generic;
@@ -224,7 +224,43 @@ public class QueryableExpressionTreeTests
 
         var output = result["user-ext.ts"];
         await Assert.That(output).Contains("select(");
-        await Assert.That(output).DoesNotContain("tree:");
+        await Assert.That(output).Contains("tree:");
+        await Assert.That(output).Contains("\"new\"");
+        await Assert.That(output).Contains("initializers:");
+        await Assert.That(output).Contains("name: \"age\"");
+    }
+
+    [Test]
+    public async Task NestedLambda_EmitsExprLambda()
+    {
+        // Outer queryable lambda contains an inner arrow — the walker
+        // recurses into the nested body, binds the inner parameter, and
+        // emits a `kind: "lambda"` node carrying the inner shape.
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> WithActiveFriends(IQueryable<User> users) =>
+                    users.Where(u => u.Friends.Any(f => f.Active));
+            }
+
+            [Transpile]
+            public class User
+            {
+                public List<User> Friends { get; set; } = new();
+                public bool Active { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("tree:");
+        await Assert.That(output).Contains("\"lambda\"");
+        await Assert.That(output).Contains("\"call\"");
     }
 
     [Test]
@@ -232,7 +268,9 @@ public class QueryableExpressionTreeTests
     {
         // IQueryable<T> receiver alone is implicit — the user did
         // not necessarily ask the provider to handle every body
-        // shape. Status-quo silent bail preserved (no MS0024).
+        // shape. Status-quo silent bail preserved (no MS0024). An
+        // explicit cast lives outside the walker's switch so the body
+        // bails (valid inside an Expression<Func<…>> on the C# side).
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using System.Collections.Generic;
@@ -241,8 +279,8 @@ public class QueryableExpressionTreeTests
             [Transpile]
             public static class UserExt
             {
-                public static IEnumerable<User> Doubled(IQueryable<User> users) =>
-                    users.Select(u => new User { Age = u.Age + 1 });
+                public static IEnumerable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => (long)u.Age >= 18L);
             }
 
             [Transpile]
@@ -275,8 +313,8 @@ public class QueryableExpressionTreeTests
 
             public static class Probe
             {
-                public static System.Linq.Expressions.Expression<System.Func<Bag, Bag>> Lambda() =>
-                    b => new Bag { Value = b.Value + 1 };
+                public static System.Linq.Expressions.Expression<System.Func<Bag, bool>> Lambda() =>
+                    b => (long)b.Value >= 1L;
             }
             """;
 
@@ -426,7 +464,7 @@ public class QueryableExpressionTreeTests
                 public static Bag Run([Queryable] Func<Bag, Bag> f, Bag b) => f(b);
 
                 public static Bag Call(Bag input) =>
-                    Run(b => new Bag { Value = b.Value + 1 }, input);
+                    Run(b => new Bag { Value = (int)(long)b.Value + 1 }, input);
             }
             """
         );
@@ -454,7 +492,7 @@ public class QueryableExpressionTreeTests
                 public static Bag Run(Expression<Func<Bag, Bag>> f, Bag b) => f.Compile()(b);
 
                 public static Bag Call(Bag input) =>
-                    Run(b => new Bag { Value = b.Value + 1 }, input);
+                    Run(b => new Bag { Value = (int)(long)b.Value + 1 }, input);
             }
             """
         );
@@ -508,7 +546,7 @@ public class QueryableExpressionTreeTests
                 public static Bag Run(Func<Bag, Bag> f, Bag b) => f(b);
 
                 public static Bag Call(Bag input) =>
-                    Run(b => new Bag { Value = b.Value + 1 }, input);
+                    Run(b => new Bag { Value = (int)(long)b.Value + 1 }, input);
             }
             """
         );
@@ -529,8 +567,8 @@ public class QueryableExpressionTreeTests
 
             public static class Probe
             {
-                public static System.Linq.Expressions.Expression<System.Func<Bag, Bag>> Lambda() =>
-                    b => new Bag { Value = b.Value + 1 };
+                public static System.Linq.Expressions.Expression<System.Func<Bag, bool>> Lambda() =>
+                    b => (long)b.Value >= 1L;
             }
             """;
 

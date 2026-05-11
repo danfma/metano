@@ -34,11 +34,13 @@ namespace Metano.Compiler.Extraction;
 /// whose method or argument parameter carries
 /// <c>[Queryable]</c>, or whose parameter type is
 /// <c>System.Linq.Expressions.Expression&lt;Func&lt;…&gt;&gt;</c>. The
-/// walker emits the MVP subset only — param / capture / literal /
-/// member / call / binary / unary / conditional. Unsupported nodes
-/// surface as a <c>null</c> result; the caller drops the queryable
-/// meta and the lambda flows as a plain closure. The MS0024 hard
-/// error path is reserved for a follow-up.
+/// walker covers the subset listed in <see cref="SupportedKinds"/> —
+/// param / capture / literal / member / call / binary / unary /
+/// conditional, plus object-creation (<c>new T(args) { … }</c>) and
+/// nested lambdas added in #206. Unsupported nodes surface as a
+/// <c>null</c> result; the caller drops the queryable meta and the
+/// lambda flows as a plain closure. The MS0024 hard error path is
+/// reserved for a follow-up.
 /// </para>
 /// </summary>
 internal sealed class IrExpressionTreeExtractor
@@ -50,7 +52,7 @@ internal sealed class IrExpressionTreeExtractor
     /// <see cref="Walk"/> switch.
     /// </summary>
     internal const string SupportedKinds =
-        "param, capture, literal, member, call, binary, unary, conditional";
+        "param, capture, literal, member, call, binary, unary, conditional, new, lambda";
 
     private readonly SemanticModel _semantic;
     private readonly IrTypeOriginResolver? _originResolver;
@@ -143,6 +145,12 @@ internal sealed class IrExpressionTreeExtractor
             case ConditionalExpressionSyntax cond:
                 return WalkConditional(cond);
 
+            case ObjectCreationExpressionSyntax objCreation:
+                return WalkObjectCreation(objCreation);
+
+            case LambdaExpressionSyntax nestedLambda:
+                return WalkNestedLambda(nestedLambda);
+
             default:
                 Bail(node, node.Kind().ToString());
                 return null;
@@ -204,6 +212,95 @@ internal sealed class IrExpressionTreeExtractor
         if (condition is null || whenTrue is null || whenFalse is null)
             return null;
         return new IrExprConditional(condition, whenTrue, whenFalse);
+    }
+
+    private IrExprTreeNode? WalkObjectCreation(ObjectCreationExpressionSyntax node)
+    {
+        var args = new List<IrExprTreeNode>(node.ArgumentList?.Arguments.Count ?? 0);
+        if (node.ArgumentList is not null)
+        {
+            foreach (var arg in node.ArgumentList.Arguments)
+            {
+                var lowered = Walk(arg.Expression);
+                if (lowered is null)
+                    return null;
+                args.Add(lowered);
+            }
+        }
+
+        List<IrExprNewInitializer>? initializers = null;
+        if (node.Initializer is not null)
+        {
+            initializers = new List<IrExprNewInitializer>(node.Initializer.Expressions.Count);
+            foreach (var entry in node.Initializer.Expressions)
+            {
+                // Only support `Member = value`; other initializer forms
+                // (collection / indexed / dictionary) escape the MVP
+                // shape — surface as unsupported so the lambda falls
+                // back to the closure path.
+                if (entry is not AssignmentExpressionSyntax assignment)
+                {
+                    Bail(entry, entry.Kind().ToString());
+                    return null;
+                }
+                if (assignment.Left is not IdentifierNameSyntax memberName)
+                {
+                    Bail(assignment.Left, assignment.Left.Kind().ToString());
+                    return null;
+                }
+                var value = Walk(assignment.Right);
+                if (value is null)
+                    return null;
+                initializers.Add(new IrExprNewInitializer(memberName.Identifier.ValueText, value));
+            }
+        }
+
+        return new IrExprNew(MapType(node), args, initializers);
+    }
+
+    private IrExprTreeNode? WalkNestedLambda(LambdaExpressionSyntax lambda)
+    {
+        // Nested lambda body must itself be an expression — statement
+        // bodies fall outside the MVP shape and bail like any other
+        // unsupported node would.
+        if (lambda.Body is not ExpressionSyntax bodyExpr)
+        {
+            Bail(lambda, lambda.Kind().ToString());
+            return null;
+        }
+
+        var paramSymbols = new List<IParameterSymbol>();
+        var paramNodes = new List<IrExprLambdaParam>();
+        foreach (var paramSyntax in EnumerateParameters(lambda))
+        {
+            if (_semantic.GetDeclaredSymbol(paramSyntax) is not IParameterSymbol symbol)
+            {
+                Bail(paramSyntax, paramSyntax.Kind().ToString());
+                return null;
+            }
+            paramSymbols.Add(symbol);
+            paramNodes.Add(new IrExprLambdaParam(symbol.Name, MapTypeSymbol(symbol.Type)));
+        }
+
+        // Bind inner params before walking the body so identifier
+        // resolution treats them as `param` nodes rather than
+        // closure-captured locals. Roll back on exit so a sibling
+        // nested lambda cannot leak the binding.
+        foreach (var symbol in paramSymbols)
+            _lambdaParams.Add(symbol);
+
+        try
+        {
+            var body = Walk(bodyExpr);
+            if (body is null)
+                return null;
+            return new IrExprLambda(paramNodes, body);
+        }
+        finally
+        {
+            foreach (var symbol in paramSymbols)
+                _lambdaParams.Remove(symbol);
+        }
     }
 
     private IrExprTreeNode? WalkIdentifier(IdentifierNameSyntax id)
@@ -316,4 +413,13 @@ internal sealed class IrExpressionTreeExtractor
         var t = info.ConvertedType ?? info.Type;
         return t is null ? null : IrTypeRefMapper.Map(t, _originResolver, _target);
     }
+
+    /// <summary>
+    /// Maps a Roslyn <see cref="ITypeSymbol"/> directly (no syntax node
+    /// — used for lambda parameter types resolved off the declared
+    /// symbol). Returns <c>null</c> when Roslyn could not bind a type,
+    /// matching the syntax-flavoured <see cref="MapType"/> path.
+    /// </summary>
+    private IrTypeRef? MapTypeSymbol(ITypeSymbol? type) =>
+        type is null ? null : IrTypeRefMapper.Map(type, _originResolver, _target);
 }

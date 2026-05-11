@@ -130,7 +130,13 @@ export interface ExprLambda {
 /** New-object: `new T { p = v, … }` or `new T(args)`. */
 export interface ExprNew {
   readonly kind: "new";
-  readonly type: string;
+  /**
+   * Qualified type emitted by the compiler when known. Same shape as the
+   * `type` field on {@link ExprParam} / {@link ExprCapture} / {@link ExprLiteral}
+   * so a provider can dispatch DTO constructors across packages via the
+   * combined `name + from` key.
+   */
+  readonly type?: ExprTypeRef;
   readonly args: readonly ExprTree[];
   readonly initializers?: readonly { readonly name: string; readonly value: ExprTree }[];
 }

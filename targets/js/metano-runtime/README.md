@@ -124,9 +124,14 @@ When a LINQ chain opts into queryable mode (`IQueryable<T>` receiver or a
 expression tree (`QueryableMeta`) alongside the closure. Providers walk the
 tree by `kind` to translate predicates into SQL, OData, GraphQL, etc.
 
-Param, capture, and literal nodes carry an optional **qualified** `type`
-field shaped `{ name, from? }` — `name` is the simple identifier the
-provider dispatches on, and `from` is the cross-package origin (the
+Supported node kinds today: `param`, `capture`, `literal`, `member`, `call`,
+`binary`, `unary`, `conditional`, `new` (object-initializer projections
+such as `select(u => new UserDto { Name = u.Name })`), and `lambda`
+(nested arrows like `where(u => u.orders.some(o => o.active))`).
+
+Param, capture, literal, and `new` nodes carry an optional **qualified**
+`type` field shaped `{ name, from? }` — `name` is the simple identifier
+the provider dispatches on, and `from` is the cross-package origin (the
 `[EmitPackage]` id) when the type lives in another package. Local and
 primitive types omit `from`. This disambiguates same-named types defined
 in different packages without forcing providers to parse module paths.

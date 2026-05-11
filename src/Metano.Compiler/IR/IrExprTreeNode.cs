@@ -7,9 +7,10 @@ namespace Metano.Compiler.IR;
 /// lowers each variant to the matching TS object literal.
 ///
 /// <para>
-/// MVP subset (Phase B / #31): param, capture, literal, member, call,
-/// binary, unary, conditional. Phase B's walker emits MS0024 when the
-/// lambda body uses constructs outside this list.
+/// Subset (Phase B / #31, extended in #206): param, capture, literal,
+/// member, call, binary, unary, conditional, new, lambda. Phase B's
+/// walker emits MS0024 when the lambda body uses constructs outside
+/// this list.
 /// </para>
 /// </summary>
 public abstract record IrExprTreeNode;
@@ -54,3 +55,39 @@ public sealed record IrExprConditional(
     IrExprTreeNode WhenTrue,
     IrExprTreeNode WhenFalse
 ) : IrExprTreeNode;
+
+/// <summary>
+/// Object-creation: <c>new T(args)</c> with optional initializer block
+/// <c>{ Member = value, ... }</c>. <see cref="Initializers"/> is null
+/// (not just empty) when the syntax uses no initializer block, so the
+/// bridge can skip the optional <c>initializers</c> property entirely.
+/// </summary>
+public sealed record IrExprNew(
+    IrTypeRef? Type,
+    IReadOnlyList<IrExprTreeNode> Args,
+    IReadOnlyList<IrExprNewInitializer>? Initializers = null
+) : IrExprTreeNode;
+
+/// <summary>
+/// Single <c>Member = value</c> assignment inside an
+/// <c>ObjectInitializerExpression</c>. <see cref="Member"/> is the C#
+/// identifier — the bridge applies the same member-casing rule as
+/// <see cref="IrExprMember"/> so the emitted name matches the lowered
+/// TS surface.
+/// </summary>
+public sealed record IrExprNewInitializer(string Member, IrExprTreeNode Value);
+
+/// <summary>
+/// Nested lambda: <c>(p, …) => body</c>. Captures and params bind in the
+/// outer walker's scope; the runtime visitor crosses lambda boundaries
+/// and the provider rebinds <c>params</c> when translating the body.
+/// </summary>
+public sealed record IrExprLambda(IReadOnlyList<IrExprLambdaParam> Params, IrExprTreeNode Body)
+    : IrExprTreeNode;
+
+/// <summary>
+/// Single parameter of an <see cref="IrExprLambda"/>. <see cref="Type"/>
+/// is null when Roslyn could not resolve a parameter type (e.g.
+/// inferred generics with no contextual constraint).
+/// </summary>
+public sealed record IrExprLambdaParam(string Name, IrTypeRef? Type = null);
