@@ -122,6 +122,28 @@ public class IrTypeSignatureHasherTests
     }
 
     [Test]
+    public async Task AttributeNamedArgEdit_ChangesHash()
+    {
+        var before = HashFirstTranspilableType(
+            """
+            namespace Demo;
+
+            [Transpile, Import("Foo", "foo", Version = "1.0.0")]
+            public sealed class Foo {}
+            """
+        );
+        var after = HashFirstTranspilableType(
+            """
+            namespace Demo;
+
+            [Transpile, Import("Foo", "foo", Version = "2.0.0")]
+            public sealed class Foo {}
+            """
+        );
+        await Assert.That(before).IsNotEqualTo(after);
+    }
+
+    [Test]
     public async Task BaseTypeChange_ChangesHash()
     {
         var before = HashFirstTranspilableType(
