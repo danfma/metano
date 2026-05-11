@@ -14,7 +14,11 @@ export class ProductDemo {
         where((p: Product) => p.isActive, {
           tree: {
             kind: "member",
-            target: { kind: "param", name: "p", type: "Product" },
+            target: {
+              kind: "param",
+              name: "p",
+              type: { name: "Product" },
+            },
             member: "isActive",
           },
         }),
@@ -32,7 +36,11 @@ export class ProductDemo {
             op: "&&",
             left: {
               kind: "member",
-              target: { kind: "param", name: "p", type: "Product" },
+              target: {
+                kind: "param",
+                name: "p",
+                type: { name: "Product" },
+              },
               member: "isActive",
             },
             right: {
@@ -40,10 +48,18 @@ export class ProductDemo {
               op: ">",
               left: {
                 kind: "member",
-                target: { kind: "param", name: "p", type: "Product" },
+                target: {
+                  kind: "param",
+                  name: "p",
+                  type: { name: "Product" },
+                },
                 member: "stockCount",
               },
-              right: { kind: "literal", value: 0, type: "number" },
+              right: {
+                kind: "literal",
+                value: 0,
+                type: { name: "number" },
+              },
             },
           },
         }),
@@ -61,10 +77,18 @@ export class ProductDemo {
             op: ">=",
             left: {
               kind: "member",
-              target: { kind: "param", name: "p", type: "Product" },
+              target: {
+                kind: "param",
+                name: "p",
+                type: { name: "Product" },
+              },
               member: "unitPrice",
             },
-            right: { kind: "capture", name: "minPrice", type: "number" },
+            right: {
+              kind: "capture",
+              name: "minPrice",
+              type: { name: "number" },
+            },
           },
           captures: { minPrice: minPrice },
         }),
@@ -79,7 +103,11 @@ export class ProductDemo {
         orderByDescending((p: Product) => p.unitPrice, {
           tree: {
             kind: "member",
-            target: { kind: "param", name: "p", type: "Product" },
+            target: {
+              kind: "param",
+              name: "p",
+              type: { name: "Product" },
+            },
             member: "unitPrice",
           },
         }),
@@ -95,7 +123,11 @@ export class ProductDemo {
         orderBy((p: Product) => p.id, {
           tree: {
             kind: "member",
-            target: { kind: "param", name: "p", type: "Product" },
+            target: {
+              kind: "param",
+              name: "p",
+              type: { name: "Product" },
+            },
             member: "id",
           },
         }),
@@ -112,7 +144,11 @@ export class ProductDemo {
         where((p: Product) => p.isActive, {
           tree: {
             kind: "member",
-            target: { kind: "param", name: "p", type: "Product" },
+            target: {
+              kind: "param",
+              name: "p",
+              type: { name: "Product" },
+            },
             member: "isActive",
           },
         }),
@@ -127,7 +163,11 @@ export class ProductDemo {
         orderBy((p: Product) => p.id, {
           tree: {
             kind: "member",
-            target: { kind: "param", name: "p", type: "Product" },
+            target: {
+              kind: "param",
+              name: "p",
+              type: { name: "Product" },
+            },
             member: "id",
           },
         }),

@@ -501,13 +501,58 @@ public static class IrToTsExpressionBridge
         };
 
     /// <summary>
-    /// Builds an object literal entry for <paramref name="type"/> when
-    /// non-null. Skipped fields land as <c>(key, null)</c> tuples that
-    /// <see cref="TreeNode"/> filters out, keeping the emitted JS object
-    /// minimal.
+    /// Builds an object-literal entry for <paramref name="type"/> when
+    /// non-null. Returns <c>null</c> for skipped fields so
+    /// <see cref="TreeNode"/>'s <c>(key, null)</c> filter keeps the
+    /// emitted JS object minimal.
     /// </summary>
-    private static TsExpression? MapOptionalType(IrTypeRef? type) =>
-        type is null ? null : new TsStringLiteral(Printer.RenderType(IrToTsTypeMapper.Map(type)));
+    /// <remarks>
+    /// Emitted shape: <c>{ name: string; from?: string }</c>.
+    /// <c>name</c> is the simple identifier the provider sees at
+    /// runtime; <c>from</c> carries the cross-assembly package id
+    /// (from <c>[EmitPackage]</c>) so providers can disambiguate
+    /// same-named types defined in different packages. Local types
+    /// and primitives omit <c>from</c>.
+    /// </remarks>
+    private static TsExpression? MapOptionalType(IrTypeRef? type)
+    {
+        if (type is null)
+            return null;
+
+        var typeRef = ResolveStructuredType(type);
+        var props = new List<TsObjectProperty> { new("name", new TsStringLiteral(typeRef.Name)) };
+        if (typeRef.PackageId is { Length: > 0 } pkg)
+            props.Add(new TsObjectProperty("from", new TsStringLiteral(pkg)));
+        return new TsObjectLiteral(props);
+    }
+
+    /// <summary>
+    /// Resolved pair the queryable expression-tree emitter writes for
+    /// a single param / capture / literal node. <see cref="Name"/> is
+    /// the identifier the provider dispatches on;
+    /// <see cref="PackageId"/> is the <c>[EmitPackage]</c> id when the
+    /// type comes from another assembly (and <c>null</c> otherwise,
+    /// for local types and primitives).
+    /// </summary>
+    private readonly record struct StructuredTypeRef(string Name, string? PackageId);
+
+    /// <summary>
+    /// Splits an <see cref="IrTypeRef"/> into the structured pair the
+    /// queryable expression-tree emitter writes. Named types contribute
+    /// their bare identifier plus <see cref="IrTypeOrigin.PackageId"/>
+    /// when present; primitives and everything else fall back to the
+    /// rendered TS surface name with no origin.
+    /// <see cref="IrNullableTypeRef"/> wrappers are unwrapped so a
+    /// nullable capture/literal still carries the inner type's origin —
+    /// nullability is not part of the expression-tree contract today.
+    /// </summary>
+    private static StructuredTypeRef ResolveStructuredType(IrTypeRef type) =>
+        type switch
+        {
+            IrNullableTypeRef nullable => ResolveStructuredType(nullable.Inner),
+            IrNamedTypeRef named => new(named.Name, named.Origin?.PackageId),
+            _ => new(Printer.RenderType(IrToTsTypeMapper.Map(type)), null),
+        };
 
     private static TsObjectLiteral TreeNode(
         string kind,

@@ -39,12 +39,25 @@ export type BinaryOp =
 
 export type UnaryOp = "!" | "-" | "+" | "~";
 
+/**
+ * Qualified type reference attached to {@link ExprParam}, {@link ExprCapture},
+ * and {@link ExprLiteral} nodes. `name` is the simple identifier the provider
+ * uses for dispatch / column resolution; `from` is the cross-package origin
+ * (the `[EmitPackage]` id on the C# side) so providers can disambiguate two
+ * same-named types coming from different packages. Local and primitive types
+ * omit `from`.
+ */
+export interface ExprTypeRef {
+  readonly name: string;
+  readonly from?: string;
+}
+
 /** Reference to a lambda parameter — `(u) => …` introduces `u`. */
 export interface ExprParam {
   readonly kind: "param";
   readonly name: string;
-  /** C# / TS type emitted by the compiler when known. */
-  readonly type?: string;
+  /** Qualified type emitted by the compiler when known. */
+  readonly type?: ExprTypeRef;
 }
 
 /**
@@ -57,16 +70,16 @@ export interface ExprParam {
 export interface ExprCapture {
   readonly kind: "capture";
   readonly name: string;
-  /** C# / TS type emitted by the compiler when known. */
-  readonly type?: string;
+  /** Qualified type emitted by the compiler when known. */
+  readonly type?: ExprTypeRef;
 }
 
 /** Constant value: literal, captured const, default. */
 export interface ExprLiteral {
   readonly kind: "literal";
   readonly value: unknown;
-  /** C# type name (e.g. "int", "string", "MyEnum") for provider type-coercion. */
-  readonly type?: string;
+  /** Qualified type emitted by the compiler when known. */
+  readonly type?: ExprTypeRef;
 }
 
 /** Property / field access: `target.member`. */

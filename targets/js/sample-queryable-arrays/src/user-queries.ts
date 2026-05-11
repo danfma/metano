@@ -14,10 +14,18 @@ export class UserQueries {
           op: ">=",
           left: {
             kind: "member",
-            target: { kind: "param", name: "u", type: "User" },
+            target: {
+              kind: "param",
+              name: "u",
+              type: { name: "User" },
+            },
             member: "age",
           },
-          right: { kind: "literal", value: 18, type: "number" },
+          right: {
+            kind: "literal",
+            value: 18,
+            type: { name: "number" },
+          },
         },
       }),
     );
@@ -35,14 +43,26 @@ export class UserQueries {
             op: ">=",
             left: {
               kind: "member",
-              target: { kind: "param", name: "u", type: "User" },
+              target: {
+                kind: "param",
+                name: "u",
+                type: { name: "User" },
+              },
               member: "age",
             },
-            right: { kind: "literal", value: 18, type: "number" },
+            right: {
+              kind: "literal",
+              value: 18,
+              type: { name: "number" },
+            },
           },
           right: {
             kind: "member",
-            target: { kind: "param", name: "u", type: "User" },
+            target: {
+              kind: "param",
+              name: "u",
+              type: { name: "User" },
+            },
             member: "active",
           },
         },
@@ -59,10 +79,18 @@ export class UserQueries {
           op: ">=",
           left: {
             kind: "member",
-            target: { kind: "param", name: "u", type: "User" },
+            target: {
+              kind: "param",
+              name: "u",
+              type: { name: "User" },
+            },
             member: "age",
           },
-          right: { kind: "capture", name: "minAge", type: "number" },
+          right: {
+            kind: "capture",
+            name: "minAge",
+            type: { name: "number" },
+          },
         },
         captures: { minAge: minAge },
       }),
@@ -78,16 +106,28 @@ export class UserQueries {
           op: ">=",
           left: {
             kind: "member",
-            target: { kind: "param", name: "u", type: "User" },
+            target: {
+              kind: "param",
+              name: "u",
+              type: { name: "User" },
+            },
             member: "age",
           },
-          right: { kind: "literal", value: 18, type: "number" },
+          right: {
+            kind: "literal",
+            value: 18,
+            type: { name: "number" },
+          },
         },
       }),
       select((u: User) => u.name, {
         tree: {
           kind: "member",
-          target: { kind: "param", name: "u", type: "User" },
+          target: {
+            kind: "param",
+            name: "u",
+            type: { name: "User" },
+          },
           member: "name",
         },
       }),

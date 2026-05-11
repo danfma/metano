@@ -306,6 +306,106 @@ public class QueryableExpressionTreeTests
     }
 
     [Test]
+    public async Task ParamType_LocalNamedType_EmitsStructuredNameWithoutOrigin()
+    {
+        // Local types contribute `{ name: "User" }` with no `from` —
+        // providers can dispatch on the bare identifier when the type
+        // lives in the same package.
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= 18);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("type: { name: \"User\" }");
+        await Assert.That(output).DoesNotContain("from:");
+    }
+
+    [Test]
+    public async Task LiteralType_Primitive_EmitsStructuredPrimitiveName()
+    {
+        // Primitives lower to their TS surface name (`number`) carried
+        // under `name`, with no origin — same shape as local named
+        // types.
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= 18);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("type: { name: \"number\" }");
+    }
+
+    [Test]
+    public async Task ParamType_CrossPackageType_EmitsStructuredNameAndOrigin()
+    {
+        // A queryable lambda whose parameter type lives in a referenced
+        // assembly carries `{ name, from }` so providers can
+        // disambiguate same-named types across packages.
+        var library = """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib-pkg")]
+
+            namespace LibNs;
+
+            public class Product
+            {
+                public int Stock { get; set; }
+            }
+            """;
+
+        var consumer = """
+            using System.Collections.Generic;
+            using System.Linq;
+            using LibNs;
+
+            namespace ConsumerNs;
+
+            [Transpile]
+            public static class ProductExt
+            {
+                public static IEnumerable<Product> InStock(IQueryable<Product> products) =>
+                    products.Where(p => p.Stock >= 1);
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+        var output = result.Values.Single(f => f.Contains("inStock"));
+        await Assert.That(output).Contains("type: { name: \"Product\", from: \"lib-pkg\" }");
+    }
+
+    [Test]
     public async Task Walker_ImplicitOptIn_UnsupportedBody_StaysSilent()
     {
         // Same shape as the explicit test but isExplicitOptIn=false —

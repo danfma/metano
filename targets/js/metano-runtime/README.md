@@ -117,6 +117,37 @@ Contract:
 - The closure side-channel (`stage.apply`) keeps working in parallel; a
   provider that cannot introspect a given stage may fall back to it.
 
+### `ExprTree` — queryable expression trees
+
+When a LINQ chain opts into queryable mode (`IQueryable<T>` receiver or a
+`[Queryable]` parameter on the C# side), the transpiler emits a paired
+expression tree (`QueryableMeta`) alongside the closure. Providers walk the
+tree by `kind` to translate predicates into SQL, OData, GraphQL, etc.
+
+Param, capture, and literal nodes carry an optional **qualified** `type`
+field shaped `{ name, from? }` — `name` is the simple identifier the
+provider dispatches on, and `from` is the cross-package origin (the
+`[EmitPackage]` id) when the type lives in another package. Local and
+primitive types omit `from`. This disambiguates same-named types defined
+in different packages without forcing providers to parse module paths.
+
+```typescript
+// where((p: Product) => p.unitPrice >= minPrice)
+//
+// `Product` lives in another package consumed via [EmitPackage("inventory")];
+// `number` is a primitive (no origin), so `from` is omitted.
+{
+  kind: "binary",
+  op: ">=",
+  left: {
+    kind: "member",
+    target: { kind: "param", name: "p", type: { name: "Product", from: "inventory" } },
+    member: "unitPrice",
+  },
+  right: { kind: "capture", name: "minPrice", type: { name: "number" } },
+}
+```
+
 ### `UUID` — branded UUID type
 
 A branded primitive that `System.Guid` maps to. At runtime it's literally a
