@@ -86,7 +86,11 @@ public static class TranspilerHost
         }
 
         var transpileSw = Stopwatch.StartNew();
-        var output = target.Transform(ir, compilation, outputDir, options.FilePrefix);
+        // Pass outputDir to the target only when the run will actually
+        // touch disk — dry-run and --no-cache must not write the
+        // per-target group cache (PR 3c).
+        var targetCacheDir = options.DryRun || options.NoCache ? null : outputDir;
+        var output = target.Transform(ir, compilation, targetCacheDir, options.FilePrefix);
 
         transpileSw.Stop();
 

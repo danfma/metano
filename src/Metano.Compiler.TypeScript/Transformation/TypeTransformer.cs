@@ -92,7 +92,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// real file with the stub's empty body.
     /// </summary>
     public IReadOnlyDictionary<string, string> CachedFileContents => _cachedFileContents;
-    private readonly Dictionary<string, string> _cachedFileContents = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _cachedFileContents =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Diagnostics collected during transformation. Includes warnings about unsupported
@@ -372,10 +373,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                                 {
                                     diskContent = diskContent[prefixBlock.Length..];
                                 }
-                                lock (_cachedFileContents)
-                                {
-                                    _cachedFileContents[fileMeta.Path] = diskContent;
-                                }
+                                _cachedFileContents[fileMeta.Path] = diskContent;
                                 Interlocked.Increment(ref skippedGroupCount);
                                 return;
                             }
