@@ -320,6 +320,48 @@ describe("linq operators", () => {
     expect(getStages(total)).toBeUndefined();
   });
 
+  test("getStages — symbol survives where → select → orderBy → toArray", () => {
+    const whereOp = where<number>((x) => x > 1);
+    const selectOp = select((x: number) => ({ value: x * 10 }));
+    const orderByOp = orderBy<{ value: number }, number>((item) => item.value);
+    const toArrayOp = toArray<{ value: number }>();
+
+    const result = linq([5, 1, 3, 2, 4], whereOp, selectOp, orderByOp, toArrayOp);
+    expect(result).toEqual([{ value: 20 }, { value: 30 }, { value: 40 }, { value: 50 }]);
+
+    const stages = getStages(result);
+    expect(stages).toEqual([whereOp, selectOp, orderByOp, toArrayOp]);
+    expect(Object.getOwnPropertyDescriptor(result, LINQ_STAGES)?.enumerable).toBe(false);
+    // README claims the slot stays out of every wire shape — pin it.
+    expect(JSON.stringify(result)).toBe(
+      JSON.stringify([{ value: 20 }, { value: 30 }, { value: 40 }, { value: 50 }]),
+    );
+    expect(Object.keys(result).length).toBe(4);
+  });
+
+  test("LINQ_STAGES — registered in the global Symbol.for table", () => {
+    // README promises cross-module-instance compatibility via
+    // Symbol.for. Pin the exact registry key so a future rename
+    // breaks the test instead of silently breaking every provider
+    // resolved from a different node_modules layout.
+    expect(LINQ_STAGES).toBe(Symbol.for("metano-runtime/system/linq:stages"));
+  });
+
+  test("getStages — symbol survives terminals that return objects", () => {
+    // toMap returns a Map; Map is an object, so the slot must live
+    // on it too. Providers that materialise via .toMap() need the
+    // chain to remain inspectable on the result.
+    const whereOp = where<number>((x) => x > 0);
+    const toMapOp = toMap<number, string, number>(
+      (x) => `k${x}`,
+      (x) => x,
+    );
+    const map = linq([1, 2, 3], whereOp, toMapOp);
+    expect(map instanceof Map).toBe(true);
+    const stages = getStages(map);
+    expect(stages).toEqual([whereOp, toMapOp]);
+  });
+
   test("lazy semantics — generators not executed until terminal", () => {
     let calls = 0;
     function* counter(): Iterable<number> {

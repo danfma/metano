@@ -65,6 +65,58 @@ const result = Enumerable.from([1, 2, 3, 4, 5])
   `lastOrDefault`, `single`, `singleOrDefault`, `any`, `all`, `count`, `sum`, `average`,
   `min`, `max`, `minBy`, `maxBy`, `contains`, `aggregate`
 
+### `linq()` — descriptor-based pipeline + provider introspection
+
+For IQueryable-style scenarios, the runtime also exposes a tagged-descriptor
+pipeline: each operator (`where`, `select`, `orderBy`, …) is a standalone
+factory that returns a `{ kind, …closures, apply, queryable? }` descriptor.
+`linq(source, ...stages)` runs the chain by calling each stage's `apply`,
+returning a lazy `Iterable<T>` (or a scalar, for terminal-bearing chains).
+
+```typescript
+import { getStages, linq, select, where } from "metano-runtime";
+
+const query = linq(
+  users,
+  where((u) => u.age >= 18),
+  select((u) => u.name),
+);
+
+for (const name of query) {
+  console.log(name);
+}
+```
+
+When the result is an object (the lazy `Iterable<T>` from a composition chain,
+or any object-typed terminal result like `toArray`), the runtime attaches the
+descriptor list at a non-enumerable symbol-keyed slot — `LINQ_STAGES`,
+registered via `Symbol.for("metano-runtime/system/linq:stages")`. An
+introspecting consumer (IQueryable provider, query planner, debugger) reads
+it via `getStages`:
+
+```typescript
+import { getStages, linq, select, where } from "metano-runtime";
+
+const query = linq(items, where((x) => x.active), select((x) => x.name));
+const stages = getStages(query); // [WhereOp, SelectOp] | undefined
+
+if (stages) {
+  // walk `stages[i].queryable` (ExprTree) to translate into SQL / GraphQL / …
+}
+```
+
+Contract:
+
+- The slot is **non-enumerable**, so `JSON.stringify`, `{ ...spread }`, and
+  `Object.keys` do not leak the chain into the wire shape.
+- `getStages` returns `undefined` for primitive results (scalar terminals
+  like `count` / `sum`) and for values produced outside this runtime.
+- The slot is scoped via `Symbol.for`, so multiple module copies (duplicate
+  npm resolutions) share the same key — `getStages` from any copy sees the
+  stages attached by any other.
+- The closure side-channel (`stage.apply`) keeps working in parallel; a
+  provider that cannot introspect a given stage may fall back to it.
+
 ### `UUID` — branded UUID type
 
 A branded primitive that `System.Guid` maps to. At runtime it's literally a
