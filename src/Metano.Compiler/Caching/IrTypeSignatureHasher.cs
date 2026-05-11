@@ -61,7 +61,9 @@ public static class IrTypeSignatureHasher
         if (symbol.BaseType is { } baseType)
             sb.Append("base=").Append(baseType.ToDisplayString()).Append('\0');
 
-        foreach (var iface in symbol.Interfaces.OrderBy(i => i.ToDisplayString(), StringComparer.Ordinal))
+        foreach (
+            var iface in symbol.Interfaces.OrderBy(i => i.ToDisplayString(), StringComparer.Ordinal)
+        )
             sb.Append("iface=").Append(iface.ToDisplayString()).Append('\0');
 
         AppendAttributes(sb, symbol.GetAttributes());
