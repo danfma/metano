@@ -148,6 +148,57 @@ in different packages without forcing providers to parse module paths.
 }
 ```
 
+### `ExprTreeVisitor` — generic walker for IQueryable provider authors
+
+`metano-runtime/system/linq` ships a stable visitor surface so providers
+that translate `QueryableMeta` into another dialect (SQL, GraphQL, OData,
+HTTP query strings) do **not** need to reimplement parameter scoping, the
+recursive walker, captures lookup, or the primitive comparator. Three
+entry points cover the common cases:
+
+- `evaluateExprTree(tree, scope)` — pure JS evaluation. Default behavior
+  for mock / in-memory providers; resolves the param, looks up captures,
+  short-circuits boolean ops, mirrors JS semantics on arithmetic.
+- `compileLambdaBody(meta, fallbackParamName?)` — wraps the evaluator
+  into a `(item) => unknown` predicate by closing over `meta.captures`.
+  Pass `fallbackParamName` (defaults to `"x"`) for literal-only bodies
+  that never mention the param.
+- `ExprTreeVisitor<R>` — abstract base with one `visitX` method per node
+  kind. Default implementations recurse, so subclasses override only the
+  nodes they translate. Helpers `readParamName` and `compareValues` are
+  exported for providers that bypass the visitor.
+
+```typescript
+import {
+  ExprTreeVisitor,
+  type ExprBinary,
+  type ExprLiteral,
+  type ExprMember,
+  type ExprParam,
+} from "metano-runtime";
+
+class SqlPredicate extends ExprTreeVisitor<string> {
+  protected override visitParam(node: ExprParam): string {
+    return node.name;
+  }
+  protected override visitLiteral(node: ExprLiteral): string {
+    return JSON.stringify(node.value);
+  }
+  protected override visitMember(node: ExprMember): string {
+    return `${this.visit(node.target)}.${node.member}`;
+  }
+  protected override visitBinary(node: ExprBinary): string {
+    return `(${this.visit(node.left)} ${node.op} ${this.visit(node.right)})`;
+  }
+}
+
+// new SqlPredicate().visit(meta.tree) → "(u.age >= 18)"
+```
+
+The array-backed sample (`targets/js/sample-queryable-arrays`) uses
+`compileLambdaBody` directly — its provider is now ~50 LOC of stage
+dispatch with all generic walker concerns delegated to the runtime.
+
 ### `UUID` — branded UUID type
 
 A branded primitive that `System.Guid` maps to. At runtime it's literally a

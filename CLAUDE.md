@@ -139,7 +139,7 @@ All attributes live in the `Metano.Annotations` namespace inside the `src/Metano
 | `[EmitInFile("name")]` | Type | Co-locates multiple types in a single .ts file |
 | `[MapMethod]` | Assembly | Declarative BCL method → JS method/template mapping |
 | `[MapProperty]` | Assembly | Declarative BCL property → JS property/template mapping |
-| `[Queryable]` | Method/Parameter | Captures lambda body as expression tree alongside the closure (IQueryable provider input) — runtime descriptor's `queryable?` field (`QueryableMeta`). |
+| `[Queryable]` | Method/Parameter | Captures lambda body as expression tree alongside the closure (IQueryable provider input) — runtime descriptor's `queryable?` field (`QueryableMeta`). Provider authors translate the tree via `ExprTreeVisitor` / `evaluateExprTree` / `compileLambdaBody` from `metano-runtime/system/linq`. |
 
 ### Tests
 

@@ -34,10 +34,20 @@ export type {
   ExprNew,
   ExprParam,
   ExprTree,
+  ExprTypeRef,
   ExprUnary,
   QueryableMeta,
   UnaryOp,
 } from "./expr-tree.ts";
+
+export {
+  ExprTreeVisitor,
+  compareValues,
+  compileLambdaBody,
+  evaluateExprTree,
+  readParamName,
+} from "./expr-tree-visitor.ts";
+export type { ExprTreeScope } from "./expr-tree-visitor.ts";
 
 export type {
   AnyOperator,
