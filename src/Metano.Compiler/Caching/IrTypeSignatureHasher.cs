@@ -73,7 +73,10 @@ public static class IrTypeSignatureHasher
             sb.Append("base=").Append(baseType.ToDisplayString(StableFormat)).Append('\0');
 
         foreach (
-            var iface in symbol.Interfaces.OrderBy(i => i.ToDisplayString(StableFormat), StringComparer.Ordinal)
+            var iface in symbol.Interfaces.OrderBy(
+                i => i.ToDisplayString(StableFormat),
+                StringComparer.Ordinal
+            )
         )
             sb.Append("iface=").Append(iface.ToDisplayString(StableFormat)).Append('\0');
 
