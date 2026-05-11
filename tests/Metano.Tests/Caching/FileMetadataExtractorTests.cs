@@ -23,7 +23,7 @@ public class FileMetadataExtractorTests
             ]
         );
 
-        var meta = FileMetadataExtractor.Extract(source);
+        var meta = FileMetadataExtractor.Extract(source, "content-placeholder");
 
         await Assert.That(meta.Path).IsEqualTo("foo/bar.ts");
         await Assert.That(meta.Imports.Count).IsEqualTo(1);
@@ -39,6 +39,7 @@ public class FileMetadataExtractorTests
     {
         var meta = new CachedFileMetadata(
             "foo/bar.ts",
+            "deadbeef",
             [new CachedImport(["UserId"], "#/shared-kernel/user-id")],
             [
                 new CachedExport("Bar", TypeOnly: false),
@@ -71,7 +72,7 @@ public class FileMetadataExtractorTests
             ]
         );
 
-        var meta = FileMetadataExtractor.Extract(source);
+        var meta = FileMetadataExtractor.Extract(source, "content-placeholder");
 
         await Assert.That(meta.Imports.Count).IsEqualTo(1);
         await Assert.That(meta.Exports.Count).IsEqualTo(0);

@@ -11,20 +11,25 @@ namespace Metano.Compiler.TypeScript.Caching;
 /// (<c>namespace + fileName</c>).
 ///
 /// <para>
-/// A group entry is valid for re-use when every output file it
-/// declares still matches the global <c>outputHashes</c> map kept
-/// by <see cref="Metano.Compiler.Caching.TranspilationCache"/> —
-/// the whole-build cache (PR 3a) verifies that map at the host
-/// layer before <c>target.Transform</c> ever runs, so the per-group
-/// hit path can trust it here.
+/// A group entry is valid for re-use only when ALL of the
+/// following hold: (a) the cached <c>ConfigurationFingerprint</c>
+/// matches the active run's, (b) the cached closure hash matches
+/// the closure currently computed from the dep graph, and (c) the
+/// disk content's SHA-256 matches the cached
+/// <see cref="CachedFileMetadata.ContentHash"/>. The whole-build
+/// cache (PR 3a) verifies disk content on the short-circuit
+/// path, but on a normal transform run it does not — so this
+/// layer hashes the disk content itself before trusting the
+/// cached metadata.
 /// </para>
 /// </summary>
 public sealed record GroupCacheFile(
     int FormatVersion,
+    string ConfigurationFingerprint,
     IReadOnlyDictionary<string, GroupCacheEntry> Groups
 )
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -46,7 +51,7 @@ public sealed record GroupCacheFile(
                 return null;
             if (cache.FormatVersion != CurrentFormatVersion)
                 return null;
-            if (cache.Groups is null)
+            if (cache.Groups is null || cache.ConfigurationFingerprint is null)
                 return null;
             return cache;
         }

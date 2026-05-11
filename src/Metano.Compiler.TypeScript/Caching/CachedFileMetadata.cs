@@ -19,6 +19,7 @@ namespace Metano.Compiler.TypeScript.Caching;
 /// </summary>
 public sealed record CachedFileMetadata(
     string Path,
+    string ContentHash,
     IReadOnlyList<CachedImport> Imports,
     IReadOnlyList<CachedExport> Exports
 );
