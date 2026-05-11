@@ -92,8 +92,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// real file with the stub's empty body.
     /// </summary>
     public IReadOnlyDictionary<string, string> CachedFileContents => _cachedFileContents;
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _cachedFileContents =
-        new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        string
+    > _cachedFileContents = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Diagnostics collected during transformation. Includes warnings about unsupported
