@@ -768,8 +768,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         List<INamedTypeSymbol> Types
     );
 
-    private static string GroupKey(TypeFileGroup group) =>
-        $"{group.Namespace}/{group.FileName}";
+    private static string GroupKey(TypeFileGroup group) => $"{group.Namespace}/{group.FileName}";
 
     /// <summary>
     /// Builds the per-group closure hash map (PR 3c). The signature
@@ -781,7 +780,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyList<TypeFileGroup> groups
     )
     {
-        var allTypes = groups.SelectMany(g => g.Types).Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>();
+        var allTypes = groups
+            .SelectMany(g => g.Types)
+            .Distinct(SymbolEqualityComparer.Default)
+            .Cast<INamedTypeSymbol>();
         var sigIndex = GroupClosureHasher.BuildSignatureHashIndex(allTypes);
         var graph = IrTypeDependencyGraph.Build(ir);
 

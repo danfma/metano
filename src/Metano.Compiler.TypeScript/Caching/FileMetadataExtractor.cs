@@ -44,9 +44,7 @@ public static class FileMetadataExtractor
                             import.From,
                             import.TypeOnly,
                             import.IsDefault,
-                            import.TypeOnlyNames is null
-                                ? null
-                                : import.TypeOnlyNames.ToArray(),
+                            import.TypeOnlyNames is null ? null : import.TypeOnlyNames.ToArray(),
                             import.IsNamespace,
                             import.Aliases
                         )
