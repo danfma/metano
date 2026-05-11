@@ -557,4 +557,89 @@ public class QueryableExpressionTreeTests
 
         await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsFalse();
     }
+
+    /// <summary>
+    /// Pins the casing contract: PascalCase IR identifiers must land as
+    /// lowerCamelCase in the emitted <c>member</c> / <c>method</c> keys
+    /// for the TypeScript target. The runtime <c>QueryableMeta</c>
+    /// consumers dereference the lowered property by that key, so a
+    /// drift here would silently break every provider.
+    /// </summary>
+    [Test]
+    public async Task TsTarget_MemberAndMethod_EmitLowerCamelCase()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> AdultsWithFullName(IQueryable<User> users) =>
+                    users.Where(u => u.FirstName.StartsWith("A"));
+            }
+
+            [Transpile]
+            public class User
+            {
+                public string FirstName { get; set; } = "";
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("member: \"firstName\"");
+        await Assert.That(output).Contains("method: \"startsWith\"");
+        await Assert.That(output).DoesNotContain("member: \"FirstName\"");
+        await Assert.That(output).DoesNotContain("method: \"StartsWith\"");
+    }
+
+    /// <summary>
+    /// Direct policy test: TS, Dart, and the null fallback all
+    /// emit the lowerCamelCase form today. Pins the contract so a
+    /// future change to one target does not silently regress the
+    /// others.
+    /// </summary>
+    [Test]
+    public async Task ExprTreeNamingPolicy_MemberCasing_IsTargetAware()
+    {
+        await Assert
+            .That(
+                Metano.Compiler.IR.IrExprTreeNamingPolicy.MemberCasing(
+                    "FirstName",
+                    Metano.Annotations.TargetLanguage.TypeScript
+                )
+            )
+            .IsEqualTo("firstName");
+        await Assert
+            .That(
+                Metano.Compiler.IR.IrExprTreeNamingPolicy.MemberCasing(
+                    "FirstName",
+                    Metano.Annotations.TargetLanguage.Dart
+                )
+            )
+            .IsEqualTo("firstName");
+        await Assert
+            .That(Metano.Compiler.IR.IrExprTreeNamingPolicy.MemberCasing("FirstName", null))
+            .IsEqualTo("firstName");
+        // Already-lowercase identifiers pass through unchanged.
+        await Assert
+            .That(
+                Metano.Compiler.IR.IrExprTreeNamingPolicy.MemberCasing(
+                    "firstName",
+                    Metano.Annotations.TargetLanguage.TypeScript
+                )
+            )
+            .IsEqualTo("firstName");
+        // Empty input is preserved (no IndexOutOfRangeException).
+        await Assert
+            .That(
+                Metano.Compiler.IR.IrExprTreeNamingPolicy.MemberCasing(
+                    "",
+                    Metano.Annotations.TargetLanguage.TypeScript
+                )
+            )
+            .IsEqualTo("");
+    }
 }

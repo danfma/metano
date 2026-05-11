@@ -1,4 +1,5 @@
 using System.Globalization;
+using Metano.Annotations;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -461,11 +462,18 @@ public static class IrToTsExpressionBridge
             ),
             // Member access on the lowered TS object lines up with the
             // member-casing rule (no reserved-word escape) used elsewhere
-            // in the bridge.
+            // in the bridge. Casing is routed through
+            // IrExprTreeNamingPolicy so future targets (Dart) reuse the
+            // same hook with their own TargetLanguage.
             IrExprMember m => TreeNode(
                 "member",
                 ("target", MapExprTree(m.Target)),
-                ("member", new TsStringLiteral(TypeScriptNaming.ToCamelCaseMember(m.Member)))
+                (
+                    "member",
+                    new TsStringLiteral(
+                        IrExprTreeNamingPolicy.MemberCasing(m.Member, TargetLanguage.TypeScript)
+                    )
+                )
             ),
             // Method names follow the same member-casing rule so the
             // tree's `method` matches the actual TS property emitted on
@@ -475,7 +483,12 @@ public static class IrToTsExpressionBridge
             IrExprCall call => TreeNode(
                 "call",
                 ("target", call.Target is null ? new TsLiteral("null") : MapExprTree(call.Target)),
-                ("method", new TsStringLiteral(TypeScriptNaming.ToCamelCaseMember(call.Method))),
+                (
+                    "method",
+                    new TsStringLiteral(
+                        IrExprTreeNamingPolicy.MemberCasing(call.Method, TargetLanguage.TypeScript)
+                    )
+                ),
                 ("args", new TsArrayLiteral(call.Args.Select(MapExprTree).ToList()))
             ),
             IrExprBinary bin => TreeNode(
