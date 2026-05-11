@@ -5,4 +5,4 @@ export const Priority = {
   High: "high",
 } as const;
 
-export type Priority = typeof Priority[keyof typeof Priority];
+export type Priority = (typeof Priority)[keyof typeof Priority];

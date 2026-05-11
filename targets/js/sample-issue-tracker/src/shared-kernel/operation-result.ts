@@ -2,7 +2,12 @@
 import { HashCode } from "metano-runtime";
 
 export class OperationResult<T> {
-  constructor(readonly success: boolean, readonly value: T | null, readonly errorCode: string | null = null, readonly errorMessage: string | null = null) { }
+  constructor(
+    readonly success: boolean,
+    readonly value: T | null,
+    readonly errorCode: string | null = null,
+    readonly errorMessage: string | null = null,
+  ) {}
 
   get hasValue(): boolean {
     return this.success && !(this.value == null);
@@ -17,7 +22,13 @@ export class OperationResult<T> {
   }
 
   equals(other: any): boolean {
-    return other instanceof OperationResult && this.success === other.success && this.value === other.value && this.errorCode === other.errorCode && this.errorMessage === other.errorMessage;
+    return (
+      other instanceof OperationResult &&
+      this.success === other.success &&
+      this.value === other.value &&
+      this.errorCode === other.errorCode &&
+      this.errorMessage === other.errorMessage
+    );
   }
 
   hashCode(): number {
@@ -31,6 +42,11 @@ export class OperationResult<T> {
   }
 
   with(overrides?: Partial<OperationResult<T>>): OperationResult<T> {
-    return new OperationResult(overrides?.success ?? this.success, overrides?.value ?? this.value, overrides?.errorCode ?? this.errorCode, overrides?.errorMessage ?? this.errorMessage);
+    return new OperationResult(
+      overrides?.success ?? this.success,
+      overrides?.value ?? this.value,
+      overrides?.errorCode ?? this.errorCode,
+      overrides?.errorMessage ?? this.errorMessage,
+    );
   }
 }

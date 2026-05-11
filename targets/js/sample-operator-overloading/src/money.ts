@@ -5,7 +5,10 @@ import type { Currency } from "./currency";
 import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception";
 
 export class Money {
-  constructor(readonly cents: bigint, readonly currency: Currency) { }
+  constructor(
+    readonly cents: bigint,
+    readonly currency: Currency,
+  ) {}
 
   static __add(left: Money, right: Money): Money {
     Money.expectSameCurrency(left, right);
