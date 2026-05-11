@@ -86,7 +86,7 @@ public static class TranspilerHost
         }
 
         var transpileSw = Stopwatch.StartNew();
-        var output = target.Transform(ir, compilation);
+        var output = target.Transform(ir, compilation, outputDir, options.FilePrefix);
 
         transpileSw.Stop();
 

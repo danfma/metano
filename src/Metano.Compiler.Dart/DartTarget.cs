@@ -18,7 +18,12 @@ public sealed class DartTarget : ITranspilerTarget
 
     public IReadOnlyList<DartSourceFile> LastSourceFiles { get; private set; } = [];
 
-    public TargetOutput Transform(IrCompilation ir, Compilation? compilation)
+    public TargetOutput Transform(
+        IrCompilation ir,
+        Compilation? compilation,
+        string? outputDir = null,
+        string? filePrefix = null
+    )
     {
         if (compilation is null)
             throw new NotSupportedException(

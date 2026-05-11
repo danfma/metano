@@ -87,7 +87,12 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public string ConfigurationFingerprint =>
         $"namespaceBarrels={NamespaceBarrels};stripInterfacePrefix={StripInterfacePrefix}";
 
-    public TargetOutput Transform(IrCompilation ir, Compilation? compilation)
+    public TargetOutput Transform(
+        IrCompilation ir,
+        Compilation? compilation,
+        string? outputDir = null,
+        string? filePrefix = null
+    )
     {
         if (compilation is null)
             throw new NotSupportedException(
@@ -100,6 +105,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         {
             NamespaceBarrels = NamespaceBarrels,
             StripInterfacePrefix = StripInterfacePrefix,
+            CacheOutputDir = outputDir,
+            CacheFilePrefix = filePrefix,
         };
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
@@ -117,7 +124,18 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         var printer = new Printer();
         var generated = new List<GeneratedFile>(sourceFiles.Count);
         foreach (var file in sourceFiles)
-            generated.Add(new GeneratedFile(file.FileName, printer.Print(file)));
+        {
+            // PR 3c: per-group cache hits surface stub TsSourceFiles
+            // here so the barrel + cyclic stages see the right
+            // imports + exports, but the on-disk bytes already match
+            // the previous emit. Skip Printer for those — reuse the
+            // disk content directly so the host's emit pass writes
+            // the same bytes back.
+            if (transformer.CachedFileContents.TryGetValue(file.FileName, out var cached))
+                generated.Add(new GeneratedFile(file.FileName, cached));
+            else
+                generated.Add(new GeneratedFile(file.FileName, printer.Print(file)));
+        }
 
         return new TargetOutput(generated, transformer.Diagnostics);
     }

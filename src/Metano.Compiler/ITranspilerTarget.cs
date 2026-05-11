@@ -44,7 +44,12 @@ public interface ITranspilerTarget
     /// <see langword="null"/> for frontends with no Roslyn backing — IR-only targets can
     /// ignore the parameter entirely; Roslyn-dependent targets should surface a clear
     /// diagnostic when it is unavailable.</param>
-    TargetOutput Transform(IrCompilation ir, Compilation? compilation);
+    TargetOutput Transform(
+        IrCompilation ir,
+        Compilation? compilation,
+        string? outputDir = null,
+        string? filePrefix = null
+    );
 
     /// <summary>
     /// Stable fingerprint of every target-specific option that influences
