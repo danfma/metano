@@ -23,8 +23,9 @@ Thumbs.db
 bun.lock
 
 # Metano incremental cache — pinned next to generated outputs
-# (ADR-0021). Per-machine, never committed.
+# (ADR-0021, ADR-0024). Per-machine, never committed.
 .metano-cache.json
+.metano-cache-groups-*.json
 
 # Local working plans (per CLAUDE.md workflow — private per-session notes,
 # not committed — the authoritative backlog lives in GitHub issues)

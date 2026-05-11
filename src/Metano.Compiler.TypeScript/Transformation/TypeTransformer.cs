@@ -1,6 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Caching;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.Frontend.Roslyn;
@@ -8,6 +9,7 @@ using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.Caching;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -63,6 +65,34 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// Opt-in via <c>--strip-interface-prefix</c>.
     /// </summary>
     public bool StripInterfacePrefix { get; init; }
+
+    /// <summary>
+    /// Output directory for the active run, supplied by the host
+    /// (<see cref="Metano.Compiler.TranspilerHost"/>) so the per-group
+    /// cache (PR 3c) can live next to the generated <c>.ts</c> files.
+    /// <c>null</c> disables the per-group skip path — useful for unit
+    /// tests that drive the transformer with no on-disk side effects.
+    /// </summary>
+    public string? CacheOutputDir { get; init; }
+
+    /// <summary>
+    /// File-prefix block applied by the host at emit time. When set,
+    /// per-group cache hits strip it from the disk content before
+    /// re-publishing — the host re-applies the prefix on the next
+    /// write so storing the prefixed form would double it.
+    /// </summary>
+    public string? CacheFilePrefix { get; init; }
+
+    /// <summary>
+    /// On a per-group cache hit (PR 3c) the transformer reuses the
+    /// content already on disk: stub <c>TsSourceFile</c>s flow
+    /// through barrel + cyclic detection, but the printed output for
+    /// those paths comes straight from disk so the next emit
+    /// pass writes the same bytes back instead of corrupting the
+    /// real file with the stub's empty body.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CachedFileContents => _cachedFileContents;
+    private readonly Dictionary<string, string> _cachedFileContents = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Diagnostics collected during transformation. Includes warnings about unsupported
@@ -251,6 +281,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         };
 
         var files = new List<TsSourceFile>();
+        var groups = new List<TypeFileGroup>();
+        var perGroupClosure = new Dictionary<string, string>(StringComparer.Ordinal);
+        var perGroupMetadata = Array.Empty<CachedFileMetadata[]>();
 
         // Publish the interface-prefix rename dict for the duration
         // of this transform so `IrToTsTypeMapper.MapNamed` rewrites
@@ -284,20 +317,88 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // AsyncLocal writes inside a worker stay isolated. The result
             // list preserves source order via the group index so downstream
             // barrels and golden tests stay deterministic.
-            var groups = GroupTypesByFile(transpilableTypes);
+            groups = GroupTypesByFile(transpilableTypes);
+
+            // Per-group skip decision (PR 3c): for every group whose
+            // closure hash matches the cached entry, reuse the stub
+            // built from cached metadata and skip TransformGroup
+            // entirely. Misses run the full transform as before. The
+            // closure-hash index amortises per-type hashing across
+            // groups whose closures overlap.
+            perGroupClosure = ComputePerGroupClosure(ir, groups);
+            var cachedGroups = LoadGroupCache();
             var perGroupResults = new TsSourceFile?[groups.Count];
+            perGroupMetadata = new CachedFileMetadata[groups.Count][];
+            var skippedGroupCount = 0;
             Parallel.For(
                 0,
                 groups.Count,
                 index =>
                 {
-                    perGroupResults[index] = TransformGroup(groups[index]);
+                    var group = groups[index];
+                    var groupKey = GroupKey(group);
+                    if (
+                        cachedGroups is not null
+                        && perGroupClosure.TryGetValue(groupKey, out var closure)
+                        && cachedGroups.Groups.TryGetValue(groupKey, out var entry)
+                        && string.Equals(entry.ClosureHash, closure, StringComparison.Ordinal)
+                    )
+                    {
+                        // Hit: rebuild a stub TsSourceFile from cached
+                        // metadata. The host has already verified each
+                        // output file exists with matching content via
+                        // PR 3a's OutputsStillValid gate; if we got
+                        // here it means PR 3a missed for some other
+                        // reason but this group's slice is still good.
+                        if (entry.Files.Count == 1 && CacheOutputDir is not null)
+                        {
+                            var fileMeta = entry.Files[0];
+                            var diskPath = Path.Combine(
+                                CacheOutputDir,
+                                fileMeta.Path.Replace('/', Path.DirectorySeparatorChar)
+                            );
+                            if (File.Exists(diskPath))
+                            {
+                                perGroupResults[index] = FileMetadataExtractor.BuildStub(fileMeta);
+                                perGroupMetadata[index] = [fileMeta];
+                                var diskContent = File.ReadAllText(diskPath);
+                                var prefixBlock = string.IsNullOrEmpty(CacheFilePrefix)
+                                    ? null
+                                    : CacheFilePrefix + "\n";
+                                if (
+                                    prefixBlock is not null
+                                    && diskContent.StartsWith(prefixBlock, StringComparison.Ordinal)
+                                )
+                                {
+                                    diskContent = diskContent[prefixBlock.Length..];
+                                }
+                                lock (_cachedFileContents)
+                                {
+                                    _cachedFileContents[fileMeta.Path] = diskContent;
+                                }
+                                Interlocked.Increment(ref skippedGroupCount);
+                                return;
+                            }
+                        }
+                    }
+
+                    var produced = TransformGroup(group);
+                    perGroupResults[index] = produced;
+                    perGroupMetadata[index] = produced is null
+                        ? []
+                        : [FileMetadataExtractor.Extract(produced)];
                 }
             );
             for (var i = 0; i < perGroupResults.Length; i++)
             {
                 if (perGroupResults[i] is { } file)
                     files.Add(file);
+            }
+            if (skippedGroupCount > 0)
+            {
+                Console.WriteLine(
+                    $"  Per-group cache: {skippedGroupCount}/{groups.Count} group(s) reused from cache."
+                );
             }
         }
         finally
@@ -346,6 +447,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             _crossPackageDependencies[packageName] = version;
         }
+
+        WriteGroupCache(groups, perGroupClosure, perGroupMetadata);
 
         return files;
     }
@@ -664,6 +767,58 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string FileName,
         List<INamedTypeSymbol> Types
     );
+
+    private static string GroupKey(TypeFileGroup group) =>
+        $"{group.Namespace}/{group.FileName}";
+
+    /// <summary>
+    /// Builds the per-group closure hash map (PR 3c). The signature
+    /// hash index is amortised: a type appearing in N groups gets
+    /// hashed once.
+    /// </summary>
+    private static Dictionary<string, string> ComputePerGroupClosure(
+        IrCompilation ir,
+        IReadOnlyList<TypeFileGroup> groups
+    )
+    {
+        var allTypes = groups.SelectMany(g => g.Types).Distinct(SymbolEqualityComparer.Default).Cast<INamedTypeSymbol>();
+        var sigIndex = GroupClosureHasher.BuildSignatureHashIndex(allTypes);
+        var graph = IrTypeDependencyGraph.Build(ir);
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var group in groups)
+        {
+            var fqns = group.Types.Select(IrTypeDependencyGraph.QualifiedName);
+            result[GroupKey(group)] = GroupClosureHasher.HashGroupClosure(fqns, graph, sigIndex);
+        }
+        return result;
+    }
+
+    private GroupCacheFile? LoadGroupCache() =>
+        CacheOutputDir is null ? null : GroupCacheFile.TryRead(CacheOutputDir);
+
+    private void WriteGroupCache(
+        IReadOnlyList<TypeFileGroup> groups,
+        IReadOnlyDictionary<string, string> closures,
+        IReadOnlyList<CachedFileMetadata[]> metadata
+    )
+    {
+        if (CacheOutputDir is null)
+            return;
+        var entries = new Dictionary<string, GroupCacheEntry>(StringComparer.Ordinal);
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var key = GroupKey(groups[i]);
+            if (!closures.TryGetValue(key, out var closure))
+                continue;
+            var files = metadata[i] ?? [];
+            if (files.Length == 0)
+                continue;
+            entries[key] = new GroupCacheEntry(closure, files);
+        }
+        var cache = new GroupCacheFile(GroupCacheFile.CurrentFormatVersion, entries);
+        cache.Write(CacheOutputDir);
+    }
 
     /// <summary>
     /// Rewrites every top-level transpilable interface whose C# name
