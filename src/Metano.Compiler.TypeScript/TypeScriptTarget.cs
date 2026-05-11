@@ -107,6 +107,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             StripInterfacePrefix = StripInterfacePrefix,
             CacheOutputDir = outputDir,
             CacheFilePrefix = filePrefix,
+            CacheConfigurationFingerprint =
+                $"{ConfigurationFingerprint};filePrefix={filePrefix ?? string.Empty}",
         };
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;

@@ -84,6 +84,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public string? CacheFilePrefix { get; init; }
 
     /// <summary>
+    /// Target configuration fingerprint that participates in the
+    /// per-group cache key (combines <c>NamespaceBarrels</c>,
+    /// <c>StripInterfacePrefix</c>, and the host's <c>FilePrefix</c>).
+    /// A flag flip invalidates the entire group cache file even when
+    /// individual closure hashes still match.
+    /// </summary>
+    public string? CacheConfigurationFingerprint { get; init; }
+
+    /// <summary>
     /// On a per-group cache hit (PR 3c) the transformer reuses the
     /// content already on disk: stub <c>TsSourceFile</c>s flow
     /// through barrel + cyclic detection, but the printed output for
@@ -323,13 +332,24 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             groups = GroupTypesByFile(transpilableTypes);
 
             // Per-group skip decision (PR 3c): for every group whose
-            // closure hash matches the cached entry, reuse the stub
-            // built from cached metadata and skip TransformGroup
-            // entirely. Misses run the full transform as before. The
-            // closure-hash index amortises per-type hashing across
-            // groups whose closures overlap.
-            perGroupClosure = ComputePerGroupClosure(ir, groups);
-            var cachedGroups = LoadGroupCache();
+            // closure hash matches the cached entry AND the on-disk
+            // file's content hash still matches the cached value,
+            // reuse the stub built from cached metadata and skip
+            // TransformGroup entirely. Misses run the full transform
+            // as before. The closure-hash index amortises per-type
+            // hashing across groups whose closures overlap.
+            //
+            // ComputePerGroupClosure + LoadGroupCache run only when
+            // the host enabled the cache path (CacheOutputDir set
+            // AND the configuration fingerprint matches the cache
+            // file's). Otherwise both stay null and every iteration
+            // takes the miss branch.
+            groups = GroupTypesByFile(transpilableTypes);
+            var cachedGroups = LoadGroupCacheIfValid();
+            perGroupClosure =
+                cachedGroups is null && CacheOutputDir is null
+                    ? new Dictionary<string, string>(StringComparer.Ordinal)
+                    : ComputePerGroupClosure(ir, groups);
             var perGroupResults = new TsSourceFile?[groups.Count];
             perGroupMetadata = new CachedFileMetadata[groups.Count][];
             var skippedGroupCount = 0;
@@ -341,52 +361,40 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     var group = groups[index];
                     var groupKey = GroupKey(group);
                     if (
-                        cachedGroups is not null
-                        && perGroupClosure.TryGetValue(groupKey, out var closure)
-                        && cachedGroups.Groups.TryGetValue(groupKey, out var entry)
-                        && string.Equals(entry.ClosureHash, closure, StringComparison.Ordinal)
+                        TryReuseFromCache(
+                            groupKey,
+                            cachedGroups,
+                            perGroupClosure,
+                            out var stub,
+                            out var fileMeta
+                        )
                     )
                     {
-                        // Hit: rebuild a stub TsSourceFile from cached
-                        // metadata. The host has already verified each
-                        // output file exists with matching content via
-                        // PR 3a's OutputsStillValid gate; if we got
-                        // here it means PR 3a missed for some other
-                        // reason but this group's slice is still good.
-                        if (entry.Files.Count == 1 && CacheOutputDir is not null)
-                        {
-                            var fileMeta = entry.Files[0];
-                            var diskPath = Path.Combine(
-                                CacheOutputDir,
-                                fileMeta.Path.Replace('/', Path.DirectorySeparatorChar)
-                            );
-                            if (File.Exists(diskPath))
-                            {
-                                perGroupResults[index] = FileMetadataExtractor.BuildStub(fileMeta);
-                                perGroupMetadata[index] = [fileMeta];
-                                var diskContent = File.ReadAllText(diskPath);
-                                var prefixBlock = string.IsNullOrEmpty(CacheFilePrefix)
-                                    ? null
-                                    : CacheFilePrefix + "\n";
-                                if (
-                                    prefixBlock is not null
-                                    && diskContent.StartsWith(prefixBlock, StringComparison.Ordinal)
-                                )
-                                {
-                                    diskContent = diskContent[prefixBlock.Length..];
-                                }
-                                _cachedFileContents[fileMeta.Path] = diskContent;
-                                Interlocked.Increment(ref skippedGroupCount);
-                                return;
-                            }
-                        }
+                        perGroupResults[index] = stub;
+                        perGroupMetadata[index] = [fileMeta!];
+                        Interlocked.Increment(ref skippedGroupCount);
+                        return;
                     }
 
                     var produced = TransformGroup(group);
                     perGroupResults[index] = produced;
-                    perGroupMetadata[index] = produced is null
-                        ? []
-                        : [FileMetadataExtractor.Extract(produced)];
+                    if (produced is not null)
+                    {
+                        // Print once: the printed bytes are what the
+                        // target emits AND what the cache fingerprints.
+                        // Stash in _cachedFileContents so the target
+                        // skips its own Printer call for this path.
+                        var printedContent = new Printer().Print(produced);
+                        _cachedFileContents[produced.FileName] = printedContent;
+                        perGroupMetadata[index] =
+                        [
+                            FileMetadataExtractor.Extract(produced, printedContent),
+                        ];
+                    }
+                    else
+                    {
+                        perGroupMetadata[index] = [];
+                    }
                 }
             );
             for (var i = 0; i < perGroupResults.Length; i++)
@@ -796,8 +804,76 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         return result;
     }
 
-    private GroupCacheFile? LoadGroupCache() =>
-        CacheOutputDir is null ? null : GroupCacheFile.TryRead(CacheOutputDir);
+    /// <summary>
+    /// Loads the per-group cache only when the host enabled the
+    /// cache path AND the cached configuration fingerprint matches
+    /// the current run's. A mismatch discards every entry so a
+    /// flag flip (e.g., toggling <c>--strip-interface-prefix</c>) or
+    /// a different <c>--file-prefix</c> never serves stale bytes.
+    /// </summary>
+    private GroupCacheFile? LoadGroupCacheIfValid()
+    {
+        if (CacheOutputDir is null)
+            return null;
+        var cache = GroupCacheFile.TryRead(CacheOutputDir);
+        if (cache is null)
+            return null;
+        if (
+            !string.Equals(
+                cache.ConfigurationFingerprint,
+                CacheConfigurationFingerprint ?? string.Empty,
+                StringComparison.Ordinal
+            )
+        )
+            return null;
+        return cache;
+    }
+
+    private bool TryReuseFromCache(
+        string groupKey,
+        GroupCacheFile? cachedGroups,
+        IReadOnlyDictionary<string, string> closures,
+        out TsSourceFile? stub,
+        out CachedFileMetadata? fileMeta
+    )
+    {
+        stub = null;
+        fileMeta = null;
+        if (CacheOutputDir is null || cachedGroups is null)
+            return false;
+        if (!closures.TryGetValue(groupKey, out var closure))
+            return false;
+        if (!cachedGroups.Groups.TryGetValue(groupKey, out var entry))
+            return false;
+        if (!string.Equals(entry.ClosureHash, closure, StringComparison.Ordinal))
+            return false;
+        if (entry.Files.Count != 1)
+            return false;
+        var meta = entry.Files[0];
+        if (!FileMetadataExtractor.IsSafeRelativePath(meta.Path))
+            return false;
+        var diskPath = Path.Combine(
+            CacheOutputDir,
+            meta.Path.Replace('/', Path.DirectorySeparatorChar)
+        );
+        if (!File.Exists(diskPath))
+            return false;
+
+        var diskContent = File.ReadAllText(diskPath);
+        var prefixBlock = string.IsNullOrEmpty(CacheFilePrefix) ? null : CacheFilePrefix + "\n";
+        if (prefixBlock is not null && diskContent.StartsWith(prefixBlock, StringComparison.Ordinal))
+            diskContent = diskContent[prefixBlock.Length..];
+
+        // Content-hash gate: a hand-edited output file (or any
+        // out-of-band change) flips the hash and forces a miss.
+        if (!string.Equals(FileMetadataExtractor.Sha256(diskContent), meta.ContentHash, StringComparison.Ordinal))
+            return false;
+
+        _cachedFileContents[meta.Path] = diskContent;
+        stub = FileMetadataExtractor.BuildStub(meta);
+        fileMeta = meta;
+        return true;
+    }
 
     private void WriteGroupCache(
         IReadOnlyList<TypeFileGroup> groups,
@@ -806,6 +882,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     )
     {
         if (CacheOutputDir is null)
+            return;
+        // Skip the write when the transform produced errors: the
+        // host will abort emit, so persisting entries for files
+        // that were never written would seed stale cache hits on
+        // the next run.
+        if (_diagnostics.Any(d => d.Severity == MetanoDiagnosticSeverity.Error))
             return;
         var entries = new Dictionary<string, GroupCacheEntry>(StringComparer.Ordinal);
         for (var i = 0; i < groups.Count; i++)
@@ -818,7 +900,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
             entries[key] = new GroupCacheEntry(closure, files);
         }
-        var cache = new GroupCacheFile(GroupCacheFile.CurrentFormatVersion, entries);
+        var cache = new GroupCacheFile(
+            GroupCacheFile.CurrentFormatVersion,
+            CacheConfigurationFingerprint ?? string.Empty,
+            entries
+        );
         cache.Write(CacheOutputDir);
     }
 

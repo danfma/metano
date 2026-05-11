@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Caching;
@@ -28,7 +30,7 @@ namespace Metano.Compiler.TypeScript.Caching;
 /// </summary>
 public static class FileMetadataExtractor
 {
-    public static CachedFileMetadata Extract(TsSourceFile file)
+    public static CachedFileMetadata Extract(TsSourceFile file, string content)
     {
         var imports = new List<CachedImport>();
         var exports = new List<CachedExport>();
@@ -74,7 +76,18 @@ public static class FileMetadataExtractor
             }
         }
 
-        return new CachedFileMetadata(file.FileName, imports, exports);
+        return new CachedFileMetadata(file.FileName, Sha256(content), imports, exports);
+    }
+
+    /// <summary>
+    /// Hex SHA-256 of UTF-8 <paramref name="content"/>. Used by the
+    /// per-group cache to fingerprint each emitted file so a stale
+    /// entry whose on-disk content has been edited gets rejected.
+    /// </summary>
+    public static string Sha256(string content)
+    {
+        var bytes = Encoding.UTF8.GetBytes(content);
+        return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
     public static TsSourceFile BuildStub(CachedFileMetadata metadata)
@@ -107,5 +120,26 @@ public static class FileMetadataExtractor
         }
 
         return new TsSourceFile(metadata.Path, statements);
+    }
+
+    /// <summary>
+    /// Rejects rooted paths and any segment equal to <c>..</c> so a
+    /// hand-edited <c>.metano-cache-groups-typescript.json</c> cannot
+    /// redirect <c>File.ReadAllText</c> to an arbitrary disk
+    /// location (mirrors the safety check the host-level cache from
+    /// PR 3a applies in <c>CacheKeyBuilder</c>).
+    /// </summary>
+    public static bool IsSafeRelativePath(string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath))
+            return false;
+        if (Path.IsPathRooted(relativePath))
+            return false;
+        foreach (var segment in relativePath.Split('/', '\\'))
+        {
+            if (segment == "..")
+                return false;
+        }
+        return true;
     }
 }
