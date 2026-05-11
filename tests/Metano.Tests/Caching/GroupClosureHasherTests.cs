@@ -28,7 +28,10 @@ public class GroupClosureHasherTests
         var before = HashClosureOf("Demo.Order", BaselineSource);
         var after = HashClosureOf(
             "Demo.Order",
-            BaselineSource.Replace("record Order(Money Total)", "record Order(Money Total, int Quantity)")
+            BaselineSource.Replace(
+                "record Order(Money Total)",
+                "record Order(Money Total, int Quantity)"
+            )
         );
         await Assert.That(before).IsNotEqualTo(after);
     }
@@ -41,7 +44,10 @@ public class GroupClosureHasherTests
         // so the hash must flip even though Order itself didn't change.
         var after = HashClosureOf(
             "Demo.Order",
-            BaselineSource.Replace("record Money(decimal Amount, string Currency)", "record Money(decimal Amount, string Currency, string Note)")
+            BaselineSource.Replace(
+                "record Money(decimal Amount, string Currency)",
+                "record Money(decimal Amount, string Currency, string Note)"
+            )
         );
         await Assert.That(before).IsNotEqualTo(after);
     }
@@ -55,13 +61,15 @@ public class GroupClosureHasherTests
         // Order's group.
         var after = HashClosureOf(
             "Demo.Order",
-            BaselineSource.Replace("record Customer(string Name)", "record Customer(string Name, string Email)")
+            BaselineSource.Replace(
+                "record Customer(string Name)",
+                "record Customer(string Name, string Email)"
+            )
         );
         await Assert.That(before).IsEqualTo(after);
     }
 
-    private const string BaselineSource =
-        """
+    private const string BaselineSource = """
         namespace Demo;
 
         [Transpile]
@@ -95,7 +103,9 @@ public class GroupClosureHasherTests
             {
                 if (
                     model.GetDeclaredSymbol(node) is INamedTypeSymbol named
-                    && named.GetAttributes().Any(a => a.AttributeClass?.Name == "TranspileAttribute")
+                    && named
+                        .GetAttributes()
+                        .Any(a => a.AttributeClass?.Name == "TranspileAttribute")
                 )
                     yield return named;
             }

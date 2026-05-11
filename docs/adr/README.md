@@ -43,3 +43,4 @@ second-guess when they meet the code without the context that led to it.
 | [ADR-0020](0020-parallel-type-transformer.md)                    | Parallel `TypeTransformer` per file group + thread-safe shared state           |
 | [ADR-0021](0021-incremental-cache.md)                            | Incremental cache: whole-build short-circuit on source/reference/output match  |
 | [ADR-0022](0022-watch-mode.md)                                   | `--watch` mode: file-system watcher + debounce on top of the cache + parallel  |
+| [ADR-0023](0023-per-group-skip-foundation.md)                    | Per-group skip foundation: per-type + closure signature hashing (PR 3b setup)  |
