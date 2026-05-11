@@ -634,6 +634,245 @@ public class QueryableExpressionTreeTests
     }
 
     /// <summary>
+    /// Sanity check for the constant-folding baseline (#208): a
+    /// <c>const</c> field reference inside the lambda body has always
+    /// folded via <see cref="SemanticModel.GetConstantValue"/>. The
+    /// emitted tree must contain the literal value and no capture
+    /// for the field. Locks the behaviour so the new
+    /// <c>static readonly</c> path cannot accidentally regress the
+    /// <c>const</c> path it shares.
+    /// </summary>
+    [Test]
+    public async Task ConstField_FoldedAsLiteral()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                private const int MinAge = 18;
+
+                public static IEnumerable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= MinAge);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("\"literal\"");
+        await Assert.That(output).Contains("value: 18");
+        await Assert.That(output).DoesNotContain("\"capture\"");
+    }
+
+    /// <summary>
+    /// <c>static readonly</c> fields with literal initializers fold
+    /// just like <c>const</c> fields, even though Roslyn does not
+    /// reduce the reference itself. The walker peeks at the field's
+    /// declarator and validates the initializer with
+    /// <see cref="SemanticModel.GetConstantValue"/>.
+    /// </summary>
+    [Test]
+    public async Task StaticReadonlyField_LiteralInitializer_FoldedAsLiteral()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                private static readonly int MinAge = 18;
+
+                public static IEnumerable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= MinAge);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("\"literal\"");
+        await Assert.That(output).Contains("value: 18");
+        await Assert.That(output).DoesNotContain("\"capture\"");
+    }
+
+    /// <summary>
+    /// Conservative bailout: a <c>static readonly</c> field whose
+    /// initializer calls user code (<c>Compute()</c>) is NOT folded.
+    /// The walker cannot prove purity, so the reference stays as a
+    /// runtime capture and the closure resolves the value at call
+    /// time — matching pre-#208 behaviour for non-constant cases.
+    /// </summary>
+    [Test]
+    public async Task StaticReadonlyField_ComputedInitializer_StaysCapture()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                private static readonly int MinAge = Compute();
+
+                private static int Compute() => 18;
+
+                public static IEnumerable<User> Adults(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= MinAge);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("\"capture\"");
+        await Assert.That(output).Contains("minAge:");
+    }
+
+    /// <summary>
+    /// Method-local <c>const</c> declarations are Roslyn constants —
+    /// <see cref="SemanticModel.GetConstantValue"/> already folds the
+    /// reference. The test pins the behaviour so the new folding
+    /// branches cannot regress what was already covered.
+    /// </summary>
+    [Test]
+    public async Task LocalConstDeclaration_FoldedAsLiteral()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Adults(IQueryable<User> users)
+                {
+                    const int minAge = 18;
+                    return users.Where(u => u.Age >= minAge);
+                }
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        await Assert.That(output).Contains("\"literal\"");
+        await Assert.That(output).Contains("value: 18");
+        await Assert.That(output).DoesNotContain("\"capture\"");
+    }
+
+    /// <summary>
+    /// Binary arithmetic over two folded constants reduces to a
+    /// single literal node. Roslyn does not fold a binary expression
+    /// over <c>static readonly</c> reads, so the post-walk arithmetic
+    /// step picks it up: <c>MinAge + 1</c> becomes <c>literal(19)</c>.
+    /// </summary>
+    [Test]
+    public async Task BinaryArithmeticOverConstants_FoldedAsLiteral()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                private static readonly int MinAge = 18;
+
+                public static IEnumerable<User> AdultsPlus(IQueryable<User> users) =>
+                    users.Where(u => u.Age >= MinAge + 1);
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["user-ext.ts"];
+        // Folded literal: 18 + 1 collapsed into a single literal(19).
+        await Assert.That(output).Contains("value: 19");
+        // MinAge stayed out of the captures bundle (no runtime read).
+        await Assert.That(output).DoesNotContain("\"capture\"");
+        // The fold consumed the source-side `+` — no binary
+        // operator node remains for the threshold operand.
+        await Assert.That(output).DoesNotContain("\"op\": \"+\"");
+    }
+
+    /// <summary>
+    /// Conservative bailout: an instance (non-static) <c>readonly</c>
+    /// field read against a captured receiver cannot fold to a
+    /// literal — the value depends on which instance the closure
+    /// captures at runtime. The reference must surface as a
+    /// <c>capture</c> so the provider sees the runtime value, not a
+    /// stale compile-time approximation.
+    /// </summary>
+    [Test]
+    public async Task RegularReadonlyInstanceField_StaysCapture()
+    {
+        var result = TranspileHelper.TranspileWithIrBodies(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public class AdultFilter
+            {
+                private readonly int _minAge;
+
+                public AdultFilter(int minAge) { _minAge = minAge; }
+
+                public IEnumerable<User> Apply(IQueryable<User> users)
+                {
+                    var threshold = _minAge;
+                    return users.Where(u => u.Age >= threshold);
+                }
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        var output = result["adult-filter.ts"];
+        await Assert.That(output).Contains("\"capture\"");
+        await Assert.That(output).Contains("threshold:");
+    }
+
+    /// <summary>
     /// Direct policy test: TS, Dart, and the null fallback all
     /// emit the lowerCamelCase form today. Pins the contract so a
     /// future change to one target does not silently regress the

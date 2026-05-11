@@ -42,6 +42,23 @@ namespace Metano.Compiler.Extraction;
 /// lambda flows as a plain closure. The MS0024 hard error path is
 /// reserved for a follow-up.
 /// </para>
+/// <para>
+/// <b>Constant folding (#208).</b> Any expression that Roslyn proves
+/// constant via <see cref="SemanticModel.GetConstantValue"/> collapses
+/// to <see cref="IrExprLiteral"/> instead of a runtime capture. That
+/// covers literal tokens, <c>const</c> fields, and <c>const</c>
+/// locals natively. On top of that, <see cref="TryFoldConstant"/>
+/// peeks at <c>static readonly</c> field declarations and folds the
+/// reference when the initializer itself is a Roslyn-constant
+/// expression — Roslyn does not fold <c>static readonly</c> reads on
+/// its own. Binary and unary nodes finally re-fold post-walk when
+/// every operand collapsed to a literal, so combinations like
+/// <c>MIN_AGE + 1</c> (where <c>MIN_AGE</c> is a folded
+/// <c>static readonly</c>) come out as a single literal node. The
+/// walker stays conservative: regular instance <c>readonly</c>
+/// fields, mutable static fields, and any field whose initializer
+/// references something else stay as runtime captures.
+/// </para>
 /// </summary>
 internal sealed class IrExpressionTreeExtractor
 {
@@ -201,7 +218,10 @@ internal sealed class IrExpressionTreeExtractor
         var operand = Walk(unary.Operand);
         if (operand is null)
             return null;
-        return new IrExprUnary(unary.OperatorToken.ValueText, operand);
+        var op = unary.OperatorToken.ValueText;
+        if (operand is IrExprLiteral lit && TryFoldUnary(op, lit.Value, out var foldedValue))
+            return new IrExprLiteral(foldedValue, MapType(unary));
+        return new IrExprUnary(op, operand);
     }
 
     private IrExprTreeNode? WalkConditional(ConditionalExpressionSyntax cond)
@@ -371,9 +391,33 @@ internal sealed class IrExpressionTreeExtractor
         var right = Walk(bin.Right);
         if (left is null || right is null)
             return null;
-        return new IrExprBinary(bin.OperatorToken.ValueText, left, right);
+        var op = bin.OperatorToken.ValueText;
+        if (
+            left is IrExprLiteral leftLit
+            && right is IrExprLiteral rightLit
+            && TryFoldBinary(op, leftLit.Value, rightLit.Value, out var foldedValue)
+        )
+            return new IrExprLiteral(foldedValue, MapType(bin));
+        return new IrExprBinary(op, left, right);
     }
 
+    /// <summary>
+    /// Folds <paramref name="expr"/> to a literal when its value is
+    /// known at compile time. Two paths:
+    /// <list type="number">
+    ///   <item>Roslyn's own constant evaluator
+    ///   (<see cref="SemanticModel.GetConstantValue"/>) covers literal
+    ///   tokens, <c>const</c> fields, and <c>const</c> locals.</item>
+    ///   <item>For <c>static readonly</c> fields Roslyn declines to
+    ///   fold the reference itself, so we peek at the declarator and
+    ///   re-ask its semantic model whether the initializer is
+    ///   constant. Anything more elaborate than a literal /
+    ///   <c>const</c> reference stays a runtime capture — we never
+    ///   execute user code at compile time.</item>
+    /// </list>
+    /// Regular (non-static) <c>readonly</c> instance fields and any
+    /// mutable field stay as runtime captures by construction.
+    /// </summary>
     private bool TryFoldConstant(ExpressionSyntax expr, out IrExprTreeNode? folded)
     {
         var constant = _semantic.GetConstantValue(expr);
@@ -382,8 +426,318 @@ internal sealed class IrExpressionTreeExtractor
             folded = new IrExprLiteral(constant.Value, MapType(expr));
             return true;
         }
+        if (TryFoldStaticReadonlyField(expr, out folded))
+            return true;
         folded = null;
         return false;
+    }
+
+    /// <summary>
+    /// Folds a <c>static readonly</c> field reference when its
+    /// initializer is itself a Roslyn-constant expression. Mirrors the
+    /// <c>[Constant]</c> validator's policy in
+    /// <c>CSharpSourceFrontend.IsFieldInitializerConstant</c>: only
+    /// initializers Roslyn can fold are accepted, so we never run user
+    /// code (<c>Compute()</c>, factory calls, …) to populate a literal.
+    /// </summary>
+    private bool TryFoldStaticReadonlyField(ExpressionSyntax expr, out IrExprTreeNode? folded)
+    {
+        folded = null;
+        if (!IsFoldableStaticReadonlyField(expr, out var field))
+            return false;
+        foreach (var reference in field.DeclaringSyntaxReferences)
+        {
+            if (TryFoldFieldDeclarator(reference, expr, out folded))
+                return true;
+        }
+        return false;
+    }
+
+    private bool IsFoldableStaticReadonlyField(ExpressionSyntax expr, out IFieldSymbol field)
+    {
+        field = (_semantic.GetSymbolInfo(expr).Symbol as IFieldSymbol)!;
+        if (field is null)
+            return false;
+        return field is { IsStatic: true, IsReadOnly: true, IsConst: false };
+    }
+
+    private bool TryFoldFieldDeclarator(
+        SyntaxReference reference,
+        ExpressionSyntax expr,
+        out IrExprTreeNode? folded
+    )
+    {
+        folded = null;
+        if (reference.GetSyntax() is not VariableDeclaratorSyntax declarator)
+            return false;
+        if (declarator.Initializer?.Value is not { } initializer)
+            return false;
+        var model = _semantic.Compilation.GetSemanticModel(declarator.SyntaxTree);
+        var constant = model.GetConstantValue(initializer);
+        if (!constant.HasValue)
+            return false;
+        folded = new IrExprLiteral(constant.Value, MapType(expr));
+        return true;
+    }
+
+    /// <summary>
+    /// Folds a unary expression whose operand already collapsed to an
+    /// <see cref="IrExprLiteral"/>. Only the operators the walker
+    /// emits are supported (<c>-</c>, <c>+</c>, <c>!</c>, <c>~</c>);
+    /// anything outside that set bails to a runtime
+    /// <see cref="IrExprUnary"/> node.
+    /// </summary>
+    private static bool TryFoldUnary(string op, object? value, out object? result)
+    {
+        result = null;
+        switch (op)
+        {
+            case "-":
+                return TryNegate(value, out result);
+            case "+":
+                if (value is sbyte or short or int or long or float or double or decimal)
+                {
+                    result = value;
+                    return true;
+                }
+                return false;
+            case "!":
+                if (value is bool b)
+                {
+                    result = !b;
+                    return true;
+                }
+                return false;
+            case "~":
+                return TryBitwiseNot(value, out result);
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryNegate(object? value, out object? result)
+    {
+        result = value switch
+        {
+            int i => -i,
+            long l => -l,
+            short s => -(int)s,
+            sbyte sb => -(int)sb,
+            float f => -f,
+            double d => -d,
+            decimal m => -m,
+            _ => null,
+        };
+        return result is not null;
+    }
+
+    private static bool TryBitwiseNot(object? value, out object? result)
+    {
+        result = value switch
+        {
+            int i => ~i,
+            long l => ~l,
+            uint u => ~u,
+            ulong ul => ~ul,
+            _ => null,
+        };
+        return result is not null;
+    }
+
+    /// <summary>
+    /// Folds a binary expression whose operands already collapsed to
+    /// <see cref="IrExprLiteral"/>. Stays conservative: handles
+    /// arithmetic (<c>+ - * / %</c>) over matching numeric primitives,
+    /// boolean short-circuit (<c>&amp;&amp;</c>, <c>||</c>), and
+    /// equality / ordering comparisons. Mixed-type promotions or
+    /// operators outside this set fall through to a runtime
+    /// <see cref="IrExprBinary"/> node — keeping the runtime tree
+    /// identical to the pre-fold shape.
+    /// </summary>
+    private static bool TryFoldBinary(string op, object? left, object? right, out object? result)
+    {
+        result = null;
+        // Boolean short-circuit folding is independent of the numeric
+        // promotion rules below.
+        if (left is bool lb && right is bool rb)
+        {
+            switch (op)
+            {
+                case "&&":
+                case "&":
+                    result = lb && rb;
+                    return true;
+                case "||":
+                case "|":
+                    result = lb || rb;
+                    return true;
+                case "==":
+                    result = lb == rb;
+                    return true;
+                case "!=":
+                    result = lb != rb;
+                    return true;
+            }
+            return false;
+        }
+
+        // Limit numeric folding to operands that share a single
+        // primitive type. Roslyn already folded literal pairs, so the
+        // remaining cases come from `static readonly` reads — those
+        // are typed by their declarations, which is enough to fold
+        // without re-implementing the C# promotion lattice.
+        if (left is null || right is null || left.GetType() != right.GetType())
+            return false;
+
+        switch (left)
+        {
+            case int li:
+                return TryFoldIntArith(op, li, (int)right!, out result);
+            case long ll:
+                return TryFoldLongArith(op, ll, (long)right!, out result);
+            case double ld:
+                return TryFoldDoubleArith(op, ld, (double)right!, out result);
+            case float lf:
+                return TryFoldFloatArith(op, lf, (float)right!, out result);
+            case decimal lm:
+                return TryFoldDecimalArith(op, lm, (decimal)right!, out result);
+            case string ls when right is string rs:
+                if (op == "+")
+                {
+                    result = ls + rs;
+                    return true;
+                }
+                if (op == "==")
+                {
+                    result = ls == rs;
+                    return true;
+                }
+                if (op == "!=")
+                {
+                    result = ls != rs;
+                    return true;
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryFoldIntArith(string op, int l, int r, out object? result)
+    {
+        result = op switch
+        {
+            "+" => (object)(l + r),
+            "-" => l - r,
+            "*" => l * r,
+            "/" when r != 0 => l / r,
+            "%" when r != 0 => l % r,
+            "==" => l == r,
+            "!=" => l != r,
+            "<" => l < r,
+            "<=" => l <= r,
+            ">" => l > r,
+            ">=" => l >= r,
+            "&" => l & r,
+            "|" => l | r,
+            "^" => l ^ r,
+            _ => null,
+        };
+        return result is not null;
+    }
+
+    private static bool TryFoldLongArith(string op, long l, long r, out object? result)
+    {
+        result = op switch
+        {
+            "+" => (object)(l + r),
+            "-" => l - r,
+            "*" => l * r,
+            "/" when r != 0 => l / r,
+            "%" when r != 0 => l % r,
+            "==" => l == r,
+            "!=" => l != r,
+            "<" => l < r,
+            "<=" => l <= r,
+            ">" => l > r,
+            ">=" => l >= r,
+            "&" => l & r,
+            "|" => l | r,
+            "^" => l ^ r,
+            _ => null,
+        };
+        return result is not null;
+    }
+
+    private static bool TryFoldDoubleArith(string op, double l, double r, out object? result)
+    {
+        result = op switch
+        {
+            "+" => (object)(l + r),
+            "-" => l - r,
+            "*" => l * r,
+            "/" => l / r,
+            "%" => l % r,
+            "==" => l == r,
+            "!=" => l != r,
+            "<" => l < r,
+            "<=" => l <= r,
+            ">" => l > r,
+            ">=" => l >= r,
+            _ => null,
+        };
+        return result is not null;
+    }
+
+    private static bool TryFoldFloatArith(string op, float l, float r, out object? result)
+    {
+        result = op switch
+        {
+            "+" => (object)(l + r),
+            "-" => l - r,
+            "*" => l * r,
+            "/" => l / r,
+            "%" => l % r,
+            "==" => l == r,
+            "!=" => l != r,
+            "<" => l < r,
+            "<=" => l <= r,
+            ">" => l > r,
+            ">=" => l >= r,
+            _ => null,
+        };
+        return result is not null;
+    }
+
+    private static bool TryFoldDecimalArith(string op, decimal l, decimal r, out object? result)
+    {
+        // decimal arithmetic always throws on overflow (no unchecked
+        // decimal in C#). Bail on overflow so the build keeps moving
+        // and the runtime closure takes the value path.
+        try
+        {
+            result = op switch
+            {
+                "+" => (object)(l + r),
+                "-" => l - r,
+                "*" => l * r,
+                "/" when r != 0 => l / r,
+                "%" when r != 0 => l % r,
+                "==" => l == r,
+                "!=" => l != r,
+                "<" => l < r,
+                "<=" => l <= r,
+                ">" => l > r,
+                ">=" => l >= r,
+                _ => null,
+            };
+            return result is not null;
+        }
+        catch (OverflowException)
+        {
+            result = null;
+            return false;
+        }
     }
 
     private IrExprTreeNode CaptureSymbol(ExpressionSyntax syntax, ISymbol symbol)

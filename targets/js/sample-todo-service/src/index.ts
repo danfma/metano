@@ -1,11 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-export {
-  assertTodoCreated,
-  assertTodoUpdated,
-  isTodoCreated,
-  isTodoUpdated,
-  TodoEventKind,
-} from "./events";
+export { assertTodoCreated, assertTodoUpdated, isTodoCreated, isTodoUpdated, TodoEventKind } from "./events";
 export type { TodoCreated, TodoUpdated } from "./events";
 export { JsonContext } from "./json-context";
 export { assertCreateTodoDto, isCreateTodoDto, TodoStore } from "./todos";
