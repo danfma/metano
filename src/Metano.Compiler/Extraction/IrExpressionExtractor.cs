@@ -3223,7 +3223,25 @@ public sealed class IrExpressionExtractor
             if (!ShouldCaptureExpressionTree(receiverIsQueryable, methodHasQueryable, paramSymbol))
                 continue;
 
-            var walker = new IrExpressionTreeExtractor(_semantic, _originResolver, _target, this);
+            // Explicit opt-in (#205): [Queryable] on method/param or
+            // Expression<Func<…>> parameter type *without* IQueryable<T>
+            // receiver in scope. IQueryable<T> auto-resolves stages to
+            // System.Linq.Queryable (Expression<Func<…>> params), so
+            // the receiver intent dominates — keep the silent bail
+            // there.
+            var trigger = new QueryableTriggerContext(
+                receiverIsQueryable,
+                methodHasQueryable,
+                paramSymbol
+            );
+            var isExplicit = IsExplicitQueryableOptIn(trigger);
+            var walker = new IrExpressionTreeExtractor(
+                _semantic,
+                _originResolver,
+                _target,
+                this,
+                isExplicit
+            );
             var meta = walker.TryExtract(lambda);
             if (meta is not null)
                 return meta;
@@ -3248,6 +3266,33 @@ public sealed class IrExpressionExtractor
         if (paramIndex >= reduced.Parameters.Length)
             return null;
         return reduced.Parameters[paramIndex];
+    }
+
+    /// <summary>
+    /// Snapshot of the three signals
+    /// <see cref="ShouldCaptureExpressionTree"/> and
+    /// <see cref="IsExplicitQueryableOptIn"/> consult: whether the
+    /// receiver is <c>IQueryable&lt;T&gt;</c>, whether the stage
+    /// method itself carries <c>[Queryable]</c>, and the resolved
+    /// lambda parameter symbol (used to inspect its attribute set
+    /// and declared type).
+    /// </summary>
+    private readonly record struct QueryableTriggerContext(
+        bool ReceiverIsQueryable,
+        bool MethodHasQueryable,
+        IParameterSymbol? ParamSymbol
+    );
+
+    private static bool IsExplicitQueryableOptIn(QueryableTriggerContext trigger)
+    {
+        if (trigger.ReceiverIsQueryable)
+            return false;
+        if (trigger.MethodHasQueryable)
+            return true;
+        if (trigger.ParamSymbol is null)
+            return false;
+        return HasQueryableAttribute(trigger.ParamSymbol)
+            || IsExpressionDelegateType(trigger.ParamSymbol.Type);
     }
 
     private static bool ShouldCaptureExpressionTree(

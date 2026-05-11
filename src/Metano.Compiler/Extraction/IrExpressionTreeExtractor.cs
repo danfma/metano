@@ -1,3 +1,4 @@
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -10,6 +11,23 @@ namespace Metano.Compiler.Extraction;
 /// <see cref="IrExprTreeNode"/> shape the runtime
 /// <c>QueryableMeta</c> consumes (Phase B / #31).
 ///
+/// <para>
+/// <b>Reach today.</b> The diagnostic fires only when the
+/// trigger detection in
+/// <see cref="IrExpressionExtractor"/>'s <c>TryCaptureQueryableMeta</c>
+/// runs, and that path is gated by
+/// <c>IrLinqMapping.TryResolve</c> recognising the stage method —
+/// currently <c>System.Linq.Enumerable</c> /
+/// <c>System.Linq.Queryable</c> only. Queryable stages always
+/// have an <c>IQueryable&lt;T&gt;</c> receiver, which the issue
+/// classifies as <em>implicit</em>; Enumerable stages take
+/// <c>Func&lt;…&gt;</c> rather than
+/// <c>Expression&lt;Func&lt;…&gt;&gt;</c> and carry no
+/// <c>[Queryable]</c>. Net effect: in the current build MS0024 has
+/// no production trigger — the plumbing lands ahead of a follow-up
+/// that broadens the trigger surface to recognise custom
+/// <c>[Queryable]</c>-tagged extension methods.
+/// </para>
 /// <para>
 /// Triggered for stages whose receiver is <c>IQueryable&lt;T&gt;</c>,
 /// whose method or argument parameter carries
@@ -24,10 +42,20 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal sealed class IrExpressionTreeExtractor
 {
+    /// <summary>
+    /// Human-readable list of node kinds the walker covers. Kept as
+    /// a single source of truth so the MS0024 message and any
+    /// future documentation cannot drift from the actual
+    /// <see cref="Walk"/> switch.
+    /// </summary>
+    internal const string SupportedKinds =
+        "param, capture, literal, member, call, binary, unary, conditional";
+
     private readonly SemanticModel _semantic;
     private readonly IrTypeOriginResolver? _originResolver;
     private readonly Metano.Annotations.TargetLanguage? _target;
     private readonly IrExpressionExtractor _valueExtractor;
+    private readonly bool _isExplicitOptIn;
 
     private readonly HashSet<ISymbol> _lambdaParams = new(SymbolEqualityComparer.Default);
     private readonly Dictionary<ISymbol, IrQueryableCapture> _captures = new(
@@ -40,13 +68,15 @@ internal sealed class IrExpressionTreeExtractor
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver,
         Metano.Annotations.TargetLanguage? target,
-        IrExpressionExtractor valueExtractor
+        IrExpressionExtractor valueExtractor,
+        bool isExplicitOptIn = false
     )
     {
         _semantic = semanticModel;
         _originResolver = originResolver;
         _target = target;
         _valueExtractor = valueExtractor;
+        _isExplicitOptIn = isExplicitOptIn;
     }
 
     /// <summary>
@@ -113,10 +143,49 @@ internal sealed class IrExpressionTreeExtractor
                 return WalkConditional(cond);
 
             default:
-                _failed = true;
+                Bail(node, node.Kind().ToString());
                 return null;
         }
     }
+
+    /// <summary>
+    /// Marks the walker as failed at <paramref name="offending"/>.
+    /// When the caller opted in <em>explicitly</em>
+    /// (<c>[Queryable]</c> on the method / parameter, or an
+    /// <c>Expression&lt;Func&lt;…&gt;&gt;</c> parameter), publish an
+    /// MS0024 diagnostic so the user learns the body fell outside
+    /// the MVP subset instead of silently losing the queryable
+    /// meta. Implicit triggers (<c>IQueryable&lt;T&gt;</c> receiver
+    /// alone) keep the silent bail.
+    /// <para>
+    /// Only the <em>first</em> unsupported node is reported per
+    /// lambda — subsequent bails short-circuit on <c>_failed</c>
+    /// without re-entering the diagnostic path.
+    /// </para>
+    /// </summary>
+    private void Bail(SyntaxNode offending, string unsupportedKind)
+    {
+        if (_failed)
+            return;
+        _failed = true;
+        if (!_isExplicitOptIn)
+            return;
+        QueryableExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedQueryableBody,
+                FormatUnsupportedBodyMessage(unsupportedKind),
+                offending.GetLocation()
+            )
+        );
+    }
+
+    private static string FormatUnsupportedBodyMessage(string unsupportedKind) =>
+        $"Queryable lambda body uses unsupported syntax '{unsupportedKind}'. "
+        + $"The expression-tree walker supports: {SupportedKinds}. "
+        + "Either refactor the body into that subset, or remove the [Queryable] "
+        + "attribute / change the parameter type away from Expression<Func<…>> so "
+        + "the closure runs without a captured tree.";
 
     private IrExprTreeNode? WalkUnary(PrefixUnaryExpressionSyntax unary)
     {
@@ -141,7 +210,7 @@ internal sealed class IrExpressionTreeExtractor
         var symbol = _semantic.GetSymbolInfo(id).Symbol;
         if (symbol is null)
         {
-            _failed = true;
+            Bail(id, "UnresolvedIdentifier");
             return null;
         }
 
@@ -182,7 +251,7 @@ internal sealed class IrExpressionTreeExtractor
                 method = idName.Identifier.ValueText;
                 break;
             default:
-                _failed = true;
+                Bail(inv, inv.Expression.Kind().ToString());
                 return null;
         }
 

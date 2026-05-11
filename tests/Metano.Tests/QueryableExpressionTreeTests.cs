@@ -226,4 +226,124 @@ public class QueryableExpressionTreeTests
         await Assert.That(output).Contains("select(");
         await Assert.That(output).DoesNotContain("tree:");
     }
+
+    [Test]
+    public async Task ImplicitOptIn_IQueryableReceiver_UnsupportedBody_StaysSilent()
+    {
+        // IQueryable<T> receiver alone is implicit — the user did
+        // not necessarily ask the provider to handle every body
+        // shape. Status-quo silent bail preserved (no MS0024).
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public static class UserExt
+            {
+                public static IEnumerable<User> Doubled(IQueryable<User> users) =>
+                    users.Select(u => new User { Age = u.Age + 1 });
+            }
+
+            [Transpile]
+            public class User
+            {
+                public int Age { get; set; }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsFalse();
+        await Assert.That(files["user-ext.ts"]).DoesNotContain("tree:");
+    }
+
+    [Test]
+    public async Task Walker_ExplicitOptIn_UnsupportedBody_RaisesMS0024()
+    {
+        // Drive the walker directly with isExplicitOptIn=true so we
+        // exercise the diagnostic path independent of which call-site
+        // signal the trigger detection picks up. The current
+        // architecture only invokes the walker inside recognised LINQ
+        // chains (IrLinqMapping), so an end-to-end scenario for the
+        // explicit branch is limited; this unit test pins the contract
+        // for follow-up work that broadens the trigger surface.
+        var source = """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class Bag { public int Value { get; set; } }
+
+            public static class Probe
+            {
+                public static System.Linq.Expressions.Expression<System.Func<Bag, Bag>> Lambda() =>
+                    b => new Bag { Value = b.Value + 1 };
+            }
+            """;
+
+        var compilation = Metano.Tests.IR.IrTestHelper.Compile(source);
+        var diagnostics = new List<Metano.Compiler.Diagnostics.MetanoDiagnostic>();
+        var syntaxTree = compilation.SyntaxTrees.First();
+        var lambda = syntaxTree
+            .GetRoot()
+            .DescendantNodes()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
+            .First();
+        var model = compilation.GetSemanticModel(syntaxTree);
+        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics))
+        {
+            var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(
+                model,
+                originResolver: null,
+                target: null,
+                valueExtractor: new Metano.Compiler.Extraction.IrExpressionExtractor(model),
+                isExplicitOptIn: true
+            );
+            var meta = walker.TryExtract(lambda);
+            await Assert.That(meta).IsNull();
+        }
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsTrue();
+    }
+
+    [Test]
+    public async Task Walker_ImplicitOptIn_UnsupportedBody_StaysSilent()
+    {
+        // Same shape as the explicit test but isExplicitOptIn=false —
+        // walker bails silently, no MS0024.
+        var source = """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public class Bag { public int Value { get; set; } }
+
+            public static class Probe
+            {
+                public static System.Linq.Expressions.Expression<System.Func<Bag, Bag>> Lambda() =>
+                    b => new Bag { Value = b.Value + 1 };
+            }
+            """;
+
+        var compilation = Metano.Tests.IR.IrTestHelper.Compile(source);
+        var diagnostics = new List<Metano.Compiler.Diagnostics.MetanoDiagnostic>();
+        var syntaxTree = compilation.SyntaxTrees.First();
+        var lambda = syntaxTree
+            .GetRoot()
+            .DescendantNodes()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
+            .First();
+        var model = compilation.GetSemanticModel(syntaxTree);
+        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics))
+        {
+            var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(
+                model,
+                originResolver: null,
+                target: null,
+                valueExtractor: new Metano.Compiler.Extraction.IrExpressionExtractor(model),
+                isExplicitOptIn: false
+            );
+            walker.TryExtract(lambda);
+        }
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0024")).IsFalse();
+    }
 }

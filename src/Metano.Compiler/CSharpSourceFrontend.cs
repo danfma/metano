@@ -88,6 +88,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         TargetLanguage target
     )
     {
+        // Open the queryable-extraction diagnostic sink (#205 / MS0024)
+        // so the AsyncLocal-routed walker can publish into the same
+        // diagnostics list the rest of the frontend uses. The named
+        // using variable documents the scope's reason for existing —
+        // it has no other read site.
+        using var queryableDiagnosticSink =
+            Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics);
         // Fields beyond what's already populated stay empty during the
         // incremental migration. Downstream targets fall back to
         // `LoadedCompilation` for the rest until follow-up PRs wire them
