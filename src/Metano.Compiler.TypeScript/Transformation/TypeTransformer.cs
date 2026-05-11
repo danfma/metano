@@ -861,12 +861,21 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var diskContent = File.ReadAllText(diskPath);
         var prefixBlock = string.IsNullOrEmpty(CacheFilePrefix) ? null : CacheFilePrefix + "\n";
-        if (prefixBlock is not null && diskContent.StartsWith(prefixBlock, StringComparison.Ordinal))
+        if (
+            prefixBlock is not null
+            && diskContent.StartsWith(prefixBlock, StringComparison.Ordinal)
+        )
             diskContent = diskContent[prefixBlock.Length..];
 
         // Content-hash gate: a hand-edited output file (or any
         // out-of-band change) flips the hash and forces a miss.
-        if (!string.Equals(FileMetadataExtractor.Sha256(diskContent), meta.ContentHash, StringComparison.Ordinal))
+        if (
+            !string.Equals(
+                FileMetadataExtractor.Sha256(diskContent),
+                meta.ContentHash,
+                StringComparison.Ordinal
+            )
+        )
             return false;
 
         _cachedFileContents[meta.Path] = diskContent;
