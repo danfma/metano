@@ -96,16 +96,12 @@ public static class IrToTsExpressionBridge
         };
 
     /// <summary>
-    /// `dict[key]` on a <see cref="IrMapTypeRef"/> can't use JS bracket
-    /// access — `Map` has no indexer. Rewrite to `dict.get(key)` on read;
-    /// writes (`dict[k] = v`) are rewritten by <see cref="MapBinaryAssign"/>
-    /// to `dict.set(k, v)`. All other receivers keep the literal bracket
-    /// form.
-    /// </summary>
-    /// <summary>
     /// Binary expressions route through the generic lowering, with one
-    /// special case: `dict[key] = value` on a <see cref="IrMapTypeRef"/>
-    /// receiver must become `dict.set(key, value)` — Map has no indexer.
+    /// special case: <c>dict[key] = value</c> on a
+    /// <see cref="IrMapTypeRef"/> receiver must become
+    /// <c>dict.set(key, value)</c> — JS <c>Map</c> has no indexer.
+    /// Reads (<c>dict[key]</c>) are rewritten elsewhere to
+    /// <c>dict.get(key)</c>.
     /// </summary>
     private static TsExpression MapBinary(
         IrBinaryExpression bin,

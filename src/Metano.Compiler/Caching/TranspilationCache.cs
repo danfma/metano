@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace Metano.Compiler.Caching;
@@ -72,19 +73,7 @@ public sealed record TranspilationCache(
         {
             var json = File.ReadAllText(path);
             var cache = JsonSerializer.Deserialize<TranspilationCache>(json, JsonOptions);
-            if (cache is null)
-                return null;
-            if (cache.FormatVersion != CurrentFormatVersion)
-                return null;
-            if (
-                cache.Target is null
-                || cache.ConfigurationFingerprint is null
-                || cache.SourceHashes is null
-                || cache.ReferenceFingerprints is null
-                || cache.OutputHashes is null
-            )
-                return null;
-            return cache;
+            return IsStructurallyValid(cache) ? cache : null;
         }
         catch
         {
@@ -93,6 +82,21 @@ public sealed record TranspilationCache(
             return null;
         }
     }
+
+    /// <summary>
+    /// Predicate guarding <see cref="TryRead"/>'s success path against
+    /// hand-edited / partially-deserialised cache files. Every
+    /// required section must be non-null and the schema version must
+    /// match the current format.
+    /// </summary>
+    private static bool IsStructurallyValid([NotNullWhen(true)] TranspilationCache? cache) =>
+        cache is not null
+        && cache.FormatVersion == CurrentFormatVersion
+        && cache.Target is not null
+        && cache.ConfigurationFingerprint is not null
+        && cache.SourceHashes is not null
+        && cache.ReferenceFingerprints is not null
+        && cache.OutputHashes is not null;
 
     public void Write(string outputDir)
     {

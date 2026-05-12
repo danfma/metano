@@ -125,18 +125,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public IReadOnlyDictionary<string, string> CrossPackageDependencies =>
         _crossPackageDependencies;
 
-    internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
-    {
-        lock (_diagnosticsLock)
-            _diagnostics.Add(diagnostic);
-    }
-
     /// <summary>
-    /// Thread-safe sink for the per-group transformation loop. Wraps
-    /// <see cref="_diagnostics"/> writes inside the per-group lock so
-    /// parallel workers serialise on diagnostic emission.
+    /// Thread-safe sink for diagnostic emission. The lock serialises
+    /// writes from the per-group parallel transform loop as well as
+    /// any other call site that needs to publish a diagnostic.
+    /// Single channel: <see cref="TypeScriptTransformContext"/> and
+    /// the queryable-extraction sink (#218) both route through here.
     /// </summary>
-    private void AddDiagnostic(MetanoDiagnostic diagnostic)
+    internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
     {
         lock (_diagnosticsLock)
             _diagnostics.Add(diagnostic);
@@ -200,11 +196,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // and surface through the host's standard merge with
         // <c>ir.Diagnostics</c>. The named using documents the
         // scope's purpose; it has no other read site.
-        // Route through AddDiagnostic so MS0024 reports from the
+        // Route through ReportDiagnostic so MS0024 reports from the
         // parallel per-group transform share the same lock the
         // rest of the transformer uses — bare-list binding would
         // mean two distinct monitors over one non-thread-safe list.
-        using var queryableDiagnosticSink = QueryableExtractionDiagnostics.Open(AddDiagnostic);
+        using var queryableDiagnosticSink = QueryableExtractionDiagnostics.Open(ReportDiagnostic);
 
         _currentAssembly = compilation.Assembly;
 
@@ -282,7 +278,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.ExternalImports,
             ir.CrossAssemblyOrigins,
             compilation,
-            AddDiagnostic
+            ReportDiagnostic
         );
 
         _context = new TypeScriptTransformContext(
@@ -296,7 +292,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.GuardableTypeKeys ?? new HashSet<string>(StringComparer.Ordinal),
             _pathNaming,
             declarativeMappings,
-            AddDiagnostic
+            ReportDiagnostic
         )
         {
             TypeMapping = typeMappingContext,
@@ -342,8 +338,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // AsyncLocal writes inside a worker stay isolated. The result
             // list preserves source order via the group index so downstream
             // barrels and golden tests stay deterministic.
-            groups = GroupTypesByFile(transpilableTypes);
-
             // Per-group skip decision (PR 3c): for every group whose
             // closure hash matches the cached entry AND the on-disk
             // file's content hash still matches the cached value,

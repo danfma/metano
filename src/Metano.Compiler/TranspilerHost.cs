@@ -262,15 +262,17 @@ public static class TranspilerHost
             Console.WriteLine($"  Would write: {file.RelativePath}");
     }
 
+    /// <summary>
+    /// Counts logical lines in <paramref name="content"/>. A trailing
+    /// newline does not introduce an extra empty line — files that
+    /// end with <c>\n</c> count the same as those that do not.
+    /// </summary>
     private static int CountLines(string content)
     {
         if (content.Length == 0)
             return 0;
-        var count = 1;
-        for (var i = 0; i < content.Length; i++)
-            if (content[i] == '\n')
-                count++;
-        return content[^1] == '\n' ? count - 1 : count;
+        var newlines = content.AsSpan().Count('\n');
+        return content[^1] == '\n' ? newlines : newlines + 1;
     }
 
     private static async Task EmitFilesAsync(

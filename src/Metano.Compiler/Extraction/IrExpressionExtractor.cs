@@ -1263,6 +1263,18 @@ public sealed class IrExpressionExtractor
 
     private IrExpression ExtractUnary(ExpressionSyntax node, bool isPrefix)
     {
+        // `x!` (SuppressNullableWarning) is null-forgiving in C# but
+        // has no JS / TS analogue — pass the operand through
+        // untouched. UnaryPlus (`+x`) is a numeric identity; collapse
+        // to the operand for the same reason.
+        if (
+            node is PostfixUnaryExpressionSyntax suppress
+            && suppress.IsKind(SyntaxKind.SuppressNullableWarningExpression)
+        )
+            return Extract(suppress.Operand);
+        if (node is PrefixUnaryExpressionSyntax plus && plus.IsKind(SyntaxKind.UnaryPlusExpression))
+            return Extract(plus.Operand);
+
         var (op, operand) = node switch
         {
             PrefixUnaryExpressionSyntax pre => (MapUnaryOp(pre.Kind()), pre.Operand),
@@ -1337,7 +1349,15 @@ public sealed class IrExpressionExtractor
             SyntaxKind.RightShiftExpression => IrBinaryOp.RightShift,
             SyntaxKind.UnsignedRightShiftExpression => IrBinaryOp.UnsignedRightShift,
             SyntaxKind.CoalesceExpression => IrBinaryOp.NullCoalescing,
-            _ => IrBinaryOp.Add, // fallback; unsupported kinds land here but are rare
+            // Unsupported binary kinds throw rather than silently
+            // miscompile as IrBinaryOp.Add. If a new Roslyn binary
+            // shape appears, the build fails loudly with the kind
+            // name so the mapping can be added explicitly.
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(kind),
+                kind,
+                $"Unsupported binary syntax kind '{kind}'."
+            ),
         };
 
     private static IrBinaryOp MapAssignmentOp(SyntaxKind kind) =>
@@ -1357,7 +1377,11 @@ public sealed class IrExpressionExtractor
             SyntaxKind.UnsignedRightShiftAssignmentExpression =>
                 IrBinaryOp.UnsignedRightShiftAssign,
             SyntaxKind.CoalesceAssignmentExpression => IrBinaryOp.NullCoalescingAssign,
-            _ => IrBinaryOp.Assign,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(kind),
+                kind,
+                $"Unsupported assignment syntax kind '{kind}'."
+            ),
         };
 
     private static IrUnaryOp MapUnaryOp(SyntaxKind kind) =>
@@ -1370,7 +1394,11 @@ public sealed class IrExpressionExtractor
                 IrUnaryOp.Increment,
             SyntaxKind.PreDecrementExpression or SyntaxKind.PostDecrementExpression =>
                 IrUnaryOp.Decrement,
-            _ => IrUnaryOp.Negate,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(kind),
+                kind,
+                $"Unsupported unary syntax kind '{kind}'."
+            ),
         };
 
     /// <summary>

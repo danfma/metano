@@ -102,16 +102,15 @@ public static class CacheKeyBuilder
             if (!File.Exists(fullPath))
                 return null;
 
-            // Read once: hash + capture content for rehydration. Streamed
-            // hash so large outputs don't allocate a full-file string.
-            string content;
-            using (var stream = File.OpenRead(fullPath))
-            {
-                var actualHash = HexEncode(SHA256.HashData(stream));
-                if (actualHash != expectedHash)
-                    return null;
-            }
-            content = File.ReadAllText(fullPath);
+            // Single read: hash + UTF-8 decode from the same byte
+            // buffer. The earlier shape opened the file twice
+            // (stream-hash then ReadAllText); for a cache check over
+            // dozens of generated files that doubled the I/O budget.
+            var bytes = File.ReadAllBytes(fullPath);
+            var actualHash = HexEncode(SHA256.HashData(bytes));
+            if (actualHash != expectedHash)
+                return null;
+            var content = System.Text.Encoding.UTF8.GetString(bytes);
             // Strip the prefix block so rehydrated GeneratedFile.Content
             // matches what target.Transform would produce — the host
             // re-applies the prefix at write time on the full-pipeline

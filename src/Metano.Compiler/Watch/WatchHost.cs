@@ -203,7 +203,7 @@ public static class WatchHost
     /// <c>obj/</c> (including .cs source-generator output and
     /// MSBuild-generated .csproj caches) is build-byproduct noise.
     /// </summary>
-    public static bool IsRelevant(string path)
+    internal static bool IsRelevant(string path)
     {
         if (string.IsNullOrEmpty(path))
             return false;

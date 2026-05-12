@@ -448,7 +448,8 @@ internal sealed class IrExpressionTreeExtractor
     private bool TryFoldStaticReadonlyField(ExpressionSyntax expr, out IrExprTreeNode? folded)
     {
         folded = null;
-        if (!IsFoldableStaticReadonlyField(expr, out var field))
+        var field = ResolveFoldableStaticReadonlyField(expr);
+        if (field is null)
             return false;
         foreach (var reference in field.DeclaringSyntaxReferences)
         {
@@ -458,12 +459,18 @@ internal sealed class IrExpressionTreeExtractor
         return false;
     }
 
-    private bool IsFoldableStaticReadonlyField(ExpressionSyntax expr, out IFieldSymbol field)
+    /// <summary>
+    /// Returns the field symbol when <paramref name="expr"/> references
+    /// a foldable <c>static readonly</c> field (non-const), or
+    /// <see langword="null"/> otherwise. Replaces the previous
+    /// <c>out</c>-flavored helper whose <c>(... as IFieldSymbol)!</c>
+    /// gymnastics lied about non-nullability.
+    /// </summary>
+    private IFieldSymbol? ResolveFoldableStaticReadonlyField(ExpressionSyntax expr)
     {
-        field = (_semantic.GetSymbolInfo(expr).Symbol as IFieldSymbol)!;
-        if (field is null)
-            return false;
-        return field is { IsStatic: true, IsReadOnly: true, IsConst: false };
+        if (_semantic.GetSymbolInfo(expr).Symbol is not IFieldSymbol field)
+            return null;
+        return field is { IsStatic: true, IsReadOnly: true, IsConst: false } ? field : null;
     }
 
     private bool TryFoldFieldDeclarator(

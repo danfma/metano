@@ -18,7 +18,7 @@ public sealed class Printer
 
         // Imports first, separated by a blank line from declarations.
         var imports = file.Statements.OfType<DartImport>().ToList();
-        var rest = file.Statements.Except(imports).ToList();
+        var rest = file.Statements.Where(s => s is not DartImport).ToList();
 
         foreach (var import in imports)
             PrintImport(sb, import);
@@ -53,6 +53,17 @@ public sealed class Printer
             case DartTypedef td:
                 PrintTypedef(sb, td);
                 break;
+            case DartImport:
+                throw new InvalidOperationException(
+                    "DartImport must be filtered out before PrintTopLevel — Print() pulls imports into the header block. "
+                        + "Reaching this arm means a caller bypassed Print()."
+                );
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(stmt),
+                    stmt.GetType().Name,
+                    "Unsupported DartTopLevel shape."
+                );
         }
     }
 

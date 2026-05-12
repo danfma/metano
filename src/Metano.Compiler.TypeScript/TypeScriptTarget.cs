@@ -85,7 +85,29 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// <see cref="TranspilationCache"/> handles structural breaks).
     /// </summary>
     public string ConfigurationFingerprint =>
-        $"namespaceBarrels={NamespaceBarrels};stripInterfacePrefix={StripInterfacePrefix}";
+        BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix);
+
+    /// <summary>
+    /// Per-target fingerprint pinned into the incremental cache key
+    /// (ADR-0021). When the host extends the fingerprint with its own
+    /// <c>filePrefix</c>, the host-level helper produces the final
+    /// composite — this method covers the target-owned portion only.
+    /// </summary>
+    private static string BuildConfigurationFingerprint(
+        bool namespaceBarrels,
+        bool stripInterfacePrefix
+    ) => $"namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix}";
+
+    /// <summary>
+    /// Builds the cache-fingerprint composite consumed by
+    /// <see cref="TypeTransformer.CacheConfigurationFingerprint"/>:
+    /// target flags + the host's file prefix. Both call sites
+    /// (read at construction here and read by the host when
+    /// validating an on-disk cache entry) must share this format
+    /// verbatim or a flag-flip never invalidates the cache.
+    /// </summary>
+    private static string BuildCacheFingerprint(string targetFingerprint, string? filePrefix) =>
+        $"{targetFingerprint};filePrefix={filePrefix ?? string.Empty}";
 
     public TargetOutput Transform(
         IrCompilation ir,
@@ -107,8 +129,10 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             StripInterfacePrefix = StripInterfacePrefix,
             CacheOutputDir = outputDir,
             CacheFilePrefix = filePrefix,
-            CacheConfigurationFingerprint =
-                $"{ConfigurationFingerprint};filePrefix={filePrefix ?? string.Empty}",
+            CacheConfigurationFingerprint = BuildCacheFingerprint(
+                ConfigurationFingerprint,
+                filePrefix
+            ),
         };
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
