@@ -3539,7 +3539,9 @@ public sealed class IrExpressionExtractor
 
         stages.Reverse();
         var source = Extract(sourceSyntax);
-        return new IrLinqChain(source, stages);
+        // Build-time fusion of adjacent stages (#207). Idempotent on
+        // chains the rules don't match — returns the original instance.
+        return IrLinqChainFuser.Fuse(new IrLinqChain(source, stages));
     }
 
     /// <summary>
