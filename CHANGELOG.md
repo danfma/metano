@@ -4,6 +4,62 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.3.0
+
+_2026-05-12_
+
+
+### ✨ Features
+
+* **compiler:** --watch mode ([#18](https://github.com/danfma/metano/issues/18)) ([8fff5a7](https://github.com/danfma/metano/commit/8fff5a7e32db3acfd830f8148d114fb584fe02d9)), closes [#21](https://github.com/danfma/metano/issues/21) [#21](https://github.com/danfma/metano/issues/21) [#211](https://github.com/danfma/metano/issues/211) [#213](https://github.com/danfma/metano/issues/213) [#214](https://github.com/danfma/metano/issues/214)
+* **compiler:** add [StrictUnionGuard] for shape-level union dispatch ([#154](https://github.com/danfma/metano/issues/154)) ([f09fc40](https://github.com/danfma/metano/commit/f09fc402723912a85982bfde08348850b1c925da)), closes [#88](https://github.com/danfma/metano/issues/88)
+* **compiler:** broaden MS0024 trigger to non-LINQ [Queryable] callsites ([#218](https://github.com/danfma/metano/issues/218)) ([7c47a44](https://github.com/danfma/metano/commit/7c47a44ea474077bcec11af93d0abd1a89491770))
+* **compiler:** emit qualified type refs in queryable expression trees ([eae3507](https://github.com/danfma/metano/commit/eae3507fffcfb2d66b48d319dc94c588544022b7)), closes [#203](https://github.com/danfma/metano/issues/203)
+* **compiler:** extend queryable walker with new + nested lambda ([#206](https://github.com/danfma/metano/issues/206)) ([e633d2f](https://github.com/danfma/metano/commit/e633d2fe5b61f8b913390327bdb712b3e79daf34))
+* **compiler:** fold static readonly + pure-arithmetic captures ([#208](https://github.com/danfma/metano/issues/208)) ([0a7d251](https://github.com/danfma/metano/commit/0a7d251ff60e06c0b915674b717757564743f0be))
+* **compiler:** fuse adjacent LINQ stages at build time ([#207](https://github.com/danfma/metano/issues/207)) ([bf48474](https://github.com/danfma/metano/commit/bf484742bac5e70605c54a20d5be72c990b4361a))
+* **compiler:** group closure hasher for PR 3b ([8b0c270](https://github.com/danfma/metano/commit/8b0c2703cbabdd7408e15b36f5f26acbab33704e))
+* **compiler:** hoist pure repeated subtrees out of captured ExprTrees ([#209](https://github.com/danfma/metano/issues/209)) ([46ad6da](https://github.com/danfma/metano/commit/46ad6da689fe8a64762f97d15be4296a65276590))
+* **compiler:** incremental cache MVP — whole-build short-circuit (ADR-0021) ([9eef85a](https://github.com/danfma/metano/commit/9eef85a3fa249b3f31b2c12d577d34525385c727)), closes [#21](https://github.com/danfma/metano/issues/21) [#18](https://github.com/danfma/metano/issues/18) [#18](https://github.com/danfma/metano/issues/18) [#21](https://github.com/danfma/metano/issues/21) [#211](https://github.com/danfma/metano/issues/211) [#213](https://github.com/danfma/metano/issues/213) [#18](https://github.com/danfma/metano/issues/18)
+* **compiler:** lower extension indexers via item$get / item$set helpers ([#156](https://github.com/danfma/metano/issues/156)) ([7bfe7dd](https://github.com/danfma/metano/commit/7bfe7dd2a33b88a190b7786faad71a72be9b149f))
+* **compiler:** lower extension property setters via $set helpers ([#156](https://github.com/danfma/metano/issues/156)) ([6768eb5](https://github.com/danfma/metano/commit/6768eb58e26bf613d8d9c101a4cd1a4f6adf8aaa))
+* **compiler:** lower static extension members to module helpers ([#156](https://github.com/danfma/metano/issues/156)) ([457d2b5](https://github.com/danfma/metano/commit/457d2b537b1bfb93cb7791ec59c8016180007bb2))
+* **compiler:** MS0024 hard error for explicit queryable opt-in ([#205](https://github.com/danfma/metano/issues/205)) ([95ca446](https://github.com/danfma/metano/commit/95ca446a7d2845fcf0e5cfb48d5fc2f8001aac07))
+* **compiler:** parallelize TypeTransformer per file group (ADR-0020) ([b37c6d2](https://github.com/danfma/metano/commit/b37c6d2cae5336c7e6621fd3dabc0228dd91cfdb)), closes [#21](https://github.com/danfma/metano/issues/21) [#18](https://github.com/danfma/metano/issues/18) [#211](https://github.com/danfma/metano/issues/211) [#21](https://github.com/danfma/metano/issues/21) [#211](https://github.com/danfma/metano/issues/211) [#21](https://github.com/danfma/metano/issues/21) [#18](https://github.com/danfma/metano/issues/18)
+* **compiler:** per-group skip integration (PR 3c) ([6dd58b6](https://github.com/danfma/metano/commit/6dd58b61788d5c9f377b01902a9ccb4c5486df83)), closes [#21](https://github.com/danfma/metano/issues/21) [#18](https://github.com/danfma/metano/issues/18) [#21](https://github.com/danfma/metano/issues/21) [#18](https://github.com/danfma/metano/issues/18) [#211](https://github.com/danfma/metano/issues/211) [#213](https://github.com/danfma/metano/issues/213) [#214](https://github.com/danfma/metano/issues/214) [#215](https://github.com/danfma/metano/issues/215) [#216](https://github.com/danfma/metano/issues/216)
+* **compiler:** per-type signature hasher for PR 3b ([590a5c6](https://github.com/danfma/metano/commit/590a5c6f579e7badf9f875d35f5d734bae75cafc))
+* **compiler:** type-level dependency graph backbone for [#18](https://github.com/danfma/metano/issues/18) + [#21](https://github.com/danfma/metano/issues/21) ([fcf999f](https://github.com/danfma/metano/commit/fcf999fc9fc6fe8098b1aa395451ee7172b0ee86))
+* **runtime:** migrate array provider to getStages + document linq slot ([#200](https://github.com/danfma/metano/issues/200)) ([b5f0101](https://github.com/danfma/metano/commit/b5f0101f3e079a73d646d6d54ddfbc6113b62895))
+* **runtime:** publish ExprTree visitor API for queryable providers ([f77fa13](https://github.com/danfma/metano/commit/f77fa1370fbfc6f45511e00dfa7b4c94c4284c53)), closes [#198](https://github.com/danfma/metano/issues/198)
+
+### 🐛 Bug Fixes
+
+* address PR [#204](https://github.com/danfma/metano/issues/204) review + add pre-push targets/ sync check ([6815397](https://github.com/danfma/metano/commit/681539750b60be6ee99d78b30e600f3e6bf6e8ed)), closes [C#-style](https://github.com/danfma/C/issues/-style)
+* **compiler,runtime:** record equals() routes value-wrapper fields through valueEquals ([#202](https://github.com/danfma/metano/issues/202)) ([3fd0659](https://github.com/danfma/metano/commit/3fd0659275818ef2940f0a8913164b70c267404e))
+* **compiler:** gate per-group cache writes on disk-touching runs ([9776c13](https://github.com/danfma/metano/commit/9776c13340dfb83253246d38cfd1cb8b72b35260)), closes [#217](https://github.com/danfma/metano/issues/217)
+* **compiler:** harden per-group cache against config drift, tampering, and error runs ([669755f](https://github.com/danfma/metano/commit/669755fadb08be396895457eac2327dcd38d782b)), closes [#217](https://github.com/danfma/metano/issues/217)
+* **compiler:** make parallel TypeTransformer's shared sinks actually thread-safe ([4147f83](https://github.com/danfma/metano/commit/4147f83275cacf0b5065893b3b60deca89b9dde2)), closes [#213](https://github.com/danfma/metano/issues/213)
+* **compiler:** stabilise IrTypeSignatureHasher cache key (gemini review) ([e2a246c](https://github.com/danfma/metano/commit/e2a246cdedd08812d881388d4637b71311adb147)), closes [#216](https://github.com/danfma/metano/issues/216)
+* **compiler:** tighten incremental cache key + harden cache reads ([47baaed](https://github.com/danfma/metano/commit/47baaed4b40b270f1838626d8d5656f9d096e420)), closes [#214](https://github.com/danfma/metano/issues/214)
+* **compiler:** tighten WatchHost debounce + sync per Copilot review ([6e89b62](https://github.com/danfma/metano/commit/6e89b62dc0f8e9ff2d5939c3f0c03744ebffb1ec)), closes [#215](https://github.com/danfma/metano/issues/215)
+* **compiler:** tighten WatchHost rename + error handling, unsubscribe Ctrl+C handler ([695002b](https://github.com/danfma/metano/commit/695002bd6422852cbb6c1b911f975355dfc53857)), closes [#215](https://github.com/danfma/metano/issues/215)
+* **compiler:** verify WatchHost review findings already landed ([9212907](https://github.com/danfma/metano/commit/9212907fbc546da2570400d6f30908d97bc3a415))
+* **dependency-graph:** address PR [#211](https://github.com/danfma/metano/issues/211) review findings ([4fce313](https://github.com/danfma/metano/commit/4fce313656af2406c06ab760e3c174df8a6ff99e))
+* **reorg:** correct cref namespaces + harden pre-push gate against build races ([7b88091](https://github.com/danfma/metano/commit/7b8809110fc54f1cabe3ecb9fafb9b0cc74fec65))
+
+### ♻️ Refactor
+
+* **compiler:** route ExprTree member/method casing through target-aware policy ([#210](https://github.com/danfma/metano/issues/210)) ([21f9713](https://github.com/danfma/metano/commit/21f9713d13c5a7e4a297fee5ec70ca9906a55f83))
+* **compiler:** split Metano.Compiler folders by concern (ADR-0019) ([a16aafb](https://github.com/danfma/metano/commit/a16aafbfff7f29f55b955810428f9f045b7836f5))
+* **namespaces:** nest Metano.{Dart,TypeScript}.* under Metano.Compiler.* ([6276672](https://github.com/danfma/metano/commit/62766726fa477a903a452cfb49c7d88ee6d920b3))
+
+### 📝 Documentation
+
+* ADR-0023 — per-group skip foundation (PR 3b setup) ([ecb81db](https://github.com/danfma/metano/commit/ecb81dbcb239e129f32c8b1b48fee777192a663f))
+* **dependency-graph:** scope statement to signature surface only ([ed921d5](https://github.com/danfma/metano/commit/ed921d56549e839adb58ee531b12ea232d884899))
+* **plans:** seed reorganization brief ([208cb95](https://github.com/danfma/metano/commit/208cb951ddefa47c19267edcb43bbfe1f1a5bce2))
+* **roadmap:** editorial charter so docs/roadmap stays focused ([abf809d](https://github.com/danfma/metano/commit/abf809d133be762f7e0500cb5867b2c0c5a46847))
+
 ## 2.2.0
 
 _2026-05-07_
