@@ -232,6 +232,15 @@ public static class IrModuleFunctionExtractor
                     );
                     if (propFn is not null)
                         acc.Add(propFn);
+                    var setterFn = ConvertExtensionPropertySetter(
+                        propSymbol,
+                        propSyntax,
+                        receiver,
+                        model,
+                        originResolver
+                    );
+                    if (setterFn is not null)
+                        acc.Add(setterFn);
                     break;
             }
         }
@@ -331,6 +340,57 @@ public static class IrModuleFunctionExtractor
             Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
             Parameters: [receiver],
             ReturnType: IrTypeRefMapper.Map(prop.Type, originResolver),
+            Body: body,
+            Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
+            TypeParameters: null,
+            Attributes: IrAttributeExtractor.Extract(prop)
+        );
+    }
+
+    /// <summary>
+    /// Emits the <c>$set</c> companion for a C# 14 extension-block property
+    /// when the source declares a setter. The helper takes the receiver
+    /// followed by the new value (the implicit C# <c>value</c> parameter)
+    /// so call sites can rewrite <c>receiver.Prop = v</c> to
+    /// <c>prop$set(receiver, v)</c>. Auto-properties (no body) are skipped
+    /// because the receiver has no backing field to mutate in the
+    /// transpiled module form.
+    /// </summary>
+    private static IrModuleFunction? ConvertExtensionPropertySetter(
+        IPropertySymbol prop,
+        PropertyDeclarationSyntax syntax,
+        IrParameter receiver,
+        SemanticModel model,
+        IrTypeOriginResolver? originResolver
+    )
+    {
+        if (prop.SetMethod is null)
+            return null;
+        var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
+            a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SetAccessorDeclaration)
+        );
+        if (setterSyntax is null)
+            return null;
+        // Skip auto-set without a body — there's no backing field to mutate.
+        if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
+            return null;
+
+        var extractor = new IrStatementExtractor(model, originResolver);
+        var body = extractor.ExtractBody(
+            setterSyntax.Body,
+            setterSyntax.ExpressionBody,
+            isVoid: true
+        );
+
+        var valueParameter = new IrParameter(
+            "value",
+            IrTypeRefMapper.Map(prop.Type, originResolver)
+        );
+
+        return new IrModuleFunction(
+            Name: prop.Name + IrExtensionConventions.PropertySetterSuffix,
+            Parameters: [receiver, valueParameter],
+            ReturnType: new IrPrimitiveTypeRef(IrPrimitive.Void),
             Body: body,
             Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
             TypeParameters: null,

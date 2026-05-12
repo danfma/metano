@@ -67,6 +67,15 @@ public sealed class IrExpressionExtractor
     /// </summary>
     private readonly IReadOnlyDictionary<ISymbol, IrExpression>? _inlineParameterSubs;
 
+    /// <summary>
+    /// Counter for synthesizing fresh <c>receiver$temp</c> binding
+    /// names in <c>BuildReceiverOnceSetter</c>. Each nested
+    /// <see cref="Metano.Compiler.IR.IrLetExpression"/> gets a unique
+    /// suffix so an inner setter cannot accidentally shadow an outer
+    /// one (cheap defense against future Stage 4 indexer reuse).
+    /// </summary>
+    private int _receiverTempCounter;
+
     public IrExpressionExtractor(
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver = null,
@@ -289,11 +298,18 @@ public sealed class IrExpressionExtractor
         if (_semantic.GetSymbolInfo(assign.Left).Symbol is IEventSymbol)
             return null;
 
-        var memberWrite = new IrBinaryExpression(
-            rebound,
-            MapAssignmentOp(assign.Kind()),
-            Extract(assign.Right)
-        );
+        // Null-conditional extension property write — the rebound LHS is
+        // a member access whose symbol resolves to an extension property
+        // with a setter. Build the helper call directly so the inner
+        // assignment also benefits from the `$set` lowering; the
+        // surrounding null check stays exactly as the legacy form.
+        var memberWrite =
+            TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
+            ?? new IrBinaryExpression(
+                rebound,
+                MapAssignmentOp(assign.Kind()),
+                Extract(assign.Right)
+            );
         return new IrBinaryExpression(
             new IrBinaryExpression(
                 receiver,
@@ -303,6 +319,113 @@ public sealed class IrExpressionExtractor
             IrBinaryOp.LogicalAnd,
             memberWrite
         );
+    }
+
+    /// <summary>
+    /// Mirror of <see cref="BuildExtensionPropertyAssignment"/> for the
+    /// inner write of a null-conditional assignment. The receiver was
+    /// already validated to be side-effect free by
+    /// <see cref="IsSimpleReceiver"/>, so we can pass it directly into the
+    /// helper call without an additional let-binding. Returns
+    /// <c>null</c> when the LHS isn't an extension property — the caller
+    /// falls back to the legacy member-write shape.
+    /// </summary>
+    private IrExpression? TryBuildExtensionPropertyAssignmentForNullConditional(
+        IrExpression receiver,
+        AssignmentExpressionSyntax assign
+    )
+    {
+        if (assign.Left is not MemberBindingExpressionSyntax mb)
+            return null;
+        if (_semantic.GetSymbolInfo(mb).Symbol is not IPropertySymbol prop)
+            return null;
+        // The conditional binding has no syntactic MemberAccessExpression
+        // we can hand to `TryResolveExtensionPropertyLowering` — synthesize
+        // the lookup from the property symbol directly.
+        var setterLowering = TryResolveExtensionPropertyLoweringForSymbol(prop);
+        if (setterLowering is null)
+            return null;
+
+        var setterName = prop.Name + IrExtensionConventions.PropertySetterSuffix;
+        var emittedSetterName = ResolvePropertySetterEmittedName(prop);
+        var getterName = setterLowering.Value.HelperName;
+        var emittedGetterName = setterLowering.Value.EmittedName;
+        var rhs = Extract(assign.Right);
+        var compoundOp = TryMapCompoundAssignmentToBinary(assign.Kind());
+
+        IrExpression newValue;
+        if (compoundOp is null)
+        {
+            newValue = rhs;
+        }
+        else
+        {
+            newValue = new IrBinaryExpression(
+                BuildExtensionHelperCall(
+                    setterLowering.Value.HelperContainer,
+                    getterName,
+                    emittedGetterName,
+                    [new IrArgument(receiver)],
+                    typeArguments: null
+                ),
+                compoundOp.Value,
+                rhs
+            );
+        }
+
+        return BuildExtensionHelperCall(
+            setterLowering.Value.HelperContainer,
+            setterName,
+            emittedSetterName,
+            [new IrArgument(receiver), new IrArgument(newValue)],
+            typeArguments: null
+        );
+    }
+
+    /// <summary>
+    /// Resolves the property-getter lowering metadata for a property
+    /// symbol without a syntactic <see cref="MemberAccessExpressionSyntax"/>
+    /// receiver — needed for null-conditional writes where the LHS is a
+    /// <see cref="MemberBindingExpressionSyntax"/>. Replicates the type
+    /// guards from <see cref="TryResolveExtensionPropertyLowering"/>.
+    /// </summary>
+    private ExtensionPropertyLowering? TryResolveExtensionPropertyLoweringForSymbol(
+        IPropertySymbol prop
+    )
+    {
+        if (prop.IsIndexer)
+            return null;
+        var containing = prop.ContainingType;
+        if (containing is null)
+            return null;
+
+        if (
+            string.IsNullOrEmpty(containing.Name)
+            && containing.ContainingType is { IsStatic: true } parentStatic
+            && IsTranspilableExtensionContainer(parentStatic)
+        )
+        {
+            return new ExtensionPropertyLowering(
+                prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+                ResolvePropertyEmittedName(prop),
+                parentStatic
+            );
+        }
+
+        if (
+            containing.IsStatic
+            && prop.Parameters.Length > 0
+            && IsTranspilableExtensionContainer(containing)
+        )
+        {
+            return new ExtensionPropertyLowering(
+                prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+                ResolvePropertyEmittedName(prop),
+                containing
+            );
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1034,6 +1157,26 @@ public sealed class IrExpressionExtractor
 
     private IrExpression ExtractAssignment(AssignmentExpressionSyntax assign)
     {
+        // Extension property assignment (`receiver.Prop = value` or any
+        // compound form) — rewrite to a helper call against the property's
+        // `$set` companion. Compound operators (`+=`, `++` via this path is
+        // never reached but `+=` is) and the simple assign use the same
+        // lowering shape; the receiver-once IR (IrLetExpression) protects
+        // impure receivers from double evaluation.
+        if (
+            assign.Left is MemberAccessExpressionSyntax setterMember
+            && _semantic.GetSymbolInfo(setterMember).Symbol is IPropertySymbol setterProp
+            && TryResolveExtensionPropertyLowering(setterProp, setterMember) is { } setterLowering
+        )
+        {
+            return BuildExtensionPropertyAssignment(
+                setterMember,
+                setterProp,
+                setterLowering,
+                assign
+            );
+        }
+
         // `x += y` where the compound operator resolves to a user-defined
         // operator method — rewrite to `x = x.$add(y)`. The semantic model
         // exposes the operator on the assignment expression itself.
@@ -1113,6 +1256,20 @@ public sealed class IrExpressionExtractor
             var operandType = _semantic.GetTypeInfo(operand).Type;
             if (operandType?.SpecialType == SpecialType.System_Decimal)
                 return new IrCallExpression(new IrMemberAccess(Extract(operand), "neg"), []);
+        }
+        // `receiver.Prop++` against an extension property rewrites to a
+        // let-bound setter call so the receiver evaluates exactly once.
+        // Prefix vs postfix is collapsed to the same shape — the MVP only
+        // covers the statement-position use, which doesn't observe the
+        // pre/post value distinction.
+        if (
+            (op is IrUnaryOp.Increment or IrUnaryOp.Decrement)
+            && operand is MemberAccessExpressionSyntax incMember
+            && _semantic.GetSymbolInfo(incMember).Symbol is IPropertySymbol incProp
+            && TryResolveExtensionPropertyLowering(incProp, incMember) is { } incLowering
+        )
+        {
+            return BuildExtensionPropertyIncrement(incMember, incProp, incLowering, op);
         }
         return new IrUnaryExpression(op, Extract(operand), isPrefix);
     }
@@ -2618,6 +2775,194 @@ public sealed class IrExpressionExtractor
             typeArguments,
             origin
         );
+    }
+
+    /// <summary>
+    /// Builds the call-site IR for <c>receiver.Prop = value</c> (and every
+    /// compound-assignment variant) against an extension property whose
+    /// host has a <c>$set</c> companion. Simple assignment lowers to a
+    /// single <c>prop$set(receiver, value)</c> call. Compound forms read
+    /// the current value via <c>prop$get(receiver)</c>, combine it with
+    /// the right-hand side using the equivalent binary operator, and feed
+    /// the result back into the setter. The receiver is shared with a
+    /// let-binding (IIFE in TS) so impure receivers — method results,
+    /// chained property reads — evaluate exactly once, matching the
+    /// observable behavior of the source. Simple identifiers / <c>this</c>
+    /// receivers skip the binding to keep the emitted code compact.
+    /// </summary>
+    private IrExpression BuildExtensionPropertyAssignment(
+        MemberAccessExpressionSyntax targetSyntax,
+        IPropertySymbol property,
+        ExtensionPropertyLowering setterLowering,
+        AssignmentExpressionSyntax assign
+    )
+    {
+        var setterName = property.Name + IrExtensionConventions.PropertySetterSuffix;
+        var emittedSetterName = ResolvePropertySetterEmittedName(property);
+        var getterName = setterLowering.HelperName;
+        var emittedGetterName = setterLowering.EmittedName;
+
+        var receiver = Extract(targetSyntax.Expression);
+        var rhs = Extract(assign.Right);
+        var compoundOp = TryMapCompoundAssignmentToBinary(assign.Kind());
+
+        if (compoundOp is null)
+        {
+            return BuildExtensionHelperCall(
+                setterLowering.HelperContainer,
+                setterName,
+                emittedSetterName,
+                [new IrArgument(receiver), new IrArgument(rhs)],
+                typeArguments: null
+            );
+        }
+
+        return BuildReceiverOnceSetter(
+            setterLowering.HelperContainer,
+            receiver,
+            getterName,
+            emittedGetterName,
+            setterName,
+            emittedSetterName,
+            recv => new IrBinaryExpression(
+                BuildExtensionHelperCall(
+                    setterLowering.HelperContainer,
+                    getterName,
+                    emittedGetterName,
+                    [new IrArgument(recv)],
+                    typeArguments: null
+                ),
+                compoundOp.Value,
+                rhs
+            )
+        );
+    }
+
+    /// <summary>
+    /// Lowers <c>receiver.Prop++</c> / <c>receiver.Prop--</c> against an
+    /// extension property to a let-bound setter-call shape so the
+    /// receiver evaluates exactly once. The new value is computed as
+    /// <c>prop$get(r) ± 1</c>, matching C# increment semantics for the
+    /// numeric extension properties the MVP covers.
+    /// </summary>
+    private IrExpression BuildExtensionPropertyIncrement(
+        MemberAccessExpressionSyntax targetSyntax,
+        IPropertySymbol property,
+        ExtensionPropertyLowering propLowering,
+        IrUnaryOp op
+    )
+    {
+        if (property.SetMethod is null)
+            return new IrUnsupportedExpression("ExtensionPropertyIncrementWithoutSetter");
+
+        var setterName = property.Name + IrExtensionConventions.PropertySetterSuffix;
+        var emittedSetterName = ResolvePropertySetterEmittedName(property);
+        var getterName = propLowering.HelperName;
+        var emittedGetterName = propLowering.EmittedName;
+        var binaryOp = op == IrUnaryOp.Increment ? IrBinaryOp.Add : IrBinaryOp.Subtract;
+        var receiver = Extract(targetSyntax.Expression);
+
+        return BuildReceiverOnceSetter(
+            propLowering.HelperContainer,
+            receiver,
+            getterName,
+            emittedGetterName,
+            setterName,
+            emittedSetterName,
+            recv => new IrBinaryExpression(
+                BuildExtensionHelperCall(
+                    propLowering.HelperContainer,
+                    getterName,
+                    emittedGetterName,
+                    [new IrArgument(recv)],
+                    typeArguments: null
+                ),
+                binaryOp,
+                new IrLiteral(1, IrLiteralKind.Int32)
+            )
+        );
+    }
+
+    /// <summary>
+    /// Wraps a setter call whose new-value expression references the
+    /// receiver more than once in an <see cref="IrLetExpression"/>, but
+    /// only when the receiver is impure. Simple identifiers / <c>this</c>
+    /// skip the binding to keep the output close to the source.
+    /// </summary>
+    private IrExpression BuildReceiverOnceSetter(
+        INamedTypeSymbol helperContainer,
+        IrExpression receiver,
+        string getterName,
+        string? emittedGetterName,
+        string setterName,
+        string? emittedSetterName,
+        Func<IrExpression, IrExpression> buildNewValue
+    )
+    {
+        if (IsSimpleReceiver(receiver))
+        {
+            return BuildExtensionHelperCall(
+                helperContainer,
+                setterName,
+                emittedSetterName,
+                [new IrArgument(receiver), new IrArgument(buildNewValue(receiver))],
+                typeArguments: null
+            );
+        }
+
+        // Fresh binding name per call site so nested setter rewrites
+        // (a setter whose new-value expression triggers another
+        // setter on a different impure receiver) don't shadow each
+        // other under IIFE scoping.
+        var tempName = $"receiver$temp${_receiverTempCounter++}";
+        var tempRef = new IrIdentifier(tempName);
+        var setterCall = BuildExtensionHelperCall(
+            helperContainer,
+            setterName,
+            emittedSetterName,
+            [new IrArgument(tempRef), new IrArgument(buildNewValue(tempRef))],
+            typeArguments: null
+        );
+        return new IrLetExpression(tempName, receiver, setterCall);
+    }
+
+    /// <summary>
+    /// Maps the compound assignment kinds (<c>+=</c>, <c>-=</c>, …) to
+    /// the equivalent binary operator so a setter rewrite can synthesize
+    /// the read-modify-write expression. Returns <c>null</c> for plain
+    /// <c>=</c> (no read needed) and for forms that don't have a clean
+    /// binary equivalent (currently <c>??=</c>, which the MVP doesn't
+    /// support against extension setters).
+    /// </summary>
+    private static IrBinaryOp? TryMapCompoundAssignmentToBinary(SyntaxKind kind) =>
+        kind switch
+        {
+            SyntaxKind.AddAssignmentExpression => IrBinaryOp.Add,
+            SyntaxKind.SubtractAssignmentExpression => IrBinaryOp.Subtract,
+            SyntaxKind.MultiplyAssignmentExpression => IrBinaryOp.Multiply,
+            SyntaxKind.DivideAssignmentExpression => IrBinaryOp.Divide,
+            SyntaxKind.ModuloAssignmentExpression => IrBinaryOp.Modulo,
+            SyntaxKind.AndAssignmentExpression => IrBinaryOp.BitwiseAnd,
+            SyntaxKind.OrAssignmentExpression => IrBinaryOp.BitwiseOr,
+            SyntaxKind.ExclusiveOrAssignmentExpression => IrBinaryOp.BitwiseXor,
+            SyntaxKind.LeftShiftAssignmentExpression => IrBinaryOp.LeftShift,
+            SyntaxKind.RightShiftAssignmentExpression => IrBinaryOp.RightShift,
+            SyntaxKind.UnsignedRightShiftAssignmentExpression => IrBinaryOp.UnsignedRightShift,
+            _ => null,
+        };
+
+    /// <summary>
+    /// Per-target <c>[Name]</c> override for the setter companion of an
+    /// extension property — mirrors <see cref="ResolvePropertyEmittedName"/>
+    /// but appends the setter suffix so the call site matches the helper
+    /// emitted by <see cref="IrModuleFunctionExtractor"/>.
+    /// </summary>
+    private string? ResolvePropertySetterEmittedName(IPropertySymbol property)
+    {
+        var overrideName = SymbolHelper.GetNameOverride(property, _target);
+        return overrideName is null
+            ? null
+            : overrideName + IrExtensionConventions.PropertySetterSuffix;
     }
 
     private readonly record struct ExtensionCallLowering(

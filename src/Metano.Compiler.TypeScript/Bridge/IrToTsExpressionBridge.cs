@@ -88,6 +88,7 @@ public static class IrToTsExpressionBridge
                 Array.Empty<TsExpression>()
             ),
             IrLinqChain chain => MapLinqChain(chain, bclRegistry),
+            IrLetExpression let => MapLetExpression(let, bclRegistry),
             IrUnsupportedExpression u => new TsIdentifier(
                 $"/* TODO: unsupported IR expression {u.Kind} */"
             ),
@@ -817,6 +818,26 @@ public static class IrToTsExpressionBridge
         IrToTsTypeMapper.Map(targetType) is TsNamedType named
             ? new TsBinaryExpression(value, "instanceof", new TsIdentifier(named.Name))
             : new TsIdentifier("/* TODO: non-named type pattern */");
+
+    /// <summary>
+    /// Lowers <see cref="IrLetExpression"/> to an IIFE: the binding becomes
+    /// the arrow's lone parameter and the value supplies the single
+    /// argument. The arrow's body is a one-statement <c>return</c> of the
+    /// body expression so the let-binding stays a pure expression at the
+    /// call site (compound-assignment, increment, null-conditional writes
+    /// in expression position all need an expression, not a statement).
+    /// </summary>
+    private static TsExpression MapLetExpression(
+        IrLetExpression let,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var arrow = new TsArrowFunction(
+            [new TsParameter(let.Name, null)],
+            [new TsReturnStatement(Map(let.Body, bclRegistry))]
+        );
+        return new TsCallExpression(new TsParenthesized(arrow), [Map(let.Value, bclRegistry)]);
+    }
 
     /// <summary>
     /// Lowers a C# <c>switch</c> expression. When the arm chain ends with a

@@ -189,6 +189,17 @@ public sealed class TypeScriptTransformContext(
                     firstClaim,
                     reportDiagnostic
                 );
+                if (prop.SetMethod is not null)
+                {
+                    Register(
+                        ResolvePropertySetterHelperName(prop),
+                        prop,
+                        ownerRef,
+                        map,
+                        firstClaim,
+                        reportDiagnostic
+                    );
+                }
                 break;
         }
     }
@@ -208,6 +219,12 @@ public sealed class TypeScriptTransformContext(
             SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
             ?? TypeScriptNaming.ToCamelCase(property.Name)
         ) + IrExtensionConventions.PropertyGetterSuffix;
+
+    private static string ResolvePropertySetterHelperName(IPropertySymbol property) =>
+        (
+            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
+            ?? TypeScriptNaming.ToCamelCase(property.Name)
+        ) + IrExtensionConventions.PropertySetterSuffix;
 
     /// <summary>
     /// Records <paramref name="ownerRef"/> as the import target for

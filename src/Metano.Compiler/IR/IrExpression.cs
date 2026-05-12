@@ -398,6 +398,22 @@ public sealed record IrWithAssignment(string MemberName, IrExpression Value);
 /// </summary>
 public sealed record IrThrowExpression(IrExpression Expression) : IrExpression;
 
+// -- Let binding --
+
+/// <summary>
+/// Evaluates <see cref="Value"/> once, binds it to <see cref="Name"/>, and
+/// returns <see cref="Body"/> with that binding in scope. Used to hoist a
+/// shared receiver so a rewrite that needs to reference it more than once
+/// (extension property compound assignment, increment/decrement,
+/// null-conditional writes) can do so without re-evaluating the source
+/// expression. Backends lower the node according to their idioms — the
+/// TypeScript bridge emits an IIFE
+/// (<c>((Name) =&gt; Body)(Value)</c>) so the binding scopes only the
+/// body expression and the surrounding statement remains an expression.
+/// </summary>
+public sealed record IrLetExpression(string Name, IrExpression Value, IrExpression Body)
+    : IrExpression;
+
 // -- Runtime helpers --
 
 /// <summary>
