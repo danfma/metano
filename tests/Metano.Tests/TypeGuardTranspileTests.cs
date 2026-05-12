@@ -787,4 +787,150 @@ public class TypeGuardTranspileTests
         await Assert.That(output).DoesNotContain("Node | Leaf");
         await Assert.That(output).DoesNotContain("Leaf | Node");
     }
+
+    // ─── [StrictUnionGuard] registry dispatch ────────────────
+
+    [Test]
+    public async Task StrictUnion_RegistersVariantGuard()
+    {
+        // Each variant module side-effect-registers its guard on the
+        // runtime registry at load. The base guard then dispatches via
+        // `getUnionGuard(v.kind)` without value-importing variants
+        // (which would form an ESM cycle).
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard, StrictUnionGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var circle = result["circle.ts"];
+        await Assert.That(circle).Contains("registerUnionGuard(\"Circle\", isCircle)");
+        var square = result["square.ts"];
+        await Assert.That(square).Contains("registerUnionGuard(\"Square\", isSquare)");
+        // Registration ships from metano-runtime — single bundled import.
+        await Assert.That(circle).Contains("registerUnionGuard");
+        await Assert.That(circle).Contains("from \"metano-runtime\"");
+    }
+
+    [Test]
+    public async Task StrictUnion_BaseGuard_DispatchesToRegistry()
+    {
+        // Base file looks the variant guard up via the runtime registry.
+        // No variant import — the registry is the sole runtime link, so
+        // the value-import graph between base and variants stays
+        // acyclic.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard, StrictUnionGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).Contains("getUnionGuard(v.kind)");
+        await Assert.That(output).Contains("guard !== undefined");
+        // ESM-cycle guard: the base must not value-import variant guards.
+        await Assert.That(output).DoesNotContain("import { isCircle");
+        await Assert.That(output).DoesNotContain("import { isSquare");
+    }
+
+    [Test]
+    public async Task StrictUnion_NoVariantRegistered_FallsBackToDiscriminatorOnly()
+    {
+        // When the registry has no entry (variant module not loaded),
+        // the strict guard falls back to `true` — keeping it at least
+        // as permissive as the legacy discriminator-only narrow. This
+        // is the contract that makes opting in safe: strict is never
+        // *more* lenient than non-strict (it rejects unknown
+        // discriminators), but also never *more* restrictive than the
+        // old behavior when variants are missing.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard, StrictUnionGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        // The conditional shape `guard !== undefined ? guard(value) : true`
+        // is the explicit fallback: missing registry entry → permissive.
+        await Assert.That(output).Contains("guard !== undefined ? guard(value) : true");
+    }
+
+    [Test]
+    public async Task StrictUnion_DefaultPath_DiscriminatorOnly_Unchanged()
+    {
+        // Default path (no [StrictUnionGuard]) must keep the legacy
+        // discriminator-only emission untouched — no registry lookup,
+        // no fallback branch.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).DoesNotContain("getUnionGuard");
+        await Assert.That(output).DoesNotContain("registerUnionGuard");
+        var circle = result["circle.ts"];
+        await Assert.That(circle).DoesNotContain("registerUnionGuard");
+    }
 }

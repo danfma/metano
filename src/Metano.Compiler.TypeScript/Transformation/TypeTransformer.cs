@@ -586,8 +586,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // boundary) or a branch (conditional handling).
         if (SymbolHelper.HasGenerateGuard(type))
         {
-            foreach (var guard in new TypeGuardBuilder(Context).Generate(type))
+            var guardBuilder = new TypeGuardBuilder(Context);
+            foreach (var guard in guardBuilder.Generate(type))
                 sink.Add(guard);
+
+            // Strict-union variant: emit a top-level
+            // `registerUnionGuard("Variant", isVariant)` side-effect so
+            // the abstract base's dispatch picks the variant up at
+            // module load. Skipped silently when the type isn't part of
+            // a [StrictUnionGuard] hierarchy.
+            var registration = guardBuilder.TryBuildVariantRegistration(type);
+            if (registration is not null)
+                sink.Add(registration);
         }
 
         // Process nested types — emit a companion namespace with the nested members.

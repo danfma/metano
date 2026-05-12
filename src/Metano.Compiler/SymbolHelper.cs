@@ -460,6 +460,25 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// Reads <c>[StrictUnionGuard]</c> from the
+    /// <c>Metano.Annotations.TypeScript</c> namespace. When present on
+    /// a <c>[GenerateGuard]</c> abstract base, the emitted guard
+    /// dispatches per-variant shape validation via the runtime
+    /// <c>UnionGuardRegistry</c> instead of relying on the
+    /// discriminator-only narrow. Namespace-qualified match so
+    /// unrelated <c>[StrictUnionGuard]</c> attributes from other
+    /// libraries cannot be mistaken for the Metano variant.
+    /// </summary>
+    public static bool HasStrictUnionGuard(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is ("StrictUnionGuardAttribute" or "StrictUnionGuard")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
+                    == "Metano.Annotations.TypeScript"
+            );
+
+    /// <summary>
     /// Reads <c>[Discriminator("FieldName")]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. Returns the
     /// discriminant field name (original C# casing) when the attribute

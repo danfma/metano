@@ -289,6 +289,8 @@ public sealed class ImportCollector(
                         or "unknown[]"
                         or "delegateAdd"
                         or "delegateRemove"
+                        or "getUnionGuard"
+                        or "registerUnionGuard"
             )
                 continue;
 
@@ -983,6 +985,16 @@ public sealed class ImportCollector(
                     // IrRuntimeRequirement through the frontend.
                     if (callId.Name == "bindReceiver")
                         runtimeHelpers.Add("bindReceiver");
+                    // `getUnionGuard` / `registerUnionGuard` ship from
+                    // `metano-runtime` and back the [StrictUnionGuard]
+                    // dispatch. Route them through the runtime-helper
+                    // bucket so the collector emits the matching
+                    // import. The walker only sees calls (base guard
+                    // looks up via `getUnionGuard(...)`; each variant
+                    // module registers via `registerUnionGuard(...)`),
+                    // so this is the right hook.
+                    if (callId.Name is "getUnionGuard" or "registerUnionGuard")
+                        runtimeHelpers.Add(callId.Name);
                 }
                 // Static method calls like Enumerable.from(...)
                 else if (

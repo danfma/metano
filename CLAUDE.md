@@ -126,7 +126,7 @@ All attributes live in the `Metano.Annotations` namespace inside the `src/Metano
 | `[Name("x")]` | Any | Overrides name in TS output |
 | `[Ignore]` | Member | Omits member from output |
 | `[ExportedAsModule]` | Static class | Emits top-level functions instead of class |
-| `[GenerateGuard]` | Type | Generates `isTypeName()` type guard function |
+| `[GenerateGuard]` | Type | Generates `isTypeName()` type guard function. Pair with TS-only `[StrictUnionGuard]` on the abstract base to dispatch per-variant shape validation via the runtime `UnionGuardRegistry` (avoids the ESM cycle that would arise from value-importing variants on the base). |
 | `[ExportFromBcl]` | Assembly | Maps BCL type to JS package (with optional `Version`) |
 | `[Import]` | Type/Method | Declares external JS module dependency (with optional `Version`, `AsDefault`) |
 | `[Emit("$0.foo($1)")]` | Method | Inlines JS at call site with argument placeholders |
