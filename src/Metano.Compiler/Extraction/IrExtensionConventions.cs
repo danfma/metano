@@ -22,4 +22,16 @@ public static class IrExtensionConventions
     /// single source of truth.
     /// </summary>
     public const string PropertySetterSuffix = "$set";
+
+    /// <summary>
+    /// Default base name for an extension indexer's helpers when the source
+    /// declares no <c>[IndexerName]</c> override. Roslyn already reports
+    /// <c>"Item"</c> as the default <see cref="Microsoft.CodeAnalysis.IPropertySymbol.Name"/>;
+    /// the helper-name resolver lower-cases that to <c>item</c> so reads emit
+    /// <c>item$get(self, index)</c> and writes emit <c>item$set(self, index, value)</c>.
+    /// A custom name (<c>[IndexerName("Slot")]</c>) flows through the same
+    /// pipeline because Roslyn rewrites <c>prop.Name</c> to the overridden
+    /// value — the convention here only documents the fallback.
+    /// </summary>
+    public const string DefaultIndexerName = "Item";
 }

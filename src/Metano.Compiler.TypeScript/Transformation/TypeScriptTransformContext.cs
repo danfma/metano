@@ -201,6 +201,36 @@ public sealed class TypeScriptTransformContext(
                     );
                 }
                 break;
+
+            // Extension indexer (`extension(R r) { public T this[int i] { … } }`).
+            // Reads lower to `item$get(self, index)` and writes to
+            // `item$set(self, index, value)` — the helper base name comes
+            // from the indexer symbol's <c>Name</c> (Roslyn already rewrites
+            // it to the <c>[IndexerName]</c> override when present, default
+            // <c>"Item"</c>), so the registry keys agree with the helper
+            // names emitted by `IrModuleFunctionExtractor`.
+            case IPropertySymbol indexer
+                when indexer.DeclaredAccessibility == Accessibility.Public && indexer.IsIndexer:
+                Register(
+                    ResolvePropertyHelperName(indexer),
+                    indexer,
+                    ownerRef,
+                    map,
+                    firstClaim,
+                    reportDiagnostic
+                );
+                if (indexer.SetMethod is not null)
+                {
+                    Register(
+                        ResolvePropertySetterHelperName(indexer),
+                        indexer,
+                        ownerRef,
+                        map,
+                        firstClaim,
+                        reportDiagnostic
+                    );
+                }
+                break;
         }
     }
 

@@ -280,8 +280,153 @@ public static class IrModuleFunctionExtractor
                     if (setterFn is not null)
                         acc.Add(setterFn);
                     break;
+
+                case IndexerDeclarationSyntax indexerSyntax:
+                    var indexerSymbol = model.GetDeclaredSymbol(indexerSyntax) as IPropertySymbol;
+                    if (indexerSymbol is null)
+                        continue;
+                    if (indexerSymbol.DeclaredAccessibility != Accessibility.Public)
+                        continue;
+                    var indexerGetter = ConvertExtensionIndexerGetter(
+                        indexerSymbol,
+                        indexerSyntax,
+                        receiver,
+                        model,
+                        originResolver
+                    );
+                    if (indexerGetter is not null)
+                        acc.Add(indexerGetter);
+                    var indexerSetter = ConvertExtensionIndexerSetter(
+                        indexerSymbol,
+                        indexerSyntax,
+                        receiver,
+                        model,
+                        originResolver
+                    );
+                    if (indexerSetter is not null)
+                        acc.Add(indexerSetter);
+                    break;
             }
         }
+    }
+
+    /// <summary>
+    /// Lowers the get accessor of a C# 14 extension indexer
+    /// (<c>extension(Bag b) { public Item this[int i] { get => …; } }</c>)
+    /// into <c>item$get(self, index)</c>. The helper's base name comes from
+    /// the property symbol's <see cref="IPropertySymbol.Name"/>, which
+    /// Roslyn already rewrites to the <c>[IndexerName]</c> override when
+    /// present (default <c>"Item"</c>).
+    /// </summary>
+    private static IrModuleFunction? ConvertExtensionIndexerGetter(
+        IPropertySymbol indexer,
+        IndexerDeclarationSyntax syntax,
+        IrParameter receiver,
+        SemanticModel model,
+        IrTypeOriginResolver? originResolver
+    )
+    {
+        var getter = indexer.GetMethod;
+        if (getter is null)
+            return null;
+        var getterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
+            a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
+        );
+
+        var extractor = new IrStatementExtractor(model, originResolver);
+        IReadOnlyList<IrStatement>? body;
+        if (syntax.ExpressionBody is not null)
+        {
+            var expr = new IrExpressionExtractor(model, originResolver).Extract(
+                syntax.ExpressionBody.Expression
+            );
+            body = [new IrReturnStatement(expr)];
+        }
+        else if (getterSyntax is not null)
+        {
+            body = extractor.ExtractBody(
+                getterSyntax.Body,
+                getterSyntax.ExpressionBody,
+                isVoid: false
+            );
+        }
+        else
+        {
+            return null;
+        }
+
+        var parameters = new List<IrParameter> { receiver };
+        parameters.AddRange(
+            indexer.Parameters.Select(p => new IrParameter(
+                p.Name,
+                IrTypeRefMapper.Map(p.Type, originResolver),
+                IsConstant: p.HasConstant()
+            ))
+        );
+
+        return new IrModuleFunction(
+            Name: indexer.Name + IrExtensionConventions.PropertyGetterSuffix,
+            Parameters: parameters,
+            ReturnType: IrTypeRefMapper.Map(indexer.Type, originResolver),
+            Body: body,
+            Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
+            TypeParameters: null,
+            Attributes: IrAttributeExtractor.Extract(indexer)
+        );
+    }
+
+    /// <summary>
+    /// Lowers the set accessor of a C# 14 extension indexer into
+    /// <c>item$set(self, index, value)</c>. Returns <c>null</c> when the
+    /// indexer is read-only or the setter has no body (no backing field to
+    /// mutate in module form — same constraint that
+    /// <see cref="ConvertExtensionPropertySetter"/> applies to extension
+    /// properties).
+    /// </summary>
+    private static IrModuleFunction? ConvertExtensionIndexerSetter(
+        IPropertySymbol indexer,
+        IndexerDeclarationSyntax syntax,
+        IrParameter receiver,
+        SemanticModel model,
+        IrTypeOriginResolver? originResolver
+    )
+    {
+        if (indexer.SetMethod is null)
+            return null;
+        var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
+            a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SetAccessorDeclaration)
+        );
+        if (setterSyntax is null)
+            return null;
+        if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
+            return null;
+
+        var extractor = new IrStatementExtractor(model, originResolver);
+        var body = extractor.ExtractBody(
+            setterSyntax.Body,
+            setterSyntax.ExpressionBody,
+            isVoid: true
+        );
+
+        var parameters = new List<IrParameter> { receiver };
+        parameters.AddRange(
+            indexer.Parameters.Select(p => new IrParameter(
+                p.Name,
+                IrTypeRefMapper.Map(p.Type, originResolver),
+                IsConstant: p.HasConstant()
+            ))
+        );
+        parameters.Add(new IrParameter("value", IrTypeRefMapper.Map(indexer.Type, originResolver)));
+
+        return new IrModuleFunction(
+            Name: indexer.Name + IrExtensionConventions.PropertySetterSuffix,
+            Parameters: parameters,
+            ReturnType: new IrPrimitiveTypeRef(IrPrimitive.Void),
+            Body: body,
+            Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
+            TypeParameters: null,
+            Attributes: IrAttributeExtractor.Extract(indexer)
+        );
     }
 
     private static IrModuleFunction ConvertExtensionMethod(

@@ -1177,6 +1177,26 @@ public sealed class IrExpressionExtractor
             );
         }
 
+        // Extension indexer assignment (`receiver[i] = value`, `+=`, etc.) —
+        // routes through the same `$set` companion / receiver-once pattern
+        // as extension properties. The index expression is also captured
+        // once for compound forms so an impure index (`xs[NextIndex()]`)
+        // doesn't fire twice.
+        if (
+            assign.Left is ElementAccessExpressionSyntax indexerLeft
+            && _semantic.GetSymbolInfo(indexerLeft).Symbol is IPropertySymbol indexerProp
+            && indexerProp.IsIndexer
+            && TryResolveExtensionIndexerLowering(indexerProp, indexerLeft) is { } indexerLowering
+        )
+        {
+            return BuildExtensionIndexerAssignment(
+                indexerLeft,
+                indexerProp,
+                indexerLowering,
+                assign
+            );
+        }
+
         // `x += y` where the compound operator resolves to a user-defined
         // operator method — rewrite to `x = x.$add(y)`. The semantic model
         // exposes the operator on the assignment expression itself.
@@ -1270,6 +1290,26 @@ public sealed class IrExpressionExtractor
         )
         {
             return BuildExtensionPropertyIncrement(incMember, incProp, incLowering, op);
+        }
+        // `receiver[i]++` against an extension indexer — same receiver-once
+        // lowering as compound assignment, with the increment expressed as
+        // `item$set(r, i, item$get(r, i) + 1)`. Statement-position only;
+        // the postfix value isn't observable in MVP scope.
+        if (
+            (op is IrUnaryOp.Increment or IrUnaryOp.Decrement)
+            && operand is ElementAccessExpressionSyntax incIndexer
+            && _semantic.GetSymbolInfo(incIndexer).Symbol is IPropertySymbol incIndexerProp
+            && incIndexerProp.IsIndexer
+            && TryResolveExtensionIndexerLowering(incIndexerProp, incIndexer)
+                is { } incIndexerLowering
+        )
+        {
+            return BuildExtensionIndexerIncrement(
+                incIndexer,
+                incIndexerProp,
+                incIndexerLowering,
+                op
+            );
         }
         return new IrUnaryExpression(op, Extract(operand), isPrefix);
     }
@@ -2499,6 +2539,20 @@ public sealed class IrExpressionExtractor
 
     private IrExpression ExtractElementAccess(ElementAccessExpressionSyntax elem)
     {
+        // Extension indexer read — `bag[i]` against a C# 14 extension
+        // indexer lowers to a flat `item$get(receiver, i)` helper call so
+        // the call site has no surviving bracket access on the receiver
+        // type. Falls through to the legacy bracket form for arrays /
+        // dictionaries / non-extension indexers.
+        if (
+            _semantic.GetSymbolInfo(elem).Symbol is IPropertySymbol indexerProp
+            && indexerProp.IsIndexer
+            && TryResolveExtensionIndexerLowering(indexerProp, elem) is { } readLowering
+        )
+        {
+            return BuildExtensionIndexerGetCall(elem, indexerProp, readLowering);
+        }
+
         var target = Extract(elem.Expression);
         // Treat the first argument as the index; multi-arg indexers are uncommon.
         var index =
@@ -2960,6 +3014,277 @@ public sealed class IrExpressionExtractor
                 new IrLiteral(1, IrLiteralKind.Int32)
             )
         );
+    }
+
+    /// <summary>
+    /// Lowers an indexer read (<c>receiver[i]</c>) against a C# 14
+    /// extension indexer into <c>item$get(receiver, i, …)</c>. Extra
+    /// arguments beyond the first index slot are forwarded verbatim so
+    /// multi-key indexers stay correctly typed at the helper.
+    /// </summary>
+    private IrExpression BuildExtensionIndexerGetCall(
+        ElementAccessExpressionSyntax targetSyntax,
+        IPropertySymbol indexer,
+        ExtensionPropertyLowering lowering
+    )
+    {
+        var arguments = new List<IrArgument>(targetSyntax.ArgumentList.Arguments.Count + 1)
+        {
+            new IrArgument(Extract(targetSyntax.Expression)),
+        };
+        foreach (var arg in targetSyntax.ArgumentList.Arguments)
+            arguments.Add(new IrArgument(Extract(arg.Expression)));
+        return BuildExtensionHelperCall(
+            lowering.HelperContainer,
+            lowering.HelperName,
+            lowering.EmittedName,
+            arguments,
+            typeArguments: null
+        );
+    }
+
+    /// <summary>
+    /// Builds the call-site IR for an extension-indexer write
+    /// (<c>receiver[i] = value</c> and every compound-assignment form).
+    /// Simple assignment lowers to <c>item$set(receiver, i, value)</c>.
+    /// Compound forms read the slot via <c>item$get</c>, combine with the
+    /// right-hand side, and feed the result back into the setter. The
+    /// receiver is shared with an <see cref="IrLetExpression"/> when it is
+    /// impure (method results, chained reads) so it evaluates exactly once,
+    /// matching C# semantics.
+    /// <para>
+    /// MVP scope mirrors Stage 2 — only the receiver is protected against
+    /// double evaluation. An impure index expression
+    /// (e.g., <c>xs[NextIndex()] += 1</c>) still appears in both the
+    /// getter and setter call positions; a follow-up may wrap the indices
+    /// in additional let-bindings if the use case shows up in practice.
+    /// </para>
+    /// </summary>
+    private IrExpression BuildExtensionIndexerAssignment(
+        ElementAccessExpressionSyntax targetSyntax,
+        IPropertySymbol indexer,
+        ExtensionPropertyLowering getterLowering,
+        AssignmentExpressionSyntax assign
+    )
+    {
+        var setterName = indexer.Name + IrExtensionConventions.PropertySetterSuffix;
+        var emittedSetterName = ResolvePropertySetterEmittedName(indexer);
+        var getterName = getterLowering.HelperName;
+        var emittedGetterName = getterLowering.EmittedName;
+
+        var receiver = Extract(targetSyntax.Expression);
+        var indexArgs = targetSyntax
+            .ArgumentList.Arguments.Select(a => Extract(a.Expression))
+            .ToList();
+        var rhs = Extract(assign.Right);
+        var compoundOp = TryMapCompoundAssignmentToBinary(assign.Kind());
+
+        if (compoundOp is null)
+        {
+            var args = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(receiver) };
+            foreach (var idx in indexArgs)
+                args.Add(new IrArgument(idx));
+            args.Add(new IrArgument(rhs));
+            return BuildExtensionHelperCall(
+                getterLowering.HelperContainer,
+                setterName,
+                emittedSetterName,
+                args,
+                typeArguments: null
+            );
+        }
+
+        return BuildReceiverOnceIndexerSetter(
+            getterLowering.HelperContainer,
+            receiver,
+            indexArgs,
+            getterName,
+            emittedGetterName,
+            setterName,
+            emittedSetterName,
+            (recv, idxRefs) =>
+                new IrBinaryExpression(
+                    BuildExtensionIndexerHelperCall(
+                        getterLowering.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        recv,
+                        idxRefs
+                    ),
+                    compoundOp.Value,
+                    rhs
+                )
+        );
+    }
+
+    /// <summary>
+    /// Lowers <c>receiver[i]++</c> / <c>receiver[i]--</c> against an
+    /// extension indexer to a let-bound setter-call shape so the receiver
+    /// evaluates exactly once. The new slot value is computed as
+    /// <c>item$get(r, i) ± 1</c>. Statement-position only — the post/pre
+    /// value distinction is out of MVP scope.
+    /// </summary>
+    private IrExpression BuildExtensionIndexerIncrement(
+        ElementAccessExpressionSyntax targetSyntax,
+        IPropertySymbol indexer,
+        ExtensionPropertyLowering lowering,
+        IrUnaryOp op
+    )
+    {
+        if (indexer.SetMethod is null)
+            return new IrUnsupportedExpression("ExtensionIndexerIncrementWithoutSetter");
+
+        var setterName = indexer.Name + IrExtensionConventions.PropertySetterSuffix;
+        var emittedSetterName = ResolvePropertySetterEmittedName(indexer);
+        var getterName = lowering.HelperName;
+        var emittedGetterName = lowering.EmittedName;
+        var binaryOp = op == IrUnaryOp.Increment ? IrBinaryOp.Add : IrBinaryOp.Subtract;
+        var receiver = Extract(targetSyntax.Expression);
+        var indexArgs = targetSyntax
+            .ArgumentList.Arguments.Select(a => Extract(a.Expression))
+            .ToList();
+
+        return BuildReceiverOnceIndexerSetter(
+            lowering.HelperContainer,
+            receiver,
+            indexArgs,
+            getterName,
+            emittedGetterName,
+            setterName,
+            emittedSetterName,
+            (recv, idxRefs) =>
+                new IrBinaryExpression(
+                    BuildExtensionIndexerHelperCall(
+                        lowering.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        recv,
+                        idxRefs
+                    ),
+                    binaryOp,
+                    new IrLiteral(1, IrLiteralKind.Int32)
+                )
+        );
+    }
+
+    /// <summary>
+    /// Variant of <see cref="BuildReceiverOnceSetter"/> tailored for
+    /// indexers: the new-value callback receives both the receiver
+    /// reference and the (already evaluated) index argument list so the
+    /// caller can plug them into a getter sub-call without re-evaluating
+    /// the original syntax. Index expressions are captured into the
+    /// surrounding scope by the caller — this method only protects the
+    /// receiver.
+    /// </summary>
+    private IrExpression BuildReceiverOnceIndexerSetter(
+        INamedTypeSymbol helperContainer,
+        IrExpression receiver,
+        IReadOnlyList<IrExpression> indexArgs,
+        string getterName,
+        string? emittedGetterName,
+        string setterName,
+        string? emittedSetterName,
+        Func<IrExpression, IReadOnlyList<IrExpression>, IrExpression> buildNewValue
+    )
+    {
+        if (IsSimpleReceiver(receiver))
+        {
+            var setterArgs = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(receiver) };
+            foreach (var idx in indexArgs)
+                setterArgs.Add(new IrArgument(idx));
+            setterArgs.Add(new IrArgument(buildNewValue(receiver, indexArgs)));
+            return BuildExtensionHelperCall(
+                helperContainer,
+                setterName,
+                emittedSetterName,
+                setterArgs,
+                typeArguments: null
+            );
+        }
+
+        var tempName = $"receiver$temp${_receiverTempCounter++}";
+        var tempRef = new IrIdentifier(tempName);
+        var args = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(tempRef) };
+        foreach (var idx in indexArgs)
+            args.Add(new IrArgument(idx));
+        args.Add(new IrArgument(buildNewValue(tempRef, indexArgs)));
+        var setterCall = BuildExtensionHelperCall(
+            helperContainer,
+            setterName,
+            emittedSetterName,
+            args,
+            typeArguments: null
+        );
+        return new IrLetExpression(tempName, receiver, setterCall);
+    }
+
+    /// <summary>
+    /// Convenience wrapper that builds an <c>item$get(receiver, …)</c> call
+    /// from a receiver expression and the already-extracted index argument
+    /// list, mirroring the shape <see cref="BuildExtensionHelperCall"/>
+    /// expects.
+    /// </summary>
+    private static IrExpression BuildExtensionIndexerHelperCall(
+        INamedTypeSymbol helperContainer,
+        string helperName,
+        string? emittedName,
+        IrExpression receiver,
+        IReadOnlyList<IrExpression> indexArgs
+    )
+    {
+        var args = new List<IrArgument>(indexArgs.Count + 1) { new IrArgument(receiver) };
+        foreach (var idx in indexArgs)
+            args.Add(new IrArgument(idx));
+        return BuildExtensionHelperCall(
+            helperContainer,
+            helperName,
+            emittedName,
+            args,
+            typeArguments: null
+        );
+    }
+
+    /// <summary>
+    /// Resolves the helper-emission metadata for an extension indexer
+    /// referenced at a call site. Mirrors
+    /// <see cref="TryResolveExtensionPropertyLowering"/> but accepts an
+    /// <see cref="ElementAccessExpressionSyntax"/> receiver and skips the
+    /// non-indexer guard. Reuses <see cref="ExtensionPropertyLowering"/>
+    /// because the call-site contract is identical: a static helper on the
+    /// extension container, keyed by the indexer's <c>Name</c>
+    /// (Roslyn substitutes <c>[IndexerName]</c> overrides into the symbol
+    /// name, so no extra attribute read is required).
+    /// </summary>
+    private ExtensionPropertyLowering? TryResolveExtensionIndexerLowering(
+        IPropertySymbol indexer,
+        ElementAccessExpressionSyntax access
+    )
+    {
+        if (!indexer.IsIndexer)
+            return null;
+        var containing = indexer.ContainingType;
+        if (containing is null)
+            return null;
+
+        // C# 14 extension block indexer — ContainingType is the synthetic
+        // anonymous type Roslyn manufactures inside `extension(R r) { … }`.
+        if (
+            string.IsNullOrEmpty(containing.Name)
+            && containing.ContainingType is { IsStatic: true } parentStatic
+            && IsTranspilableExtensionContainer(parentStatic)
+        )
+        {
+            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            if (receiverSymbol is INamedTypeSymbol)
+                return null;
+            return new ExtensionPropertyLowering(
+                indexer.Name + IrExtensionConventions.PropertyGetterSuffix,
+                ResolvePropertyEmittedName(indexer),
+                parentStatic
+            );
+        }
+
+        return null;
     }
 
     /// <summary>
