@@ -52,11 +52,12 @@ export function readyForReview(issues: Issue[], limit: number): Issue[] {
     issues,
     where(
       (issue: Issue) =>
-        issue.status === IssueStatus.InProgress || issue.status === IssueStatus.InReview,
-    ),
-    where(
-      (issue: Issue) =>
-        issue.priority === IssuePriority.High || issue.priority === IssuePriority.Urgent,
+        ((issue: Issue) =>
+          issue.status === IssueStatus.InProgress || issue.status === IssueStatus.InReview)(
+          issue,
+        ) &&
+        ((issue: Issue) =>
+          issue.priority === IssuePriority.High || issue.priority === IssuePriority.Urgent)(issue),
     ),
     take(limit),
     toArray(),
