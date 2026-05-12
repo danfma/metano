@@ -212,9 +212,27 @@ public static class IrModuleFunctionExtractor
                         continue;
                     if (methodSymbol.DeclaredAccessibility != Accessibility.Public)
                         continue;
-                    acc.Add(
-                        ConvertExtensionMethod(methodSymbol, receiver, originResolver, compilation)
-                    );
+                    // Static extension members ignore the receiver entirely —
+                    // emit them as plain module functions so call sites can
+                    // dispatch via `Type.Member(args)` without a phantom
+                    // first argument.
+                    if (methodSymbol.IsStatic)
+                    {
+                        acc.Add(
+                            ConvertStaticExtensionMethod(methodSymbol, originResolver, compilation)
+                        );
+                    }
+                    else
+                    {
+                        acc.Add(
+                            ConvertExtensionMethod(
+                                methodSymbol,
+                                receiver,
+                                originResolver,
+                                compilation
+                            )
+                        );
+                    }
                     break;
 
                 case PropertyDeclarationSyntax propSyntax:
@@ -223,6 +241,26 @@ public static class IrModuleFunctionExtractor
                         continue;
                     if (propSymbol.DeclaredAccessibility != Accessibility.Public)
                         continue;
+                    if (propSymbol.IsStatic)
+                    {
+                        var staticGetterFn = ConvertStaticExtensionProperty(
+                            propSymbol,
+                            propSyntax,
+                            model,
+                            originResolver
+                        );
+                        if (staticGetterFn is not null)
+                            acc.Add(staticGetterFn);
+                        var staticSetterFn = ConvertStaticExtensionPropertySetter(
+                            propSymbol,
+                            propSyntax,
+                            model,
+                            originResolver
+                        );
+                        if (staticSetterFn is not null)
+                            acc.Add(staticSetterFn);
+                        break;
+                    }
                     var propFn = ConvertExtensionProperty(
                         propSymbol,
                         propSyntax,
@@ -390,6 +428,165 @@ public static class IrModuleFunctionExtractor
         return new IrModuleFunction(
             Name: prop.Name + IrExtensionConventions.PropertySetterSuffix,
             Parameters: [receiver, valueParameter],
+            ReturnType: new IrPrimitiveTypeRef(IrPrimitive.Void),
+            Body: body,
+            Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
+            TypeParameters: null,
+            Attributes: IrAttributeExtractor.Extract(prop)
+        );
+    }
+
+    /// <summary>
+    /// C# 14 extension blocks may declare <c>static</c> members that bypass
+    /// the receiver entirely — factories (<c>public static T Create(…)</c>)
+    /// and module-level helpers that read static state. They lower to plain
+    /// module functions: no receiver in the parameter list, dispatched at
+    /// call sites via <c>Type.Member(args)</c>.
+    /// </summary>
+    private static IrModuleFunction ConvertStaticExtensionMethod(
+        IMethodSymbol method,
+        IrTypeOriginResolver? originResolver,
+        Compilation compilation
+    )
+    {
+        var parameters = method
+            .Parameters.Select(p => new IrParameter(
+                p.Name,
+                IrTypeRefMapper.Map(p.Type, originResolver),
+                HasDefaultValue: p.HasExplicitDefaultValue,
+                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                IsParams: p.IsParams,
+                IsConstant: p.HasConstant()
+            ))
+            .ToList();
+
+        var hasYield = DetectYield(method);
+        var returnType = hasYield
+            ? IrTypeRefMapper.MapForGeneratorReturn(method.ReturnType, originResolver)
+            : IrTypeRefMapper.Map(method.ReturnType, originResolver);
+
+        var semantics = new IrMethodSemantics(
+            IsAsync: hasYield ? false : method.IsAsync,
+            IsGenerator: hasYield,
+            IsExtension: true,
+            IsOperator: false,
+            OperatorKind: null
+        );
+
+        var typeParameters =
+            method.TypeParameters.Length > 0
+                ? method
+                    .TypeParameters.Select(tp => new IrTypeParameter(
+                        tp.Name,
+                        tp.ConstraintTypes.Length > 0
+                            ? tp
+                                .ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver))
+                                .ToList()
+                            : null
+                    ))
+                    .ToList()
+                : null;
+
+        var body = TryExtractBody(method, compilation, originResolver);
+
+        return new IrModuleFunction(
+            Name: method.Name,
+            Parameters: parameters,
+            ReturnType: returnType,
+            Body: body,
+            Semantics: semantics,
+            TypeParameters: typeParameters,
+            Attributes: IrAttributeExtractor.Extract(method)
+        );
+    }
+
+    /// <summary>
+    /// Lowers a <c>static</c> property declared inside a C# 14
+    /// <c>extension(R r)</c> block to a getter-shaped module function with
+    /// no receiver parameter. Auto-property getters (no body) are skipped
+    /// because the module form has no backing field to read from.
+    /// </summary>
+    private static IrModuleFunction? ConvertStaticExtensionProperty(
+        IPropertySymbol prop,
+        PropertyDeclarationSyntax syntax,
+        SemanticModel model,
+        IrTypeOriginResolver? originResolver
+    )
+    {
+        var extractor = new IrStatementExtractor(model, originResolver);
+        IReadOnlyList<IrStatement>? body;
+        if (syntax.ExpressionBody is not null)
+        {
+            var expr = new IrExpressionExtractor(model, originResolver).Extract(
+                syntax.ExpressionBody.Expression
+            );
+            body = [new IrReturnStatement(expr)];
+        }
+        else if (
+            syntax.AccessorList?.Accessors.FirstOrDefault(a =>
+                a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
+            ) is
+            { } getter
+        )
+        {
+            if (getter.Body is null && getter.ExpressionBody is null)
+                return null;
+            body = extractor.ExtractBody(getter.Body, getter.ExpressionBody, isVoid: false);
+        }
+        else
+        {
+            return null;
+        }
+
+        return new IrModuleFunction(
+            Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+            Parameters: [],
+            ReturnType: IrTypeRefMapper.Map(prop.Type, originResolver),
+            Body: body,
+            Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
+            TypeParameters: null,
+            Attributes: IrAttributeExtractor.Extract(prop)
+        );
+    }
+
+    /// <summary>
+    /// Setter companion for a <c>static</c> extension-block property — emits
+    /// <c>prop$set(value)</c> with no receiver. Auto-properties are skipped
+    /// for the same reason as the instance counterpart: the module form has
+    /// no backing storage to mutate.
+    /// </summary>
+    private static IrModuleFunction? ConvertStaticExtensionPropertySetter(
+        IPropertySymbol prop,
+        PropertyDeclarationSyntax syntax,
+        SemanticModel model,
+        IrTypeOriginResolver? originResolver
+    )
+    {
+        if (prop.SetMethod is null)
+            return null;
+        var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
+            a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SetAccessorDeclaration)
+        );
+        if (setterSyntax is null)
+            return null;
+        if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
+            return null;
+
+        var extractor = new IrStatementExtractor(model, originResolver);
+        var body = extractor.ExtractBody(
+            setterSyntax.Body,
+            setterSyntax.ExpressionBody,
+            isVoid: true
+        );
+
+        var valueParameter = new IrParameter(
+            "value",
+            IrTypeRefMapper.Map(prop.Type, originResolver)
+        );
+
+        return new IrModuleFunction(
+            Name: prop.Name + IrExtensionConventions.PropertySetterSuffix,
+            Parameters: [valueParameter],
             ReturnType: new IrPrimitiveTypeRef(IrPrimitive.Void),
             Body: body,
             Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),

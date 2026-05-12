@@ -1383,16 +1383,21 @@ public sealed class IrExpressionExtractor
         // Extension property read: `receiver.Prop` against a classic
         // `(this T)` extension property or a C# 14 `extension(T) { T Prop }`
         // block lowers to the module-level helper `prop$get(receiver)`.
+        // Static extension property reads (`Type.Prop`) drop the receiver
+        // — the helper has no parameter list at all.
         if (
             symbol is IPropertySymbol propSymbol
             && TryResolveExtensionPropertyLowering(propSymbol, member) is { } propLowering
         )
         {
+            var propArgs = propLowering.IsStatic
+                ? Array.Empty<IrArgument>()
+                : new[] { new IrArgument(Extract(member.Expression)) };
             return BuildExtensionHelperCall(
                 propLowering.HelperContainer,
                 propLowering.HelperName,
                 propLowering.EmittedName,
-                [new IrArgument(Extract(member.Expression))],
+                propArgs,
                 typeArguments: null
             );
         }
@@ -1817,14 +1822,15 @@ public sealed class IrExpressionExtractor
         // Without the rewrite the receiver carries a phantom property
         // access (`receiver.method()`) at runtime — there is no such
         // member on the receiver type because the helper lives on the
-        // extension's static container.
+        // extension's static container. Static extension members are
+        // dispatched via `Type.Member(args)` — the receiver is the type,
+        // not a value, so the helper takes only the syntactic arguments.
         if (
             symbol is IMethodSymbol extensionCallee
             && inv.Expression is MemberAccessExpressionSyntax extensionAccess
             && TryResolveExtensionLowering(extensionCallee, extensionAccess) is { } extLowering
         )
         {
-            var receiver = Extract(extensionAccess.Expression);
             var extensionArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
             // The reduced `extensionCallee` is the receiver-less view of the
             // method (parameter count matches the syntax arg count); use it
@@ -1838,6 +1844,17 @@ public sealed class IrExpressionExtractor
                 extensionTypeArgs = symbol
                     .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
                     .ToList();
+            if (extLowering.IsStatic)
+            {
+                return BuildExtensionHelperCall(
+                    extLowering.HelperContainer,
+                    extLowering.HelperName,
+                    extLowering.EmittedName,
+                    extensionArgs,
+                    extensionTypeArgs
+                );
+            }
+            var receiver = Extract(extensionAccess.Expression);
             return BuildExtensionHelperCall(
                 extLowering.HelperContainer,
                 extLowering.HelperName,
@@ -2802,9 +2819,42 @@ public sealed class IrExpressionExtractor
         var getterName = setterLowering.HelperName;
         var emittedGetterName = setterLowering.EmittedName;
 
-        var receiver = Extract(targetSyntax.Expression);
         var rhs = Extract(assign.Right);
         var compoundOp = TryMapCompoundAssignmentToBinary(assign.Kind());
+
+        // Static extension property: no receiver to thread through — the
+        // setter takes only the new value, and compound forms read via the
+        // matching zero-arg getter.
+        if (setterLowering.IsStatic)
+        {
+            if (compoundOp is null)
+            {
+                return BuildExtensionHelperCall(
+                    setterLowering.HelperContainer,
+                    setterName,
+                    emittedSetterName,
+                    [new IrArgument(rhs)],
+                    typeArguments: null
+                );
+            }
+
+            var currentValue = BuildExtensionHelperCall(
+                setterLowering.HelperContainer,
+                getterName,
+                emittedGetterName,
+                Array.Empty<IrArgument>(),
+                typeArguments: null
+            );
+            return BuildExtensionHelperCall(
+                setterLowering.HelperContainer,
+                setterName,
+                emittedSetterName,
+                [new IrArgument(new IrBinaryExpression(currentValue, compoundOp.Value, rhs))],
+                typeArguments: null
+            );
+        }
+
+        var receiver = Extract(targetSyntax.Expression);
 
         if (compoundOp is null)
         {
@@ -2860,6 +2910,35 @@ public sealed class IrExpressionExtractor
         var getterName = propLowering.HelperName;
         var emittedGetterName = propLowering.EmittedName;
         var binaryOp = op == IrUnaryOp.Increment ? IrBinaryOp.Add : IrBinaryOp.Subtract;
+
+        // Static increment: no receiver to capture — emit
+        // `prop$set(prop$get() ± 1)` directly.
+        if (propLowering.IsStatic)
+        {
+            var currentValue = BuildExtensionHelperCall(
+                propLowering.HelperContainer,
+                getterName,
+                emittedGetterName,
+                Array.Empty<IrArgument>(),
+                typeArguments: null
+            );
+            return BuildExtensionHelperCall(
+                propLowering.HelperContainer,
+                setterName,
+                emittedSetterName,
+                [
+                    new IrArgument(
+                        new IrBinaryExpression(
+                            currentValue,
+                            binaryOp,
+                            new IrLiteral(1, IrLiteralKind.Int32)
+                        )
+                    ),
+                ],
+                typeArguments: null
+            );
+        }
+
         var receiver = Extract(targetSyntax.Expression);
 
         return BuildReceiverOnceSetter(
@@ -2969,13 +3048,15 @@ public sealed class IrExpressionExtractor
         IMethodSymbol OriginSymbol,
         string HelperName,
         string? EmittedName,
-        INamedTypeSymbol HelperContainer
+        INamedTypeSymbol HelperContainer,
+        bool IsStatic = false
     );
 
     private readonly record struct ExtensionPropertyLowering(
         string HelperName,
         string? EmittedName,
-        INamedTypeSymbol HelperContainer
+        INamedTypeSymbol HelperContainer,
+        bool IsStatic = false
     );
 
     private ExtensionPropertyLowering? TryResolveExtensionPropertyLowering(
@@ -2998,6 +3079,17 @@ public sealed class IrExpressionExtractor
         )
         {
             var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            // Static extension property: LHS is the type, the helper takes
+            // no receiver, the call site emits `prop$get()` / `prop$set(v)`.
+            if (prop.IsStatic && receiverSymbol is INamedTypeSymbol)
+            {
+                return new ExtensionPropertyLowering(
+                    prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+                    ResolvePropertyEmittedName(prop),
+                    parentStatic,
+                    IsStatic: true
+                );
+            }
             if (receiverSymbol is INamedTypeSymbol)
                 return null;
             return new ExtensionPropertyLowering(
@@ -3079,6 +3171,22 @@ public sealed class IrExpressionExtractor
         )
         {
             var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            // Static extension members dispatch through `Type.Member(args)` —
+            // the LHS is the receiver-type symbol, the receiver isn't a value,
+            // and the helper takes no implicit first argument. Treat the
+            // instance form (LHS is a value, callee is non-static) as the
+            // default and split the static case into a dedicated branch so
+            // the call-site rewrite knows to drop the receiver.
+            if (callee.IsStatic && receiverSymbol is INamedTypeSymbol)
+            {
+                return new ExtensionCallLowering(
+                    callee,
+                    callee.Name,
+                    ResolveEmittedName(callee),
+                    parentStatic,
+                    IsStatic: true
+                );
+            }
             if (receiverSymbol is INamedTypeSymbol)
                 return null;
             return new ExtensionCallLowering(
