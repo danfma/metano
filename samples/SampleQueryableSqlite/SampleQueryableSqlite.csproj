@@ -17,5 +17,13 @@
     <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Ship the schema next to the generated SQLite provider so db.ts
+         can load it at module init. OutputPath is relative to
+         $(MetanoOutputDir); Language="typescript" keeps the asset out of
+         a future Dart run. -->
+    <MetanoAsset Include="schema.sql" OutputPath="provider/schema.sql" Language="typescript" />
+  </ItemGroup>
+
   <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
 </Project>

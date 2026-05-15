@@ -38,6 +38,10 @@ public class TranspilationCacheTests
             {
                 ["/refs/Bar.dll"] = "12345:6789",
             },
+            AssetSourceHashes: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["/proj/schema.sql"] = "asset-hash-1",
+            },
             OutputHashes: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["src/foo.ts"] = "def456",
@@ -57,6 +61,9 @@ public class TranspilationCacheTests
         await Assert
             .That(roundTripped.ReferenceFingerprints["/refs/Bar.dll"])
             .IsEqualTo("12345:6789");
+        await Assert
+            .That(roundTripped.AssetSourceHashes["/proj/schema.sql"])
+            .IsEqualTo("asset-hash-1");
         await Assert.That(roundTripped.OutputHashes["src/foo.ts"]).IsEqualTo("def456");
     }
 
@@ -81,6 +88,7 @@ public class TranspilationCacheTests
               "configurationFingerprint": "",
               "sourceHashes": {},
               "referenceFingerprints": {},
+              "assetSourceHashes": {},
               "outputHashes": {}
             }
             """
@@ -242,6 +250,71 @@ public class TranspilationCacheTests
 
         var result = CacheKeyBuilder.ValidateAndRehydrate(dir, hashes, prefixBlock: null);
         await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task ComputeAssetFingerprints_ReturnsHashKeyedByCacheKey()
+    {
+        var dir = MakeTempDir();
+        var assetPath = Path.Combine(dir, "schema.sql");
+        await File.WriteAllTextAsync(assetPath, "CREATE TABLE t (id INTEGER);");
+
+        var hashes = CacheKeyBuilder.ComputeAssetFingerprints([
+            new AssetSpec(assetPath, RelativeDestination: "provider/schema.sql"),
+        ]);
+
+        await Assert.That(hashes.Count).IsEqualTo(1);
+        await Assert
+            .That(hashes.Keys.Single())
+            .Contains("schema.sql")
+            .And.Contains("=>provider/schema.sql");
+    }
+
+    [Test]
+    public async Task ComputeAssetFingerprints_SkipsMissingFiles()
+    {
+        var dir = MakeTempDir();
+        var present = Path.Combine(dir, "present.sql");
+        var missing = Path.Combine(dir, "missing.sql");
+        await File.WriteAllTextAsync(present, "CREATE TABLE t (id INTEGER);");
+
+        var hashes = CacheKeyBuilder.ComputeAssetFingerprints([
+            new AssetSpec(missing),
+            new AssetSpec(present),
+        ]);
+
+        await Assert.That(hashes.Count).IsEqualTo(1);
+        await Assert.That(hashes.Keys.Single()).Contains("present.sql");
+    }
+
+    [Test]
+    public async Task ComputeAssetFingerprints_DistinguishesDestinations()
+    {
+        var dir = MakeTempDir();
+        var source = Path.Combine(dir, "schema.sql");
+        await File.WriteAllTextAsync(source, "x");
+
+        var hashes = CacheKeyBuilder.ComputeAssetFingerprints([
+            new AssetSpec(source, RelativeDestination: "a.sql"),
+            new AssetSpec(source, RelativeDestination: "b.sql"),
+        ]);
+
+        await Assert.That(hashes.Count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task ComputeAssetFingerprints_ChangesWhenContentChanges()
+    {
+        var dir = MakeTempDir();
+        var asset = Path.Combine(dir, "schema.sql");
+        await File.WriteAllTextAsync(asset, "v1");
+
+        var first = CacheKeyBuilder.ComputeAssetFingerprints([new AssetSpec(asset)]);
+
+        await File.WriteAllTextAsync(asset, "v2");
+        var second = CacheKeyBuilder.ComputeAssetFingerprints([new AssetSpec(asset)]);
+
+        await Assert.That(first.Values.Single()).IsNotEqualTo(second.Values.Single());
     }
 
     private string MakeTempDir()

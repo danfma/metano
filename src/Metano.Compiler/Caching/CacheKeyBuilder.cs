@@ -123,6 +123,44 @@ public static class CacheKeyBuilder
         return rehydrated;
     }
 
+    /// <summary>
+    /// Fingerprints each declared asset by SHA-256 of its on-disk
+    /// source content, keyed by the cache key from
+    /// <see cref="ComputeAssetCacheKey"/>. Missing source files are
+    /// silently omitted — the host surfaces an
+    /// <see cref="DiagnosticCodes.AssetCopyFailure"/> when it tries
+    /// to copy them, and the omitted entry guarantees the next run
+    /// re-attempts the copy instead of short-circuiting on a stale
+    /// fingerprint.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ComputeAssetFingerprints(
+        IReadOnlyList<AssetSpec> assets
+    )
+    {
+        var fingerprints = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var asset in assets)
+        {
+            if (!File.Exists(asset.Source))
+                continue;
+            var bytes = File.ReadAllBytes(asset.Source);
+            fingerprints[ComputeAssetCacheKey(asset)] = HexEncode(SHA256.HashData(bytes));
+        }
+        return fingerprints;
+    }
+
+    /// <summary>
+    /// Cache key shape: <c>NormalizePath(source)</c> for the mirror-
+    /// default, or <c>NormalizePath(source)=&gt;relativeDestination</c>
+    /// for an explicit <c>OutputPath</c> override. The destination
+    /// participates so the same source emitted to two destinations
+    /// produces two distinct rows — invalidating either one triggers
+    /// a re-copy of only the affected destination.
+    /// </summary>
+    private static string ComputeAssetCacheKey(AssetSpec asset) =>
+        asset.RelativeDestination is null
+            ? NormalizePath(asset.Source)
+            : $"{NormalizePath(asset.Source)}=>{asset.RelativeDestination}";
+
     public static bool DictionariesEqual(
         IReadOnlyDictionary<string, string> a,
         IReadOnlyDictionary<string, string> b

@@ -241,4 +241,14 @@ public static class DiagnosticCodes
     /// drop the queryable surface so the lambda flows through as an
     /// opaque closure.</summary>
     public const string UnsupportedQueryableBody = "MS0024";
+
+    /// <summary>MS0025 — a <c>&lt;MetanoAsset&gt;</c> declared on the
+    /// consumer csproj could not be copied to the generated output
+    /// directory. Causes include the source file being missing on
+    /// disk, the resolved destination escaping the output tree (via a
+    /// <c>..</c> segment or a rooted <c>Output</c> path), or an I/O
+    /// failure during copy. The transpiler emits the rest of the run
+    /// and surfaces the failure as a warning so the developer can
+    /// fix the manifest without losing the generated TS output.</summary>
+    public const string AssetCopyFailure = "MS0025";
 }

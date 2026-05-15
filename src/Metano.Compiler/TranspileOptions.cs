@@ -11,5 +11,6 @@ public sealed record TranspileOptions(
     bool Clean = false,
     string? FilePrefix = null,
     bool DryRun = false,
-    bool NoCache = false
+    bool NoCache = false,
+    IReadOnlyList<AssetSpec>? Assets = null
 );

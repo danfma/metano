@@ -17,6 +17,7 @@ public class Commands
     /// <param name="dryRun">Run the full pipeline but do NOT write any files. Print a preflight summary (file count + total line count + per-file paths) instead.</param>
     /// <param name="noCache">Disable the incremental cache. Forces a full transpilation even when sources, references, and outputs are byte-identical to the previous run.</param>
     /// <param name="watch">Stay running and re-transpile every time a .cs / .csproj / .props / .targets file under the project directory changes.</param>
+    /// <param name="asset">Static asset to copy into the output directory alongside generated files. Repeat the flag for multiple assets. Each value is either an absolute path or `absolutePath=relativeDestination` (destination relative to --output, no rooted paths, no `..` segments). When the destination is omitted, the path relative to the project directory is mirrored under the output tree. Wired from `&lt;MetanoAsset Include="..." OutputPath="..." Language="dart" /&gt;` by the MSBuild target.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -26,7 +27,8 @@ public class Commands
         string? filePrefix = null,
         bool dryRun = false,
         bool noCache = false,
-        bool watch = false
+        bool watch = false,
+        string[]? asset = null
     )
     {
         var target = new DartTarget();
@@ -38,7 +40,8 @@ public class Commands
             Clean: clean,
             FilePrefix: filePrefix,
             DryRun: dryRun,
-            NoCache: noCache
+            NoCache: noCache,
+            Assets: AssetFlagParser.Parse(asset)
         );
 
         async Task RunOnce()

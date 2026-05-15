@@ -78,8 +78,9 @@ targets/js/sample-queryable-sqlite/
 ```
 
 The C# project sets `MetanoClean=false` so the hand-written TS providers under
-`src/provider/` survive between regenerations. Resource / asset copy from the
-C# project is tracked separately in #199.
+`src/provider/` survive between regenerations. The schema DDL ships as a
+`<MetanoAsset Include="schema.sql" OutputPath="provider/schema.sql" Language="typescript" />`,
+which the transpiler copies next to `provider/db.ts` on every build (FR-048).
 
 ## Running
 
@@ -112,6 +113,6 @@ bun test
 - #197 — `sample-queryable-arrays`, the in-memory provider this sample evolves.
 - #198 — generic visitor API + reusable walker (the natural extraction target
   once a few real providers exist).
-- #199 — copy assembly assets / resources to the generated package output (the
-  schema DDL would normally live as a `schema.sql` resource).
+- #199 — copy assembly assets / resources to the generated package output
+  (closed by this sample's `<MetanoAsset Include="schema.sql" />` wiring).
 - #200 — runtime `LINQ_STAGES` / `getStages` helper that powers introspection.

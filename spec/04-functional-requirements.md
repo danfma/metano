@@ -115,6 +115,12 @@ requirement uses a stable identifier in the format `FR-XXX`.
   `Metano.Build` as build-only dependencies in .NET projects, so adopting the
   transpiler does not unnecessarily contribute runtime or transitive package
   surface to downstream application outputs.
+- **FR-048** The system shall copy declared static assets (schema files,
+  fixtures, resources) from the source project into the generated package
+  output. Assets are declared via the `<MetanoAsset>` MSBuild item type and
+  support optional output-relative destination override, optional per-target
+  filtering, and participate in the transpiler's incremental cache so
+  unchanged assets do not trigger re-copy.
 
 ## 9. Diagnostic Requirements
 

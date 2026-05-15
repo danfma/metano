@@ -81,6 +81,7 @@ TypeScript backend — the normative surface of the product today.
 | Validation | Generated type guards | Implemented | Via `[GenerateGuard]` — emits `isT` predicate and `assertT(value, message?)` throwing companion. |
 | Diagnostics | Stable `MS0001`-`MS0008` catalog | Implemented | See diagnostic catalog. |
 | Cycles | Generated TS cyclic import detection | Implemented | Reported as `MS0005`. |
+| Assets | `<MetanoAsset>` static asset copy to generated output | Implemented | Supports optional `OutputPath` destination, optional `Language` filter, cache-aware (FR-048). Missing source / escape attempt / I/O failure raises MS0025. |
 
 ## Explicit Non-Core Guarantees
 

@@ -23,6 +23,7 @@ public class Commands
     /// <param name="dryRun">Run the full pipeline but do NOT write any files. Print a preflight summary (file count + total line count + per-file paths) instead. Useful for CI preflight checks and exploratory runs. Skips the package.json update too.</param>
     /// <param name="noCache">Disable the incremental cache. Forces a full transpilation even when sources, references, and outputs are byte-identical to the previous run.</param>
     /// <param name="watch">Stay running and re-transpile every time a .cs / .csproj / .props / .targets file under the project directory changes. Combine with the incremental cache (default) for instant re-runs when nothing actually changed.</param>
+    /// <param name="asset">Static asset to copy into the output directory alongside generated files. Repeat the flag for multiple assets. Each value is either an absolute path or an `absolutePath=relativeDestination` pair where the destination is interpreted relative to --output (no rooted paths, no `..` segments). When the destination is omitted, the asset's path relative to the project directory is mirrored under the output tree. Wired from `&lt;MetanoAsset Include="..." OutputPath="..." /&gt;` by the MSBuild target.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -38,7 +39,8 @@ public class Commands
         string? filePrefix = null,
         bool dryRun = false,
         bool noCache = false,
-        bool watch = false
+        bool watch = false,
+        string[]? asset = null
     )
     {
         var target = new TypeScriptTarget
@@ -54,7 +56,8 @@ public class Commands
             Clean: clean,
             FilePrefix: filePrefix,
             DryRun: dryRun,
-            NoCache: noCache
+            NoCache: noCache,
+            Assets: AssetFlagParser.Parse(asset)
         );
 
         async Task RunOnce()
