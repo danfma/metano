@@ -14,19 +14,24 @@ namespace Metano.Compiler.TypeScript.Caching;
 /// on-disk content is what actually gets written.
 ///
 /// <para>
-/// Imports go through unchanged. Exports collapse to the
-/// minimum shape each downstream stage reads:
+/// Imports go through unchanged. Exports preserve the original
+/// concrete <see cref="TsTopLevel"/> shape via
+/// <see cref="CachedExportKind"/> so a cache rehydration produces
+/// the exact same node type the fresh AST would (a
+/// <c>TsTypeAlias</c> rebuilds as <c>TsTypeAlias</c>, not as a
+/// generic type-only stub). This guards against silent
+/// misclassification when a downstream stage adds a check that
+/// distinguishes one type-only shape from another.
 /// </para>
-/// <list type="bullet">
-///   <item>Value exports → <see cref="TsConstObject"/> with the
-///   same <see cref="TsTopLevel"/>-level name. <c>BarrelFileGenerator</c>
-///   matches <c>TsConstObject { Exported: true }</c> in its
-///   <c>GetExportedName</c> switch and treats it as a value
-///   re-export.</item>
-///   <item>Type-only exports → <see cref="TsInterface"/>, which the
-///   barrel emitter treats as type-only. The empty
-///   property list keeps the stub minimal.</item>
-/// </list>
+/// <para>
+/// Non-exported and side-effect-only shapes
+/// (<see cref="TsTopLevelStatement"/>, <see cref="TsReExport"/>,
+/// <see cref="TsModuleExport"/>, <see cref="TsExportImportAlias"/>)
+/// participate via the file's on-disk content but contribute nothing
+/// to the barrel's export surface; the switch acknowledges them
+/// explicitly so a future addition to <see cref="TsTopLevel"/> has
+/// to land here too (the <c>default</c> arm throws).
+/// </para>
 /// </summary>
 public static class FileMetadataExtractor
 {
@@ -37,46 +42,106 @@ public static class FileMetadataExtractor
 
         foreach (var stmt in file.Statements)
         {
-            switch (stmt)
+            if (stmt is TsImport import)
             {
-                case TsImport import:
-                    imports.Add(
-                        new CachedImport(
-                            import.Names,
-                            import.From,
-                            import.TypeOnly,
-                            import.IsDefault,
-                            import.TypeOnlyNames is null ? null : import.TypeOnlyNames.ToArray(),
-                            import.IsNamespace,
-                            import.Aliases
-                        )
-                    );
-                    break;
-                case TsClass { Exported: true } c:
-                    exports.Add(new CachedExport(c.Name, TypeOnly: false));
-                    break;
-                case TsFunction { Exported: true } f:
-                    exports.Add(new CachedExport(f.Name, TypeOnly: false));
-                    break;
-                case TsEnum { Exported: true } e:
-                    exports.Add(new CachedExport(e.Name, TypeOnly: false));
-                    break;
-                case TsConstObject { Exported: true } co:
-                    exports.Add(new CachedExport(co.Name, TypeOnly: false));
-                    break;
-                case TsNamespaceDeclaration { Exported: true } ns:
-                    exports.Add(new CachedExport(ns.Name, TypeOnly: false));
-                    break;
-                case TsTypeAlias { Exported: true } ta:
-                    exports.Add(new CachedExport(ta.Name, TypeOnly: true));
-                    break;
-                case TsInterface { Exported: true } i:
-                    exports.Add(new CachedExport(i.Name, TypeOnly: true));
-                    break;
+                imports.Add(CaptureImport(import));
+                continue;
             }
+
+            if (TryClassifyExport(stmt) is { } export)
+            {
+                exports.Add(export);
+                continue;
+            }
+
+            RequireKnownNonExportShape(stmt);
         }
 
         return new CachedFileMetadata(file.FileName, Sha256(content), imports, exports);
+    }
+
+    private static CachedImport CaptureImport(TsImport import) =>
+        new(
+            import.Names,
+            import.From,
+            import.TypeOnly,
+            import.IsDefault,
+            import.TypeOnlyNames is null ? null : import.TypeOnlyNames.ToArray(),
+            import.IsNamespace,
+            import.Aliases
+        );
+
+    /// <summary>
+    /// Maps each exported <c>TsTopLevel</c> subtype to its
+    /// <see cref="CachedExport"/> entry. Returns <see langword="null"/>
+    /// for non-exported variants and for shapes that contribute
+    /// nothing to the barrel surface — the caller treats both cases
+    /// as "not an export" via <see cref="RequireKnownNonExportShape"/>.
+    /// </summary>
+    private static CachedExport? TryClassifyExport(TsTopLevel stmt) =>
+        stmt switch
+        {
+            TsClass c when c.Exported => new CachedExport(c.Name, CachedExportKind.Class),
+            TsFunction f when f.Exported => new CachedExport(f.Name, CachedExportKind.Function),
+            TsEnum e when e.Exported => new CachedExport(e.Name, CachedExportKind.Enum),
+            TsConstObject co when co.Exported => new CachedExport(
+                co.Name,
+                CachedExportKind.ConstObject
+            ),
+            TsNamespaceDeclaration ns when ns.Exported => new CachedExport(
+                ns.Name,
+                CachedExportKind.Namespace
+            ),
+            TsTypeAlias ta when ta.Exported => new CachedExport(
+                ta.Name,
+                CachedExportKind.TypeAlias
+            ),
+            TsInterface i when i.Exported => new CachedExport(i.Name, CachedExportKind.Interface),
+            _ => null,
+        };
+
+    /// <summary>
+    /// Enforces that a non-export statement belongs to one of the
+    /// shapes the cache deliberately ignores. Splitting the catch-all
+    /// into two named groups keeps the intent explicit:
+    /// <list type="bullet">
+    ///   <item>Non-exported variants of the seven exportable shapes —
+    ///   contribute on-disk content only.</item>
+    ///   <item>Side-effect / re-export / alias shapes — barrel emitter
+    ///   ignores them by design.</item>
+    /// </list>
+    /// Anything else throws so a future <c>TsTopLevel</c> subtype
+    /// cannot slip in unnoticed and silently miss the cache.
+    /// </summary>
+    private static void RequireKnownNonExportShape(TsTopLevel stmt)
+    {
+        switch (stmt)
+        {
+            // Non-exported variants — body still ships on disk.
+            case TsClass:
+            case TsFunction:
+            case TsEnum:
+            case TsConstObject:
+            case TsNamespaceDeclaration:
+            case TsTypeAlias:
+            case TsInterface:
+                return;
+
+            // Side-effect / re-export / alias shapes — the barrel
+            // emitter does not classify them as exportable surface.
+            case TsTopLevelStatement:
+            case TsReExport:
+            case TsModuleExport:
+            case TsExportImportAlias:
+                return;
+
+            default:
+                throw new InvalidOperationException(
+                    $"Unhandled TsTopLevel subtype '{stmt.GetType().Name}' in "
+                        + "FileMetadataExtractor. Add an explicit case so cache "
+                        + "rehydration stays consistent with the fresh AST."
+                );
+        }
     }
 
     /// <summary>
@@ -112,15 +177,38 @@ public static class FileMetadataExtractor
         }
 
         foreach (var export in metadata.Exports)
-        {
-            if (export.TypeOnly)
-                statements.Add(new TsInterface(export.Name, []));
-            else
-                statements.Add(new TsConstObject(export.Name, []));
-        }
+            statements.Add(BuildExportStub(export));
 
         return new TsSourceFile(metadata.Path, statements);
     }
+
+    /// <summary>
+    /// Reconstructs a minimal <see cref="TsTopLevel"/> node of the
+    /// exact original kind. Empty bodies / parameter lists are fine
+    /// because the cached on-disk file is what actually ships;
+    /// downstream stages only consume the node's type and exported
+    /// name.
+    /// </summary>
+    private static TsTopLevel BuildExportStub(CachedExport export) =>
+        export.Kind switch
+        {
+            CachedExportKind.Class => new TsClass(export.Name, Constructor: null, Members: []),
+            CachedExportKind.Function => new TsFunction(
+                export.Name,
+                Parameters: [],
+                ReturnType: new TsVoidType(),
+                Body: []
+            ),
+            CachedExportKind.Enum => new TsEnum(export.Name, Members: []),
+            CachedExportKind.ConstObject => new TsConstObject(export.Name, Entries: []),
+            CachedExportKind.Namespace => new TsNamespaceDeclaration(export.Name, Functions: []),
+            CachedExportKind.TypeAlias => new TsTypeAlias(export.Name, Type: new TsAnyType()),
+            CachedExportKind.Interface => new TsInterface(export.Name, Properties: []),
+            _ => throw new InvalidOperationException(
+                $"Unhandled CachedExportKind '{export.Kind}' in BuildExportStub. "
+                    + "Add a switch arm matching the new enum value."
+            ),
+        };
 
     /// <summary>
     /// Rejects rooted paths and any segment equal to <c>..</c> so a

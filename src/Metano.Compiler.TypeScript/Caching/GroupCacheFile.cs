@@ -29,13 +29,22 @@ public sealed record GroupCacheFile(
     IReadOnlyDictionary<string, GroupCacheEntry> Groups
 )
 {
-    public const int CurrentFormatVersion = 2;
+    // v3 introduced CachedExportKind (#220): the v2 shape persisted a
+    // bool `typeOnly` per export which silently misclassified type-only
+    // shapes on rehydration when deserialised by v3 code (the missing
+    // `kind` field would default to 0 = Class). Bumping the version
+    // invalidates every stale v2 file so the next run rebuilds the
+    // group cache from scratch.
+    public const int CurrentFormatVersion = 3;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        // Persist CachedExportKind as its name so the on-disk schema
+        // stays debuggable AND survives reordering of the enum.
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
     };
 
     public static GroupCacheFile? TryRead(string outputDir)
