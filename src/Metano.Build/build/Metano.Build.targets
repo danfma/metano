@@ -21,7 +21,39 @@
       MetanoFilePrefix       (optional)  Verbatim text inserted at the top of every generated file, followed by a single newline. Use for formatter / lint directives (Biome `biome-ignore-all`, Prettier `// @prettier-ignore`, `// @generated` markers). Multi-line values are accepted; pass through MSBuild XML escaping.
       MetanoExtraArgs        (optional)  Additional CLI arguments
       MetanoPostBuildCommand (optional)  Shell command to run after transpilation completes. Receives the consumer's choice of formatter / linter / packager. Stays empty by default so the target ships no tool dependency; consumers opt in per project when they want the post-emit pass.
+
+    Asset item type (FR-048):
+
+      <MetanoAsset Include="schema.sql" />
+        Copies the file from the project directory to <MetanoOutputDir>,
+        mirroring the relative path. `schema.sql` lands at
+        $(MetanoOutputDir)/schema.sql; `assets/seed.json` lands at
+        $(MetanoOutputDir)/assets/seed.json.
+
+      Supported per-item metadata:
+        OutputPath (optional)  Output-relative destination path. Overrides
+                               the mirrored default. Use to relocate the
+                               asset without renaming the source file.
+                               `Output` is reserved by MSBuild (MSB4118),
+                               so the metadata name is `OutputPath`.
+        Language   (optional)  Which transpiler this asset applies to.
+                               `typescript`, `dart`, `all`, or empty (=all).
+                               Items not matching the active language are
+                               dropped before the CLI sees them, so they
+                               don't perturb the incremental cache
+                               fingerprint. The metadata name is `Language`
+                               because `Target` is reserved by MSBuild
+                               (MSB4066).
+
+      Declare the same Include twice with different OutputPath values to
+      ship the asset to multiple destinations.
   -->
+
+  <ItemDefinitionGroup>
+    <MetanoAsset>
+      <Language>all</Language>
+    </MetanoAsset>
+  </ItemDefinitionGroup>
 
   <Target Name="MetanoTranspile" AfterTargets="Build" Condition="'$(MetanoOutputDir)' != ''">
     <PropertyGroup>
@@ -32,6 +64,14 @@
       <_MetanoCmd Condition="'$(MetanoCompilerProject)' == ''">dotnet metano-typescript</_MetanoCmd>
       <_MetanoCmd Condition="'$(MetanoCompilerProject)' != ''"
         >dotnet run --project "$(MetanoCompilerProject)" --</_MetanoCmd
+      >
+
+      <!-- Language tag used to filter <MetanoAsset Language="..."> items.
+           The TypeScript build target defaults to "typescript"; downstream
+           Dart-specific MSBuild integrations can override _MetanoTargetLanguage
+           before this target runs to filter accordingly. -->
+      <_MetanoTargetLanguage Condition="'$(_MetanoTargetLanguage)' == ''"
+        >typescript</_MetanoTargetLanguage
       >
 
       <_MetanoArgs>-p "$(MSBuildProjectFullPath)" -o "$(MetanoOutputDir)"</_MetanoArgs>
@@ -60,6 +100,33 @@
       >
       <_MetanoArgs Condition="'$(MetanoExtraArgs)' != ''"
         >$(_MetanoArgs) $(MetanoExtraArgs)</_MetanoArgs
+      >
+    </PropertyGroup>
+
+    <!-- Project @(MetanoAsset) items into asset CLI args.
+         Filter by %(Language) against the active transpiler language;
+         items carrying `all` or matching the language survive. Drop
+         items whose source file does not exist so the CLI never sees
+         broken paths (the host would issue MS0025 anyway, but failing
+         fast keeps the fingerprint clean). -->
+    <ItemGroup>
+      <_MetanoAssetSelected
+        Include="@(MetanoAsset)"
+        Condition="
+        ('%(MetanoAsset.Language)' == '$(_MetanoTargetLanguage)' or
+          '%(MetanoAsset.Language)' == 'all') and
+        Exists('%(MetanoAsset.FullPath)')"
+      />
+    </ItemGroup>
+
+    <!-- Emit one CLI flag per surviving asset. Always include the
+         `=DEST` separator; the host's AssetFlagParser treats an empty
+         tail as a missing override, so a bare <MetanoAsset Include="x" />
+         still mirrors the source path. -->
+    <PropertyGroup>
+      <_MetanoAssetArgs>@(_MetanoAssetSelected -> '--asset &quot;%(FullPath)=%(OutputPath)&quot;', ' ')</_MetanoAssetArgs>
+      <_MetanoArgs Condition="'$(_MetanoAssetArgs)' != ''"
+        >$(_MetanoArgs) $(_MetanoAssetArgs)</_MetanoArgs
       >
     </PropertyGroup>
 

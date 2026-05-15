@@ -26,6 +26,10 @@ namespace Metano.Compiler.Caching;
 ///   <item><b>Reference fingerprints</b>: <c>length:lastWriteTimeUtc</c>
 ///   per metadata reference. Picks up assembly swaps without reading
 ///   the .dll bytes.</item>
+///   <item><b>Asset source hashes</b> (FR-048): SHA-256 of every
+///   <c>&lt;MetanoAsset&gt;</c> source file declared on the run.
+///   Editing an asset (or changing its destination) invalidates the
+///   short-circuit so the file gets re-copied to the output.</item>
 ///   <item><b>Output hashes</b>: SHA-256 of every file the previous
 ///   run emitted into the output directory. If a user (or
 ///   <c>--clean</c> on a sibling target, or a manual <c>rm</c>) deletes
@@ -44,10 +48,11 @@ public sealed record TranspilationCache(
     string ConfigurationFingerprint,
     IReadOnlyDictionary<string, string> SourceHashes,
     IReadOnlyDictionary<string, string> ReferenceFingerprints,
+    IReadOnlyDictionary<string, string> AssetSourceHashes,
     IReadOnlyDictionary<string, string> OutputHashes
 )
 {
-    public const int CurrentFormatVersion = 2;
+    public const int CurrentFormatVersion = 3;
     public const string FileName = ".metano-cache.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -96,6 +101,7 @@ public sealed record TranspilationCache(
         && cache.ConfigurationFingerprint is not null
         && cache.SourceHashes is not null
         && cache.ReferenceFingerprints is not null
+        && cache.AssetSourceHashes is not null
         && cache.OutputHashes is not null;
 
     public void Write(string outputDir)

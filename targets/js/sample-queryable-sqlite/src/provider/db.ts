@@ -12,6 +12,11 @@ import { Database } from "bun:sqlite";
 import { Decimal } from "decimal.js";
 import { Product } from "#/product";
 
+// Loaded eagerly from disk so the bootstrap helper does not need to be
+// async. The transpiler copies samples/SampleQueryableSqlite/schema.sql
+// to provider/schema.sql via <MetanoAsset> (FR-048).
+const SCHEMA_SQL = await Bun.file(new URL("./schema.sql", import.meta.url)).text();
+
 /** Entity-property → SQLite-column name table for the `products` row. */
 export const PRODUCT_COLUMN_MAP: Record<string, string> = {
   id: "id",
@@ -71,16 +76,7 @@ export function mapProductRow(row: ProductRow): Product {
  */
 export function createSeededDatabase(): Database {
   const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE products (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      unit_price REAL NOT NULL,
-      stock_count INTEGER NOT NULL,
-      is_active INTEGER NOT NULL
-    );
-  `);
+  db.exec(SCHEMA_SQL);
   const insert = db.prepare(
     "INSERT INTO products (id, name, display_name, unit_price, stock_count, is_active) VALUES (?, ?, ?, ?, ?, ?)",
   );

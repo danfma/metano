@@ -31,6 +31,8 @@ public static class TranspilerHost
     {
         var projectPath = Path.GetFullPath(options.ProjectPath);
         var outputDir = Path.GetFullPath(options.OutputDir);
+        var projectDir = Path.GetDirectoryName(projectPath) ?? Directory.GetCurrentDirectory();
+        var assets = options.Assets ?? [];
 
         var totalSw = Stopwatch.StartNew();
         var compileSw = Stopwatch.StartNew();
@@ -62,11 +64,13 @@ public static class TranspilerHost
         // run does not pay the SHA bill.
         IReadOnlyDictionary<string, string>? sourceHashes = null;
         IReadOnlyDictionary<string, string>? referenceFingerprints = null;
+        IReadOnlyDictionary<string, string>? assetSourceHashes = null;
         var configFingerprint = BuildConfigFingerprint(target, options);
         if (ShouldAttemptCache(options))
         {
             sourceHashes = CacheKeyBuilder.ComputeSourceHashes(compilation);
             referenceFingerprints = CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
+            assetSourceHashes = CacheKeyBuilder.ComputeAssetFingerprints(assets);
             if (
                 TryShortCircuitFromCache(
                     outputDir,
@@ -74,6 +78,7 @@ public static class TranspilerHost
                     configFingerprint,
                     sourceHashes,
                     referenceFingerprints,
+                    assetSourceHashes,
                     options.FilePrefix,
                     options.ShowTimings,
                     totalSw,
@@ -132,6 +137,12 @@ public static class TranspilerHost
         }
 
         await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix);
+        var assetDiagnostics = await CopyAssetsAsync(assets, outputDir, projectDir);
+        var (assetWarnings, assetErrors) =
+            assetDiagnostics.Count > 0 ? ReportDiagnostics(assetDiagnostics) : (0, 0);
+        warningCount += assetWarnings;
+        if (assetErrors > 0)
+            return new TranspileResult(false, output.Files, warningCount, assetErrors);
         emitSw.Stop();
         totalSw.Stop();
 
@@ -151,6 +162,8 @@ public static class TranspilerHost
             configFingerprint,
             sourceHashes,
             referenceFingerprints,
+            assetSourceHashes,
+            assets,
             compilation
         );
 
@@ -174,6 +187,8 @@ public static class TranspilerHost
         string configFingerprint,
         IReadOnlyDictionary<string, string>? sourceHashes,
         IReadOnlyDictionary<string, string>? referenceFingerprints,
+        IReadOnlyDictionary<string, string>? assetSourceHashes,
+        IReadOnlyList<AssetSpec> assets,
         Microsoft.CodeAnalysis.Compilation compilation
     )
     {
@@ -188,12 +203,14 @@ public static class TranspilerHost
         // consultable on the next run.
         sourceHashes ??= CacheKeyBuilder.ComputeSourceHashes(compilation);
         referenceFingerprints ??= CacheKeyBuilder.ComputeReferenceFingerprints(compilation);
+        assetSourceHashes ??= CacheKeyBuilder.ComputeAssetFingerprints(assets);
         var cache = new TranspilationCache(
             FormatVersion: TranspilationCache.CurrentFormatVersion,
             Target: target.Language.ToString(),
             ConfigurationFingerprint: configFingerprint,
             SourceHashes: sourceHashes,
             ReferenceFingerprints: referenceFingerprints,
+            AssetSourceHashes: assetSourceHashes,
             OutputHashes: outputHashes
         );
         cache.Write(outputDir);
@@ -205,6 +222,7 @@ public static class TranspilerHost
         string configFingerprint,
         IReadOnlyDictionary<string, string> sourceHashes,
         IReadOnlyDictionary<string, string> referenceFingerprints,
+        IReadOnlyDictionary<string, string> assetSourceHashes,
         string? filePrefix,
         bool showTimings,
         Stopwatch totalSw,
@@ -228,6 +246,8 @@ public static class TranspilerHost
         if (!CacheKeyBuilder.DictionariesEqual(cache.SourceHashes, sourceHashes))
             return false;
         if (!CacheKeyBuilder.DictionariesEqual(cache.ReferenceFingerprints, referenceFingerprints))
+            return false;
+        if (!CacheKeyBuilder.DictionariesEqual(cache.AssetSourceHashes, assetSourceHashes))
             return false;
 
         var prefixBlock = string.IsNullOrEmpty(filePrefix) ? null : filePrefix + "\n";
@@ -274,6 +294,150 @@ public static class TranspilerHost
         var newlines = content.AsSpan().Count('\n');
         return content[^1] == '\n' ? newlines : newlines + 1;
     }
+
+    /// <summary>
+    /// Copies <see cref="AssetSpec"/> entries declared on the run into
+    /// <paramref name="outputDir"/>. Destination is the spec's
+    /// <see cref="AssetSpec.RelativeDestination"/> when present;
+    /// otherwise the source's path relative to <paramref name="projectDir"/>
+    /// is mirrored under the output tree. Each copy is sandboxed: any
+    /// resolved destination that escapes <paramref name="outputDir"/>
+    /// (rooted path or <c>..</c> segment), missing source file, or any
+    /// I/O failure surfaces as an
+    /// <see cref="DiagnosticCodes.AssetCopyFailure"/> error so the
+    /// build fails fast — a manifest bug that silently shipped a
+    /// broken artifact would be far worse than a loud diagnostic.
+    /// </summary>
+    internal static async Task<IReadOnlyList<MetanoDiagnostic>> CopyAssetsAsync(
+        IReadOnlyList<AssetSpec> assets,
+        string outputDirFull,
+        string projectDir
+    )
+    {
+        if (assets.Count == 0)
+            return [];
+
+        var diagnostics = new List<MetanoDiagnostic>();
+        foreach (var asset in assets)
+            await CopyOneAssetAsync(asset, outputDirFull, projectDir, diagnostics);
+        return diagnostics;
+    }
+
+    private static async Task CopyOneAssetAsync(
+        AssetSpec asset,
+        string outputDirFull,
+        string projectDir,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        if (!File.Exists(asset.Source))
+        {
+            diagnostics.Add(CreateMissingAssetDiagnostic(asset.Source));
+            return;
+        }
+
+        if (HasRootedDestination(asset.RelativeDestination))
+        {
+            diagnostics.Add(
+                CreateEscapingAssetDiagnostic(asset.Source, asset.RelativeDestination!)
+            );
+            return;
+        }
+
+        var relative = ResolveAssetDestination(asset, projectDir);
+        var destination = Path.GetFullPath(Path.Combine(outputDirFull, relative));
+        if (!IsInsideOutputDir(destination, outputDirFull))
+        {
+            diagnostics.Add(CreateEscapingAssetDiagnostic(asset.Source, relative));
+            return;
+        }
+
+        try
+        {
+            var destinationDir = Path.GetDirectoryName(destination);
+            if (destinationDir is not null)
+                Directory.CreateDirectory(destinationDir);
+            await using var source = File.OpenRead(asset.Source);
+            await using var sink = File.Create(destination);
+            await source.CopyToAsync(sink);
+            Console.WriteLine($"  Copied asset: {relative}");
+        }
+        catch (Exception ex)
+        {
+            diagnostics.Add(CreateAssetIoDiagnostic(asset.Source, relative, ex));
+        }
+    }
+
+    /// <summary>
+    /// Rooted destinations (<c>/abs/path</c>, <c>C:\path</c>) would
+    /// silently relocate the asset outside the output tree once
+    /// <c>Path.Combine</c> dropped the relative prefix. Reject them
+    /// up-front so the user sees an explicit MS0025 diagnostic
+    /// instead of either a confusing "escapes output directory"
+    /// message or a silent rewrite.
+    /// </summary>
+    private static bool HasRootedDestination(string? relativeDestination) =>
+        !string.IsNullOrEmpty(relativeDestination)
+        && (Path.IsPathRooted(relativeDestination) || relativeDestination.StartsWith('/'));
+
+    /// <summary>
+    /// Resolves the output-relative destination for an asset. An
+    /// explicit override (from <c>%(MetanoAsset.OutputPath)</c>) wins
+    /// over the source-mirror heuristic. The fallback mirrors the
+    /// asset's path relative to the consumer's project directory so a
+    /// typical <c>&lt;MetanoAsset Include="schema.sql" /&gt;</c> lands
+    /// at <c>OutputDir/schema.sql</c>, and a nested
+    /// <c>assets/seed.json</c> preserves its <c>assets/</c> prefix.
+    /// </summary>
+    private static string ResolveAssetDestination(AssetSpec asset, string projectDir)
+    {
+        if (!string.IsNullOrEmpty(asset.RelativeDestination))
+            return NormalizeRelative(asset.RelativeDestination);
+
+        var sourceFull = Path.GetFullPath(asset.Source);
+        var projectFull = Path.GetFullPath(projectDir);
+        var mirrored = Path.GetRelativePath(projectFull, sourceFull);
+        return NormalizeRelative(mirrored);
+    }
+
+    private static string NormalizeRelative(string path) => path.Replace('\\', '/');
+
+    private static bool IsInsideOutputDir(string destinationFull, string outputDirFull)
+    {
+        var outputWithSeparator = outputDirFull.EndsWith(Path.DirectorySeparatorChar)
+            ? outputDirFull
+            : outputDirFull + Path.DirectorySeparatorChar;
+        return destinationFull.StartsWith(outputWithSeparator, StringComparison.Ordinal)
+            || string.Equals(destinationFull, outputDirFull, StringComparison.Ordinal);
+    }
+
+    private static MetanoDiagnostic CreateMissingAssetDiagnostic(string source) =>
+        new(
+            MetanoDiagnosticSeverity.Error,
+            DiagnosticCodes.AssetCopyFailure,
+            $"Asset '{source}' was not found on disk. "
+                + "Check the <MetanoAsset Include=\"...\"> path in the csproj."
+        );
+
+    private static MetanoDiagnostic CreateEscapingAssetDiagnostic(string source, string relative) =>
+        new(
+            MetanoDiagnosticSeverity.Error,
+            DiagnosticCodes.AssetCopyFailure,
+            $"Asset '{source}' resolved to '{relative}', which escapes the output "
+                + "directory. <MetanoAsset OutputPath=\"...\"> must be a relative path "
+                + "without leading slashes, drive letters, or '..' segments."
+        );
+
+    private static MetanoDiagnostic CreateAssetIoDiagnostic(
+        string source,
+        string relative,
+        Exception ex
+    ) =>
+        new(
+            MetanoDiagnosticSeverity.Error,
+            DiagnosticCodes.AssetCopyFailure,
+            $"Failed to copy asset '{source}' to '{relative}': {ex.Message}"
+        );
 
     private static async Task EmitFilesAsync(
         string outputDir,
