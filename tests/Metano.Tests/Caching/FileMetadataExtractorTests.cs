@@ -124,24 +124,34 @@ public class FileMetadataExtractorTests
 
         await Assert.That(stub.FileName).IsEqualTo("foo/bar.ts");
         await Assert.That(stub.Statements.OfType<TsImport>().Count()).IsEqualTo(1);
-        await Assert.That(stub.Statements.OfType<TsClass>().Any(c => c.Name == "CClass")).IsTrue();
         await Assert
-            .That(stub.Statements.OfType<TsFunction>().Any(f => f.Name == "fFunc"))
+            .That(stub.Statements.OfType<TsClass>().Any(c => c.Name == "CClass" && c.Exported))
             .IsTrue();
-        await Assert.That(stub.Statements.OfType<TsEnum>().Any(e => e.Name == "EEnum")).IsTrue();
         await Assert
-            .That(stub.Statements.OfType<TsConstObject>().Any(co => co.Name == "CoConst"))
+            .That(stub.Statements.OfType<TsFunction>().Any(f => f.Name == "fFunc" && f.Exported))
+            .IsTrue();
+        await Assert
+            .That(stub.Statements.OfType<TsEnum>().Any(e => e.Name == "EEnum" && e.Exported))
             .IsTrue();
         await Assert
             .That(
-                stub.Statements.OfType<TsNamespaceDeclaration>().Any(ns => ns.Name == "NNamespace")
+                stub.Statements.OfType<TsConstObject>()
+                    .Any(co => co.Name == "CoConst" && co.Exported)
             )
             .IsTrue();
         await Assert
-            .That(stub.Statements.OfType<TsTypeAlias>().Any(ta => ta.Name == "TAlias"))
+            .That(
+                stub.Statements.OfType<TsNamespaceDeclaration>()
+                    .Any(ns => ns.Name == "NNamespace" && ns.Exported)
+            )
             .IsTrue();
         await Assert
-            .That(stub.Statements.OfType<TsInterface>().Any(i => i.Name == "IIface"))
+            .That(
+                stub.Statements.OfType<TsTypeAlias>().Any(ta => ta.Name == "TAlias" && ta.Exported)
+            )
+            .IsTrue();
+        await Assert
+            .That(stub.Statements.OfType<TsInterface>().Any(i => i.Name == "IIface" && i.Exported))
             .IsTrue();
     }
 
