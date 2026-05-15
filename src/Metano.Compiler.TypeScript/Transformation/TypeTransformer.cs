@@ -145,18 +145,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private void TransformNestedTypes(INamedTypeSymbol parent, List<TsTopLevel> statements)
     {
-        var nested = parent
-            .GetTypeMembers()
-            .Where(t => !t.IsImplicitlyDeclared)
-            .Where(t => t.DeclaredAccessibility != Accessibility.Internal)
-            .Where(t =>
-                SymbolHelper.IsTranspilable(
-                    t,
-                    Context.AssemblyWideTranspile,
-                    Context.CurrentAssembly
-                )
-            )
-            .ToList();
+        var nested = parent.GetTypeMembers().Where(IsExportableNestedType).ToList();
 
         if (nested.Count == 0)
             return;
@@ -182,6 +171,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             );
         }
     }
+
+    private bool IsExportableNestedType(INamedTypeSymbol type) =>
+        !type.IsImplicitlyDeclared
+        && type.DeclaredAccessibility != Accessibility.Internal
+        && SymbolHelper.IsTranspilable(
+            type,
+            Context.AssemblyWideTranspile,
+            Context.CurrentAssembly
+        );
 
     /// <summary>
     /// Discovers all types with [Transpile] and transforms each into a TsSourceFile.

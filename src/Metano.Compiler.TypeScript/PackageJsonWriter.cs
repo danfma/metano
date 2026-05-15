@@ -64,49 +64,9 @@ public static class PackageJsonWriter
         var packageJsonPath = Path.Combine(packageRoot, "package.json");
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
-        // Resolve the source root: explicit parameter, or infer from first path segment.
-        // "--src-root ." means the package root itself is the source root, so the full
-        // srcRelative becomes the output prefix (e.g., "src/domain" → prefix "src/domain").
-        var rawSrcRoot = srcRoot?.Replace('\\', '/').TrimStart('/').TrimEnd('/');
-        string resolvedSrcRoot;
-        if (rawSrcRoot is null or "")
-            resolvedSrcRoot = srcRelative.Split('/')[0]; // infer from first segment
-        else if (rawSrcRoot == ".")
-            resolvedSrcRoot = ""; // package root is the source root
-        else
-            resolvedSrcRoot = rawSrcRoot.TrimStart('.', '/');
-
-        // Output prefix: the path from the source root to the output directory.
-        // Empty when outputDir IS the source root (e.g., srcRelative = "src").
-        // Validate that srcRelative is within resolvedSrcRoot — if not, fall back
-        // to empty prefix and warn rather than producing silently wrong paths.
-        string outputPrefix;
-        if (resolvedSrcRoot.Length == 0)
-        {
-            // Package root is the source root — full srcRelative is the prefix.
-            outputPrefix = srcRelative;
-        }
-        else if (srcRelative == resolvedSrcRoot)
-        {
-            outputPrefix = "";
-        }
-        else if (srcRelative.StartsWith(resolvedSrcRoot + "/", StringComparison.Ordinal))
-        {
-            outputPrefix = srcRelative[(resolvedSrcRoot.Length + 1)..];
-        }
-        else
-        {
-            outputPrefix = "";
-            diagnostics.Add(
-                new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Warning,
-                    DiagnosticCodes.CrossPackageResolution,
-                    $"--src-root '{resolvedSrcRoot}' is not an ancestor of output path "
-                        + $"'{srcRelative}'. Ignoring prefix — imports/exports paths may be incorrect. "
-                        + $"Set --src-root to the directory that your build tool uses as rootDir."
-                )
-            );
-        }
+        var (outputPrefix, prefixDiagnostic) = OutputPrefix.Resolve(srcRoot, srcRelative);
+        if (prefixDiagnostic is not null)
+            diagnostics.Add(prefixDiagnostic);
 
         // Build the imports/exports objects. Exports are only needed for libraries.
         var exports = isExecutable

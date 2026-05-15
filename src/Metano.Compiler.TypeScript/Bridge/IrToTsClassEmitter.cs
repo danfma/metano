@@ -148,33 +148,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        // Promoted `params T[]` ctor params can't carry the parameter-
-        // property modifier (TS forbids `readonly ...x: T[]`). The bridge
-        // emits the rest form on the ctor signature; declare the
-        // companion field here so the public surface still exposes it
-        // as a property (the ctor body assigns the rest array — see
-        // BuildSimpleConstructor). (#152)
-        if (ir.Constructor is { } ctorIr)
-        {
-            foreach (var p in ctorIr.Parameters)
-            {
-                if (!p.Parameter.IsParams || p.Promotion is IrParameterPromotion.None)
-                    continue;
-                var name = p.EmittedName ?? IrToTsNamingPolicy.ToParameterName(p.Parameter.Name);
-                classMembers.Add(
-                    new TsFieldMember(
-                        name,
-                        ResolveCtorParamTsType(p.Parameter.Type),
-                        Initializer: null,
-                        Readonly: p.Promotion is IrParameterPromotion.ReadonlyProperty,
-                        Static: false,
-                        Accessibility: IrToTsClassBridge.MapAccessibility(
-                            p.PromotedVisibility ?? IrVisibility.Public
-                        )
-                    )
-                );
-            }
-        }
+        EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
 
         // Walk the IR member list directly — IrClassExtractor already filtered
         // `[Ignore]`, implicit accessors, backing fields, enum members, and
@@ -308,6 +282,43 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             _context.DeclarativeMappings
         );
     }
+
+    /// <summary>
+    /// Promoted <c>params T[]</c> ctor params can't carry the parameter-property
+    /// modifier (TS forbids <c>readonly ...x: T[]</c>). The bridge emits the rest
+    /// form on the ctor signature; this helper declares the companion field so
+    /// the public surface still exposes it as a property (#152).
+    /// </summary>
+    private void EmitPromotedParamsCompanionFields(
+        IrConstructorDeclaration? ctorIr,
+        List<TsClassMember> classMembers
+    )
+    {
+        if (ctorIr is null)
+            return;
+
+        foreach (var p in ctorIr.Parameters)
+        {
+            if (!IsPromotedParamsParameter(p))
+                continue;
+            classMembers.Add(BuildPromotedParamsCompanionField(p));
+        }
+    }
+
+    private static bool IsPromotedParamsParameter(IrConstructorParameter p) =>
+        p.Parameter.IsParams && p.Promotion is not IrParameterPromotion.None;
+
+    private TsFieldMember BuildPromotedParamsCompanionField(IrConstructorParameter p) =>
+        new(
+            p.EmittedName ?? IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
+            ResolveCtorParamTsType(p.Parameter.Type),
+            Initializer: null,
+            Readonly: p.Promotion is IrParameterPromotion.ReadonlyProperty,
+            Static: false,
+            Accessibility: IrToTsClassBridge.MapAccessibility(
+                p.PromotedVisibility ?? IrVisibility.Public
+            )
+        );
 
     // ─── Constructor parameter discovery ──────────────────────
 

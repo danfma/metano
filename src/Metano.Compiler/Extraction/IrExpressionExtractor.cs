@@ -76,6 +76,8 @@ public sealed class IrExpressionExtractor
     /// </summary>
     private int _receiverTempCounter;
 
+    private string NextReceiverTempName() => $"receiver$temp${_receiverTempCounter++}";
+
     public IrExpressionExtractor(
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver = null,
@@ -3230,7 +3232,7 @@ public sealed class IrExpressionExtractor
             );
         }
 
-        var tempName = $"receiver$temp${_receiverTempCounter++}";
+        var tempName = NextReceiverTempName();
         var tempRef = new IrIdentifier(tempName);
         var args = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(tempRef) };
         foreach (var idx in indexArgs)
@@ -3346,7 +3348,7 @@ public sealed class IrExpressionExtractor
         // (a setter whose new-value expression triggers another
         // setter on a different impure receiver) don't shadow each
         // other under IIFE scoping.
-        var tempName = $"receiver$temp${_receiverTempCounter++}";
+        var tempName = NextReceiverTempName();
         var tempRef = new IrIdentifier(tempName);
         var setterCall = BuildExtensionHelperCall(
             helperContainer,

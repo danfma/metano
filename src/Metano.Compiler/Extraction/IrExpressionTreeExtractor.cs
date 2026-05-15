@@ -309,22 +309,31 @@ internal sealed class IrExpressionTreeExtractor
 
         // Bind inner params before walking the body so identifier
         // resolution treats them as `param` nodes rather than
-        // closure-captured locals. Roll back on exit so a sibling
-        // nested lambda cannot leak the binding.
-        foreach (var symbol in paramSymbols)
-            _lambdaParams.Add(symbol);
+        // closure-captured locals. The scope rolls back on dispose so a
+        // sibling nested lambda cannot leak the binding.
+        using var paramScope = BindNestedLambdaParams(paramSymbols);
+        var body = Walk(bodyExpr);
+        if (body is null)
+            return null;
+        return new IrExprLambda(paramNodes, body);
+    }
 
-        try
+    private IDisposable BindNestedLambdaParams(IReadOnlyList<IParameterSymbol> symbols)
+    {
+        foreach (var symbol in symbols)
+            _lambdaParams.Add(symbol);
+        return new NestedLambdaParamScope(_lambdaParams, symbols);
+    }
+
+    private sealed class NestedLambdaParamScope(
+        HashSet<ISymbol> lambdaParams,
+        IReadOnlyList<IParameterSymbol> symbols
+    ) : IDisposable
+    {
+        public void Dispose()
         {
-            var body = Walk(bodyExpr);
-            if (body is null)
-                return null;
-            return new IrExprLambda(paramNodes, body);
-        }
-        finally
-        {
-            foreach (var symbol in paramSymbols)
-                _lambdaParams.Remove(symbol);
+            foreach (var symbol in symbols)
+                lambdaParams.Remove(symbol);
         }
     }
 

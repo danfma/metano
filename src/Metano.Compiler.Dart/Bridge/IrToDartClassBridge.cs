@@ -71,7 +71,7 @@ public static class IrToDartClassBridge
         // (Dart's idiomatic equivalent of C#'s `with` expression). The
         // synthesis is skipped for [PlainObject] records — those are emitted
         // as plain data carriers without behavior.
-        if (ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject && ir.Constructor is not null)
+        if (ShouldSynthesizeRecordMembers(ir))
             SynthesizeRecordMembers(ir, name, members);
 
         statements.Add(
@@ -88,6 +88,9 @@ public static class IrToDartClassBridge
     }
 
     // ── Record synthesis ───────────────────────────────────────────────────
+
+    private static bool ShouldSynthesizeRecordMembers(IrClassDeclaration ir) =>
+        ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject && ir.Constructor is not null;
 
     /// <summary>
     /// Synthesizes <c>operator ==</c>, <c>hashCode</c>, and <c>copyWith</c> for
@@ -342,17 +345,27 @@ public static class IrToDartClassBridge
             IrToDartTypeMapper.Map(field.Type),
             IsFinal: field.IsReadonly,
             IsStatic: field.IsStatic,
-            // Dart requires non-nullable fields to be initialized at declaration or in
-            // the constructor. `late` is the safe fallback when we have neither — a
-            // field initializer from the IR removes the need for it; a ctor body that
-            // assigns the field (e.g. `_view = view`) keeps `late` so Dart accepts the
-            // deferred initialization. Applies equally to static fields: an
-            // uninitialized `static int count;` is invalid without `late`.
-            IsLate: !IsNullable(field.Type) && field.Initializer is null,
+            IsLate: NeedsLate(field.Type, field.Initializer is not null),
             Initializer: field.Initializer
         );
 
     private static bool IsNullable(IrTypeRef type) => type is IrNullableTypeRef;
+
+    /// <summary>
+    /// Dart requires non-nullable fields to be initialized at declaration or in
+    /// the constructor. <c>late</c> is the safe fallback when neither holds — an
+    /// initializer satisfies the field at construction time without the modifier.
+    /// Applies equally to static fields: an uninitialized <c>static int count;</c>
+    /// is invalid without <c>late</c>.
+    /// <para>
+    /// Property-backed slots add their own <c>!IsStatic</c> guard at the call
+    /// site: Dart forbids <c>late</c> on static properties, but accepts it on
+    /// static fields. The asymmetry stays out of this helper because the field
+    /// path never needs the extra gate.
+    /// </para>
+    /// </summary>
+    private static bool NeedsLate(IrTypeRef type, bool hasInitializer) =>
+        !IsNullable(type) && !hasInitializer;
 
     /// <summary>
     /// Filters out C# BCL interfaces (IEquatable, IComparable, IFormattable, ...) that
@@ -391,16 +404,12 @@ public static class IrToDartClassBridge
             // surface as Dart field initializers — dropping them would change
             // runtime semantics and, for non-nullable fields, leave a `late`
             // declaration pointing at a value that was never written.
-            // Non-nullable fields only need `late` when there's no initializer;
-            // the presence of one makes the field satisfied at construction
-            // time without the modifier.
-            var hasInitializer = prop.Initializer is not null;
             return new DartField(
                 IrToDartNamingPolicy.ToMemberName(prop.Name, prop.Attributes),
                 IrToDartTypeMapper.Map(prop.Type),
                 IsFinal: isFinal,
                 IsStatic: prop.IsStatic,
-                IsLate: !prop.IsStatic && !IsNullable(prop.Type) && !hasInitializer,
+                IsLate: !prop.IsStatic && NeedsLate(prop.Type, prop.Initializer is not null),
                 Initializer: prop.Initializer
             );
         }
