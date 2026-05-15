@@ -246,9 +246,9 @@ public static class DiagnosticCodes
     /// consumer csproj could not be copied to the generated output
     /// directory. Causes include the source file being missing on
     /// disk, the resolved destination escaping the output tree (via a
-    /// <c>..</c> segment or a rooted <c>Output</c> path), or an I/O
-    /// failure during copy. The transpiler emits the rest of the run
-    /// and surfaces the failure as a warning so the developer can
-    /// fix the manifest without losing the generated TS output.</summary>
+    /// <c>..</c> segment or a rooted <c>OutputPath</c>), or an I/O
+    /// failure during copy. Surfaced as an error so the build fails
+    /// fast — a broken manifest silently shipping an incomplete
+    /// artifact would be worse than a loud diagnostic.</summary>
     public const string AssetCopyFailure = "MS0025";
 }

@@ -79,6 +79,8 @@ public static class TranspilerHost
                     sourceHashes,
                     referenceFingerprints,
                     assetSourceHashes,
+                    assets,
+                    projectDir,
                     options.FilePrefix,
                     options.ShowTimings,
                     totalSw,
@@ -114,7 +116,7 @@ public static class TranspilerHost
         if (errorCount > 0)
             return new TranspileResult(false, output.Files, warningCount, errorCount);
 
-        if (output.Files.Count == 0)
+        if (output.Files.Count == 0 && assets.Count == 0)
         {
             Console.WriteLine("Metano: No transpilable types found.");
 
@@ -136,7 +138,8 @@ public static class TranspilerHost
             return new TranspileResult(true, output.Files, warningCount, 0);
         }
 
-        await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix);
+        if (output.Files.Count > 0)
+            await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix);
         var assetDiagnostics = await CopyAssetsAsync(assets, outputDir, projectDir);
         var (assetWarnings, assetErrors) =
             assetDiagnostics.Count > 0 ? ReportDiagnostics(assetDiagnostics) : (0, 0);
@@ -223,6 +226,8 @@ public static class TranspilerHost
         IReadOnlyDictionary<string, string> sourceHashes,
         IReadOnlyDictionary<string, string> referenceFingerprints,
         IReadOnlyDictionary<string, string> assetSourceHashes,
+        IReadOnlyList<AssetSpec> assets,
+        string projectDir,
         string? filePrefix,
         bool showTimings,
         Stopwatch totalSw,
@@ -249,6 +254,8 @@ public static class TranspilerHost
             return false;
         if (!CacheKeyBuilder.DictionariesEqual(cache.AssetSourceHashes, assetSourceHashes))
             return false;
+        if (!AreAssetCopiesIntact(assets, assetSourceHashes, outputDir, projectDir))
+            return false;
 
         var prefixBlock = string.IsNullOrEmpty(filePrefix) ? null : filePrefix + "\n";
         var rehydrated = CacheKeyBuilder.ValidateAndRehydrate(
@@ -266,6 +273,42 @@ public static class TranspilerHost
         );
         if (showTimings)
             Console.WriteLine($"  Total: {totalSw.ElapsedMilliseconds}ms");
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that every declared asset still exists at its resolved
+    /// destination with content matching the cached source fingerprint.
+    /// Guards against a cache hit when the user (or an external tool)
+    /// has deleted or edited an asset copy out-of-band; without this
+    /// check, the short-circuit would happily report success even
+    /// though the artifact is incomplete.
+    /// </summary>
+    private static bool AreAssetCopiesIntact(
+        IReadOnlyList<AssetSpec> assets,
+        IReadOnlyDictionary<string, string> assetSourceHashes,
+        string outputDir,
+        string projectDir
+    )
+    {
+        foreach (var asset in assets)
+        {
+            if (
+                !assetSourceHashes.TryGetValue(
+                    CacheKeyBuilder.ComputeAssetCacheKey(asset),
+                    out var expectedHash
+                )
+            )
+                return false;
+            var relative = ResolveAssetDestination(asset, projectDir);
+            var destination = Path.GetFullPath(Path.Combine(outputDir, relative));
+            if (!File.Exists(destination))
+                return false;
+            using var stream = File.OpenRead(destination);
+            var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+            if (!string.Equals(actual, expectedHash, StringComparison.Ordinal))
+                return false;
+        }
         return true;
     }
 
@@ -407,8 +450,16 @@ public static class TranspilerHost
         var outputWithSeparator = outputDirFull.EndsWith(Path.DirectorySeparatorChar)
             ? outputDirFull
             : outputDirFull + Path.DirectorySeparatorChar;
-        return destinationFull.StartsWith(outputWithSeparator, StringComparison.Ordinal)
-            || string.Equals(destinationFull, outputDirFull, StringComparison.Ordinal);
+        // Path comparison is case-insensitive on Windows / macOS HFS+ and
+        // case-sensitive on Linux. Mirror the platform's filesystem so a
+        // mismatched casing between outputDirFull and destinationFull
+        // does not produce a false escape report.
+        var comparison =
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+        return destinationFull.StartsWith(outputWithSeparator, comparison)
+            || string.Equals(destinationFull, outputDirFull, comparison);
     }
 
     private static MetanoDiagnostic CreateMissingAssetDiagnostic(string source) =>

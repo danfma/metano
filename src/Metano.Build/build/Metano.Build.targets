@@ -105,17 +105,16 @@
 
     <!-- Project @(MetanoAsset) items into asset CLI args.
          Filter by %(Language) against the active transpiler language;
-         items carrying `all` or matching the language survive. Drop
-         items whose source file does not exist so the CLI never sees
-         broken paths (the host would issue MS0025 anyway, but failing
-         fast keeps the fingerprint clean). -->
+         items carrying `all` or matching the language survive. Missing
+         source files are intentionally NOT filtered here — the host
+         must see them so it can raise MS0025 instead of letting a
+         broken manifest pass silently. -->
     <ItemGroup>
       <_MetanoAssetSelected
         Include="@(MetanoAsset)"
         Condition="
-        ('%(MetanoAsset.Language)' == '$(_MetanoTargetLanguage)' or
-          '%(MetanoAsset.Language)' == 'all') and
-        Exists('%(MetanoAsset.FullPath)')"
+        '%(MetanoAsset.Language)' == '$(_MetanoTargetLanguage)' or
+          '%(MetanoAsset.Language)' == 'all'"
       />
     </ItemGroup>
 
