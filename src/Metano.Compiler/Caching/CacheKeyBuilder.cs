@@ -142,8 +142,8 @@ public static class CacheKeyBuilder
         {
             if (!File.Exists(asset.Source))
                 continue;
-            var bytes = File.ReadAllBytes(asset.Source);
-            fingerprints[ComputeAssetCacheKey(asset)] = HexEncode(SHA256.HashData(bytes));
+            using var stream = File.OpenRead(asset.Source);
+            fingerprints[ComputeAssetCacheKey(asset)] = HexEncode(SHA256.HashData(stream));
         }
         return fingerprints;
     }
@@ -154,12 +154,15 @@ public static class CacheKeyBuilder
     /// for an explicit <c>OutputPath</c> override. The destination
     /// participates so the same source emitted to two destinations
     /// produces two distinct rows — invalidating either one triggers
-    /// a re-copy of only the affected destination.
+    /// a re-copy of only the affected destination. Destination
+    /// separators are normalised to <c>/</c> so a Windows-authored
+    /// <c>provider\schema.sql</c> shares the same row as a Unix
+    /// <c>provider/schema.sql</c>.
     /// </summary>
-    private static string ComputeAssetCacheKey(AssetSpec asset) =>
+    internal static string ComputeAssetCacheKey(AssetSpec asset) =>
         asset.RelativeDestination is null
             ? NormalizePath(asset.Source)
-            : $"{NormalizePath(asset.Source)}=>{asset.RelativeDestination}";
+            : $"{NormalizePath(asset.Source)}=>{asset.RelativeDestination.Replace('\\', '/')}";
 
     public static bool DictionariesEqual(
         IReadOnlyDictionary<string, string> a,
