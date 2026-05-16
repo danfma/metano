@@ -28,9 +28,23 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     private readonly IrCompilation _ir = ir;
     private readonly Compilation _compilation = compilation;
     private readonly List<MetanoDiagnostic> _diagnostics = new();
+    private readonly object _diagnosticsLock = new();
     private readonly DartIrRewriter _rewriter = new(DeclarativeMappingRegistry.FromIr(ir));
 
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
+
+    /// <summary>
+    /// Thread-safe sink for diagnostic emission. Mirrors the TypeScript
+    /// transformer's sink contract (#218 / #226): every producer routes
+    /// through this single locked entry-point so a future parallel-Dart
+    /// sweep does not corrupt the list. Open <c>QueryableExtractionDiagnostics</c>
+    /// against this method instead of <c>_diagnostics.Add</c>.
+    /// </summary>
+    internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
+    {
+        lock (_diagnosticsLock)
+            _diagnostics.Add(diagnostic);
+    }
 
     public IReadOnlyList<DartSourceFile> TransformAll()
     {
@@ -39,7 +53,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
         // in this transformer's diagnostics list and surface via
         // the host's standard merge.
         using var queryableDiagnosticSink =
-            Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(_diagnostics.Add);
+            Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(ReportDiagnostic);
 
         var files = new List<DartSourceFile>();
         var transpilable = DiscoverTranspilableTypes();
@@ -67,7 +81,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
             var fileName = IrToDartNamingPolicy.ToFileName(emittedName);
             if (localTypeFiles.ContainsKey(emittedName))
             {
-                _diagnostics.Add(
+                ReportDiagnostic(
                     new MetanoDiagnostic(
                         MetanoDiagnosticSeverity.Error,
                         DiagnosticCodes.AmbiguousConstruct,
@@ -156,7 +170,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     var delegateIr = IrDelegateExtractor.Extract(type, target: TargetLanguage.Dart);
                     if (delegateIr is null)
                     {
-                        _diagnostics.Add(
+                        ReportDiagnostic(
                             new MetanoDiagnostic(
                                 MetanoDiagnosticSeverity.Warning,
                                 DiagnosticCodes.UnsupportedFeature,
@@ -170,7 +184,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     break;
 
                 default:
-                    _diagnostics.Add(
+                    ReportDiagnostic(
                         new MetanoDiagnostic(
                             MetanoDiagnosticSeverity.Warning,
                             DiagnosticCodes.UnsupportedFeature,
@@ -234,7 +248,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
         {
             if (member is IrMethodDeclaration method && method.Overloads is { Count: > 0 })
             {
-                _diagnostics.Add(
+                ReportDiagnostic(
                     new MetanoDiagnostic(
                         MetanoDiagnosticSeverity.Warning,
                         DiagnosticCodes.UnsupportedFeature,

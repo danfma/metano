@@ -126,11 +126,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         _crossPackageDependencies;
 
     /// <summary>
-    /// Thread-safe sink for diagnostic emission. The lock serialises
-    /// writes from the per-group parallel transform loop as well as
-    /// any other call site that needs to publish a diagnostic.
-    /// Single channel: <see cref="TypeScriptTransformContext"/> and
-    /// the queryable-extraction sink (#218) both route through here.
+    /// Thread-safe sink for diagnostic emission (#218 / #226). Every
+    /// producer routes through this single locked entry-point so the
+    /// per-group parallel transform loop and any future parallel-emit
+    /// PR cannot corrupt the list. Open
+    /// <see cref="Metano.Compiler.Extraction.QueryableExtractionDiagnostics"/>
+    /// against this method instead of <c>_diagnostics.Add</c> so the
+    /// walker's MS0024 reports share the same lock.
     /// </summary>
     internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
     {
@@ -428,7 +430,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // diagnostics for each distinct cycle. Cycles are reported as warnings — the
         // build proceeds, but the consumer sees the chain in their build log instead
         // of debugging it through tsgo's downstream error.
-        CyclicReferenceDetector.DetectAndReport(files, _diagnostics.Add);
+        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic);
 
         // Drain MS0007 cross-package misses recorded by TypeMapper.ResolveOrigin while
         // mapping types. One error per unique miss; the message names the missing
@@ -440,7 +442,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             )
         )
         {
-            _diagnostics.Add(
+            ReportDiagnostic(
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Error,
                     DiagnosticCodes.CrossPackageResolution,
@@ -758,7 +760,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 && firstNs != ns
             )
             {
-                _diagnostics.Add(
+                ReportDiagnostic(
                     new MetanoDiagnostic(
                         MetanoDiagnosticSeverity.Error,
                         DiagnosticCodes.EmitInFileConflict,
