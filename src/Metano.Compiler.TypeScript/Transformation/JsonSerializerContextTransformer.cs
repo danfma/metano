@@ -353,26 +353,27 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
-    /// Classifies a C# property type into a TypeDescriptor kind string for the runtime spec.
+    /// Classifies a C# property type into a <see cref="JsonPropertyKind"/>
+    /// dispatch tag for the runtime spec. The wire string is derived from
+    /// the enum value via <see cref="GetWireKind"/> so the on-disk shape
+    /// stays byte-identical with the prior magic-string implementation.
     /// </summary>
-    private string ClassifyPropertyType(ITypeSymbol type)
+    private JsonPropertyKind ClassifyPropertyType(ITypeSymbol type)
     {
-        // Unwrap nullable
         if (
             type is INamedTypeSymbol
             {
                 OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
-            } nullable
+            }
         )
-            return "nullable";
+            return JsonPropertyKind.Nullable;
 
         if (
             type.NullableAnnotation == NullableAnnotation.Annotated
             && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T
         )
-            return "nullable";
+            return JsonPropertyKind.Nullable;
 
-        // Primitives
         if (
             type.SpecialType
             is SpecialType.System_String
@@ -388,7 +389,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 or SpecialType.System_SByte
                 or SpecialType.System_Boolean
         )
-            return "primitive";
+            return JsonPropertyKind.Primitive;
 
         if (type is INamedTypeSymbol named)
         {
@@ -397,17 +398,15 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             // Guid → UUID branded type. At runtime it's a string (JSON wire:
             // primitive string), but the deserialize side wraps via UUID.create.
             if (fullName is "System.Guid")
-                return "branded";
+                return JsonPropertyKind.Branded;
 
             // Uri → primitive string (no special handling needed).
             if (fullName is "System.Uri")
-                return "primitive";
+                return JsonPropertyKind.Primitive;
 
-            // Decimal
             if (fullName is "System.Decimal" || type.SpecialType == SpecialType.System_Decimal)
-                return "decimal";
+                return JsonPropertyKind.Decimal;
 
-            // Temporal types
             if (
                 fullName
                 is "System.DateTime"
@@ -416,24 +415,20 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                     or "System.TimeOnly"
                     or "System.TimeSpan"
             )
-                return "temporal";
+                return JsonPropertyKind.Temporal;
 
-            // Dictionary-like → map
             if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)
-                return "map";
+                return JsonPropertyKind.Map;
 
-            // HashSet-like → hashSet
             if (named.IsSetLike() && named.TypeArguments.Length > 0)
-                return "hashSet";
+                return JsonPropertyKind.HashSet;
 
             // Collection-like / IEnumerable / IReadOnlyCollection → array.
             // Since #129 these no longer share the `IsCollectionLike`
             // predicate (they lower to TS `Iterable<T>` at the type
             // level), but JSON-wise they still serialize as arrays —
             // `JSON.stringify([...iter])` works the same as a plain
-            // array. Keep the descriptor as "array" so the generated
-            // serializer context knows to iterate and emit the element
-            // descriptor.
+            // array.
             if (
                 (
                     named.IsCollectionLike()
@@ -442,24 +437,45 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 )
                 && named.TypeArguments.Length > 0
             )
-                return "array";
+                return JsonPropertyKind.Array;
 
-            // Enum with [StringEnum] → enum, otherwise numericEnum
             if (named.TypeKind == TypeKind.Enum)
-                return SymbolHelper.HasAttribute(named, "StringEnum") ? "enum" : "numericEnum";
+                return SymbolHelper.HasAttribute(named, "StringEnum")
+                    ? JsonPropertyKind.Enum
+                    : JsonPropertyKind.NumericEnum;
 
             // [Branded] (and its predecessor [InlineWrapper]) → branded
             if (SymbolHelper.HasBranded(named))
-                return "branded";
+                return JsonPropertyKind.Branded;
         }
 
-        // Arrays
         if (type is IArrayTypeSymbol)
-            return "array";
+            return JsonPropertyKind.Array;
 
-        // Other transpilable type → ref
-        return "ref";
+        return JsonPropertyKind.Ref;
     }
+
+    /// <summary>
+    /// Wire-format string for the runtime <c>TypeDescriptor.kind</c>
+    /// field. Kept as a single-source-of-truth mapping so the on-disk
+    /// shape can never drift from the enum.
+    /// </summary>
+    private static string GetWireKind(JsonPropertyKind kind) =>
+        kind switch
+        {
+            JsonPropertyKind.Primitive => "primitive",
+            JsonPropertyKind.Nullable => "nullable",
+            JsonPropertyKind.Branded => "branded",
+            JsonPropertyKind.Decimal => "decimal",
+            JsonPropertyKind.Temporal => "temporal",
+            JsonPropertyKind.Map => "map",
+            JsonPropertyKind.HashSet => "hashSet",
+            JsonPropertyKind.Array => "array",
+            JsonPropertyKind.Enum => "enum",
+            JsonPropertyKind.NumericEnum => "numericEnum",
+            JsonPropertyKind.Ref => "ref",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
+        };
 
     /// <summary>
     /// Builds a property spec object literal: { ts: "name", json: "name", type: { kind: "..." } }
@@ -467,7 +483,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     private TsObjectLiteral BuildPropertySpec(
         string tsName,
         string jsonName,
-        string descriptorKind,
+        JsonPropertyKind descriptorKind,
         IPropertySymbol prop
     )
     {
@@ -478,7 +494,6 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             new("type", BuildTypeDescriptor(prop.Type, descriptorKind)),
         };
 
-        // Add optional: true for nullable types
         if (
             prop.Type.NullableAnnotation == NullableAnnotation.Annotated
             || prop.Type
@@ -495,138 +510,147 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
-    /// Builds the type descriptor object: { kind: "primitive" }, { kind: "array", element: {...} }, etc.
+    /// Dispatches to the per-kind descriptor builder. Compiler-enforced
+    /// exhaustiveness: a new <see cref="JsonPropertyKind"/> value will
+    /// fail to build if no arm is added here.
     /// </summary>
-    private TsObjectLiteral BuildTypeDescriptor(ITypeSymbol type, string kind)
-    {
-        switch (kind)
+    private TsObjectLiteral BuildTypeDescriptor(ITypeSymbol type, JsonPropertyKind kind) =>
+        kind switch
         {
-            case "nullable":
-            {
-                var innerType = UnwrapNullable(type);
-                var innerKind = ClassifyPropertyType(innerType);
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("nullable")),
-                    new TsObjectProperty("inner", BuildTypeDescriptor(innerType, innerKind)),
-                ]);
-            }
+            JsonPropertyKind.Nullable => BuildNullableDescriptor(type),
+            JsonPropertyKind.Array => BuildArrayDescriptor(type),
+            JsonPropertyKind.Map => BuildMapDescriptor(type),
+            JsonPropertyKind.HashSet => BuildHashSetDescriptor(type),
+            JsonPropertyKind.Temporal => BuildTemporalDescriptor(type),
+            JsonPropertyKind.Branded => BuildBrandedDescriptor(type),
+            JsonPropertyKind.Enum => BuildEnumValuesDescriptor(type, JsonPropertyKind.Enum),
+            JsonPropertyKind.NumericEnum => BuildEnumValuesDescriptor(
+                type,
+                JsonPropertyKind.NumericEnum
+            ),
+            JsonPropertyKind.Ref => BuildRefDescriptor(type),
+            JsonPropertyKind.Primitive or JsonPropertyKind.Decimal => BuildBareKindDescriptor(kind),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
+        };
 
-            case "array":
-            {
-                var elementType = GetElementType(type);
-                var elementKind = ClassifyPropertyType(elementType);
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("array")),
-                    new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
-                ]);
-            }
-
-            case "map":
-            {
-                var named = (INamedTypeSymbol)type;
-                var keyType = named.TypeArguments[0];
-                var valueType = named.TypeArguments[1];
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("map")),
-                    new TsObjectProperty(
-                        "key",
-                        BuildTypeDescriptor(keyType, ClassifyPropertyType(keyType))
-                    ),
-                    new TsObjectProperty(
-                        "value",
-                        BuildTypeDescriptor(valueType, ClassifyPropertyType(valueType))
-                    ),
-                ]);
-            }
-
-            case "hashSet":
-            {
-                var named = (INamedTypeSymbol)type;
-                var elementType = named.TypeArguments[0];
-                var elementKind = ClassifyPropertyType(elementType);
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("hashSet")),
-                    new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
-                ]);
-            }
-
-            case "temporal":
-            {
-                var tsType = MapType(type);
-                var typeName = tsType is TsNamedType namedTs
-                    ? namedTs.Name
-                    : "Temporal.PlainDateTime";
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("temporal")),
-                    new TsObjectProperty(
-                        "parse",
-                        new TsPropertyAccess(new TsIdentifier(typeName), "from")
-                    ),
-                ]);
-            }
-
-            case "branded":
-            {
-                // System.Guid maps to the UUID branded type from metano-runtime.
-                // Other branded types come from user-defined [Branded] structs
-                // and use their TS type name directly.
-                var named = (INamedTypeSymbol)type;
-                var tsTypeName =
-                    named.ToDisplayString() == "System.Guid"
-                        ? "UUID"
-                        : _context.ResolveTsName(named);
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("branded")),
-                    new TsObjectProperty(
-                        "create",
-                        new TsPropertyAccess(new TsIdentifier(tsTypeName), "create")
-                    ),
-                ]);
-            }
-
-            case "enum":
-            {
-                var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("enum")),
-                    new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
-                ]);
-            }
-
-            case "numericEnum":
-            {
-                var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("numericEnum")),
-                    new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
-                ]);
-            }
-
-            case "ref":
-            {
-                var tsType = MapType(type);
-                var refName = tsType is TsNamedType namedTs ? namedTs.Name : "unknown";
-                var getterName = TypeScriptNaming.ToCamelCase(refName);
-                return new TsObjectLiteral([
-                    new TsObjectProperty("kind", new TsStringLiteral("ref")),
-                    new TsObjectProperty(
-                        "spec",
-                        new TsArrowFunction(
-                            [],
-                            [
-                                new TsReturnStatement(
-                                    new TsPropertyAccess(new TsIdentifier("this"), getterName)
-                                ),
-                            ]
-                        )
-                    ),
-                ]);
-            }
-
-            default: // primitive, decimal
-                return new TsObjectLiteral([new TsObjectProperty("kind", new TsStringLiteral(kind))]);
-        }
+    private TsObjectLiteral BuildNullableDescriptor(ITypeSymbol type)
+    {
+        var innerType = UnwrapNullable(type);
+        var innerKind = ClassifyPropertyType(innerType);
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Nullable)),
+            new TsObjectProperty("inner", BuildTypeDescriptor(innerType, innerKind)),
+        ]);
     }
+
+    private TsObjectLiteral BuildArrayDescriptor(ITypeSymbol type)
+    {
+        var elementType = GetElementType(type);
+        var elementKind = ClassifyPropertyType(elementType);
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Array)),
+            new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
+        ]);
+    }
+
+    private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type)
+    {
+        var named = (INamedTypeSymbol)type;
+        var keyType = named.TypeArguments[0];
+        var valueType = named.TypeArguments[1];
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Map)),
+            new TsObjectProperty(
+                "key",
+                BuildTypeDescriptor(keyType, ClassifyPropertyType(keyType))
+            ),
+            new TsObjectProperty(
+                "value",
+                BuildTypeDescriptor(valueType, ClassifyPropertyType(valueType))
+            ),
+        ]);
+    }
+
+    private TsObjectLiteral BuildHashSetDescriptor(ITypeSymbol type)
+    {
+        var named = (INamedTypeSymbol)type;
+        var elementType = named.TypeArguments[0];
+        var elementKind = ClassifyPropertyType(elementType);
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.HashSet)),
+            new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
+        ]);
+    }
+
+    private TsObjectLiteral BuildTemporalDescriptor(ITypeSymbol type)
+    {
+        var tsType = MapType(type);
+        var typeName = tsType is TsNamedType namedTs ? namedTs.Name : "Temporal.PlainDateTime";
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Temporal)),
+            new TsObjectProperty("parse", new TsPropertyAccess(new TsIdentifier(typeName), "from")),
+        ]);
+    }
+
+    /// <summary>
+    /// System.Guid maps to the UUID branded type from metano-runtime.
+    /// Other branded types come from user-defined <c>[Branded]</c>
+    /// structs and use their TS type name directly.
+    /// </summary>
+    private TsObjectLiteral BuildBrandedDescriptor(ITypeSymbol type)
+    {
+        var named = (INamedTypeSymbol)type;
+        var tsTypeName =
+            named.ToDisplayString() == "System.Guid" ? "UUID" : _context.ResolveTsName(named);
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Branded)),
+            new TsObjectProperty(
+                "create",
+                new TsPropertyAccess(new TsIdentifier(tsTypeName), "create")
+            ),
+        ]);
+    }
+
+    private TsObjectLiteral BuildEnumValuesDescriptor(ITypeSymbol type, JsonPropertyKind kind)
+    {
+        var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(kind)),
+            new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
+        ]);
+    }
+
+    private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type)
+    {
+        var tsType = MapType(type);
+        var refName = tsType is TsNamedType namedTs ? namedTs.Name : "unknown";
+        var getterName = TypeScriptNaming.ToCamelCase(refName);
+        return new TsObjectLiteral([
+            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Ref)),
+            new TsObjectProperty(
+                "spec",
+                new TsArrowFunction(
+                    [],
+                    [
+                        new TsReturnStatement(
+                            new TsPropertyAccess(new TsIdentifier("this"), getterName)
+                        ),
+                    ]
+                )
+            ),
+        ]);
+    }
+
+    /// <summary>
+    /// Builds a kind-only descriptor for leaf wire kinds with no
+    /// payload (primitive / decimal). The runtime <c>SerializerContext</c>
+    /// reads the <c>kind</c> field and routes by it without further
+    /// fields.
+    /// </summary>
+    private static TsObjectLiteral BuildBareKindDescriptor(JsonPropertyKind kind) =>
+        new([new TsObjectProperty("kind", WireKindLiteral(kind))]);
+
+    private static TsStringLiteral WireKindLiteral(JsonPropertyKind kind) => new(GetWireKind(kind));
 
     private static ITypeSymbol UnwrapNullable(ITypeSymbol type)
     {
