@@ -2,8 +2,8 @@ namespace Metano.Compiler.TypeScript.Caching;
 
 /// <summary>
 /// Per-cached-file shape persisted alongside the per-group closure
-/// hash (ADR-0023 follow-up / PR 3c). On a per-group cache hit the
-/// host reads the file's content from disk and rebuilds a minimal
+/// hash (ADR-0023). On a per-group cache hit the host reads the
+/// file's content from disk and rebuilds a minimal
 /// <see cref="Metano.Compiler.TypeScript.AST.TsSourceFile"/> from
 /// this metadata so the downstream stages
 /// (<c>BarrelFileGenerator</c>, <c>CyclicReferenceDetector</c>) can

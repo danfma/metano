@@ -40,17 +40,12 @@ namespace Metano.Annotations.TypeScript;
 /// does not accidentally see TS-only knobs.
 /// </para>
 /// <para>
-/// <b>Resolution recipe:</b> <c>[External]</c> only suppresses emission
-/// — it does NOT teach TypeScript where the name lives. For ambient
-/// shapes that come from an npm package, pair the attribute with
-/// <c>[Import("ExportedName", from: "package")]</c>: the consumer file
-/// emits <c>import { ExportedName as LocalName } from "package"</c>
-/// (or just <c>import { LocalName }</c> when the names match) and TS
-/// resolves the type through the package's own <c>.d.ts</c>. For
-/// purely synthetic markers that have no npm representation, the
-/// consumer must provide an ambient declaration alongside (a project
-/// <c>global.d.ts</c> with <c>declare class LocalName {}</c>). A
-/// future iteration may emit that declaration automatically — see #190.
+/// Resolution of the name on the TypeScript side stays the
+/// consumer's responsibility: pair the attribute with
+/// <c>[Import("ExportedName", from: "package")]</c> for symbols
+/// shipped by an npm package, or hand-author an ambient declaration
+/// for synthetic markers. The full recipe, including the rationale
+/// for not auto-emitting an ambient declaration, lives in ADR-0015.
 /// </para>
 /// </summary>
 [AttributeUsage(

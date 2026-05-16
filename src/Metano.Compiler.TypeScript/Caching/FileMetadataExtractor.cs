@@ -8,7 +8,7 @@ namespace Metano.Compiler.TypeScript.Caching;
 /// Extracts <see cref="CachedFileMetadata"/> from a freshly
 /// transformed <see cref="TsSourceFile"/> and rebuilds a stub
 /// <see cref="TsSourceFile"/> from cached metadata on a per-group
-/// hit (PR 3c). The stub contains exactly the AST nodes the
+/// cache hit. The stub contains exactly the AST nodes the
 /// barrel emitter and cyclic detector look at — every other
 /// statement is omitted, which is safe because the cached
 /// on-disk content is what actually gets written.
@@ -215,7 +215,7 @@ public static class FileMetadataExtractor
     /// hand-edited <c>.metano-cache-groups-typescript.json</c> cannot
     /// redirect <c>File.ReadAllText</c> to an arbitrary disk
     /// location (mirrors the safety check the host-level cache from
-    /// PR 3a applies in <c>CacheKeyBuilder</c>).
+    /// host-level cache applies in <c>CacheKeyBuilder</c>).
     /// </summary>
     public static bool IsSafeRelativePath(string relativePath)
     {

@@ -4,11 +4,12 @@ using System.Text.Json;
 namespace Metano.Compiler.Caching;
 
 /// <summary>
-/// On-disk cache the transpiler writes after every successful run and
-/// inspects at the start of the next run to decide whether anything
-/// regenerates. The MVP scope (#21 PR 3a) is "skip the entire pipeline
-/// when nothing changed"; per-group skip lands in the follow-up
-/// (PR 3b) once a file-descriptor abstraction exists.
+/// Host-level on-disk cache the transpiler writes after every
+/// successful run and inspects at the start of the next run to decide
+/// whether the entire pipeline can short-circuit (ADR-0021). The
+/// per-group cache (<see cref="GroupCacheFile"/>) layers on top of
+/// this one to skip individual file groups when their type-signature
+/// closure is unchanged but the broader fingerprint differs.
 ///
 /// <para>
 /// Cache invariants:

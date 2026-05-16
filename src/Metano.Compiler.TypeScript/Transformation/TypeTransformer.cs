@@ -69,7 +69,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// Output directory for the active run, supplied by the host
     /// (<see cref="Metano.Compiler.TranspilerHost"/>) so the per-group
-    /// cache (PR 3c) can live next to the generated <c>.ts</c> files.
+    /// cache (ADR-0023) can live next to the generated <c>.ts</c> files.
     /// <c>null</c> disables the per-group skip path — useful for unit
     /// tests that drive the transformer with no on-disk side effects.
     /// </summary>
@@ -93,7 +93,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public string? CacheConfigurationFingerprint { get; init; }
 
     /// <summary>
-    /// On a per-group cache hit (PR 3c) the transformer reuses the
+    /// On a per-group cache hit (ADR-0023) the transformer reuses the
     /// content already on disk: stub <c>TsSourceFile</c>s flow
     /// through barrel + cyclic detection, but the printed output for
     /// those paths comes straight from disk so the next emit
@@ -338,7 +338,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // AsyncLocal writes inside a worker stay isolated. The result
             // list preserves source order via the group index so downstream
             // barrels and golden tests stay deterministic.
-            // Per-group skip decision (PR 3c): for every group whose
+            // Per-group skip decision (ADR-0023): for every group whose
             // closure hash matches the cached entry AND the on-disk
             // file's content hash still matches the cached value,
             // reuse the stub built from cached metadata and skip
@@ -796,7 +796,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private static string GroupKey(TypeFileGroup group) => $"{group.Namespace}/{group.FileName}";
 
     /// <summary>
-    /// Builds the per-group closure hash map (PR 3c). The signature
+    /// Builds the per-group closure hash map (ADR-0023). The signature
     /// hash index is amortised: a type appearing in N groups gets
     /// hashed once.
     /// </summary>

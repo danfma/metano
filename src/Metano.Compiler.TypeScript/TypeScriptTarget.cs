@@ -151,7 +151,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         var generated = new List<GeneratedFile>(sourceFiles.Count);
         foreach (var file in sourceFiles)
         {
-            // PR 3c: per-group cache hits surface stub TsSourceFiles
+            // Per-group cache hits (ADR-0023) surface stub TsSourceFiles
             // here so the barrel + cyclic stages see the right
             // imports + exports, but the on-disk bytes already match
             // the previous emit. Skip Printer for those — reuse the

@@ -3,24 +3,24 @@ using System.Text.Json;
 namespace Metano.Compiler.TypeScript.Caching;
 
 /// <summary>
-/// Per-target persistence for the per-group skip cache (PR 3c).
-/// Lives next to <c>TranspilationCache</c>'s <c>.metano-cache.json</c>
-/// at <c>&lt;outputDir&gt;/.metano-cache-groups-typescript.json</c>;
+/// Per-target persistence for the per-group skip cache (ADR-0023).
+/// Lives next to <see cref="Metano.Compiler.Caching.TranspilationCache"/>'s
+/// <c>.metano-cache.json</c> at
+/// <c>&lt;outputDir&gt;/.metano-cache-groups-typescript.json</c>;
 /// shape is keyed by the group key the
-/// <c>TypeScript</c> transformer uses for grouping
+/// <see cref="Transformation.TypeTransformer"/> uses for grouping
 /// (<c>namespace + fileName</c>).
 ///
 /// <para>
-/// A group entry is valid for re-use only when ALL of the
-/// following hold: (a) the cached <c>ConfigurationFingerprint</c>
-/// matches the active run's, (b) the cached closure hash matches
-/// the closure currently computed from the dep graph, and (c) the
-/// disk content's SHA-256 matches the cached
-/// <see cref="CachedFileMetadata.ContentHash"/>. The whole-build
-/// cache (PR 3a) verifies disk content on the short-circuit
-/// path, but on a normal transform run it does not — so this
-/// layer hashes the disk content itself before trusting the
-/// cached metadata.
+/// A group entry is valid for re-use only when ALL of the following
+/// hold: (a) the cached <c>ConfigurationFingerprint</c> matches the
+/// active run's, (b) the cached closure hash matches the closure
+/// currently computed from the dep graph, and (c) the disk content's
+/// SHA-256 matches the cached
+/// <see cref="CachedFileMetadata.ContentHash"/>. The host-level
+/// cache verifies disk content on its short-circuit path, but on a
+/// normal transform run it does not — so this layer re-hashes the
+/// disk content itself before trusting the cached metadata.
 /// </para>
 /// </summary>
 public sealed record GroupCacheFile(

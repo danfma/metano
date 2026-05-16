@@ -7,18 +7,17 @@ namespace Metano.Compiler.Caching;
 
 /// <summary>
 /// Computes the cache-invalidation key for a single file group
-/// (PR 3b / ADR-0023): the SHA-256 of the per-type signature
-/// hashes for every type in the group <em>plus every type the
-/// group transitively depends on</em>, sorted by FQN for stable
-/// order.
+/// (ADR-0023): the SHA-256 of the per-type signature hashes for
+/// every type in the group <em>plus every type the group
+/// transitively depends on</em>, sorted by FQN for stable order.
 ///
 /// <para>
-/// Combined with the global cache key from PR 3a
-/// (target language + configuration fingerprint + reference
-/// fingerprints), the group closure hash is the exact unit of
-/// invalidation the per-group skip path needs: change a type
-/// inside the closure and the hash flips; change a type outside
-/// the closure and the hash stays.
+/// Combined with the host-level cache key (target language +
+/// configuration fingerprint + reference fingerprints from
+/// <see cref="TranspilationCache"/>), the group closure hash is the
+/// exact unit of invalidation the per-group skip path needs: change
+/// a type inside the closure and the hash flips; change a type
+/// outside the closure and the hash stays.
 /// </para>
 /// </summary>
 public static class GroupClosureHasher
@@ -80,8 +79,8 @@ public static class GroupClosureHasher
         {
             sb.Append(fqn).Append('=');
             // Types outside the transpilable set (BCL, foreign assemblies)
-            // do not have entries here; the global reference fingerprint
-            // from PR 3a already covers their churn.
+            // do not have entries here; the host-level cache's reference
+            // fingerprints already cover their churn.
             if (signatureHashes.TryGetValue(fqn, out var hash))
                 sb.Append(hash);
             sb.Append('\0');

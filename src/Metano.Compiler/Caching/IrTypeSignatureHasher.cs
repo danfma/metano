@@ -8,9 +8,11 @@ namespace Metano.Compiler.Caching;
 /// <summary>
 /// Computes a stable per-type fingerprint from a Roslyn
 /// <see cref="INamedTypeSymbol"/>. The fingerprint is the unit of
-/// invalidation for the per-group incremental skip
-/// (#21 / ADR-0023 / PR 3b) — when a type's hash changes, every
-/// group whose closure contains that type regenerates.
+/// invalidation for the per-group incremental skip (ADR-0023):
+/// <see cref="GroupClosureHasher"/> folds every type's hash in a
+/// closure into one closure hash, so a body edit to any type in the
+/// group's transitive closure invalidates the group's entry in
+/// <see cref="GroupCacheFile"/>.
 ///
 /// <para>
 /// The hash mixes everything that can affect emission for the type:
