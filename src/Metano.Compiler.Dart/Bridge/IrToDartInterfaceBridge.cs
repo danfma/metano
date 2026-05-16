@@ -17,7 +17,7 @@ public static class IrToDartInterfaceBridge
     public static void Convert(IrInterfaceDeclaration ir, List<DartTopLevel> statements)
     {
         var name = IrToDartNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
-        var typeParameters = ConvertTypeParameters(ir.TypeParameters);
+        var typeParameters = IrToDartTypeParameterMapper.Map(ir.TypeParameters);
 
         // Dart's `implements` (not `extends`) is idiomatic for interface-to-interface reuse.
         var implementsList = ir.BaseInterfaces is { Count: > 0 } bases
@@ -75,28 +75,10 @@ public static class IrToDartInterfaceBridge
             Name: IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes),
             Parameters: parameters,
             ReturnType: IrToDartTypeMapper.Map(method.ReturnType),
-            TypeParameters: ConvertTypeParameters(method.TypeParameters),
+            TypeParameters: IrToDartTypeParameterMapper.Map(method.TypeParameters),
             IsStatic: method.IsStatic,
             IsAbstract: true,
             IsAsync: method.Semantics.IsAsync
         );
-    }
-
-    private static IReadOnlyList<DartTypeParameter>? ConvertTypeParameters(
-        IReadOnlyList<IrTypeParameter>? typeParameters
-    )
-    {
-        if (typeParameters is null || typeParameters.Count == 0)
-            return null;
-
-        return typeParameters
-            .Select(tp =>
-            {
-                var extends = tp.Constraints is { Count: > 0 } c
-                    ? IrToDartTypeMapper.Map(c[0])
-                    : null;
-                return new DartTypeParameter(tp.Name, extends);
-            })
-            .ToList();
     }
 }

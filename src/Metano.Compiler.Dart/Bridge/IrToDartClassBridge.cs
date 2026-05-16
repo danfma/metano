@@ -23,7 +23,7 @@ public static class IrToDartClassBridge
     {
         var name = IrToDartNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var modifier = ResolveClassModifier(ir);
-        var typeParameters = ConvertTypeParameters(ir.TypeParameters);
+        var typeParameters = IrToDartTypeParameterMapper.Map(ir.TypeParameters);
 
         var extendsType = ir.BaseType is not null ? IrToDartTypeMapper.Map(ir.BaseType) : null;
         // Filter out C# BCL interfaces (IEquatable, IComparable, ...) that records and
@@ -436,7 +436,7 @@ public static class IrToDartClassBridge
                 ))
                 .ToList(),
             ReturnType: IrToDartTypeMapper.Map(method.ReturnType),
-            TypeParameters: ConvertTypeParameters(method.TypeParameters),
+            TypeParameters: IrToDartTypeParameterMapper.Map(method.TypeParameters),
             IsStatic: method.IsStatic,
             IsAbstract: method.Semantics.IsAbstract,
             IsAsync: method.Semantics.IsAsync,
@@ -486,8 +486,4 @@ public static class IrToDartClassBridge
             return DartClassModifier.Final;
         return DartClassModifier.None;
     }
-
-    private static IReadOnlyList<DartTypeParameter>? ConvertTypeParameters(
-        IReadOnlyList<IrTypeParameter>? typeParameters
-    ) => IrToDartTypeParameterMapper.Map(typeParameters);
 }

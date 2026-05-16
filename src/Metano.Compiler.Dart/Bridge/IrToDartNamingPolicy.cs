@@ -42,7 +42,13 @@ public static class IrToDartNamingPolicy
         return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
-    private static string ToSnakeCase(string pascal)
+    /// <summary>
+    /// PascalCase → snake_case. Shared by file naming
+    /// (<see cref="ToFileName"/>) and namespace-folder lowering in
+    /// <c>IrToDartTypeMapper</c> so both surfaces follow the Dart
+    /// convention without duplicating the conversion.
+    /// </summary>
+    internal static string ToSnakeCase(string pascal)
     {
         if (pascal.Length == 0)
             return pascal;

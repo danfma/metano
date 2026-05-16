@@ -123,31 +123,9 @@ public static class IrToDartTypeMapper
         {
             var relative = origin.Namespace[(origin.AssemblyRootNamespace.Length + 1)..];
             foreach (var segment in relative.Split('.'))
-                parts.Add(ToSnakeCase(segment));
+                parts.Add(IrToDartNamingPolicy.ToSnakeCase(segment));
         }
-        parts.Add(ToSnakeCase(typeName));
+        parts.Add(IrToDartNamingPolicy.ToSnakeCase(typeName));
         return string.Join("/", parts);
-    }
-
-    private static string ToSnakeCase(string pascal)
-    {
-        if (pascal.Length == 0)
-            return pascal;
-        var sb = new System.Text.StringBuilder(pascal.Length + 4);
-        sb.Append(char.ToLowerInvariant(pascal[0]));
-        for (var i = 1; i < pascal.Length; i++)
-        {
-            var c = pascal[i];
-            if (char.IsUpper(c))
-            {
-                sb.Append('_');
-                sb.Append(char.ToLowerInvariant(c));
-            }
-            else
-            {
-                sb.Append(c);
-            }
-        }
-        return sb.ToString();
     }
 }

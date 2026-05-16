@@ -508,35 +508,29 @@ internal sealed class IrExpressionTreeExtractor
     /// anything outside that set bails to a runtime
     /// <see cref="IrExprUnary"/> node.
     /// </summary>
-    private static bool TryFoldUnary(string op, object? value, out object? result)
+    private static bool TryFoldUnary(string op, object? value, out object? result) =>
+        op switch
+        {
+            "-" => TryFoldNegate(value, out result),
+            "+" => TryFoldUnaryPlus(value, out result),
+            "!" => TryFoldLogicalNot(value, out result),
+            "~" => TryFoldBitwiseNot(value, out result),
+            _ => NotFolded(out result),
+        };
+
+    /// <summary>
+    /// Switch-expression syntax requires expression bodies, so the
+    /// "no-match" arm of <see cref="TryFoldUnary"/> routes here to
+    /// return <see langword="false"/> with a <see langword="null"/>
+    /// out parameter in expression form.
+    /// </summary>
+    private static bool NotFolded(out object? result)
     {
         result = null;
-        switch (op)
-        {
-            case "-":
-                return TryNegate(value, out result);
-            case "+":
-                if (value is sbyte or short or int or long or float or double or decimal)
-                {
-                    result = value;
-                    return true;
-                }
-                return false;
-            case "!":
-                if (value is bool b)
-                {
-                    result = !b;
-                    return true;
-                }
-                return false;
-            case "~":
-                return TryBitwiseNot(value, out result);
-            default:
-                return false;
-        }
+        return false;
     }
 
-    private static bool TryNegate(object? value, out object? result)
+    private static bool TryFoldNegate(object? value, out object? result)
     {
         result = value switch
         {
@@ -552,7 +546,32 @@ internal sealed class IrExpressionTreeExtractor
         return result is not null;
     }
 
-    private static bool TryBitwiseNot(object? value, out object? result)
+    /// <summary>
+    /// Unary <c>+</c> is identity on every signed numeric primitive.
+    /// </summary>
+    private static bool TryFoldUnaryPlus(object? value, out object? result)
+    {
+        if (value is sbyte or short or int or long or float or double or decimal)
+        {
+            result = value;
+            return true;
+        }
+        result = null;
+        return false;
+    }
+
+    private static bool TryFoldLogicalNot(object? value, out object? result)
+    {
+        if (value is bool b)
+        {
+            result = !b;
+            return true;
+        }
+        result = null;
+        return false;
+    }
+
+    private static bool TryFoldBitwiseNot(object? value, out object? result)
     {
         result = value switch
         {
@@ -644,21 +663,39 @@ internal sealed class IrExpressionTreeExtractor
         }
     }
 
-    private static bool TryFoldIntArith(string op, int l, int r, out object? result)
+    /// <summary>
+    /// Per-type fold helpers delegate here for operators whose semantics
+    /// are identical across every numeric primitive; they layer
+    /// divide-by-zero guards (int/long/decimal) or IEEE-754 unguarded
+    /// divides (float/double) and bitwise ops (int/long) on top.
+    /// </summary>
+    private static bool TryFoldCommonNumericOp<T>(string op, T l, T r, out object? result)
+        where T : System.Numerics.INumber<T>
     {
         result = op switch
         {
             "+" => (object)(l + r),
             "-" => l - r,
             "*" => l * r,
-            "/" when r != 0 => l / r,
-            "%" when r != 0 => l % r,
             "==" => l == r,
             "!=" => l != r,
             "<" => l < r,
             "<=" => l <= r,
             ">" => l > r,
             ">=" => l >= r,
+            _ => null,
+        };
+        return result is not null;
+    }
+
+    private static bool TryFoldIntArith(string op, int l, int r, out object? result)
+    {
+        if (TryFoldCommonNumericOp(op, l, r, out result))
+            return true;
+        result = op switch
+        {
+            "/" when r != 0 => (object)(l / r),
+            "%" when r != 0 => l % r,
             "&" => l & r,
             "|" => l | r,
             "^" => l ^ r,
@@ -669,19 +706,12 @@ internal sealed class IrExpressionTreeExtractor
 
     private static bool TryFoldLongArith(string op, long l, long r, out object? result)
     {
+        if (TryFoldCommonNumericOp(op, l, r, out result))
+            return true;
         result = op switch
         {
-            "+" => (object)(l + r),
-            "-" => l - r,
-            "*" => l * r,
-            "/" when r != 0 => l / r,
+            "/" when r != 0 => (object)(l / r),
             "%" when r != 0 => l % r,
-            "==" => l == r,
-            "!=" => l != r,
-            "<" => l < r,
-            "<=" => l <= r,
-            ">" => l > r,
-            ">=" => l >= r,
             "&" => l & r,
             "|" => l | r,
             "^" => l ^ r,
@@ -692,19 +722,13 @@ internal sealed class IrExpressionTreeExtractor
 
     private static bool TryFoldDoubleArith(string op, double l, double r, out object? result)
     {
+        if (TryFoldCommonNumericOp(op, l, r, out result))
+            return true;
+        // IEEE-754: no zero guard. `x / 0.0` → ±Infinity; `0.0 / 0.0` → NaN.
         result = op switch
         {
-            "+" => (object)(l + r),
-            "-" => l - r,
-            "*" => l * r,
-            "/" => l / r,
+            "/" => (object)(l / r),
             "%" => l % r,
-            "==" => l == r,
-            "!=" => l != r,
-            "<" => l < r,
-            "<=" => l <= r,
-            ">" => l > r,
-            ">=" => l >= r,
             _ => null,
         };
         return result is not null;
@@ -712,19 +736,13 @@ internal sealed class IrExpressionTreeExtractor
 
     private static bool TryFoldFloatArith(string op, float l, float r, out object? result)
     {
+        if (TryFoldCommonNumericOp(op, l, r, out result))
+            return true;
+        // IEEE-754: see TryFoldDoubleArith.
         result = op switch
         {
-            "+" => (object)(l + r),
-            "-" => l - r,
-            "*" => l * r,
-            "/" => l / r,
+            "/" => (object)(l / r),
             "%" => l % r,
-            "==" => l == r,
-            "!=" => l != r,
-            "<" => l < r,
-            "<=" => l <= r,
-            ">" => l > r,
-            ">=" => l >= r,
             _ => null,
         };
         return result is not null;
@@ -737,19 +755,12 @@ internal sealed class IrExpressionTreeExtractor
         // and the runtime closure takes the value path.
         try
         {
+            if (TryFoldCommonNumericOp(op, l, r, out result))
+                return true;
             result = op switch
             {
-                "+" => (object)(l + r),
-                "-" => l - r,
-                "*" => l * r,
-                "/" when r != 0 => l / r,
+                "/" when r != 0 => (object)(l / r),
                 "%" when r != 0 => l % r,
-                "==" => l == r,
-                "!=" => l != r,
-                "<" => l < r,
-                "<=" => l <= r,
-                ">" => l > r,
-                ">=" => l >= r,
                 _ => null,
             };
             return result is not null;
