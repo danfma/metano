@@ -22,7 +22,9 @@ public class ThrowExpressionTests
         var output = result["widget.ts"];
         await Assert.That(output).Contains("?? (() =>");
         await Assert.That(output).Contains("throw new Error(\"missing\")");
-        await Assert.That(output).DoesNotContain("IrNewExpression");
+        // Catches an IR-node `ToString()` leaking into the printed output
+        // — records render as `IrNewExpression { … }`.
+        await Assert.That(output).DoesNotContain("IrNewExpression {");
     }
 
     [Test]
@@ -43,6 +45,8 @@ public class ThrowExpressionTests
         var output = result["widget.ts"];
         await Assert.That(output).Contains("(() =>");
         await Assert.That(output).Contains("throw new Error(\"nope\")");
-        await Assert.That(output).DoesNotContain("IrNewExpression");
+        // Catches an IR-node `ToString()` leaking into the printed output
+        // — records render as `IrNewExpression { … }`.
+        await Assert.That(output).DoesNotContain("IrNewExpression {");
     }
 }

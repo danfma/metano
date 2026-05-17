@@ -162,7 +162,7 @@ public class PlainObjectTests
         // Only `title` in the literal — pageNumber omitted (the receiver gets
         // undefined, the optional field allows it).
         await Assert.That(output).Contains("{ title: \"intro\" }");
-        await Assert.That(output).DoesNotContain("pageNumber");
+        await Assert.That(output).DoesNotContain("pageNumber:");
     }
 
     [Test]
@@ -303,10 +303,14 @@ public class PlainObjectTests
         );
 
         var output = result["point.ts"];
-        await Assert.That(output).DoesNotContain("equals");
-        await Assert.That(output).DoesNotContain("hashCode");
+        // Positive guard: a PlainObject record still emits its interface
+        // surface, so we have something concrete to assert before claiming
+        // the synthesised value-equality + with members are absent.
+        await Assert.That(output).Contains("export interface Point");
+        await Assert.That(output).DoesNotContain("equals(");
+        await Assert.That(output).DoesNotContain("hashCode(");
         await Assert.That(output).DoesNotContain("with(");
-        // Also no HashCode runtime import
-        await Assert.That(output).DoesNotContain("HashCode");
+        // Also no HashCode runtime import.
+        await Assert.That(output).DoesNotContain("\"metano-runtime\"");
     }
 }

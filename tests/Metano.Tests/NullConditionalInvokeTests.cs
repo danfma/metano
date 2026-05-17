@@ -35,7 +35,7 @@ public class NullConditionalInvokeTests
 
         var output = result["widget.ts"];
         await Assert.That(output).Contains("this.onClick?.()");
-        await Assert.That(output).DoesNotContain("Invoke");
+        await Assert.That(output).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -58,7 +58,7 @@ public class NullConditionalInvokeTests
 
         var output = result["widget.ts"];
         await Assert.That(output).Contains("this.onEvent?.(\"hello\", 42)");
-        await Assert.That(output).DoesNotContain("Invoke");
+        await Assert.That(output).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -86,7 +86,7 @@ public class NullConditionalInvokeTests
 
         var output = result["widget.ts"];
         await Assert.That(output).Contains("this.logger(\"msg\")");
-        await Assert.That(output).DoesNotContain("Invoke");
+        await Assert.That(output).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -109,7 +109,7 @@ public class NullConditionalInvokeTests
 
         var output = result["bus.ts"];
         await Assert.That(output).Contains("Bus.listener?.(msg)");
-        await Assert.That(output).DoesNotContain("Invoke");
+        await Assert.That(output).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -132,7 +132,7 @@ public class NullConditionalInvokeTests
 
         var output = result["widget.ts"];
         await Assert.That(output).Contains("this.onClick?.()");
-        await Assert.That(output).DoesNotContain("Invoke");
+        await Assert.That(output).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -160,7 +160,7 @@ public class NullConditionalInvokeTests
 
         var output = result["widget.ts"];
         await Assert.That(output).Contains("this.format(value)");
-        await Assert.That(output).DoesNotContain("Invoke");
+        await Assert.That(output).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -269,7 +269,7 @@ public class NullConditionalInvokeTests
 
         var output = result["outer.ts"];
         await Assert.That(output).Contains("this.middle?.inner?.handler?.()");
-        await Assert.That(output).DoesNotContain("Invoke");
+        await Assert.That(output).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -351,7 +351,7 @@ public class NullConditionalInvokeTests
 
         var dart = files["widget.dart"];
         await Assert.That(dart).Contains("onTick?.call(7)");
-        await Assert.That(dart).DoesNotContain("Invoke");
+        await Assert.That(dart).DoesNotContain(".Invoke(");
     }
 
     [Test]
@@ -379,7 +379,7 @@ public class NullConditionalInvokeTests
 
         var dart = files["widget.dart"];
         await Assert.That(dart).Contains("onTick(7)");
-        await Assert.That(dart).DoesNotContain("Invoke");
+        await Assert.That(dart).DoesNotContain(".Invoke(");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

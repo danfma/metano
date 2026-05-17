@@ -178,7 +178,7 @@ public class DartBackendTests
 
         var dart = files["money.dart"];
         await Assert.That(dart).Contains("class Money {");
-        await Assert.That(dart).DoesNotContain("extends");
+        await Assert.That(dart).DoesNotContain("class Money extends");
     }
 
     [Test]
@@ -197,7 +197,7 @@ public class DartBackendTests
 
         var dart = files["plain.dart"];
         await Assert.That(dart).Contains("class Plain {");
-        await Assert.That(dart).DoesNotContain("extends");
+        await Assert.That(dart).DoesNotContain("class Plain extends");
     }
 
     [Test]

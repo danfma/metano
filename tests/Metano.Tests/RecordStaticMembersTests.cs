@@ -138,7 +138,10 @@ public class RecordStaticMembersTests
         );
 
         var output = result["counter.ts"];
-        await Assert.That(output).DoesNotContain("internal");
+        // Positive guard — there is generated content; the negations
+        // below assert that the private static field was suppressed.
+        await Assert.That(output).Contains("export interface Counter");
+        await Assert.That(output).DoesNotContain("Internal");
         await Assert.That(output).DoesNotContain("\"secret\"");
     }
 

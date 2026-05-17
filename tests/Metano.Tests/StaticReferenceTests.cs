@@ -62,8 +62,11 @@ public class StaticReferenceTests
         );
 
         var output = result["my-service.ts"];
-        // Type references in constructor should stay PascalCase
+        // Type references in constructor should stay PascalCase — guard
+        // against the parameter / property being lowered as a value
+        // identifier (`instance: myService`) instead of the type name.
         await Assert.That(output).Contains("MyService");
-        await Assert.That(output).DoesNotContain("myService");
+        await Assert.That(output).DoesNotContain(": myService");
+        await Assert.That(output).DoesNotContain("new myService");
     }
 }
