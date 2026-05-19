@@ -136,6 +136,12 @@ public sealed partial class IrExpressionExtractor
             // to the extractor's mutable recursion-guard state; see the
             // rewriter's class doc for the ownership rationale.
             new Invocation.InlineMethodExpansionRewriter(TryExpandInlineMethod),
+            // Bespoke callback — extension-call resolution shares helpers
+            // (`IsTranspilableExtensionContainer`, `BuildExtensionHelperCall`)
+            // with the property-access and assignment paths; threading
+            // those through the rewriter façade would touch 5+ call sites
+            // for one rewriter's benefit.
+            new Invocation.ExtensionMethodRewriter(TryRewriteExtensionCall),
         };
     }
 
@@ -1739,54 +1745,6 @@ public sealed partial class IrExpressionExtractor
                 return rewritten;
         }
 
-        // Extension method call site (classic `(this T)` reduced form or
-        // C# 14 `extension(T r) { … }` block): `receiver.Method(args)`
-        // lowers to the module-level helper `method(receiver, args)`.
-        // Without the rewrite the receiver carries a phantom property
-        // access (`receiver.method()`) at runtime — there is no such
-        // member on the receiver type because the helper lives on the
-        // extension's static container. Static extension members are
-        // dispatched via `Type.Member(args)` — the receiver is the type,
-        // not a value, so the helper takes only the syntactic arguments.
-        if (
-            symbol is IMethodSymbol extensionCallee
-            && inv.Expression is MemberAccessExpressionSyntax extensionAccess
-            && TryResolveExtensionLowering(extensionCallee, extensionAccess) is { } extLowering
-        )
-        {
-            var extensionArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-            // The reduced `extensionCallee` is the receiver-less view of the
-            // method (parameter count matches the syntax arg count); use it
-            // for argument-shape decisions so params spreading and named
-            // argument normalization key off the right parameter list.
-            ApplyParamsSpread(extensionArgs, extensionCallee, inv.ArgumentList.Arguments);
-            if (extensionArgs.Any(a => a.Name is not null))
-                extensionArgs = NormalizeArguments(extensionArgs, extensionCallee).ToList();
-            IReadOnlyList<IrTypeRef>? extensionTypeArgs = null;
-            if (symbol is { TypeArguments.Length: > 0 })
-                extensionTypeArgs = symbol
-                    .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
-                    .ToList();
-            if (extLowering.IsStatic)
-            {
-                return BuildExtensionHelperCall(
-                    extLowering.HelperContainer,
-                    extLowering.HelperName,
-                    extLowering.EmittedName,
-                    extensionArgs,
-                    extensionTypeArgs
-                );
-            }
-            var receiver = Extract(extensionAccess.Expression);
-            return BuildExtensionHelperCall(
-                extLowering.HelperContainer,
-                extLowering.HelperName,
-                extLowering.EmittedName,
-                [new IrArgument(receiver), .. extensionArgs],
-                extensionTypeArgs
-            );
-        }
-
         var target = Extract(inv.Expression);
         var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
         ApplyParamsSpread(args, symbol, inv.ArgumentList.Arguments);
@@ -2241,6 +2199,67 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrArgument ExtractArgument(ArgumentSyntax argument) =>
         new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText);
+
+    /// <summary>
+    /// Lowers an extension-method call site (classic <c>(this T)</c>
+    /// reduced form or C# 14 <c>extension(T r) { … }</c> block) into
+    /// the module-level helper call <c>method(receiver, args)</c>.
+    /// Returns <see langword="null"/> when the invocation isn't an
+    /// extension call so the rewriter chain falls through to the
+    /// regular call lowering. Without the rewrite the receiver
+    /// carries a phantom property access (<c>receiver.method()</c>)
+    /// at runtime — no such member exists on the receiver type
+    /// because the helper lives on the extension's static container.
+    /// Static extension members dispatch through
+    /// <c>Type.Member(args)</c> — the receiver is the type itself,
+    /// not a value, so the helper takes only the syntactic
+    /// arguments.
+    /// </summary>
+    internal IrExpression? TryRewriteExtensionCall(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol extensionCallee
+    )
+    {
+        if (inv.Expression is not MemberAccessExpressionSyntax extensionAccess)
+            return null;
+        if (TryResolveExtensionLowering(extensionCallee, extensionAccess) is not { } extLowering)
+            return null;
+
+        var extensionArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+        // The reduced `extensionCallee` is the receiver-less view of the
+        // method (parameter count matches the syntax arg count); use it
+        // for argument-shape decisions so params spreading and named
+        // argument normalization key off the right parameter list.
+        ApplyParamsSpread(extensionArgs, extensionCallee, inv.ArgumentList.Arguments);
+        if (extensionArgs.Any(a => a.Name is not null))
+            extensionArgs = NormalizeArguments(extensionArgs, extensionCallee).ToList();
+
+        IReadOnlyList<IrTypeRef>? extensionTypeArgs = null;
+        if (extensionCallee is { TypeArguments.Length: > 0 })
+            extensionTypeArgs = extensionCallee
+                .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
+                .ToList();
+
+        if (extLowering.IsStatic)
+        {
+            return BuildExtensionHelperCall(
+                extLowering.HelperContainer,
+                extLowering.HelperName,
+                extLowering.EmittedName,
+                extensionArgs,
+                extensionTypeArgs
+            );
+        }
+
+        var receiver = Extract(extensionAccess.Expression);
+        return BuildExtensionHelperCall(
+            extLowering.HelperContainer,
+            extLowering.HelperName,
+            extLowering.EmittedName,
+            [new IrArgument(receiver), .. extensionArgs],
+            extensionTypeArgs
+        );
+    }
 
     /// <summary>
     /// Builds the canonical IR shape for an extension-helper call:

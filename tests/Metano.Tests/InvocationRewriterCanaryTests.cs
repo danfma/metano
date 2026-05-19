@@ -225,4 +225,34 @@ public class InvocationRewriterCanaryTests
 
         await Assert.That(output).Contains("return n + n;");
     }
+
+    [Test]
+    public async Task ExtensionMethod_LowersToHelperCall()
+    {
+        // Pins the ExtensionMethodRewriter slot. An extension method
+        // call `receiver.Method(args)` must lower to the module
+        // helper `method(receiver, args)` — bypassing the rewriter
+        // would emit `receiver.method()` which dangles against a
+        // non-existent member on the receiver type.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class StringExtensions
+            {
+                public static int CountChars(this string s) => s.Length;
+            }
+
+            public class Runtime
+            {
+                public int Measure(string text) => text.CountChars();
+            }
+            """
+        );
+
+        var output = result["runtime.ts"];
+
+        await Assert.That(output).Contains("countChars(text)");
+    }
 }
