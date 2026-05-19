@@ -122,12 +122,16 @@ public sealed partial class IrExpressionExtractor
         // sorted first and lands in later PRs of #221.
         var helpers = new Invocation.InvocationLoweringHelpers(
             ApplyParamsSpread: ApplyParamsSpread,
-            BuildOrigin: BuildOrigin
+            BuildOrigin: BuildOrigin,
+            NormalizeArguments: NormalizeArguments,
+            MapTypeRef: t => IrTypeRefMapper.Map(t, _originResolver, _target),
+            Target: _target
         );
         _invocationRewriters = new Invocation.IInvocationRewriter[]
         {
             new Invocation.DelegateInvokeRewriter(helpers),
             new Invocation.IntrinsicBclLoweringTable(semanticModel.Compilation, helpers),
+            new Invocation.EmitOrImportRewriter(helpers),
         };
     }
 
@@ -1731,26 +1735,6 @@ public sealed partial class IrExpressionExtractor
                 return rewritten;
         }
 
-        // `[Emit("…$0…")]` rewrites the call into an inline template
-        // expansion. The template author owns every placeholder — for
-        // instance methods `$0` typically references the receiver, for
-        // static methods the first argument. We carry the raw template in
-        // the IR and let backends decide how to expand it.
-        if (symbol is not null)
-        {
-            var emitTemplate = GetEmitTemplate(symbol);
-            if (emitTemplate is not null)
-                return BuildEmitTemplateExpression(symbol, inv, emitTemplate);
-
-            // Plain `[Import]` (no `[Emit]`) — the method is a thin facade over
-            // an external JS export. Lower the call to a direct invocation of
-            // the imported identifier and thread the [Import] metadata so the
-            // consumer file gets the matching `import { name } from "..."`
-            // line.
-            if (SymbolHelper.GetImport(symbol) is { } directImport)
-                return BuildImportFacadeTemplateExpression(symbol, inv, directImport);
-        }
-
         // `[Inline]` method: beta-reduce the body at the call site.
         // Parameters bind to the caller's argument IR (the reduced
         // extension receiver becomes the first parameter) so the body
@@ -2053,18 +2037,6 @@ public sealed partial class IrExpressionExtractor
         return -1;
     }
 
-    /// <summary>
-    /// Reads the raw template string from a symbol's <c>[Emit("…")]</c>
-    /// attribute. Returns <c>null</c> when the attribute is absent so the
-    /// caller falls back to the ordinary call lowering.
-    /// </summary>
-    private static string? GetEmitTemplate(ISymbol symbol) =>
-        symbol
-            .GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.Name is "EmitAttribute" or "Emit")
-            ?.ConstructorArguments.FirstOrDefault()
-            .Value as string;
-
     private IrMemberOrigin? BuildOrigin(ISymbol? symbol)
     {
         if (symbol?.ContainingType is null)
@@ -2277,113 +2249,6 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrArgument ExtractArgument(ArgumentSyntax argument) =>
         new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText);
-
-    /// <summary>
-    /// Builds an <see cref="IrTemplateExpression"/> for an <c>[Emit]</c>-annotated
-    /// method invocation. The template author owns every placeholder; we hand
-    /// the raw template + positional arg list to the backend. Instance-method
-    /// calls promote the receiver to <c>$0</c> so backends never need to
-    /// rediscover the elision. <c>[Import]</c> on the same method threads as
-    /// <see cref="IrTemplateExpression.ExternalImports"/> so the consumer file
-    /// gets the matching <c>import {…} from "…"</c> line.
-    /// </summary>
-    private IrTemplateExpression BuildEmitTemplateExpression(
-        IMethodSymbol symbol,
-        InvocationExpressionSyntax inv,
-        string emitTemplate
-    )
-    {
-        // Run the same normalization the regular invocation path uses so
-        // named args reorder to parameter declaration order, params arrays
-        // spread, and skipped optional parameters surface their explicit
-        // default. The [Emit] template author addresses arguments by index
-        // ($0, $1, …) and expects those indices to align with the C#
-        // parameter slots — bypassing normalization would land named args
-        // positionally and silently corrupt the emitted call.
-        var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-        ApplyParamsSpread(args, symbol, inv.ArgumentList.Arguments);
-        if (args.Any(a => a.Name is not null))
-            args = NormalizeArguments(args, symbol).ToList();
-
-        var templateArgs = new List<IrExpression>();
-        if (!symbol.IsStatic && inv.Expression is MemberAccessExpressionSyntax memberAccess)
-            templateArgs.Add(Extract(memberAccess.Expression));
-        templateArgs.AddRange(args.Select(a => a.Value));
-
-        IReadOnlyList<IrTypeRef>? typeArgs = null;
-        if (symbol is { TypeArguments.Length: > 0 })
-            typeArgs = symbol
-                .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
-                .ToList();
-
-        IReadOnlyList<IrExternalImport>? externalImports = null;
-        if (SymbolHelper.GetImport(symbol) is { } emitImport)
-            externalImports = [ToIrExternalImport(emitImport)];
-
-        return new IrTemplateExpression(
-            emitTemplate,
-            Receiver: null,
-            templateArgs,
-            TypeArguments: typeArgs,
-            ExternalImports: externalImports
-        );
-    }
-
-    /// <summary>
-    /// Builds an <see cref="IrTemplateExpression"/> for a plain
-    /// <c>[Import]</c>-only method invocation: the method declares no
-    /// <c>[Emit]</c> template, so we synthesize one — <c>name($0,$1,…)</c> — and
-    /// thread the import metadata. Static methods drop the receiver; instance
-    /// methods carry it as the leading positional argument, which means the
-    /// imported JS function is expected to accept the receiver as its first
-    /// parameter (the only shape `name(receiver, …)` has a sound mapping for).
-    /// Named arguments are normalized into parameter order before placeholders
-    /// are assigned, and <c>params</c> arrays are flattened via
-    /// <see cref="ApplyParamsSpread"/> so the generated call mirrors how the
-    /// regular invocation path lowers.
-    /// </summary>
-    private IrTemplateExpression BuildImportFacadeTemplateExpression(
-        IMethodSymbol symbol,
-        InvocationExpressionSyntax inv,
-        SymbolHelper.ImportInfo import
-    )
-    {
-        var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-        ApplyParamsSpread(args, symbol, inv.ArgumentList.Arguments);
-        if (args.Any(a => a.Name is not null))
-            args = NormalizeArguments(args, symbol).ToList();
-
-        var templateArgs = new List<IrExpression>();
-        if (!symbol.IsStatic && inv.Expression is MemberAccessExpressionSyntax instanceAccess)
-            templateArgs.Add(Extract(instanceAccess.Expression));
-        templateArgs.AddRange(args.Select(a => a.Value));
-
-        var emittedName =
-            SymbolHelper.GetNameOverride(symbol, _target) ?? SymbolHelper.ToCamelCase(symbol.Name);
-        var template = $"{emittedName}({BuildPositionalPlaceholders(templateArgs.Count)})";
-
-        return new IrTemplateExpression(
-            template,
-            Receiver: null,
-            templateArgs,
-            ExternalImports: [ToIrExternalImport(import, emittedName)]
-        );
-    }
-
-    private static IrExternalImport ToIrExternalImport(
-        SymbolHelper.ImportInfo import,
-        string? emittedName = null
-    ) =>
-        new(
-            import.Name,
-            import.From,
-            import.AsDefault,
-            import.Version,
-            EmittedName: SymbolHelper.NormalizeDivergentName(emittedName, import.Name)
-        );
-
-    private static string BuildPositionalPlaceholders(int count) =>
-        string.Join(", ", Enumerable.Range(0, count).Select(i => $"${i}"));
 
     /// <summary>
     /// Builds the canonical IR shape for an extension-helper call:

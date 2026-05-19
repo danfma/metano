@@ -116,4 +116,84 @@ public class InvocationRewriterCanaryTests
         // "Math.round" substring.
         await Assert.That(output).DoesNotContain("Math.Round(x)");
     }
+
+    [Test]
+    public async Task EmitAttribute_LowersToInlineTemplate()
+    {
+        // Pins the AttributeTemplateRewriter's `[Emit]` arm. The
+        // template author writes `$0.toFixed($1)` verbatim and the
+        // backend must surface it at the call site with the
+        // arguments substituted at the matching slots — bypassing
+        // the rewriter would emit a regular call to a `.toFixed`
+        // helper that doesn't exist.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Helpers
+            {
+                [Emit("$0.toFixed($1)")]
+                public static extern string Format(decimal value, int digits);
+
+                public static string Show(decimal m) => Format(m, 2);
+            }
+            """
+        );
+
+        var output = result["helpers.ts"];
+
+        await Assert.That(output).Contains("m.toFixed(2)");
+    }
+
+    [Test]
+    public async Task ImportAttribute_LowersToFacadeCallWithImport()
+    {
+        // Pins the AttributeTemplateRewriter's `[Import]`-only arm.
+        // No `[Emit]` template means the rewriter synthesises one of
+        // the form `name($0, $1, …)` AND emits the matching ESM
+        // import line so the consumer file resolves the helper.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Sums
+            {
+                [Import(name: "add", from: "math-utils")]
+                public static extern int Add(int a, int b);
+
+                public static int Total(int a, int b) => Add(a, b);
+            }
+            """
+        );
+
+        var output = result["sums.ts"];
+
+        await Assert.That(output).Contains("add(a, b)");
+        await Assert.That(output).Contains("from \"math-utils\"");
+    }
+
+    [Test]
+    public async Task EmitAndImportTogether_EmitTemplateWinsAndImportThreads()
+    {
+        // Precedence canary: when a method carries both [Emit] and
+        // [Import], the emit template takes the lowered shape AND
+        // the import is threaded as an external dependency. Reverse
+        // the rewriter's internal order and the call would lower as
+        // a facade `name(…)` instead of the bespoke template.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class HashUtils
+            {
+                [Emit("hashBytes($0)"), Import(name: "hashBytes", from: "crypto-utils")]
+                public static extern int Hash(byte[] data);
+
+                public static int Run(byte[] b) => Hash(b);
+            }
+            """
+        );
+
+        var output = result["hash-utils.ts"];
+
+        await Assert.That(output).Contains("hashBytes(b)");
+        await Assert.That(output).Contains("from \"crypto-utils\"");
+    }
 }
