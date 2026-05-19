@@ -61,7 +61,9 @@
   </ItemDefinitionGroup>
 
   <PropertyGroup>
-    <MetanoEnabled Condition="'$(MetanoEnabled)' == '' and '$(MetanoOutputDir)' != ''">true</MetanoEnabled>
+    <MetanoEnabled Condition="'$(MetanoEnabled)' == '' and '$(MetanoOutputDir)' != ''"
+      >true</MetanoEnabled
+    >
   </PropertyGroup>
 
   <Target
