@@ -34,6 +34,46 @@ public sealed class ImportCollector(
     private readonly IReadOnlySet<IrRuntimeRequirement>? _irRuntimeRequirements =
         irRuntimeRequirements;
 
+    /// <summary>
+    /// Identifiers that surface in generated TS but never need an
+    /// <c>import</c> line: TypeScript built-ins (<c>Map</c>, <c>Set</c>,
+    /// <c>unknown</c>, …), JavaScript globals (<c>console</c>,
+    /// <c>Math</c>, <c>crypto</c>, <c>Object</c>), keywords used as
+    /// expressions (<c>typeof</c>), and runtime helpers that the
+    /// codegen wires in through a dedicated path
+    /// (<c>delegateAdd</c>/<c>delegateRemove</c>,
+    /// <c>getUnionGuard</c>/<c>registerUnionGuard</c>, <c>HashCode</c>).
+    /// Hoisted out of the original 28-arm pattern match to drop the
+    /// scrolling cost when adding a new bypass.
+    /// </summary>
+    private static readonly HashSet<string> NonImportableIdentifiers = new(StringComparer.Ordinal)
+    {
+        "Map",
+        "Set",
+        "unknown",
+        "any",
+        "null",
+        "Partial",
+        "Error",
+        "HashCode",
+        "Array",
+        "v",
+        "value",
+        "true",
+        "false",
+        "undefined",
+        "console",
+        "Math",
+        "crypto",
+        "Object",
+        "typeof",
+        "unknown[]",
+        "delegateAdd",
+        "delegateRemove",
+        "getUnionGuard",
+        "registerUnionGuard",
+    };
+
     public IReadOnlyList<TsImport> Collect(
         INamedTypeSymbol currentType,
         List<TsTopLevel> statements
@@ -262,35 +302,11 @@ public sealed class ImportCollector(
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
         {
-            // Skip built-in types and runtime identifiers that don't need imports
+            // Skip built-in types and runtime identifiers that don't need imports.
             if (
                 typeName.StartsWith("Temporal.")
                 || IsRuntimeTypeCheck(typeName)
-                || typeName
-                    is "Map"
-                        or "Set"
-                        or "unknown"
-                        or "any"
-                        or "null"
-                        or "Partial"
-                        or "Error"
-                        or "HashCode"
-                        or "Array"
-                        or "v"
-                        or "value"
-                        or "true"
-                        or "false"
-                        or "undefined"
-                        or "console"
-                        or "Math"
-                        or "crypto"
-                        or "Object"
-                        or "typeof"
-                        or "unknown[]"
-                        or "delegateAdd"
-                        or "delegateRemove"
-                        or "getUnionGuard"
-                        or "registerUnionGuard"
+                || NonImportableIdentifiers.Contains(typeName)
             )
                 continue;
 
