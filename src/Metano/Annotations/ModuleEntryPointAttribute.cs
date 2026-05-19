@@ -2,19 +2,17 @@ namespace Metano.Annotations;
 
 /// <summary>
 /// Marks a static method whose body becomes the top-level executable code of the
-/// generated TypeScript module instead of being emitted as a regular function. The
-/// containing class must also be <see cref="ExportedAsModuleAttribute"/>.
+/// generated TypeScript module instead of being emitted as a regular function.
+/// The containing class is typically annotated with
+/// <see cref="NoContainerAttribute"/> so that the rest of its static members
+/// flatten onto the module surface alongside the unwrapped entry point — but
+/// <c>[ModuleEntryPoint]</c> itself does not require it.
 ///
 /// <para>
-/// This is independent of (and complements) <see cref="ExportedAsModuleAttribute"/>:
-/// other static methods on the class still become exported functions; only the method
-/// marked with <c>[ModuleEntryPoint]</c> has its body unwrapped at the file's top level.
+/// Exercised end-to-end by <c>samples/SampleTodo.Service</c>, whose Hono
+/// bootstrap method becomes the module's top-level statements after
+/// transpilation.
 /// </para>
-///
-/// <para><strong>Note:</strong> The transpiler logic that consumes this attribute is
-/// not yet implemented. Currently this attribute exists only as a declaration so that
-/// consumer code referencing it compiles. End-to-end behavior comes in a follow-up
-/// commit.</para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class ModuleEntryPointAttribute : Attribute;

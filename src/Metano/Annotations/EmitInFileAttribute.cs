@@ -44,6 +44,7 @@ namespace Metano.Annotations;
         | AttributeTargets.Struct
         | AttributeTargets.Enum
         | AttributeTargets.Interface
+        | AttributeTargets.Delegate
 )]
 public sealed class EmitInFileAttribute(string fileName) : Attribute
 {

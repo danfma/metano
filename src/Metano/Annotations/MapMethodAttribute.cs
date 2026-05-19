@@ -47,13 +47,13 @@ namespace Metano.Annotations;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
-public sealed class MapMethodAttribute : Attribute
+public sealed class MapMethodAttribute(Type declaringType, string csharpMethod) : Attribute
 {
     /// <summary>The C# type that declares the method (use an open generic for generics).</summary>
-    public Type DeclaringType { get; }
+    public Type DeclaringType { get; } = declaringType;
 
     /// <summary>The C# method's simple name. All overloads are matched.</summary>
-    public string CSharpMethod { get; }
+    public string CSharpMethod { get; } = csharpMethod;
 
     /// <summary>
     /// Simple JavaScript rename. Mutually exclusive with <see cref="JsTemplate"/>.
@@ -141,17 +141,15 @@ public sealed class MapMethodAttribute : Attribute
     public string? DartRuntimeImports { get; init; }
 
     /// <summary>
-    /// Optional argument-count filter. When set, this declaration only matches a call
-    /// site whose argument count equals this value. Used to disambiguate overloads
-    /// when one shape lowers cleanly and another does not — e.g. <c>Console.WriteLine(value)</c>
-    /// (single-arg, maps to Dart's <c>print(value)</c>) vs the format-string
-    /// <c>Console.WriteLine(format, args...)</c> (no clean Dart equivalent).
+    /// Optional argument-count filter. Contract: <c>-1</c> (default)
+    /// disables the filter; any non-negative value requires the call
+    /// site to carry exactly that many arguments. Used to disambiguate
+    /// overloads when one shape lowers cleanly and another does not —
+    /// e.g. <c>Console.WriteLine(value)</c> (single-arg, maps to
+    /// Dart's <c>print(value)</c>) vs the format-string
+    /// <c>Console.WriteLine(format, args...)</c> (no clean Dart
+    /// equivalent). The sentinel is the cleanest option because the
+    /// CLR rejects <c>int?</c> as an attribute argument type (CS0655).
     /// </summary>
     public int WhenArgCount { get; init; } = -1;
-
-    public MapMethodAttribute(Type declaringType, string csharpMethod)
-    {
-        DeclaringType = declaringType;
-        CSharpMethod = csharpMethod;
-    }
 }

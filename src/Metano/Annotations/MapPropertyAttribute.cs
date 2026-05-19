@@ -38,13 +38,13 @@ namespace Metano.Annotations;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
-public sealed class MapPropertyAttribute : Attribute
+public sealed class MapPropertyAttribute(Type declaringType, string csharpProperty) : Attribute
 {
     /// <summary>The C# type that declares the property (use an open generic for generics).</summary>
-    public Type DeclaringType { get; }
+    public Type DeclaringType { get; } = declaringType;
 
     /// <summary>The C# property's name.</summary>
-    public string CSharpProperty { get; }
+    public string CSharpProperty { get; } = csharpProperty;
 
     /// <summary>
     /// Simple JavaScript rename. Mutually exclusive with <see cref="JsTemplate"/>.
@@ -83,10 +83,4 @@ public sealed class MapPropertyAttribute : Attribute
     /// of identifiers from <c>package:metano_runtime/metano_runtime.dart</c>.
     /// </summary>
     public string? DartRuntimeImports { get; init; }
-
-    public MapPropertyAttribute(Type declaringType, string csharpProperty)
-    {
-        DeclaringType = declaringType;
-        CSharpProperty = csharpProperty;
-    }
 }

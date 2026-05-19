@@ -2211,9 +2211,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     dartRuntimeImports = named.Value.Value as string;
                     break;
                 case "WhenArgCount":
-                    // The attribute uses a sentinel `-1` because `int?` is not
-                    // allowed as an attribute argument type. Anything < 0 means
-                    // "no filter".
+                    // CLR rejects `int?` as an attribute argument
+                    // (CS0655) so the attribute uses a `-1` sentinel
+                    // for "no filter"; the IR mapping carries `int?`.
                     if (named.Value.Value is int count && count >= 0)
                         whenArgCount = count;
                     break;

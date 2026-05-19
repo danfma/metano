@@ -13,4 +13,8 @@ namespace Metano.Annotations;
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Struct)]
+[Obsolete(
+    "Use [Branded] instead. [InlineWrapper] remains functional but will be "
+        + "removed in a future release; new code should prefer [Branded]."
+)]
 public sealed class InlineWrapperAttribute : Attribute;

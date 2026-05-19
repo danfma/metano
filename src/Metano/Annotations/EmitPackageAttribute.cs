@@ -46,5 +46,5 @@ public sealed class EmitPackageAttribute(string name, EmitTarget target = EmitTa
     /// where the consumer needs <c>workspace:*</c> to resolve through the monorepo
     /// linker. Setting this property explicitly resolves the ambiguity.
     /// </summary>
-    public string Version { get; set; } = "";
+    public string Version { get; init; } = "";
 }

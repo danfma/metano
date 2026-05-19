@@ -30,10 +30,11 @@ namespace Metano.Annotations;
 /// export default app;
 /// </code>
 ///
-/// <para><strong>Note:</strong> The transpiler logic that consumes this attribute is
-/// not yet implemented. Currently this attribute exists only as a declaration so that
-/// consumer code referencing it compiles. End-to-end behavior comes in a follow-up
-/// commit.</para>
+/// <para>
+/// Exercised end-to-end by <c>samples/SampleTodo.Service</c>; the Hono
+/// bootstrap promotes its <c>app</c> local to the module's default export
+/// via <c>[ExportVarFromBody("app", AsDefault = true)]</c>.
+/// </para>
 /// </summary>
 /// <param name="name">Name of the local variable inside the entry point body to export.</param>
 [AttributeUsage(AttributeTargets.Method)]

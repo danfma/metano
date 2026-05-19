@@ -42,4 +42,4 @@ namespace Metano.Annotations;
 /// take <c>self</c> as the first parameter and lower to standalone functions).</para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false)]
-public sealed class PlainObjectAttribute : Attribute { }
+public sealed class PlainObjectAttribute : Attribute;

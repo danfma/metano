@@ -25,7 +25,19 @@ namespace Metano.Annotations;
 /// </code>
 /// </para>
 /// </summary>
-[AttributeUsage(AttributeTargets.All, AllowMultiple = true)]
+[AttributeUsage(
+    AttributeTargets.Class
+        | AttributeTargets.Struct
+        | AttributeTargets.Enum
+        | AttributeTargets.Interface
+        | AttributeTargets.Delegate
+        | AttributeTargets.Method
+        | AttributeTargets.Property
+        | AttributeTargets.Field
+        | AttributeTargets.Parameter
+        | AttributeTargets.Event,
+    AllowMultiple = true
+)]
 public sealed class NameAttribute : Attribute
 {
     /// <summary>Untargeted override — applies to every backend that lacks a

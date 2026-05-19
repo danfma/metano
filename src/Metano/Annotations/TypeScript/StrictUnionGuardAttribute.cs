@@ -41,4 +41,4 @@ namespace Metano.Annotations.TypeScript;
     AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface,
     Inherited = false
 )]
-public sealed class StrictUnionGuardAttribute : Attribute { }
+public sealed class StrictUnionGuardAttribute : Attribute;

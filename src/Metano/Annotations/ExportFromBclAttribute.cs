@@ -11,8 +11,8 @@ namespace Metano.Annotations;
 public sealed class ExportFromBclAttribute(Type type) : Attribute
 {
     public Type Type { get; } = type;
-    public string FromPackage { get; set; } = "";
-    public string ExportedName { get; set; } = "";
+    public string FromPackage { get; init; } = "";
+    public string ExportedName { get; init; } = "";
 
     /// <summary>
     /// Optional npm version specifier (e.g., <c>^10.6.0</c>). When set, the compiler
@@ -21,5 +21,5 @@ public sealed class ExportFromBclAttribute(Type type) : Attribute
     /// mapping is actually used. Without it, the user is responsible for adding the
     /// dependency manually.
     /// </summary>
-    public string Version { get; set; } = "";
+    public string Version { get; init; } = "";
 }

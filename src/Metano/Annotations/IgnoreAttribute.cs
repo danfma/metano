@@ -34,10 +34,15 @@ namespace Metano.Annotations;
 /// use <see cref="TypeScript.ExternalAttribute"/> instead: it expresses
 /// "no emission" without painting transpilable code as broken.
 /// <para>
-/// Follows the per-target resolution pattern of <see cref="NameAttribute"/>:
-/// <c>[Ignore(TargetLanguage.Dart)]</c> paints the symbol as .NET-only on
-/// Dart while letting it emit on every other target, and the parameterless
-/// form applies to every target.
+/// Resolution rules when a backend looks up whether a symbol is ignored:
+/// <list type="number">
+///   <item>If an <c>[Ignore(Target)]</c> exists with <c>Target</c> equal to
+///   the emitting backend, the symbol is ignored on that target.</item>
+///   <item>Otherwise, the untargeted <c>[Ignore]</c> (if any) ignores the
+///   symbol on every target.</item>
+///   <item>Otherwise, the symbol participates in emission normally.</item>
+/// </list>
+/// Mirrors the pattern carried by <see cref="NameAttribute"/>.
 /// </para>
 /// <para>
 /// Parameter targets are intentionally excluded — dropping a parameter from
