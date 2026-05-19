@@ -432,9 +432,22 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // of debugging it through tsgo's downstream error.
         CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic);
 
-        // Drain MS0007 cross-package misses recorded by TypeMapper.ResolveOrigin while
-        // mapping types. One error per unique miss; the message names the missing
-        // attribute and the producing assembly so the user knows where to fix it.
+        DrainCrossPackageMisses(typeMappingContext);
+        DrainCrossPackageDependencies(typeMappingContext);
+
+        WriteGroupCache(groups, perGroupClosure, perGroupMetadata);
+
+        return files;
+    }
+
+    /// <summary>
+    /// Drains MS0007 cross-package misses recorded by
+    /// <c>TypeMapper.ResolveOrigin</c> while mapping types. One error
+    /// per unique miss; the message names the missing attribute and
+    /// the producing assembly so the user knows where to fix it.
+    /// </summary>
+    private void DrainCrossPackageMisses(TypeMappingContext typeMappingContext)
+    {
         foreach (
             var miss in typeMappingContext.CrossPackageMisses.OrderBy(
                 s => s,
@@ -453,19 +466,20 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 )
             );
         }
+    }
 
-        // Drain auto-generated cross-package dependencies. The map is already
-        // pre-formatted (string → version specifier), populated by three paths in
-        // TypeMapper / ImportCollector. The CLI driver merges it into the consumer's
-        // package.json.
+    /// <summary>
+    /// Drains the auto-generated cross-package dependency map. The
+    /// map is already pre-formatted (string → version specifier),
+    /// populated by three paths in <c>TypeMapper</c> / <c>ImportCollector</c>;
+    /// the CLI driver merges it into the consumer's <c>package.json</c>.
+    /// </summary>
+    private void DrainCrossPackageDependencies(TypeMappingContext typeMappingContext)
+    {
         foreach (var (packageName, version) in typeMappingContext.UsedCrossPackages)
         {
             _crossPackageDependencies[packageName] = version;
         }
-
-        WriteGroupCache(groups, perGroupClosure, perGroupMetadata);
-
-        return files;
     }
 
     private bool _assemblyWideTranspile;
@@ -515,60 +529,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var startCount = sink.Count;
 
-        if (type.TypeKind == TypeKind.Enum)
-        {
-            var enumIr = (IrEnumDeclaration)GetOrExtractIr(type, irCache)!;
-            IrToTsEnumBridge.Convert(enumIr, sink);
-        }
-        else if (type.TypeKind == TypeKind.Interface)
-        {
-            var ifaceIr = (IrInterfaceDeclaration)GetOrExtractIr(type, irCache)!;
-            IrToTsInterfaceBridge.Convert(ifaceIr, sink, Context.ResolveTsName(type));
-        }
-        else if (type.TypeKind == TypeKind.Delegate)
-        {
-            var delegateIr = (IrDelegateDeclaration)GetOrExtractIr(type, irCache)!;
-            IrToTsDelegateBridge.Convert(delegateIr, sink, Context.ResolveTsName(type));
-        }
-        else if (IsExceptionType(type))
-        {
-            var exceptionIr = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
-            IrToTsExceptionBridge.Convert(exceptionIr, sink, Context.DeclarativeMappings);
-        }
-        else if (IsJsonSerializerContextType(type))
-        {
-            new JsonSerializerContextTransformer(Context).Transform(type, sink);
-        }
-        else if (
-            ir.EntryPoint is not null
-            && SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType)
-        )
-        {
-            // C# 9+ top-level statements → unwrap as module-level code
-            EmitTopLevelStatements(ir.EntryPoint.Method, sink);
-        }
-        else if (
-            (
-                SymbolHelper.HasExportedAsModule(type)
-                || SymbolHelper.HasNoContainer(type)
-                || HasExtensionMembers(type)
-            ) && type.IsStatic
-        )
-        {
-            TryEmitModuleViaIr(type, sink);
-        }
-        else if (TryEmitBrandedViaIr(type, sink, irCache)) { }
-        else if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
-        {
-            if (TryEmitPlainObjectViaIr(type, sink, irCache))
-            {
-                // Fully emitted through the IR pipeline.
-            }
-            else
-            {
-                new IrToTsClassEmitter(Context).Transform(type, sink);
-            }
-        }
+        _ =
+            TryEmitEnum(type, sink, irCache)
+            || TryEmitInterface(type, sink, irCache)
+            || TryEmitDelegate(type, sink, irCache)
+            || TryEmitException(type, sink, irCache)
+            || TryEmitJsonSerializerContext(type, sink)
+            || TryEmitTopLevelEntryPoint(type, sink)
+            || TryEmitStaticModule(type, sink)
+            || TryEmitBrandedViaIr(type, sink, irCache)
+            || TryEmitPlainObjectOrClass(type, sink, irCache);
 
         if (sink.Count == startCount)
             return false;
@@ -598,6 +568,122 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // TypeScript declaration merging makes `Outer.Inner` accessible just like in C#.
         TransformNestedTypes(type, sink);
 
+        return true;
+    }
+
+    private bool TryEmitEnum(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (type.TypeKind != TypeKind.Enum)
+            return false;
+        var enumIr = (IrEnumDeclaration)GetOrExtractIr(type, irCache)!;
+        IrToTsEnumBridge.Convert(enumIr, sink);
+        return true;
+    }
+
+    private bool TryEmitInterface(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (type.TypeKind != TypeKind.Interface)
+            return false;
+        var ifaceIr = (IrInterfaceDeclaration)GetOrExtractIr(type, irCache)!;
+        IrToTsInterfaceBridge.Convert(ifaceIr, sink, Context.ResolveTsName(type));
+        return true;
+    }
+
+    private bool TryEmitDelegate(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (type.TypeKind != TypeKind.Delegate)
+            return false;
+        var delegateIr = (IrDelegateDeclaration)GetOrExtractIr(type, irCache)!;
+        IrToTsDelegateBridge.Convert(delegateIr, sink, Context.ResolveTsName(type));
+        return true;
+    }
+
+    private bool TryEmitException(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (!IsExceptionType(type))
+            return false;
+        var exceptionIr = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
+        IrToTsExceptionBridge.Convert(exceptionIr, sink, Context.DeclarativeMappings);
+        return true;
+    }
+
+    private bool TryEmitJsonSerializerContext(INamedTypeSymbol type, List<TsTopLevel> sink)
+    {
+        if (!IsJsonSerializerContextType(type))
+            return false;
+        new JsonSerializerContextTransformer(Context).Transform(type, sink);
+        return true;
+    }
+
+    /// <summary>
+    /// C# 9+ top-level statements: the synthetic <c>&lt;Program&gt;</c>
+    /// class carries the entry-point method whose body lowers to
+    /// module-level code instead of a class wrapper.
+    /// </summary>
+    private bool TryEmitTopLevelEntryPoint(INamedTypeSymbol type, List<TsTopLevel> sink)
+    {
+        if (ir.EntryPoint is null)
+            return false;
+        if (!SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType))
+            return false;
+        EmitTopLevelStatements(ir.EntryPoint.Method, sink);
+        return true;
+    }
+
+    /// <summary>
+    /// Static classes opted into module-shape emission via
+    /// <c>[ExportedAsModule]</c>, <c>[NoContainer]</c>, or by carrying
+    /// any extension members. Once the opt-in matches the dispatcher
+    /// stops here — even when <see cref="TryEmitModuleViaIr"/> chooses
+    /// not to emit (e.g., a static class whose only method carries
+    /// <c>[Import]</c>), the type must not fall through to the
+    /// class/struct fallback below.
+    /// </summary>
+    private bool TryEmitStaticModule(INamedTypeSymbol type, List<TsTopLevel> sink)
+    {
+        if (!type.IsStatic || !IsStaticModuleShape(type))
+            return false;
+        TryEmitModuleViaIr(type, sink);
+        return true;
+    }
+
+    private static bool IsStaticModuleShape(INamedTypeSymbol type) =>
+        SymbolHelper.HasExportedAsModule(type)
+        || SymbolHelper.HasNoContainer(type)
+        || HasExtensionMembers(type);
+
+    /// <summary>
+    /// Class / struct / record fallback: prefer the <c>[PlainObject]</c>
+    /// path when applicable, fall back to the full class emitter
+    /// otherwise.
+    /// </summary>
+    private bool TryEmitPlainObjectOrClass(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (!type.IsRecord && type.TypeKind is not (TypeKind.Struct or TypeKind.Class))
+            return false;
+        if (TryEmitPlainObjectViaIr(type, sink, irCache))
+            return true;
+        new IrToTsClassEmitter(Context).Transform(type, sink);
         return true;
     }
 
