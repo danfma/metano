@@ -16,7 +16,7 @@ public static class IrTestHelper
     public static IrEnumDeclaration ExtractEnum(string csharpSource)
     {
         var compilation = Compile(csharpSource);
-        var type = FindTranspilableType(compilation, TypeKind.Enum);
+        var type = FindTranspilableType(compilation, [TypeKind.Enum]);
         return IrEnumExtractor.Extract(type);
     }
 
@@ -26,8 +26,22 @@ public static class IrTestHelper
     public static IrInterfaceDeclaration ExtractInterface(string csharpSource)
     {
         var compilation = Compile(csharpSource);
-        var type = FindTranspilableType(compilation, TypeKind.Interface);
+        var type = FindTranspilableType(compilation, [TypeKind.Interface]);
         return IrInterfaceExtractor.Extract(type);
+    }
+
+    /// <summary>
+    /// Compiles C# source and extracts the first matching
+    /// [Transpile]-annotated class or struct (or one identified by
+    /// <paramref name="typeName"/>) to <see cref="IrClassDeclaration"/>.
+    /// Replaces the per-file <c>ExtractClass</c> helpers each test
+    /// fixture used to maintain.
+    /// </summary>
+    public static IrClassDeclaration ExtractClass(string csharpSource, string? typeName = null)
+    {
+        var compilation = Compile(csharpSource);
+        var type = FindTranspilableType(compilation, [TypeKind.Class, TypeKind.Struct], typeName);
+        return IrClassExtractor.Extract(type);
     }
 
     /// <summary>
@@ -83,32 +97,72 @@ public static class IrTestHelper
         return compilation;
     }
 
-    private static INamedTypeSymbol FindTranspilableType(
+    /// <summary>
+    /// Scans <paramref name="compilation"/> for the first declared
+    /// <see cref="INamedTypeSymbol"/> whose <see cref="TypeKind"/>
+    /// appears in <paramref name="kinds"/> (or any kind when null)
+    /// and which carries <c>[Transpile]</c>. When
+    /// <paramref name="typeName"/> is supplied, also requires
+    /// <see cref="ISymbol.Name"/> match. Replaces three per-file
+    /// reimplementations of the same loop.
+    /// </summary>
+    public static INamedTypeSymbol FindTranspilableType(
         CSharpCompilation compilation,
-        TypeKind kind
+        IReadOnlyList<TypeKind>? kinds = null,
+        string? typeName = null
     )
     {
         foreach (var tree in compilation.SyntaxTrees)
         {
             var model = compilation.GetSemanticModel(tree);
-            var root = tree.GetRoot();
-
-            foreach (var node in root.DescendantNodes())
+            foreach (var node in tree.GetRoot().DescendantNodes())
             {
-                var symbol = model.GetDeclaredSymbol(node);
-                if (
-                    symbol is INamedTypeSymbol namedType
-                    && namedType.TypeKind == kind
-                    && Metano.Compiler.SymbolHelper.HasTranspile(namedType)
-                )
-                {
-                    return namedType;
-                }
+                if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol named)
+                    continue;
+                if (kinds is not null && !kinds.Contains(named.TypeKind))
+                    continue;
+                if (!Metano.Compiler.SymbolHelper.HasTranspile(named))
+                    continue;
+                if (typeName is not null && named.Name != typeName)
+                    continue;
+                return named;
             }
         }
 
+        var kindLabel = kinds is null ? "type" : string.Join("/", kinds);
+        var nameLabel = typeName is null ? "" : $" named '{typeName}'";
         throw new InvalidOperationException(
-            $"No [Transpile]-annotated {kind} found in the source."
+            $"No [Transpile]-annotated {kindLabel}{nameLabel} found in the source."
         );
+    }
+
+    /// <summary>
+    /// Scans <paramref name="compilation"/> for the first declared
+    /// <see cref="INamedTypeSymbol"/> whose name matches
+    /// <paramref name="typeName"/> (or the first declared type
+    /// when null). No <c>[Transpile]</c> filter — caller decides
+    /// whether the test fixture needs the attribute. Replaces a
+    /// per-file copy in <c>IrTypeSignatureHasherTests</c>.
+    /// </summary>
+    public static INamedTypeSymbol FindNamedType(
+        CSharpCompilation compilation,
+        string? typeName = null
+    )
+    {
+        var visited = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var model = compilation.GetSemanticModel(tree);
+            foreach (var node in tree.GetRoot().DescendantNodes())
+            {
+                if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol named)
+                    continue;
+                if (!visited.Add(named))
+                    continue;
+                if (typeName is null || named.Name == typeName)
+                    return named;
+            }
+        }
+        throw new InvalidOperationException($"Type '{typeName ?? "<first>"}' not found.");
     }
 }

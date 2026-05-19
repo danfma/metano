@@ -13,6 +13,21 @@ namespace Metano.Tests;
 /// </summary>
 public class EmitPackageTests
 {
+    private readonly List<string> _tempDirs = new();
+
+    [After(Test)]
+    public void DeleteTempDirs()
+    {
+        // Centralised cleanup so a test failure mid-assertion still
+        // releases the temp directory. Previously each test ended with
+        // a manual Directory.Delete that would not run on an exception.
+        foreach (var dir in _tempDirs)
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Test]
     public async Task NoExistingFile_AuthoritativeNameWritten()
     {
@@ -30,8 +45,6 @@ public class EmitPackageTests
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("@scope/cool-pkg");
         await Assert.That(diags.Count).IsEqualTo(0);
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -64,8 +77,6 @@ public class EmitPackageTests
         await Assert
             .That((imports["#/*"] as JsonObject)!["default"]?.GetValue<string>())
             .IsEqualTo("./src/*.ts");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -89,8 +100,6 @@ public class EmitPackageTests
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("sample-todo");
         await Assert.That(diags.Count).IsEqualTo(0);
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -127,8 +136,6 @@ public class EmitPackageTests
             .That(diags.Any(d => d.Code == DiagnosticCodes.CrossPackageResolution))
             .IsTrue();
         await Assert.That(diags.Any(d => d.Severity == MetanoDiagnosticSeverity.Warning)).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -166,8 +173,6 @@ public class EmitPackageTests
         // Compiler-tracked entries added.
         await Assert.That(depsObj["sample-todo"]?.GetValue<string>()).IsEqualTo("workspace:*");
         await Assert.That(depsObj["@scope/lib"]?.GetValue<string>()).IsEqualTo("^1.2.3");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -198,8 +203,6 @@ public class EmitPackageTests
         await Assert
             .That((pkg["dependencies"] as JsonObject)!["sample-todo"]?.GetValue<string>())
             .IsEqualTo("^1.5.0");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -223,8 +226,6 @@ public class EmitPackageTests
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("hand-written");
         await Assert.That(diags.Count).IsEqualTo(0);
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -259,8 +260,6 @@ public class EmitPackageTests
         // Individual files must NOT appear
         await Assert.That(exports.ContainsKey("./domain/item")).IsFalse();
         await Assert.That(exports.ContainsKey("./domain/category")).IsFalse();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -291,8 +290,6 @@ public class EmitPackageTests
         await Assert.That(exports.ContainsKey(".")).IsTrue();
         await Assert.That(exports.ContainsKey("./todo-item")).IsFalse();
         await Assert.That(exports.ContainsKey("./todo-list")).IsFalse();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -332,8 +329,6 @@ public class EmitPackageTests
         await Assert.That(imports.ContainsKey("#")).IsTrue();
         // User-defined entry preserved
         await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -379,8 +374,6 @@ public class EmitPackageTests
         // Stale entry removed
         await Assert.That(exports.ContainsKey("./old-barrel")).IsFalse();
         await Assert.That(exports!.Count).IsEqualTo(1);
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -426,8 +419,6 @@ public class EmitPackageTests
         await Assert.That(imports!.ContainsKey("#")).IsTrue();
         await Assert.That(imports.ContainsKey("#/*")).IsTrue();
         await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -471,8 +462,6 @@ public class EmitPackageTests
         await Assert.That(subpathAlias).IsNotNull();
         await Assert.That(subpathAlias!["types"]?.GetValue<string>()).IsEqualTo("./lib/*.d.ts");
         await Assert.That(subpathAlias["import"]?.GetValue<string>()).IsEqualTo("./lib/*.js");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -510,8 +499,6 @@ public class EmitPackageTests
         await Assert
             .That(rootEntry!["types"]?.GetValue<string>())
             .IsEqualTo("./dist/domain/index.d.ts");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -541,8 +528,6 @@ public class EmitPackageTests
         await Assert.That(wildcard["import"]?.GetValue<string>()).IsEqualTo("./dist/domain/*.js");
         // Source paths use the full srcRelative (unchanged)
         await Assert.That(wildcard["default"]?.GetValue<string>()).IsEqualTo("./src/domain/*.ts");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -568,8 +553,6 @@ public class EmitPackageTests
         // srcRoot = "lib", srcRelative = "lib/models" → prefix = "models"
         await Assert.That(exports!.ContainsKey("./models")).IsTrue();
         await Assert.That(exports.ContainsKey(".")).IsFalse();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -596,8 +579,6 @@ public class EmitPackageTests
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey("./domain")).IsTrue();
         await Assert.That(exports.ContainsKey(".")).IsFalse();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -623,8 +604,6 @@ public class EmitPackageTests
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey("./domain")).IsTrue();
         await Assert.That(exports.ContainsKey(".")).IsFalse();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     // ── Write-if-missing rule for hand-curated fields ────────────────
@@ -652,8 +631,6 @@ public class EmitPackageTests
 
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["type"]?.GetValue<string>()).IsEqualTo("commonjs");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -674,8 +651,6 @@ public class EmitPackageTests
 
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["type"]?.GetValue<string>()).IsEqualTo("module");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -710,8 +685,6 @@ public class EmitPackageTests
         await Assert.That(sideEffects!.Count).IsEqualTo(2);
         await Assert.That(sideEffects[0]?.GetValue<string>()).IsEqualTo("./styles.css");
         await Assert.That(sideEffects[1]?.GetValue<string>()).IsEqualTo("./register.ts");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -749,8 +722,6 @@ public class EmitPackageTests
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey("./styles.css")).IsTrue();
         await Assert.That(exports.ContainsKey(".")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -793,8 +764,6 @@ public class EmitPackageTests
         await Assert.That(rootExport!["types"]?.GetValue<string>()).IsEqualTo("./dist/index.d.ts");
         await Assert.That(rootExport["import"]?.GetValue<string>()).IsEqualTo("./dist/index.js");
         await Assert.That(rootExport["require"]?.GetValue<string>()).IsEqualTo("./dist/index.cjs");
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -832,8 +801,6 @@ public class EmitPackageTests
 
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey("./styles.css")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -875,8 +842,6 @@ public class EmitPackageTests
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey("./cjs")).IsTrue();
         await Assert.That(exports.ContainsKey(".")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -915,8 +880,6 @@ public class EmitPackageTests
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey(".")).IsFalse();
         await Assert.That(exports.ContainsKey("./styles.css")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
     [Test]
@@ -957,14 +920,13 @@ public class EmitPackageTests
 
         await Assert.That(exports).IsNotNull();
         await Assert.That(exports!.ContainsKey("./nested")).IsTrue();
-
-        Directory.Delete(tempDir, recursive: true);
     }
 
-    private static string CreateTempDir()
+    private string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"metasharp-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
+        _tempDirs.Add(dir);
         return dir;
     }
 

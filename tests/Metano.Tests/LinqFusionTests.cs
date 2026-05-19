@@ -1,3 +1,5 @@
+using static Metano.Tests.Assertions.OutputAssertions;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -247,19 +249,5 @@ public class LinqFusionTests
         var output = result["user-ext.ts"];
         var reverseOccurrences = CountOccurrences(output, "reverse(");
         await Assert.That(reverseOccurrences).IsEqualTo(1);
-    }
-
-    private static int CountOccurrences(string haystack, string needle)
-    {
-        if (string.IsNullOrEmpty(needle))
-            return 0;
-        var count = 0;
-        var index = 0;
-        while ((index = haystack.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
-        {
-            count++;
-            index += needle.Length;
-        }
-        return count;
     }
 }

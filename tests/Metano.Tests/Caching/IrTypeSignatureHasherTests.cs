@@ -178,21 +178,6 @@ public class IrTypeSignatureHasherTests
         return IrTypeSignatureHasher.Hash(symbol);
     }
 
-    private static INamedTypeSymbol FindType(CSharpCompilation compilation, string? typeName)
-    {
-        var visited = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var node in tree.GetRoot().DescendantNodes())
-            {
-                if (model.GetDeclaredSymbol(node) is INamedTypeSymbol named && visited.Add(named))
-                {
-                    if (typeName is null || named.Name == typeName)
-                        return named;
-                }
-            }
-        }
-        throw new InvalidOperationException($"Type '{typeName ?? "<first>"}' not found.");
-    }
+    private static INamedTypeSymbol FindType(CSharpCompilation compilation, string? typeName) =>
+        Metano.Tests.IR.IrTestHelper.FindNamedType(compilation, typeName);
 }

@@ -96,24 +96,6 @@ public class IrRuntimeRequirementScannerTests
     private static bool Contains(IReadOnlySet<IrRuntimeRequirement> set, string helperName) =>
         set.Any(r => r.HelperName == helperName);
 
-    private static IrClassDeclaration ExtractClass(string csharpSource)
-    {
-        var compilation = IrTestHelper.Compile(csharpSource);
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var node in tree.GetRoot().DescendantNodes())
-            {
-                if (
-                    model.GetDeclaredSymbol(node) is INamedTypeSymbol named
-                    && named.TypeKind is TypeKind.Class
-                    && Metano.Compiler.SymbolHelper.HasTranspile(named)
-                )
-                {
-                    return IrClassExtractor.Extract(named);
-                }
-            }
-        }
-        throw new InvalidOperationException("No [Transpile]-annotated class found.");
-    }
+    private static IrClassDeclaration ExtractClass(string csharpSource) =>
+        IrTestHelper.ExtractClass(csharpSource);
 }

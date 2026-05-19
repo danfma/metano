@@ -1,3 +1,5 @@
+using static Metano.Tests.Assertions.OutputAssertions;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -311,19 +313,5 @@ public class ExtensionIndexerTests
         await Assert.That(output).Contains("export function item$get");
         await Assert.That(output).Contains("export function item$set");
         await Assert.That(output).Contains("value: number");
-    }
-
-    private static int CountOccurrences(string haystack, string needle)
-    {
-        if (string.IsNullOrEmpty(needle))
-            return 0;
-        var count = 0;
-        var index = 0;
-        while ((index = haystack.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
-        {
-            count++;
-            index += needle.Length;
-        }
-        return count;
     }
 }

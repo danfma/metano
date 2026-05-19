@@ -685,40 +685,6 @@ public class IrClassExtractionTests
         await Assert.That(ir.Semantics.IsException).IsTrue();
     }
 
-    // -- helpers --
-
-    private static IrClassDeclaration ExtractClass(string csharpSource, string? typeName = null)
-    {
-        var compilation = IrTestHelper.Compile(csharpSource);
-        INamedTypeSymbol? found = null;
-
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var node in tree.GetRoot().DescendantNodes())
-            {
-                if (model.GetDeclaredSymbol(node) is not INamedTypeSymbol named)
-                    continue;
-                if (
-                    named.TypeKind is not (TypeKind.Class or TypeKind.Struct)
-                    || !Metano.Compiler.SymbolHelper.HasTranspile(named)
-                )
-                    continue;
-                if (typeName is null || named.Name == typeName)
-                {
-                    found = named;
-                    break;
-                }
-            }
-            if (found is not null)
-                break;
-        }
-
-        if (found is null)
-            throw new InvalidOperationException(
-                $"No [Transpile]-annotated class/struct{(typeName is null ? "" : $" named {typeName}")} found."
-            );
-
-        return IrClassExtractor.Extract(found);
-    }
+    private static IrClassDeclaration ExtractClass(string csharpSource, string? typeName = null) =>
+        IrTestHelper.ExtractClass(csharpSource, typeName);
 }
