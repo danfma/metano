@@ -88,6 +88,10 @@ public static class TranspilerHost
                 )
             )
             {
+                // Refresh the MSBuild stamp so the next incremental
+                // build still sees a fresh Outputs timestamp even when
+                // the entire pipeline short-circuited via the cache.
+                WriteStamp(outputDir);
                 return new TranspileResult(true, cachedFiles, 0, 0);
             }
         }
@@ -170,7 +174,37 @@ public static class TranspilerHost
             compilation
         );
 
+        WriteStamp(outputDir);
+
         return new TranspileResult(true, output.Files, warningCount, 0);
+    }
+
+    /// <summary>
+    /// Writes <c>&lt;outputDir&gt;/.metano-stamp</c> after a successful
+    /// run. The MSBuild target's <c>Outputs</c> attribute points at
+    /// this file, so the incremental engine skips the
+    /// <c>MetanoTranspile</c> target when every input is older than
+    /// the stamp. The file's content is the run's UTC timestamp;
+    /// MSBuild only inspects the file's <c>LastWriteTime</c>, but a
+    /// timestamp body makes the file self-describing in tooling that
+    /// opens it.
+    /// </summary>
+    private static void WriteStamp(string outputDir)
+    {
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            File.WriteAllText(
+                Path.Combine(outputDir, ".metano-stamp"),
+                DateTime.UtcNow.ToString("O") + Environment.NewLine
+            );
+        }
+        catch
+        {
+            // Best-effort: a stamp-write failure should not break the
+            // build. The next run pays a re-transpile and surfaces the
+            // underlying I/O error through the normal write path.
+        }
     }
 
     private static bool ShouldAttemptCache(TranspileOptions options) =>

@@ -66,10 +66,26 @@
     >
   </PropertyGroup>
 
+  <!-- User-authored compilation inputs only — exclude items under
+       $(IntermediateOutputPath) (e.g., the auto-generated
+       obj/.../*.AssemblyInfo.cs which MSBuild touches on every build
+       and would otherwise force MetanoTranspile to re-run every time. -->
+  <Target Name="_MetanoCollectUserInputs" BeforeTargets="MetanoTranspile">
+    <ItemGroup>
+      <_MetanoUserCompile
+        Include="@(Compile)"
+        Condition="!$([System.String]::Copy('%(Compile.FullPath)').StartsWith('$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)'))'))"
+      />
+    </ItemGroup>
+  </Target>
+
   <Target
     Name="MetanoTranspile"
     AfterTargets="Build"
+    DependsOnTargets="_MetanoCollectUserInputs"
     Condition="'$(MetanoEnabled)' == 'true' and '$(MetanoOutputDir)' != ''"
+    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath)"
+    Outputs="$(MetanoOutputDir)/.metano-stamp"
   >
     <PropertyGroup>
       <!-- Two modes:
@@ -88,35 +104,39 @@
       <_MetanoTargetLanguage Condition="'$(_MetanoTargetLanguage)' == ''"
         >typescript</_MetanoTargetLanguage
       >
-
-      <_MetanoArgs>-p "$(MSBuildProjectFullPath)" -o "$(MetanoOutputDir)"</_MetanoArgs>
-      <_MetanoArgs Condition="'$(MetanoClean)' == 'true'">$(_MetanoArgs) --clean</_MetanoArgs>
-      <_MetanoArgs Condition="'$(MetanoShowTimings)' == 'true'">$(_MetanoArgs) --time</_MetanoArgs>
-      <_MetanoArgs Condition="'$(MetanoDist)' != ''"
-        >$(_MetanoArgs) --dist "$(MetanoDist)"</_MetanoArgs
-      >
-      <_MetanoArgs Condition="'$(MetanoPackageRoot)' != ''"
-        >$(_MetanoArgs) --package-root "$(MetanoPackageRoot)"</_MetanoArgs
-      >
-      <_MetanoArgs Condition="'$(MetanoSrcRoot)' != ''"
-        >$(_MetanoArgs) --src-root "$(MetanoSrcRoot)"</_MetanoArgs
-      >
-      <_MetanoArgs Condition="'$(MetanoSkipPackageJson)' == 'true'"
-        >$(_MetanoArgs) --skip-package-json</_MetanoArgs
-      >
-      <_MetanoArgs Condition="'$(MetanoNamespaceBarrels)' == 'true'"
-        >$(_MetanoArgs) --namespace-barrels</_MetanoArgs
-      >
-      <_MetanoArgs Condition="'$(MetanoStripInterfacePrefix)' == 'true'"
-        >$(_MetanoArgs) --strip-interface-prefix</_MetanoArgs
-      >
-      <_MetanoArgs Condition="'$(MetanoFilePrefix)' != ''"
-        >$(_MetanoArgs) --file-prefix "$(MetanoFilePrefix)"</_MetanoArgs
-      >
-      <_MetanoArgs Condition="'$(MetanoExtraArgs)' != ''"
-        >$(_MetanoArgs) $(MetanoExtraArgs)</_MetanoArgs
-      >
     </PropertyGroup>
+
+    <!-- One MSBuild item per CLI flag, evaluated lazily. Each entry's
+         Condition gates the flag on the corresponding consumer-set
+         property so empty values never reach the command line. Value-
+         bearing flags carry the value inline (quoted) and bare flags
+         render as just the switch token. -->
+    <ItemGroup>
+      <_MetanoArg Include="-p &quot;$(MSBuildProjectFullPath)&quot;" />
+      <_MetanoArg Include="-o &quot;$(MetanoOutputDir)&quot;" />
+      <_MetanoArg Include="--clean" Condition="'$(MetanoClean)' == 'true'" />
+      <_MetanoArg Include="--time" Condition="'$(MetanoShowTimings)' == 'true'" />
+      <_MetanoArg Include="--dist &quot;$(MetanoDist)&quot;" Condition="'$(MetanoDist)' != ''" />
+      <_MetanoArg
+        Include="--package-root &quot;$(MetanoPackageRoot)&quot;"
+        Condition="'$(MetanoPackageRoot)' != ''"
+      />
+      <_MetanoArg
+        Include="--src-root &quot;$(MetanoSrcRoot)&quot;"
+        Condition="'$(MetanoSrcRoot)' != ''"
+      />
+      <_MetanoArg Include="--skip-package-json" Condition="'$(MetanoSkipPackageJson)' == 'true'" />
+      <_MetanoArg Include="--namespace-barrels" Condition="'$(MetanoNamespaceBarrels)' == 'true'" />
+      <_MetanoArg
+        Include="--strip-interface-prefix"
+        Condition="'$(MetanoStripInterfacePrefix)' == 'true'"
+      />
+      <_MetanoArg
+        Include="--file-prefix &quot;$(MetanoFilePrefix)&quot;"
+        Condition="'$(MetanoFilePrefix)' != ''"
+      />
+      <_MetanoArg Include="$(MetanoExtraArgs)" Condition="'$(MetanoExtraArgs)' != ''" />
+    </ItemGroup>
 
     <!-- Project @(MetanoAsset) items into asset CLI args.
          Filter by %(Language) against the active transpiler language;
@@ -131,17 +151,11 @@
         '%(MetanoAsset.Language)' == '$(_MetanoTargetLanguage)' or
           '%(MetanoAsset.Language)' == 'all'"
       />
+      <_MetanoArg Include="@(_MetanoAssetSelected -> '--asset &quot;%(FullPath)=%(OutputPath)&quot;')" />
     </ItemGroup>
 
-    <!-- Emit one CLI flag per surviving asset. Always include the
-         `=DEST` separator; the host's AssetFlagParser treats an empty
-         tail as a missing override, so a bare <MetanoAsset Include="x" />
-         still mirrors the source path. -->
     <PropertyGroup>
-      <_MetanoAssetArgs>@(_MetanoAssetSelected -> '--asset &quot;%(FullPath)=%(OutputPath)&quot;', ' ')</_MetanoAssetArgs>
-      <_MetanoArgs Condition="'$(_MetanoAssetArgs)' != ''"
-        >$(_MetanoArgs) $(_MetanoAssetArgs)</_MetanoArgs
-      >
+      <_MetanoArgs>@(_MetanoArg, ' ')</_MetanoArgs>
     </PropertyGroup>
 
     <Message
