@@ -196,4 +196,33 @@ public class InvocationRewriterCanaryTests
         await Assert.That(output).Contains("hashBytes(b)");
         await Assert.That(output).Contains("from \"crypto-utils\"");
     }
+
+    [Test]
+    public async Task InlineMethod_LowersThroughRewriterChain()
+    {
+        // Pins the InlineMethodExpansionRewriter slot. An [Inline]
+        // method call must β-reduce its body at the call site —
+        // bypassing the rewriter would emit a regular method call,
+        // and since [Inline] methods carry [NoEmit]-like semantics
+        // (no body lowered), the call would dangle against a
+        // non-existent helper.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [Transpile, NoContainer]
+            public static class MathHelpers
+            {
+                [Inline(InlineMode.Substitute)]
+                public static int Double(int x) => x + x;
+
+                public static int Run(int n) => Double(n);
+            }
+            """
+        );
+
+        var output = result["math-helpers.ts"];
+
+        await Assert.That(output).Contains("return n + n;");
+    }
 }

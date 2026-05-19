@@ -132,6 +132,10 @@ public sealed partial class IrExpressionExtractor
             new Invocation.DelegateInvokeRewriter(helpers),
             new Invocation.IntrinsicBclLoweringTable(semanticModel.Compilation, helpers),
             new Invocation.EmitOrImportRewriter(helpers),
+            // Bespoke callback (not via helpers) — inline expansion is tied
+            // to the extractor's mutable recursion-guard state; see the
+            // rewriter's class doc for the ownership rationale.
+            new Invocation.InlineMethodExpansionRewriter(TryExpandInlineMethod),
         };
     }
 
@@ -1733,18 +1737,6 @@ public sealed partial class IrExpressionExtractor
         {
             if (rewriter.Rewrite(invocationContext) is { } rewritten)
                 return rewritten;
-        }
-
-        // `[Inline]` method: beta-reduce the body at the call site.
-        // Parameters bind to the caller's argument IR (the reduced
-        // extension receiver becomes the first parameter) so the body
-        // emits as if it had been written inline at the call site. A
-        // cross-assembly body resolves through the referenced
-        // compilation's semantic model, matching field/property inline.
-        if (symbol is not null && SymbolHelper.IsInlineMember(symbol))
-        {
-            if (TryExpandInlineMethod(inv, symbol) is { } inlinedBody)
-                return inlinedBody;
         }
 
         // Extension method call site (classic `(this T)` reduced form or
