@@ -55,6 +55,59 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         );
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
+        var (ctorParamsForSignature, ownParams, allParams, baseParams, explicitCtors) =
+            ResolveCtorParameterLists(type, ir, extendsType);
+
+        var constructor = BuildClassConstructor(
+            type,
+            ir,
+            ctorParamsForSignature,
+            explicitCtors,
+            extendsType,
+            baseParams
+        );
+
+        var classMembers = new List<TsClassMember>();
+        EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
+        EmitClassMembers(ir, ctorParamsForSignature, classMembers);
+        EmitDeferredOperatorsAndMethods(type, ir, classMembers);
+        EmitSynthesizedMembers(type, ir, allParams, explicitCtors, classMembers);
+
+        // Records get synthesized `with(...)` / `equals(...)` / `hashCode(...)`
+        // helpers via `IrToTsRecordSynthesisBridge`. The `with` helper
+        // calls `new TypeName(...)`, which TypeScript rejects on
+        // `abstract class`. Suppress the abstract modifier for records
+        // until the synthesis path emits a constructor-aware shape;
+        // tracked as a follow-up to issue #118.
+        var emitAbstract = ir.Semantics.IsAbstract && !ir.Semantics.IsRecord;
+
+        statements.Add(
+            new TsClass(
+                _context.ResolveTsName(type),
+                constructor,
+                classMembers,
+                Extends: extendsType,
+                Implements: IrToTsClassBridge.BuildImplements(ir),
+                TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir),
+                Abstract: emitAbstract
+            )
+        );
+    }
+
+    /// <summary>
+    /// Resolves every constructor-parameter list the rest of the emit
+    /// step needs: own (promoted), DI-captured, combined signature,
+    /// inherited base params (for <c>super(...)</c>), and the list
+    /// of explicit constructors driving the multi-ctor branch.
+    /// </summary>
+    private (
+        List<TsConstructorParam> SignatureParams,
+        IReadOnlyList<TsConstructorParam> OwnParams,
+        List<TsConstructorParam> AllParams,
+        IReadOnlyList<TsConstructorParam> BaseParams,
+        List<IMethodSymbol> ExplicitCtors
+    ) ResolveCtorParameterLists(INamedTypeSymbol type, IrClassDeclaration ir, TsType? extendsType)
+    {
         var baseParams =
             type.BaseType is not null && extendsType is not null
                 ? GetInheritedCtorParamsFromIr(type.BaseType.OriginalDefinition)
@@ -70,26 +123,44 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             ip => ResolveCtorParamTsType(ip.Parameter.Type),
             _context.DeclarativeMappings
         );
-        // All params for equals/hashCode/with (conceptual fields — both inherited and own)
         var allParams = baseParams.Concat(ownParams).ToList();
-        // Constructor signature: only own params (base properties are declared in parent)
-        var ctorParamsForSignature = ownParams.ToList();
+        var signatureParams = ownParams.ToList();
 
         var capturedParams = IrToTsClassBridge.BuildCapturedCtorParams(
             ir.Constructor,
             ip => ResolveCtorParamTsType(ip.Parameter.Type),
             ownParams.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
         );
-        ctorParamsForSignature.AddRange(capturedParams);
+        signatureParams.AddRange(capturedParams);
 
-        // Detect multiple constructors
         var explicitCtors = type
             .Constructors.Where(c => c.DeclaredAccessibility == Accessibility.Public)
             .Where(c => !c.IsImplicitlyDeclared || c.Parameters.Length > 0)
             .ToList();
 
-        TsConstructor constructor;
+        return (signatureParams, ownParams, allParams, baseParams, explicitCtors);
+    }
 
+    /// <summary>
+    /// Three-branch dispatcher for the constructor body:
+    /// <list type="number">
+    ///   <item>Multi-constructor → IR-driven overload dispatcher;</item>
+    ///   <item>Unmatched explicit single ctor (DI shape) →
+    ///     <c>BuildSimpleConstructor</c> with TS-shorthand-suppressed
+    ///     param list;</item>
+    ///   <item>Otherwise → <c>BuildSimpleConstructor</c> with the
+    ///     promoted + captured signature.</item>
+    /// </list>
+    /// </summary>
+    private TsConstructor BuildClassConstructor(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        List<TsConstructorParam> ctorParamsForSignature,
+        List<IMethodSymbol> explicitCtors,
+        TsType? extendsType,
+        IReadOnlyList<TsConstructorParam> baseParams
+    )
+    {
         if (explicitCtors.Count > 1)
         {
             // The IR pipeline owns multi-constructor dispatch. When the body
@@ -97,19 +168,19 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             // build-time diagnostic and emit an empty constructor stub —
             // crashing here would abort the whole transpile for an otherwise
             // valid type, and silently dropping the type would hide the gap.
-            constructor =
-                TryBuildConstructorDispatcherFromIr(ir.Constructor)
+            return TryBuildConstructorDispatcherFromIr(ir.Constructor)
                 ?? EmitUnsupportedConstructor(
                     type,
                     $"Constructor overload group on '{type.Name}' contains constructs the IR "
                         + "pipeline doesn't yet model; an empty constructor was emitted."
                 );
         }
+
         // Non-record class with an explicit constructor whose params don't match
         // any property (e.g., DI-injected services assigned to private fields in
         // the body). The record-style and captured-param paths miss this because
         // "view" ≠ "_view" and the assignment is in the body, not a field initializer.
-        else if (HasUnmatchedExplicitConstructor(type, ctorParamsForSignature, explicitCtors))
+        if (HasUnmatchedExplicitConstructor(type, ctorParamsForSignature, explicitCtors))
         {
             // Accessibility None → plain parameter, no TS shorthand property
             // promotion. The param is assigned to a private field in the body,
@@ -126,38 +197,41 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     Rest: p.Parameter.IsParams
                 ))
                 .ToList();
-            constructor = IrToTsClassBridge.BuildSimpleConstructor(
+            return IrToTsClassBridge.BuildSimpleConstructor(
                 ir.Constructor,
                 ctorParams,
                 ResolveSuperArgs(extendsType, ir, baseParams),
                 _context.DeclarativeMappings
             );
         }
-        else
-        {
-            constructor = IrToTsClassBridge.BuildSimpleConstructor(
-                ir.Constructor,
-                ctorParamsForSignature,
-                ResolveSuperArgs(extendsType, ir, baseParams),
-                _context.DeclarativeMappings
-            );
-        }
 
-        var classMembers = new List<TsClassMember>();
+        return IrToTsClassBridge.BuildSimpleConstructor(
+            ir.Constructor,
+            ctorParamsForSignature,
+            ResolveSuperArgs(extendsType, ir, baseParams),
+            _context.DeclarativeMappings
+        );
+    }
+
+    /// <summary>
+    /// Walks <see cref="IrClassDeclaration.Members"/> and emits fields,
+    /// properties (except those covered by a promoted ctor param), and
+    /// events into <paramref name="classMembers"/>. Operators and
+    /// methods are deferred — <see cref="EmitDeferredOperatorsAndMethods"/>
+    /// runs them after this pass so the final layout keeps the
+    /// "operators before methods" ordering the legacy emitter
+    /// established.
+    /// </summary>
+    private void EmitClassMembers(
+        IrClassDeclaration ir,
+        List<TsConstructorParam> ctorParamsForSignature,
+        List<TsClassMember> classMembers
+    )
+    {
         var ctorParamNames = ctorParamsForSignature
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
-
-        // Walk the IR member list directly — IrClassExtractor already filtered
-        // `[Ignore]`, implicit accessors, backing fields, enum members, and
-        // `[Emit]` templates, and folded sibling overloads onto a primary
-        // method's Overloads slot. Fields, properties, and events emit
-        // in-place; operators and methods get deferred so the final layout
-        // matches the legacy "operators before methods" ordering.
-        var deferredOperators = new List<IrMethodDeclaration>();
-        var deferredMethods = new List<IrMethodDeclaration>();
         foreach (var irMember in ir.Members ?? [])
         {
             switch (irMember)
@@ -185,15 +259,6 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     );
                     break;
 
-                case IrMethodDeclaration irMethod when irMethod.Semantics.IsOperator:
-                    deferredOperators.Add(irMethod);
-                    break;
-
-                case IrMethodDeclaration irMethod
-                    when irMethod.Visibility is not IrVisibility.PrivateProtected:
-                    deferredMethods.Add(irMethod);
-                    break;
-
                 case IrEventDeclaration irEvent:
                     classMembers.AddRange(
                         IrToTsClassBridge.BuildEvent(
@@ -201,6 +266,36 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                             IrToTsTypeMapper.Map(irEvent.HandlerType, BclOverrides)
                         )
                     );
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Second-phase walk that emits operators (before methods) and
+    /// methods. Split from <see cref="EmitClassMembers"/> so the final
+    /// member ordering matches the legacy "operators-then-methods"
+    /// layout — the in-place emission of fields/properties/events
+    /// already happened.
+    /// </summary>
+    private void EmitDeferredOperatorsAndMethods(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        List<TsClassMember> classMembers
+    )
+    {
+        var deferredOperators = new List<IrMethodDeclaration>();
+        var deferredMethods = new List<IrMethodDeclaration>();
+        foreach (var irMember in ir.Members ?? [])
+        {
+            switch (irMember)
+            {
+                case IrMethodDeclaration irMethod when irMethod.Semantics.IsOperator:
+                    deferredOperators.Add(irMethod);
+                    break;
+                case IrMethodDeclaration irMethod
+                    when irMethod.Visibility is not IrVisibility.PrivateProtected:
+                    deferredMethods.Add(irMethod);
                     break;
             }
         }
@@ -214,36 +309,29 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             if (members is not null)
                 classMembers.AddRange(members);
         }
+    }
 
+    /// <summary>
+    /// Adds the compiler-synthesised members the source did not
+    /// declare: the <c>create({...})</c> factory paired with an
+    /// <c>[ObjectArgs]</c> ctor, plus <c>equals</c> / <c>hashCode</c> /
+    /// <c>with</c> for non-<c>[PlainObject]</c> records via
+    /// <see cref="IrToTsRecordSynthesisBridge"/>.
+    /// </summary>
+    private void EmitSynthesizedMembers(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        List<TsConstructorParam> allParams,
+        List<IMethodSymbol> explicitCtors,
+        List<TsClassMember> classMembers
+    )
+    {
         var objectArgsFactory = TryBuildObjectArgsCreateFactory(type, ir, explicitCtors);
         if (objectArgsFactory is not null)
             classMembers.Add(objectArgsFactory);
 
-        // Generate equals, hashCode, with for records via the IR-driven bridge
-        // so the output flows through the same path the Dart target uses.
-        // Gate: records yes, [PlainObject] records no.
         if (ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject)
             classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir, allParams));
-
-        // Records get synthesized `with(...)` / `equals(...)` / `hashCode(...)`
-        // helpers via `IrToTsRecordSynthesisBridge`. The `with` helper
-        // calls `new TypeName(...)`, which TypeScript rejects on
-        // `abstract class`. Suppress the abstract modifier for records
-        // until the synthesis path emits a constructor-aware shape;
-        // tracked as a follow-up to issue #118.
-        var emitAbstract = ir.Semantics.IsAbstract && !ir.Semantics.IsRecord;
-
-        statements.Add(
-            new TsClass(
-                _context.ResolveTsName(type),
-                constructor,
-                classMembers,
-                Extends: extendsType,
-                Implements: IrToTsClassBridge.BuildImplements(ir),
-                TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir),
-                Abstract: emitAbstract
-            )
-        );
     }
 
     /// <summary>
