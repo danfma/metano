@@ -141,41 +141,8 @@ public sealed partial class IrExpressionExtractor
         return call;
     }
 
-    /// <summary>
-    /// Routes <c>System.Math.{Round,Floor,Ceiling,Abs}(decimal)</c> to
-    /// the matching instance method on the runtime <c>Decimal</c>
-    /// wrapper. Returns <see langword="null"/> when the call doesn't
-    /// match the BCL signature so the caller falls back to ordinary
-    /// invocation lowering.
-    /// </summary>
-    private IrExpression? TryRewriteMathDecimalCall(
-        InvocationExpressionSyntax inv,
-        IMethodSymbol? symbol
-    )
-    {
-        if (
-            symbol is null
-            || symbol.ContainingType?.ToDisplayString() != "System.Math"
-            || inv.ArgumentList.Arguments.Count != 1
-        )
-            return null;
-
-        var argSyntax = inv.ArgumentList.Arguments[0].Expression;
-        var argType = _semantic.GetTypeInfo(argSyntax).Type;
-        if (argType?.SpecialType != SpecialType.System_Decimal)
-            return null;
-
-        var methodName = symbol.Name switch
-        {
-            "Round" => "round",
-            "Floor" => "floor",
-            "Ceiling" => "ceil",
-            "Abs" => "abs",
-            _ => null,
-        };
-        if (methodName is null)
-            return null;
-
-        return new IrCallExpression(new IrMemberAccess(Extract(argSyntax), methodName), []);
-    }
+    // `Math.{Round,Floor,Ceiling,Abs}(decimal)` and `decimal.Parse`
+    // rewrites moved to `Invocation/IntrinsicBclLoweringTable.cs` as
+    // a symbol-keyed dispatch table — see ADR-adjacent note in the
+    // class docstring there.
 }

@@ -104,7 +104,34 @@ public sealed partial class IrExpressionExtractor
         _target = target;
         _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         _inlineParameterSubs = inlineParameterSubs;
+
+        // Invocation rewriter chain (#221 — invocation rewriter
+        // extraction). Order is load-bearing — see each rewriter's
+        // class doc for the priority tier the entry occupies.
+        //
+        // Pre-pass concerns (LINQ chain detection, queryable-trigger
+        // diagnostics) stay above the chain in ExtractInvocation
+        // because they don't share the "match-or-decline" contract.
+        //
+        // [Emit] templates, [Import] facades, [Inline] expansion,
+        // and extension-method lowering stay BELOW the chain in the
+        // inline cascade for now. They each own mutable state
+        // (inline-expansion recursion guard, attribute-driven facade
+        // builders) that's still threaded through extractor fields;
+        // migrating them into rewriters needs that state ownership
+        // sorted first and lands in later PRs of #221.
+        var helpers = new Invocation.InvocationLoweringHelpers(
+            ApplyParamsSpread: ApplyParamsSpread,
+            BuildOrigin: BuildOrigin
+        );
+        _invocationRewriters = new Invocation.IInvocationRewriter[]
+        {
+            new Invocation.DelegateInvokeRewriter(helpers),
+            new Invocation.IntrinsicBclLoweringTable(semanticModel.Compilation, helpers),
+        };
     }
+
+    private readonly Invocation.IInvocationRewriter[] _invocationRewriters;
 
     internal HashSet<ISymbol> InlineExpandingSet => _inlineExpanding;
 
@@ -1687,44 +1714,21 @@ public sealed partial class IrExpressionExtractor
         // covered.
         ReportQueryableDiagnosticsForExplicitOptIn(inv, symbol);
 
-        // `handler.Invoke(args)` lowers to `handler(args)` — the
-        // synthesized `Invoke` member has no runtime counterpart in
-        // JS/TS because the delegate IS the function. Drop the
-        // `.Invoke` indirection at the source-level so consumers
-        // read the dispatch as a plain function call. The Dart
-        // bridge re-introduces the explicit `.call(...)` segment;
-        // routing through the call below is fine because the
-        // bridge's call lowering handles the receiver shape.
-        //
-        // `[This]`-bearing delegates fall through to the rewrite
-        // further down (line 1357 onward), which produces the
-        // `delegate.call(receiver, ...)` shape that JS needs to
-        // rebind `this` before the runtime trampoline forwards it.
-        if (
-            symbol is { } invoke
-            && IsDelegateInvoke(invoke)
-            && !HasThisParameter(invoke)
-            && inv.Expression is MemberAccessExpressionSyntax invokeMember
-        )
+        // Chain dispatch (#221 — invocation rewriter extraction).
+        // Order is fixed by the array initialiser in the ctor; each
+        // rewriter returns non-null only when its symbol-shape gate
+        // matches.
+        var invocationContext = new Invocation.InvocationRewriteContext(
+            inv,
+            symbol,
+            _semantic,
+            Extract,
+            ExtractArgument
+        );
+        foreach (var rewriter in _invocationRewriters)
         {
-            var receiver = Extract(invokeMember.Expression);
-            var invokeArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-            ApplyParamsSpread(invokeArgs, symbol, inv.ArgumentList.Arguments);
-            return new IrCallExpression(receiver, invokeArgs, Origin: BuildOrigin(symbol));
-        }
-
-        // `decimal.Parse(s)` → `new Decimal(s)`.
-        if (
-            symbol is { IsStatic: true, Name: "Parse" }
-            && symbol.ContainingType?.ToDisplayString() == "decimal"
-            && inv.ArgumentList.Arguments.Count >= 1
-        )
-        {
-            var arg = Extract(inv.ArgumentList.Arguments[0].Expression);
-            return new IrNewExpression(
-                new IrPrimitiveTypeRef(IrPrimitive.Decimal),
-                [new IrArgument(arg)]
-            );
+            if (rewriter.Rewrite(invocationContext) is { } rewritten)
+                return rewritten;
         }
 
         // `[Emit("…$0…")]` rewrites the call into an inline template
@@ -1746,15 +1750,6 @@ public sealed partial class IrExpressionExtractor
             if (SymbolHelper.GetImport(symbol) is { } directImport)
                 return BuildImportFacadeTemplateExpression(symbol, inv, directImport);
         }
-
-        // `Math.Round(decimal)` / `Math.Floor(decimal)` / `Math.Ceiling(decimal)` /
-        // `Math.Abs(decimal)` have no number-only equivalent in decimal.js — each
-        // Decimal instance carries its own instance method. Rewrite to the
-        // receiver's method call so `Math.Round(amount)` becomes
-        // `amount.round()` on the TS side, matching the legacy
-        // InvocationHandler.TryRewriteMathDecimal behavior.
-        if (TryRewriteMathDecimalCall(inv, symbol) is { } mathRewrite)
-            return mathRewrite;
 
         // `[Inline]` method: beta-reduce the body at the call site.
         // Parameters bind to the caller's argument IR (the reduced
