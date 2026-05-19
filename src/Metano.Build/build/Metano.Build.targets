@@ -10,6 +10,11 @@
     Configurable properties (set in the consuming .csproj):
 
       MetanoOutputDir        (required)  Where to write .ts files
+      MetanoEnabled          (optional)  Opt-out switch. Defaults to true when
+                                         MetanoOutputDir is set; set to false to
+                                         skip the transpile target without unsetting
+                                         the output dir (e.g., in CI variants that
+                                         only want the .NET build).
       MetanoClean            (optional)  true to wipe the output dir first (default: false)
       MetanoDist             (optional)  JS dist dir relative to package root (default: ./dist)
       MetanoPackageRoot      (optional)  Root of the npm package (default: parent of OutputDir)
@@ -55,7 +60,15 @@
     </MetanoAsset>
   </ItemDefinitionGroup>
 
-  <Target Name="MetanoTranspile" AfterTargets="Build" Condition="'$(MetanoOutputDir)' != ''">
+  <PropertyGroup>
+    <MetanoEnabled Condition="'$(MetanoEnabled)' == '' and '$(MetanoOutputDir)' != ''">true</MetanoEnabled>
+  </PropertyGroup>
+
+  <Target
+    Name="MetanoTranspile"
+    AfterTargets="Build"
+    Condition="'$(MetanoEnabled)' == 'true' and '$(MetanoOutputDir)' != ''"
+  >
     <PropertyGroup>
       <!-- Two modes:
            1. Installed tool (default): `dotnet metano-typescript`
@@ -133,7 +146,12 @@
       Importance="high"
       Text="Metano: Transpiling $(MSBuildProjectName) → $(MetanoOutputDir)"
     />
-    <Exec Command="$(_MetanoCmd) $(_MetanoArgs)" />
+    <Exec
+      Command="$(_MetanoCmd) $(_MetanoArgs)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      ConsoleToMSBuild="true"
+      StandardOutputImportance="High"
+    />
   </Target>
 
   <!--
@@ -153,6 +171,11 @@
       Importance="high"
       Text="Metano: Running post-build command for $(MSBuildProjectName)"
     />
-    <Exec Command="$(MetanoPostBuildCommand)" />
+    <Exec
+      Command="$(MetanoPostBuildCommand)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      ConsoleToMSBuild="true"
+      StandardOutputImportance="High"
+    />
   </Target>
 </Project>

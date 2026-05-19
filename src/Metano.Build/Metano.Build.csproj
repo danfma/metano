@@ -17,8 +17,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Embed the .targets files so NuGet delivers them to the consumer's build -->
-    <None Include="build/**" Pack="true" PackagePath="build/" />
-    <None Include="buildTransitive/**" Pack="true" PackagePath="buildTransitive/" />
+    <!-- Embed the single canonical .targets file in BOTH `build/` and
+         `buildTransitive/` so direct and transitive consumers run the
+         exact same target. Previously each path carried its own copy
+         and the transitive one drifted (missing MetanoNamespaceBarrels
+         / MetanoStripInterfacePrefix / MetanoFilePrefix / the
+         MetanoPostBuild target). #230 collapses both onto the
+         `build/` source. -->
+    <None Include="build/Metano.Build.targets" Pack="true" PackagePath="build/" />
+    <None Include="build/Metano.Build.targets" Pack="true" PackagePath="buildTransitive/" />
   </ItemGroup>
 </Project>
