@@ -26,6 +26,7 @@ bun.lock
 # (ADR-0021, ADR-0024). Per-machine, never committed.
 .metano-cache.json
 .metano-cache-groups-*.json
+.metano-stamp
 
 # Local working plans (per CLAUDE.md workflow — private per-session notes,
 # not committed — the authoritative backlog lives in GitHub issues)
