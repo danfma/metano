@@ -365,42 +365,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 groups.Count,
                 index =>
                 {
-                    var group = groups[index];
-                    var groupKey = GroupKey(group);
                     if (
-                        TryReuseFromCache(
-                            groupKey,
+                        TransformGroupOrReuseFromCache(
+                            index,
+                            groups,
                             cachedGroups,
                             perGroupClosure,
-                            out var stub,
-                            out var fileMeta
+                            perGroupResults,
+                            perGroupMetadata
                         )
                     )
                     {
-                        perGroupResults[index] = stub;
-                        perGroupMetadata[index] = [fileMeta!];
                         Interlocked.Increment(ref skippedGroupCount);
-                        return;
-                    }
-
-                    var produced = TransformGroup(group);
-                    perGroupResults[index] = produced;
-                    if (produced is not null)
-                    {
-                        // Print once: the printed bytes are what the
-                        // target emits AND what the cache fingerprints.
-                        // Stash in _cachedFileContents so the target
-                        // skips its own Printer call for this path.
-                        var printedContent = new Printer().Print(produced);
-                        _cachedFileContents[produced.FileName] = printedContent;
-                        perGroupMetadata[index] =
-                        [
-                            FileMetadataExtractor.Extract(produced, printedContent),
-                        ];
-                    }
-                    else
-                    {
-                        perGroupMetadata[index] = [];
                     }
                 }
             );
@@ -685,6 +661,59 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return true;
         new IrToTsClassEmitter(Context).Transform(type, sink);
         return true;
+    }
+
+    /// <summary>
+    /// Per-iteration worker for the Parallel.For pass. Returns
+    /// <see langword="true"/> when the group hit the cache (caller
+    /// increments the skip counter); <see langword="false"/> when
+    /// <see cref="TransformGroup"/> ran. Result + metadata land in
+    /// the shared index-keyed arrays so the caller can preserve
+    /// source order after the parallel pass completes.
+    /// </summary>
+    private bool TransformGroupOrReuseFromCache(
+        int index,
+        IReadOnlyList<TypeFileGroup> groups,
+        GroupCacheFile? cachedGroups,
+        IReadOnlyDictionary<string, string> perGroupClosure,
+        TsSourceFile?[] perGroupResults,
+        CachedFileMetadata[][] perGroupMetadata
+    )
+    {
+        var group = groups[index];
+        var groupKey = GroupKey(group);
+        if (
+            TryReuseFromCache(
+                groupKey,
+                cachedGroups,
+                perGroupClosure,
+                out var stub,
+                out var fileMeta
+            )
+        )
+        {
+            perGroupResults[index] = stub;
+            perGroupMetadata[index] = [fileMeta!];
+            return true;
+        }
+
+        var produced = TransformGroup(group);
+        perGroupResults[index] = produced;
+        if (produced is not null)
+        {
+            // Print once: the printed bytes are what the target emits
+            // AND what the cache fingerprints. Stash in
+            // _cachedFileContents so the target skips its own Printer
+            // call for this path.
+            var printedContent = new Printer().Print(produced);
+            _cachedFileContents[produced.FileName] = printedContent;
+            perGroupMetadata[index] = [FileMetadataExtractor.Extract(produced, printedContent)];
+        }
+        else
+        {
+            perGroupMetadata[index] = [];
+        }
+        return false;
     }
 
     /// <summary>
