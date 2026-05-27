@@ -170,11 +170,15 @@ Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, ru
 
 ### Spec as source of truth
 
-The product specification under `spec/` is the **single source of truth** for what
-Metano should do. Every functional requirement (FR-NNN) and non-functional requirement
-(NFR-NNN) in the spec is normative. The relationship between artifacts:
+The product specification in **speckit format** under `specs/001-project-baseline-evolution/`
+is the **single source of truth** for what Metano should do. Every functional requirement
+(FR-NNN) and non-functional requirement (NFR-NNN) remains normative and resolvable there.
+The legacy `spec/` has been migrated and renamed `old-spec/` — a comparison reference only,
+pending retirement once the migration parity gate passes. The relationship between artifacts:
 
-- `spec/` defines **what** the product must do (requirements, feature matrix, attributes, diagnostics).
+- `specs/001-project-baseline-evolution/baseline/` defines **what** the product does today
+  (capability matrix with code+test traceability, attribute catalog, diagnostic catalog).
+- `specs/001-project-baseline-evolution/roadmap/` defines **what's next** (evolution thrusts).
 - `docs/adr/` explains **why** specific architectural choices were made.
 - GitHub issues track **concrete work** — each issue must reference a spec requirement or be a request to change the spec.
 
@@ -202,3 +206,10 @@ Rules:
 - **JS tooling.** Always use **Bun** — never npm, yarn, npx, or pnpm.
 - **JS test conventions.** Tests live in `test/` (sibling to `src/`), mirroring the source directory structure. Imports use `#/*` subpath aliases (e.g., `import { Foo } from "#/system/json"`). Test files use `.test.ts` suffix.
 - **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
+
+<!-- SPECKIT START -->
+Active feature plan: `specs/001-project-baseline-evolution/plan.md`
+(baseline + multi-target evolution roadmap + legacy `spec/` → speckit reconciliation).
+For technologies, project structure, and other context, read that plan and its sibling
+`spec.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/`.
+<!-- SPECKIT END -->
