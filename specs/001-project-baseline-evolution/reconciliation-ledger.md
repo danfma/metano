@@ -42,8 +42,8 @@ Documents that named `spec/` as the source of truth and must be repointed to the
 | `.specify/memory/constitution.md` | "FR/NFR in `spec/`" | `specs/001-project-baseline-evolution/` (speckit canonical) | ✅ |
 | `CLAUDE.md` | "product specification under `spec/`" | `specs/001-project-baseline-evolution/` | ✅ |
 
-> SSOT pointers repointed (T022). `old-spec/` remains in the tree until the migration parity gate
-> below passes.
+> SSOT pointers repointed (T022). The migration parity gate below has passed and `old-spec/` has been
+> deleted.
 
 ## Migration parity gate status (CR-004)
 
@@ -53,7 +53,8 @@ Documents that named `spec/` as the source of truth and must be repointed to the
 | Stable identifiers preserved (`FR`/`NFR`/`MS`/`ADR`) | ✅ (see [.identifier-inventory.md](./baseline/.identifier-inventory.md)) |
 | SSOT pointers repointed | ✅ |
 | Architecture dispositions consistent with ADRs | ✅ (ADR-0001 / ADR-0013 unchanged; see overview) |
-| **`old-spec/` eligible for deletion?** | **Eligible** — but deletion deferred to a human sign-off / follow-up, not performed by this feature |
+| **`old-spec/` eligible for deletion?** | ✅ **Deleted** — maintainer confirmed parity; `old-spec/` removed from the tree |
 
-> Per spec scope, this feature does **not** delete `old-spec/`. It marks the gate satisfied and leaves
-> the physical removal as an explicit, separate action once a maintainer confirms parity by eye.
+> The `old-spec/` references that remain in this ledger and in `.migration-index.md` are historical
+> code-span text documenting the migration, not live file links — they record where each legacy
+> document went after `old-spec/` was retired.
