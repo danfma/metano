@@ -169,6 +169,19 @@ public sealed record IrArgument(IrExpression Value, string? Name = null, bool Is
 /// <c>new T(a, b)</c> to a positional array literal <c>[a, b]</c>, mirroring
 /// the <c>[PlainObject]</c> object-literal lowering.
 /// </para>
+/// <para>
+/// <paramref name="Initializers"/> carries the <c>Member = value</c> clauses
+/// of an object-initializer construction (<c>new T { … }</c>). A JSX backend
+/// reads them to populate element attributes / children.
+/// </para>
+/// <para>
+/// <paramref name="ExternalImports"/> carries the <c>[Import]</c> module
+/// dependency of an imported JSX-renderable type (a <c>solid-router</c>
+/// <c>Route</c>, etc.) so a backend that lowers the <c>new</c> to a JSX
+/// element can resolve the capitalized tag to its npm module instead of an
+/// intra-project component file. Null for every other construction; the value
+/// import is otherwise resolved from the declaring type.
+/// </para>
 /// </summary>
 public sealed record IrNewExpression(
     IrTypeRef Type,
@@ -176,8 +189,36 @@ public sealed record IrNewExpression(
     bool IsPlainObject = false,
     IReadOnlyList<string>? ParameterNames = null,
     bool IsObjectArgsCtor = false,
-    bool IsJsTuple = false
+    bool IsJsTuple = false,
+    IReadOnlyList<IrMemberInit>? Initializers = null,
+    IReadOnlyList<IrExternalImport>? ExternalImports = null
 ) : IrExpression;
+
+/// <summary>
+/// A single <c>Member = value</c> assignment inside an object-initializer
+/// clause (<c>new T { Member = value, ... }</c>).
+/// <para>
+/// <see cref="MemberName"/> is the original C# member name;
+/// <see cref="EmittedName"/> is the resolved <c>[Name]</c> override for the
+/// active target (or <c>null</c>, in which case the backend camelCases the
+/// member name itself). <see cref="Value"/> is the lowered right-hand
+/// expression. Order is source order — backends that care about stable child
+/// / attribute ordering (JSX) rely on it.
+/// <para>
+/// <see cref="IsChildrenSlot"/> is set when the assigned member is the element
+/// base's children-collection slot (a member typed as an array of the marked
+/// JSX element type). A JSX backend routes such an assignment to the element's
+/// children rather than to an attribute — by this resolved flag, never by a
+/// hard-coded member name, so any binding's children slot works regardless of
+/// what it is named.
+/// </para>
+/// </summary>
+public sealed record IrMemberInit(
+    string MemberName,
+    string? EmittedName,
+    IrExpression Value,
+    bool IsChildrenSlot = false
+);
 
 // -- Operators --
 

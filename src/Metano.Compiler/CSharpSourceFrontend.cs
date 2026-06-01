@@ -154,6 +154,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateIgnoreReferences(compilation, assemblyWideTranspile, target, diagnostics);
             ValidateJsTupleAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsCallableAttribute(compilation, assemblyWideTranspile, diagnostics);
+            ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
         }
 
         return new IrCompilation(
@@ -790,6 +791,155 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 $"Transpilable code references '{target.Name}', which is marked [Ignore] "
                     + "(.NET-only). Migrate the type to [External] (ambient TS shape) "
                     + "or remove the dependency from transpiled code.",
+                location
+            )
+        );
+    }
+
+    /// <summary>
+    /// MS0026 — flags a <c>new T(...)</c> placed in a JSX-renderable position
+    /// (a <c>Children</c> element, a <c>Render()</c> return, or the render-entry
+    /// lambda body) whose constructed type cannot be classified as a component,
+    /// a native element, or an imported renderable. The position is recognized
+    /// by its <em>converted</em> type being the marked <c>[External] JsxElement</c>:
+    /// when the source expects a renderable there but the concrete constructed
+    /// type fails <see cref="SymbolHelper.IsJsxRenderable"/>, the transpiler
+    /// would otherwise emit silently-wrong JSX (Constitution V). A <c>null</c>
+    /// return is not a <c>new</c> expression, so it never triggers this — that
+    /// stays a runtime concern, not a marker error (diagnostics contract).
+    /// </summary>
+    private static void ValidateJsxRenderablePositions(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        Metano.Annotations.TargetLanguage target,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        var seen = new HashSet<Location>();
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+            {
+                if (
+                    !SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly)
+                    || SymbolHelper.HasIgnore(type, target)
+                )
+                    return;
+                CheckJsxComponentRenderReturn(type, diagnostics, seen);
+                ScanJsxRenderablePositions(type, compilation, diagnostics, seen);
+            }
+        );
+    }
+
+    /// <summary>
+    /// MS0026 (condition 2) — a <c>[JsxComponentBuilder]</c>-derived component
+    /// whose <c>Render()</c> method does not return the marked
+    /// <c>[External] JsxElement</c> type. C#'s override rules normally force the
+    /// override to match the base's declared return type, so this fires only when
+    /// the family base is itself misapplied: <c>[JsxComponentBuilder]</c> sits on
+    /// a base whose render method returns something that is not the marked
+    /// element. We flag the concrete component's render syntax in that case so the
+    /// transpiler does not emit a function component whose body never produces JSX.
+    /// </summary>
+    private static void CheckJsxComponentRenderReturn(
+        INamedTypeSymbol type,
+        List<MetanoDiagnostic> diagnostics,
+        HashSet<Location> seen
+    )
+    {
+        if (!SymbolHelper.IsJsxComponent(type))
+            return;
+        var render = type.GetMembers("Render")
+            .OfType<IMethodSymbol>()
+            .FirstOrDefault(m => m.Parameters.IsEmpty && !m.IsStatic);
+        if (render is null)
+            return;
+        if (SymbolHelper.IsMarkedJsxElementType(render.ReturnType))
+            return;
+        var location =
+            render.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax().GetLocation()
+            ?? type.Locations.FirstOrDefault()
+            ?? Location.None;
+        if (!seen.Add(location))
+            return;
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.JsxRenderableUnrecognized,
+                $"'{type.Name}' is marked as a JSX component but its Render() does not "
+                    + "return the marked JsxElement type. Ensure the [JsxComponentBuilder] "
+                    + "base declares Render() returning the [External] JsxElement type.",
+                location
+            )
+        );
+    }
+
+    private static void ScanJsxRenderablePositions(
+        INamedTypeSymbol containing,
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics,
+        HashSet<Location> seen
+    )
+    {
+        foreach (var reference in containing.DeclaringSyntaxReferences)
+        {
+            var syntax = reference.GetSyntax();
+            var tree = syntax.SyntaxTree;
+            var semantic = compilation.GetSemanticModel(tree);
+            foreach (var node in syntax.DescendantNodes())
+            {
+                ExpressionSyntax creation = node switch
+                {
+                    ObjectCreationExpressionSyntax oc => oc,
+                    ImplicitObjectCreationExpressionSyntax ioc => ioc,
+                    _ => null!,
+                };
+                if (creation is null)
+                    continue;
+                CheckJsxRenderablePosition(creation, semantic, diagnostics, seen);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A <c>new</c> expression is in a JSX-renderable position when the compiler
+    /// converts it to the marked <c>JsxElement</c> (the <c>Children</c> array
+    /// element type, the <c>Render()</c> return type, the render-entry lambda
+    /// body). The check is shape-based on the Roslyn conversion: the position's
+    /// converted type must be the marked element, and the constructed type must
+    /// fail JSX classification. Nested <c>Children</c> elements, render returns,
+    /// and lambda bodies are all reached because the syntax walk visits every
+    /// <c>new</c> in the body and the converted-type gate selects only the ones
+    /// the source actually expects to render.
+    /// </summary>
+    private static void CheckJsxRenderablePosition(
+        ExpressionSyntax creation,
+        SemanticModel semantic,
+        List<MetanoDiagnostic> diagnostics,
+        HashSet<Location> seen
+    )
+    {
+        var typeInfo = semantic.GetTypeInfo(creation);
+        if (typeInfo.ConvertedType is not { } converted)
+            return;
+        if (!SymbolHelper.IsMarkedJsxElementType(converted))
+            return;
+        if (typeInfo.Type is not INamedTypeSymbol constructed)
+            return;
+        if (SymbolHelper.IsJsxRenderable(constructed))
+            return;
+        var location = creation.GetLocation();
+        if (!seen.Add(location))
+            return;
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.JsxRenderableUnrecognized,
+                $"'{constructed.Name}' cannot be used as a JSX element. Mark it with "
+                    + "[JsxNativeElement(\"tag\")], derive it from a [JsxComponentBuilder] base, "
+                    + "or declare it as an imported renderable with [Import(...)] typed as "
+                    + "JsxElement.",
                 location
             )
         );

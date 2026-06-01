@@ -208,11 +208,13 @@ Rules:
 - **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/003-js-interop-primitives/plan.md`
-(foundational JS-interop primitives — `[JsTuple]`, `[JsCallable]`, tuple deconstruction —
-that the JSX reactivity refactor of `specs/002-jsx-codegen-from-csharp/` will consume).
+Active feature plan: `specs/002-jsx-codegen-from-csharp/plan.md`
+(first vertical slice of JSX/TSX code generation from C# renderable record components,
+proving target SolidJS, with library-agnostic renderable-type recognition).
 For technologies, project structure, and other context, read that plan and its sibling
 `spec.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/`.
-The project baseline + multi-target roadmap remains at
+The foundational JS-interop primitives — `[JsTuple]`, `[JsCallable]`, tuple deconstruction —
+are merged at `specs/003-js-interop-primitives/plan.md`; the 002 reactivity refactor consumes them.
+The project baseline + multi-target evolution roadmap remains at
 `specs/001-project-baseline-evolution/plan.md`.
 <!-- SPECKIT END -->

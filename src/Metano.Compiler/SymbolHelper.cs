@@ -25,6 +25,40 @@ public static class SymbolHelper
         SymbolDisplayFormat.CSharpErrorMessageFormat;
 
     /// <summary>
+    /// Namespace of the TypeScript-target-specific Metano annotations
+    /// (<c>[External]</c>, <c>[Optional]</c>, <c>[JsxComponentBuilder]</c>,
+    /// <c>[JsxNativeElement]</c>, …). Readers match on this fully-qualified
+    /// namespace so unrelated attributes that share a short name (e.g. COM's
+    /// <c>System.Runtime.InteropServices.OptionalAttribute</c>) are not
+    /// mistaken for the Metano variant.
+    /// </summary>
+    private const string TypeScriptAnnotationsNamespace = "Metano.Annotations.TypeScript";
+
+    /// <summary>
+    /// True when <paramref name="attribute"/> is a Metano TypeScript-target
+    /// annotation whose class name matches one of <paramref name="names"/>
+    /// (with or without the <c>Attribute</c> suffix) and lives in
+    /// <see cref="TypeScriptAnnotationsNamespace"/>.
+    /// </summary>
+    private static bool IsMetanoTsAttribute(AttributeData attribute, params string[] names)
+    {
+        var name = attribute.AttributeClass?.Name;
+        if (name is null)
+            return false;
+        if (
+            attribute.AttributeClass?.ContainingNamespace?.ToDisplayString()
+            != TypeScriptAnnotationsNamespace
+        )
+            return false;
+        foreach (var candidate in names)
+        {
+            if (name == candidate || name == candidate + "Attribute")
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Returns the type's open-generic full name in a format stable enough
     /// to use as a dictionary key across the IR pipeline (registry build /
     /// IR origin extraction).
@@ -43,16 +77,6 @@ public static class SymbolHelper
     /// </summary>
     public static string GetCrossAssemblyOriginKey(this ITypeSymbol type) =>
         $"{type.ContainingAssembly?.Name ?? string.Empty}:{type.GetStableFullName()}";
-
-    /// <summary>
-    /// Namespace that houses the TypeScript-target-specific annotations
-    /// (<c>[External]</c>, <c>[Optional]</c>, <c>[JsTuple]</c>,
-    /// <c>[JsCallable]</c>, …). Predicates that read these attributes match
-    /// on the fully-qualified namespace so unrelated attributes from other
-    /// libraries that happen to share a short name cannot be mistaken for
-    /// the Metano variant.
-    /// </summary>
-    private const string TypeScriptAnnotationsNamespace = "Metano.Annotations.TypeScript";
 
     public static bool HasAttribute(this ISymbol symbol, string attributeName)
     {
@@ -252,6 +276,146 @@ public static class SymbolHelper
     /// </summary>
     public static bool HasExternal(this ISymbol symbol) =>
         HasTypeScriptAttribute(symbol, "External");
+
+    /// <summary>
+    /// Reads <c>[JsxComponentBuilder]</c> from the
+    /// <c>Metano.Annotations.TypeScript</c> namespace. Marks the abstract
+    /// base of a JSX component family (the marker carrier itself, not the
+    /// concrete components that derive from it). Namespace-qualified match so
+    /// unrelated attributes sharing the short name are not mistaken for the
+    /// Metano variant.
+    /// </summary>
+    public static bool HasJsxComponentBuilder(this ISymbol symbol) =>
+        HasTypeScriptAttribute(symbol, "JsxComponentBuilder");
+
+    /// <summary>
+    /// Reads the tag name from <c>[JsxNativeElement("tag")]</c> (in the
+    /// <c>Metano.Annotations.TypeScript</c> namespace). Returns the
+    /// constructor argument when present, or <c>null</c> otherwise. The
+    /// attribute class has no <c>Attribute</c> suffix, so the match accepts
+    /// both spellings defensively. Namespace-qualified so unrelated
+    /// attributes are not mistaken for the Metano variant.
+    /// </summary>
+    public static string? GetJsxNativeElementTag(this ISymbol symbol)
+    {
+        var attr = symbol
+            .GetAttributes()
+            .FirstOrDefault(a => IsMetanoTsAttribute(a, "JsxNativeElement"));
+        if (attr is null || attr.ConstructorArguments.Length == 0)
+            return null;
+        return attr.ConstructorArguments[0].Value as string;
+    }
+
+    /// <summary>
+    /// Walks the <see cref="INamedTypeSymbol.BaseType"/> chain and returns
+    /// <c>true</c> when any base carries <c>[JsxComponentBuilder]</c>. The
+    /// type's own attribute is not consulted — a component is recognized by
+    /// the marker on one of its bases (the abstract builder), not on itself.
+    /// </summary>
+    public static bool DerivesFromJsxComponentBuilder(this INamedTypeSymbol type)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.HasJsxComponentBuilder())
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True when <paramref name="type"/> is a JSX <em>component</em> — a type a
+    /// JSX backend emits as a function component. The single predicate both the
+    /// type-semantics extractor and the type-ref mapper consult.
+    /// <para>
+    /// Three conditions must all hold:
+    /// <list type="bullet">
+    ///   <item>it derives (transitively) from a <c>[JsxComponentBuilder]</c>
+    ///   base — that is the marker of the component family;</item>
+    ///   <item>it is <em>not</em> the abstract marker carrier itself — the base
+    ///   that carries <c>[JsxComponentBuilder]</c> is the family root, not an
+    ///   emittable component;</item>
+    ///   <item>it is <em>not</em> a native element (<c>[JsxNativeElement]</c>) —
+    ///   <c>Html.Div</c> derives from the builder base yet must lower to the
+    ///   intrinsic <c>&lt;div&gt;</c>, not a <c>&lt;Div/&gt;</c> component.</item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    public static bool IsJsxComponent(this INamedTypeSymbol type) =>
+        type.DerivesFromJsxComponentBuilder()
+        && !type.HasJsxComponentBuilder()
+        && type.GetJsxNativeElementTag() is null;
+
+    /// <summary>
+    /// True when <paramref name="type"/> is renderable in a JSX value
+    /// position: it is a component (derives from a <c>[JsxComponentBuilder]</c>
+    /// base), OR it carries <c>[JsxNativeElement]</c>, OR it is an
+    /// <c>[Import]</c>/<c>[External]</c>-typed library renderable that is (or
+    /// is implicitly convertible to) the marked <c>JsxElement</c> type.
+    /// </summary>
+    public static bool IsJsxRenderable(this ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol named && named.DerivesFromJsxComponentBuilder())
+            return true;
+        if (type.GetJsxNativeElementTag() is not null)
+            return true;
+        // Imported renderable (FR-022): a library-provided element typed as
+        // the marked JsxElement. Recognize when the type itself carries
+        // [Import]/[External] and is/derives-from the marked element type.
+        if ((type.HasImport() || type.HasExternal()) && IsMarkedJsxElementType(type))
+            return true;
+        return false;
+    }
+
+    /// <summary>
+    /// True when <paramref name="member"/> is a JSX element base's
+    /// children-collection slot: a property or field whose type is an array (or
+    /// array-like collection) of the marked <c>[External] JsxElement</c> type
+    /// (e.g. <c>JsxElement[]? Children</c> on the element base or on a
+    /// <c>solid-router</c> <c>Route</c>). A JSX backend routes an assignment to
+    /// such a member into the element's children — by this resolved shape, never
+    /// by the literal member name — so a binding may name its slot anything.
+    /// </summary>
+    public static bool IsJsxChildrenSlot(this ISymbol member)
+    {
+        var memberType = member switch
+        {
+            IPropertySymbol property => property.Type,
+            IFieldSymbol field => field.Type,
+            _ => null,
+        };
+        var elementType = memberType switch
+        {
+            IArrayTypeSymbol array => array.ElementType,
+            INamedTypeSymbol { TypeArguments.Length: 1 } named when named.IsCollectionLike() =>
+                named.TypeArguments[0],
+            _ => null,
+        };
+        return elementType is not null && IsMarkedJsxElementType(elementType);
+    }
+
+    /// <summary>
+    /// v1 recognition heuristic for the abstract element type that
+    /// <c>IJsxComponentBuilder&lt;TSelf, TElement&gt;</c> uses as
+    /// <c>TElement</c>: a type (or one of its bases) named <c>JsxElement</c>
+    /// that carries <c>[External]</c>. Pragmatic on purpose — a precise
+    /// resolution of the open generic's <c>TElement</c> argument is deferred
+    /// until a binding needs more than the name-plus-marker check.
+    /// <para>
+    /// Public so the JSX-position validator (MS0026) can ask whether a
+    /// <em>position's expected/converted type</em> is the marked element — i.e.
+    /// whether the source actually expects a renderable there — before judging
+    /// the concrete constructed type's classification.
+    /// </para>
+    /// </summary>
+    public static bool IsMarkedJsxElementType(ITypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.Name == "JsxElement" && current.HasExternal())
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Reads <c>[This]</c> from <c>Metano.Annotations</c>. Marks

@@ -278,7 +278,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.ExternalImports,
             ir.CrossAssemblyOrigins,
             compilation,
-            ReportDiagnostic
+            ReportDiagnostic,
+            typeMappingContext
         );
 
         _context = new TypeScriptTransformContext(
@@ -522,6 +523,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             || TryEmitStaticModule(type, sink)
             || TryEmitBrandedViaIr(type, sink, irCache)
             || TryEmitJsTuple(type, sink, irCache)
+            || TryEmitJsxComponent(type, sink, irCache)
             || TryEmitPlainObjectOrClass(type, sink, irCache);
 
         if (sink.Count == startCount)
@@ -778,7 +780,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             );
             statements.InsertRange(0, imports);
 
-            var relativePath = Context.PathNaming.GetRelativePath(group.Namespace, group.FileName);
+            var isJsx = ContainsJsx(statements);
+            var relativePath = Context.PathNaming.GetRelativePath(
+                group.Namespace,
+                group.FileName,
+                isJsx
+            );
             return new TsSourceFile(relativePath, statements, group.Namespace);
         }
         finally
@@ -786,6 +793,105 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrToTsTypeMapper.UsingAliases = previousAliases;
         }
     }
+
+    /// <summary>
+    /// Recursively scans the produced top-level statements for any
+    /// <see cref="TsJsxElement"/> so <see cref="TransformGroup"/> can pick the
+    /// <c>.tsx</c> extension. The decision is made post-lowering on the TS AST
+    /// (per D8): returns <c>true</c> when the lowered tree contains a JSX element
+    /// anywhere (a function body, a class member, a statement, or a nested
+    /// expression), which selects the <c>.tsx</c> extension; files with no JSX
+    /// stay <c>.ts</c>.
+    /// </summary>
+    private static bool ContainsJsx(IReadOnlyList<TsTopLevel> topLevels)
+    {
+        foreach (var node in topLevels)
+        {
+            if (ContainsJsxInTopLevel(node))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool ContainsJsxInTopLevel(TsTopLevel node) =>
+        node switch
+        {
+            TsFunction func => ContainsJsxInStatements(func.Body),
+            TsClass cls => cls.Members.Any(ContainsJsxInClassMember),
+            TsTopLevelStatement stmt => ContainsJsxInStatement(stmt.Inner),
+            _ => false,
+        };
+
+    private static bool ContainsJsxInClassMember(TsClassMember member) =>
+        member switch
+        {
+            TsMethodMember method => ContainsJsxInStatements(method.Body),
+            TsGetterMember getter => ContainsJsxInStatements(getter.Body),
+            TsSetterMember setter => ContainsJsxInStatements(setter.Body),
+            TsFieldMember { Initializer: { } init } => ContainsJsxInExpression(init),
+            _ => false,
+        };
+
+    private static bool ContainsJsxInStatements(IReadOnlyList<TsStatement> statements)
+    {
+        foreach (var statement in statements)
+        {
+            if (ContainsJsxInStatement(statement))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool ContainsJsxInStatement(TsStatement statement) =>
+        statement switch
+        {
+            TsReturnStatement { Expression: { } expr } => ContainsJsxInExpression(expr),
+            TsExpressionStatement exprStmt => ContainsJsxInExpression(exprStmt.Expression),
+            TsThrowStatement throwStmt => ContainsJsxInExpression(throwStmt.Expression),
+            TsVariableDeclaration varDecl => ContainsJsxInExpression(varDecl.Initializer),
+            TsIfStatement ifStmt => ContainsJsxInExpression(ifStmt.Condition)
+                || ContainsJsxInStatements(ifStmt.Then)
+                || (ifStmt.Else is { } @else && ContainsJsxInStatements(@else)),
+            TsSwitchStatement switchStmt => ContainsJsxInExpression(switchStmt.Discriminant)
+                || switchStmt.Cases.Any(c =>
+                    (c.Test is { } test && ContainsJsxInExpression(test))
+                    || ContainsJsxInStatements(c.Body)
+                ),
+            _ => false,
+        };
+
+    private static bool ContainsJsxInExpression(TsExpression expression) =>
+        expression switch
+        {
+            TsJsxElement => true,
+            TsArrowFunction arrow => ContainsJsxInStatements(arrow.Body),
+            TsCallExpression call => ContainsJsxInExpression(call.Callee)
+                || call.Arguments.Any(ContainsJsxInExpression),
+            TsNewExpression newExpr => ContainsJsxInExpression(newExpr.Callee)
+                || newExpr.Arguments.Any(ContainsJsxInExpression),
+            TsArrayLiteral array => array.Elements.Any(ContainsJsxInExpression),
+            TsObjectLiteral obj => obj.Properties.Any(p => ContainsJsxInExpression(p.Value)),
+            TsBinaryExpression bin => ContainsJsxInExpression(bin.Left)
+                || ContainsJsxInExpression(bin.Right),
+            TsConditionalExpression cond => ContainsJsxInExpression(cond.Condition)
+                || ContainsJsxInExpression(cond.WhenTrue)
+                || ContainsJsxInExpression(cond.WhenFalse),
+            TsParenthesized paren => ContainsJsxInExpression(paren.Expression),
+            TsAwaitExpression await_ => ContainsJsxInExpression(await_.Expression),
+            TsSpreadExpression spread => ContainsJsxInExpression(spread.Expression),
+            TsPropertyAccess access => ContainsJsxInExpression(access.Object),
+            TsElementAccess elem => ContainsJsxInExpression(elem.Object)
+                || ContainsJsxInExpression(elem.Index),
+            TsCastExpression cast => ContainsJsxInExpression(cast.Expression),
+            // [Emit]/[Import] call sites (e.g. `render(() => <X/>, c)` from
+            // SolidRenderer.Render) lower to a TsTemplate whose arguments carry
+            // the JSX. Without recursing here the host file silently stays .ts.
+            TsTemplate template => (
+                template.Receiver is { } receiver && ContainsJsxInExpression(receiver)
+            ) || template.Arguments.Any(ContainsJsxInExpression),
+            TsTemplateLiteral literal => literal.Expressions.Any(ContainsJsxInExpression),
+            _ => false,
+        };
 
     /// <summary>
     /// Merges three alias sources in precedence order (lowest first, so
@@ -1492,6 +1598,38 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
+    /// Routes a JSX component record (<see cref="IrTypeSemantics.IsJsxComponent"/>)
+    /// through <see cref="IrToTsJsxComponentBridge"/>, emitting a props type alias
+    /// + function component instead of a class. Runs before the class/plain-object
+    /// branch so a component never emits a class, <c>equals</c>/<c>hashCode</c>/
+    /// <c>with</c>, or constructor. Honors <c>[Name]</c> via
+    /// <see cref="TypeScriptTransformContext.ResolveTsName(INamedTypeSymbol)"/>,
+    /// which also renames the props type (<c>&lt;Name&gt;Props</c>).
+    /// </summary>
+    private bool TryEmitJsxComponent(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+            return false;
+        if (
+            GetOrExtractIr(type, irCache)
+            is not IrClassDeclaration { Semantics.IsJsxComponent: true } ir
+        )
+            return false;
+
+        IrToTsJsxComponentBridge.Convert(
+            ir,
+            Context.ResolveTsName(type),
+            sink,
+            Context.DeclarativeMappings
+        );
+        return true;
+    }
+
+    /// <summary>
     /// Returns the IR for <paramref name="type"/>, reusing the per-group cache when
     /// supplied. Returns <c>null</c> for type kinds the IR pipeline doesn't model
     /// (delegates, type parameters). Callers that already gated on a known kind can
@@ -1613,7 +1751,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyDictionary<string, IrExternalImport> externalImports,
         IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
         Compilation compilation,
-        Action<MetanoDiagnostic> reportDiagnostic
+        Action<MetanoDiagnostic> reportDiagnostic,
+        TypeMappingContext typeMappingContext
     )
     {
         var reservedNames = BuildReservedImportNames(
@@ -1696,7 +1835,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 asm.GlobalNamespace,
                 packageInfo,
                 crossAssemblyOrigins,
-                exports
+                exports,
+                typeMappingContext
             );
         }
 
@@ -1714,21 +1854,35 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         INamespaceSymbol namespaceSymbol,
         SymbolHelper.EmitPackageInfo packageInfo,
         IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
-        Dictionary<string, NoContainerExport> exports
+        Dictionary<string, NoContainerExport> exports,
+        TypeMappingContext typeMappingContext
     )
     {
         foreach (var type in namespaceSymbol.GetTypeMembers())
-            VisitCrossAssemblyType(type, packageInfo, crossAssemblyOrigins, exports);
+            VisitCrossAssemblyType(
+                type,
+                packageInfo,
+                crossAssemblyOrigins,
+                exports,
+                typeMappingContext
+            );
 
         foreach (var nestedNs in namespaceSymbol.GetNamespaceMembers())
-            CollectTopLevelNoContainerExports(nestedNs, packageInfo, crossAssemblyOrigins, exports);
+            CollectTopLevelNoContainerExports(
+                nestedNs,
+                packageInfo,
+                crossAssemblyOrigins,
+                exports,
+                typeMappingContext
+            );
     }
 
     private static void VisitCrossAssemblyType(
         INamedTypeSymbol type,
         SymbolHelper.EmitPackageInfo packageInfo,
         IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
-        Dictionary<string, NoContainerExport> exports
+        Dictionary<string, NoContainerExport> exports,
+        TypeMappingContext typeMappingContext
     )
     {
         if (type.DeclaredAccessibility == Accessibility.Public && SymbolHelper.HasNoContainer(type))
@@ -1736,6 +1890,20 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var originKey = type.GetCrossAssemblyOriginKey();
             if (crossAssemblyOrigins.TryGetValue(originKey, out var typeOrigin))
             {
+                // Stage the version hint so the import collector's
+                // ConfirmCrossPackageDependency can promote this package into
+                // #dependencies when it emits the function import (resolving the
+                // owning type as a *type* never happens for a flattened
+                // [NoContainer] facade, so the type-ref resolver path that
+                // normally stages the hint is bypassed here). Mirror that
+                // resolver's fallback: prefer the explicit
+                // [EmitPackage(Version=...)], else the source assembly's MSBuild
+                // identity version.
+                if (typeOrigin.VersionHint is { Length: > 0 } versionHint)
+                    typeMappingContext.CrossPackageVersionHints[packageInfo.Name] = versionHint;
+                else if (type.ContainingAssembly is { } sourceAsm)
+                    typeMappingContext.CrossPackageVersionHints[packageInfo.Name] =
+                        RoslynTypeQueries.FormatAssemblyVersion(sourceAsm);
                 var subPath = PathNaming.ComputeSubPath(
                     typeOrigin.AssemblyRootNamespace ?? "",
                     typeOrigin.Namespace ?? "",
@@ -1766,7 +1934,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         foreach (var nested in type.GetTypeMembers())
-            VisitCrossAssemblyType(nested, packageInfo, crossAssemblyOrigins, exports);
+            VisitCrossAssemblyType(
+                nested,
+                packageInfo,
+                crossAssemblyOrigins,
+                exports,
+                typeMappingContext
+            );
     }
 
     /// <summary>

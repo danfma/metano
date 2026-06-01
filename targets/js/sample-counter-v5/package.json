@@ -37,10 +37,6 @@
     "./stores": {
       "types": "./dist/stores/index.d.ts",
       "import": "./dist/stores/index.js"
-    },
-    "./js-interop/solid-js": {
-      "types": "./dist/js-interop/solid-js/index.d.ts",
-      "import": "./dist/js-interop/solid-js/index.js"
     }
   }
 }

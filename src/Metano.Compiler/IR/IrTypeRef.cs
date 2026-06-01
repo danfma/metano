@@ -49,6 +49,19 @@ public sealed record IrNamedTypeRef(
 /// <param name="IsTranspilable">Whether the type is emitted to the
 /// target (as opposed to coming from the BCL or a foreign package).
 /// Governs whether a runtime class/object is guaranteed to exist.</param>
+/// <param name="JsxNativeElementTag">The tag from <c>[JsxNativeElement("tag")]</c>
+/// on the referenced type — a <c>new T { … }</c> of such a type lowers to an
+/// intrinsic <c>&lt;tag&gt;</c> element. <c>null</c> when absent. Mirrors the
+/// declaration-side <see cref="IrTypeSemantics.JsxNativeElementTag"/> so a
+/// backend can decide JSX lowering off the constructed value's type ref
+/// without re-resolving the Roslyn symbol.</param>
+/// <param name="IsJsxComponent">The referenced type derives from a
+/// <c>[JsxComponentBuilder]</c> base — a <c>new T { … }</c> in a renderable
+/// position lowers to a component usage <c>&lt;T … /&gt;</c>.</param>
+/// <param name="RendersAsJsxElement">The referenced type is JSX-renderable in a
+/// value position (component, native element, or imported renderable typed as
+/// the marked element). Drives the expression bridge's decision to route a
+/// <c>new</c> through the JSX bridge.</param>
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,
     IReadOnlyList<string>? StringEnumValues = null,
@@ -56,7 +69,10 @@ public sealed record IrNamedTypeSemantics(
     bool IsTranspilable = false,
     bool IsIgnored = false,
     IrEnumMemberInfo? EnumDefaultMember = null,
-    bool IsExternal = false
+    bool IsExternal = false,
+    string? JsxNativeElementTag = null,
+    bool IsJsxComponent = false,
+    bool RendersAsJsxElement = false
 );
 
 /// <summary>

@@ -1,7 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { createSignal, type ISignal } from "#/js-interop/solid-js";
+import { createEffect, createSignal, type Signal as ISignal } from "solid-js";
 import { Counter } from "#/models";
-import { createEffect } from "solid-js";
 
 export class CounterStore {
   private readonly _counter: ISignal<Counter>;
@@ -14,15 +13,15 @@ export class CounterStore {
   }
 
   state(): Counter {
-    return this._counter.value;
+    return this._counter[0]();
   }
 
   increment(): void {
-    this._counter.set((x: Counter) => x.increment());
+    this._counter[1]((x: Counter) => x.increment());
   }
 
   decrement(): void {
-    this._counter.set((x: Counter) => x.decrement());
+    this._counter[1]((x: Counter) => x.decrement());
   }
 
   static create(): CounterStore {

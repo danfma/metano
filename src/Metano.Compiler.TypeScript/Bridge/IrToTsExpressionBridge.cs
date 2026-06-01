@@ -25,8 +25,17 @@ public static class IrToTsExpressionBridge
     public static TsExpression Map(
         IrExpression expression,
         DeclarativeMappingRegistry? bclRegistry = null
-    ) =>
-        expression switch
+    )
+    {
+        // JSX-producing expressions (a JSX-renderable `new`, a `Solid.For(...)`
+        // helper, or a `Text(...)` builder) lower through the single JSX-producer
+        // entry point regardless of position. This catches a bare
+        // `Render() => Solid.For(items, …)` return that never passes through
+        // LowerChild — without it the call would emit as a raw function call.
+        if (IrToTsJsxBridge.TryLowerJsxProducer(expression, bclRegistry) is { } jsx)
+            return jsx;
+
+        return expression switch
         {
             IrLiteral lit => MapLiteral(lit),
             IrIdentifier id => new TsIdentifier(TypeScriptNaming.ToCamelCase(id.Name)),
@@ -61,6 +70,9 @@ public static class IrToTsExpressionBridge
             IrArrayLiteral arr => new TsArrayLiteral(
                 arr.Elements.Select(e => Map(e, bclRegistry)).ToList()
             ),
+            IrSpreadExpression spread => new TsSpreadExpression(
+                Map(spread.Expression, bclRegistry)
+            ),
             IrTemplateExpression tpl => new TsTemplate(
                 tpl.Template,
                 tpl.Receiver is null ? null : Map(tpl.Receiver, bclRegistry),
@@ -94,6 +106,7 @@ public static class IrToTsExpressionBridge
             ),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };
+    }
 
     /// <summary>
     /// Binary expressions route through the generic lowering, with one
@@ -404,10 +417,19 @@ public static class IrToTsExpressionBridge
         // (the real .d.ts of the npm package). [Ignore] should be barred
         // by MS0013 before reaching emission, but the same drop is kept
         // so a suppressed-diagnostic run still produces compilable TS.
+        //
+        // A JSX-renderable type (native element, component, or imported
+        // renderable) has no usable TS type name in value position: a
+        // [JsxNativeElement] record lowers to an intrinsic tag (`<button>`),
+        // never an emitted `Html.Button` type, so annotating a handler
+        // parameter with it (`(_: Html.Button) => …`) references a name that
+        // doesn't exist in the generated module. Omit the annotation and let
+        // TS infer the parameter type from the surrounding JSX signature
+        // (e.g. SolidJS's `onClick` handler type).
         if (
             p.Type is IrNamedTypeRef named
             && named.Semantics is { } sem
-            && (sem.IsIgnored || sem.IsExternal)
+            && (sem.IsIgnored || sem.IsExternal || sem.RendersAsJsxElement)
         )
             return null;
         return IrToTsTypeMapper.Map(p.Type);
@@ -717,12 +739,14 @@ public static class IrToTsExpressionBridge
         // identifier to emit) — matching the legacy `LambdaHandler`
         // behavior. Otherwise the full inferred type is emitted so the
         // generated TS keeps call-site type information.
-        var parameters = lambda
-            .Parameters.Select(p => new TsParameter(
-                TypeScriptNaming.ToCamelCase(p.Name),
-                LowerLambdaParameterType(p)
-            ))
-            .ToList();
+        var parameters = DeduplicateParameterNames(
+            DropTrailingDiscardParameters(lambda.Parameters)
+                .Select(p => new TsParameter(
+                    TypeScriptNaming.ToCamelCase(p.Name),
+                    LowerLambdaParameterType(p)
+                ))
+                .ToList()
+        );
         var body = IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry);
         // Named function expression: emitted when the lambda is the
         // lowered body of a directly-recursive [Inline] method (#194).
@@ -755,6 +779,65 @@ public static class IrToTsExpressionBridge
         if (lambda.UsesThis)
             return new TsCallExpression(new TsIdentifier("bindReceiver"), [arrow]);
         return arrow;
+    }
+
+    /// <summary>
+    /// Drops trailing C# discard parameters (named <c>_</c>) from a lambda's
+    /// parameter list. A discard is never read in the body, and a JS arrow can
+    /// safely declare fewer parameters than its delegate target supplies (a
+    /// function of lower arity is assignable to one of higher arity), so removing
+    /// trailing discards produces the idiomatic zero/short-arg form
+    /// (<c>_ =&gt; …</c> → <c>() =&gt; …</c>, <c>(item, _) =&gt; …</c> →
+    /// <c>(item) =&gt; …</c>). This is what JSX contexts need: an event handler
+    /// hoisted to a <c>const</c> loses its contextual type, so a kept <c>_</c>
+    /// parameter would be an implicit <c>any</c>; and a Solid <c>&lt;For&gt;</c>
+    /// render prop's <c>index</c> is an <c>Accessor&lt;number&gt;</c>, which a
+    /// kept <c>number</c>-typed discard would clash with. Only TRAILING discards
+    /// are dropped — a discard followed by a used parameter must stay to preserve
+    /// positional binding.
+    /// </summary>
+    private static IReadOnlyList<IrParameter> DropTrailingDiscardParameters(
+        IReadOnlyList<IrParameter> parameters
+    )
+    {
+        var lastKept = parameters.Count - 1;
+        while (
+            lastKept >= 0 && string.Equals(parameters[lastKept].Name, "_", StringComparison.Ordinal)
+        )
+            lastKept--;
+        return lastKept == parameters.Count - 1
+            ? parameters
+            : parameters.Take(lastKept + 1).ToList();
+    }
+
+    /// <summary>
+    /// Renames colliding lambda parameter names so the emitted TS parameter
+    /// list is syntactically valid. C# permits repeated discards
+    /// (<c>(_, _) =&gt; …</c>) and shadowing across positions, but TS rejects a
+    /// duplicate binding name in a single parameter list. The first occurrence
+    /// keeps its name; each later collision is suffixed with its positional
+    /// index (<c>_</c>, <c>_1</c>, <c>_2</c>), and the suffixed name is itself
+    /// checked against the running set so a synthesized name never collides
+    /// with an explicit one. Order is preserved.
+    /// </summary>
+    private static List<TsParameter> DeduplicateParameterNames(List<TsParameter> parameters)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<TsParameter>(parameters.Count);
+        for (var i = 0; i < parameters.Count; i++)
+        {
+            var p = parameters[i];
+            if (seen.Add(p.Name))
+            {
+                result.Add(p);
+                continue;
+            }
+            var candidate = $"{p.Name}{i}";
+            while (!seen.Add(candidate))
+                candidate = $"{candidate}_";
+            result.Add(p with { Name = candidate });
+        }
+        return result;
     }
 
     /// <summary>
@@ -1190,6 +1273,13 @@ public static class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
+        // JSX-renderable constructions (native elements + component composition)
+        // lower to a TsJsxElement, never a `new T(…)` call. Decided purely off
+        // the constructed value's type semantics (FR-012), so this must run
+        // before the plain-object / branded / exception branches below.
+        if (ne.Type is IrNamedTypeRef { Semantics.RendersAsJsxElement: true })
+            return IrToTsJsxBridge.Convert(ne, bclRegistry);
+
         var args = ne.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
         if (ne.IsObjectArgsCtor && ne.Type is IrNamedTypeRef objectArgsTarget)
         {

@@ -16,6 +16,9 @@ namespace Metano.Compiler.IR;
 /// <param name="IsBranded">Single-field branded type (C# <c>[Branded]</c>, formerly <c>[InlineWrapper]</c>).</param>
 /// <param name="BrandedUnderlyingType">The underlying primitive when <see cref="IsBranded"/> is true.</param>
 /// <param name="IsJsTuple">Positional JS array-tuple shape (C# <c>[JsTuple]</c>) — lowered as an array tuple rather than a class.</param>
+/// <param name="IsJsxComponent">Derives from a <c>[JsxComponentBuilder]</c> base — a backend that supports JSX emits it as a function component.</param>
+/// <param name="JsxNativeElementTag">The tag from <c>[JsxNativeElement("tag")]</c> — a <c>new T { … }</c> of such a type lowers to an intrinsic <c>&lt;tag&gt;</c> element. Null when absent.</param>
+/// <param name="RendersAsJsxElement">The type is JSX-renderable in a value position (a component, a native element, or an imported renderable typed as the marked element).</param>
 public sealed record IrTypeSemantics(
     bool IsRecord = false,
     bool IsValueType = false,
@@ -26,5 +29,8 @@ public sealed record IrTypeSemantics(
     bool IsException = false,
     bool IsBranded = false,
     IrTypeRef? BrandedUnderlyingType = null,
-    bool IsJsTuple = false
+    bool IsJsTuple = false,
+    bool IsJsxComponent = false,
+    string? JsxNativeElementTag = null,
+    bool RendersAsJsxElement = false
 );

@@ -94,7 +94,7 @@ constraints · **Planned** = not a current guarantee. Unless a row names a backe
 | Packaging | `[EmitPackage]` cross-package + `package.json` | TS | Implemented | `CSharpSourceFrontend.cs`, `Metano.Compiler.TypeScript/PackageJsonWriter.cs` | `tests/Metano.Tests/EmitPackageTests.cs` | Dependency propagation (ADR-0011). |
 | Serialization | `JsonSerializerContext` | TS | Implemented | `Extraction/IrExpressionExtractor.cs`, `IR/IrRuntimeRequirement.cs` | `tests/Metano.Tests/JsonSerializerContextTests.cs` | JSON names resolved at transpile time. |
 | Validation | Type guards (`[GenerateGuard]`) | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/GenerateGuardAttribute.cs` | `tests/Metano.Tests/TypeGuardTranspileTests.cs` | Emits `isT` + `assertT` (ADR-0009). |
-| Diagnostics | Stable `MS0001`–`MS0025`, `MS0027`, `MS0028` | TS | Implemented | `Diagnostics/MetaSharpDiagnostic.cs` | `tests/Metano.Tests/DiagnosticsTests.cs` | Full catalog: [diagnostic-catalog.md](./diagnostic-catalog.md). `MS0026` reserved by branch `002`. |
+| Diagnostics | Stable `MS0001`–`MS0028` | TS | Implemented | `Diagnostics/MetaSharpDiagnostic.cs` | `tests/Metano.Tests/DiagnosticsTests.cs` | Full catalog: [diagnostic-catalog.md](./diagnostic-catalog.md). MS0026 = unrecognized JSX renderable; MS0027/MS0028 = JS-interop misuse. |
 | Cycles | Generated cyclic import detection | TS | Implemented | `CSharpSourceFrontend.cs`, `Analysis/` | `tests/Metano.Tests/CyclicReferenceTests.cs` | Reported as MS0005. |
 | Assets | `<MetanoAsset>` static asset copy | TS | Implemented | `AssetFlagParser.cs`, `AssetSpec.cs` | `tests/Metano.Tests/Caching/TranspilerHostAssetCopyTests.cs` | Cache-aware; failures → MS0025 (FR-048). |
 
@@ -107,6 +107,19 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 | Interop | `[JsTuple]` record → JS array-tuple | TS | Implemented | `Bridge/IrToTsJsTupleBridge.cs`, `Annotations/TypeScript/JsTupleAttribute.cs` | `tests/Metano.Tests/JsTupleTranspileTests.cs` | Type alias / erased with `[Import]`; positional `[i]`; misuse → MS0027. |
 | Interop | `[JsCallable]` interface → direct invocation | TS | Implemented | `Bridge/IrToTsExpressionBridge.cs`, `Annotations/TypeScript/JsCallableAttribute.cs` | `tests/Metano.Tests/JsCallableTranspileTests.cs` | `recv.Invoke(a)`→`recv(a)`; overloaded `Invoke`; erased; misuse → MS0028. |
 | Interop | Tuple deconstruction `var (a,b)=e` | TS | Implemented | `Extraction/IrStatementExtractor.cs`, `TypeScript/AST/TsDestructuringDeclaration.cs` | `tests/Metano.Tests/DeconstructionTranspileTests.cs` | → `const [a, b] = e`; discards supported; flat only. |
+
+## UI components (JSX/TSX)
+
+First vertical slice of UI-component transpilation — C# renderable record components → idiomatic SolidJS TSX. Spec: [specs/002-jsx-codegen-from-csharp/](../../002-jsx-codegen-from-csharp/spec.md). Proving target SolidJS; recognition is library-agnostic (validated against an imported `solid-router` type).
+
+| Area | Feature | Backend | Status | Code area | Test | Constraints |
+| --- | --- | --- | --- | --- | --- | --- |
+| UI | Renderable record component → `export function` + `<Name>Props` | TS | Implemented | `Bridge/IrToTsJsxComponentBridge.cs`, `Annotations/TypeScript/JsxComponentBuilderAttribute.cs` | `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` | Settable/positional props → optional props; body hoists prop defaults. |
+| UI | Native elements (`[JsxNativeElement]`) → intrinsic JSX | TS | Implemented | `Bridge/IrToTsJsxBridge.cs`, `TypeScript/AST/TsJsxElement.cs` | `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` | Attr name = `[Name]` override else camelCase; `Children` slot resolved by symbol. |
+| UI | Component composition (`<Name … />`) + render-entry lambda | TS | Implemented | `Bridge/IrToTsJsxBridge.cs` | `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` | Type-driven (constructed type `RendersAsJsxElement`). |
+| UI | SolidJS reactivity (`ISignal`/`CreateSignal`/`CreateEffect`/`For`/`render`) | TS | Implemented | `bindings/Metano.TypeScript.SolidJs/`, `Bridge/IrToTsJsxBridge.cs` | `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` | Explicit signal API only; wrapper elided to Solid tuple. No auto field-mutation reactivity. |
+| UI | Imported renderables (`[Import]`, e.g. `solid-router`) | TS | Implemented | `Bridge/IrToTsJsxBridge.cs`, `Extraction/IrExpressionExtractor.cs` | `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` | Library-agnostic; emits `<Name/>` + package import. |
+| UI | `.tsx` emission + `MS0026` unrecognized renderable | TS | Implemented | `Transformation/{PathNaming,TypeTransformer}.cs`, `CSharpSourceFrontend.cs` | `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` | `.tsx` only when JSX present; sample `targets/js/sample-solid-ui`. |
 
 ## Dart backend — status & gaps
 

@@ -180,6 +180,59 @@ public static class TranspileHelper
         Transpile(csharpSource, OutputKind.ConsoleApplication);
 
     /// <summary>
+    /// The SolidJS + DOM binding assemblies, added as metadata references only
+    /// for the JSX golden tests via <see cref="TranspileJsx"/>. Kept off the
+    /// shared <see cref="BaseReferences"/> on purpose: the SolidJS binding
+    /// carries <c>[assembly: TranspileAssembly] + [EmitPackage]</c> and
+    /// <c>[Import]</c> members, so folding it into every compilation would leak
+    /// cross-assembly external-import + transpilable-type discovery into
+    /// unrelated frontend tests.
+    /// </summary>
+    private static readonly MetadataReference[] JsxBindingReferences =
+    [
+        MetadataReference.CreateFromFile(
+            typeof(Metano.TypeScript.SolidJs.JsxComponent).Assembly.Location
+        ),
+        MetadataReference.CreateFromFile(typeof(Metano.TypeScript.DOM.Document).Assembly.Location),
+    ];
+
+    /// <summary>
+    /// Compiles inline C# against the real SolidJS + DOM bindings and transpiles
+    /// it. Used by the JSX golden tests so the emitted <c>.tsx</c> is
+    /// authoritative against the shipped binding (e.g. the <c>[Name("class")]</c>
+    /// override on <c>Html.Element.ClassName</c>) rather than an inline stand-in.
+    /// </summary>
+    public static Dictionary<string, string> TranspileJsx(string csharpSource)
+    {
+        var compilation = CompileAssembly(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary,
+            extraReferences: JsxBindingReferences
+        );
+        return TranspileCore(compilation).Files;
+    }
+
+    /// <summary>
+    /// Like <see cref="TranspileJsx"/> but also returns the merged diagnostics
+    /// (frontend + transformer), so JSX validation tests can assert MS0026 when
+    /// a non-renderable type lands in a JSX-renderable position.
+    /// </summary>
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileJsxWithDiagnostics(string csharpSource)
+    {
+        var compilation = CompileAssembly(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary,
+            extraReferences: JsxBindingReferences
+        );
+        return TranspileCore(compilation);
+    }
+
+    /// <summary>
     /// Variant of <see cref="Transpile"/> that enables the
     /// <c>--namespace-barrels</c> opt-in — exercises the root
     /// <c>src/index.ts</c> emission path with nested

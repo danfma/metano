@@ -104,4 +104,33 @@ public sealed class TypeMappingContext(
     /// </summary>
     public IDictionary<string, string> UsedCrossPackages { get; } =
         usedCrossPackages ?? new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Version specifiers for cross-package origins the resolver has *seen* but
+    /// which have not yet been confirmed to produce an emitted import. Resolving
+    /// a referenced type does not by itself create a runtime dependency: a type
+    /// from an <c>[EmitPackage]</c> assembly may erase entirely (a
+    /// <c>[JsxNativeElement]</c> record lowers to an intrinsic tag, a
+    /// <c>[NoContainer]</c> facade inlines via <c>[Emit]</c>, an <c>[External]</c>
+    /// base disappears), in which case nothing imports the package and adding it
+    /// to <c>package.json#dependencies</c> would pin a workspace that the
+    /// generated module never references (and may not even exist). The resolver
+    /// records the version hint here; <see cref="ConfirmCrossPackageDependency"/>
+    /// promotes it to <see cref="UsedCrossPackages"/> only when the import
+    /// collector actually emits an import line for that package.
+    /// </summary>
+    public IDictionary<string, string> CrossPackageVersionHints { get; } =
+        new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Promotes a previously-seen cross-package origin into a real dependency once
+    /// the import collector confirms an import line was emitted for it. No-op when
+    /// the resolver never recorded a version hint for the package (defensive — the
+    /// import would then carry no version to pin).
+    /// </summary>
+    public void ConfirmCrossPackageDependency(string packageName)
+    {
+        if (CrossPackageVersionHints.TryGetValue(packageName, out var version))
+            UsedCrossPackages[packageName] = version;
+    }
 }

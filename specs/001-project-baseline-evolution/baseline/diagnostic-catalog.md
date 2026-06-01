@@ -14,7 +14,7 @@ Metano's stable diagnostic contract. Source of truth: the diagnostic-code consta
 Each diagnostic carries: severity, stable code, message, optional source location. Stable codes are
 part of the transpiler contract (ADR-0010) and are searchable across docs, tests, issues, and ADRs.
 
-## Stable codes (`MS0001`–`MS0025`)
+## Stable codes (`MS0001`–`MS0028`)
 
 | Code | Symbolic name | Meaning |
 | --- | --- | --- |
@@ -43,11 +43,9 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0023` | `InvalidEmit` | `[Emit]` template is invalid (bad placeholder/shape). |
 | `MS0024` | `UnsupportedQueryableBody` | A `[Queryable]` lambda body uses an unsupported construct for expression-tree capture. |
 | `MS0025` | `AssetCopyFailure` | A `<MetanoAsset>` copy failed (missing source, path escape, or I/O error). |
+| `MS0026` | `JsxRenderableUnrecognized` | A type used in a JSX-renderable position is not a component, `[JsxNativeElement]`, or imported renderable typed as `JsxElement` (or a `[JsxComponentBuilder]` render returns a non-element). |
 | `MS0027` | `InvalidJsTuple` | `[JsTuple]` applied to a type with no positional shape (a record/class with no primary-constructor parameter list), or a `[JsTuple]` record that declares an instance member beyond its positional elements (it must be positional-only — the bare array tuple has no object to host extra members). |
 | `MS0028` | `InvalidJsCallable` | `[JsCallable]` applied to a non-interface, or a `[JsCallable]` interface exposing a member other than `Invoke` — declared or inherited from a base interface. |
-
-> `MS0026` is intentionally reserved by the in-flight JSX feature (branch `002-jsx-codegen-from-csharp`,
-> not yet merged); the JS-interop primitives use `MS0027`/`MS0028` to avoid a merge collision.
 
 ## Related
 

@@ -41,17 +41,23 @@ public static class IrTypeOriginResolverFactory
                 return null;
             }
 
-            // Track package usage so package.json dependencies stay accurate even
-            // when the IR path (rather than the legacy TypeMapper) is used. Prefer
-            // the explicit [EmitPackage(Version=...)] override; otherwise read the
-            // source assembly's MSBuild Identity through Roslyn — that fallback
-            // can't move onto the IR until the frontend is target-aware.
+            // Record the version hint so package.json dependencies stay accurate
+            // even when the IR path (rather than the legacy TypeMapper) is used.
+            // Prefer the explicit [EmitPackage(Version=...)] override; otherwise
+            // read the source assembly's MSBuild Identity through Roslyn — that
+            // fallback can't move onto the IR until the frontend is target-aware.
+            //
+            // Resolving a type is NOT the same as importing it: a type from an
+            // [EmitPackage] assembly can erase completely (JSX native element,
+            // [NoContainer] facade, [External] base), in which case no import is
+            // emitted and the package must not land in dependencies. So this only
+            // stages a *candidate*; the import collector confirms it via
+            // ConfirmCrossPackageDependency when it actually emits the import line.
             if (origin.VersionHint is { Length: > 0 } versionHint)
-                ctx.UsedCrossPackages[origin.PackageId] = versionHint;
+                ctx.CrossPackageVersionHints[origin.PackageId] = versionHint;
             else if (key.ContainingAssembly is { } sourceAsm)
-                ctx.UsedCrossPackages[origin.PackageId] = RoslynTypeQueries.FormatAssemblyVersion(
-                    sourceAsm
-                );
+                ctx.CrossPackageVersionHints[origin.PackageId] =
+                    RoslynTypeQueries.FormatAssemblyVersion(sourceAsm);
 
             return origin;
         };

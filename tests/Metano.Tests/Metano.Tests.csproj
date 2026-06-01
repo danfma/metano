@@ -15,9 +15,16 @@
     <ProjectReference Include="../../src/Metano/Metano.csproj" />
     <ProjectReference Include="../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj" />
     <ProjectReference Include="../../src/Metano.Compiler.Dart/Metano.Compiler.Dart.csproj" />
+    <!-- The JSX golden tests compile inline C# against the real SolidJS/DOM
+         bindings so the goldens are authoritative against the shipped binding
+         (e.g. ClassName's [Name("class")] override). Referenced here so the
+         binding assemblies land in the test output for the inline compiler. -->
+    <ProjectReference Include="../../bindings/Metano.TypeScript.SolidJs/Metano.TypeScript.SolidJs.csproj" />
+    <ProjectReference Include="../../bindings/Metano.TypeScript.DOM/Metano.TypeScript.DOM.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="Expected/**/*.ts" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Expected/**/*.tsx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

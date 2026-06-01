@@ -214,6 +214,11 @@ public sealed class ImportCollector(
         {
             if (!importedNames.Add(typeName))
                 continue;
+            // An import line is actually being emitted for this package — promote
+            // the resolver's staged version hint into a real package.json
+            // dependency. (Types whose origin was resolved but which erased never
+            // reach this loop, so their package stays out of dependencies.)
+            _typeMappingContext.ConfirmCrossPackageDependency(origin.PackageName);
             var importPath =
                 origin.SubPath.Length > 0
                     ? $"{origin.PackageName}/{origin.SubPath}"
@@ -435,6 +440,12 @@ public sealed class ImportCollector(
                 // [EmitPackage] subpath instead of a project-relative file path.
                 if (erasableExport.CrossPackageOrigin is { } crossOrigin)
                 {
+                    // An import line is actually being emitted for this package —
+                    // promote the resolver's staged version hint into a real
+                    // package.json dependency (mirrors the cross-package origin
+                    // loop above). Without this the [NoContainer] facade's package
+                    // is dropped from #dependencies.
+                    _typeMappingContext.ConfirmCrossPackageDependency(crossOrigin.PackageName);
                     var crossPath =
                         crossOrigin.SubPath.Length > 0
                             ? $"{crossOrigin.PackageName}/{crossOrigin.SubPath}"
@@ -1069,6 +1080,9 @@ public sealed class ImportCollector(
                 CollectFromExpression(cond.WhenTrue, sink);
                 CollectFromExpression(cond.WhenFalse, sink);
                 break;
+            case TsJsxElement jsx:
+                CollectFromJsxElement(jsx, sink);
+                break;
             case TsAwaitExpression await_:
                 CollectFromExpression(await_.Expression, sink);
                 break;
@@ -1144,6 +1158,48 @@ public sealed class ImportCollector(
                 foreach (var ext in template.ExternalImports)
                     sink.TemplateExternals.Add(ext);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Walks a JSX element so component / helper names and any expressions
+    /// embedded in attributes or children become referenced names. A
+    /// capitalized <see cref="TsJsxElement.TagName"/> is a component (or a
+    /// helper like <c>For</c>) used as a value — intrinsic lowercase tags
+    /// (<c>div</c>, <c>span</c>) are JSX-runtime intrinsics and need no import.
+    /// </summary>
+    private void CollectFromJsxElement(TsJsxElement jsx, ImportCollectionSink sink)
+    {
+        // A tag backed by an explicit external import (e.g. the SolidJS `<For>`
+        // helper) resolves through the external-import channel, not as a
+        // transpilable component — so it must NOT be registered as a referenced
+        // type name (that would synthesize a wrong intra-project import line).
+        if (jsx.ExternalImports is { Count: > 0 } externalImports)
+        {
+            foreach (var ext in externalImports)
+                sink.TemplateExternals.Add(ext);
+        }
+        else if (jsx.TagName.Length > 0 && char.IsUpper(jsx.TagName[0]))
+        {
+            sink.Names.Add(jsx.TagName);
+            sink.ValueNames.Add(jsx.TagName);
+        }
+        foreach (var attribute in jsx.Attributes)
+        {
+            if (attribute.Value is TsJsxAttributeExpressionValue expr)
+                CollectFromExpression(expr.Expression, sink);
+        }
+        foreach (var child in jsx.Children)
+        {
+            switch (child)
+            {
+                case TsJsxExpressionChild expr:
+                    CollectFromExpression(expr.Expression, sink);
+                    break;
+                case TsJsxElementChild element:
+                    CollectFromJsxElement(element.Element, sink);
+                    break;
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-using SampleCounterV5.JsInterop.SolidJs;
+using Metano.TypeScript.SolidJs;
 using SampleCounterV5.Models;
 
 namespace SampleCounterV5.Stores;

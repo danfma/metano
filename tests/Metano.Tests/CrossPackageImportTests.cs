@@ -176,6 +176,63 @@ public class CrossPackageImportTests
     }
 
     [Test]
+    public async Task CrossPackageNoContainerFunction_TracksDependency()
+    {
+        // A [NoContainer] static class in a referenced [EmitPackage] library
+        // exports its function bodies as top-level functions. When the consumer
+        // calls such a function across the package boundary, the call flattens to
+        // a bare identifier, the import line is emitted, AND the package must land
+        // in #dependencies — the [NoContainer] cross-package branch in
+        // ImportCollector must confirm the dependency (regression: it previously
+        // emitted the import but dropped the dep).
+        var library = """
+            using Metano.Annotations;
+
+            [assembly: System.Reflection.AssemblyVersion("2.1.0.0")]
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/util")]
+
+            namespace AcmeUtil;
+
+            [NoContainer]
+            public static class Format
+            {
+                public static string Shout(string text) => text + "!";
+            }
+            """;
+
+        var consumer = """
+            using AcmeUtil;
+
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public static class Greeter
+            {
+                public static string Loud() => Format.Shout("hi");
+            }
+            """;
+
+        var libCompilation = TranspileHelper.CompileLibrary(library);
+        var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
+
+        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
+        var files = transformer.TransformAll();
+        var printer = new Metano.Compiler.TypeScript.Printer();
+        var greeter = printer.Print(files.Single(f => f.FileName == "greeter.ts"));
+
+        // The flattened import line lands (precondition for the dep confirm).
+        await Assert.That(greeter).Contains("from \"@acme/util\"");
+        await Assert.That(greeter).Contains("shout(\"hi\")");
+
+        // The package must be promoted into #dependencies with the assembly
+        // version range — this is the regression fix.
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("@acme/util")).IsTrue();
+        await Assert.That(transformer.CrossPackageDependencies["@acme/util"]).IsEqualTo("^2.1.0");
+    }
+
+    [Test]
     public async Task UnversionedLibrary_GetsWorkspaceDepSpec()
     {
         // No [assembly: AssemblyVersion] → Roslyn defaults to 0.0.0.0 → workspace:*

@@ -21,9 +21,11 @@ public sealed class PathNaming(string rootNamespace)
 
     /// <summary>
     /// Strips the root namespace and converts remaining segments to a kebab-case file path.
-    /// e.g., root="Orzano.Shared", ns="Orzano.Shared.Models", name="Money" → "models/money.ts"
+    /// e.g., root="Orzano.Shared", ns="Orzano.Shared.Models", name="Money" → "models/money.ts".
+    /// When <paramref name="isJsx"/> is true the file gets a <c>.tsx</c> extension instead
+    /// of <c>.ts</c> (the default keeps every current caller emitting <c>.ts</c>).
     /// </summary>
-    public string GetRelativePath(string ns, string typeName)
+    public string GetRelativePath(string ns, string typeName, bool isJsx = false)
     {
         var relative = StripRootNamespace(ns);
         var segments =
@@ -31,10 +33,11 @@ public sealed class PathNaming(string rootNamespace)
                 ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
                 : [];
 
+        var extension = isJsx ? ".tsx" : ".ts";
         var fileName = SymbolHelper.ToKebabCase(typeName);
         return segments.Length > 0
-            ? string.Join("/", segments) + "/" + fileName + ".ts"
-            : fileName + ".ts";
+            ? string.Join("/", segments) + "/" + fileName + extension
+            : fileName + extension;
     }
 
     public string StripRootNamespace(string ns)

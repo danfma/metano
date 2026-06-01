@@ -11,12 +11,14 @@
   </Folder>
   <Folder Name="/bindings/">
     <Project Path="bindings/Metano.TypeScript.DOM/Metano.TypeScript.DOM.csproj" />
+    <Project Path="bindings\Metano.TypeScript.SolidJs\Metano.TypeScript.SolidJs.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SampleCounterV2/SampleCounterV2.csproj" />
     <Project Path="samples/SampleCounterV5/SampleCounterV5.csproj" />
     <Project Path="samples/SampleIssueTracker/SampleIssueTracker.csproj" />
     <Project Path="samples/SampleOperatorOverloading/SampleOperatorOverloading.csproj" />
+    <Project Path="samples/SampleSolidUi/SampleSolidUi.csproj" />
     <Project Path="samples/SampleTodo.Service/SampleTodo.Service.csproj" />
     <Project Path="samples/SampleTodo/SampleTodo.csproj" />
     <Project Path="samples\HelloWorld\HelloWorld.csproj" />

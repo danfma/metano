@@ -220,7 +220,10 @@ public static class IrClassExtractor
             IsException: IsException(type),
             IsBranded: SymbolHelper.HasBranded(type),
             BrandedUnderlyingType: ExtractBrandedUnderlyingType(type, originResolver),
-            IsJsTuple: SymbolHelper.HasJsTuple(type)
+            IsJsTuple: SymbolHelper.HasJsTuple(type),
+            IsJsxComponent: SymbolHelper.IsJsxComponent(type),
+            JsxNativeElementTag: SymbolHelper.GetJsxNativeElementTag(type),
+            RendersAsJsxElement: SymbolHelper.IsJsxRenderable(type)
         );
 
     /// <summary>

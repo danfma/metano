@@ -252,9 +252,19 @@ public static class DiagnosticCodes
     /// artifact would be worse than a loud diagnostic.</summary>
     public const string AssetCopyFailure = "MS0025";
 
-    // MS0026 is intentionally skipped — reserved by the in-flight JSX feature
-    // on branch 002 (not yet merged). Skipping it avoids a code collision at
-    // merge time.
+    /// <summary>MS0026 — a type used in a JSX-renderable position (a
+    /// <c>Children</c> element, a <c>Render()</c> return, the
+    /// <c>render</c> entry lambda) cannot be classified as any of: a
+    /// component (derives from a <c>[JsxComponentBuilder]</c> base), a
+    /// native element (<c>[JsxNativeElement("tag")]</c>), or an imported
+    /// renderable (<c>[Import]</c>/<c>[External]</c> typed as / convertible
+    /// to the marked <c>JsxElement</c>); or a <c>[JsxComponentBuilder]</c>
+    /// base is misapplied (its render method does not return the marked
+    /// element type). Carries the offending expression / declaration
+    /// location. Mark the type with the appropriate JSX marker, or declare
+    /// it as an imported renderable, so the transpiler raises this error
+    /// instead of emitting silently-wrong JSX.</summary>
+    public const string JsxRenderableUnrecognized = "MS0026";
 
     /// <summary>MS0027 — <c>[JsTuple]</c> (from
     /// <c>Metano.Annotations.TypeScript</c>) was applied to a type with no

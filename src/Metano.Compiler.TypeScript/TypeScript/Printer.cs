@@ -428,8 +428,15 @@ public sealed class Printer(string indent = "  ")
         PrintTypeParameters(func.TypeParameters);
         _sb.Write("(");
         PrintParameters(func.Parameters);
-        _sb.Write("): ");
-        PrintType(func.ReturnType);
+        if (func.ReturnType is { } returnType)
+        {
+            _sb.Write("): ");
+            PrintType(returnType);
+        }
+        else
+        {
+            _sb.Write(")");
+        }
         PrintBody(func.Body);
     }
 
@@ -840,6 +847,11 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsObjectType obj:
+                if (obj.Fields.Count == 0)
+                {
+                    _sb.Write("{}");
+                    break;
+                }
                 _sb.Write("{ ");
                 for (var i = 0; i < obj.Fields.Count; i++)
                 {
@@ -1241,6 +1253,82 @@ public sealed class Printer(string indent = "  ")
                 PrintExpression(cond.WhenTrue);
                 _sb.Write(" : ");
                 PrintExpression(cond.WhenFalse);
+                break;
+
+            case TsJsxElement jsx:
+                PrintJsxElement(jsx);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Emits a JSX element: <c>&lt;tag attr="lit" attr2={expr}&gt;children&lt;/tag&gt;</c>,
+    /// or the self-closing form <c>&lt;tag ... /&gt;</c> when the element is
+    /// flagged self-closing or has no children.
+    /// </summary>
+    private void PrintJsxElement(TsJsxElement jsx)
+    {
+        _sb.Write("<");
+        _sb.Write(jsx.TagName);
+        foreach (var attribute in jsx.Attributes)
+        {
+            _sb.Write(" ");
+            PrintJsxAttribute(attribute);
+        }
+
+        if (jsx.SelfClosing || jsx.Children.Count == 0)
+        {
+            _sb.Write(" />");
+            return;
+        }
+
+        _sb.Write(">");
+        foreach (var child in jsx.Children)
+            PrintJsxChild(child);
+        _sb.Write("</");
+        _sb.Write(jsx.TagName);
+        _sb.Write(">");
+    }
+
+    /// <summary>
+    /// Emits a single JSX attribute: <c>name="..."</c> for a string value,
+    /// <c>name={...}</c> for an embedded expression.
+    /// </summary>
+    private void PrintJsxAttribute(TsJsxAttribute attribute)
+    {
+        _sb.Write(attribute.Name);
+        switch (attribute.Value)
+        {
+            case TsJsxAttributeStringValue str:
+                _sb.Write("=");
+                _sb.WriteQuoted(str.Value);
+                break;
+            case TsJsxAttributeExpressionValue expr:
+                _sb.Write("={");
+                PrintExpression(expr.Expression);
+                _sb.Write("}");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Emits a JSX child: raw text, an embedded expression (<c>{expr}</c>), or
+    /// a nested element.
+    /// </summary>
+    private void PrintJsxChild(TsJsxChild child)
+    {
+        switch (child)
+        {
+            case TsJsxText text:
+                _sb.Write(text.Value);
+                break;
+            case TsJsxExpressionChild expr:
+                _sb.Write("{");
+                PrintExpression(expr.Expression);
+                _sb.Write("}");
+                break;
+            case TsJsxElementChild element:
+                PrintJsxElement(element.Element);
                 break;
         }
     }

@@ -387,12 +387,25 @@ public static class IrTypeRefMapper
                 IsExternal: SymbolHelper.HasExternal(named)
             );
 
+        // JSX recognition mirrors the declaration-side IrTypeSemantics flags
+        // (IrClassExtractor.ExtractSemantics) so the TS expression bridge can
+        // decide JSX lowering off the constructed value's type ref. The native
+        // tag wins over the component flag because Html elements derive from the
+        // [JsxComponentBuilder] base AND carry [JsxNativeElement] — a div must
+        // render as <div>, not as a <Div/> component.
+        var jsxNativeTag = SymbolHelper.GetJsxNativeElementTag(named);
+        var isJsxComponent = SymbolHelper.IsJsxComponent(named);
+        var rendersAsJsx = SymbolHelper.IsJsxRenderable(named);
+
         if (named.IsRecord)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Record,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named)
+                IsExternal: SymbolHelper.HasExternal(named),
+                JsxNativeElementTag: jsxNativeTag,
+                IsJsxComponent: isJsxComponent,
+                RendersAsJsxElement: rendersAsJsx
             );
 
         if (named.TypeKind == TypeKind.Struct)
@@ -408,7 +421,10 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Class,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named)
+                IsExternal: SymbolHelper.HasExternal(named),
+                JsxNativeElementTag: jsxNativeTag,
+                IsJsxComponent: isJsxComponent,
+                RendersAsJsxElement: rendersAsJsx
             );
 
         return null;

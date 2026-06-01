@@ -552,9 +552,21 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ExtractCollectionExpression(CollectionExpressionSyntax coll)
     {
+        // Preserve source order across both element kinds: a plain expression
+        // element extracts directly; a spread element (`..source`) lowers to an
+        // IrSpreadExpression so a downstream backend can re-emit `...source`
+        // (TS array spread) instead of silently dropping it.
         var elements = coll
-            .Elements.OfType<ExpressionElementSyntax>()
-            .Select(e => Extract(e.Expression))
+            .Elements.Select<CollectionElementSyntax, IrExpression>(e =>
+                e switch
+                {
+                    ExpressionElementSyntax expr => Extract(expr.Expression),
+                    SpreadElementSyntax spread => new IrSpreadExpression(
+                        Extract(spread.Expression)
+                    ),
+                    _ => Extract(((ExpressionElementSyntax)e).Expression),
+                }
+            )
             .ToList();
         var convertedType = _semantic.GetTypeInfo(coll).ConvertedType;
         if (convertedType is INamedTypeSymbol named)
@@ -1414,6 +1426,37 @@ public sealed partial class IrExpressionExtractor
                 return target;
         }
 
+        // Property-getter `[Emit]` template: a property whose getter (or the
+        // property itself) carries `[Emit("…$0…")]` lowers its read to the
+        // template with the receiver threaded as `$0` (e.g. `ISignal<T>.Value`
+        // → `$0[0]()` → `count[0]()`). The invocation rewriter handles the
+        // method/`Set` side; a getter read has no invocation syntax, so the
+        // substitution is wired here. A coexisting `[Import]` on the member is
+        // threaded as an external dependency so the helper module is imported.
+        if (
+            symbol is IPropertySymbol emitProp
+            && GetPropertyEmitTemplate(emitProp) is { } propTemplate
+        )
+        {
+            IReadOnlyList<IrExternalImport>? propExternalImports = null;
+            if (SymbolHelper.GetImport(emitProp) is { } propImport)
+                propExternalImports =
+                [
+                    new IrExternalImport(
+                        propImport.Name,
+                        propImport.From,
+                        propImport.AsDefault,
+                        propImport.Version
+                    ),
+                ];
+            return new IrTemplateExpression(
+                propTemplate,
+                Receiver: null,
+                [target],
+                ExternalImports: propExternalImports
+            );
+        }
+
         // `[Inline]` fields and properties substitute their initializer
         // (or getter body) at every access site. When expansion
         // succeeds, the member access is replaced by the extracted
@@ -1618,15 +1661,23 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// If <paramref name="symbol"/> carries <c>[Inline]</c> and resolves
-    /// to a supported shape (<c>static readonly</c> field with
-    /// initializer, or <c>static</c> property with an expression-bodied
-    /// getter), returns the extracted initializer expression.
-    /// Guards against recursion by tracking in-progress symbols in
-    /// <see cref="_inlineExpanding"/>. Unsupported shapes and cycles
-    /// return <c>null</c> so the caller falls back to a regular
-    /// access; the validator surfaces the diagnostic separately.
+    /// Reads the raw <c>[Emit("…")]</c> template from a property read site.
+    /// The attribute is matched on the property symbol first, then on its
+    /// getter accessor, so a binding may place it on either. Returns
+    /// <see langword="null"/> when no template is present.
     /// </summary>
+    private static string? GetPropertyEmitTemplate(IPropertySymbol property)
+    {
+        return ReadEmitTemplate(property) ?? ReadEmitTemplate(property.GetMethod);
+
+        static string? ReadEmitTemplate(ISymbol? symbol) =>
+            symbol
+                ?.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name is "EmitAttribute" or "Emit")
+                ?.ConstructorArguments.FirstOrDefault()
+                .Value as string;
+    }
+
     private IrExpression? TryExpandInlineAccess(ISymbol? symbol)
     {
         if (symbol is null || !SymbolHelper.IsInlineMember(symbol))
@@ -3124,7 +3175,89 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        return new IrNewExpression(type, args, isPlainObject, parameterNames, IsJsTuple: isJsTuple);
+        var initializers = ExtractObjectInitializer(creationSyntax);
+        return new IrNewExpression(
+            type,
+            args,
+            isPlainObject,
+            parameterNames,
+            IsJsTuple: isJsTuple,
+            Initializers: initializers,
+            ExternalImports: BuildImportedRenderableImports(typeSymbol)
+        );
+    }
+
+    /// <summary>
+    /// When the constructed type is an <em>imported</em> JSX renderable — it is
+    /// JSX-renderable (FR-022) but neither a Metano component (does not derive
+    /// from a <c>[JsxComponentBuilder]</c> base) nor a native intrinsic element
+    /// (<c>[JsxNativeElement]</c>) — its <c>[Import]</c> module is threaded onto
+    /// the IR so the backend's JSX lowering can resolve the capitalized tag to
+    /// its npm module (<c>import { Route } from "solid-router"</c>) instead of a
+    /// wrong intra-project component import. Returns <c>null</c> for every other
+    /// construction (components resolve their import from the declaring type;
+    /// native elements emit a lowercase intrinsic tag that needs no import).
+    /// </summary>
+    private static IReadOnlyList<IrExternalImport>? BuildImportedRenderableImports(
+        ITypeSymbol? typeSymbol
+    )
+    {
+        if (typeSymbol is not INamedTypeSymbol named)
+            return null;
+        var isComponent = named.DerivesFromJsxComponentBuilder();
+        var isNative = SymbolHelper.GetJsxNativeElementTag(named) is not null;
+        if (isComponent || isNative || !SymbolHelper.IsJsxRenderable(named))
+            return null;
+        if (SymbolHelper.GetImport(named) is not { } import)
+            return null;
+        return [new IrExternalImport(import.Name, import.From, import.AsDefault, import.Version)];
+    }
+
+    /// <summary>
+    /// Reads the object-initializer clause of an object creation
+    /// (<c>new T { Member = value, ... }</c>) into an ordered list of
+    /// <see cref="IrMemberInit"/>. Returns <c>null</c> when the creation has no
+    /// initializer (preserving the prior behavior for every existing call
+    /// site) or when the clause is a collection initializer rather than an
+    /// object initializer. Each <see cref="AssignmentExpressionSyntax"/>'s
+    /// left identifier resolves to the assigned member symbol so the
+    /// <c>[Name]</c> override is captured as <see cref="IrMemberInit.EmittedName"/>;
+    /// the right side is lowered through the normal expression path.
+    /// </summary>
+    private IReadOnlyList<IrMemberInit>? ExtractObjectInitializer(ExpressionSyntax creationSyntax)
+    {
+        var initializer = creationSyntax switch
+        {
+            ObjectCreationExpressionSyntax oc => oc.Initializer,
+            ImplicitObjectCreationExpressionSyntax ioc => ioc.Initializer,
+            _ => null,
+        };
+        if (initializer is null || !initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
+            return null;
+
+        var inits = new List<IrMemberInit>();
+        foreach (var expression in initializer.Expressions)
+        {
+            if (expression is not AssignmentExpressionSyntax assign)
+                continue;
+            var memberName = assign.Left switch
+            {
+                IdentifierNameSyntax id => id.Identifier.ValueText,
+                _ => assign.Left.ToString(),
+            };
+            var memberSymbol = _semantic.GetSymbolInfo(assign.Left).Symbol;
+            var emittedName = memberSymbol is not null
+                ? SymbolHelper.GetNameOverride(
+                    memberSymbol,
+                    Metano.Annotations.TargetLanguage.TypeScript
+                )
+                : null;
+            var isChildrenSlot = memberSymbol is not null && memberSymbol.IsJsxChildrenSlot();
+            inits.Add(
+                new IrMemberInit(memberName, emittedName, Extract(assign.Right), isChildrenSlot)
+            );
+        }
+        return inits;
     }
 
     private static List<(string Name, IrExpression Value)> BuildObjectArgsProperties(

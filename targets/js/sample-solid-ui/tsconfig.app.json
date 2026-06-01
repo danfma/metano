@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "es2023",
+    "module": "esnext",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+    "allowJs": false,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    // "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+
+    /* Linting — relaxed for generated code: a JSX function component always
+       declares `props` (even when its body references no prop), so enforcing
+       noUnusedParameters/noUnusedLocals on transpiler output would flag a shape
+       the generator must emit. Real type-safety stays on. */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+
+    "rootDir": "./src",
+    "outDir": "./lib",
+    "paths": {
+      "#/*": [
+        "./src/*",
+        "./dist/*"
+      ]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["lib"]
+}
