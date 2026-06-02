@@ -208,8 +208,11 @@ Rules:
 - **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/001-project-baseline-evolution/plan.md`
-(baseline + multi-target evolution roadmap + legacy `spec/` → speckit reconciliation).
+Active feature plan: `specs/003-js-interop-primitives/plan.md`
+(foundational JS-interop primitives — `[JsTuple]`, `[JsCallable]`, tuple deconstruction —
+that the JSX reactivity refactor of `specs/002-jsx-codegen-from-csharp/` will consume).
 For technologies, project structure, and other context, read that plan and its sibling
 `spec.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/`.
+The project baseline + multi-target roadmap remains at
+`specs/001-project-baseline-evolution/plan.md`.
 <!-- SPECKIT END -->

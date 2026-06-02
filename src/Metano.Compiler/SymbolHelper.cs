@@ -44,6 +44,16 @@ public static class SymbolHelper
     public static string GetCrossAssemblyOriginKey(this ITypeSymbol type) =>
         $"{type.ContainingAssembly?.Name ?? string.Empty}:{type.GetStableFullName()}";
 
+    /// <summary>
+    /// Namespace that houses the TypeScript-target-specific annotations
+    /// (<c>[External]</c>, <c>[Optional]</c>, <c>[JsTuple]</c>,
+    /// <c>[JsCallable]</c>, …). Predicates that read these attributes match
+    /// on the fully-qualified namespace so unrelated attributes from other
+    /// libraries that happen to share a short name cannot be mistaken for
+    /// the Metano variant.
+    /// </summary>
+    private const string TypeScriptAnnotationsNamespace = "Metano.Annotations.TypeScript";
+
     public static bool HasAttribute(this ISymbol symbol, string attributeName)
     {
         return symbol
@@ -53,6 +63,25 @@ public static class SymbolHelper
                 || a.AttributeClass?.Name == attributeName + "Attribute"
             );
     }
+
+    /// <summary>
+    /// True when <paramref name="symbol"/> carries an attribute whose short
+    /// name is <paramref name="shortName"/> (with or without the
+    /// <c>Attribute</c> suffix) declared in the
+    /// <see cref="TypeScriptAnnotationsNamespace"/>. Factors the repeated
+    /// namespace-qualified match shared by the TS-annotation predicates.
+    /// </summary>
+    private static bool HasTypeScriptAttribute(ISymbol symbol, string shortName) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                (
+                    a.AttributeClass?.Name == shortName
+                    || a.AttributeClass?.Name == shortName + "Attribute"
+                )
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
+                    == TypeScriptAnnotationsNamespace
+            );
 
     /// <summary>
     /// Reads a symbol's <c>[Name]</c> override. Multiple <c>[Name]</c>
@@ -205,13 +234,7 @@ public static class SymbolHelper
     /// mistaken for the Metano variant.
     /// </summary>
     public static bool HasOptional(this ISymbol symbol) =>
-        symbol
-            .GetAttributes()
-            .Any(a =>
-                a.AttributeClass?.Name is ("OptionalAttribute" or "Optional")
-                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
-                    == "Metano.Annotations.TypeScript"
-            );
+        HasTypeScriptAttribute(symbol, "Optional");
 
     /// <summary>
     /// Reads <c>[External]</c> from the
@@ -228,13 +251,7 @@ public static class SymbolHelper
     /// are not mistaken for the Metano variant.
     /// </summary>
     public static bool HasExternal(this ISymbol symbol) =>
-        symbol
-            .GetAttributes()
-            .Any(a =>
-                a.AttributeClass?.Name is ("ExternalAttribute" or "External")
-                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
-                    == "Metano.Annotations.TypeScript"
-            );
+        HasTypeScriptAttribute(symbol, "External");
 
     /// <summary>
     /// Reads <c>[This]</c> from <c>Metano.Annotations</c>. Marks
@@ -470,13 +487,103 @@ public static class SymbolHelper
     /// libraries cannot be mistaken for the Metano variant.
     /// </summary>
     public static bool HasStrictUnionGuard(this ISymbol symbol) =>
-        symbol
-            .GetAttributes()
-            .Any(a =>
-                a.AttributeClass?.Name is ("StrictUnionGuardAttribute" or "StrictUnionGuard")
-                && a.AttributeClass?.ContainingNamespace?.ToDisplayString()
-                    == "Metano.Annotations.TypeScript"
-            );
+        HasTypeScriptAttribute(symbol, "StrictUnionGuard");
+
+    /// <summary>
+    /// Reads <c>[JsTuple]</c> from the
+    /// <c>Metano.Annotations.TypeScript</c> namespace. Marks a positional
+    /// record as a JS array-tuple (the array-shape sibling of
+    /// <c>[PlainObject]</c>): standalone it lowers to a tuple type alias
+    /// <c>= [T0, T1, …]</c>; combined with <c>[Import]</c> it is erased and
+    /// resolves to the imported library tuple. TS-specific — callers outside
+    /// the TypeScript target should treat <c>true</c> as a no-op.
+    /// Namespace-qualified match so unrelated <c>[JsTuple]</c> attributes
+    /// from other libraries are not mistaken for the Metano variant.
+    /// </summary>
+    public static bool HasJsTuple(this ISymbol symbol) => HasTypeScriptAttribute(symbol, "JsTuple");
+
+    /// <summary>
+    /// Reads <c>[JsCallable]</c> from the
+    /// <c>Metano.Annotations.TypeScript</c> namespace. Marks an erased
+    /// interface modeling a JS callable value; calls to its <c>Invoke(…)</c>
+    /// member(s) lower to direct receiver invocation. TS-specific — callers
+    /// outside the TypeScript target should treat <c>true</c> as a no-op.
+    /// Namespace-qualified match so unrelated <c>[JsCallable]</c> attributes
+    /// from other libraries are not mistaken for the Metano variant.
+    /// </summary>
+    public static bool HasJsCallable(this ISymbol symbol) =>
+        HasTypeScriptAttribute(symbol, "JsCallable");
+
+    /// <summary>
+    /// The sole member name a <c>[JsCallable]</c> interface may declare — the
+    /// conventional .NET call-operation name (mirrors delegate <c>.Invoke</c>).
+    /// Shared by the invoke-lowering predicate and the MS0028 validator so the
+    /// magic string lives in one place.
+    /// </summary>
+    public const string JsCallableInvokeMember = "Invoke";
+
+    /// <summary>
+    /// True when <paramref name="method"/> is the <c>Invoke</c> member of a
+    /// <c>[JsCallable]</c> interface — the shape the expression bridge lowers
+    /// to a direct receiver call (<c>recv.Invoke(args)</c> → <c>recv(args)</c>).
+    /// Matches by member name (<c>Invoke</c>) plus the
+    /// <see cref="HasJsCallable"/> marker on the containing type, so any
+    /// overload of <c>Invoke</c> qualifies regardless of arity.
+    /// </summary>
+    public static bool IsJsCallableInvoke(IMethodSymbol method) =>
+        method.Name == JsCallableInvokeMember
+        && method.ContainingType is { } containing
+        && containing.HasJsCallable();
+
+    /// <summary>
+    /// Returns the primary (positional) constructor of <paramref name="type"/>
+    /// when it declares one with at least one parameter — the positional shape
+    /// <c>[JsTuple]</c> needs. Probes the declaring syntax for a
+    /// <c>TypeDeclarationSyntax</c> carrying a <c>ParameterList</c> (records and
+    /// C# 12 primary constructors). Returns <c>null</c> when the type has no
+    /// positional constructor. Single source of truth for both the
+    /// element-index resolution (<see cref="GetJsTupleElementIndex"/>) and the
+    /// MS0027 positional-shape validation in <c>CSharpSourceFrontend</c>.
+    /// </summary>
+    public static IMethodSymbol? GetPositionalPrimaryConstructor(INamedTypeSymbol type) =>
+        type.InstanceConstructors.FirstOrDefault(c =>
+            c.Parameters.Length > 0
+            && c.DeclaringSyntaxReferences.Any(r =>
+                r.GetSyntax() is TypeDeclarationSyntax { ParameterList: not null }
+            )
+        );
+
+    /// <summary>
+    /// Resolves the positional index of <paramref name="member"/> within its
+    /// <c>[JsTuple]</c> record's primary (positional) constructor. Returns the
+    /// zero-based slot index when the containing type carries <c>[JsTuple]</c>
+    /// and the member maps to a primary-constructor parameter (by name), or
+    /// <c>-1</c> otherwise. The index drives positional element access
+    /// (<c>value.Item</c> → <c>value[i]</c>) on a tuple-typed receiver.
+    /// </summary>
+    public static int GetJsTupleElementIndex(ISymbol member)
+    {
+        if (member.ContainingType is not { } containing || !containing.HasJsTuple())
+            return -1;
+
+        var primaryConstructor = GetPositionalPrimaryConstructor(containing);
+        if (primaryConstructor is null)
+            return -1;
+
+        for (var i = 0; i < primaryConstructor.Parameters.Length; i++)
+        {
+            if (
+                string.Equals(
+                    primaryConstructor.Parameters[i].Name,
+                    member.Name,
+                    StringComparison.Ordinal
+                )
+            )
+                return i;
+        }
+
+        return -1;
+    }
 
     /// <summary>
     /// Reads <c>[Discriminator("FieldName")]</c> from the
@@ -717,6 +824,14 @@ public static class SymbolHelper
         // attribute semantics stay explicit at the source-code layer.
         if (HasExternal(symbol))
             return false;
+        // `[JsCallable]` interfaces are erased — they model a JS callable
+        // value (every `recv.Invoke(args)` lowers to `recv(args)`), not a TS
+        // type. They never produce a .ts file and must not be registered as a
+        // transpilable type ref (a reference would otherwise import a
+        // non-existent module). Per research D9 this holds with or without
+        // `[External]`/`[Import]`.
+        if (HasJsCallable(symbol))
+            return false;
         // C# 11 file-scoped types are emit-time metadata carriers
         // (e.g. `[ImportAlias]` carriers in #181 Stage 3). They never
         // produce a .ts file regardless of the surrounding
@@ -736,6 +851,39 @@ public static class SymbolHelper
         )
             return true;
         return false;
+    }
+
+    /// <summary>
+    /// "Author opted this type into transpilation" — it carries
+    /// <c>[Transpile]</c>, or the assembly is in <c>[assembly: TranspileAssembly]</c>
+    /// mode and the type is public (and not <c>[Ignore]</c>).
+    /// <para>
+    /// Unlike <see cref="IsTranspilable(ISymbol, bool, IAssemblySymbol?)"/>, this
+    /// does <b>not</b> short-circuit on the emission-scope markers
+    /// (<c>[External]</c>, <c>[JsCallable]</c>, file-local) that make a type
+    /// emit no <c>.ts</c> file. Those markers are exactly the ones whose misuse a
+    /// declaration-time validator must still flag — gating such a validator on
+    /// <see cref="IsTranspilable"/> would silently suppress its own diagnostic
+    /// (a <c>[JsCallable]</c> interface is never <c>IsTranspilable</c>). Use this
+    /// predicate to scope attribute validators to author-opted-in types.
+    /// </para>
+    /// </summary>
+    public static bool IsDeclaredTranspilable(
+        ISymbol symbol,
+        bool assemblyWideTranspile,
+        IAssemblySymbol? currentAssembly = null
+    )
+    {
+        if (HasIgnore(symbol))
+            return false;
+        if (HasTranspile(symbol))
+            return true;
+        return assemblyWideTranspile
+            && symbol.DeclaredAccessibility == Accessibility.Public
+            && (
+                currentAssembly is null
+                || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, currentAssembly)
+            );
     }
 
     /// <summary>

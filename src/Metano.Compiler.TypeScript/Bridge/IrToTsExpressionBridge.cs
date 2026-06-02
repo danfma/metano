@@ -219,6 +219,19 @@ public static class IrToTsExpressionBridge
     )
     {
         var loweredTarget = Map(ma.Target, bclRegistry);
+
+        // `[JsTuple]` positional member read: `value.First` / `value.Second`
+        // lowers to array-index access `value[0]` / `value[1]`. The element
+        // index is the member's positional declaration order, resolved by the
+        // extractor against the record's primary constructor.
+        if (ma.Origin is { IsJsTupleElement: true, TupleIndex: >= 0 } tupleOrigin)
+            return new TsElementAccess(
+                loweredTarget,
+                // Numeric index literal — TsLiteral carries the raw token, and the
+                // index is a non-negative int, so this prints as `value[0]`.
+                new TsLiteral(tupleOrigin.TupleIndex.ToString())
+            );
+
         if (bclRegistry is not null)
         {
             var mapped = IrToTsBclMapper.TryMapMemberAccess(ma, loweredTarget, bclRegistry);
@@ -285,6 +298,21 @@ public static class IrToTsExpressionBridge
         // for call sites using `Name: value` is handled earlier (at the
         // dispatcher or object-literal pass).
         var loweredArgs = call.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
+
+        // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
+        // the receiver `recv(args)`. After destructuring, the receiver IS the
+        // JS function — the `Invoke` member is erased. Overloaded `Invoke`
+        // (value / updater / arbitrary arity) all map identically; only the
+        // argument list differs. Map the receiver (the member-access target),
+        // never the `.Invoke` access itself.
+        if (
+            call.Origin is { IsJsCallableInvoke: true }
+            && call.Target is IrMemberAccess invokeAccess
+        )
+        {
+            var receiver = Map(invokeAccess.Target, bclRegistry);
+            return new TsCallExpression(receiver, loweredArgs, call.IsOptional);
+        }
 
         // `[PlainObject]` instance method call: rewrite `obj.Method(args)` to
         // `methodName(obj, args)` — the plain-object shape has no class
@@ -1188,6 +1216,12 @@ public static class IrToTsExpressionBridge
             }
             return new TsObjectLiteral(properties);
         }
+        // `[JsTuple]` construction: `new T(a, b)` lowers to a positional array
+        // literal `[a, b]`, the array-shape sibling of the `[PlainObject]`
+        // object-literal lowering above. The class wrapper is erased; the
+        // tuple IS the array.
+        if (ne.IsJsTuple)
+            return new TsArrayLiteral(args);
         if (ne.Type is IrNamedTypeRef named && named.Semantics is { } s)
         {
             // BCL exception types (InvalidOperationException, …) have no

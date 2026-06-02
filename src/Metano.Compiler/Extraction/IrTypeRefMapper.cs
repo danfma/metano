@@ -211,6 +211,27 @@ public static class IrTypeRefMapper
             if (named.IsCollectionLike() && named.TypeArguments.Length > 0)
                 return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver, target));
 
+            // `[JsCallable]` interface in type position: the interface is erased
+            // (no declaration / import), so a bare named reference would dangle.
+            // Lower it to its call shape — a single function type for one Invoke,
+            // or a multi-signature callable for overloaded Invoke. Roslyn returns
+            // the Invoke overloads with their type arguments already substituted
+            // (e.g. `ISignalSetter<int>` → `Invoke(int)`, `Invoke(Func<int,int>)`).
+            if (named.TypeKind == TypeKind.Interface && SymbolHelper.HasJsCallable(named))
+            {
+                var signatures = named
+                    .GetMembers(SymbolHelper.JsCallableInvokeMember)
+                    .OfType<IMethodSymbol>()
+                    .Select(invoke => BuildFunctionType(invoke, originResolver, target))
+                    .ToList();
+                if (signatures.Count == 1)
+                    return signatures[0];
+                if (signatures.Count > 1)
+                    return new IrCallableTypeRef(signatures);
+                // No Invoke (malformed — MS0028 covers this) → an empty callable.
+                return new IrFunctionTypeRef([], new IrPrimitiveTypeRef(IrPrimitive.Void));
+            }
+
             if (named.TypeKind == TypeKind.Delegate)
             {
                 if (NamedDelegatePredicate?.Invoke(named) == true)
@@ -509,12 +530,24 @@ public static class IrTypeRefMapper
         if (invoke is null)
             return new IrFunctionTypeRef([], new IrPrimitiveTypeRef(IrPrimitive.Void));
 
-        // `[This]` on the first parameter promotes it to the
-        // synthetic `this` receiver slot. The parameter itself is
-        // dropped from the positional list so each backend picks
-        // the emission shape it prefers — TypeScript prepends a
-        // `(this: T, …)` annotation, Dart re-introduces the
-        // parameter as a regular positional arg in its bridge.
+        return BuildFunctionType(invoke, originResolver, target);
+    }
+
+    /// <summary>
+    /// Maps an <c>Invoke</c> method symbol (a delegate's, or a
+    /// <c>[JsCallable]</c> interface's) to an <see cref="IrFunctionTypeRef"/>.
+    /// <c>[This]</c> on the first parameter promotes it to the synthetic
+    /// <c>this</c> receiver slot; the parameter itself is dropped from the
+    /// positional list so each backend picks the emission shape it prefers —
+    /// TypeScript prepends a <c>(this: T, …)</c> annotation, Dart re-introduces
+    /// the parameter as a regular positional arg in its bridge.
+    /// </summary>
+    private static IrFunctionTypeRef BuildFunctionType(
+        IMethodSymbol invoke,
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
         IrTypeRef? thisType = null;
         var sourceParameters = invoke.Parameters;
         if (sourceParameters.Length > 0 && SymbolHelper.HasThis(sourceParameters[0]))

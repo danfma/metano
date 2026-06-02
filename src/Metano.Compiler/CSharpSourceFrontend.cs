@@ -152,6 +152,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
             ValidateEmitAttribute(compilation, diagnostics);
             ValidateIgnoreReferences(compilation, assemblyWideTranspile, target, diagnostics);
+            ValidateJsTupleAttribute(compilation, assemblyWideTranspile, diagnostics);
+            ValidateJsCallableAttribute(compilation, assemblyWideTranspile, diagnostics);
         }
 
         return new IrCompilation(
@@ -1194,6 +1196,248 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         foreach (var nested in type.GetTypeMembers())
             VisitTypeForExternal(nested, diagnostics);
+    }
+
+    /// <summary>
+    /// Validates <c>[JsTuple]</c> (from <c>Metano.Annotations.TypeScript</c>).
+    /// The attribute lowers a type to a bare positional array tuple, so it
+    /// requires a positional shape AND must be positional-only:
+    /// <list type="bullet">
+    ///   <item>The type needs a primary constructor parameter list whose order
+    ///   maps to array slots — applied to a type with no positional
+    ///   constructor, there is no field order to map.</item>
+    ///   <item>Beyond the positional elements, the type may declare no extra
+    ///   instance members — a JS array tuple has no object to host them, so a
+    ///   <c>p.Sum</c>-style access would read undefined at runtime.</item>
+    /// </list>
+    /// Both violations raise <c>MS0027 InvalidJsTuple</c> — the first at the
+    /// type declaration, the second at the offending member.
+    /// </summary>
+    private static void ValidateJsTupleAttribute(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type => VisitTypeForJsTuple(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        );
+    }
+
+    private static void VisitTypeForJsTuple(
+        INamedTypeSymbol type,
+        bool assemblyWideTranspile,
+        IAssemblySymbol currentAssembly,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        // Gate on author-opted-in transpilation — mirroring the sibling
+        // validators (ValidateOptionalAttribute / ValidateDiscriminatorAttribute)
+        // but via IsDeclaredTranspilable so an emission-scope marker (here, a
+        // [JsTuple, Import] that erases the type) doesn't suppress the validator's
+        // own diagnostic. A [JsTuple] on a .NET-only type never reaches emission,
+        // so its misuse is not actionable for the active target.
+        if (
+            SymbolHelper.IsDeclaredTranspilable(type, assemblyWideTranspile, currentAssembly)
+            && SymbolHelper.HasJsTuple(type)
+        )
+        {
+            var positionalConstructor = SymbolHelper.GetPositionalPrimaryConstructor(type);
+            if (positionalConstructor is null)
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidJsTuple,
+                        $"[JsTuple] on '{type.Name}' requires a positional shape — a record "
+                            + $"(or class/struct) with a primary-constructor parameter list whose "
+                            + $"declaration order maps to the array slots. The type has no "
+                            + $"positional constructor, so there is no field order to lower. Add a "
+                            + $"primary constructor (e.g. 'record {type.Name}(A First, B Second)') "
+                            + $"or remove [JsTuple].",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+            else
+            {
+                ReportExtraJsTupleMembers(type, positionalConstructor, diagnostics);
+            }
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForJsTuple(nested, assemblyWideTranspile, currentAssembly, diagnostics);
+    }
+
+    /// <summary>
+    /// A <c>[JsTuple]</c> record lowers to a bare JS array tuple
+    /// (<c>[T0, T1, …]</c>) — there is no object to host extra members, and a
+    /// non-positional member access on the array would read an undefined
+    /// property at runtime. So the type must be positional-only: every declared
+    /// instance member must be one of the positional properties or a record's
+    /// synthesized helper (<c>Equals</c>/<c>GetHashCode</c>/<c>ToString</c>/
+    /// <c>Deconstruct</c>/<c>&lt;Clone&gt;$</c>/copy-ctor/<c>EqualityContract</c>).
+    /// Any other declared instance member raises <c>MS0027</c> at the offending
+    /// member.
+    /// </summary>
+    private static void ReportExtraJsTupleMembers(
+        INamedTypeSymbol type,
+        IMethodSymbol positionalConstructor,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var positionalNames = positionalConstructor
+            .Parameters.Select(p => p.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var member in type.GetMembers())
+        {
+            if (member.IsImplicitlyDeclared || member.IsStatic)
+                continue;
+            // The positional properties the primary constructor synthesizes.
+            if (member is IPropertySymbol && positionalNames.Contains(member.Name))
+                continue;
+            // The primary constructor itself, and the record's synthesized
+            // value-semantics helpers.
+            if (IsSynthesizedRecordMember(member))
+                continue;
+
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.InvalidJsTuple,
+                    $"[JsTuple] record '{type.Name}' must be positional-only. Member "
+                        + $"'{type.Name}.{member.Name}' is not a positional element, and a "
+                        + $"[JsTuple] lowers to a bare JS array tuple with no object to host "
+                        + $"it — accessing it at runtime would read undefined. Move the member "
+                        + $"to a wrapper type or remove [JsTuple].",
+                    member.Locations.FirstOrDefault()
+                )
+            );
+        }
+    }
+
+    /// <summary>
+    /// True for the members the C# compiler synthesizes for a positional record
+    /// (the <c>Equals</c> overloads, <c>GetHashCode</c>, <c>ToString</c>,
+    /// <c>Deconstruct</c>, the <c>&lt;Clone&gt;$</c> clone helper, every
+    /// constructor — primary and copy — and the <c>EqualityContract</c>
+    /// property). These carry implementation Roslyn doesn't always flag
+    /// <c>IsImplicitlyDeclared</c> for (their syntax is the record declaration
+    /// itself), so the positional-only check recognizes them by name/shape
+    /// rather than rely on the flag.
+    /// </summary>
+    private static bool IsSynthesizedRecordMember(ISymbol member) =>
+        member switch
+        {
+            IMethodSymbol method => method.Name
+                is "Equals"
+                    or "GetHashCode"
+                    or "ToString"
+                    or "Deconstruct"
+                    or "<Clone>$"
+                || method.MethodKind == MethodKind.Constructor,
+            IPropertySymbol property => property.Name == "EqualityContract",
+            _ => false,
+        };
+
+    /// <summary>
+    /// Validates <c>[JsCallable]</c> (from <c>Metano.Annotations.TypeScript</c>).
+    /// The attribute models an erased JS callable value whose <c>Invoke(…)</c>
+    /// member(s) lower to direct receiver invocation. It is only meaningful on an
+    /// interface declaring nothing but (possibly overloaded) <c>Invoke</c>
+    /// members — neither the interface itself nor any base interface it extends
+    /// may contribute a non-<c>Invoke</c> member, because the whole inherited
+    /// surface is erased to a single callable. Applied to a non-interface, or an
+    /// interface whose declared-or-inherited members include a non-<c>Invoke</c>
+    /// member, raises <c>MS0028 InvalidJsCallable</c> — at the type for the
+    /// non-interface case, at the offending member otherwise.
+    /// </summary>
+    private static void ValidateJsCallableAttribute(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+                VisitTypeForJsCallable(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        );
+    }
+
+    private static void VisitTypeForJsCallable(
+        INamedTypeSymbol type,
+        bool assemblyWideTranspile,
+        IAssemblySymbol currentAssembly,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        // Gate on author-opted-in transpilation via IsDeclaredTranspilable —
+        // NOT IsTranspilable, which always returns false for a [JsCallable]
+        // interface (it is emission-erased) and would therefore suppress this
+        // very diagnostic. A [JsCallable] on a .NET-only type never reaches
+        // emission, so its misuse is not actionable for the active target.
+        if (
+            SymbolHelper.IsDeclaredTranspilable(type, assemblyWideTranspile, currentAssembly)
+            && SymbolHelper.HasJsCallable(type)
+        )
+        {
+            if (type.TypeKind != TypeKind.Interface)
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidJsCallable,
+                        $"[JsCallable] on '{type.Name}' requires an interface. The attribute "
+                            + $"models an erased JS callable value whose Invoke(…) member(s) "
+                            + $"lower to a direct call on the receiver; only an interface can "
+                            + $"express the (possibly overloaded) call signatures. Convert "
+                            + $"'{type.Name}' to an interface or remove [JsCallable].",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+            }
+            else
+            {
+                // The callable's entire surface is erased to one JS function, so
+                // every member it contributes — declared OR inherited from a base
+                // interface — must be `Invoke`. Scan both so a non-`Invoke`
+                // member on a base interface cannot smuggle a phantom surface in.
+                var members = type.GetMembers()
+                    .Concat(type.AllInterfaces.SelectMany(i => i.GetMembers()));
+                foreach (var member in members)
+                {
+                    if (member.IsImplicitlyDeclared)
+                        continue;
+                    // Only the call-operation member `Invoke` (any arity /
+                    // overload) is allowed. The property/event accessor
+                    // methods are implicitly declared and filtered above;
+                    // an explicit non-Invoke member is the misuse.
+                    if (member is IMethodSymbol { Name: SymbolHelper.JsCallableInvokeMember })
+                        continue;
+                    diagnostics.Add(
+                        new MetanoDiagnostic(
+                            MetanoDiagnosticSeverity.Error,
+                            DiagnosticCodes.InvalidJsCallable,
+                            $"[JsCallable] interface '{type.Name}' may only expose 'Invoke' "
+                                + $"member(s) (overloaded Invoke is allowed). Member "
+                                + $"'{member.ContainingType?.Name ?? type.Name}.{member.Name}' "
+                                + $"is not 'Invoke'; the callable facade — including any base "
+                                + $"interface it extends — has no TS surface to host it. Move "
+                                + $"the member to a separate interface or remove [JsCallable].",
+                            member.Locations.FirstOrDefault()
+                        )
+                    );
+                }
+            }
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForJsCallable(nested, assemblyWideTranspile, currentAssembly, diagnostics);
     }
 
     /// <summary>

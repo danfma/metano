@@ -251,4 +251,26 @@ public static class DiagnosticCodes
     /// fast — a broken manifest silently shipping an incomplete
     /// artifact would be worse than a loud diagnostic.</summary>
     public const string AssetCopyFailure = "MS0025";
+
+    // MS0026 is intentionally skipped — reserved by the in-flight JSX feature
+    // on branch 002 (not yet merged). Skipping it avoids a code collision at
+    // merge time.
+
+    /// <summary>MS0027 — <c>[JsTuple]</c> (from
+    /// <c>Metano.Annotations.TypeScript</c>) was applied to a type with no
+    /// positional shape (a non-positional record or class). Without a
+    /// positional constructor there is no field order to map to the array
+    /// slots of a JS tuple. The fix is to declare the type as a positional
+    /// record (<c>record Signal&lt;T&gt;(Func&lt;T&gt; Getter, …)</c>) so each
+    /// member has a stable array index.</summary>
+    public const string InvalidJsTuple = "MS0027";
+
+    /// <summary>MS0028 — <c>[JsCallable]</c> (from
+    /// <c>Metano.Annotations.TypeScript</c>) was applied to a non-interface,
+    /// or to a <c>[JsCallable]</c> interface that declares members other than
+    /// <c>Invoke</c>. The attribute models an erased callable facade whose only
+    /// operation is invocation; any other member would have no emitted
+    /// declaration to bind to. The fix is to move the extra members to a
+    /// separate interface or drop <c>[JsCallable]</c>.</summary>
+    public const string InvalidJsCallable = "MS0028";
 }

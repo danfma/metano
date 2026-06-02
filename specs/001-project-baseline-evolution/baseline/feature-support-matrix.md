@@ -94,9 +94,19 @@ constraints · **Planned** = not a current guarantee. Unless a row names a backe
 | Packaging | `[EmitPackage]` cross-package + `package.json` | TS | Implemented | `CSharpSourceFrontend.cs`, `Metano.Compiler.TypeScript/PackageJsonWriter.cs` | `tests/Metano.Tests/EmitPackageTests.cs` | Dependency propagation (ADR-0011). |
 | Serialization | `JsonSerializerContext` | TS | Implemented | `Extraction/IrExpressionExtractor.cs`, `IR/IrRuntimeRequirement.cs` | `tests/Metano.Tests/JsonSerializerContextTests.cs` | JSON names resolved at transpile time. |
 | Validation | Type guards (`[GenerateGuard]`) | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/GenerateGuardAttribute.cs` | `tests/Metano.Tests/TypeGuardTranspileTests.cs` | Emits `isT` + `assertT` (ADR-0009). |
-| Diagnostics | Stable `MS0001`–`MS0025` | TS | Implemented | `Diagnostics/MetaSharpDiagnostic.cs` | `tests/Metano.Tests/DiagnosticsTests.cs` | Full catalog: [diagnostic-catalog.md](./diagnostic-catalog.md). |
+| Diagnostics | Stable `MS0001`–`MS0025`, `MS0027`, `MS0028` | TS | Implemented | `Diagnostics/MetaSharpDiagnostic.cs` | `tests/Metano.Tests/DiagnosticsTests.cs` | Full catalog: [diagnostic-catalog.md](./diagnostic-catalog.md). `MS0026` reserved by branch `002`. |
 | Cycles | Generated cyclic import detection | TS | Implemented | `CSharpSourceFrontend.cs`, `Analysis/` | `tests/Metano.Tests/CyclicReferenceTests.cs` | Reported as MS0005. |
 | Assets | `<MetanoAsset>` static asset copy | TS | Implemented | `AssetFlagParser.cs`, `AssetSpec.cs` | `tests/Metano.Tests/Caching/TranspilerHostAssetCopyTests.cs` | Cache-aware; failures → MS0025 (FR-048). |
+
+## JS-interop primitives
+
+Declarative array-tuple / callable shapes + tuple deconstruction (no hand-written `[Emit]`). Spec: [specs/003-js-interop-primitives/](../../003-js-interop-primitives/spec.md).
+
+| Area | Feature | Backend | Status | Code area | Test | Constraints |
+| --- | --- | --- | --- | --- | --- | --- |
+| Interop | `[JsTuple]` record → JS array-tuple | TS | Implemented | `Bridge/IrToTsJsTupleBridge.cs`, `Annotations/TypeScript/JsTupleAttribute.cs` | `tests/Metano.Tests/JsTupleTranspileTests.cs` | Type alias / erased with `[Import]`; positional `[i]`; misuse → MS0027. |
+| Interop | `[JsCallable]` interface → direct invocation | TS | Implemented | `Bridge/IrToTsExpressionBridge.cs`, `Annotations/TypeScript/JsCallableAttribute.cs` | `tests/Metano.Tests/JsCallableTranspileTests.cs` | `recv.Invoke(a)`→`recv(a)`; overloaded `Invoke`; erased; misuse → MS0028. |
+| Interop | Tuple deconstruction `var (a,b)=e` | TS | Implemented | `Extraction/IrStatementExtractor.cs`, `TypeScript/AST/TsDestructuringDeclaration.cs` | `tests/Metano.Tests/DeconstructionTranspileTests.cs` | → `const [a, b] = e`; discards supported; flat only. |
 
 ## Dart backend — status & gaps
 

@@ -144,6 +144,18 @@ public sealed record IrFunctionTypeRef(
 ) : IrTypeRef;
 
 /// <summary>
+/// A callable value with one or more call signatures — the lowered form of a
+/// <c>[JsCallable]</c> interface used in type position. A single-signature
+/// callable is represented directly as <see cref="IrFunctionTypeRef"/>; this
+/// node carries the <em>overloaded</em> case (multiple <c>Invoke</c> overloads),
+/// which a single function type cannot express. Backends render it as the
+/// intersection of its signatures (TypeScript: <c>((v: T) =&gt; void) &amp;
+/// ((u: (c: T) =&gt; T) =&gt; void)</c>). The interface name is erased — no
+/// declaration or import is emitted for it.
+/// </summary>
+public sealed record IrCallableTypeRef(IReadOnlyList<IrFunctionTypeRef> Signatures) : IrTypeRef;
+
+/// <summary>
 /// An asynchronous result (C# <c>Task&lt;T&gt;</c>, <c>ValueTask&lt;T&gt;</c>).
 /// Each backend decides the representation (TypeScript: <c>Promise&lt;T&gt;</c>,
 /// Dart: <c>Future&lt;T&gt;</c>, Kotlin: suspend function).

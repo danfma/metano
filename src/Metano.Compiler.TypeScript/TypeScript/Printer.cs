@@ -939,6 +939,27 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(";");
                 break;
 
+            case TsDestructuringDeclaration destructuring:
+                if (destructuring.Exported)
+                    _sb.Write("export ");
+                _sb.Write(destructuring.Const ? "const " : "let ");
+                _sb.Write("[");
+                for (var i = 0; i < destructuring.Names.Count; i++)
+                {
+                    if (i > 0)
+                        _sb.Write(", ");
+                    // A null name is a discard: emit an empty slot. When the
+                    // discard is trailing the comma above already produced the
+                    // hole; for a leading/middle discard the empty slot is the
+                    // absence of a name between commas.
+                    if (destructuring.Names[i] is { } name)
+                        _sb.Write(name);
+                }
+                _sb.Write("] = ");
+                PrintExpression(destructuring.Initializer);
+                _sb.Write(";");
+                break;
+
             case TsExpressionStatement exprStmt:
                 PrintExpression(exprStmt.Expression);
                 _sb.Write(";");

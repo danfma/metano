@@ -220,6 +220,11 @@ public static class IrToTsStatementBridge
                     : new TsIdentifier("undefined"),
                 Const: vd.IsConst
             ),
+            IrTupleDeconstruction td => new TsDestructuringDeclaration(
+                td.Elements.Select(e => e.Name).ToList(),
+                IrToTsExpressionBridge.Map(td.Initializer, bclRegistry),
+                Const: td.IsConst
+            ),
             IrIfStatement ifs => new TsIfStatement(
                 IrToTsExpressionBridge.Map(ifs.Condition, bclRegistry),
                 MapBody(ifs.Then, bclRegistry),

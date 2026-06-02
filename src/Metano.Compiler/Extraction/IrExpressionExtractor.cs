@@ -2016,6 +2016,14 @@ public sealed partial class IrExpressionExtractor
         // bridge honors either to drop the enclosing type reference.
         var isDeclaringTypeExternal = SymbolHelper.HasExternal(symbol.ContainingType);
         var isDeclaringTypeNoContainer = SymbolHelper.HasNoContainer(symbol.ContainingType);
+        // `[JsCallable]` interface `Invoke(…)` call → the receiver IS the JS
+        // function, so the call lowers to `recv(args)`. `[JsTuple]` positional
+        // member read → array-index access `recv[i]`. Both reuse the member
+        // origin dispatch channel so the TS bridge can branch without
+        // re-reading the Roslyn symbol.
+        var isJsCallableInvoke =
+            symbol is IMethodSymbol invokeMethod && SymbolHelper.IsJsCallableInvoke(invokeMethod);
+        var tupleIndex = SymbolHelper.GetJsTupleElementIndex(symbol);
         return new IrMemberOrigin(
             declaringTypeName,
             symbol.Name,
@@ -2026,7 +2034,10 @@ public sealed partial class IrExpressionExtractor
             IsPlainObjectInstanceMethod: isPlainObjectInstanceMethod,
             IsStringEnumMember: isStringEnumMember,
             IsDeclaringTypeExternal: isDeclaringTypeExternal,
-            IsDeclaringTypeNoContainer: isDeclaringTypeNoContainer
+            IsDeclaringTypeNoContainer: isDeclaringTypeNoContainer,
+            IsJsCallableInvoke: isJsCallableInvoke,
+            IsJsTupleElement: tupleIndex >= 0,
+            TupleIndex: tupleIndex
         );
     }
 
@@ -3087,6 +3098,8 @@ public sealed partial class IrExpressionExtractor
     {
         var isPlainObject =
             typeSymbol is INamedTypeSymbol named && SymbolHelper.HasPlainObject(named);
+        var isJsTuple =
+            typeSymbol is INamedTypeSymbol jsTupleNamed && SymbolHelper.HasJsTuple(jsTupleNamed);
         IReadOnlyList<string>? parameterNames = null;
         var ctor = _semantic.GetSymbolInfo(creationSyntax).Symbol as IMethodSymbol;
         if (isPlainObject && ctor is not null && ctor.Parameters.Length > 0)
@@ -3111,7 +3124,7 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        return new IrNewExpression(type, args, isPlainObject, parameterNames);
+        return new IrNewExpression(type, args, isPlainObject, parameterNames, IsJsTuple: isJsTuple);
     }
 
     private static List<(string Name, IrExpression Value)> BuildObjectArgsProperties(

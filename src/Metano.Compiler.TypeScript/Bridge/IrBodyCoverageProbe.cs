@@ -29,6 +29,10 @@ public static class IrBodyCoverageProbe
             IrReturnStatement ret => ret.Value is null || IsCoveredExpression(ret.Value),
             IrVariableDeclaration vd => vd.Initializer is null
                 || IsCoveredExpression(vd.Initializer),
+            // A deconstructing declaration lowers to a TS array-destructuring
+            // binding; coverage hinges only on the initializer (the binding
+            // names/discards are always emittable).
+            IrTupleDeconstruction td => IsCoveredExpression(td.Initializer),
             IrIfStatement ifs => IsCoveredExpression(ifs.Condition)
                 && IsFullyCovered(ifs.Then)
                 && (ifs.Else is null || IsFullyCovered(ifs.Else)),

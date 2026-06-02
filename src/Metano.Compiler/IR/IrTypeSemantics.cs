@@ -15,6 +15,7 @@ namespace Metano.Compiler.IR;
 /// <param name="IsException">Extends the exception hierarchy.</param>
 /// <param name="IsBranded">Single-field branded type (C# <c>[Branded]</c>, formerly <c>[InlineWrapper]</c>).</param>
 /// <param name="BrandedUnderlyingType">The underlying primitive when <see cref="IsBranded"/> is true.</param>
+/// <param name="IsJsTuple">Positional JS array-tuple shape (C# <c>[JsTuple]</c>) — lowered as an array tuple rather than a class.</param>
 public sealed record IrTypeSemantics(
     bool IsRecord = false,
     bool IsValueType = false,
@@ -24,5 +25,6 @@ public sealed record IrTypeSemantics(
     bool IsPlainObject = false,
     bool IsException = false,
     bool IsBranded = false,
-    IrTypeRef? BrandedUnderlyingType = null
+    IrTypeRef? BrandedUnderlyingType = null,
+    bool IsJsTuple = false
 );

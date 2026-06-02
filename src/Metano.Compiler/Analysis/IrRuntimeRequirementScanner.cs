@@ -85,9 +85,10 @@ public static class IrRuntimeRequirementScanner
                 ScanType(nested, acc);
 
         // Records carry value-equality semantics that require a hashing helper.
-        // [PlainObject] records are emitted as bare interfaces / object literals — no
-        // synthesized equals/hashCode/with — so the helper isn't needed.
-        if (c.Semantics.IsRecord && !c.Semantics.IsPlainObject)
+        // [PlainObject] records are emitted as bare interfaces / object literals,
+        // and [JsTuple] records as bare array-tuple aliases — neither synthesizes
+        // equals/hashCode/with, so the helper isn't needed.
+        if (c.Semantics.IsRecord && !c.Semantics.IsPlainObject && !c.Semantics.IsJsTuple)
         {
             acc.Add(new IrRuntimeRequirement("HashCode", IrRuntimeCategory.Hashing));
             // The synthesized `equals` falls back to `valueEquals` for

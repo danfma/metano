@@ -503,6 +503,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
             return false;
 
+        // [JsCallable] interfaces are erased — they model a JS callable value,
+        // not a TS type. Every `recv.Invoke(args)` call lowers to `recv(args)`
+        // (see IrToTsExpressionBridge.MapCall), so the interface itself emits
+        // no declaration, with or without [External]/[Import] (per research D9).
+        if (SymbolHelper.HasJsCallable(type))
+            return false;
+
         var startCount = sink.Count;
 
         _ =
@@ -514,6 +521,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             || TryEmitTopLevelEntryPoint(type, sink)
             || TryEmitStaticModule(type, sink)
             || TryEmitBrandedViaIr(type, sink, irCache)
+            || TryEmitJsTuple(type, sink, irCache)
             || TryEmitPlainObjectOrClass(type, sink, irCache);
 
         if (sink.Count == startCount)
@@ -1440,6 +1448,27 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
         return IrToTsPlainObjectBridge.Convert(ir, sink, Context.DeclarativeMappings);
+    }
+
+    /// <summary>
+    /// Routes <c>[JsTuple]</c> records/structs through
+    /// <see cref="IrToTsJsTupleBridge"/> — the array-shape sibling of
+    /// <c>[PlainObject]</c>. Emits a positional tuple type alias
+    /// (<c>export type T = [T0, T1, …]</c>). A <c>[JsTuple, Import]</c> type
+    /// never reaches here: <see cref="BuildTypeStatements"/> short-circuits on
+    /// <c>[Import]</c> so the reference resolves to the imported library tuple.
+    /// </summary>
+    private bool TryEmitJsTuple(
+        INamedTypeSymbol type,
+        List<TsTopLevel> sink,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
+    )
+    {
+        if (!SymbolHelper.HasJsTuple(type))
+            return false;
+
+        var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
+        return IrToTsJsTupleBridge.Convert(ir, sink);
     }
 
     /// <summary>

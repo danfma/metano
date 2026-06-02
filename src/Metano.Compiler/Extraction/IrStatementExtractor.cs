@@ -184,6 +184,9 @@ public sealed class IrStatementExtractor(
             case IrVariableDeclaration vd when vd.Initializer is not null:
                 CollectReassignedLocals(vd.Initializer, acc);
                 break;
+            case IrTupleDeconstruction td:
+                CollectReassignedLocals(td.Initializer, acc);
+                break;
             case IrIfStatement ifs:
                 CollectReassignedLocals(ifs.Condition, acc);
                 foreach (var s in ifs.Then)
@@ -333,6 +336,13 @@ public sealed class IrStatementExtractor(
             {
                 IsConst = true,
             },
+            IrTupleDeconstruction td
+                when !td.IsConst
+                    && !td.Elements.Any(e => e.Name is { } name && reassigned.Contains(name)) =>
+                td with
+                {
+                    IsConst = true,
+                },
             IrIfStatement ifs => ifs with
             {
                 Then = ifs.Then.Select(s => RewriteDeclarations(s, reassigned)).ToList(),
@@ -389,6 +399,13 @@ public sealed class IrStatementExtractor(
             BlockSyntax block => new IrBlockStatement(
                 block.Statements.Select(ExtractStatement).ToList()
             ),
+            // `var (a, b) = expr;` parses as an ExpressionStatement wrapping a
+            // SimpleAssignment whose Left is a DeclarationExpression with a
+            // parenthesized variable designation. Intercept it BEFORE the generic
+            // ExpressionStatement arm so it does not fall through to the
+            // single-variable DeclarationExpression path (or IrUnsupportedStatement).
+            ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assign }
+                when TryExtractTupleDeconstruction(assign) is { } deconstruction => deconstruction,
             ExpressionStatementSyntax expr => new IrExpressionStatement(
                 _expressions.Extract(expr.Expression)
             ),
@@ -542,6 +559,90 @@ public sealed class IrStatementExtractor(
             : null;
 
         return new IrVariableDeclaration(name, type, initializer, IsConst: local.IsConst);
+    }
+
+    /// <summary>
+    /// Recognizes a deconstructing variable declaration — <c>var (a, b) = expr;</c>
+    /// — and lowers it to an <see cref="IrTupleDeconstruction"/>. Such a statement
+    /// is a <see cref="SimpleAssignmentExpression"/> whose <c>Left</c> is a
+    /// <see cref="DeclarationExpressionSyntax"/> (type <c>var</c>) carrying a
+    /// <see cref="ParenthesizedVariableDesignationSyntax"/>; each inner designation
+    /// is either a <see cref="SingleVariableDesignationSyntax"/> (bound name) or a
+    /// <see cref="DiscardDesignationSyntax"/> (discard → null element).
+    /// <para>
+    /// The match is gated on a <em>semantic</em> guard: the right-hand side's
+    /// type must be the one shape that actually IS a JS array — an array type or
+    /// a <c>[JsTuple]</c> record. A user type with a custom <c>Deconstruct</c>
+    /// method, or a native C# <c>ValueTuple</c> (deferred — research D7), would
+    /// also parse as this syntax but is NOT a JS array; array-destructuring it
+    /// would read <c>undefined</c> at runtime. For those, this method returns
+    /// null so the statement surfaces as <see cref="IrUnsupportedStatement"/>
+    /// (loud, per Constitution V) rather than mis-lowering silently.
+    /// </para>
+    /// Returns null for any other assignment shape too, so the caller falls back
+    /// to the ordinary expression-statement path. The
+    /// <see cref="IrTupleDeconstruction.IsConst"/> flag starts false and is
+    /// promoted by <see cref="PromoteEffectiveConsts"/> exactly like a normal
+    /// local (const unless a bound name is reassigned).
+    /// </summary>
+    private IrTupleDeconstruction? TryExtractTupleDeconstruction(AssignmentExpressionSyntax assign)
+    {
+        if (!assign.IsKind(SyntaxKind.SimpleAssignmentExpression))
+            return null;
+        if (assign.Left is not DeclarationExpressionSyntax declaration)
+            return null;
+        if (declaration.Designation is not ParenthesizedVariableDesignationSyntax parenthesized)
+            return null;
+        if (!IsJsArrayTupleInitializer(assign.Right))
+            return null;
+
+        var elements = new List<IrDeconstructionElement>(parenthesized.Variables.Count);
+        foreach (var variable in parenthesized.Variables)
+        {
+            switch (variable)
+            {
+                case SingleVariableDesignationSyntax single:
+                    elements.Add(new IrDeconstructionElement(single.Identifier.ValueText));
+                    break;
+                case DiscardDesignationSyntax:
+                    elements.Add(new IrDeconstructionElement(Name: null));
+                    break;
+                default:
+                    // Nested deconstruction (`(a, (b, c))`) is out of scope — bail
+                    // so the statement surfaces as unsupported rather than dropping
+                    // a malformed binding.
+                    return null;
+            }
+        }
+
+        var initializer = _expressions.Extract(assign.Right);
+        // Default to let; PromoteEffectiveConsts upgrades to const when no bound
+        // name is reassigned, mirroring IrVariableDeclaration handling.
+        return new IrTupleDeconstruction(elements, initializer, IsConst: false);
+    }
+
+    /// <summary>
+    /// True when <paramref name="initializer"/>'s semantic type is one of the two
+    /// shapes that ARE a JS array — an array type or a <c>[JsTuple]</c> record —
+    /// the only receivers for which TS array-destructuring (<c>const [a, b] =
+    /// …</c>) is sound. A user type exposing a <c>Deconstruct</c> method and a
+    /// native C# <c>ValueTuple</c> both parse as the deconstruction syntax yet
+    /// are not JS arrays at runtime; gating here keeps the interception off them
+    /// so they fall through to <see cref="IrUnsupportedStatement"/> (native
+    /// ValueTuple deconstruction is out of scope — research D7). Uses the
+    /// converted type so an implicit conversion to an array-shaped target is
+    /// honored, falling back to the expression's own type.
+    /// </summary>
+    private bool IsJsArrayTupleInitializer(ExpressionSyntax initializer)
+    {
+        var typeInfo = _semantic.GetTypeInfo(initializer);
+        var type = typeInfo.Type ?? typeInfo.ConvertedType;
+        return type switch
+        {
+            IArrayTypeSymbol => true,
+            INamedTypeSymbol named => named.HasJsTuple(),
+            _ => false,
+        };
     }
 
     private IrStatement ExtractIf(IfStatementSyntax ifs)

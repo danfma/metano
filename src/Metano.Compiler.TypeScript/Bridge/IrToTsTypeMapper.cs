@@ -25,10 +25,13 @@ public static class IrToTsTypeMapper
             ),
             IrSetTypeRef s => new TsNamedType("HashSet", [Map(s.ElementType, overrides)]),
             IrTupleTypeRef t => new TsTupleType(t.Elements.Select(e => Map(e, overrides)).ToList()),
-            IrFunctionTypeRef f => new TsFunctionType(
-                f.Parameters.Select(p => MapParameter(p, overrides)).ToList(),
-                Map(f.ReturnType, overrides),
-                f.ThisType is null ? null : Map(f.ThisType, overrides)
+            IrFunctionTypeRef f => MapFunctionType(f, overrides),
+            // Overloaded `[JsCallable]` Invoke → intersection of call signatures.
+            // `((v: T) => void) & ((u: (c: T) => T) => void)` — TS reads an
+            // intersection of function types as a single value callable with
+            // either signature, the structural mirror of an overloaded method.
+            IrCallableTypeRef c => new TsIntersectionType(
+                c.Signatures.Select(s => (TsType)MapFunctionType(s, overrides)).ToList()
             ),
             IrPromiseTypeRef pr => new TsPromiseType(Map(pr.ResultType, overrides)),
             IrGeneratorTypeRef g => new TsNamedType("Generator", [Map(g.YieldType, overrides)]),
@@ -162,6 +165,16 @@ public static class IrToTsTypeMapper
             IrPrimitive.TimeSpan => new TsNamedType("Temporal.Duration"),
             _ => new TsAnyType(),
         };
+
+    private static TsFunctionType MapFunctionType(
+        IrFunctionTypeRef f,
+        IrToTsTypeOverrides? overrides
+    ) =>
+        new(
+            f.Parameters.Select(p => MapParameter(p, overrides)).ToList(),
+            Map(f.ReturnType, overrides),
+            f.ThisType is null ? null : Map(f.ThisType, overrides)
+        );
 
     private static TsParameter MapParameter(IrParameter param, IrToTsTypeOverrides? overrides) =>
         new(

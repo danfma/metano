@@ -26,6 +26,32 @@ public sealed record IrVariableDeclaration(
 ) : IrStatement;
 
 /// <summary>
+/// A deconstructing variable declaration — <c>var (a, b) = expr;</c>. Lowers to
+/// a JS array-destructuring binding (<c>const [a, b] = expr</c>). Each element is
+/// a bound name or a discard (<see cref="IrDeconstructionElement.Name"/> null).
+/// Target-agnostic: a Dart target could consume the same shape as record-pattern
+/// destructuring.
+/// </summary>
+/// <param name="Elements">The positional binding slots, in declaration order.</param>
+/// <param name="Initializer">The right-hand side that produces the tuple value.</param>
+/// <param name="IsConst">True when no bound local is reassigned (mirrors
+/// <see cref="IrVariableDeclaration.IsConst"/>); false promotes the binding to <c>let</c>.</param>
+public sealed record IrTupleDeconstruction(
+    IReadOnlyList<IrDeconstructionElement> Elements,
+    IrExpression Initializer,
+    bool IsConst = true
+) : IrStatement;
+
+/// <summary>
+/// One slot of an <see cref="IrTupleDeconstruction"/>. A null
+/// <paramref name="Name"/> denotes a discard (<c>_</c>) — an empty hole in the
+/// emitted array pattern that binds nothing.
+/// </summary>
+/// <param name="Name">The bound local name, or null for a discard.</param>
+/// <param name="Type">The optional declared element type (usually null for <c>var</c>).</param>
+public sealed record IrDeconstructionElement(string? Name, IrTypeRef? Type = null);
+
+/// <summary>
 /// An <c>if</c> statement with optional <c>else</c> branch.
 /// </summary>
 public sealed record IrIfStatement(

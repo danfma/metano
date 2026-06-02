@@ -920,6 +920,13 @@ public sealed class ImportCollector(
             case TsVariableDeclaration varDecl:
                 CollectFromExpression(varDecl.Initializer, sink);
                 break;
+            case TsDestructuringDeclaration destructuring:
+                // The destructured initializer can carry an [Import]-facade
+                // template (e.g. `const [count, setCount] = createSignal(0)`),
+                // so its external imports must be collected the same way a
+                // plain variable initializer's are.
+                CollectFromExpression(destructuring.Initializer, sink);
+                break;
         }
     }
 

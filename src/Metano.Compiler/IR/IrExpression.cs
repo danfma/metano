@@ -73,6 +73,9 @@ public sealed record IrBaseExpression() : IrExpression;
 /// otherwise reachable from the parent node.
 /// </para>
 /// </summary>
+/// <param name="IsJsCallableInvoke">The call targets <c>Invoke</c> on a <c>[JsCallable]</c> interface; the receiver IS the JS function, so <c>recv.Invoke(args)</c> lowers to <c>recv(args)</c>.</param>
+/// <param name="IsJsTupleElement">The member access reads a positional element of a <c>[JsTuple]</c> value, lowering to array-index access <c>recv[i]</c>.</param>
+/// <param name="TupleIndex">The positional index (declaration order) when <see cref="IsJsTupleElement"/> is true; <c>-1</c> otherwise.</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
     string MemberName,
@@ -83,7 +86,10 @@ public sealed record IrMemberOrigin(
     bool IsPlainObjectInstanceMethod = false,
     bool IsStringEnumMember = false,
     bool IsDeclaringTypeExternal = false,
-    bool IsDeclaringTypeNoContainer = false
+    bool IsDeclaringTypeNoContainer = false,
+    bool IsJsCallableInvoke = false,
+    bool IsJsTupleElement = false,
+    int TupleIndex = -1
 );
 
 /// <summary>
@@ -157,13 +163,20 @@ public sealed record IrArgument(IrExpression Value, string? Name = null, bool Is
 /// every type as a real class (Dart) just render the normal
 /// <c>new T(args)</c>.
 /// </para>
+/// <para>
+/// <paramref name="IsJsTuple"/> flags constructions where the target type
+/// carries <c>[JsTuple]</c>: backends that emit array tuples (TS) lower
+/// <c>new T(a, b)</c> to a positional array literal <c>[a, b]</c>, mirroring
+/// the <c>[PlainObject]</c> object-literal lowering.
+/// </para>
 /// </summary>
 public sealed record IrNewExpression(
     IrTypeRef Type,
     IReadOnlyList<IrArgument> Arguments,
     bool IsPlainObject = false,
     IReadOnlyList<string>? ParameterNames = null,
-    bool IsObjectArgsCtor = false
+    bool IsObjectArgsCtor = false,
+    bool IsJsTuple = false
 ) : IrExpression;
 
 // -- Operators --

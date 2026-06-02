@@ -219,7 +219,8 @@ public static class IrClassExtractor
             IsPlainObject: SymbolHelper.HasPlainObject(type),
             IsException: IsException(type),
             IsBranded: SymbolHelper.HasBranded(type),
-            BrandedUnderlyingType: ExtractBrandedUnderlyingType(type, originResolver)
+            BrandedUnderlyingType: ExtractBrandedUnderlyingType(type, originResolver),
+            IsJsTuple: SymbolHelper.HasJsTuple(type)
         );
 
     /// <summary>
