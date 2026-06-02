@@ -7,9 +7,10 @@ public sealed record CounterGroup : JsxComponent
 {
     public override JsxElement Render()
     {
-        var countersCount = Solid.CreateSignal(1);
+        var (countersCount, setCountersCount) = Solid.CreateSignal(1);
 
-        MouseClickHandler<Html.Button> addCounter = _ => countersCount.Set(countersCount.Value + 1);
+        MouseClickHandler<Html.Button> addCounter = _ =>
+            setCountersCount.Invoke(countersCount() + 1);
 
         return new Html.Div
         {
@@ -21,7 +22,7 @@ public sealed record CounterGroup : JsxComponent
                     Children =
                     [
                         Solid.For(
-                            Enumerable.Range(0, countersCount.Value).ToList(),
+                            Enumerable.Range(0, countersCount()).ToList(),
                             (_, _) => new Counter()
                         ),
                     ],

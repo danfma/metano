@@ -2,32 +2,33 @@
 
 **Covers**: FR-015…FR-020, FR-022, FR-023 (User Story 4 + library recognition)
 
-The `ISignal`/`SignalWrapper` abstraction is a compile-time facade over the Solid signal tuple `[Accessor<T>, Setter<T>]`. No wrapper object survives in output. [FR-015]
+The signal binding is a `[JsTuple]` `Signal<T>(Func<T> Getter, ISignalSetter<T> Setter)` whose setter is a `[JsCallable]` interface — both erased compile-time facades over the Solid signal tuple `[Accessor<T>, Setter<T>]`. No wrapper object or declaration survives in output. Realized on the feature-003 `[JsTuple]`/`[JsCallable]`/tuple-deconstruction primitives. [FR-015]
 
-## R1 — Signal creation
+## R1 — Signal creation (destructured)
 
-**In**: `var count = Solid.CreateSignal(0);`
-**Out**: `const count = createSignal(0);` — import `{ createSignal }` from `"solid-js"`. [FR-015, FR-023]
-- No `SignalWrapper` / `new` / intermediate appears. [FR-015]
+**In**: `var (count, setCount) = Solid.CreateSignal(0);`
+**Out**: `const [count, setCount] = createSignal(0);` — import `{ createSignal }` from `"solid-js"`. [FR-015, FR-023]
+- No `Signal` / `ISignalSetter` / `new` / wrapper intermediate appears; the types are erased. [FR-015]
 
 ## R2 — Signal read
 
-**In**: `count.Value`
-**Out**: `count[0]()` [FR-016]
+**In**: `count()` (the getter `Func<T>` invocation)
+**Out**: `count()` [FR-016]
 
-## R3 — Signal write (direct form, per clarification)
+## R3 — Signal write (direct form via `[JsCallable]`)
 
-**In**: `count.Set(count.Value - 1)`
-**Out**: `count[1](count[0]() - 1)` [FR-016]
+**In**: `setCount.Invoke(count() - 1)`
+**Out**: `setCount(count() - 1)` [FR-016]
 
-**In**: `count.Set(x => x + 1)`
-**Out**: `count[1]((x) => x + 1)` [FR-016]
-- Value form is NOT wrapped in `() => v`. [FR-016]
+**In**: `setCount.Invoke(x => x + 1)`
+**Out**: `setCount((x) => x + 1)` [FR-016]
+- Value form is NOT wrapped in `() => v`; both `Invoke` overloads lower to a direct call. [FR-016]
+- No `count[0]()`/`count[1]()` index form, no `[Emit]` template. [FR-016]
 
 ## R4 — Effect
 
-**In**: `Solid.CreateEffect(() => Console.WriteLine(count.Value));`
-**Out**: `createEffect(() => console.log(count[0]()));` — import `{ createEffect }` from `"solid-js"`. [FR-017, FR-023]
+**In**: `Solid.CreateEffect(() => Console.WriteLine(count()));`
+**Out**: `createEffect(() => console.log(count()));` — import `{ createEffect }` from `"solid-js"`. [FR-017, FR-023]
 
 ## R5 — `For` helper → `<For>`
 

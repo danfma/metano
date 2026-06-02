@@ -5,11 +5,14 @@ namespace SampleCounterV5.Stores;
 
 public sealed class CounterStore
 {
-    private readonly ISignal<Counter> _counter;
+    private readonly System.Func<Counter> _get;
+    private readonly ISignalSetter<Counter> _set;
 
     private CounterStore()
     {
-        _counter = Solid.CreateSignal(Counter.Zero);
+        var (get, set) = Solid.CreateSignal(Counter.Zero);
+        _get = get;
+        _set = set;
 
         Solid.CreateEffect(() =>
         {
@@ -17,11 +20,11 @@ public sealed class CounterStore
         });
     }
 
-    public Counter State() => _counter.Value;
+    public Counter State() => _get();
 
-    public void Increment() => _counter.Set(x => x.Increment());
+    public void Increment() => _set.Invoke(x => x.Increment());
 
-    public void Decrement() => _counter.Set(x => x.Decrement());
+    public void Decrement() => _set.Invoke(x => x.Decrement());
 
     public static CounterStore Create() => new();
 }

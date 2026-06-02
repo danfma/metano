@@ -9,10 +9,10 @@ public sealed record Counter : JsxComponent
 
     public override JsxElement Render()
     {
-        var count = Solid.CreateSignal(Count);
+        var (count, setCount) = Solid.CreateSignal(Count);
 
-        MouseClickHandler<Html.Button> decrement = _ => count.Set(count.Value - 1);
-        MouseClickHandler<Html.Button> increment = _ => count.Set(count.Value + 1);
+        MouseClickHandler<Html.Button> decrement = _ => setCount.Invoke(count() - 1);
+        MouseClickHandler<Html.Button> increment = _ => setCount.Invoke(count() + 1);
 
         return new Html.Div
         {
@@ -25,7 +25,7 @@ public sealed record Counter : JsxComponent
                     OnClick = decrement,
                     Children = [Text("-")],
                 },
-                new Html.Span { ClassName = "display", Children = [Text(count.Value)] },
+                new Html.Span { ClassName = "display", Children = [Text(count())] },
                 new Html.Button
                 {
                     ClassName = "action",

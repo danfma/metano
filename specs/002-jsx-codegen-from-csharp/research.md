@@ -85,6 +85,8 @@ So `var count = Solid.CreateSignal(Count)` → `const count = createSignal(props
 - *Transpile `SignalWrapper` as a real runtime class*: produces a wrapper object in output, violating FR-015 ("no wrapper object allocated") and SC-002.
 - *Treat `ISignal` as `[InlineWrapper]`/branded*: the branded machinery targets primitive value wrappers, not a get/set tuple facade — wrong fit.
 
+> **Superseded (2026-06-01)**: D6's `ISignal.Value`/`.Set` facade with relocated `[Emit("$0[0]()")]`/`[Emit("$0[1]($1)")]` index templates is replaced by the feature-`003-js-interop-primitives` composition. The binding is now `[JsTuple, Import("Signal", from: "solid-js")] record Signal<T>(Func<T> Getter, [JsCallable] ISignalSetter<T> Setter)`: `var (count, setCount) = Solid.CreateSignal(0)` deconstructs to `const [count, setCount] = createSignal(0)`, reads are `count()`, and writes are `setCount(v)` / `setCount(c => c + 1)` via the `[JsCallable]` setter — **zero `[Emit]` templates**, no cryptic `count[0]()`/`count[1]()` output. The 002 reactivity refactor that adopts this composition depends on feature 003 landing first. FR-015/FR-016 and `contracts/reactivity-lowering.contract.md` reflect the new shape.
+
 ## D7 — `Solid.For` and render-prop children (FR-018)
 
 **Decision**: Map `Solid.For(items, (item, index) => element)` to a JSX element `<For each={items}>{(item, index) => <element>}</For>`, importing `For` from `solid-js`. This is handled in `IrToTsJsxBridge` as a recognized **JSX-producing helper call**: a call whose target is the `For` binding method emits a `TsJsxElement` named `For` with an `each` attribute (first arg) and a single **expression child** holding the lowered lambda (which itself returns JSX).

@@ -21,10 +21,10 @@ The recognition of "what is a renderable element" is **library-agnostic by desig
 ### Session 2026-06-01
 
 - Q: Target-library scope for this first attempt (v1)? → A: Solid + generic — SolidJS is the proving target, AND the library-agnostic recognition mechanism is validated against at least one imported library type (e.g. `solid-router`) to prove the marker set generalizes beyond native HTML.
-- Q: Does automatic reactivity (C# field/property mutation lowered to signal read/write) belong in scope, or only the explicit signal API? → A: Explicit signal API only. Lowering is mechanical: `ISignal<T>.Value` → signal read, `.Set(...)` → signal write, `Solid.CreateSignal` → `createSignal`, plus `CreateEffect`/`For`/`render`. Automatic field-mutation reactivity (the dataflow "hard 80%") is explicitly **out of scope** and deferred.
+- Q: Does automatic reactivity (C# field/property mutation lowered to signal read/write) belong in scope, or only the explicit signal API? → A: Explicit signal API only. Lowering is mechanical: `Solid.CreateSignal` returns a `[JsTuple]` `Signal<T>` destructured into a getter+setter pair, the getter (`Func<T>`) is invoked as `count()`, the setter (a `[JsCallable]` interface) is invoked as `setCount(v)`, plus `CreateEffect`/`For`/`render`. Automatic field-mutation reactivity (the dataflow "hard 80%") is explicitly **out of scope** and deferred. *(Updated: this clarification originally described an `ISignal<T>.Value`/`.Set` facade lowering to tuple-index forms (`count[0]()`/`count[1]()`); it now adopts the feature-003 `[JsTuple]`/`[JsCallable]`/tuple-deconstruction primitives — see Dependencies.)*
 - Q: How is the JSX attribute name derived (e.g. `ClassName` → `class`)? → A: camelCase of the C# property name by default (`ClassName` → `className`, `OnClick` → `onClick`), with `[Name("...")]` on the binding property as the override for HTML-literal forms. The SolidJS binding carries `[Name("class")]` on `Html.Element.ClassName` so its output is `class` (aligned with the Solid idiom); no built-in DOM attribute table lives in the compiler core.
 - Q: Which component members become props? → A: Settable properties (`{ get; init; }` / `{ get; set; }`) and record positional parameters become props; get-only / computed / expression-bodied / readonly members are treated as derived/internal and excluded from the `Props` type. `[Ignore]` excludes any member.
-- Q: How is `ISignal.Set(value)` emitted when the wrapper is elided? → A: Idiomatic direct form — `.Set(value)` → `setter(value)` and `.Set(updater)` → `setter(updater)`; the value is not wrapped in `() => value`. Function-typed signals (rare) get a defensive updater-wrap at planning time to disambiguate value-vs-updater.
+- Q: How is the signal setter emitted? → A: Idiomatic direct form via the `[JsCallable]` setter — `setCount.Invoke(value)` → `setCount(value)` and `setCount.Invoke(updater)` → `setCount(updater)`; the value is not wrapped in `() => value`. The setter's two `Invoke` overloads (value and updater) both lower to a direct call. *(Updated from the prior `ISignal.Set(...)` facade form.)*
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -84,17 +84,17 @@ When a component record (a renderable builder, not a native element) is instanti
 
 ### User Story 4 - SolidJS reactivity and helper primitives map to their runtime equivalents (Priority: P2)
 
-The developer uses the SolidJS binding surface — `Solid.CreateSignal`, `ISignal<T>.Value` / `.Set`, `Solid.CreateEffect`, `Solid.For`, and `SolidRenderer.Render` — and Metano maps each to its idiomatic SolidJS runtime form, eliding the C# wrapper abstractions.
+The developer uses the SolidJS binding surface — `Solid.CreateSignal` (returning a `[JsTuple]` `Signal<T>` destructured into a getter `Func<T>` + a `[JsCallable]` setter), `Solid.CreateEffect`, `Solid.For`, and `SolidRenderer.Render` — and Metano maps each to its idiomatic SolidJS runtime form, eliding the C# binding types.
 
 **Why this priority**: A UI component is inert without state. The explicit-signal API is the reactivity model for v1; it must lower cleanly for the proving target.
 
-**Independent Test**: Transpile a component using `var count = Solid.CreateSignal(0); ... count.Value ... count.Set(...)` and assert it emits `const count = createSignal(0)` with reads/writes mapped to the Solid signal tuple form, importing `createSignal` from `solid-js`.
+**Independent Test**: Transpile a component using `var (count, setCount) = Solid.CreateSignal(0); ... count() ... setCount.Invoke(...)` and assert it emits `const [count, setCount] = createSignal(0)` with reads as `count()` and writes as `setCount(...)`, importing `createSignal` from `solid-js`.
 
 **Acceptance Scenarios**:
 
-1. **Given** `Solid.CreateSignal(value)`, **When** transpiled, **Then** it emits `createSignal(value)` imported from `solid-js`, and the C# `SignalWrapper`/`ISignal` abstraction is fully elided (no wrapper object is allocated in output).
-2. **Given** a read `count.Value`, **When** transpiled, **Then** it emits the Solid signal read (getter-call form).
-3. **Given** a write `count.Set(v)` and `count.Set(fn)`, **When** transpiled, **Then** each emits the Solid signal write (setter-call form), preserving value-vs-updater semantics.
+1. **Given** `var (count, setCount) = Solid.CreateSignal(value)`, **When** transpiled, **Then** it emits `const [count, setCount] = createSignal(value)` imported from `solid-js`, and the C# `Signal<T>`/`ISignalSetter<T>` binding types are fully erased (no wrapper object is allocated in output).
+2. **Given** a read `count()`, **When** transpiled, **Then** it emits `count()` (a plain `Func<T>` invocation).
+3. **Given** a write `setCount.Invoke(v)` and `setCount.Invoke(fn)`, **When** transpiled, **Then** each emits `setCount(v)` / `setCount(fn)` (the `[JsCallable]` direct-call form), preserving value-vs-updater semantics.
 4. **Given** `Solid.CreateEffect(() => ...)`, **When** transpiled, **Then** it emits `createEffect(() => ...)` imported from `solid-js`.
 5. **Given** `Solid.For(items, (item, index) => element)`, **When** transpiled, **Then** it emits Solid's `<For each={items}>{(item, index) => ...}</For>` component usage.
 6. **Given** `SolidRenderer.Render(fn, container)`, **When** transpiled, **Then** it emits `render(fn, container)` imported from `solid-js/web`.
@@ -127,7 +127,7 @@ The marker attributes and types let Metano recognize "what counts as a renderabl
 - **Mixed children**: a `Children` list mixing native elements, component records, `Text(...)`, and helper calls (`Solid.For(...)`) preserves order and lowers each child by its own rule.
 - **Attribute value that is an expression vs literal**: string-literal attributes emit `attr="literal"`; non-literal expressions emit `attr={expr}`.
 - **Nested component composition**: a component returning other components (e.g. `CounterGroup` rendering `Counter` via `Solid.For`) lowers each composed component correctly.
-- **Wrapper-eliding helper that allocates**: a binding method whose C# body allocates a wrapper (e.g. `CreateSignal` returning `new SignalWrapper<T>(...)`) must collapse to the underlying runtime call in output, leaving no trace of the C# wrapper.
+- **Erased binding types**: the `[JsTuple]` `Signal<T>` and `[JsCallable]` `ISignalSetter<T>` binding types are erased — no `.ts` declaration is emitted for either, and `Solid.CreateSignal` collapses to the `createSignal(...)` runtime call, leaving no trace of the C# binding types in output.
 - **Reserved/colliding attribute names**: HTML attribute mapping (`ClassName` → `class`) must not collide with JSX/TS reserved words; the mapping is explicit per native element binding.
 
 ## Requirements *(mandatory)*
@@ -159,8 +159,8 @@ The marker attributes and types let Metano recognize "what counts as a renderabl
 
 #### Reactivity & helper mapping (explicit signal API only)
 
-- **FR-015**: The system MUST map the signal-creation binding (`Solid.CreateSignal(value)`) to `createSignal(value)` imported from `solid-js`, and MUST elide the C# `ISignal`/`SignalWrapper` abstraction so no wrapper object is allocated in the output.
-- **FR-016**: The system MUST map a signal read (`ISignal<T>.Value`) to the Solid signal getter-call form (`signal[0]()`) and a signal write to the idiomatic direct setter form: `.Set(value)` → `signal[1](value)` and `.Set(updater)` → `signal[1](updater)` (the value MUST NOT be wrapped in `() => value`). Function-typed signal values use a defensive updater-wrap to disambiguate value-vs-updater semantics.
+- **FR-015**: The system MUST map the signal-creation binding (`Solid.CreateSignal(value)`, returning a `[JsTuple, Import("Signal", from: "solid-js")]` `Signal<T>` record) to `createSignal(value)` imported from `solid-js`, and MUST erase the `Signal<T>` / `ISignalSetter<T>` binding types so no wrapper object or declaration is emitted. A consuming `var (count, setCount) = Solid.CreateSignal(value)` MUST lower to `const [count, setCount] = createSignal(value)` via tuple-deconstruction. *(Realized on the feature-003 `[JsTuple]` + tuple-deconstruction primitives.)*
+- **FR-016**: The system MUST map a signal read (the getter `Func<T>` invocation `count()`) to `count()`, and a signal write (the `[JsCallable]` setter) to the idiomatic direct call form: `setCount.Invoke(value)` → `setCount(value)` and `setCount.Invoke(updater)` → `setCount(updater)` (the value MUST NOT be wrapped in `() => value`). The setter's two `Invoke` overloads (value and updater) both lower to a direct receiver invocation. *(Realized on the feature-003 `[JsCallable]` primitive; no `[Emit]` template, no `count[0]()`/`count[1]()` index form.)*
 - **FR-017**: The system MUST map the effect binding (`Solid.CreateEffect(action)`) to `createEffect(...)` imported from `solid-js`.
 - **FR-018**: The system MUST map the list-rendering helper (`Solid.For(items, (item, index) => element)`) to Solid's `<For each={items}>{(item, index) => ...}</For>` component usage.
 - **FR-019**: The system MUST map the render-entry binding (`SolidRenderer.Render(fn, container)`) to `render(fn, container)` imported from `solid-js/web`.
@@ -180,7 +180,7 @@ The marker attributes and types let Metano recognize "what counts as a renderabl
 - **Native element**: a builder type marked `[JsxNativeElement("tag")]`; lowers to an intrinsic JSX element.
 - **Marked element type (`JsxElement`)**: the abstract renderable type the conversion targets; its presence in a position signals "emit as JSX."
 - **Builder contract (`IJsxComponentBuilder<TSelf, TElement>`)**: the marker interface tying a builder to the element type it renders, including the implicit `TSelf → TElement` conversion.
-- **Signal abstraction (`ISignal<T>` / `SignalWrapper`)**: the explicit reactive primitive; a compile-time abstraction elided into the target framework's signal form.
+- **Signal binding (`Signal<T>` / `ISignalSetter<T>`)**: the explicit reactive primitive — a `[JsTuple]` positional record (getter `Func<T>` + `[JsCallable]` setter) that erases into the target framework's signal tuple form. Built on the feature-003 `[JsTuple]`/`[JsCallable]` primitives.
 - **Reactivity / helper bindings**: the binding surface (`Solid.CreateSignal`, `CreateEffect`, `For`, `SolidRenderer.Render`) mapped to runtime equivalents via declarative import/emit mappings.
 - **Imported renderable type**: a renderable element/component sourced from an external package via `[Import]` (e.g. `solid-router`), recognized library-agnostically.
 
@@ -190,14 +190,15 @@ The marker attributes and types let Metano recognize "what counts as a renderabl
 
 - **SC-001**: The prototype `SampleSolidUi` project (`Counter` + `CounterGroup` + entry point) transpiles end-to-end into `.tsx` output with zero manual edits required to make it a valid JSX module.
 - **SC-002**: A developer can author a stateful counter component in C# and obtain idiomatic SolidJS TSX output whose function/props shape matches the documented target (named function, `<Name>Props` type, signal-based body) with no wrapper objects from the C# abstraction surviving in the output.
-- **SC-003**: 100% of the reactivity/helper bindings in the prototype (`CreateSignal`, `ISignal.Value`/`.Set`, `CreateEffect`, `For`, `render`) lower to their documented SolidJS runtime forms, verified by golden-output tests.
+- **SC-003**: 100% of the reactivity/helper bindings in the prototype (`CreateSignal` + tuple-deconstruction, getter `count()`, `[JsCallable]` setter `setCount(...)`, `CreateEffect`, `For`, `render`) lower to their documented SolidJS runtime forms — with no `count[0]()`/`count[1]()` index forms and no surviving `Signal`/`ISignalSetter` artifact — verified by golden-output tests.
 - **SC-004**: Library-agnostic recognition is proven against at least two distinct sources — native HTML elements **and** at least one type imported from an external package (e.g. `solid-router`) — with both emitted as correct JSX and imports added.
 - **SC-005**: The generated SolidJS output compiles and runs (renders the expected DOM) in a consuming Vite + SolidJS sample, mirroring the existing `sample-counter-*` consumer pattern.
 - **SC-006**: When the marker set cannot recognize a renderable type, the transpiler surfaces an actionable diagnostic instead of emitting silently-wrong code, in 100% of the identified unsupported-shape cases.
 
 ## Assumptions
 
-- **Explicit-signal reactivity only**: reactivity is expressed through the explicit signal API (`ISignal`/`CreateSignal`/`CreateEffect`); automatic field-mutation reactivity is deferred to a future feature (confirmed in Clarifications; consistent with the deferral recorded in prior reactive-lowering investigation).
+- **Explicit-signal reactivity only**: reactivity is expressed through the explicit signal API (`Solid.CreateSignal` → destructured getter/setter, `CreateEffect`); automatic field-mutation reactivity is deferred to a future feature (confirmed in Clarifications; consistent with the deferral recorded in prior reactive-lowering investigation).
+- **Depends on feature 003**: the signal binding is realized via the `[JsTuple]`, `[JsCallable]`, and tuple-deconstruction primitives delivered by feature `003-js-interop-primitives`. The original tuple-index facade (`ISignal.Value`/`.Set` → `count[0]()`/`count[1]()`) is superseded by that composition.
 - **SolidJS is the proving target**: v1 validates the pipeline against SolidJS, while the recognition mechanism is designed library-agnostic and additionally validated against one imported library type. React/Vue/Svelte targets are out of scope for this feature.
 - **The prototype bindings are the contract**: `bindings/Metano.TypeScript.SolidJs/` and `bindings/Metano.TypeScript.DOM/` define the intended binding surface; this feature implements the transpiler behavior that makes those prototypes lower correctly. The binding API may be refined if a marker proves insufficient (FR-024).
 - **Attribute names are camelCased by default, overridable per binding**: the default attribute name is the camelCased C# property name (`ClassName` → `className`, `OnClick` → `onClick`); HTML-literal names (`class`, `for`) are opt-in via `[Name("...")]` on the binding property. The compiler core hard-codes no DOM attribute table, keeping recognition library-agnostic.

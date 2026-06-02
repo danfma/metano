@@ -260,6 +260,14 @@ public static class IrToTsJsxComponentBridge
                     ? null
                     : Rewrite(vd.Initializer, propNames, referenced),
             },
+            // A deconstructing declaration (`var (count, setCount) =
+            // Solid.CreateSignal(Count)`) holds a prop read in its initializer;
+            // descend so `this.Count` is rewritten to the hoisted local. The
+            // bound element names are fresh locals, never prop reads.
+            IrTupleDeconstruction td => td with
+            {
+                Initializer = Rewrite(td.Initializer, propNames, referenced),
+            },
             IrIfStatement ifs => new IrIfStatement(
                 Rewrite(ifs.Condition, propNames, referenced),
                 RewriteList(ifs.Then, propNames, referenced),

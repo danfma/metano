@@ -262,16 +262,16 @@ public class SolidJsJsxTranspileTests
 
                 public override JsxElement Render()
                 {
-                    var count = Solid.CreateSignal(Count);
-                    Solid.CreateEffect(() => Console.WriteLine(count.Value));
-                    MouseClickHandler<Html.Button> decrement = _ => count.Set(count.Value - 1);
-                    MouseClickHandler<Html.Button> increment = _ => count.Set(x => x + 1);
+                    var (count, setCount) = Solid.CreateSignal(Count);
+                    Solid.CreateEffect(() => Console.WriteLine(count()));
+                    MouseClickHandler<Html.Button> decrement = _ => setCount.Invoke(count() - 1);
+                    MouseClickHandler<Html.Button> increment = _ => setCount.Invoke(x => x + 1);
                     return new Html.Div
                     {
                         Children =
                         [
                             new Html.Button { ClassName = "dec", OnClick = decrement, Children = [Text("-")] },
-                            new Html.Span { Children = [Text(count.Value)] },
+                            new Html.Span { Children = [Text(count())] },
                             new Html.Button { ClassName = "inc", OnClick = increment, Children = [Text("+")] },
                         ],
                     };
