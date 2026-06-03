@@ -575,6 +575,51 @@ public class SolidJsJsxTranspileTests
     }
 
     [Test]
+    public async Task PropReadInsideLinqChain_IsHoisted()
+    {
+        // A LINQ chain (Values.Select(...)) in a Render body must be descended so a
+        // prop read in its source is hoisted — and so the rewrite walker does not
+        // throw on the IrLinqChain node (which it previously had no arm for; the
+        // fail-loud default surfaced the gap on the SampleSolidUi CounterGroup).
+        var result = TranspileHelper.TranspileJsx(
+            $$"""
+            {{Usings}}
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public sealed record Counter : JsxComponent
+            {
+                public int Count { get; init; }
+                public override JsxElement Render() => new Html.Span { Children = [Text(Count)] };
+            }
+
+            [Transpile]
+            public sealed record CounterBoard : JsxComponent
+            {
+                public IReadOnlyList<int> Values { get; init; }
+                public override JsxElement Render() =>
+                    new Html.Div
+                    {
+                        Children =
+                        [
+                            Solid.For(
+                                Values.Select(v => v).ToArray(),
+                                (item, index) => new Counter { Count = item }
+                            ),
+                        ],
+                    };
+            }
+            """
+        );
+
+        var tsx = result["counter-board.tsx"];
+        await Assert.That(tsx).Contains("props$values");
+        await Assert.That(tsx).DoesNotContain("this.values");
+        await Assert.That(tsx).DoesNotContain("this.Values");
+    }
+
+    [Test]
     public async Task CrossPackageComponent_ResolvesThroughPackageImport()
     {
         // A component from a referenced [EmitPackage] library, used as `<Badge />`

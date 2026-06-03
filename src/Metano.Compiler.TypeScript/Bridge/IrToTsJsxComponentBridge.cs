@@ -523,6 +523,24 @@ public static class IrToTsJsxComponentBridge
             {
                 Arguments = rh.Arguments.Select(a => Rewrite(a, propNames, referenced)).ToList(),
             },
+            // A LINQ chain (`Items.Select(x => …)`) holds prop reads in its source
+            // and in each stage's argument lambdas — descend both so e.g.
+            // `this.Items` is hoisted. (The Phase-B Queryable expr-tree is null on
+            // the JSX path and carries closure captures, not this-prop reads.)
+            IrLinqChain linq => linq with
+            {
+                Source = Rewrite(linq.Source, propNames, referenced),
+                Stages = linq
+                    .Stages.Select(stage =>
+                        stage with
+                        {
+                            Arguments = stage
+                                .Arguments.Select(a => Rewrite(a, propNames, referenced))
+                                .ToList(),
+                        }
+                    )
+                    .ToList(),
+            },
             // True leaves — no nested expression to descend into.
             IrLiteral or IrIdentifier or IrTypeReference or IrThisExpression or IrBaseExpression =>
                 expr,

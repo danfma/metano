@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { linq, toArray } from "metano-runtime/system/linq";
 import { Counter } from "./counter";
 import { For, createSignal } from "solid-js";
@@ -17,7 +18,7 @@ export function CounterGroup(props: CounterGroupProps) {
             toArray(),
           )}
         >
-          {() => <Counter />}
+          {(_, _1) => <Counter />}
         </For>
       </div>
       <button class="add-action" onClick={addCounter}>

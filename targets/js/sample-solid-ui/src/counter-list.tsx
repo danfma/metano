@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Counter } from "./counter";
 import { For } from "solid-js";
 

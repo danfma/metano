@@ -14,7 +14,7 @@ export class Button implements IWidget {
   build(): HTMLElement {
     const btn = document.createElement("button");
     btn.textContent = this._label;
-    btn.onclick = (_) => this._onPressed();
+    btn.onclick = () => this._onPressed();
 
     return btn;
   }

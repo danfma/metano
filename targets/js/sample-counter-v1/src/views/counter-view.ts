@@ -17,7 +17,7 @@ export class CounterView implements ICounterView {
     this._text = text;
     const button = document.createElement("button");
     button.innerHTML = "Click me";
-    button.onclick = (_) => this.onButtonClick?.();
+    button.onclick = () => this.onButtonClick?.();
     root.append(button);
   }
 

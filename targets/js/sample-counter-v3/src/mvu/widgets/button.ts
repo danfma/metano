@@ -15,7 +15,7 @@ export class Button extends Widget {
   render(): HTMLElement {
     const btn = document.createElement("button");
     btn.textContent = this._label;
-    btn.onclick = (_) => this._onPressed();
+    btn.onclick = () => this._onPressed();
 
     return btn;
   }
