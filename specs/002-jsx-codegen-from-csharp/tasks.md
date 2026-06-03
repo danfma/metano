@@ -125,20 +125,20 @@ Compiler (target-agnostic core + TypeScript adapter). Core: `src/Metano.Compiler
 
 ## Phase 6: User Story 4 - SolidJS reactivity & helper primitives (Priority: P2)
 
-**Goal**: The explicit signal API and Solid helpers lower to idiomatic SolidJS, with the `ISignal`/`SignalWrapper` abstraction elided.
+**Goal**: The explicit signal API and Solid helpers lower to idiomatic SolidJS, with the `[JsTuple]` `Signal<T>` / `[JsCallable]` `ISignalSetter<T>` binding types erased.
 
-**Independent Test**: Transpile a component using `Solid.CreateSignal`/`.Value`/`.Set`/`CreateEffect`/`For`; assert the documented Solid forms with correct imports (contracts R1–R6).
+**Independent Test**: Transpile a component using `Solid.CreateSignal` (destructured), the getter `count()`, the `[JsCallable]` setter `setCount.Invoke(...)`, `CreateEffect`/`For`; assert the documented Solid forms with correct imports (contracts R1–R6).
 
 ### Binding refactor (FR-015, FR-016)
 
-- [X] T029 [US4] Refactor `bindings/Metano.TypeScript.SolidJs/Solid.cs` so `Solid.CreateSignal(value)` maps to `createSignal(value)` via `[Import("createSignal", from: "solid-js")]` + `[Emit("createSignal($0)")]`, dropping the `SignalWrapper`/`CreateRawSignal` indirection from emission (FR-015, contract R1).
-- [X] T030 [US4] Refactor `bindings/Metano.TypeScript.SolidJs/ISignal.cs` so `Value` getter emits `$0[0]()` and `Set(value)`/`Set(updater)` emit `$0[1]($1)` (direct form, no `() => v` wrap) via `[Emit]`/`[MapProperty]`/`[MapMethod]`; mark `bindings/Metano.TypeScript.SolidJs/SignalWrapper.cs` so it is not emitted (FR-016, contracts R2–R3, research D6).
+- [X] T029 [US4] Define the signal binding on the feature-003 primitives in `bindings/Metano.TypeScript.SolidJs/Signal.cs` (a `[JsTuple, Import("Signal", from: "solid-js")]` positional record `Signal<T>(Func<T> Getter, ISignalSetter<T> Setter)`) and map `Solid.CreateSignal(value)` in `bindings/Metano.TypeScript.SolidJs/Solid.cs` to `createSignal(value)` via `[Import("createSignal", from: "solid-js")]`. The `[JsTuple]` record erases so `var (count, setCount) = Solid.CreateSignal(value)` lowers to `const [count, setCount] = createSignal(value)` via tuple-deconstruction — no `Signal`/wrapper intermediate survives (FR-015, contract R1).
+- [X] T030 [US4] Define the signal setter on the feature-003 `[JsCallable]` primitive in `bindings/Metano.TypeScript.SolidJs/ISignalSetter.cs`: an interface whose `Invoke(value)` and `Invoke(updater)` overloads both lower to a direct receiver call — `setCount.Invoke(v)` → `setCount(v)`, `setCount.Invoke(fn)` → `setCount(fn)` (no `() => v` wrap, no `count[0]()`/`count[1]()` index form, no `[Emit]` template). The getter `Func<T>` invocation `count()` lowers to `count()` (FR-016, contracts R2–R3, research D6).
 
 ### Helper mapping (FR-017, FR-018, FR-019)
 
 - [X] T031 [US4] In `src/Metano.Compiler.TypeScript/Bridge/IrToTsJsxBridge.cs`, recognize the `Solid.For(items, lambda)` helper call and emit `<For each={items}>{lambda}</For>` as a `TsJsxElement("For", [each=…], [expressionChild(lambda)])`, importing `For` from `solid-js` (FR-018, contract R5, research D7).
 - [X] T032 [P] [US4] Confirm `Solid.CreateEffect` → `createEffect` (`solid-js`) and `SolidRenderer.Render` → `render` (`solid-js/web`) lower via the existing `[Import]` on `bindings/Metano.TypeScript.SolidJs/Solid.cs` / `Web/SolidRenderer.cs`; add `[Import]` where missing (FR-017, FR-019, contracts R4, R6).
-- [X] T033 [P] [US4] Add golden tests for contracts R1–R6 in `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` with expected `.tsx` fixtures, asserting no `SignalWrapper`/wrapper allocation survives (SC-002) (depends on T029–T032).
+- [X] T033 [P] [US4] Add golden tests for contracts R1–R6 in `tests/Metano.Tests/SolidJsJsxTranspileTests.cs` with expected `.tsx` fixtures, asserting no `Signal`/`ISignalSetter`/wrapper allocation survives (SC-002) (depends on T029–T032).
 
 **Checkpoint**: A stateful counter component lowers to idiomatic SolidJS with correct imports and no wrapper objects.
 
@@ -234,8 +234,8 @@ Setup + Foundational → US1 (MVP) → US2 (native elements) → US3 (compositio
 
 - [P] = different files, no dependency on an incomplete task.
 - [Story] label maps each task to its spec user story for traceability.
-- The signal lowering form (`const count = createSignal(...)`, read `count[0]()`, write `count[1](...)`) and `class`-vs-camelCase attribute rules are fixed by the spec Clarifications — pin them in golden fixtures.
+- The signal lowering form (`const [count, setCount] = createSignal(...)`, read `count()`, write `setCount(...)`) and `class`-vs-camelCase attribute rules are fixed by the spec Clarifications — pin them in golden fixtures.
 - Deferred (non-blocking, tracked in research.md): Solid `<For>` index-accessor adaptation, optional second diagnostic code (MS0027), `[JsxChildren]` marker for non-`Children` child slots.
-- Deferred from the dual-agent review (justified in code): FR-016 defensive updater-wrap for **function-typed** signals — a declarative `[Emit]` template cannot introspect whether the closed generic `T` is a delegate, and an unconditional wrap would break the common value-set; rare per spec. Rationale in `bindings/Metano.TypeScript.SolidJs/ISignal.cs`.
+- Deferred from the dual-agent review (justified in code): FR-016 defensive updater-wrap for **function-typed** signals — a declarative `[Emit]` template cannot introspect whether the closed generic `T` is a delegate, and an unconditional wrap would break the common value-set; rare per spec. Rationale in `bindings/Metano.TypeScript.SolidJs/ISignalSetter.cs`.
 - Out of scope, left untouched: stale committed Dart output under `targets/flutter/sample_counter` (pre-existing drift vs current `SampleCounterV1` source; not part of this feature).
 - Commit after each task or logical group on branch `002-jsx-codegen-from-csharp`; reference the spec, no AI attribution.

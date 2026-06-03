@@ -6,13 +6,13 @@
 
 ## Summary
 
-Lower C# *renderable record components* (records deriving from a `[JsxComponentBuilder]` base whose `Render()` returns the marked `JsxElement` type) into idiomatic SolidJS **TSX function components**. The work splits across four layers: (1) extend the target-agnostic IR + extractor to capture object-initializer member assignments and JSX recognition metadata; (2) add JSX AST nodes + printing + `.tsx` file selection to the TypeScript target; (3) add a `IrToTsJsxComponentBridge` that emits `export function <Name>(props: <Name>Props)` with the `Render()` body lowered and props hoisted; (4) refine the SolidJS bindings so `ISignal`/`SignalWrapper` collapse to the Solid `[get, set]` tuple via declarative `[Emit]`/`[Import]`. Recognition is **type-driven** (the type of a `new T { … }` is JSX-renderable), not conversion-driven, which sidesteps the unused implicit-conversion machinery. SolidJS is the proving target; library-agnostic recognition is validated against an imported type (e.g. `solid-router`). Validated end-to-end by transpiling `samples/SampleSolidUi/` into a new Vite + SolidJS consumer at `targets/js/sample-solid-ui/`, plus TUnit golden tests.
+Lower C# *renderable record components* (records deriving from a `[JsxComponentBuilder]` base whose `Render()` returns the marked `JsxElement` type) into idiomatic SolidJS **TSX function components**. The work splits across four layers: (1) extend the target-agnostic IR + extractor to capture object-initializer member assignments and JSX recognition metadata; (2) add JSX AST nodes + printing + `.tsx` file selection to the TypeScript target; (3) add a `IrToTsJsxComponentBridge` that emits `export function <Name>(props: <Name>Props)` with the `Render()` body lowered and props hoisted; (4) build the SolidJS signal binding on the feature-003 `[JsTuple]`/`[JsCallable]`/tuple-deconstruction primitives so `Signal<T>`/`ISignalSetter<T>` erase to the Solid `[get, set]` tuple (`const [count, setCount] = createSignal(...)`, read `count()`, write `setCount(...)`). Recognition is **type-driven** (the type of a `new T { … }` is JSX-renderable), not conversion-driven, which sidesteps the unused implicit-conversion machinery. SolidJS is the proving target; library-agnostic recognition is validated against an imported type (e.g. `solid-router`). Validated end-to-end by transpiling `samples/SampleSolidUi/` into a new Vite + SolidJS consumer at `targets/js/sample-solid-ui/`, plus TUnit golden tests.
 
 ## Technical Context
 
 **Language/Version**: C# 14 / .NET 10 (preview), Roslyn 5.3.0 (Microsoft.CodeAnalysis)
 
-**Primary Dependencies**: Roslyn (semantic model + syntax), ConsoleAppFramework (CLI), TUnit (.NET tests), Bun + Vite + `vite-plugin-solid` + `solid-js` (consumer), CSharpier (format)
+**Primary Dependencies**: Roslyn (semantic model + syntax), ConsoleAppFramework (CLI), TUnit (.NET tests), Bun + Vite + `vite-plugin-solid` + `solid-js` (consumer), CSharpier (format). Also depends on the feature-003 JS-interop primitives (`[JsTuple]`, `[JsCallable]`, tuple deconstruction) — the signal binding is realized on them.
 
 **Storage**: N/A (compiler; reads C# projects, writes `.ts`/`.tsx` files)
 
@@ -26,7 +26,7 @@ Lower C# *renderable record components* (records deriving from a `[JsxComponentB
 
 **Constraints**: Core (`Metano.Compiler`) MUST NOT depend on the TypeScript target (Constitution IV). Nullable representation stays `T | null = null` except props (optional `name?: T` per spec). All committed C# passes `dotnet csharpier .` with warnings-as-errors. Diagnostics are actionable with a stable `MS00NN` code.
 
-**Scale/Scope**: First vertical slice. Surface exercised by the prototype: one builder base, native HTML elements (`div`/`span`/`button`), component composition, `Solid.CreateSignal`/`ISignal.Value`/`.Set`/`CreateEffect`/`For`/`render`, and one imported renderable type. Control-flow helpers beyond `For`, stores/context/resources, and automatic field-mutation reactivity are explicitly out of scope.
+**Scale/Scope**: First vertical slice. Surface exercised by the prototype: one builder base, native HTML elements (`div`/`span`/`button`), component composition, `Solid.CreateSignal` (destructured getter `count()` + `[JsCallable]` setter `setCount(...)`)/`CreateEffect`/`For`/`render`, and one imported renderable type. Control-flow helpers beyond `For`, stores/context/resources, and automatic field-mutation reactivity are explicitly out of scope.
 
 ## Constitution Check
 
@@ -93,8 +93,8 @@ src/Metano.Compiler.TypeScript/                 # TypeScript adapter
 ├── Bridge/IrToTsJsxBridge.cs                   # NEW: new-with-initializer (JSX-typed) → TsJsxElement; helper-call JSX (For)
 └── Bridge/IrToTsExpressionBridge.cs            # EXTEND MapNewExpression to route JSX-typed initializers
 
-bindings/Metano.TypeScript.SolidJs/             # binding refinement (FR-015/016)
-├── ISignal.cs / SignalWrapper.cs / Solid.cs    # REFACTOR to declarative [Emit]/[Import] tuple facade; SignalWrapper not emitted
+bindings/Metano.TypeScript.SolidJs/             # signal binding on feature-003 primitives (FR-015/016)
+├── Signal.cs / ISignalSetter.cs / Solid.cs     # [JsTuple] Signal<T> + [JsCallable] setter; erase to the Solid [get, set] tuple
 ├── Solid.Ui.cs                                 # For helper → JSX <For> mapping marker
 └── Routing/ (NEW, optional)                    # one imported renderable type for SC-004 (e.g. a solid-router component stub)
 
@@ -120,7 +120,7 @@ The implementation is sliced so each phase is independently testable and builds 
 2. **US1 (P1) — component record → TSX function**. `IrToTsJsxComponentBridge`: recognition via `IrTypeSemantics.IsJsxComponent`, `export function`/`<Name>Props`, props hoisting + default application, `Render()` body lowering, JSX return. `[Name]` honored.
 3. **US2 (P2) — native element lowering**. JSX-typed `new T { … }` → `<tag …>` with attribute-name mapping (camelCase + `[Name]` override), `Children` → nested children, `Text(...)` → text/expression child, self-closing.
 4. **US3 (P2) — component composition**. Component-record `new T { … }` in renderable position → `<Name … />`; render-entry lambda → JSX.
-5. **US4 (P2) — SolidJS reactivity mapping + binding refactor**. `CreateSignal`→`createSignal`, `ISignal.Value`/`.Set` → tuple accessors, `CreateEffect`, `For`→`<For>`, `render`; `SignalWrapper` elided.
+5. **US4 (P2) — SolidJS reactivity mapping + signal binding on feature-003 primitives**. `CreateSignal`→`createSignal` (destructured `[get, set]`), getter `count()`, `[JsCallable]` setter `setCount(...)`, `CreateEffect`, `For`→`<For>`, `render`; `Signal<T>`/`ISignalSetter<T>` erased.
 6. **US5 (P3) — library-agnostic recognition + diagnostic**. Imported renderable type recognized (`[Import]`); `MS0026` for insufficient markers.
 7. **Validation — sample + consumer + golden tests**. Wire `SampleSolidUi` to transpile; create `targets/js/sample-solid-ui` consumer; golden tests per US; `bun run build` + `bun test` green (SC-001/005).
 
