@@ -86,7 +86,8 @@ public static class IrRuntimeRequirementScanner
 
         // Records carry value-equality semantics that require a hashing helper.
         // [PlainObject] records are emitted as bare interfaces / object literals,
-        // and [JsTuple] records as bare array-tuple aliases — neither synthesizes
+        // [JsTuple] records as bare array-tuple aliases, and [Branded] records as
+        // bare branded-primitive aliases (`string & { __brand }`) — none synthesize
         // equals/hashCode/with, so the helper isn't needed. JSX components are
         // emitted as function components (no class, no equals/hashCode/with) so
         // they likewise need no hashing helper.
@@ -94,6 +95,7 @@ public static class IrRuntimeRequirementScanner
             c.Semantics.IsRecord
             && !c.Semantics.IsPlainObject
             && !c.Semantics.IsJsTuple
+            && !c.Semantics.IsBranded
             && !c.Semantics.IsJsxComponent
         )
         {

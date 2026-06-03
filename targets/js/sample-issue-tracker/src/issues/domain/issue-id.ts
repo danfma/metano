@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, UUID } from "metano-runtime";
+import { UUID } from "metano-runtime";
 
 export type IssueId = string & { readonly __brand: "IssueId" };
 
