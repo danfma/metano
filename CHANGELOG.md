@@ -4,6 +4,53 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.4.0
+
+_2026-06-03_
+
+
+### ✨ Features
+
+* add JS-interop primitives ([JsTuple], [JsCallable], tuple deconstruction) ([9dab074](https://github.com/danfma/metano/commit/9dab07464c3c37756d67d60024d1fed8e1d64828))
+* add JSX/TSX code generation from C# components ([6e1279c](https://github.com/danfma/metano/commit/6e1279ce6431a3827d0664c5f42524400252b0f5))
+* **build:** incremental skip + ItemGroup args for MetanoTranspile ([#230](https://github.com/danfma/metano/issues/230)) ([b531c94](https://github.com/danfma/metano/commit/b531c94a78edcc7c8746df6f5e262c1ab702084d))
+* **compiler:** copy <MetanoAsset> static assets to generated output ([#199](https://github.com/danfma/metano/issues/199)) ([23078f6](https://github.com/danfma/metano/commit/23078f6866bb6a4c14d8f5dbbafdf3db5abd4174))
+
+### 🐛 Bug Fixes
+
+* **build:** consolidate Metano.Build targets + add MetanoEnabled opt-out ([#230](https://github.com/danfma/metano/issues/230)) ([618eede](https://github.com/danfma/metano/commit/618eede3b84eaa2f78f3cddb2fbf97df44d2f36e))
+* **compiler:** address PR review findings on asset copy ([#199](https://github.com/danfma/metano/issues/199)) ([a0805cb](https://github.com/danfma/metano/commit/a0805cb308c032ae4095b12487937ebf5f8d4c51))
+* correct JSX codegen lambda arity, text escaping, prop-rewrite coverage, and cross-package component imports ([d04ef79](https://github.com/danfma/metano/commit/d04ef79072749d17afaed3a9d5b69a85a3cd6d16)), closes [#002](https://github.com/danfma/metano/issues/002)
+* handle IrLinqChain in JSX prop-reference rewrite and regenerate samples ([eb1cccc](https://github.com/danfma/metano/commit/eb1cccc2ec75f8c9b2bc2c23ff66e51bfaca54d3)), closes [#002](https://github.com/danfma/metano/issues/002)
+* stop branded records from requesting an unused HashCode helper import ([e8692d2](https://github.com/danfma/metano/commit/e8692d284620065f216e864637f666655256821a))
+
+### ♻️ Refactor
+
+* **annotations:** hygiene sweep across Metano.Annotations ([#229](https://github.com/danfma/metano/issues/229)) ([54c82a1](https://github.com/danfma/metano/commit/54c82a11a8b3273d0087a5d7df28c084d06435e6))
+* **compiler:** consolidate fold helpers + Dart duplication ([#225](https://github.com/danfma/metano/issues/225)) ([ced1abb](https://github.com/danfma/metano/commit/ced1abb0822c0e0abe424b81de7bd12969a11f44))
+* **compiler:** dispatch JSON descriptor build on JsonPropertyKind enum ([#231](https://github.com/danfma/metano/issues/231)) ([f2efda6](https://github.com/danfma/metano/commit/f2efda6cedf2a0bdcc4e885973b93823d7ecb338))
+* **compiler:** extract [Inline] cascade arm into thin rewriter ([#221](https://github.com/danfma/metano/issues/221)) ([5cfe60b](https://github.com/danfma/metano/commit/5cfe60b309096085f14c8586e94701acb38cd428))
+* **compiler:** extract Emit/Import template lowering into rewriter ([#221](https://github.com/danfma/metano/issues/221)) ([b996868](https://github.com/danfma/metano/commit/b996868b122a6465ae09b9324a00510329c6eeaf))
+* **compiler:** extract extension-method cascade arm into rewriter ([#221](https://github.com/danfma/metano/issues/221)) ([ae84f53](https://github.com/danfma/metano/commit/ae84f53cf815b98d1b3b426664ed665398c344d5))
+* **compiler:** extract invocation cascade into rewriter chain ([#221](https://github.com/danfma/metano/issues/221)) ([460b9fb](https://github.com/danfma/metano/commit/460b9fbdaefcb7d4df780867f1821e6f982e505f))
+* **compiler:** extract named helpers per naming convention ([e8bb9c2](https://github.com/danfma/metano/commit/e8bb9c2d50618ae91a0fe6d2fbe788470fda690e))
+* **compiler:** extract TypeTransformer Parallel.For body ([#222](https://github.com/danfma/metano/issues/222)) ([ad20534](https://github.com/danfma/metano/commit/ad205346fc962d3ae6542aa3f5ffd1ff5ccb037c))
+* **compiler:** hoist ImportCollector skip-list into a HashSet ([#224](https://github.com/danfma/metano/issues/224)) ([195dedf](https://github.com/danfma/metano/commit/195dedfc2462361ac9831639cdeaa8af59247c78))
+* **compiler:** preserve concrete export kind in per-group cache ([#220](https://github.com/danfma/metano/issues/220)) ([fd29f23](https://github.com/danfma/metano/commit/fd29f23c6c8723396bb9c52c4d7dbbe6fc113f6f))
+* **compiler:** split IrExpressionExtractor into themed partials ([#221](https://github.com/danfma/metano/issues/221)) ([22d691b](https://github.com/danfma/metano/commit/22d691b50a4b4053018fa2640083e35a1a5196fd))
+* **compiler:** split IrToTsClassBridge into thematic partial files ([#223](https://github.com/danfma/metano/issues/223)) ([9c52ee8](https://github.com/danfma/metano/commit/9c52ee854554bfd03d9b5009c1b985fe1e77fe1f))
+* **compiler:** split IrToTsClassEmitter.Transform into named phases ([#223](https://github.com/danfma/metano/issues/223)) ([4ff44fd](https://github.com/danfma/metano/commit/4ff44fd5265cb06dc40692697f64e2c54b5c5fc6))
+* **compiler:** split TypeTransformer.BuildTypeStatements + drains ([#222](https://github.com/danfma/metano/issues/222)) ([5ef3b6f](https://github.com/danfma/metano/commit/5ef3b6fba5fbf427db010bacbd73c252e707dfc4))
+* **compiler:** unify diagnostics sink discipline across TS + Dart ([#226](https://github.com/danfma/metano/issues/226)) ([15a9d52](https://github.com/danfma/metano/commit/15a9d52a13b2147814ef59e3d36c35b4020e5395)), closes [#218](https://github.com/danfma/metano/issues/218)
+* migrate SolidJS signal binding onto JS-interop primitives ([6189a5e](https://github.com/danfma/metano/commit/6189a5e660b102d427c9f448bc72cbd76756dc37))
+
+### 📝 Documentation
+
+* **compiler:** refresh stale caching/annotation docstrings ([#232](https://github.com/danfma/metano/issues/232)) ([f0fc47b](https://github.com/danfma/metano/commit/f0fc47bb29a4b32334411cd21de7e11174b90b0f))
+* ratify constitution and add baseline spec with multi-target evolution roadmap ([6af0d36](https://github.com/danfma/metano/commit/6af0d368e84b514bd38cbbd45fa77908ece0be4e))
+* reconcile plan/tasks signal-lowering with shipped feature-003 primitives ([7bc2667](https://github.com/danfma/metano/commit/7bc266780d3d075d81f3f16b8b5416411ef547ac))
+* retire old-spec after baseline parity sign-off ([2ed272f](https://github.com/danfma/metano/commit/2ed272f77b6affe6f90adadeb6cc8d2125a98fec))
+
 ## 2.3.0
 
 _2026-05-12_
