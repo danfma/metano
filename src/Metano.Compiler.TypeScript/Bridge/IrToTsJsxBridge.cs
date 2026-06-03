@@ -88,12 +88,23 @@ public static class IrToTsJsxBridge
         // it as a transpilable intra-project component (R7 / FR-022). A
         // component or native element leaves Initializers' import channel null,
         // so nothing is attached for those.
+        var externalImports = ne.ExternalImports is { Count: > 0 } ? ne.ExternalImports : null;
+
+        // A component tag from a referenced [EmitPackage] assembly carries its
+        // cross-package origin on the type ref. Thread it on so the collector emits
+        // `import { Counter } from "pkg/..."` and records the dependency, rather than
+        // synthesizing a wrong intra-project import for the capitalized tag. Skipped
+        // when an external-import channel already resolves the tag (imported
+        // renderable) and null for intra-project components (origin is null).
+        var origin = externalImports is null ? IrToTsTypeMapper.TryResolveOrigin(ne.Type) : null;
+
         return new TsJsxElement(
             tag,
             attributes,
             children,
             SelfClosing: children.Count == 0,
-            ExternalImports: ne.ExternalImports is { Count: > 0 } ? ne.ExternalImports : null
+            ExternalImports: externalImports,
+            Origin: origin
         );
     }
 

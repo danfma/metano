@@ -310,6 +310,33 @@ public static class TranspileHelper
     ) => TranspileWithLibraryCore(librarySource, consumerSource).Files;
 
     /// <summary>
+    /// Cross-package variant of <see cref="TranspileJsx"/>: compiles a JSX-aware
+    /// library (carrying its own <c>[EmitPackage]</c>) and a consumer that references
+    /// it, both against the SolidJS + DOM bindings, then transpiles the consumer.
+    /// Pins that a JSX component tag from a referenced package resolves through the
+    /// cross-package import channel rather than a dangling intra-project import.
+    /// </summary>
+    public static Dictionary<string, string> TranspileJsxWithLibrary(
+        string librarySource,
+        string consumerSource
+    )
+    {
+        var libCompilation = CompileAssembly(
+            librarySource,
+            "TestLibrary",
+            OutputKind.DynamicallyLinkedLibrary,
+            extraReferences: JsxBindingReferences
+        );
+        var consumerCompilation = CompileAssembly(
+            consumerSource,
+            "TestConsumer",
+            OutputKind.DynamicallyLinkedLibrary,
+            extraReferences: JsxBindingReferences.Append(libCompilation.ToMetadataReference())
+        );
+        return TranspileCore(consumerCompilation).Files;
+    }
+
+    /// <summary>
     /// Same as <see cref="TranspileWithLibrary"/> but also returns the diagnostics
     /// emitted by the consumer's transformation. Used for tests that assert MS00xx
     /// codes around cross-package resolution.

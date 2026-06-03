@@ -1181,7 +1181,15 @@ public sealed class ImportCollector(
         }
         else if (jsx.TagName.Length > 0 && char.IsUpper(jsx.TagName[0]))
         {
-            sink.Names.Add(jsx.TagName);
+            // A component tag carrying a cross-package origin resolves through the
+            // cross-package channel (`import { Counter } from "pkg/..."` + a recorded
+            // dependency), exactly like a non-JSX cross-package type ref. Without
+            // this it would be mis-registered as an intra-project name and emit a
+            // dangling local import. The tag is a value (used as `<Counter />`).
+            if (jsx.Origin is { } origin)
+                sink.CrossPackageOrigins[jsx.TagName] = origin;
+            else
+                sink.Names.Add(jsx.TagName);
             sink.ValueNames.Add(jsx.TagName);
         }
         foreach (var attribute in jsx.Attributes)

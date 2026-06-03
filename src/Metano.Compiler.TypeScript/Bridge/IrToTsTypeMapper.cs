@@ -127,6 +127,18 @@ public static class IrToTsTypeMapper
     }
 
     /// <summary>
+    /// Resolves the cross-package <see cref="TsTypeOrigin"/> for a type reference, or
+    /// <see langword="null"/> when the type is intra-project (its <c>Origin</c> is
+    /// null). Lets a JSX component tag from a referenced <c>[EmitPackage]</c> assembly
+    /// be routed through the cross-package import channel instead of a wrong
+    /// intra-project import.
+    /// </summary>
+    public static TsTypeOrigin? TryResolveOrigin(IrTypeRef type) =>
+        type is IrNamedTypeRef { Origin: { } origin } named
+            ? BuildTsOrigin(origin, named.Name)
+            : null;
+
+    /// <summary>
     /// Converts a semantic <see cref="IrTypeOrigin"/> to a <see cref="TsTypeOrigin"/> whose
     /// <c>SubPath</c> is a kebab-case, namespace-relative path — matching what
     /// <c>TypeMapper.ResolveOrigin</c> produces on the legacy path.

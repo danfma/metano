@@ -305,7 +305,47 @@ public static class IrToTsJsxComponentBridge
             IrBlockStatement block => new IrBlockStatement(
                 RewriteList(block.Statements, propNames, referenced)
             ),
-            _ => stmt,
+            IrSwitchStatement sw => sw with
+            {
+                Expression = Rewrite(sw.Expression, propNames, referenced),
+                Cases = sw
+                    .Cases.Select(c =>
+                        c with
+                        {
+                            Labels = c
+                                .Labels.Select(l => Rewrite(l, propNames, referenced))
+                                .ToList(),
+                            Body = RewriteList(c.Body, propNames, referenced),
+                        }
+                    )
+                    .ToList(),
+            },
+            IrTryStatement ts => ts with
+            {
+                Body = RewriteList(ts.Body, propNames, referenced),
+                Catches = ts
+                    .Catches?.Select(c =>
+                        c with
+                        {
+                            Body = RewriteList(c.Body, propNames, referenced),
+                        }
+                    )
+                    .ToList(),
+                Finally = ts.Finally is null
+                    ? null
+                    : RewriteList(ts.Finally, propNames, referenced),
+            },
+            // True leaves — no nested expression/statement to descend into.
+            IrBreakStatement or IrContinueStatement or IrYieldBreakStatement => stmt,
+            // Fail loud instead of silently passing an unhandled node through: a
+            // prop read nested inside an un-rewritten node would leak as a `this`
+            // reference into the function component (no `this` at runtime). A new
+            // IR statement kind must add an explicit arm here.
+            _ => throw new NotSupportedException(
+                $"JSX prop-reference rewrite does not handle IR statement node "
+                    + $"'{stmt.GetType().Name}'. Add an explicit arm so a prop read nested "
+                    + "inside it is hoisted rather than leaking as a `this` reference."
+            ),
         };
 
     private static IrExpression Rewrite(
@@ -441,7 +481,60 @@ public static class IrToTsJsxComponentBridge
                     : Rewrite(tpl.Receiver, propNames, referenced),
                 Arguments = tpl.Arguments.Select(a => Rewrite(a, propNames, referenced)).ToList(),
             },
-            _ => expr,
+            IrTypeCheck tc => tc with
+            {
+                Expression = Rewrite(tc.Expression, propNames, referenced),
+            },
+            IrYieldExpression ye => ye with
+            {
+                Value = ye.Value is null ? null : Rewrite(ye.Value, propNames, referenced),
+            },
+            IrObjectLiteral ol => ol with
+            {
+                Properties = ol
+                    .Properties.Select(p => (p.Name, Rewrite(p.Value, propNames, referenced)))
+                    .ToList(),
+            },
+            IrIsPatternExpression ip => ip with
+            {
+                Expression = Rewrite(ip.Expression, propNames, referenced),
+            },
+            IrSwitchExpression sw => sw with
+            {
+                Scrutinee = Rewrite(sw.Scrutinee, propNames, referenced),
+                Arms = sw
+                    .Arms.Select(arm =>
+                        arm with
+                        {
+                            WhenClause = arm.WhenClause is null
+                                ? null
+                                : Rewrite(arm.WhenClause, propNames, referenced),
+                            Result = Rewrite(arm.Result, propNames, referenced),
+                        }
+                    )
+                    .ToList(),
+            },
+            IrLetExpression le => le with
+            {
+                Value = Rewrite(le.Value, propNames, referenced),
+                Body = Rewrite(le.Body, propNames, referenced),
+            },
+            IrRuntimeHelperCall rh => rh with
+            {
+                Arguments = rh.Arguments.Select(a => Rewrite(a, propNames, referenced)).ToList(),
+            },
+            // True leaves — no nested expression to descend into.
+            IrLiteral or IrIdentifier or IrTypeReference or IrThisExpression or IrBaseExpression =>
+                expr,
+            // Fail loud instead of silently passing an unhandled node through: a
+            // prop read nested inside an un-rewritten node would leak as a `this`
+            // reference into the function component (no `this` at runtime). A new
+            // IR expression kind must add an explicit arm here.
+            _ => throw new NotSupportedException(
+                $"JSX prop-reference rewrite does not handle IR expression node "
+                    + $"'{expr.GetType().Name}'. Add an explicit arm so a prop read nested "
+                    + "inside it is hoisted rather than leaking as a `this` reference."
+            ),
         };
     }
 }

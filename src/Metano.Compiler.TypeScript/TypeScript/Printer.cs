@@ -1300,8 +1300,9 @@ public sealed class Printer(string indent = "  ")
         switch (attribute.Value)
         {
             case TsJsxAttributeStringValue str:
-                _sb.Write("=");
-                _sb.WriteQuoted(str.Value);
+                _sb.Write("=\"");
+                _sb.Write(EscapeJsxAttribute(str.Value));
+                _sb.Write("\"");
                 break;
             case TsJsxAttributeExpressionValue expr:
                 _sb.Write("={");
@@ -1320,7 +1321,7 @@ public sealed class Printer(string indent = "  ")
         switch (child)
         {
             case TsJsxText text:
-                _sb.Write(text.Value);
+                _sb.Write(EscapeJsxText(text.Value));
                 break;
             case TsJsxExpressionChild expr:
                 _sb.Write("{");
@@ -1332,6 +1333,31 @@ public sealed class Printer(string indent = "  ")
                 break;
         }
     }
+
+    /// <summary>
+    /// Escapes literal JSX text so metacharacters survive the TSX parser. A bare
+    /// <c>&lt;</c> opens a child tag and <c>{</c> opens an expression container —
+    /// both hard parse errors — so they, plus <c>&amp;</c> (which would otherwise
+    /// start an HTML entity), are emitted as character references. <c>&gt;</c> and
+    /// <c>}</c> (legal as bare text) are escaped defensively to avoid ambiguity with
+    /// adjacent tag/expression delimiters.
+    /// </summary>
+    private static string EscapeJsxText(string value) =>
+        value
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("{", "&#123;")
+            .Replace("}", "&#125;");
+
+    /// <summary>
+    /// Escapes a double-quoted JSX attribute value. A JSX attribute string is NOT a
+    /// JS string literal (a backslash is literal, not an escape), so the delimiting
+    /// quote and an entity-starting <c>&amp;</c> are emitted as character references
+    /// rather than backslash escapes; a stray <c>&lt;</c> is escaped for HTML safety.
+    /// </summary>
+    private static string EscapeJsxAttribute(string value) =>
+        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace("\"", "&quot;");
 
     /// <summary>
     /// Renders a <see cref="TsTemplate"/> by walking the template string and emitting

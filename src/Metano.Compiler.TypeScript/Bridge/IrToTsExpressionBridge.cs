@@ -739,13 +739,14 @@ public static class IrToTsExpressionBridge
         // identifier to emit) — matching the legacy `LambdaHandler`
         // behavior. Otherwise the full inferred type is emitted so the
         // generated TS keeps call-site type information.
+        var mappedParameters = lambda
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                LowerLambdaParameterType(p)
+            ))
+            .ToList();
         var parameters = DeduplicateParameterNames(
-            DropTrailingDiscardParameters(lambda.Parameters)
-                .Select(p => new TsParameter(
-                    TypeScriptNaming.ToCamelCase(p.Name),
-                    LowerLambdaParameterType(p)
-                ))
-                .ToList()
+            DropTrailingErasedDiscards(lambda.Parameters, mappedParameters)
         );
         var body = IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry);
         // Named function expression: emitted when the lambda is the
@@ -782,32 +783,37 @@ public static class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// Drops trailing C# discard parameters (named <c>_</c>) from a lambda's
-    /// parameter list. A discard is never read in the body, and a JS arrow can
-    /// safely declare fewer parameters than its delegate target supplies (a
-    /// function of lower arity is assignable to one of higher arity), so removing
-    /// trailing discards produces the idiomatic zero/short-arg form
-    /// (<c>_ =&gt; …</c> → <c>() =&gt; …</c>, <c>(item, _) =&gt; …</c> →
-    /// <c>(item) =&gt; …</c>). This is what JSX contexts need: an event handler
-    /// hoisted to a <c>const</c> loses its contextual type, so a kept <c>_</c>
-    /// parameter would be an implicit <c>any</c>; and a Solid <c>&lt;For&gt;</c>
-    /// render prop's <c>index</c> is an <c>Accessor&lt;number&gt;</c>, which a
-    /// kept <c>number</c>-typed discard would clash with. Only TRAILING discards
-    /// are dropped — a discard followed by a used parameter must stay to preserve
+    /// Drops a trailing C# discard parameter (named <c>_</c>) ONLY when its TS type
+    /// annotation was erased (<see cref="LowerLambdaParameterType"/> returned
+    /// <see langword="null"/> — e.g. a JSX event handler whose <c>[JsxNativeElement]</c>
+    /// delegate type has no emitted name). Keeping such a discard would emit an
+    /// implicit-<c>any</c> parameter (<c>(_) =&gt; …</c>) that fails under
+    /// <c>noImplicitAny</c>; the discard is never read, and these lambdas only appear
+    /// in contextually-typed callback positions (JSX handlers, hoisted <c>const</c>
+    /// handlers), so the idiomatic zero/short-arg form
+    /// (<c>_ =&gt; …</c> → <c>() =&gt; …</c>) is safe.
+    /// <para>
+    /// A discard that DOES carry a TS type is KEPT (<c>(_: number) =&gt; …</c>): it has
+    /// no implicit-<c>any</c> risk, and dropping it would change the lambda's arity —
+    /// breaking direct call sites (<c>f(42)</c> against a now-zero-arg arrow, TS2554)
+    /// and runtime <c>fn.length</c> overload dispatch. Only TRAILING erased discards
+    /// are dropped — a discard followed by a kept parameter must stay to preserve
     /// positional binding.
+    /// </para>
     /// </summary>
-    private static IReadOnlyList<IrParameter> DropTrailingDiscardParameters(
-        IReadOnlyList<IrParameter> parameters
+    private static List<TsParameter> DropTrailingErasedDiscards(
+        IReadOnlyList<IrParameter> source,
+        List<TsParameter> mapped
     )
     {
-        var lastKept = parameters.Count - 1;
+        var lastKept = mapped.Count - 1;
         while (
-            lastKept >= 0 && string.Equals(parameters[lastKept].Name, "_", StringComparison.Ordinal)
+            lastKept >= 0
+            && string.Equals(source[lastKept].Name, "_", StringComparison.Ordinal)
+            && mapped[lastKept].Type is null
         )
             lastKept--;
-        return lastKept == parameters.Count - 1
-            ? parameters
-            : parameters.Take(lastKept + 1).ToList();
+        return lastKept == mapped.Count - 1 ? mapped : mapped.Take(lastKept + 1).ToList();
     }
 
     /// <summary>

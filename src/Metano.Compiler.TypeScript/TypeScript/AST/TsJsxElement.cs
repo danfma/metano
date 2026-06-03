@@ -16,10 +16,17 @@ namespace Metano.Compiler.TypeScript.AST;
 /// here lets the collector resolve it to the right module (mirrors
 /// <see cref="TsTemplate.ExternalImports"/>). Null for plain components, whose
 /// import is resolved from their declaring type.</param>
+/// <param name="Origin">The cross-package origin of a component tag sourced from a
+/// referenced <c>[EmitPackage]</c> assembly. Non-null only for a component whose
+/// declaring type lives in another package; the collector routes such a tag through
+/// the cross-package import channel (and records the package dependency) instead of
+/// synthesizing a wrong intra-project import. Null for intra-project components
+/// (resolved from the local barrel) and for native/external-import elements.</param>
 public sealed record TsJsxElement(
     string TagName,
     IReadOnlyList<TsJsxAttribute> Attributes,
     IReadOnlyList<TsJsxChild> Children,
     bool SelfClosing = false,
-    IReadOnlyList<IrExternalImport>? ExternalImports = null
+    IReadOnlyList<IrExternalImport>? ExternalImports = null,
+    TsTypeOrigin? Origin = null
 ) : TsExpression;

@@ -487,4 +487,133 @@ public class SolidJsJsxTranspileTests
 
         await Assert.That(diagnostics.Any(d => d.Code == "MS0026")).IsTrue();
     }
+
+    // ── Review regression guards (code-review/codex findings) ───────────────
+
+    [Test]
+    public async Task TypedTrailingDiscardLambda_PreservesArity()
+    {
+        // A trailing discard whose TS type IS emitted must NOT be dropped: dropping
+        // it changes the arrow's arity and breaks direct call sites (`f(42)` →
+        // TS2554) and runtime `fn.length` dispatch. Only erased-type discards (JSX
+        // handlers) collapse to `() => …`. Regression for the previously global
+        // discard-drop that reduced every lambda's arity.
+        var result = TranspileHelper.TranspileJsx(
+            $$"""
+            {{Usings}}
+            using System;
+
+            [Transpile]
+            [ExportedAsModule]
+            public static class Math2
+            {
+                public static int Apply()
+                {
+                    Func<int, int> f = _ => 1;
+                    return f(42);
+                }
+            }
+            """
+        );
+
+        var ts = string.Join("\n", result.Values);
+        await Assert.That(ts).Contains("(_: number) => 1");
+        await Assert.That(ts).DoesNotContain("= () => 1");
+    }
+
+    [Test]
+    public async Task JsxTextChild_EscapesMetacharacters()
+    {
+        // Literal `Text(...)` content with `<`/`&`/`>` must be escaped: a bare `<`
+        // opens a child tag and breaks the TSX parser. Regression for raw text
+        // emission in the printer.
+        var result = TranspileHelper.TranspileJsx(
+            $$"""
+            {{Usings}}
+
+            [Transpile]
+            public sealed record Note : JsxComponent
+            {
+                public override JsxElement Render() =>
+                    new Html.Span { Children = [Text("a < b & c > d")] };
+            }
+            """
+        );
+
+        var tsx = result["note.tsx"];
+        await Assert.That(tsx).Contains("a &lt; b &amp; c &gt; d");
+        await Assert.That(tsx).DoesNotContain("a < b & c > d");
+    }
+
+    [Test]
+    public async Task PropReadInsideSwitchExpression_IsHoisted()
+    {
+        // A prop read nested in a `switch` expression must be rewritten to the
+        // hoisted local. The rewrite walker previously skipped switch expressions,
+        // leaking `this.count` into the function component (no `this` at runtime).
+        var result = TranspileHelper.TranspileJsx(
+            $$"""
+            {{Usings}}
+
+            [Transpile]
+            public sealed record Badge : JsxComponent
+            {
+                public int Count { get; init; }
+                public override JsxElement Render() =>
+                    new Html.Span
+                    {
+                        Children = [Text(Count switch { 0 => "none", _ => "some" })],
+                    };
+            }
+            """
+        );
+
+        var tsx = result["badge.tsx"];
+        await Assert.That(tsx).Contains("const props$count = props.count ?? 0;");
+        await Assert.That(tsx).DoesNotContain("this.count");
+        await Assert.That(tsx).DoesNotContain("this.Count");
+    }
+
+    [Test]
+    public async Task CrossPackageComponent_ResolvesThroughPackageImport()
+    {
+        // A component from a referenced [EmitPackage] library, used as `<Badge />`
+        // in a consumer's JSX, must import from the package — not synthesize a
+        // dangling intra-project import. Regression for ResolveTag dropping the
+        // component's cross-package origin.
+        var library = """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+            using Metano.TypeScript.SolidJs;
+            using Metano.TypeScript.SolidJs.Web;
+            using Metano.TypeScript.DOM;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("badge-lib")]
+
+            namespace BadgeLib;
+
+            public sealed record Badge : JsxComponent
+            {
+                public override JsxElement Render() => new Html.Span { Children = [Text("b")] };
+            }
+            """;
+        var consumer = $$"""
+            {{Usings}}
+            using BadgeLib;
+
+            [Transpile]
+            public sealed record Host : JsxComponent
+            {
+                public override JsxElement Render() => new Html.Div { Children = [new Badge()] };
+            }
+            """;
+
+        var result = TranspileHelper.TranspileJsxWithLibrary(library, consumer);
+
+        var tsx = result["host.tsx"];
+        await Assert.That(tsx).Contains("<Badge />");
+        await Assert.That(tsx).Contains("from \"badge-lib");
+        await Assert.That(tsx).DoesNotContain("\"./badge\"");
+    }
 }
