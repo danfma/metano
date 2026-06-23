@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano;
 
@@ -57,7 +58,8 @@ public static class PackageJsonWriter
         string? authoritativePackageName = null,
         IReadOnlyDictionary<string, string>? crossPackageDependencies = null,
         bool isExecutable = false,
-        string? srcRoot = null
+        string? srcRoot = null,
+        string? importAlias = null
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -84,7 +86,8 @@ public static class PackageJsonWriter
             srcRelative,
             distDirRelativeToPackageRoot,
             hasRootIndex,
-            outputPrefix
+            outputPrefix,
+            importAlias
         );
 
         JsonObject root;
@@ -112,13 +115,15 @@ public static class PackageJsonWriter
         WriteIfMissing(root, "sideEffects", false);
 
         // Imports follow the same write-if-missing rule as the
-        // scalar fields above: the transpiler seeds `#` and `#/*`
-        // on first creation, but a consumer who has retargeted
-        // either alias by hand (e.g. pointing `#/*` at `./lib/*`
-        // for a non-default build directory) keeps that mapping
-        // across regenerations. Keys absent from the existing
-        // object are added; existing keys — including transpiler-
-        // shaped ones from a previous run — are left alone.
+        // scalar fields above: the transpiler seeds its alias keys
+        // (`#` and `#/*` by default, or `#<alias>` and `#<alias>/*`
+        // when --import-alias is set) on first creation, but a
+        // consumer who has retargeted an alias by hand (e.g. pointing
+        // `#/*` at `./lib/*` for a non-default build directory) keeps
+        // that mapping across regenerations. Keys absent from the
+        // existing object are added; existing keys — including a
+        // host project's own `#` and transpiler-shaped ones from a
+        // previous run — are left alone.
         SeedMissingImports(root, imports);
 
         // Exports merge additively — see `MergeTranspilerManagedExports`
@@ -354,16 +359,24 @@ public static class PackageJsonWriter
         string srcRelative,
         string distRelative,
         bool hasRootIndex,
-        string outputPrefix
+        string outputPrefix,
+        string? importAlias
     )
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
         var dist = NormalizePath(distRelative).TrimEnd('/');
-        var distBase = outputPrefix.Length > 0 ? $"{dist}/{outputPrefix}" : dist;
+        var prefix = outputPrefix.TrimEnd('/');
+        var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
+
+        // Default `#` → keys `#/*` and `#`; a configured alias → `#<alias>/*` and
+        // `#<alias>`. When an alias is set the default `#`/`#/*` keys are never emitted,
+        // so a host project's own `#` alias is left untouched.
+        var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
+        var starKey = $"{aliasPrefix}/*";
 
         var imports = new JsonObject
         {
-            ["#/*"] = new JsonObject
+            [starKey] = new JsonObject
             {
                 ["types"] = $"./{distBase}/*.d.ts",
                 ["import"] = $"./{distBase}/*.js",
@@ -373,7 +386,7 @@ public static class PackageJsonWriter
 
         if (hasRootIndex)
         {
-            imports["#"] = new JsonObject
+            imports[aliasPrefix] = new JsonObject
             {
                 ["types"] = $"./{distBase}/index.d.ts",
                 ["import"] = $"./{distBase}/index.js",
@@ -398,7 +411,8 @@ public static class PackageJsonWriter
     )
     {
         var dist = NormalizePath(distRelative).TrimEnd('/');
-        var distBase = outputPrefix.Length > 0 ? $"{dist}/{outputPrefix}" : dist;
+        var prefix = outputPrefix.TrimEnd('/');
+        var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
         var exports = new JsonObject();
 
         var barrels = files
@@ -417,8 +431,8 @@ public static class PackageJsonWriter
             // root index.ts with prefix "domain" → "./domain"
             // users/index.ts with prefix "domain" → "./domain/users"
             string subpath;
-            if (outputPrefix.Length > 0)
-                subpath = parent.Length == 0 ? $"./{outputPrefix}" : $"./{outputPrefix}/{parent}";
+            if (prefix.Length > 0)
+                subpath = parent.Length == 0 ? $"./{prefix}" : $"./{prefix}/{parent}";
             else
                 subpath = parent.Length == 0 ? "." : $"./{parent}";
 

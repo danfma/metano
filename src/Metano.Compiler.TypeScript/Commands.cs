@@ -16,6 +16,7 @@ public class Commands
     /// <param name="packageRoot">Root directory of the consumer package (default: parent of --output)</param>
     /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
     /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
+    /// <param name="importAlias">Isolated Node.js subpath-imports alias for internal imports in the generated TypeScript (e.g. `contracts` → `#contracts/...`). When set, generated internal imports and the package.json `#&lt;alias&gt;`/`#&lt;alias&gt;/*` entries use this key instead of the default `#`, so generated code can live in a subfolder of a host project without colliding with that project's own `#` alias. A leading `#` is optional; use a simple identifier (letters, digits, `-`, `_`); blank means unset (default `#`). Does not affect cross-package imports, which use the referenced package's npm name.</param>
     /// <param name="skipPackageJson">Skip generating/updating package.json</param>
     /// <param name="namespaceBarrels">Emit an additional src/index.ts root barrel mirroring the C# namespace hierarchy via `export namespace` blocks (opt-in; see ADR-0006).</param>
     /// <param name="stripInterfacePrefix">Drop the C# `I` prefix from generated interface names when it is followed by another uppercase letter (opt-in). Collisions with sibling types in the same namespace keep the prefix and emit MS0017.</param>
@@ -33,6 +34,7 @@ public class Commands
         string? packageRoot = null,
         string dist = "./dist",
         string? srcRoot = null,
+        string? importAlias = null,
         bool skipPackageJson = false,
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
@@ -47,6 +49,7 @@ public class Commands
         {
             NamespaceBarrels = namespaceBarrels,
             StripInterfacePrefix = stripInterfacePrefix,
+            ImportAlias = importAlias,
         };
 
         var options = new TranspileOptions(
@@ -90,7 +93,8 @@ public class Commands
                     authoritativePackageName: target.LastEmitPackageName,
                     crossPackageDependencies: target.LastCrossPackageDependencies,
                     isExecutable: target.LastIsExecutable,
-                    srcRoot: srcRoot
+                    srcRoot: srcRoot,
+                    importAlias: importAlias
                 );
 
                 foreach (var d in pkgDiagnostics)
