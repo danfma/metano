@@ -4,6 +4,15 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.0
+
+_2026-06-23_
+
+
+### ✨ Features
+
+* add configurable isolated subpath-import alias for generated packages ([a0856f2](https://github.com/danfma/metano/commit/a0856f26c4f806259f995d663bcf7815f0052cab))
+
 ## 2.4.0
 
 _2026-06-03_
