@@ -68,6 +68,40 @@ public class CyclicReferenceTests
     }
 
     [Test]
+    public async Task TwoFileCycle_UnderImportAlias_StillDetectedAndRendersAliasKey()
+    {
+        // The same Node ↔ Edge cycle is still detected when a custom import alias is
+        // configured. Both types share the root namespace, so their real imports are
+        // relative (`./edge`, `./node`); the cycle renderer synthesizes the alias prefix
+        // for display, which is what this asserts (exercising the alias-aware display).
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace Demo
+            {
+                [Transpile]
+                public class Node
+                {
+                    public Edge? OutgoingEdge { get; set; }
+                }
+
+                [Transpile]
+                public class Edge
+                {
+                    public Node? Target { get; set; }
+                }
+            }
+            """,
+            importAlias: "contracts"
+        );
+
+        var cycle = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.CyclicReference);
+        await Assert.That(cycle).IsNotNull();
+        await Assert.That(cycle!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        // The diagnostic message reflects the configured alias key, not the default `#`.
+        await Assert.That(cycle.Message).Contains("#contracts/");
+    }
+
+    [Test]
     public async Task SelfReferenceWithoutPropertyImport_NoDiagnostic()
     {
         // A type that references its own type name doesn't create a file-level import

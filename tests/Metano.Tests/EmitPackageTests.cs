@@ -922,6 +922,117 @@ public class EmitPackageTests
         await Assert.That(exports!.ContainsKey("./nested")).IsTrue();
     }
 
+    // ── Configurable isolated import alias (feature 004) ─────────────
+
+    [Test]
+    public async Task Imports_WithImportAlias_UsesAliasScopedKeysOnly()
+    {
+        var tempDir = CreateTempDir();
+        // Generated code lands in a subfolder of an existing project's src root.
+        var srcDir = Path.Combine(tempDir, "src", "abc", "contracts");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("serialization/index.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "abc-contracts",
+            importAlias: "contracts"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var imports = pkg["imports"] as JsonObject;
+        await Assert.That(imports).IsNotNull();
+        // Alias-scoped keys present.
+        await Assert.That(imports!.ContainsKey("#contracts/*")).IsTrue();
+        await Assert.That(imports.ContainsKey("#contracts")).IsTrue();
+        // Default keys are NOT emitted when an alias is set.
+        await Assert.That(imports.ContainsKey("#/*")).IsFalse();
+        await Assert.That(imports.ContainsKey("#")).IsFalse();
+        // Targets are scoped to the output subfolder.
+        var wildcard = imports["#contracts/*"] as JsonObject;
+        await Assert
+            .That(wildcard!["default"]?.GetValue<string>())
+            .IsEqualTo("./src/abc/contracts/*.ts");
+        await Assert
+            .That(wildcard["types"]?.GetValue<string>())
+            .IsEqualTo("./dist/abc/contracts/*.d.ts");
+    }
+
+    [Test]
+    public async Task Imports_WithImportAlias_PreservesHostOwnHashAlias()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src", "abc", "contracts");
+        Directory.CreateDirectory(srcDir);
+        // Host project already uses `#/*` for its own src root.
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "host-app",
+              "imports": {
+                "#/*": { "default": "./src/*.ts" }
+              }
+            }
+            """
+        );
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "host-app",
+            importAlias: "contracts"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var imports = pkg["imports"] as JsonObject;
+        await Assert.That(imports).IsNotNull();
+        // Host's own `#/*` is left exactly as it was.
+        var hostAlias = imports!["#/*"] as JsonObject;
+        await Assert.That(hostAlias!["default"]?.GetValue<string>()).IsEqualTo("./src/*.ts");
+        // Metano's isolated alias is added alongside, without touching `#`.
+        await Assert.That(imports.ContainsKey("#contracts/*")).IsTrue();
+        await Assert.That(imports.ContainsKey("#contracts")).IsTrue();
+        await Assert.That(imports.ContainsKey("#")).IsFalse();
+    }
+
+    [Test]
+    public async Task Imports_NestedOutputWithTrailingSlash_NoDoubleSlash()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src", "domain");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        // Output dir carries a trailing separator — the path-joining must still
+        // produce single-slash segments (no `.../domain//index.d.ts`).
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir + Path.DirectorySeparatorChar,
+            files,
+            authoritativePackageName: "test-pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var imports = pkg["imports"] as JsonObject;
+        await Assert.That(imports).IsNotNull();
+        var wildcard = imports!["#/*"] as JsonObject;
+        await Assert.That(wildcard!["types"]?.GetValue<string>()).DoesNotContain("//");
+        await Assert.That(wildcard["import"]?.GetValue<string>()).DoesNotContain("//");
+        await Assert.That(wildcard["default"]?.GetValue<string>()).DoesNotContain("//");
+    }
+
     private string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"metasharp-test-{Guid.NewGuid():N}");

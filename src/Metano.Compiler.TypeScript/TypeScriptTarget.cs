@@ -78,14 +78,22 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public bool StripInterfacePrefix { get; init; }
 
     /// <summary>
-    /// Cache fingerprint (ADR-0021): pin the two emit-affecting flags so
-    /// flipping either one invalidates the incremental cache. Format is
-    /// keep small + ordered so future additions extend it without
+    /// Optional isolated subpath-imports alias for internal imports. <c>null</c> keeps
+    /// the default <c>#</c>. When set (e.g. <c>contracts</c>), generated internal imports
+    /// use <c>#contracts/...</c> and the package.json gets only the alias-scoped keys,
+    /// leaving a host project's own <c>#</c> untouched. Set via <c>--import-alias</c>.
+    /// </summary>
+    public string? ImportAlias { get; init; }
+
+    /// <summary>
+    /// Cache fingerprint (ADR-0021): pin the emit-affecting flags so
+    /// flipping any one invalidates the incremental cache. Format is
+    /// kept small + ordered so future additions extend it without
     /// breaking older caches (the format-version bump in
     /// <see cref="TranspilationCache"/> handles structural breaks).
     /// </summary>
     public string ConfigurationFingerprint =>
-        BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix);
+        BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix, ImportAlias);
 
     /// <summary>
     /// Per-target fingerprint pinned into the incremental cache key
@@ -95,8 +103,10 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// </summary>
     private static string BuildConfigurationFingerprint(
         bool namespaceBarrels,
-        bool stripInterfacePrefix
-    ) => $"namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix}";
+        bool stripInterfacePrefix,
+        string? importAlias
+    ) =>
+        $"namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix};importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}";
 
     /// <summary>
     /// Builds the cache-fingerprint composite consumed by
@@ -127,6 +137,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         {
             NamespaceBarrels = NamespaceBarrels,
             StripInterfacePrefix = StripInterfacePrefix,
+            ImportAlias = ImportAlias,
             CacheOutputDir = outputDir,
             CacheFilePrefix = filePrefix,
             CacheConfigurationFingerprint = BuildCacheFingerprint(

@@ -9,9 +9,36 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// dot-separated prefix across all transpilable types) so that subpath imports
 /// (<c>#/foo/bar</c>) and on-disk file paths can both be computed consistently.
 /// </summary>
-public sealed class PathNaming(string rootNamespace)
+public sealed class PathNaming(string rootNamespace, string? importAlias = null)
 {
     public string RootNamespace { get; } = rootNamespace;
+
+    /// <summary>
+    /// Subpath-imports key prefix for internal imports — <c>#</c> by default, or
+    /// <c>#&lt;alias&gt;</c> when an import alias is configured. Keeping internal imports
+    /// under an isolated key lets generated code live in a subfolder of a host project
+    /// without colliding with that project's own <c>#</c> alias.
+    /// </summary>
+    private string AliasPrefix { get; } = NormalizeImportAliasPrefix(importAlias);
+
+    /// <summary>
+    /// Normalizes a raw <c>--import-alias</c> value into a subpath-imports key prefix.
+    /// Blank (null/empty/whitespace) → <c>#</c> (the default). A single leading <c>#</c>
+    /// is optional, so both <c>contracts</c> and <c>#contracts</c> yield <c>#contracts</c>.
+    /// This is the single source of truth for the alias key shape, shared by
+    /// <see cref="CyclicReferenceDetector"/> and <c>PackageJsonWriter</c>.
+    /// </summary>
+    public static string NormalizeImportAliasPrefix(string? importAlias)
+    {
+        if (string.IsNullOrWhiteSpace(importAlias))
+            return "#";
+
+        var name = importAlias.Trim();
+        if (name.StartsWith('#'))
+            name = name[1..].Trim();
+
+        return name.Length == 0 ? "#" : "#" + name;
+    }
 
     public static string GetNamespace(INamedTypeSymbol type)
     {
@@ -81,10 +108,10 @@ public sealed class PathNaming(string rootNamespace)
             return "./" + SymbolHelper.ToKebabCase(typeName);
         }
 
-        // Different namespace: import the namespace barrel.
+        // Different namespace: import the namespace barrel under the local alias key.
         if (toParts.Length == 0)
-            return "#";
-        return "#/" + string.Join("/", toParts);
+            return AliasPrefix;
+        return AliasPrefix + "/" + string.Join("/", toParts);
     }
 
     /// <summary>

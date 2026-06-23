@@ -208,13 +208,16 @@ Rules:
 - **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/002-jsx-codegen-from-csharp/plan.md`
-(first vertical slice of JSX/TSX code generation from C# renderable record components,
-proving target SolidJS, with library-agnostic renderable-type recognition).
+Active feature plan: `specs/004-configurable-import-alias/plan.md`
+(opt-in, isolated Node.js subpath-import alias for internal imports in generated
+TypeScript — `--import-alias` CLI flag / `MetanoImportAlias` MSBuild property — so
+generated code can be emitted into a subfolder of an existing npm project without
+colliding with that project's own `#` alias; default behavior is unchanged).
 For technologies, project structure, and other context, read that plan and its sibling
 `spec.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/`.
-The foundational JS-interop primitives — `[JsTuple]`, `[JsCallable]`, tuple deconstruction —
-are merged at `specs/003-js-interop-primitives/plan.md`; the 002 reactivity refactor consumes them.
+Prior shipped features: JSX/TSX code generation at `specs/002-jsx-codegen-from-csharp/plan.md`;
+foundational JS-interop primitives (`[JsTuple]`, `[JsCallable]`, tuple deconstruction)
+at `specs/003-js-interop-primitives/plan.md`.
 The project baseline + multi-target evolution roadmap remains at
 `specs/001-project-baseline-evolution/plan.md`.
 <!-- SPECKIT END -->

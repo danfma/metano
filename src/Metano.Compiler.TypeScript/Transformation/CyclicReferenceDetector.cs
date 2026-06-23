@@ -17,8 +17,9 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// Each distinct cycle is reported once — the visited set guarantees we don't re-enter
 /// nodes whose subgraphs have already been explored.
 ///
-/// Only intra-project paths (the root alias <c>#</c> and subpath aliases starting with
-/// <c>#/</c>) participate in the graph. Imports from external packages
+/// Only intra-project paths (the configurable root alias — <c>#</c> by default, or
+/// <c>#&lt;alias&gt;</c> when <c>--import-alias</c> is set — plus its <c>/</c> subpaths)
+/// participate in the graph. Imports from external packages
 /// (<c>metano-runtime</c>, <c>@js-temporal/polyfill</c>, etc.) are skipped — their
 /// resolution lives outside Metano's view of the world.
 /// </summary>
@@ -26,11 +27,14 @@ public static class CyclicReferenceDetector
 {
     public static void DetectAndReport(
         IReadOnlyList<TsSourceFile> files,
-        Action<MetanoDiagnostic> reportDiagnostic
+        Action<MetanoDiagnostic> reportDiagnostic,
+        string? importAlias = null
     )
     {
         if (files.Count == 0)
             return;
+
+        var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
 
         // Build the file index keyed by the kebab-cased relative path WITHOUT the .ts
         // extension. For index files we also register the directory barrel alias:
@@ -64,7 +68,9 @@ public static class CyclicReferenceDetector
             {
                 if (stmt is not TsImport import)
                     continue;
-                if (!TryNormalizeLocalImport(import.From, key, out var targetImportKey))
+                if (
+                    !TryNormalizeLocalImport(import.From, key, aliasPrefix, out var targetImportKey)
+                )
                     continue;
                 if (byImportKey.TryGetValue(targetImportKey, out var canonicalTarget))
                     targets.Add(canonicalTarget);
@@ -83,7 +89,16 @@ public static class CyclicReferenceDetector
         {
             if (visited.Contains(start))
                 continue;
-            DfsVisit(start, graph, visited, onStack, pathStack, seenCycles, reportDiagnostic);
+            DfsVisit(
+                start,
+                graph,
+                visited,
+                onStack,
+                pathStack,
+                seenCycles,
+                reportDiagnostic,
+                aliasPrefix
+            );
         }
     }
 
@@ -94,7 +109,8 @@ public static class CyclicReferenceDetector
         HashSet<string> onStack,
         List<string> pathStack,
         HashSet<string> seenCycles,
-        Action<MetanoDiagnostic> reportDiagnostic
+        Action<MetanoDiagnostic> reportDiagnostic,
+        string aliasPrefix
     )
     {
         onStack.Add(node);
@@ -117,11 +133,20 @@ public static class CyclicReferenceDetector
                 // from each starting node we DFS into it from.
                 var canonical = Canonicalize(cycle);
                 if (seenCycles.Add(canonical))
-                    reportDiagnostic(BuildDiagnostic(cycle));
+                    reportDiagnostic(BuildDiagnostic(cycle, aliasPrefix));
             }
             else if (!visited.Contains(target))
             {
-                DfsVisit(target, graph, visited, onStack, pathStack, seenCycles, reportDiagnostic);
+                DfsVisit(
+                    target,
+                    graph,
+                    visited,
+                    onStack,
+                    pathStack,
+                    seenCycles,
+                    reportDiagnostic,
+                    aliasPrefix
+                );
             }
         }
 
@@ -154,9 +179,9 @@ public static class CyclicReferenceDetector
         return string.Join("→", rotated);
     }
 
-    private static MetanoDiagnostic BuildDiagnostic(IReadOnlyList<string> cycle)
+    private static MetanoDiagnostic BuildDiagnostic(IReadOnlyList<string> cycle, string aliasPrefix)
     {
-        var chain = string.Join(" → ", cycle.Select(ToDisplayImportPath));
+        var chain = string.Join(" → ", cycle.Select(key => ToDisplayImportPath(key, aliasPrefix)));
         return new MetanoDiagnostic(
             MetanoDiagnosticSeverity.Warning,
             DiagnosticCodes.CyclicReference,
@@ -164,17 +189,23 @@ public static class CyclicReferenceDetector
         );
     }
 
-    private static bool TryNormalizeLocalImport(string from, string importerKey, out string key)
+    private static bool TryNormalizeLocalImport(
+        string from,
+        string importerKey,
+        string aliasPrefix,
+        out string key
+    )
     {
-        if (from == "#")
+        if (from == aliasPrefix)
         {
             key = "";
             return true;
         }
 
-        if (from.StartsWith("#/", StringComparison.Ordinal))
+        var aliasSubpathPrefix = aliasPrefix + "/";
+        if (from.StartsWith(aliasSubpathPrefix, StringComparison.Ordinal))
         {
-            key = from[2..];
+            key = from[aliasSubpathPrefix.Length..];
             return true;
         }
 
@@ -191,13 +222,13 @@ public static class CyclicReferenceDetector
         return false;
     }
 
-    private static string ToDisplayImportPath(string key)
+    private static string ToDisplayImportPath(string key, string aliasPrefix)
     {
         if (key == "index")
-            return "#";
+            return aliasPrefix;
         if (key.EndsWith("/index", StringComparison.Ordinal))
-            return "#/" + key[..^"/index".Length];
-        return "#/" + key;
+            return aliasPrefix + "/" + key[..^"/index".Length];
+        return aliasPrefix + "/" + key;
     }
 
     private static string StripTsExtension(string fileName) =>

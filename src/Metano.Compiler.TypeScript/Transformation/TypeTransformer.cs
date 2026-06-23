@@ -67,6 +67,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public bool StripInterfacePrefix { get; init; }
 
     /// <summary>
+    /// Optional isolated subpath-imports alias for internal imports, forwarded to
+    /// <see cref="PathNaming"/> and <see cref="CyclicReferenceDetector"/>. <c>null</c>
+    /// keeps the default <c>#</c> behavior. Set via <c>--import-alias</c>.
+    /// </summary>
+    public string? ImportAlias { get; init; }
+
+    /// <summary>
     /// Output directory for the active run, supplied by the host
     /// (<see cref="Metano.Compiler.TranspilerHost"/>) so the per-group
     /// cache (ADR-0023) can live next to the generated <c>.ts</c> files.
@@ -267,7 +274,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         // All callers now use the explicit TypeMappingContext — no static assignment needed.
 
-        _pathNaming = new PathNaming(ir.LocalRootNamespace);
+        _pathNaming = new PathNaming(ir.LocalRootNamespace, ImportAlias);
 
         var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
 
@@ -407,7 +414,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // diagnostics for each distinct cycle. Cycles are reported as warnings — the
         // build proceeds, but the consumer sees the chain in their build log instead
         // of debugging it through tsgo's downstream error.
-        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic);
+        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic, ImportAlias);
 
         DrainCrossPackageMisses(typeMappingContext);
         DrainCrossPackageDependencies(typeMappingContext);

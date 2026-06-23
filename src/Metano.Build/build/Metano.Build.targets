@@ -19,6 +19,7 @@
       MetanoDist             (optional)  JS dist dir relative to package root (default: ./dist)
       MetanoPackageRoot      (optional)  Root of the npm package (default: parent of OutputDir)
       MetanoSrcRoot          (optional)  TS source root relative to package root (default: inferred)
+      MetanoImportAlias      (optional)  Isolated subpath-imports alias for internal imports in generated TS (e.g. `contracts` → `#contracts/...`). Lets generated code live in a subfolder of an existing npm project without colliding with that project's own `#` alias. Leading `#` optional; use a simple identifier (letters, digits, `-`, `_`). Default: unset (uses `#`). When several Metano projects target the same package, give each a distinct alias.
       MetanoSkipPackageJson  (optional)  true to skip package.json generation (default: false)
       MetanoShowTimings      (optional)  true to print timing info (default: false)
       MetanoNamespaceBarrels (optional)  true to emit a root src/index.ts barrel mirroring C# namespaces (default: false)
@@ -124,6 +125,10 @@
       <_MetanoArg
         Include="--src-root &quot;$(MetanoSrcRoot)&quot;"
         Condition="'$(MetanoSrcRoot)' != ''"
+      />
+      <_MetanoArg
+        Include="--import-alias &quot;$(MetanoImportAlias)&quot;"
+        Condition="'$(MetanoImportAlias)' != ''"
       />
       <_MetanoArg Include="--skip-package-json" Condition="'$(MetanoSkipPackageJson)' == 'true'" />
       <_MetanoArg Include="--namespace-barrels" Condition="'$(MetanoNamespaceBarrels)' == 'true'" />
