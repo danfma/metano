@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "#/todos";
+import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "#/sample-todo/service/todos";
 
 // Each test imports the app fresh by cache-busting the dynamic import. The Program
 // module instantiates a singleton TodoStore at top level, so without this every test

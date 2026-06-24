@@ -4,10 +4,10 @@ import {
   statusCounts,
   issuesForAssignee,
   readyForReview,
-} from "#/issues/application/issue-queries";
-import { IssueStatus } from "#/issues/domain/issue-status";
-import { IssuePriority } from "#/issues/domain/issue-priority";
-import { UserId } from "#/shared-kernel/user-id";
+} from "#/sample-issue-tracker/issues/application/issue-queries";
+import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
+import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
+import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import { makeIssue } from "../../helpers";
 
 describe("IssueQueries", () => {

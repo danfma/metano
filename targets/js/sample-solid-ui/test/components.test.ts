@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { Counter } from "../src/counter.tsx";
-import { CounterGroup } from "../src/counter-group.tsx";
+import { Counter } from "../src/sample-solid-ui/ui/counter.tsx";
+import { CounterGroup } from "../src/sample-solid-ui/ui/counter-group.tsx";
 
 // Smoke test: the JSX component records lower to SolidJS function components.
 // The repo has no DOM test harness (no happy-dom/jsdom), so rendering the

@@ -14,8 +14,8 @@
 import { describe, expect, test } from "bun:test";
 import { type AnyOperator, getStages, linq, select, where } from "metano-runtime";
 import { runArrayProvider } from "#/provider/array-provider";
-import { User } from "#/user";
-import { UserQueries } from "#/user-queries";
+import { User } from "#/sample-queryable-arrays/user";
+import { UserQueries } from "#/sample-queryable-arrays/user-queries";
 
 const sample: User[] = [
   new User("Alice", 30, true),

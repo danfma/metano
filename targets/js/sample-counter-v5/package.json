@@ -30,13 +30,13 @@
     }
   },
   "exports": {
-    "./models": {
-      "types": "./dist/models/index.d.ts",
-      "import": "./dist/models/index.js"
+    "./sample-counter-v5/models": {
+      "types": "./dist/sample-counter-v5/models/index.d.ts",
+      "import": "./dist/sample-counter-v5/models/index.js"
     },
-    "./stores": {
-      "types": "./dist/stores/index.d.ts",
-      "import": "./dist/stores/index.js"
+    "./sample-counter-v5/stores": {
+      "types": "./dist/sample-counter-v5/stores/index.d.ts",
+      "import": "./dist/sample-counter-v5/stores/index.js"
     }
   }
 }

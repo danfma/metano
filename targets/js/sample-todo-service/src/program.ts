@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Hono } from "hono";
-import { TodoStore } from "./todos";
+import { TodoStore } from "#/sample-todo/service/todos";
 
 const app = new Hono();
 const store = new TodoStore();

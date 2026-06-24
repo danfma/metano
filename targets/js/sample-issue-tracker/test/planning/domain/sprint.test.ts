@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
-import { Sprint } from "#/planning/domain/sprint";
-import { IssueId } from "#/issues/domain/issue-id";
+import { Sprint } from "#/sample-issue-tracker/planning/domain/sprint";
+import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 
 function d(iso: string): Temporal.PlainDate {
   return Temporal.PlainDate.from(iso);

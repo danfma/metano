@@ -30,25 +30,29 @@
     "test": "bun test"
   },
   "exports": {
+    "./sample-issue-tracker": {
+      "types": "./dist/sample-issue-tracker/index.d.ts",
+      "import": "./dist/sample-issue-tracker/index.js"
+    },
+    "./sample-issue-tracker/issues/application": {
+      "types": "./dist/sample-issue-tracker/issues/application/index.d.ts",
+      "import": "./dist/sample-issue-tracker/issues/application/index.js"
+    },
+    "./sample-issue-tracker/issues/domain": {
+      "types": "./dist/sample-issue-tracker/issues/domain/index.d.ts",
+      "import": "./dist/sample-issue-tracker/issues/domain/index.js"
+    },
+    "./sample-issue-tracker/planning/domain": {
+      "types": "./dist/sample-issue-tracker/planning/domain/index.d.ts",
+      "import": "./dist/sample-issue-tracker/planning/domain/index.js"
+    },
+    "./sample-issue-tracker/shared-kernel": {
+      "types": "./dist/sample-issue-tracker/shared-kernel/index.d.ts",
+      "import": "./dist/sample-issue-tracker/shared-kernel/index.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./issues/application": {
-      "types": "./dist/issues/application/index.d.ts",
-      "import": "./dist/issues/application/index.js"
-    },
-    "./issues/domain": {
-      "types": "./dist/issues/domain/index.d.ts",
-      "import": "./dist/issues/domain/index.js"
-    },
-    "./planning/domain": {
-      "types": "./dist/planning/domain/index.d.ts",
-      "import": "./dist/planning/domain/index.js"
-    },
-    "./shared-kernel": {
-      "types": "./dist/shared-kernel/index.d.ts",
-      "import": "./dist/shared-kernel/index.js"
     }
   }
 }

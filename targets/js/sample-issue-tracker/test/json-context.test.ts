@@ -9,9 +9,9 @@ import {
   IssueSnapshot,
   IssueStatus,
   IssueType,
-} from "#/issues/domain";
-import { JsonContext } from "#/json-context";
-import { UserId } from "#/shared-kernel";
+} from "#/sample-issue-tracker/issues/domain";
+import { JsonContext } from "#/sample-issue-tracker/json-context";
+import { UserId } from "#/sample-issue-tracker/shared-kernel";
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
