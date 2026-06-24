@@ -121,8 +121,8 @@ Multi-project .NET solution: target-agnostic core in `src/Metano.Compiler/`, Typ
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T026 [P] Reconcile the baseline in `specs/001-project-baseline-evolution/` by adding an FR/cross-reference entry that traces this feature's full-namespace layout + orphan-pruning behavior to the canonical spec, and update the capability matrix accordingly — satisfying the constitution's "spec as source of truth" gate (resolves analysis finding C1).
-- [ ] T027 [P] Update sample READMEs / docs to note the full-namespace layout and the tree-shaking caveat of the opt-in root aggregation barrel.
+- [x] T026 [P] Reconcile the baseline in `specs/001-project-baseline-evolution/` by adding an FR/cross-reference entry that traces this feature's full-namespace layout + orphan-pruning behavior to the canonical spec, and update the capability matrix accordingly — satisfying the constitution's "spec as source of truth" gate (resolves analysis finding C1).
+- [x] T027 [P] Update sample READMEs / docs to note the full-namespace layout and the tree-shaking caveat of the opt-in root aggregation barrel.
 - [x] T028 Dual-agent review of the complete diff: `compiler-man` (semantics, IR/path mapping, cache/pruning correctness, pipeline coverage) and `bob` (naming, method size, condition complexity, blank-line discipline) in parallel; fix findings before commit.
 - [x] T029 Run `quickstart.md` end-to-end, then `dotnet csharpier .`, the full TUnit suite, and every namespace-declaring sample's `bun run build && bun test` — all green.
 

@@ -131,21 +131,31 @@ export class User {
 
 ## Namespace-first import resolution
 
-Metano uses **namespace-first** imports, which means the import path mirrors the
-C# namespace, not the file layout:
+Metano lays generated files out by their **full** kebab-cased C# namespace under
+the package root — the on-disk path mirrors the fully-qualified name, with nothing
+stripped (ADR-0025). The package name and the namespace are therefore both present
+in a cross-package import:
 
-| Producer namespace | Generated import |
+| Producer type | Generated import |
 |---|---|
-| `Acme.Shared` (= root namespace) | `from "@acme/shared"` |
-| `Acme.Shared.Finance` | `from "@acme/shared/finance"` |
-| `Acme.Shared.Finance.Currency` | `from "@acme/shared/finance/currency"` |
+| `Acme.Shared.Finance.Money` | `from "@acme/shared/acme/shared/finance"` |
+| `Acme.Shared.Finance.Currency` | `from "@acme/shared/acme/shared/finance"` |
 
-The import resolves to the **namespace barrel** (`index.ts` inside that
-directory), not a specific file. This keeps imports clean and aligned with the
-C# mental model.
+A cross-package import resolves to the namespace's **leaf barrel** (`index.ts`
+inside that namespace directory), so multiple names from the same namespace merge
+onto one import line. (This mirrors how the producing package emits its own files,
+which keeps the two layouts in lock-step.)
 
-**Same-namespace imports** are the one exception: they use relative paths
-(`./money`) to avoid cycles through the barrel.
+**Within a single package**, references between generated types import the
+**defining file directly** — `from "#/acme/shared/finance/money"` across
+namespaces, or `from "./money"` within the same namespace — never through a barrel.
+This keeps internal correctness independent of barrel emission and structurally
+avoids ESM import cycles.
+
+A single **opt-in** root aggregation barrel (`--namespace-barrels` /
+`MetanoNamespaceBarrels`) re-exports the whole hierarchy under nested
+`export namespace` blocks for consumers who prefer one entry point. It is opt-in
+because, unlike the per-namespace leaf barrels, it defeats tree-shaking.
 
 ## Multiple packages, same type name
 
