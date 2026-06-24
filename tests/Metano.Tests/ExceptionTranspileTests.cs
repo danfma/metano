@@ -54,7 +54,7 @@ public class ExceptionTranspileTests
             """
         );
 
-        var validatorTs = result["validator.ts"];
+        var validatorTs = result["app/validator.ts"];
         // Should use the transpiled exception class, not generic Error
         await Assert.That(validatorTs).Contains("new BadValueError(\"negative\")");
         await Assert.That(validatorTs).DoesNotContain("new Error(");

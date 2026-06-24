@@ -749,7 +749,9 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Domain");
+        // Full-namespace layout: no root namespace is stripped anymore, so the
+        // frontend always reports an empty LocalRootNamespace.
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
     }
 
     [Test]
@@ -773,7 +775,8 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared");
+        // Full-namespace layout: no root namespace is stripped anymore.
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
     }
 
     [Test]
@@ -803,7 +806,8 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Domain");
+        // Full-namespace layout: no root namespace is stripped anymore.
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
     }
 
     [Test]
@@ -829,7 +833,8 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared");
+        // Full-namespace layout: no root namespace is stripped anymore.
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
     }
 
     [Test]
@@ -856,7 +861,8 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared");
+        // Full-namespace layout: no root namespace is stripped anymore.
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
     }
 
     [Test]
@@ -883,7 +889,8 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Services");
+        // Full-namespace layout: no root namespace is stripped anymore.
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
     }
 
     [Test]
@@ -907,7 +914,8 @@ public class CSharpSourceFrontendTests
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
 
-        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Domain");
+        // Full-namespace layout: no root namespace is stripped anymore.
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
     }
 
     // Tests below declare their own user types so the assertions aren't

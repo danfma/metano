@@ -124,6 +124,23 @@ public static class TranspilerHost
         {
             Console.WriteLine("Metano: No transpilable types found.");
 
+            // The last transpilable type may have just been removed: reconcile the
+            // prior manifest so its now-orphaned files are pruned, and refresh the
+            // (now-empty) manifest so the next run starts clean.
+            PruneOrphanedOutputs(outputDir, output.Files, options);
+            WriteCacheIfEnabled(
+                options,
+                target,
+                outputDir,
+                output.Files,
+                configFingerprint,
+                sourceHashes,
+                referenceFingerprints,
+                assetSourceHashes,
+                assets,
+                compilation
+            );
+
             return new TranspileResult(true, output.Files, warningCount, 0);
         }
 
@@ -150,6 +167,12 @@ public static class TranspilerHost
         warningCount += assetWarnings;
         if (assetErrors > 0)
             return new TranspileResult(false, output.Files, warningCount, assetErrors);
+
+        // Self-cleaning builds (ADR-0025): the current output set is now written
+        // successfully, so remove generated files a previous run produced but this
+        // run no longer emits — before the cache manifest below is overwritten.
+        PruneOrphanedOutputs(outputDir, output.Files, options);
+
         emitSw.Stop();
         totalSw.Stop();
 
@@ -543,11 +566,7 @@ public static class TranspilerHost
 
         foreach (var file in files)
         {
-            var filePath = Path.Combine(
-                outputDir,
-                file.RelativePath.Replace('/', Path.DirectorySeparatorChar)
-            );
-
+            var filePath = ToDiskPath(outputDir, file.RelativePath);
             var fileDir = Path.GetDirectoryName(filePath);
 
             if (fileDir is not null)
@@ -558,6 +577,136 @@ public static class TranspilerHost
             Console.WriteLine($"  Generated: {file.RelativePath}");
         }
     }
+
+    /// <summary>
+    /// Resolves a generated file's POSIX-style relative path to an on-disk path
+    /// under <paramref name="outputDir"/>, honoring the platform separator.
+    /// </summary>
+    private static string ToDiskPath(string outputDir, string relativePath) =>
+        Path.Combine(outputDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+    /// <summary>
+    /// Best-effort delete used by pruning: a transient failure (locked file,
+    /// permissions, a race with another process) must not turn an otherwise
+    /// successful emit into a hard build error — mirrors <see cref="WriteStamp"/>'s
+    /// tolerance. Returns whether the entry was removed.
+    /// </summary>
+    private static bool TryDelete(Action delete)
+    {
+        try
+        {
+            delete();
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Removes generated files a previous run produced but the current run no
+    /// longer emits (orphans), by reconciling the prior cache manifest
+    /// (<see cref="TranspilationCache.OutputHashes"/>) against the current output
+    /// set. Only paths the transpiler itself recorded — and that stay inside the
+    /// output tree — are eligible, so hand-written or unrelated files are never
+    /// touched. Now-empty generated directories are removed too. Runs only on a
+    /// successful, real emit: skipped on <c>--clean</c> (the tree was wiped),
+    /// <c>--no-cache</c> (no manifest to reconcile) and dry-run, and never
+    /// reached on a cache hit. See ADR-0025 and the pruning contract.
+    /// </summary>
+    internal static void PruneOrphanedOutputs(
+        string outputDir,
+        IReadOnlyList<GeneratedFile> currentFiles,
+        TranspileOptions options
+    )
+    {
+        if (options.Clean || options.NoCache || options.DryRun)
+            return;
+
+        var previous = TranspilationCache.TryRead(outputDir);
+        if (previous is null)
+            return;
+
+        var currentPaths = new HashSet<string>(
+            currentFiles.Select(file => file.RelativePath),
+            StringComparer.Ordinal
+        );
+
+        var touchedDirectories = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var relativePath in previous.OutputHashes.Keys)
+        {
+            if (currentPaths.Contains(relativePath))
+                continue;
+
+            // The manifest is a hand-editable file: a corrupted entry (rooted path
+            // or a `..` escape) must never delete anything outside the output tree.
+            if (!CacheKeyBuilder.IsSafeRelativePath(relativePath))
+                continue;
+
+            var diskPath = ToDiskPath(outputDir, relativePath);
+            if (!File.Exists(diskPath))
+                continue;
+
+            if (!TryDelete(() => File.Delete(diskPath)))
+                continue;
+
+            Console.WriteLine($"  Pruned: {relativePath}");
+
+            var directory = Path.GetDirectoryName(diskPath);
+            if (directory is not null)
+                touchedDirectories.Add(directory);
+        }
+
+        RemoveEmptyGeneratedDirectories(outputDir, touchedDirectories);
+    }
+
+    /// <summary>
+    /// Deletes directories emptied by pruning, walking upward from each touched
+    /// directory toward — but never including — the output root. A directory that
+    /// still holds any file or subdirectory is left intact, so the root (which
+    /// keeps the cache/stamp metadata) and any populated folders survive.
+    /// </summary>
+    private static void RemoveEmptyGeneratedDirectories(
+        string outputDir,
+        IEnumerable<string> touchedDirectories
+    )
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputDir));
+
+        foreach (var touched in touchedDirectories)
+        {
+            var current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(touched));
+
+            while (
+                IsEmptyPrunableDirectory(root, current)
+                && TryDelete(() => Directory.Delete(current))
+            )
+            {
+                var parent = Path.GetDirectoryName(current);
+                if (parent is null)
+                    break;
+
+                current = Path.TrimEndingDirectorySeparator(parent);
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="directory"/> is a strict, existing,
+    /// now-empty descendant of <paramref name="root"/> — i.e. safe to delete
+    /// without ever removing the output root itself.
+    /// </summary>
+    private static bool IsEmptyPrunableDirectory(string root, string directory) =>
+        !string.Equals(directory, root, StringComparison.Ordinal)
+        && directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+        && Directory.Exists(directory)
+        && !Directory.EnumerateFileSystemEntries(directory).Any();
 
     private static (int Warnings, int Errors) ReportDiagnostics(
         IReadOnlyList<MetanoDiagnostic> diagnostics

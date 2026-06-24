@@ -26,7 +26,7 @@ public class NamedArgumentReorderTests
             """
         );
 
-        var output = result["widget.ts"];
+        var output = result["app/widget.ts"];
         await Assert.That(output).Contains("UI.column([1, 2, 3], 12)");
         await Assert.That(output).DoesNotContain("UI.column(12, [");
     }
@@ -53,7 +53,7 @@ public class NamedArgumentReorderTests
             """
         );
 
-        var output = result["widget.ts"];
+        var output = result["app/widget.ts"];
         await Assert.That(output).Contains("UI.render(1, 7, 3)");
     }
 
@@ -79,7 +79,7 @@ public class NamedArgumentReorderTests
             """
         );
 
-        var output = result["widget.ts"];
+        var output = result["app/widget.ts"];
         await Assert.That(output).Contains("UI.layout(100, 0, 8)");
     }
 }

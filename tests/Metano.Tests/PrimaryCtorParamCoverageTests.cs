@@ -25,7 +25,7 @@ public class PrimaryCtorParamCoverageTests
             """
         );
 
-        var output = result["heading.ts"];
+        var output = result["app/heading.ts"];
         await Assert.That(output).Contains("this._level === 1");
         await Assert.That(output).DoesNotContain(" level === 1");
         await Assert.That(output).DoesNotContain("(level === 1");
@@ -48,7 +48,7 @@ public class PrimaryCtorParamCoverageTests
             """
         );
 
-        var output = result["heading.ts"];
+        var output = result["app/heading.ts"];
         await Assert.That(output).Contains("Heading.resolve(this._level)");
     }
 }

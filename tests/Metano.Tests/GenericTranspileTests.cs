@@ -47,7 +47,7 @@ public class GenericTranspileTests
         );
 
         var expected = TranspileHelper.ReadExpected("generic-constraint.ts");
-        await Assert.That(result["repo.ts"]).IsEqualTo(expected);
+        await Assert.That(result["app/repo.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class GenericTranspileTests
             """
         );
 
-        var okTs = result["ok.ts"];
+        var okTs = result["app/ok.ts"];
         await Assert.That(okTs).Contains("class Ok<T> extends Result<T>");
         await Assert.That(okTs).Contains("super(value, true)");
     }
@@ -127,7 +127,7 @@ public class GenericTranspileTests
             """
         );
 
-        var output = result["finder.ts"];
+        var output = result["app/finder.ts"];
         await Assert
             .That(output)
             .Contains("function find<T extends IEntity>(items: T[], id: string): T");
@@ -180,7 +180,7 @@ public class GenericTranspileTests
             """
         );
 
-        var boxTs = result["box.ts"];
+        var boxTs = result["app/box.ts"];
         await Assert.That(boxTs).Contains("implements IContainer<T>");
     }
 }

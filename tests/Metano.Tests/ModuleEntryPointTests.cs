@@ -186,6 +186,6 @@ public class ModuleEntryPointTests
         );
 
         await Assert.That(result).ContainsKey("program.ts");
-        await Assert.That(result).ContainsKey("greeting.ts");
+        await Assert.That(result).ContainsKey("app/greeting.ts");
     }
 }

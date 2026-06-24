@@ -1911,8 +1911,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 else if (type.ContainingAssembly is { } sourceAsm)
                     typeMappingContext.CrossPackageVersionHints[packageInfo.Name] =
                         RoslynTypeQueries.FormatAssemblyVersion(sourceAsm);
+                // Full-namespace layout (D1, ADR-0025): no root stripping — empty
+                // assembly root yields the referenced type's full-namespace subpath.
                 var subPath = PathNaming.ComputeSubPath(
-                    typeOrigin.AssemblyRootNamespace ?? "",
+                    "",
                     typeOrigin.Namespace ?? "",
                     SymbolHelper.GetNameOverride(type, TargetLanguage.TypeScript) ?? type.Name
                 );

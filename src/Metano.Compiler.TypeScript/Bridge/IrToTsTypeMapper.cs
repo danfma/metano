@@ -145,8 +145,11 @@ public static class IrToTsTypeMapper
     /// </summary>
     private static TsTypeOrigin BuildTsOrigin(IrTypeOrigin origin, string typeName)
     {
+        // Full-namespace layout (D1, ADR-0025): no root stripping — pass an empty
+        // assembly root so the cross-package subpath is the referenced type's full
+        // namespace, matching how that package emits its own files.
         var subPath = Metano.Compiler.TypeScript.Transformation.PathNaming.ComputeSubPath(
-            origin.AssemblyRootNamespace ?? "",
+            "",
             origin.Namespace ?? "",
             typeName
         );

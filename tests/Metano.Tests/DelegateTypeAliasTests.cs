@@ -16,7 +16,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["notifier.ts"];
+        var output = result["app/notifier.ts"];
         await Assert.That(output).Contains("export type Notifier = (message: string) => void;");
     }
 
@@ -32,7 +32,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["folder.ts"];
+        var output = result["app/folder.ts"];
         await Assert
             .That(output)
             .Contains("export type Folder = (acc: number, next: number) => number;");
@@ -50,7 +50,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["converter.ts"];
+        var output = result["app/converter.ts"];
         await Assert
             .That(output)
             .Contains("export type Converter<TIn, TOut> = (value: TIn) => TOut;");
@@ -73,7 +73,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["cloner.ts"];
+        var output = result["app/cloner.ts"];
         await Assert.That(output).Contains("export type Cloner<T extends ICloneable<T>>");
     }
 
@@ -95,7 +95,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var button = result["button.ts"];
+        var button = result["app/button.ts"];
         await Assert.That(button).Contains("import type { ClickHandler }");
         await Assert.That(button).Contains("onClick: ClickHandler | null = null");
     }
@@ -117,7 +117,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["button.ts"];
+        var output = result["app/button.ts"];
         await Assert.That(output).Contains("(obj: string) => void");
     }
 
@@ -140,10 +140,10 @@ public class DelegateTypeAliasTests
             """
         );
 
-        await Assert.That(result.ContainsKey("listener.ts")).IsTrue();
-        var alias = result["listener.ts"];
+        await Assert.That(result.ContainsKey("app/listener.ts")).IsTrue();
+        var alias = result["app/listener.ts"];
         await Assert.That(alias).Contains("export type Listener = (value: number) => void;");
-        var source = result["source.ts"];
+        var source = result["app/source.ts"];
         await Assert.That(source).Contains("import type { Listener }");
     }
 
@@ -190,7 +190,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["outer.ts"];
+        var output = result["app/outer.ts"];
         await Assert.That(output).Contains("Inner");
         await Assert.That(output).Contains("(message: string) => void");
     }
@@ -217,7 +217,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["combine.ts"];
+        var output = result["app/combine.ts"];
         await Assert.That(output).Contains("T extends IFoo & IBar");
     }
 
@@ -244,7 +244,7 @@ public class DelegateTypeAliasTests
             """
         );
 
-        var output = result["hub.ts"];
+        var output = result["app/hub.ts"];
         await Assert.That(output).Contains("(obj: Notifier) => void");
         await Assert.That(output).Contains("import type { Notifier }");
     }
@@ -274,8 +274,8 @@ public class DelegateTypeAliasTests
             """
         );
 
-        await Assert.That(result).ContainsKey("events/index.ts");
-        var barrel = result["events/index.ts"];
+        await Assert.That(result).ContainsKey("app/events/index.ts");
+        var barrel = result["app/events/index.ts"];
         await Assert.That(barrel).Contains("export type { Handler } from \"./handler\"");
     }
 
@@ -309,8 +309,10 @@ public class DelegateTypeAliasTests
             """;
 
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
-        var output = result["subscriber.ts"];
-        await Assert.That(output).Contains("import type { Handler } from \"@scope/lib/events\"");
+        var output = result["app/subscriber.ts"];
+        await Assert
+            .That(output)
+            .Contains("import type { Handler } from \"@scope/lib/my-lib/events\"");
         await Assert.That(output).Contains("callback: Handler | null = null");
     }
 }

@@ -153,7 +153,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        var output = result["checker.ts"];
+        var output = result["app/checker.ts"];
         await Assert.That(output).Contains("value instanceof Money");
     }
 

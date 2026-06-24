@@ -210,7 +210,7 @@ public class TargetSpecificNamingTests
             """
         );
 
-        var caller = result["caller.ts"];
+        var caller = result["app/caller.ts"];
         // Return type position
         await Assert.That(caller).Contains("make(): MyColumn");
         await Assert.That(caller).DoesNotContain("make(): Column");
@@ -248,7 +248,7 @@ public class TargetSpecificNamingTests
             """
         );
 
-        var caller = result["caller.ts"];
+        var caller = result["app/caller.ts"];
         await Assert.That(caller).Contains("Map<string, MyColumn>");
         await Assert.That(caller).DoesNotContain("Map<string, Column>");
     }
@@ -275,7 +275,7 @@ public class TargetSpecificNamingTests
             """
         );
 
-        var iface = result["i-factory.ts"];
+        var iface = result["app/i-factory.ts"];
         await Assert.That(iface).Contains("build(): MyColumn");
         await Assert.That(iface).Contains("c: MyColumn");
         await Assert.That(iface).DoesNotContain(": Column");

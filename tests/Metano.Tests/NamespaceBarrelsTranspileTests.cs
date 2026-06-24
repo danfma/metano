@@ -38,16 +38,21 @@ public class NamespaceBarrelsTranspileTests
         await Assert.That(result).ContainsKey("index.ts");
         var root = result["index.ts"];
 
-        // Each leaf directory gets a namespace import aliased as the
-        // underscore-joined PascalCased path.
-        await Assert.That(root).Contains("import * as $Issues_Domain from \"./issues/domain\"");
-        await Assert.That(root).Contains("import * as $Planning_Domain from \"./planning/domain\"");
+        // Full-namespace layout: each leaf directory gets a namespace import
+        // aliased as the underscore-joined PascalCased FULL namespace path.
+        await Assert
+            .That(root)
+            .Contains("import * as $App_Issues_Domain from \"./app/issues/domain\"");
+        await Assert
+            .That(root)
+            .Contains("import * as $App_Planning_Domain from \"./app/planning/domain\"");
 
-        // Nested namespace blocks mirror the C# tree.
+        // Nested namespace blocks mirror the C# tree, rooted at App.
+        await Assert.That(root).Contains("export namespace App");
         await Assert.That(root).Contains("export namespace Issues");
         await Assert.That(root).Contains("export namespace Planning");
-        await Assert.That(root).Contains("export import Domain = $Issues_Domain");
-        await Assert.That(root).Contains("export import Domain = $Planning_Domain");
+        await Assert.That(root).Contains("export import Domain = $App_Issues_Domain");
+        await Assert.That(root).Contains("export import Domain = $App_Planning_Domain");
     }
 
     [Test]
@@ -78,20 +83,21 @@ public class NamespaceBarrelsTranspileTests
         await Assert.That(result).ContainsKey("index.ts");
         var root = result["index.ts"];
 
-        await Assert.That(root).Contains("import * as $SharedKernel from \"./shared-kernel\"");
-        await Assert.That(root).Contains("export import SharedKernel = $SharedKernel;");
+        await Assert
+            .That(root)
+            .Contains("import * as $App_SharedKernel from \"./app/shared-kernel\"");
+        await Assert.That(root).Contains("export import SharedKernel = $App_SharedKernel;");
         await Assert.That(root).DoesNotContain("export namespace SharedKernel");
     }
 
     [Test]
     public async Task NamespaceBarrels_MergesWithBareRootLeaf()
     {
-        // Project with both a bare-root type and sub-namespaces: the
-        // existing root leaf barrel (re-exporting the bare-root type)
-        // gets the namespace-aggregation block appended, so both
-        // `import { Root } from "@pkg"` and
-        // `import { Issues } from "@pkg"` resolve from a single
-        // index.ts.
+        // Project with both an App-root type and sub-namespaces. In the
+        // full-namespace layout the App namespace is itself a leaf
+        // directory: `app/index.ts` re-exports the App-root type, and the
+        // root `index.ts` aggregates every leaf — including `./app` — under
+        // nested `export namespace` blocks.
         var result = TranspileHelper.TranspileWithNamespaceBarrels(
             """
             namespace App
@@ -110,10 +116,15 @@ public class NamespaceBarrelsTranspileTests
 
         await Assert.That(result).ContainsKey("index.ts");
         var root = result["index.ts"];
-        // Bare-root leaf re-export stays.
-        await Assert.That(root).Contains("export { Root } from \"./root\"");
-        // Plus the namespace-aggregation block for the sub-namespace.
-        await Assert.That(root).Contains("import * as $Issues_Domain from \"./issues/domain\"");
+        // The App leaf re-export lives in its own directory barrel.
+        await Assert.That(result).ContainsKey("app/index.ts");
+        await Assert.That(result["app/index.ts"]).Contains("export { Root } from \"./root\"");
+        // The root aggregates the App leaf plus the sub-namespace.
+        await Assert.That(root).Contains("import * as $App from \"./app\"");
+        await Assert
+            .That(root)
+            .Contains("import * as $App_Issues_Domain from \"./app/issues/domain\"");
+        await Assert.That(root).Contains("export namespace App");
         await Assert.That(root).Contains("export namespace Issues");
     }
 
@@ -165,7 +176,7 @@ public class NamespaceBarrelsTranspileTests
             """
         );
 
-        await Assert.That(result).ContainsKey("issues/domain/index.ts");
+        await Assert.That(result).ContainsKey("app/issues/domain/index.ts");
         await Assert.That(result).ContainsKey("index.ts");
     }
 }

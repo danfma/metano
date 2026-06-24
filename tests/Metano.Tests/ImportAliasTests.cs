@@ -32,14 +32,14 @@ public class ImportAliasTests
     {
         var naming = new PathNaming("App", "contracts");
 
-        // Cross-namespace → alias-scoped barrel.
+        // Cross-namespace → alias-scoped path to the defining file.
         await Assert
             .That(naming.ComputeRelativeImportPath("App.Services", "App.Models", "Money"))
-            .IsEqualTo("#contracts/models");
-        // Root namespace → bare alias key.
+            .IsEqualTo("#contracts/models/money");
+        // Root namespace → alias key + file name.
         await Assert
             .That(naming.ComputeRelativeImportPath("App.Services", "App", "Root"))
-            .IsEqualTo("#contracts");
+            .IsEqualTo("#contracts/root");
         // Same namespace → relative file import, never aliased.
         await Assert
             .That(naming.ComputeRelativeImportPath("App.Models", "App.Models", "Money"))
@@ -66,10 +66,10 @@ public class ImportAliasTests
 
         await Assert
             .That(naming.ComputeRelativeImportPath("App.Services", "App.Models", "Money"))
-            .IsEqualTo("#/models");
+            .IsEqualTo("#/models/money");
         await Assert
             .That(naming.ComputeRelativeImportPath("App.Services", "App", "Root"))
-            .IsEqualTo("#");
+            .IsEqualTo("#/root");
         await Assert
             .That(naming.ComputeRelativeImportPath("App.Models", "App.Models", "Money"))
             .IsEqualTo("./money");
@@ -102,8 +102,11 @@ public class ImportAliasTests
     {
         var files = TranspileHelper.Transpile(TwoNamespaceSource, importAlias: "contracts");
 
-        // The cross-namespace reference resolves through the isolated alias key.
-        await Assert.That(files.Values.Any(c => c.Contains("from \"#contracts/models\""))).IsTrue();
+        // The cross-namespace reference resolves through the isolated alias key,
+        // pointing at the defining file under its full namespace.
+        await Assert
+            .That(files.Values.Any(c => c.Contains("from \"#contracts/app/models/money\"")))
+            .IsTrue();
         // The default `#` alias never appears.
         await Assert.That(files.Values.Any(c => c.Contains("from \"#/"))).IsFalse();
         await Assert.That(files.Values.Any(c => c.Contains("from \"#\""))).IsFalse();
@@ -114,8 +117,11 @@ public class ImportAliasTests
     {
         var files = TranspileHelper.Transpile(TwoNamespaceSource);
 
-        // Default behavior is unchanged: internal imports use `#/...`.
-        await Assert.That(files.Values.Any(c => c.Contains("from \"#/models\""))).IsTrue();
+        // Default behavior: internal imports use `#/...` pointing at the file
+        // under its full namespace.
+        await Assert
+            .That(files.Values.Any(c => c.Contains("from \"#/app/models/money\"")))
+            .IsTrue();
         // No alias-scoped key leaks in.
         await Assert.That(files.Values.Any(c => c.Contains("#contracts"))).IsFalse();
     }

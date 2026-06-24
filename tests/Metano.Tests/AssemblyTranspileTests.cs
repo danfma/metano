@@ -95,7 +95,7 @@ public class AssemblyTranspileTests
             """
         );
 
-        var childTs = result["child.ts"];
+        var childTs = result["app/child.ts"];
         await Assert.That(childTs).Contains("extends Base");
     }
 
@@ -114,7 +114,7 @@ public class AssemblyTranspileTests
             """
         );
 
-        var userTs = result["user.ts"];
+        var userTs = result["app/user.ts"];
         await Assert.That(userTs).Contains("implements IEntity");
     }
 

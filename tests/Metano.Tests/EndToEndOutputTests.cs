@@ -40,16 +40,16 @@ public class EndToEndOutputTests
             """;
 
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
-        var actual = result["tracker.ts"];
+        var actual = result["app/tracker.ts"];
 
         // Pin the FULL output so any future regression in the import format,
         // namespace resolution, or property emission shows up as a clear diff.
         // Notable observations:
         //
-        // 1. Cross-package import is MERGED into one line sharing the package root
-        //    barrel `@acme/issues`. The two names come from different C# types but
-        //    live in the same namespace and are re-exported by the root barrel. The
-        //    MIXED `type` qualifier appears because
+        // 1. Cross-package import is MERGED into one line sharing the package +
+        //    full-namespace barrel `@acme/issues/acme-issues`. The two names come from
+        //    different C# types but live in the same namespace and are re-exported by
+        //    that namespace barrel. The MIXED `type` qualifier appears because
         //    Issue is referenced only as a type (the property's declared type) while
         //    IssueStatus is used as a value (the auto-init `= IssueStatus.Open`); the
         //    per-name type qualifier handles the asymmetry without splitting into two
@@ -66,7 +66,7 @@ public class EndToEndOutputTests
         //    TS would leave the field as `undefined` at runtime, breaking equality
         //    checks. The compiler picks the first enum member (value 0) automatically.
         var expected =
-            "import { IssueStatus, type Issue } from \"@acme/issues\";\n"
+            "import { IssueStatus, type Issue } from \"@acme/issues/acme-issues\";\n"
             + "\n"
             + "export class Tracker {\n"
             + "  current: Issue | null = null;\n"
@@ -101,9 +101,9 @@ public class EndToEndOutputTests
         );
 
         var keys = string.Join(", ", result.Keys.OrderBy(k => k));
-        var actual = result.TryGetValue("issue.ts", out var content)
+        var actual = result.TryGetValue("acme-issues/issue.ts", out var content)
             ? content
-            : $"<no issue.ts; got files: {keys}>";
+            : $"<no acme-issues/issue.ts; got files: {keys}>";
 
         // Pin the FULL output of the merged producer-side file so any future
         // regression in the multi-type emission, decimal mapping, or self-import

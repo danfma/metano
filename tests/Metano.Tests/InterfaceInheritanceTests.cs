@@ -207,7 +207,7 @@ public class InterfaceInheritanceTests
             """;
 
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
-        var output = result["i-stream.ts"];
+        var output = result["app/i-stream.ts"];
 
         await Assert.That(output).Contains("import");
         await Assert.That(output).Contains("ICloseable");
@@ -268,7 +268,7 @@ public class InterfaceInheritanceTests
             """;
 
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
-        var output = result["i-wallet.ts"];
+        var output = result["app/i-wallet.ts"];
 
         await Assert.That(output).Contains("import");
         await Assert.That(output).Contains("Money");

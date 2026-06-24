@@ -30,7 +30,7 @@ public class ClassInheritanceTests
             """
         );
 
-        var output = result["dog.ts"];
+        var output = result["app/dog.ts"];
         await Assert.That(output).Contains("extends Animal");
         // Synthesized derived ctor (no explicit ctor in C#) must still
         // forward to super so the emitted TS satisfies the type
@@ -60,8 +60,8 @@ public class ClassInheritanceTests
             """
         );
 
-        var shape = result["shape.ts"];
-        var circle = result["circle.ts"];
+        var shape = result["app/shape.ts"];
+        var circle = result["app/circle.ts"];
 
         await Assert.That(shape).Contains("export abstract class Shape");
         await Assert.That(shape).Contains("abstract area(): number");
@@ -90,7 +90,7 @@ public class ClassInheritanceTests
             """
         );
 
-        var output = result["dog.ts"];
+        var output = result["app/dog.ts"];
         await Assert.That(output).Contains("extends Animal");
         await Assert.That(output).Contains("super(name)");
     }
@@ -118,7 +118,7 @@ public class ClassInheritanceTests
             """
         );
 
-        var output = result["dog.ts"];
+        var output = result["app/dog.ts"];
         await Assert.That(output).Contains("extends Animal");
         await Assert.That(output).Contains("super(name)");
     }
@@ -144,7 +144,7 @@ public class ClassInheritanceTests
             """
         );
 
-        var output = result["wrapper.ts"];
+        var output = result["app/wrapper.ts"];
         await Assert.That(output).DoesNotContain("extends");
     }
 
@@ -167,7 +167,7 @@ public class ClassInheritanceTests
             """
         );
 
-        var animal = result["animal.ts"];
+        var animal = result["app/animal.ts"];
         await Assert.That(animal).Contains("export class Animal");
         await Assert.That(animal).DoesNotContain("abstract class Animal");
     }
@@ -187,7 +187,7 @@ public class ClassInheritanceTests
             """
         );
 
-        var output = result["plain.ts"];
+        var output = result["app/plain.ts"];
         // System.Object is the implicit base — no extends clause should
         // surface even though Roslyn reports it as the BaseType symbol.
         await Assert.That(output).DoesNotContain("extends");

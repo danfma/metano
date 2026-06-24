@@ -103,7 +103,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var moneyOutput = result["money.ts"];
+        var moneyOutput = result["app/money.ts"];
         await Assert.That(moneyOutput).Contains("isCurrency(v.currency)");
         await Assert.That(moneyOutput).Contains("isCurrency");
     }
@@ -140,7 +140,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var childOutput = result["child.ts"];
+        var childOutput = result["app/child.ts"];
         await Assert.That(childOutput).Contains("isChild");
         await Assert.That(childOutput).Contains("typeof v.id === \"number\"");
         await Assert.That(childOutput).Contains("typeof v.name === \"string\"");
@@ -230,7 +230,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var output = result["child.ts"];
+        var output = result["app/child.ts"];
         await Assert.That(output).Contains("typeof v._active === \"boolean\"");
         await Assert.That(output).Contains("typeof v.count === \"number\"");
     }

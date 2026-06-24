@@ -25,7 +25,7 @@ public class ForEachTranspileTests
             """
         );
 
-        var output = result["printer.ts"];
+        var output = result["app/printer.ts"];
         await Assert.That(output).Contains("for (const line of lines)");
         await Assert.That(output).Contains("console.log(line)");
     }
@@ -54,7 +54,7 @@ public class ForEachTranspileTests
             """
         );
 
-        var output = result["filter.ts"];
+        var output = result["app/filter.ts"];
         await Assert.That(output).Contains("for (const x of");
         // After #20 the LINQ chain lowers to the pipe form: a single
         // `linq(source, where(...), select(...))` call instead of a
@@ -88,7 +88,7 @@ public class ForEachTranspileTests
             """
         );
 
-        var output = result["walker.ts"];
+        var output = result["app/walker.ts"];
         await Assert.That(output).Contains("for (const n of nums)");
         await Assert.That(output).Contains("continue");
         await Assert.That(output).Contains("break");
@@ -120,7 +120,7 @@ public class ForEachTranspileTests
             """
         );
 
-        var output = result["matrix.ts"];
+        var output = result["app/matrix.ts"];
         await Assert.That(output).Contains("for (const row of grid)");
         await Assert.That(output).Contains("for (const cell of row)");
     }
@@ -150,7 +150,7 @@ public class ForEachTranspileTests
             """
         );
 
-        var output = result["repo.ts"];
+        var output = result["app/repo.ts"];
         await Assert.That(output).Contains("for (const x of this.getItems())");
     }
 }

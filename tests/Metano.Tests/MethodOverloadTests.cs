@@ -221,7 +221,7 @@ public class MethodOverloadTests
 
         await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsFalse();
 
-        var output = result["stateful-widget.ts"];
+        var output = result["app/stateful-widget.ts"];
         await Assert.That(output).Contains("build(): string");
         await Assert.That(output).Contains("build(context: number): Widget");
         await Assert.That(output).DoesNotContain("...args: unknown[]");
@@ -244,7 +244,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["setter.ts"];
+        var output = result["app/setter.ts"];
         await Assert
             .That(output)
             .Contains("typeof args[0] === \"function\" && args[0].length === 1");
@@ -267,7 +267,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["pipe.ts"];
+        var output = result["app/pipe.ts"];
         await Assert.That(output).Contains("args[0] === null");
         await Assert
             .That(output)
@@ -291,7 +291,7 @@ public class MethodOverloadTests
             """
         );
 
-        var output = result["bus.ts"];
+        var output = result["app/bus.ts"];
         await Assert.That(output).Contains("args[0].length === 0");
         await Assert.That(output).Contains("args[0].length === 1");
     }

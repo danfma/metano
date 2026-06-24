@@ -60,8 +60,8 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        await Assert.That(result).DoesNotContainKey("external-decimal.ts");
-        await Assert.That(result).ContainsKey("price.ts");
+        await Assert.That(result).DoesNotContainKey("app/external-decimal.ts");
+        await Assert.That(result).ContainsKey("app/price.ts");
     }
 
     [Test]
@@ -80,7 +80,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["event.ts"];
+        var output = result["app/event.ts"];
         await Assert.That(output).Contains("from \"moment\"");
         await Assert.That(output).Contains("when: Moment");
     }
@@ -187,7 +187,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var caller = result["caller.ts"];
+        var caller = result["app/caller.ts"];
         await Assert.That(caller).Contains("make(Widget,");
         await Assert.That(caller).Contains("import { Widget }");
     }
@@ -226,7 +226,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var caller = result["caller.ts"];
+        var caller = result["app/caller.ts"];
         await Assert.That(caller).Contains("createElement(Comp,");
         await Assert.That(caller).Contains("from \"react\"");
         await Assert.That(caller).Contains("createElement");
@@ -378,7 +378,7 @@ public class ExternalMappingTranspileTests
         );
 
         // Inferno is fully erased — no inferno.ts file.
-        await Assert.That(result).DoesNotContainKey("inferno.ts");
+        await Assert.That(result).DoesNotContainKey("app/inferno.ts");
     }
 
     [Test]
@@ -409,7 +409,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var caller = result["caller.ts"];
+        var caller = result["app/caller.ts"];
         await Assert.That(caller).Contains("createElement(\"div\",");
         await Assert.That(caller).Contains("from \"inferno-create-element\"");
         await Assert.That(caller).DoesNotContain(".CreateElement(");
@@ -479,7 +479,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var caller = result["caller.ts"];
+        var caller = result["app/caller.ts"];
         await Assert
             .That(caller)
             .Contains("import { createSignal as createRawSignal } from \"solid-js\"");
@@ -506,7 +506,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        var output = result["wrapper.ts"];
+        var output = result["app/wrapper.ts"];
         // No function/method declaration for the [Import] member.
         await Assert.That(output).DoesNotContain("doIt(n: number)");
         await Assert.That(output).DoesNotContain("Run(n: number)");

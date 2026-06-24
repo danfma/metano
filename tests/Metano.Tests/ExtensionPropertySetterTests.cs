@@ -43,7 +43,7 @@ public class ExtensionPropertySetterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("value$set(c, 7)");
         await Assert.That(output).DoesNotContain("c.value =");
     }
@@ -82,7 +82,7 @@ public class ExtensionPropertySetterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         // Receiver Pick() should appear exactly once — the let binding
         // captures it and both the read and the write reference the temp.
         var pickOccurrences = CountOccurrences(output, "this.pick()");
@@ -130,7 +130,7 @@ public class ExtensionPropertySetterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("count$set(c, count$get(c) + 1)");
         await Assert.That(output).DoesNotContain("receiver$temp$");
     }
@@ -169,7 +169,7 @@ public class ExtensionPropertySetterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         var pickOccurrences = CountOccurrences(output, "this.pick()");
         await Assert.That(pickOccurrences).IsEqualTo(1);
         await Assert.That(output).Contains("count$set(receiver$temp$0,");
@@ -213,7 +213,7 @@ public class ExtensionPropertySetterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("value$set(c, 9)");
         await Assert.That(output).Contains("c != null");
     }
@@ -245,7 +245,7 @@ public class ExtensionPropertySetterTests
             """
         );
 
-        var output = result["cell-extensions.ts"];
+        var output = result["app/cell-extensions.ts"];
         await Assert.That(output).Contains("export function value$get");
         await Assert.That(output).Contains("export function value$set");
         await Assert.That(output).Contains("value: number");

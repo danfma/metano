@@ -17,7 +17,7 @@ public class CtorFieldEmissionTests
             """
         );
 
-        var output = result["column.ts"];
+        var output = result["app/column.ts"];
         await Assert.That(output).Contains("private readonly _gap: number;");
         await Assert.That(output).DoesNotContain("private readonly _gap: number = 0");
         await Assert.That(output).Contains("this._gap = gap;");
@@ -38,7 +38,7 @@ public class CtorFieldEmissionTests
             """
         );
 
-        var output = result["toggle.ts"];
+        var output = result["app/toggle.ts"];
         await Assert.That(output).Contains("private readonly _active: boolean;");
         await Assert.That(output).DoesNotContain("_active: boolean = false");
     }
@@ -65,7 +65,7 @@ public class CtorFieldEmissionTests
             """
         );
 
-        var output = result["heading.ts"];
+        var output = result["app/heading.ts"];
         await Assert.That(output).Contains("constructor(content: string, level: number = 1)");
     }
 
@@ -89,7 +89,7 @@ public class CtorFieldEmissionTests
             """
         );
 
-        var output = result["greeter.ts"];
+        var output = result["app/greeter.ts"];
         await Assert.That(output).Contains("constructor(greeting: string = \"hello\")");
     }
 }

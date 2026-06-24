@@ -23,7 +23,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var output = result["calc.ts"];
+        var output = result["app/calc.ts"];
         await Assert.That(output).Contains("squared(n)");
         await Assert.That(output).DoesNotContain("n.squared");
     }
@@ -52,7 +52,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var output = result["calc.ts"];
+        var output = result["app/calc.ts"];
         await Assert.That(output).Contains("doubled(n)");
         await Assert.That(output).DoesNotContain("n.doubled");
     }
@@ -81,7 +81,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var output = result["calc.ts"];
+        var output = result["app/calc.ts"];
         await Assert.That(output).Contains("isEven$get(n)");
         await Assert.That(output).DoesNotContain(".isEven");
     }
@@ -109,7 +109,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var caller = result["calc.ts"];
+        var caller = result["app/calc.ts"];
         await Assert.That(caller).Contains("twice(n)");
         await Assert.That(caller).DoesNotContain("double(n)");
         await Assert.That(caller).Contains("import { twice } from \"./int-ext\";");
@@ -136,7 +136,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var caller = result["calc.ts"];
+        var caller = result["app/calc.ts"];
         await Assert.That(caller).Contains("squared(n)");
         await Assert.That(caller).Contains("import { squared } from \"./int-ext\";");
     }
@@ -162,7 +162,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var caller = result["calc.ts"];
+        var caller = result["app/calc.ts"];
         await Assert.That(caller).Contains("combine(n, 1, 2)");
     }
 
@@ -187,7 +187,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var caller = result["calc.ts"];
+        var caller = result["app/calc.ts"];
         await Assert.That(caller).Contains("sum(n, 1, 2, 3)");
     }
 
@@ -213,7 +213,7 @@ public class ExtensionCallSiteTests
             """
         );
 
-        var caller = result["calc.ts"];
+        var caller = result["app/calc.ts"];
         await Assert.That(caller).Contains("isEven(n)");
         await Assert.That(caller).Contains("import { isEven }");
     }

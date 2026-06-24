@@ -61,15 +61,14 @@ namespace Metano.Compiler.IR;
 /// <param name="Diagnostics">Diagnostics raised during extraction (e.g.,
 /// conflicts in <c>[EmitInFile]</c> groupings, malformed
 /// <c>[Import]</c> attributes).</param>
-/// <param name="LocalRootNamespace">Longest common namespace prefix of the
-/// transpilable types declared in the source unit, or the empty string when
-/// no types qualify (or when they span unrelated top-level namespaces).
-/// Backends that lay generated files out on disk use this as the root of
-/// the output tree, stripping it from per-type namespaces so relative paths
-/// stay short. This value is target-agnostic provided the target uses
-/// dot-separated namespace segments for file-system layout (TypeScript,
-/// Dart). Targets using alternate layout schemes must compute their own
-/// root independently.</param>
+/// <param name="LocalRootNamespace">Root namespace stripped from per-type
+/// namespaces when laying generated files out on disk. An empty string means
+/// "no stripping" — the full namespace becomes the output path. Under the
+/// full-namespace layout policy (D1, spec 005 / ADR-0025) the TypeScript
+/// target leaves this empty so a type's path is a pure function of its own
+/// namespace and never shifts when sibling types are added or removed. A
+/// target that wants stripped, shorter paths may populate this with a stable
+/// per-assembly root instead.</param>
 /// <param name="DeclarativeMethodMappings">Index of
 /// <c>[MapMethod]</c> entries keyed by
 /// (<see cref="SymbolHelper.GetStableFullName"/> of the declaring type,
