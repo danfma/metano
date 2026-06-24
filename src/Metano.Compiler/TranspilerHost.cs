@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Metano.Compiler.Caching;
 using Metano.Compiler.Diagnostics;
 
@@ -628,8 +629,11 @@ public static class TranspilerHost
         if (options.Clean || options.NoCache || options.DryRun)
             return;
 
+        // TryRead already rejects caches without OutputHashes (structural-validity
+        // check), but guard the property directly too so pruning never depends on
+        // that contract holding — a missing manifest simply means nothing to prune.
         var previous = TranspilationCache.TryRead(outputDir);
-        if (previous is null)
+        if (previous?.OutputHashes is null)
             return;
 
         var currentPaths = new HashSet<string>(
@@ -698,15 +702,46 @@ public static class TranspilerHost
     }
 
     /// <summary>
+    /// Compares output-tree paths with the host filesystem's case sensitivity.
+    /// Generated paths all derive from the same output directory, so casing is
+    /// already consistent; using the platform rule keeps the empty-directory walk
+    /// correct on case-insensitive Windows/macOS regardless.
+    /// </summary>
+    private static readonly StringComparison OutputPathComparison = RuntimeInformation.IsOSPlatform(
+        OSPlatform.Linux
+    )
+        ? StringComparison.Ordinal
+        : StringComparison.OrdinalIgnoreCase;
+
+    /// <summary>
     /// True when <paramref name="directory"/> is a strict, existing,
     /// now-empty descendant of <paramref name="root"/> — i.e. safe to delete
-    /// without ever removing the output root itself.
+    /// without ever removing the output root itself. Reading the directory is
+    /// best-effort: a transient I/O or permissions failure reports "not prunable"
+    /// rather than crashing the build, matching the rest of the prune step.
     /// </summary>
-    private static bool IsEmptyPrunableDirectory(string root, string directory) =>
-        !string.Equals(directory, root, StringComparison.Ordinal)
-        && directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-        && Directory.Exists(directory)
-        && !Directory.EnumerateFileSystemEntries(directory).Any();
+    private static bool IsEmptyPrunableDirectory(string root, string directory)
+    {
+        if (
+            string.Equals(directory, root, OutputPathComparison)
+            || !directory.StartsWith(root + Path.DirectorySeparatorChar, OutputPathComparison)
+        )
+            return false;
+
+        try
+        {
+            return Directory.Exists(directory)
+                && !Directory.EnumerateFileSystemEntries(directory).Any();
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private static (int Warnings, int Errors) ReportDiagnostics(
         IReadOnlyList<MetanoDiagnostic> diagnostics
