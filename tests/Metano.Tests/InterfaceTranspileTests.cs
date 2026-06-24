@@ -61,7 +61,7 @@ public class InterfaceTranspileTests
             """
         );
 
-        var userTs = result["user.ts"];
+        var userTs = result["app/user.ts"];
         await Assert.That(userTs).Contains("implements IEntity");
         await Assert.That(userTs).Contains("import type { IEntity } from \"./i-entity\"");
     }
@@ -85,7 +85,7 @@ public class InterfaceTranspileTests
             """
         );
 
-        var userTs = result["user.ts"];
+        var userTs = result["app/user.ts"];
         await Assert.That(userTs).Contains("implements Entity");
         await Assert.That(userTs).Contains("import type { Entity } from \"./entity\"");
     }
@@ -109,7 +109,7 @@ public class InterfaceTranspileTests
             """
         );
 
-        var itemTs = result["item.ts"];
+        var itemTs = result["app/item.ts"];
         await Assert.That(itemTs).Contains("implements INamed, ITagged");
     }
 
@@ -132,7 +132,7 @@ public class InterfaceTranspileTests
             """
         );
 
-        var childTs = result["child.ts"];
+        var childTs = result["app/child.ts"];
         await Assert.That(childTs).Contains("extends Base");
         await Assert.That(childTs).Contains("implements ILabeled");
     }

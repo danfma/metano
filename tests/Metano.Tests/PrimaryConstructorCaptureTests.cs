@@ -299,7 +299,7 @@ public class PrimaryConstructorCaptureTests
             """
         );
 
-        var output = result["dog.ts"];
+        var output = result["app/dog.ts"];
         var superIndex = output.IndexOf("super(", StringComparison.Ordinal);
         await Assert.That(superIndex).IsGreaterThan(-1);
 
@@ -328,7 +328,7 @@ public class PrimaryConstructorCaptureTests
             """
         );
 
-        var output = result["point.ts"];
+        var output = result["app/point.ts"];
         await Assert.That(output).Contains("private readonly _x: number");
         await Assert.That(output).Contains("private readonly _y: number");
         await Assert.That(output).Contains("this._x * this._x + this._y * this._y");

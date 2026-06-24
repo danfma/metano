@@ -175,9 +175,12 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 : BuildBclExports(compilation),
             AssembliesNeedingEmitPackage: assembliesNeedingEmitPackage,
             Diagnostics: diagnostics,
-            LocalRootNamespace: compilation is null
-                ? ""
-                : ComputeLocalRootNamespace(compilation, assemblyWideTranspile),
+            // Full-namespace layout (D1, spec 005 / ADR-0025): the TypeScript target
+            // maps every type by its complete namespace, so no root is stripped. An
+            // empty root namespace means "no stripping"; see PathNaming and the
+            // TypeScript target. Cross-assembly origins keep their own
+            // AssemblyRootNamespace (still consumed by the Dart target).
+            LocalRootNamespace: "",
             DeclarativeMethodMappings: declarativeMappings.Methods,
             DeclarativePropertyMappings: declarativeMappings.Properties,
             ChainMethodsByWrapper: declarativeMappings.ChainMethodsByWrapper,
@@ -187,41 +190,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             TranspilableTypeEntries: transpilableTypeEntries,
             EntryPoint: entryPoint
         );
-    }
-
-    /// <summary>
-    /// Computes the longest common namespace prefix of the transpilable types
-    /// declared in <paramref name="compilation"/>'s own assembly. Mirrors the
-    /// target-side filter (<see cref="SymbolHelper.IsTranspilable"/>) so the
-    /// prefix stays identical to what <c>TypeTransformer</c> used to compute
-    /// inline — including internal <c>[Transpile]</c> types that would be
-    /// missed by a public-only walker, and the synthetic Program type that
-    /// <c>TypeTransformer.DiscoverTranspilableTypes</c> injects for C# 9+
-    /// top-level statements under <c>[assembly: TranspileAssembly]</c>.
-    /// </summary>
-    private static string ComputeLocalRootNamespace(
-        Compilation compilation,
-        bool assemblyWideTranspile
-    )
-    {
-        var currentAssembly = compilation.Assembly;
-        var transpilable = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-            {
-                if (SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
-                    transpilable.Add(type);
-            }
-        );
-
-        if (
-            assemblyWideTranspile
-            && TryGetTopLevelEntryPoint(compilation, out _, out var programType)
-        )
-            transpilable.Add(programType);
-
-        return ComputeRootNamespaceFromTypes(transpilable);
     }
 
     /// <summary>

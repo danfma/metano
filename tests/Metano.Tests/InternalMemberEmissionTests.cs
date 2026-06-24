@@ -17,7 +17,7 @@ public class InternalMemberEmissionTests
             """
         );
 
-        var output = result["widget.ts"];
+        var output = result["app/widget.ts"];
         await Assert.That(output).Contains("bind(context: number): void");
     }
 
@@ -36,7 +36,7 @@ public class InternalMemberEmissionTests
             """
         );
 
-        var output = result["widget.ts"];
+        var output = result["app/widget.ts"];
         await Assert.That(output).Contains("count");
     }
 
@@ -55,7 +55,7 @@ public class InternalMemberEmissionTests
             """
         );
 
-        var output = result["widget.ts"];
+        var output = result["app/widget.ts"];
         await Assert.That(output).Contains("_flag");
     }
 }

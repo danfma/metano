@@ -17,7 +17,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["logger.ts"];
+        var output = result["app/logger.ts"];
         await Assert.That(output).Contains("log(format: string, ...args: Object[])");
     }
 
@@ -36,7 +36,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["bag.ts"];
+        var output = result["app/bag.ts"];
         await Assert.That(output).Contains("addRange(...items: T[])");
     }
 
@@ -60,7 +60,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["logger.ts"];
+        var output = result["app/logger.ts"];
         await Assert.That(output).Contains("this.log(\"hi {0} {1}\", \"alice\", 42)");
         await Assert.That(output).DoesNotContain("[\"alice\", 42]");
     }
@@ -81,7 +81,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["logger.ts"];
+        var output = result["app/logger.ts"];
         await Assert.That(output).Contains("function log(format: string, ...args: Object[])");
     }
 
@@ -100,7 +100,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["tagged.ts"];
+        var output = result["app/tagged.ts"];
         await Assert.That(output).Contains("constructor(label: string, ...tags: string[])");
     }
 
@@ -119,7 +119,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["i-printer.ts"];
+        var output = result["app/i-printer.ts"];
         await Assert.That(output).Contains("write(format: string, ...args: Object[])");
     }
 
@@ -141,7 +141,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["tagged.ts"];
+        var output = result["app/tagged.ts"];
         await Assert.That(output).Contains("readonly tags: string[]");
         await Assert.That(output).Contains("...tags: string[]");
         await Assert.That(output).Contains("this.tags = tags;");
@@ -169,7 +169,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("new Tagged(\"hi\", ...tags)");
     }
 
@@ -193,7 +193,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("new Tagged(\"hi\", \"a\", \"b\", \"c\")");
     }
 
@@ -217,7 +217,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["logger.ts"];
+        var output = result["app/logger.ts"];
         await Assert.That(output).Contains("this.log(\"hi\", ...tags)");
     }
 
@@ -242,7 +242,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("new Tagged(\"hi\", ...tags)");
     }
 
@@ -263,7 +263,7 @@ public class ParamsParameterTests
             """
         );
 
-        var output = result["host.ts"];
+        var output = result["app/host.ts"];
         await Assert.That(output).Contains("(format: string, ...args: Object[]) => void");
     }
 }

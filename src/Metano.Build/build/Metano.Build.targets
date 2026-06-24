@@ -15,7 +15,10 @@
                                          skip the transpile target without unsetting
                                          the output dir (e.g., in CI variants that
                                          only want the .NET build).
-      MetanoClean            (optional)  true to wipe the output dir first (default: false)
+      MetanoClean            (optional)  true to wipe the output dir first (default: false).
+                                         Rarely needed: incremental builds self-prune orphaned
+                                         generated files by reconciling the cache manifest, so a
+                                         renamed/moved/deleted type no longer leaves stale output.
       MetanoDist             (optional)  JS dist dir relative to package root (default: ./dist)
       MetanoPackageRoot      (optional)  Root of the npm package (default: parent of OutputDir)
       MetanoSrcRoot          (optional)  TS source root relative to package root (default: inferred)

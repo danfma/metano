@@ -19,7 +19,7 @@ public class InheritanceTranspileTests
         );
 
         var expected = TranspileHelper.ReadExpected("inheritance-base.ts");
-        await Assert.That(result["shape.ts"]).IsEqualTo(expected);
+        await Assert.That(result["app/shape.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -42,7 +42,7 @@ public class InheritanceTranspileTests
         );
 
         var expected = TranspileHelper.ReadExpected("inheritance-derived.ts");
-        await Assert.That(result["circle.ts"]).IsEqualTo(expected);
+        await Assert.That(result["app/circle.ts"]).IsEqualTo(expected);
     }
 
     [Test]
@@ -61,7 +61,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var childTs = result["child.ts"];
+        var childTs = result["app/child.ts"];
         await Assert.That(childTs).Contains("extends Base");
         await Assert.That(childTs).Contains("super(name)");
     }
@@ -82,7 +82,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var childTs = result["child.ts"];
+        var childTs = result["app/child.ts"];
         // Only own params in constructor (base params are declared in parent)
         await Assert.That(childTs).Contains("constructor(readonly age: number)");
         await Assert.That(childTs).Contains("super(name)");
@@ -104,7 +104,7 @@ public class InheritanceTranspileTests
             """
         );
 
-        var derivedTs = result["derived.ts"];
+        var derivedTs = result["app/derived.ts"];
         // equals should check both x and y
         await Assert.That(derivedTs).Contains("this.x === other.x");
         await Assert.That(derivedTs).Contains("this.y === other.y");
@@ -129,8 +129,8 @@ public class InheritanceTranspileTests
             """
         );
 
-        var extendedTs = result["models/extended.ts"];
-        await Assert.That(extendedTs).Contains("from \"#\"");
+        var extendedTs = result["app/models/extended.ts"];
+        await Assert.That(extendedTs).Contains("from \"#/app/base\"");
     }
 
     [Test]

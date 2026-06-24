@@ -26,8 +26,8 @@ public class JsonSerializerContextTests
             """
         );
 
-        await Assert.That(result).ContainsKey("json-context.ts");
-        var ts = result["json-context.ts"];
+        await Assert.That(result).ContainsKey("test-app/json-context.ts");
+        var ts = result["test-app/json-context.ts"];
 
         // Should extend SerializerContext
         await Assert.That(ts).Contains("extends SerializerContext");
@@ -74,7 +74,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         // CamelCase policy: FirstName → firstName, LastName → lastName
         await Assert.That(ts).Contains("json: \"firstName\"");
@@ -106,7 +106,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         // SnakeCaseLower: ProductName → product_name, UnitPrice → unit_price
         await Assert.That(ts).Contains("json: \"product_name\"");
@@ -140,7 +140,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         // JsonPropertyName wins over policy
         await Assert.That(ts).Contains("json: \"item_id\"");
@@ -175,7 +175,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         await Assert.That(ts).Contains("ts: \"name\"");
         await Assert.That(ts).DoesNotContain("internalToken");
@@ -206,7 +206,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         // Body should be nullable with optional flag
         await Assert.That(ts).Contains("kind: \"nullable\"");
@@ -241,7 +241,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         await Assert.That(ts).Contains("get person()");
         await Assert.That(ts).Contains("get address()");
@@ -276,7 +276,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         await Assert.That(ts).Contains("kind: \"enum\"");
         await Assert.That(ts).Contains("values: Status");
@@ -307,7 +307,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         await Assert.That(ts).Contains("kind: \"array\"");
         await Assert.That(ts).Contains("kind: \"primitive\"");
@@ -338,7 +338,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
 
         // Guid should be classified as a branded descriptor pointing at UUID.create
         await Assert.That(ts).Contains("kind: \"branded\"");
@@ -380,7 +380,7 @@ public class JsonSerializerContextTests
             """
         );
 
-        var ts = result["json-context.ts"];
+        var ts = result["test-app/json-context.ts"];
         await Assert.That(ts).Contains("kind: \"array\"");
     }
 }

@@ -184,9 +184,10 @@ public static class CacheKeyBuilder
     /// <summary>
     /// Rejects rooted paths and any segment equal to <c>..</c> so a
     /// hand-edited cache file cannot point <c>OutputsStillValid</c> /
-    /// <c>RehydrateFiles</c> at arbitrary disk locations.
+    /// <c>RehydrateFiles</c> — or <see cref="TranspilerHost.PruneOrphanedOutputs"/>'s
+    /// deletions — at arbitrary disk locations.
     /// </summary>
-    private static bool IsSafeRelativePath(string relativePath)
+    internal static bool IsSafeRelativePath(string relativePath)
     {
         if (string.IsNullOrEmpty(relativePath))
             return false;

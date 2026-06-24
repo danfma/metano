@@ -67,7 +67,7 @@ public class NullableTranspileTests
             """
         );
 
-        var output = result["person.ts"];
+        var output = result["app/person.ts"];
         await Assert.That(output).Contains("address: Address | null");
     }
 

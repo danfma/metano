@@ -228,7 +228,7 @@ public class NullConditionalInvokeTests
             """
         );
 
-        var output = result["app.ts"];
+        var output = result["app/app.ts"];
         await Assert.That(output).Contains("countChanged$add(");
         await Assert.That(output).DoesNotContain("?.()");
     }

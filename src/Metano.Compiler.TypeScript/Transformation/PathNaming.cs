@@ -5,9 +5,11 @@ namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// TypeScript-specific path / namespace helpers used by both the type emitter and the
-/// import collector. Holds the discovered <see cref="RootNamespace"/> (longest common
-/// dot-separated prefix across all transpilable types) so that subpath imports
-/// (<c>#/foo/bar</c>) and on-disk file paths can both be computed consistently.
+/// import collector, so that subpath imports (<c>#/foo/bar</c>) and on-disk file paths
+/// are computed consistently. Under the full-namespace layout policy (D1, spec 005 /
+/// ADR-0025) <see cref="RootNamespace"/> is empty — nothing is stripped and a type's
+/// path is its complete namespace — so layout never shifts when sibling types change.
+/// The stripping logic is retained for a target that may opt into a non-empty root.
 /// </summary>
 public sealed class PathNaming(string rootNamespace, string? importAlias = null)
 {
@@ -79,39 +81,34 @@ public sealed class PathNaming(string rootNamespace, string? importAlias = null)
     }
 
     /// <summary>
-    /// Computes the absolute import path for a generated type using the local package alias.
+    /// Computes the import specifier for a reference between two generated types, always
+    /// pointing at the defining type's FILE — never a namespace barrel (D3, ADR-0025).
+    /// Routing internal references directly at files keeps internal correctness
+    /// independent of barrel generation/pruning and structurally prevents ESM cycles
+    /// such as <c>issue.ts → #/issues/domain → issues/domain/index.ts → ./issue.ts</c>.
     ///
-    /// Preferred strategy is namespace-first:
-    ///
-    /// - different namespace → import the namespace barrel (<c>#/issues/domain</c>)
-    /// - root namespace      → import the package root barrel (<c>#</c>)
-    ///
-    /// Same-namespace imports fall back to the concrete file path to avoid trivial cycles like:
-    ///
-    /// <c>issue.ts → #/issues/domain → issues/domain/index.ts → ./issue.ts</c>
-    ///
-    /// The <paramref name="typeName"/> parameter therefore remains necessary for the fallback.
+    /// - same namespace      → relative file path (<c>./issue</c>)
+    /// - different namespace → alias path to the file (<c>#/issues/domain/issue</c>)
     /// </summary>
     public string ComputeRelativeImportPath(string fromNs, string toNs, string typeName)
     {
+        var fileName = SymbolHelper.ToKebabCase(typeName);
+
+        // Same namespace: relative file import (also sidesteps the namespace barrel
+        // that re-exports the current file).
+        if (fromNs == toNs)
+            return "./" + fileName;
+
+        // Different namespace: import the defining file directly under the local alias.
         var toRelative = StripRootNamespace(toNs);
         var toParts =
             toRelative.Length > 0
                 ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
                 : [];
 
-        // Same namespace: use relative file import to avoid importing through the same
-        // namespace barrel that re-exports the current file. This prevents trivial
-        // cycles like: issue.ts → barrel → ./issue.ts
-        if (fromNs == toNs)
-        {
-            return "./" + SymbolHelper.ToKebabCase(typeName);
-        }
-
-        // Different namespace: import the namespace barrel under the local alias key.
-        if (toParts.Length == 0)
-            return AliasPrefix;
-        return AliasPrefix + "/" + string.Join("/", toParts);
+        return toParts.Length == 0
+            ? AliasPrefix + "/" + fileName
+            : AliasPrefix + "/" + string.Join("/", toParts) + "/" + fileName;
     }
 
     /// <summary>

@@ -31,7 +31,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["ui.ts"];
+        var output = result["app/ui.ts"];
         await Assert.That(output).Contains("import { Column as ColumnWidget }");
         await Assert.That(output).Contains("new ColumnWidget(12)");
     }
@@ -66,7 +66,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["ui.ts"];
+        var output = result["app/ui.ts"];
         await Assert.That(output).Contains("import { Column as ColumnWidget }");
         await Assert.That(output).Contains("export function Column(gap: number): ColumnWidget");
         await Assert.That(output).Contains("return new ColumnWidget(gap);");
@@ -101,7 +101,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["ui.ts"];
+        var output = result["app/ui.ts"];
         await Assert.That(output).Contains("import { Column as ColumnFromWidgets }");
         await Assert
             .That(output)
@@ -148,7 +148,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["ui.ts"];
+        var output = result["app/ui.ts"];
         await Assert.That(output).Contains("import { Column as ColumnWidget }");
         await Assert.That(output).DoesNotContain("ColumnFromWidgets");
 
@@ -193,11 +193,11 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["ui.ts"];
+        var output = result["app/ui.ts"];
         await Assert.That(output).Contains("import { Column as ColumnW }");
         await Assert.That(output).Contains("export function Column(gap: number): ColumnW");
         await Assert.That(output).Contains("return new ColumnW(gap);");
-        await Assert.That(result.Keys).DoesNotContain("ts-module.ts");
+        await Assert.That(result.Keys).DoesNotContain("app/ts-module.ts");
     }
 
     [Test]
@@ -237,7 +237,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("Row as RowWidget");
         await Assert.That(output).Contains("Text as TextWidget");
         await Assert.That(output).Contains("return new RowWidget();");
@@ -276,7 +276,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("import { Column as ColumnB }");
         await Assert.That(output).DoesNotContain("ColumnA");
     }
@@ -312,7 +312,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("import { Column }");
         await Assert.That(output).DoesNotContain("ColumnDart");
         await Assert.That(output).DoesNotContain(" as ");
@@ -346,7 +346,7 @@ public class UsingAliasImportTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("import { Column }");
         await Assert.That(output).DoesNotContain(" as ");
         await Assert.That(output).Contains("new Column(12)");

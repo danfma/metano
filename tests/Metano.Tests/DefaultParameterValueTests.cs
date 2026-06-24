@@ -28,7 +28,7 @@ public class DefaultParameterValueTests
             """
         );
 
-        var output = result["greeter.ts"];
+        var output = result["app/greeter.ts"];
         await Assert.That(output).Contains("greet(name: string, greeting: string = \"hello\")");
     }
 
@@ -49,7 +49,7 @@ public class DefaultParameterValueTests
             """
         );
 
-        var output = result["builder.ts"];
+        var output = result["app/builder.ts"];
         await Assert
             .That(output)
             .Contains("function create(tag: string, attached: boolean = true): string");
@@ -70,7 +70,7 @@ public class DefaultParameterValueTests
             """
         );
 
-        var output = result["counter.ts"];
+        var output = result["app/counter.ts"];
         await Assert.That(output).Contains("tick(step: number = 1)");
     }
 
@@ -89,7 +89,7 @@ public class DefaultParameterValueTests
             """
         );
 
-        var output = result["logger.ts"];
+        var output = result["app/logger.ts"];
         await Assert.That(output).Contains("log(message: string, prefix: string | null = null)");
     }
 
@@ -108,7 +108,7 @@ public class DefaultParameterValueTests
             """
         );
 
-        var output = result["plain.ts"];
+        var output = result["app/plain.ts"];
         // Tighter assertion than `DoesNotContain("=")`: the signature
         // ends right after the return-type annotation, with no
         // initializer suffix between `value: string` and the body.
@@ -133,7 +133,7 @@ public class DefaultParameterValueTests
             """
         );
 
-        var output = result["renderer.ts"];
+        var output = result["app/renderer.ts"];
         await Assert.That(output).Contains("abstract render(body: string, title?: string): string");
         await Assert.That(output).DoesNotContain("title: string = ");
     }

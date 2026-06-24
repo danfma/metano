@@ -106,7 +106,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         bool stripInterfacePrefix,
         string? importAlias
     ) =>
-        $"namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix};importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}";
+        $"layout=full-namespace-v1;namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix};importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}";
 
     /// <summary>
     /// Builds the cache-fingerprint composite consumed by

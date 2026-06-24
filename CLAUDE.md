@@ -208,16 +208,20 @@ Rules:
 - **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/004-configurable-import-alias/plan.md`
-(opt-in, isolated Node.js subpath-import alias for internal imports in generated
-TypeScript — `--import-alias` CLI flag / `MetanoImportAlias` MSBuild property — so
-generated code can be emitted into a subfolder of an existing npm project without
-colliding with that project's own `#` alias; default behavior is unchanged).
+Active feature plan: `specs/005-deterministic-output-layout/plan.md`
+(deterministic, self-cleaning TypeScript output layout — types map to their FULL
+kebab-cased C# namespace under the package root with no common-prefix stripping
+[D1], so an unrelated sibling type can never relocate another type's file;
+per-namespace leaf barrels stay always-on while the root aggregation barrel stays
+opt-in [D2]; internal generated-to-generated imports resolve to the file directly,
+never through a barrel [D3]; and incremental rebuilds prune orphaned generated
+files via the cache output manifest without requiring `--clean`).
 For technologies, project structure, and other context, read that plan and its sibling
 `spec.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/`.
-Prior shipped features: JSX/TSX code generation at `specs/002-jsx-codegen-from-csharp/plan.md`;
-foundational JS-interop primitives (`[JsTuple]`, `[JsCallable]`, tuple deconstruction)
-at `specs/003-js-interop-primitives/plan.md`.
+Prior shipped features: configurable isolated subpath-import alias at
+`specs/004-configurable-import-alias/plan.md`; JSX/TSX code generation at
+`specs/002-jsx-codegen-from-csharp/plan.md`; foundational JS-interop primitives
+(`[JsTuple]`, `[JsCallable]`, tuple deconstruction) at `specs/003-js-interop-primitives/plan.md`.
 The project baseline + multi-target evolution roadmap remains at
 `specs/001-project-baseline-evolution/plan.md`.
 <!-- SPECKIT END -->

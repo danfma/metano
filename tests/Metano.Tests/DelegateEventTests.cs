@@ -91,7 +91,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["app.ts"];
+        var output = result["app/app.ts"];
         await Assert.That(output).Contains("countChanged$add(");
     }
 
@@ -123,7 +123,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["app.ts"];
+        var output = result["app/app.ts"];
         await Assert.That(output).Contains("countChanged$remove(");
     }
 
@@ -163,7 +163,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["presenter.ts"];
+        var output = result["app/presenter.ts"];
         await Assert.That(output).Contains("this._view.onClick = this.onButtonClicked.bind(this)");
         await Assert.That(output).DoesNotContain("bindReceiver");
     }
@@ -201,7 +201,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["presenter.ts"];
+        var output = result["app/presenter.ts"];
         await Assert.That(output).Contains("view.onClick = Handlers.handleClick");
         await Assert.That(output).DoesNotContain("Handlers.handleClick.bind");
     }
@@ -244,7 +244,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["worker.ts"];
+        var output = result["app/worker.ts"];
         // The IIFE captures the receiver once; the bind argument
         // reads from the captured temporary instead of re-running
         // the chain. The receiver expression itself appears exactly
@@ -288,7 +288,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["worker.ts"];
+        var output = result["app/worker.ts"];
         await Assert.That(output).Contains("this._scheduler.run(this.tick.bind(this))");
         await Assert.That(output).DoesNotContain("bindReceiver");
     }
@@ -318,7 +318,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["box.ts"];
+        var output = result["app/box.ts"];
         await Assert.That(output).Contains("return this.read.bind(this)");
         await Assert.That(output).DoesNotContain("bindReceiver");
     }
@@ -356,7 +356,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["watcher.ts"];
+        var output = result["app/watcher.ts"];
         await Assert.That(output).Contains("countChanged$add(this.onChanged.bind(this))");
         await Assert.That(output).DoesNotContain("bind(this).bind");
     }
@@ -386,7 +386,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["calculator.ts"];
+        var output = result["app/calculator.ts"];
         await Assert.That(output).Contains("this.tick()");
         await Assert.That(output).DoesNotContain(".bind(this)");
     }
@@ -422,7 +422,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["derived-handler.ts"];
+        var output = result["app/derived-handler.ts"];
         await Assert.That(output).Contains("super.handle.bind(this)");
         await Assert.That(output).DoesNotContain("super.handle.bind(super)");
     }
@@ -460,7 +460,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["derived-handler.ts"];
+        var output = result["app/derived-handler.ts"];
         await Assert.That(output).Contains(".bind(this.forwarder)");
         await Assert.That(output).DoesNotContain(".bind(super.forwarder)");
     }
@@ -509,7 +509,7 @@ public class DelegateEventTests
             """
         );
 
-        var output = result["page.ts"];
+        var output = result["app/page.ts"];
         await Assert.That(output).Contains("bindReceiver(this.onButtonClicked.bind(this))");
     }
 

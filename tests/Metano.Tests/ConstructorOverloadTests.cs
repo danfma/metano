@@ -201,7 +201,7 @@ public class ConstructorOverloadTests
             """
         );
 
-        var output = result["derived.ts"];
+        var output = result["app/derived.ts"];
         await Assert.That(output).Contains("extends Base");
         // Both branches reach a super(...) call before assigning the
         // derived-side property.
@@ -241,8 +241,8 @@ public class ConstructorOverloadTests
             """
         );
 
-        var baseTs = result["base.ts"];
-        var derivedTs = result["derived.ts"];
+        var baseTs = result["app/base.ts"];
+        var derivedTs = result["app/derived.ts"];
 
         // Base carries the dispatcher.
         await Assert.That(baseTs).Contains("constructor(...args: unknown[])");
@@ -280,7 +280,7 @@ public class ConstructorOverloadTests
             """
         );
 
-        var derivedTs = result["derived.ts"];
+        var derivedTs = result["app/derived.ts"];
         await Assert.That(derivedTs).Contains("extends BaseRec");
         await Assert.That(derivedTs).Contains("super(value)");
         await Assert.That(derivedTs).Contains("super(s.length)");

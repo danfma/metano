@@ -18,9 +18,9 @@ public class NamespaceTranspileTests
             """
         );
 
-        // Root namespace is App.Domain → both at root
-        await Assert.That(result).ContainsKey("status.ts");
-        await Assert.That(result).ContainsKey("user.ts");
+        // Full-namespace layout: App.Domain → app/domain/.
+        await Assert.That(result).ContainsKey("app/domain/status.ts");
+        await Assert.That(result).ContainsKey("app/domain/user.ts");
     }
 
     [Test]
@@ -42,10 +42,10 @@ public class NamespaceTranspileTests
             """
         );
 
-        // Root namespace is App.Domain
-        // Currency → root, Price → Models/
-        await Assert.That(result).ContainsKey("currency.ts");
-        await Assert.That(result).ContainsKey("models/price.ts");
+        // Full-namespace layout: App.Domain → app/domain/,
+        // App.Domain.Models → app/domain/models/.
+        await Assert.That(result).ContainsKey("app/domain/currency.ts");
+        await Assert.That(result).ContainsKey("app/domain/models/price.ts");
     }
 
     [Test]
@@ -67,9 +67,9 @@ public class NamespaceTranspileTests
             """
         );
 
-        var priceTs = result["models/price.ts"];
-        // Different namespace → import the root barrel of the package/project.
-        await Assert.That(priceTs).Contains("from \"#\"");
+        var priceTs = result["app/domain/models/price.ts"];
+        // Different namespace → import the file directly via the alias.
+        await Assert.That(priceTs).Contains("from \"#/app/domain/currency\"");
     }
 
     [Test]
@@ -91,14 +91,14 @@ public class NamespaceTranspileTests
             """
         );
 
-        // Root index should re-export Currency (StringEnum is a value, not type-only)
-        await Assert.That(result).ContainsKey("index.ts");
-        var rootIndex = result["index.ts"];
-        await Assert.That(rootIndex).Contains("export { Currency } from \"./currency\"");
+        // app/domain leaf barrel re-exports Currency (StringEnum is a value, not type-only)
+        await Assert.That(result).ContainsKey("app/domain/index.ts");
+        var domainIndex = result["app/domain/index.ts"];
+        await Assert.That(domainIndex).Contains("export { Currency } from \"./currency\"");
 
-        // Models index should re-export Price
-        await Assert.That(result).ContainsKey("models/index.ts");
-        var modelsIndex = result["models/index.ts"];
+        // app/domain/models leaf barrel re-exports Price
+        await Assert.That(result).ContainsKey("app/domain/models/index.ts");
+        var modelsIndex = result["app/domain/models/index.ts"];
         await Assert.That(modelsIndex).Contains("export { Price } from \"./price\"");
     }
 
@@ -122,8 +122,8 @@ public class NamespaceTranspileTests
             """
         );
 
-        var rootIndex = result["index.ts"];
-        await Assert.That(rootIndex).DoesNotContain("export * from \"./models\"");
+        var domainIndex = result["app/domain/index.ts"];
+        await Assert.That(domainIndex).DoesNotContain("export * from \"./models\"");
     }
 
     [Test]
@@ -142,14 +142,14 @@ public class NamespaceTranspileTests
             """
         );
 
-        var moneyTs = result["money.ts"];
+        var moneyTs = result["app/domain/money.ts"];
         // Same namespace uses relative file import to avoid a cycle through
         // the namespace barrel (`money.ts -> barrel -> ./money.ts`).
         await Assert.That(moneyTs).Contains("from \"./currency\"");
     }
 
     [Test]
-    public async Task MultipleTypesFromSameBarrel_MergeIntoSingleImportLine()
+    public async Task MultipleTypesFromSameNamespace_EachImportsFromOwnFile()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -185,21 +185,21 @@ public class NamespaceTranspileTests
             """
         );
 
-        var ticketTs = result["application/ticket.ts"];
-        await Assert
-            .That(ticketTs)
-            .Contains("import { Category, Priority, Status } from \"#/domain\";");
-        await Assert.That(ticketTs).DoesNotContain("import { Category } from \"#/domain\"");
-        await Assert.That(ticketTs).DoesNotContain("import { Priority } from \"#/domain\"");
-        await Assert.That(ticketTs).DoesNotContain("import { Status } from \"#/domain\"");
+        var ticketTs = result["app/application/ticket.ts"];
+        // Full-namespace layout: cross-namespace imports target each file
+        // directly via the alias rather than merging through the barrel.
+        await Assert.That(ticketTs).Contains("import { Category } from \"#/app/domain/category\";");
+        await Assert.That(ticketTs).Contains("import { Priority } from \"#/app/domain/priority\";");
+        await Assert.That(ticketTs).Contains("import { Status } from \"#/app/domain/status\";");
     }
 
     [Test]
-    public async Task AllTypeOnlyFromSameBarrel_UsesWholeStatementImportType()
+    public async Task AllTypeOnlyFromSameNamespace_UsesWholeStatementImportType()
     {
-        // When every name in a bucket is type-only, prefer the whole-statement
-        // `import type { … }` form over per-name `{ type A, type B }` — the
-        // latter triggers Biome's noImportTypeQualifier warning.
+        // Each type-only name imports from its own file via the alias, and a
+        // single-name bucket prefers the whole-statement `import type { … }`
+        // form over per-name `{ type A }` — the latter triggers Biome's
+        // noImportTypeQualifier warning.
         var result = TranspileHelper.Transpile(
             """
             namespace App.Domain
@@ -222,19 +222,24 @@ public class NamespaceTranspileTests
             """
         );
 
-        var handlerTs = result["application/i-handler.ts"];
+        var handlerTs = result["app/application/i-handler.ts"];
         await Assert
             .That(handlerTs)
-            .Contains("import type { IReadable, IWritable } from \"#/domain\";");
+            .Contains("import type { IReadable } from \"#/app/domain/i-readable\";");
+        await Assert
+            .That(handlerTs)
+            .Contains("import type { IWritable } from \"#/app/domain/i-writable\";");
         // No per-name type qualifier form.
         await Assert.That(handlerTs).DoesNotContain("{ type IReadable");
-        await Assert.That(handlerTs).DoesNotContain("type IWritable }");
+        await Assert.That(handlerTs).DoesNotContain("{ type IWritable");
     }
 
     [Test]
-    public async Task MixedValueAndTypeOnlyFromSameBarrel_UsesPerNameQualifier()
+    public async Task MixedValueAndTypeOnlyFromSameNamespace_EachImportsFromOwnFile()
     {
-        // Mixed bucket: values stay plain, types get the inline `type` qualifier.
+        // Full-namespace layout: each name imports from its own file, so the
+        // value stays a plain import and the type uses the whole-statement
+        // `import type` form.
         var result = TranspileHelper.Transpile(
             """
             namespace App.Domain
@@ -264,7 +269,10 @@ public class NamespaceTranspileTests
             """
         );
 
-        var jobTs = result["application/job.ts"];
-        await Assert.That(jobTs).Contains("import { Priority, type IReadable } from \"#/domain\";");
+        var jobTs = result["app/application/job.ts"];
+        await Assert
+            .That(jobTs)
+            .Contains("import type { IReadable } from \"#/app/domain/i-readable\";");
+        await Assert.That(jobTs).Contains("import { Priority } from \"#/app/domain/priority\";");
     }
 }

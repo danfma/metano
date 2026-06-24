@@ -52,7 +52,7 @@ public class LambdaTranspileTests
             """
         );
 
-        var output = result["item-filter.ts"];
+        var output = result["app/item-filter.ts"];
         await Assert.That(output).Contains("=>");
         await Assert.That(output).Contains("i.active");
     }

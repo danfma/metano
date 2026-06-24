@@ -35,7 +35,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["date-extensions.ts"];
+        var output = result["app/date-extensions.ts"];
         await Assert
             .That(output)
             .Contains("export function create(year: number, month: number, day: number): Date");
@@ -74,7 +74,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("create(2024, 1, 1)");
         await Assert.That(output).DoesNotContain("Date.create");
     }
@@ -105,7 +105,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["date-extensions.ts"];
+        var output = result["app/date-extensions.ts"];
         await Assert.That(output).Contains("export function zero$get(): Date");
         await Assert.That(output).DoesNotContain("date: Date");
     }
@@ -142,7 +142,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("zero$get()");
         await Assert.That(output).DoesNotContain("Date.zero");
     }
@@ -182,7 +182,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("default$set(5)");
         await Assert.That(output).DoesNotContain("Counter.default");
     }
@@ -216,7 +216,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["counter-extensions.ts"];
+        var output = result["app/counter-extensions.ts"];
         await Assert.That(output).Contains("export function default$get(): number");
         await Assert.That(output).Contains("export function default$set(value: number)");
         await Assert.That(output).DoesNotContain("counter: Counter");
@@ -255,7 +255,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["caller.ts"];
+        var output = result["app/caller.ts"];
         await Assert.That(output).Contains("default$set(default$get() + 1)");
         await Assert.That(output).DoesNotContain("receiver$temp$");
     }
@@ -288,7 +288,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var output = result["date-extensions.ts"];
+        var output = result["app/date-extensions.ts"];
         await Assert.That(output).Contains("new Date(");
     }
 
@@ -324,7 +324,7 @@ public class StaticExtensionMemberTests
             """
         );
 
-        var caller = result["caller.ts"];
+        var caller = result["app/caller.ts"];
         await Assert.That(caller).Contains("create(2024, 1, 1)");
         await Assert.That(caller).Contains("import { create } from \"./date-extensions\";");
     }
