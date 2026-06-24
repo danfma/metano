@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { IssueWorkflow } from "#/issues/domain/issue-workflow";
-import { IssueStatus } from "#/issues/domain/issue-status";
+import { IssueWorkflow } from "#/sample-issue-tracker/issues/domain/issue-workflow";
+import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
 
 // Exhaustive from × to matrix. Pins each allowed set against the
 // C# authoritative switch in IssueWorkflow.cs. A regression in the

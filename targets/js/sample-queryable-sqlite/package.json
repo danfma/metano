@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "sideEffects": false,
-  "main": "./src/main.ts",
+  "main": "./src/sample-queryable-sqlite/main.ts",
   "imports": {
     "#/*": {
       "types": "./dist/*.d.ts",
@@ -27,17 +27,17 @@
   "scripts": {
     "generate": "dotnet run --project ../../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj -- -p ../../../samples/SampleQueryableSqlite/SampleQueryableSqlite.csproj -o ./src --time",
     "build": "tsgo -b .",
-    "start": "bun run src/main.ts",
+    "start": "bun run src/sample-queryable-sqlite/main.ts",
     "test": "bun test"
   },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+    "./sample-queryable-sqlite": {
+      "types": "./dist/sample-queryable-sqlite/index.d.ts",
+      "import": "./dist/sample-queryable-sqlite/index.js"
     },
-    "./provider": {
-      "types": "./dist/provider/index.d.ts",
-      "import": "./dist/provider/index.js"
+    "./sample-queryable-sqlite/provider": {
+      "types": "./dist/sample-queryable-sqlite/provider/index.d.ts",
+      "import": "./dist/sample-queryable-sqlite/provider/index.js"
     }
   }
 }

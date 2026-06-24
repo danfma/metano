@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { OperationResult } from "#/shared-kernel/operation-result";
+import { OperationResult } from "#/sample-issue-tracker/shared-kernel/operation-result";
 
 describe("OperationResult", () => {
   test("ok() creates successful result with value", () => {

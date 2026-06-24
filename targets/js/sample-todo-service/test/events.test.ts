@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { assertTodoCreated, isTodoCreated, isTodoUpdated } from "#/events";
+import { assertTodoCreated, isTodoCreated, isTodoUpdated } from "#/sample-todo/service/events";
 
 // Demonstrates the [Discriminator("Kind")] narrowing: the generated
 // isT short-circuits on `v.kind !== "TypeName"` before walking the

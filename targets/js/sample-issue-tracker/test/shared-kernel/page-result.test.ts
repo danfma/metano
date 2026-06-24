@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { PageRequest } from "#/shared-kernel/page-request";
-import { PageResult } from "#/shared-kernel/page-result";
+import { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
+import { PageResult } from "#/sample-issue-tracker/shared-kernel/page-result";
 
 describe("PageResult", () => {
   test("constructor stores items and metadata", () => {

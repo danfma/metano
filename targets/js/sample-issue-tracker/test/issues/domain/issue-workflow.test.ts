@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { IssueWorkflow } from "#/issues/domain/issue-workflow";
-import { IssueStatus } from "#/issues/domain/issue-status";
-import { IssuePriority } from "#/issues/domain/issue-priority";
+import { IssueWorkflow } from "#/sample-issue-tracker/issues/domain/issue-workflow";
+import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
+import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
 import { makeIssue } from "../../helpers";
 
 describe("IssueWorkflow", () => {

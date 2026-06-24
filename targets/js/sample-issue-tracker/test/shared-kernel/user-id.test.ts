@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { UserId } from "#/shared-kernel/user-id";
+import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 describe("UserId (InlineWrapper)", () => {
   test("create produces a branded string", () => {

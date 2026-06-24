@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { InMemoryIssueRepository } from "#/issues/application/in-memory-issue-repository";
-import { IssueId } from "#/issues/domain/issue-id";
+import { InMemoryIssueRepository } from "#/sample-issue-tracker/issues/application/in-memory-issue-repository";
+import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 import { makeIssue } from "../../helpers";
 
 describe("InMemoryIssueRepository", () => {

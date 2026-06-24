@@ -13,10 +13,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
 import { Decimal } from "decimal.js";
-import { BunSqliteProductRepository } from "#/provider/bun-sqlite-product-repository.ts";
-import { createSeededDatabase, SEED_ROWS } from "#/provider/db.ts";
-import { Product } from "#/product.ts";
-import { ProductDemo } from "#/provider/product-demo.ts";
+import { BunSqliteProductRepository } from "#/sample-queryable-sqlite/provider/bun-sqlite-product-repository.ts";
+import { createSeededDatabase, SEED_ROWS } from "#/sample-queryable-sqlite/provider/db.ts";
+import { Product } from "#/sample-queryable-sqlite/product.ts";
+import { ProductDemo } from "#/sample-queryable-sqlite/provider/product-demo.ts";
 
 let db: Database;
 let repo: BunSqliteProductRepository;

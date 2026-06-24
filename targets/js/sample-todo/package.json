@@ -28,9 +28,9 @@
     "test": "bun test"
   },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+    "./sample-todo": {
+      "types": "./dist/sample-todo/index.d.ts",
+      "import": "./dist/sample-todo/index.js"
     }
   }
 }

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { JsonSerializer } from "metano-runtime/system/json";
-import { Priority, TodoItem } from "sample-todo";
-import { JsonContext } from "#/json-context";
-import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "#/todos";
+import { Priority, TodoItem } from "sample-todo/sample-todo";
+import { JsonContext } from "#/sample-todo/service/json-context";
+import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "#/sample-todo/service/todos";
 
 const ctx = JsonContext.default;
 

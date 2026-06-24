@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { Money } from "#/money";
-import { Currency } from "#/currency";
-import { NoSameMoneyCurrencyException } from "#/no-same-money-currency-exception";
+import { Money } from "#/sample-operator-overloading/money";
+import { Currency } from "#/sample-operator-overloading/currency";
+import { NoSameMoneyCurrencyException } from "#/sample-operator-overloading/no-same-money-currency-exception";
 
 describe("Money operator overloads", () => {
   const usd100 = new Money(10000n, Currency.Usd);

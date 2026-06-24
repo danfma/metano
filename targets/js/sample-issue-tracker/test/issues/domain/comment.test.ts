@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
-import { Comment } from "#/issues/domain/comment";
-import { UserId } from "#/shared-kernel/user-id";
+import { Comment } from "#/sample-issue-tracker/issues/domain/comment";
+import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 describe("Comment", () => {
   test("system() factory creates a system comment", () => {

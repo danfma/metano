@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { IssueService } from "#/issues/application/issue-service";
-import { InMemoryIssueRepository } from "#/issues/application/in-memory-issue-repository";
-import { IssueId } from "#/issues/domain/issue-id";
-import { IssueStatus } from "#/issues/domain/issue-status";
-import { IssuePriority } from "#/issues/domain/issue-priority";
-import { IssueType } from "#/issues/domain/issue-type";
-import { UserId } from "#/shared-kernel/user-id";
-import { PageRequest } from "#/shared-kernel/page-request";
+import { IssueService } from "#/sample-issue-tracker/issues/application/issue-service";
+import { InMemoryIssueRepository } from "#/sample-issue-tracker/issues/application/in-memory-issue-repository";
+import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
+import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
+import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
+import { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
+import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
+import { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
 
 // End-to-end workflows that exercise chained service operations +
 // OperationResult error propagation. Existing issue-service.test.ts

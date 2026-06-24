@@ -29,9 +29,9 @@
     "test": "bun test"
   },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+    "./sample-queryable-arrays": {
+      "types": "./dist/sample-queryable-arrays/index.d.ts",
+      "import": "./dist/sample-queryable-arrays/index.js"
     }
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PageRequest } from "#/shared-kernel/page-request";
+import { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
 
 describe("PageRequest", () => {
   test("default values are 1 and 20", () => {

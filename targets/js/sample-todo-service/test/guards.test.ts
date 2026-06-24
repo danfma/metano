@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { assertCreateTodoDto, isCreateTodoDto } from "#/todos";
+import { assertCreateTodoDto, isCreateTodoDto } from "#/sample-todo/service/todos";
 
 describe("CreateTodoDto guards", () => {
   test("isCreateTodoDto narrows a valid body", () => {

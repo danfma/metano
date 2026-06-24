@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { IssueId } from "#/issues/domain/issue-id";
+import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 
 describe("IssueId (InlineWrapper)", () => {
   test("new_ generates unique values", () => {

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { Priority } from "#/priority";
-import { TodoItem } from "#/todo-item";
-import { TodoList } from "#/todo-list";
+import { Priority } from "#/sample-todo/priority";
+import { TodoItem } from "#/sample-todo/todo-item";
+import { TodoList } from "#/sample-todo/todo-list";
 
 describe("TodoItem", () => {
   test("creates with defaults", () => {

@@ -1,9 +1,9 @@
-import { Issue } from "#/issues/domain/issue";
-import { IssueId } from "#/issues/domain/issue-id";
-import { IssueStatus } from "#/issues/domain/issue-status";
-import { IssuePriority } from "#/issues/domain/issue-priority";
-import { IssueType } from "#/issues/domain/issue-type";
-import { UserId } from "#/shared-kernel/user-id";
+import { Issue } from "#/sample-issue-tracker/issues/domain/issue";
+import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
+import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
+import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
+import { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
+import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 export function makeIssue(overrides?: Partial<{
   title: string;

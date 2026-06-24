@@ -1,18 +1,22 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-export { JsonContext } from "./json-context";
-import * as $Issues_Application from "./issues/application";
-import * as $Issues_Domain from "./issues/domain";
-import * as $Planning_Domain from "./planning/domain";
-import * as $SharedKernel from "./shared-kernel";
+import * as $SampleIssueTracker from "./sample-issue-tracker";
+import * as $SampleIssueTracker_Issues_Application from "./sample-issue-tracker/issues/application";
+import * as $SampleIssueTracker_Issues_Domain from "./sample-issue-tracker/issues/domain";
+import * as $SampleIssueTracker_Planning_Domain from "./sample-issue-tracker/planning/domain";
+import * as $SampleIssueTracker_SharedKernel from "./sample-issue-tracker/shared-kernel";
 
-export namespace Issues {
-  export import Application = $Issues_Application;
+export namespace SampleIssueTracker {
+  export import _ = $SampleIssueTracker;
 
-  export import Domain = $Issues_Domain;
+  export namespace Issues {
+    export import Application = $SampleIssueTracker_Issues_Application;
+
+    export import Domain = $SampleIssueTracker_Issues_Domain;
+  }
+
+  export namespace Planning {
+    export import Domain = $SampleIssueTracker_Planning_Domain;
+  }
+
+  export import SharedKernel = $SampleIssueTracker_SharedKernel;
 }
-
-export namespace Planning {
-  export import Domain = $Planning_Domain;
-}
-
-export import SharedKernel = $SharedKernel;

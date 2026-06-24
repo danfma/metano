@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { IssueStatus } from "#/issues/domain/issue-status";
-import { IssuePriority } from "#/issues/domain/issue-priority";
-import { IssueType } from "#/issues/domain/issue-type";
+import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
+import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
+import { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
 
 describe("StringEnums", () => {
   test("IssueStatus values are accessible as object members", () => {
