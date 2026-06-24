@@ -77,13 +77,24 @@ public class Commands
             // Target-specific post-emit: write/merge the consumer's package.json so the
             // generated barrels are exposed via subpath imports/exports.
             // Dry-run skips the disk write to keep "no files modified" honest.
-            if (!skipPackageJson && !dryRun && target.LastSourceFiles.Count > 0)
+            if (!skipPackageJson && !dryRun)
             {
                 var outputDir = Path.GetFullPath(output);
 
                 var resolvedPackageRoot = packageRoot is not null
                     ? Path.GetFullPath(packageRoot)
                     : FindPackageRoot(outputDir);
+
+                // Reconcile package.json when we emitted files, OR when nothing was
+                // emitted but a package.json already exists — the latter prunes stale
+                // transpiler exports after the last transpilable type is removed
+                // (without scaffolding a package.json for a project that never produced
+                // output).
+                var packageJsonExists = File.Exists(
+                    Path.Combine(resolvedPackageRoot, "package.json")
+                );
+                if (target.LastSourceFiles.Count == 0 && !packageJsonExists)
+                    return;
 
                 var pkgDiagnostics = PackageJsonWriter.UpdateOrCreate(
                     resolvedPackageRoot,
