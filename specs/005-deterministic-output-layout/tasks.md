@@ -64,7 +64,7 @@ Multi-project .NET solution: target-agnostic core in `src/Metano.Compiler/`, Typ
 - [x] T009 [US1] In `src/Metano.Compiler.TypeScript/Transformation/BarrelFileGenerator.cs`, confirm one leaf `index.ts` is emitted per nested full-namespace directory (and the root barrel still only when `NamespaceBarrels` is opt-in).
 - [x] T010 [P] [US1] In `src/Metano.Compiler/NamespaceUtilities.cs`, remove `FindCommonPrefix` if no non-layout caller remains (grep first); otherwise leave it and note the remaining caller.
 - [x] T011 [US1] Regenerate golden fixtures whose source declares a namespace under `tests/Metano.Tests/Expected/` and update the corresponding `ContainsKey("…")` path assertions in `tests/Metano.Tests/*.cs`; review the diff to confirm only the full-namespace prefix changed.
-- [~] T012 [US1] [BLOCKED: local NuGet multi-source restore (NU1507) — regenerate in a single-source/CI env] Regenerate namespace-declaring samples under `targets/js/*` (e.g. `sample-todo`, `sample-issue-tracker`, `sample-todo-service`) and update their `tsconfig.json` / `package.json` subpaths to the full-namespace layout; build each with Bun.
+- [x] T012 [US1] Regenerated all C#-backed samples to full-namespace via MSBuild (honors per-csproj flags); consumers re-pointed; 12/13 samples green (HelloWorld pre-existing vite-scaffold failure, unrelated).
 - [x] T013 [US1] Run the full TUnit suite and the regenerated sample builds; verify the US1 tests pass and that transpiling twice yields a byte-identical output tree (idempotent, SC-004).
 
 **Checkpoint**: Layout is stable and deterministic; this is a shippable MVP (the reported "file relocated" class of failures is gone).
@@ -112,7 +112,7 @@ Multi-project .NET solution: target-agnostic core in `src/Metano.Compiler/`, Typ
 
 - [x] T022 [US3] In `src/Metano.Compiler.TypeScript/Transformation/PathNaming.cs`, change `ComputeRelativeImportPath` so cross-namespace internal references target the file (`#<alias>/<full-ns>/<kebab-type>`) instead of the namespace barrel; keep same-namespace `./<kebab-type>` (depends on T007).
 - [x] T023 [US3] In `src/Metano.Compiler.TypeScript/PackageJsonWriter.cs`, ensure `exports` (and the `#<alias>/*` mapping) are derived from the emitted full-namespace leaf-barrel paths so declared subpaths mirror the layout (FR-013).
-- [~] T024 [US3] [BLOCKED with T012 — same NuGet env issue] Regenerate the namespace-declaring samples and update hand-written consumer imports to the full-namespace subpath; confirm a clean (`--clean`) regeneration type-checks with no orphan dependency and `bun test` is green for those samples.
+- [x] T024 [US3] Hand-written consumers re-pointed to full-namespace subpaths; bun build+test green across samples; SampleIssueTracker namespace-barrels test updated for the package-rooted aggregation.
 - [x] T025 [US3] Add a cross-package TUnit fixture in `tests/Metano.Tests/DeterministicLayoutScenarioTests.cs` using `TranspileHelper.TranspileWithLibrary` that replicates the reported Vigiata scenario (a namespace-declaring library — `Vigiata.Contracts.Profiles.UserProfileDto` plus `Vigiata.Contracts.Serialization.*` — consumed under an import alias), asserting: `UserProfile` resolves via `#web-server-contracts/vigiata/contracts/profiles`; no root `index.ts` / `user-profile.ts` is emitted; and a clean regeneration leaves no stale root reference (SC-007).
 
 **Checkpoint**: All three stories are independently functional; the import contract is coherent and orphan-free.
