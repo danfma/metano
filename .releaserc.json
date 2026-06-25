@@ -58,7 +58,7 @@
     [
       "@semantic-release/exec",
       {
-        "publishCmd": "dotnet pack Metano-packages.slnx -c Release -p:Version=${nextRelease.version} -p:PackageVersion=${nextRelease.version} -o ./artifacts && dotnet nuget push './artifacts/*.nupkg' --api-key \"$NUGET_TOKEN\" --source https://api.nuget.org/v3/index.json --skip-duplicate"
+        "publishCmd": "dotnet pack Metano-packages.slnx -c Release -p:Version=${nextRelease.version} -p:PackageVersion=${nextRelease.version} -o ./artifacts && dotnet nuget push './artifacts/*.nupkg' --api-key \"$NUGET_API_KEY\" --source https://api.nuget.org/v3/index.json --skip-duplicate"
       }
     ],
     [

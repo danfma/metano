@@ -11,7 +11,7 @@ on:
 
 permissions:
   contents: write
-  id-token: write # npm Trusted Publishing (OIDC)
+  id-token: write # npm + NuGet Trusted Publishing (OIDC)
   pull-requests: write
   issues: write
 
@@ -41,13 +41,25 @@ jobs:
       - name: Install npm dependencies
         run: bun install
 
+      # Exchange the workflow's OIDC token for a short-lived NuGet API key
+      # (NuGet Trusted Publishing) — replaces the long-lived NUGET_TOKEN secret.
+      # Requires a trusted-publishing policy on nuget.org for user `danfma`
+      # covering every package ID in Metano-packages.slnx. Skipped on dry runs,
+      # where semantic-release never reaches the dotnet nuget push step.
+      - name: NuGet login (OIDC → temporary API key)
+        id: nuget_login
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        uses: NuGet/login@v1
+        with:
+          user: danfma
+
       # semantic-release: analyze commits → bump version → write CHANGELOG.md →
       # commit + tag + push → exec `dotnet pack && dotnet nuget push` → create
       # GitHub Release with notes generated from the commit log.
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
+          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             bunx semantic-release --dry-run
