@@ -4,6 +4,25 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.6.0
+
+_2026-06-25_
+
+
+### ✨ Features
+
+* emit full-namespace TypeScript layout with self-cleaning incremental builds ([dd125ef](https://github.com/danfma/metano/commit/dd125ef2ba383b5a749d6ede4485d68935504dda))
+
+### 🐛 Bug Fixes
+
+* harden orphan pruning against null manifest and directory-read failures ([6272918](https://github.com/danfma/metano/commit/6272918e8864c1ef54288af80027dfb9706cbbd1))
+* prune stale package.json exports when the last transpilable type is removed ([78eaaf6](https://github.com/danfma/metano/commit/78eaaf67bb4570f0ddc1342cf2ab6391252a5cfc))
+
+### 📝 Documentation
+
+* mark sample-regeneration tasks complete in feature 005 tasks ([8411df2](https://github.com/danfma/metano/commit/8411df2ee40dde2567e4a98e8c8825279fe99c16))
+* reconcile baseline matrix and cross-package docs with full-namespace layout ([5fe9c1c](https://github.com/danfma/metano/commit/5fe9c1ccfa5a86844c345067c0b028db59c8d9e1))
+
 ## 2.5.0
 
 _2026-06-23_
