@@ -818,6 +818,29 @@ public class DartBackendTests
         await Assert.That(dart).DoesNotContain("import 'package:metano_runtime");
     }
 
+    [Test]
+    public async Task NestedRecordInNonRecordParent_DoesNotFoldChildHashCodeIntoParentFile()
+    {
+        // Regression guard for feature 006: runtime requirements are collected per emitted
+        // file. Dart emits one file per type, so a nested record's HashCode belongs to the
+        // child's file, never the parent's. An earlier TypeScript fix that populated the
+        // shared core IR's NestedTypes folded the child's requirement into the parent and
+        // regressed exactly this — the collection must stay a per-target, per-file concern.
+        var (files, _) = TranspileDart(
+            """
+            [assembly: TranspileAssembly]
+
+            public class Outer
+            {
+                public sealed record Inner(int Count);
+            }
+            """
+        );
+
+        await Assert.That(files["inner.dart"]).Contains("HashCode");
+        await Assert.That(files["outer.dart"]).DoesNotContain("HashCode");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (

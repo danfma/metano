@@ -936,29 +936,49 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     {
         var acc = new HashSet<IrRuntimeRequirement>();
         foreach (var type in types)
-        {
-            if (
-                SymbolHelper.HasImport(type)
-                || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript)
-            )
-                continue;
-            // Synthetic top-level entry points are wrapped in a class but emitted
-            // as module-level code by EmitTopLevelStatements; the IR class
-            // extraction would produce an irrelevant shape, so skip it.
-            if (
-                ir.EntryPoint is not null
-                && SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType)
-            )
-                continue;
+            ScanTypeAndEmittedNested(type, acc, irCache);
+        return acc;
+    }
 
-            var typeIr = GetOrExtractIr(type, irCache);
-            if (typeIr is null)
-                continue;
+    /// <summary>
+    /// Accumulates the runtime requirements for <paramref name="type"/> and every nested
+    /// type the target emits into the same file. Nested companion variants are emitted into
+    /// the parent's file by <see cref="TransformNestedTypes"/>, so the helpers their bodies
+    /// use (e.g. <c>valueEquals</c> for a non-strict variant field) must be imported there
+    /// too. Recursion is bounded by type-nesting depth and gated by
+    /// <see cref="IsExportableNestedType"/> so a nested type the backend does not emit never
+    /// contributes a spurious requirement. Runtime collection stays a target concern because
+    /// only the target knows which nested types share the parent's file.
+    /// </summary>
+    private void ScanTypeAndEmittedNested(
+        INamedTypeSymbol type,
+        HashSet<IrRuntimeRequirement> acc,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration> irCache
+    )
+    {
+        // [Import]/[Ignore] types are discoverable but emit no declaration (BuildTypeStatements
+        // skips them). The recursion gate IsExportableNestedType lets an [Import] nested variant
+        // through (it is still IsTranspilable), so this guard is what drops it — without it a
+        // non-emitted variant's fields would pull a spurious runtime import.
+        if (SymbolHelper.HasImport(type) || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
+            return;
+        // Synthetic top-level entry points are wrapped in a class but emitted as
+        // module-level code by EmitTopLevelStatements; the IR class extraction would
+        // produce an irrelevant shape, so skip it.
+        if (
+            ir.EntryPoint is not null
+            && SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType)
+        )
+            return;
 
+        var typeIr = GetOrExtractIr(type, irCache);
+        if (typeIr is not null)
             foreach (var req in IrRuntimeRequirementScanner.Scan(typeIr))
                 acc.Add(req);
-        }
-        return acc;
+
+        foreach (var nested in type.GetTypeMembers())
+            if (IsExportableNestedType(nested))
+                ScanTypeAndEmittedNested(nested, acc, irCache);
     }
 
     /// <summary>

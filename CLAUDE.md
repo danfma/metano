@@ -208,20 +208,24 @@ Rules:
 - **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/005-deterministic-output-layout/plan.md`
-(deterministic, self-cleaning TypeScript output layout — types map to their FULL
-kebab-cased C# namespace under the package root with no common-prefix stripping
-[D1], so an unrelated sibling type can never relocate another type's file;
-per-namespace leaf barrels stay always-on while the root aggregation barrel stays
-opt-in [D2]; internal generated-to-generated imports resolve to the file directly,
-never through a barrel [D3]; and incremental rebuilds prune orphaned generated
-files via the cache output manifest without requiring `--clean`).
+Active feature plan: `specs/006-fix-nested-variant-imports/plan.md`
+(bug fix — generated TypeScript for the companion-namespace lowering of an abstract
+record with nested record variants [the `[StrictUnionGuard]` pattern] dropped imports
+for any symbol referenced only inside the nested `namespace` block. Two independent
+defects: the TS import walker `ImportCollector` walked only `ns.Functions`, never
+`ns.Members` [missing intra-project/cross-package type refs like `UserProfile`]; and
+the core `IrClassExtractor` hard-coded `NestedTypes: null`, leaving the
+`IrRuntimeRequirementScanner` recursion dead [missing runtime helpers like
+`valueEquals`]. Fix: walk `ns.Members` in the collector + populate `NestedTypes` in
+the core IR, plus the first golden test for the namespace pattern).
 For technologies, project structure, and other context, read that plan and its sibling
 `spec.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/`.
-Prior shipped features: configurable isolated subpath-import alias at
-`specs/004-configurable-import-alias/plan.md`; JSX/TSX code generation at
-`specs/002-jsx-codegen-from-csharp/plan.md`; foundational JS-interop primitives
-(`[JsTuple]`, `[JsCallable]`, tuple deconstruction) at `specs/003-js-interop-primitives/plan.md`.
+Prior shipped features: deterministic, self-cleaning full-namespace TypeScript output
+layout at `specs/005-deterministic-output-layout/plan.md`; configurable isolated
+subpath-import alias at `specs/004-configurable-import-alias/plan.md`; JSX/TSX code
+generation at `specs/002-jsx-codegen-from-csharp/plan.md`; foundational JS-interop
+primitives (`[JsTuple]`, `[JsCallable]`, tuple deconstruction) at
+`specs/003-js-interop-primitives/plan.md`.
 The project baseline + multi-target evolution roadmap remains at
 `specs/001-project-baseline-evolution/plan.md`.
 <!-- SPECKIT END -->

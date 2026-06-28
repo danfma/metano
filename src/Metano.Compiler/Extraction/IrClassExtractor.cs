@@ -11,7 +11,9 @@ namespace Metano.Compiler.Extraction;
 /// with semantic flags), and constructor shapes (primary + overloads with parameter
 /// promotion flags). Method bodies, property getter/setter bodies, initializer
 /// expressions, and constructor bodies are left null and filled in when expression
-/// extraction is available. Nested types are <em>not yet</em> extracted.
+/// extraction is available. Nested types are <em>not</em> extracted here; each
+/// language target collects runtime requirements for the nested companion variants
+/// it emits (the TypeScript target does so in <c>TypeTransformer.ScanIrRuntimeRequirements</c>).
 /// </para>
 /// </summary>
 public static class IrClassExtractor

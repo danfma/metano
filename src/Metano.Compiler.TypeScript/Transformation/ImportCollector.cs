@@ -739,13 +739,17 @@ public sealed class ImportCollector(
                     CollectFromExpression(value, sink);
                 break;
             case TsNamespaceDeclaration ns:
+                // Companion namespaces hold both branded-companion functions and nested
+                // type companions (variant classes) in Members. Both must be walked so
+                // symbols referenced only inside the block — external types, value refs,
+                // guards — are imported. Recurse through the same entry point the top
+                // level uses so every node kind is collected identically at any depth.
                 foreach (var func in ns.Functions)
-                {
-                    foreach (var p in func.Parameters)
-                        CollectFromType(p.Type, names, crossPackageOrigins);
-                    CollectFromType(func.ReturnType, names, crossPackageOrigins);
-                    CollectFromStatements(func.Body, sink);
-                }
+                    CollectFromTopLevel(func, sink);
+
+                if (ns.Members is not null)
+                    foreach (var member in ns.Members)
+                        CollectFromTopLevel(member, sink);
                 break;
             case TsClass cls:
                 CollectFromTypeParameters(cls.TypeParameters, names, crossPackageOrigins);
