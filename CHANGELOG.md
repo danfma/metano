@@ -4,6 +4,15 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.6.1
+
+_2026-06-29_
+
+
+### 🐛 Bug Fixes
+
+* import symbols referenced only inside nested record variants ([02c224c](https://github.com/danfma/metano/commit/02c224cb400e11b89285a45fd667a098f16ccf0a))
+
 ## 2.6.0
 
 _2026-06-25_
