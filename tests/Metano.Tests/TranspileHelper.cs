@@ -174,11 +174,14 @@ public static class TranspileHelper
             StripInterfacePrefix = stripInterfacePrefix,
             ImportAlias = importAlias,
         };
+
         var files = transformer.TransformAll();
         var printer = new Printer();
         var result = new Dictionary<string, string>();
+
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);
+
         // Mirror the production host merge — frontend-raised diagnostics
         // (extraction-time validations like MS0010) need to surface to
         // test callers alongside the transformer's own output.

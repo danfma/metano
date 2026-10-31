@@ -172,6 +172,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateThisAttribute(compilation, diagnostics);
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
             ValidateEmitAttribute(compilation, diagnostics);
+
             IgnoreReferenceValidator.Validate(
                 compilation,
                 assemblyWideTranspile,
@@ -179,6 +180,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 generatedSources,
                 diagnostics
             );
+
             ValidateJsTupleAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsCallableAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
