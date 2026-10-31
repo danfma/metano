@@ -161,6 +161,59 @@ public class NullableTranspileTests
         await Assert.That(output).Contains("value?.length");
     }
 
+    [Test]
+    public async Task NullConditionalAccess_AppliesBclMappingsAndContinuesTheChain()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            [Transpile, NoContainer]
+            public static class Helper
+            {
+                public static string? Upper(string? value) => value?.ToUpper();
+                public static string? SubstringThenTrim(string? value) => value?.Substring(1).Trim();
+                public static int? DictionaryCount(
+                    global::System.Collections.Generic.Dictionary<string, int>? value
+                ) => value?.Count;
+                public static bool? HasKey(
+                    global::System.Collections.Generic.Dictionary<string, int>? value,
+                    string key
+                ) => value?.ContainsKey(key);
+                public static void ClearIfPresent(
+                    global::System.Collections.Generic.List<int>? value
+                ) => value?.Clear();
+            }
+            """
+        );
+
+        var output = result["helper.ts"];
+        await Assert.That(output).Contains("value?.toUpperCase()");
+        await Assert.That(output).Contains("value?.substring(1).trim()");
+        await Assert.That(output).Contains("value?.size");
+        await Assert.That(output).Contains("value?.has(key)");
+        await Assert
+            .That(output)
+            .Contains(
+                "$__metanoOptionalReceiver == null ? undefined : $__metanoOptionalReceiver.length = 0"
+            );
+    }
+
+    [Test]
+    public async Task StringEmpty_MapsToEmptyStringLiteral()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Helper
+            {
+                public static string GetEmpty() => string.Empty;
+            }
+            """
+        );
+
+        await Assert.That(result["helper.ts"]).Contains("return \"\";");
+    }
+
     // ─── Nullable generic types ─────────────────────────────
 
     [Test]

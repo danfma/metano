@@ -37,6 +37,30 @@ public class JsCallableTranspileTests
         await Assert.That(output).DoesNotContain(".invoke");
     }
 
+    [Test]
+    public async Task OptionalInvoke_LowersToOptionalCall()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, JsCallable]
+            public interface IAction { void Invoke(int value); }
+
+            [Transpile]
+            public class Caller
+            {
+                public void Fire(IAction? callback) => callback?.Invoke(5);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("callback?.(5)");
+        await Assert.That(output).DoesNotContain(".invoke");
+    }
+
     // Contract C2 — overloaded Invoke (value + updater) both lower to a call.
     [Test]
     public async Task OverloadedInvoke_BothLowerToDirectCall()
