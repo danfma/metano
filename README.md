@@ -139,13 +139,25 @@ export class TodoItem {
 The default walkthrough targets TypeScript, because that is the production path
 and the one wired into `Metano.Build`.
 
-Prerequisites: .NET SDK 10.0 preview, C# preview features, and a JS runtime such
-as Bun.
+Prerequisites: .NET SDK 10.0 or later (stable), the `Metano.Compiler.TypeScript`
+.NET tool, and a JS runtime such as Bun.
 
 ```bash
 dotnet add package Metano
 dotnet add package Metano.Build
 ```
+
+`Metano.Build` does not bundle the compiler — the target language is your
+choice — so install the TypeScript compiler as a .NET tool. A local tool
+manifest at the repository root keeps the version pinned for everyone:
+
+```bash
+dotnet new tool-manifest            # once per repository
+dotnet tool install Metano.Compiler.TypeScript
+```
+
+Without the tool the build stops with `METANOBUILD001` and these instructions
+(`dotnet tool restore` when the manifest already lists it).
 
 Point your C# project at a generated TypeScript package:
 
@@ -162,12 +174,18 @@ Then build:
 dotnet build
 ```
 
-For manual runs:
+For manual runs, invoke the same tool directly (install it with `--global` to
+use it outside a repository with a tool manifest):
 
 ```bash
-dotnet tool install --global Metano.Compiler.TypeScript
 dotnet metano-typescript -p path/to/YourProject.csproj -o path/to/output/src --clean
 ```
+
+The generated `package.json` lists an opt-in `source` condition first in every
+`exports` / `imports` entry, so a Vite dev server or TypeScript project can read
+the generated `.ts` files without building `dist` first (Vite
+`resolve: { conditions: ["source", ...defaultClientConditions] }`, TypeScript
+`"customConditions": ["source"]`). Default resolution keeps using `dist`.
 
 The full walkthrough is in [Getting Started](docs/getting-started.md).
 

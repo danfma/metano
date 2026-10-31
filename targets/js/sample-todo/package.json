@@ -5,6 +5,7 @@
   "sideEffects": false,
   "imports": {
     "#/*": {
+      "source": "./src/*.ts",
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./src/*.ts"
@@ -29,6 +30,7 @@
   },
   "exports": {
     "./sample-todo": {
+      "source": "./src/sample-todo/index.ts",
       "types": "./dist/sample-todo/index.d.ts",
       "import": "./dist/sample-todo/index.js"
     }

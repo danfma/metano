@@ -30,6 +30,18 @@
       MetanoFilePrefix       (optional)  Verbatim text inserted at the top of every generated file, followed by a single newline. Use for formatter / lint directives (Biome `biome-ignore-all`, Prettier `// @prettier-ignore`, `// @generated` markers). Multi-line values are accepted; pass through MSBuild XML escaping.
       MetanoExtraArgs        (optional)  Additional CLI arguments
       MetanoPostBuildCommand (optional)  Shell command to run after transpilation completes. Receives the consumer's choice of formatter / linter / packager. Stays empty by default so the target ships no tool dependency; consumers opt in per project when they want the post-emit pass.
+      MetanoSkipToolCheck    (optional)  true to skip the pre-flight check that the `metano-typescript` .NET tool is installed (default: false). The check only runs when the transpile target is out of date and not in dev mode (MetanoCompilerProject unset); when the tool is missing the build fails with METANOBUILD001 and the install instructions instead of the generic `dotnet-metano-typescript does not exist` message.
+
+    Tool requirement:
+
+      This package does NOT bundle the compiler: the target language is the
+      consumer's choice. Install the TypeScript compiler as a .NET tool,
+      preferably in a local tool manifest committed with the repository:
+
+        dotnet new tool-manifest
+        dotnet tool install Metano.Compiler.TypeScript
+
+      or install it machine-wide with the tool install `global` flag.
 
     Asset item type (FR-048):
 
@@ -165,6 +177,36 @@
     <PropertyGroup>
       <_MetanoArgs>@(_MetanoArg, ' ')</_MetanoArgs>
     </PropertyGroup>
+
+    <!-- Pre-flight: probe the installed tool before invoking it so a
+         missing tool surfaces actionable install instructions instead of
+         the dotnet host's generic "command not found" text. Lives inside
+         this target (not in DependsOnTargets) so it only costs a process
+         start when the transpile actually runs, never on up-to-date builds.
+         Skipped in dev mode, where `dotnet run` builds the compiler itself. -->
+    <PropertyGroup>
+      <_MetanoShouldProbeTool
+        Condition="'$(MetanoCompilerProject)' == '' and '$(MetanoSkipToolCheck)' != 'true'"
+        >true</_MetanoShouldProbeTool
+      >
+    </PropertyGroup>
+    <Exec
+      Condition="'$(_MetanoShouldProbeTool)' == 'true'"
+      Command="$(_MetanoCmd) --version"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      EchoOff="true"
+      IgnoreExitCode="true"
+      IgnoreStandardErrorWarningFormat="true"
+      StandardOutputImportance="low"
+      StandardErrorImportance="low"
+    >
+      <Output TaskParameter="ExitCode" PropertyName="_MetanoToolProbeExitCode" />
+    </Exec>
+    <Error
+      Condition="'$(_MetanoShouldProbeTool)' == 'true' and '$(_MetanoToolProbeExitCode)' != '0'"
+      Code="METANOBUILD001"
+      Text="The Metano TypeScript compiler tool (metano-typescript) is not available or could not be started for $(MSBuildProjectName) (`$(_MetanoCmd) --version` exited with code $(_MetanoToolProbeExitCode)). Metano.Build does not bundle the compiler; install it as a local .NET tool from the repository root with `dotnet new tool-manifest` (once) and `dotnet tool install Metano.Compiler.TypeScript`, or globally with `dotnet tool install --global Metano.Compiler.TypeScript`. If the tool is already listed in .config/dotnet-tools.json, run `dotnet tool restore`. Set MetanoSkipToolCheck=true to bypass this check."
+    />
 
     <Message
       Importance="high"

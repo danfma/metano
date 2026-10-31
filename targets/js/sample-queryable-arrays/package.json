@@ -6,6 +6,7 @@
   "sideEffects": false,
   "imports": {
     "#/*": {
+      "source": "./src/*.ts",
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./src/*.ts"
@@ -30,6 +31,7 @@
   },
   "exports": {
     "./sample-queryable-arrays": {
+      "source": "./src/sample-queryable-arrays/index.ts",
       "types": "./dist/sample-queryable-arrays/index.d.ts",
       "import": "./dist/sample-queryable-arrays/index.js"
     }

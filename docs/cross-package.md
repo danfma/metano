@@ -124,7 +124,7 @@ export class User {
   "name": "@acme/users",
   "dependencies": {
     "@acme/shared": "workspace:*",
-    "metano-runtime": "^0.1.0"
+    "metano-runtime": "^2.6.1"
   }
 }
 ```

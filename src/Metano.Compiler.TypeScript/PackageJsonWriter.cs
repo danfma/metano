@@ -26,6 +26,14 @@ public static class PackageJsonWriter
     };
 
     /// <summary>
+    /// Conditions the transpiler started emitting after its first <c>imports</c>
+    /// seeding. A manifest written by an older version lacks them, so they are
+    /// ignored when deciding whether an existing entry still holds the
+    /// transpiler's own mapping.
+    /// </summary>
+    private static readonly HashSet<string> ConditionsIntroducedAfterSeeding = ["source"];
+
+    /// <summary>
     /// Updates (or creates) the package.json at <paramref name="packageRoot"/> with imports/exports
     /// derived from the generated TS files. Paths are emitted relative to the package root and
     /// point to the dist directory (compiled JS) with a fallback to the source TS files.
@@ -73,7 +81,7 @@ public static class PackageJsonWriter
         // Build the imports/exports objects. Exports are only needed for libraries.
         var exports = isExecutable
             ? null
-            : BuildExports(files, distDirRelativeToPackageRoot, outputPrefix);
+            : BuildExports(files, srcRelative, distDirRelativeToPackageRoot, outputPrefix);
         // Check for a root barrel from the file list — executables skip exports
         // but may still need the "#" import alias for internal barrel imports.
         // When outputPrefix is set, the root barrel is at {prefix}/index.ts.
@@ -121,10 +129,10 @@ public static class PackageJsonWriter
         // consumer who has retargeted an alias by hand (e.g. pointing
         // `#/*` at `./lib/*` for a non-default build directory) keeps
         // that mapping across regenerations. Keys absent from the
-        // existing object are added; existing keys — including a
-        // host project's own `#` and transpiler-shaped ones from a
-        // previous run — are left alone.
-        SeedMissingImports(root, imports);
+        // existing object are added; an existing key is only touched
+        // when it still holds the transpiler's own mapping, which then
+        // gains any condition introduced since (e.g. `source`).
+        SeedOrUpgradeImports(root, imports);
 
         // Exports merge additively — see `MergeTranspilerManagedExports`
         // for the shape-detection rule and the deep-merge contract. Run
@@ -279,13 +287,45 @@ public static class PackageJsonWriter
                 && entryValue is JsonObject generatedEntry
             )
             {
-                foreach (var (fieldKey, fieldValue) in generatedEntry)
-                    existingEntry[fieldKey] = fieldValue?.DeepClone();
+                MergeConditions(existingEntry, generatedEntry);
             }
             else
             {
                 existing[entryKey] = entryValue?.DeepClone();
             }
+        }
+    }
+
+    /// <summary>
+    /// Copies every generated condition into <paramref name="existingEntry"/>
+    /// while keeping the resolution order meaningful. Node and bundlers
+    /// pick the first matching key of a conditional entry, so a condition
+    /// is only useful at the right position: a condition already present
+    /// is refreshed in place, and a missing one is inserted right after
+    /// the previous generated condition (or at the top when it is the
+    /// first one, as <c>source</c> is). Conditions the consumer added keep
+    /// their relative position.
+    /// </summary>
+    private static void MergeConditions(JsonObject existingEntry, JsonObject generatedEntry)
+    {
+        var insertionIndex = 0;
+
+        foreach (var (condition, target) in generatedEntry)
+        {
+            var existingIndex = existingEntry.IndexOf(condition);
+
+            if (existingIndex >= 0)
+            {
+                existingEntry[condition] = target?.DeepClone();
+                // Never move the cursor backwards: when the consumer reordered
+                // the generated conditions, a later one (e.g. `default`) must
+                // still land after every generated condition seen so far.
+                insertionIndex = Math.Max(insertionIndex, existingIndex + 1);
+                continue;
+            }
+
+            existingEntry.Insert(insertionIndex, condition, target?.DeepClone());
+            insertionIndex++;
         }
     }
 
@@ -328,14 +368,15 @@ public static class PackageJsonWriter
 
     /// <summary>
     /// Seeds the <c>imports</c> object with the transpiler's
-    /// <c>#</c> / <c>#/*</c> aliases on first creation while
-    /// leaving every existing key untouched on subsequent runs. A
-    /// consumer who retargeted <c>#/*</c> by hand (for a custom
-    /// build dir, alternate dist layout, or wrapper pre-processor)
-    /// keeps that mapping across regenerations — the transpiler
-    /// only fills in keys the consumer has not picked yet.
+    /// <c>#</c> / <c>#/*</c> aliases on first creation. On subsequent
+    /// runs a key the consumer retargeted by hand (for a custom build
+    /// dir, alternate dist layout, or wrapper pre-processor) keeps that
+    /// mapping — the transpiler only fills in keys the consumer has not
+    /// picked yet, and upgrades keys that still hold its own mapping so
+    /// manifests written by an older version gain new conditions such
+    /// as <c>source</c>.
     /// </summary>
-    private static void SeedMissingImports(JsonObject root, JsonObject generated)
+    private static void SeedOrUpgradeImports(JsonObject root, JsonObject generated)
     {
         if (root["imports"] is not JsonObject existing)
         {
@@ -345,15 +386,65 @@ public static class PackageJsonWriter
 
         foreach (var (entryKey, entryValue) in generated)
         {
-            if (existing.ContainsKey(entryKey))
+            if (!existing.ContainsKey(entryKey))
+            {
+                existing[entryKey] = entryValue?.DeepClone();
                 continue;
-            existing[entryKey] = entryValue?.DeepClone();
+            }
+
+            UpgradeTranspilerMapping(existing[entryKey], entryValue);
         }
     }
 
     /// <summary>
+    /// Merges the generated conditions into an existing imports entry
+    /// only while it still holds the transpiler's own mapping; a
+    /// retargeted or non-object entry is left exactly as the consumer
+    /// wrote it.
+    /// </summary>
+    private static void UpgradeTranspilerMapping(JsonNode? existingValue, JsonNode? generatedValue)
+    {
+        if (existingValue is not JsonObject existingEntry)
+            return;
+
+        if (generatedValue is not JsonObject generatedEntry)
+            return;
+
+        if (HoldsTranspilerMapping(existingEntry, generatedEntry))
+            MergeConditions(existingEntry, generatedEntry);
+    }
+
+    /// <summary>
+    /// True when <paramref name="existingEntry"/> still carries the full
+    /// mapping an earlier transpiler seeded: every generated condition
+    /// except the ones introduced after seeding is present and points
+    /// where the transpiler would point it (a late condition is compared
+    /// once the entry declares it). A host-authored alias that
+    /// merely overlaps (e.g. only <c>default</c>), a retargeted one, or one
+    /// the consumer trimmed is left untouched. Extra consumer conditions
+    /// do not count as divergence.
+    /// </summary>
+    private static bool HoldsTranspilerMapping(JsonObject existingEntry, JsonObject generatedEntry)
+    {
+        // A late condition counts only once present, so a consumer who
+        // retargeted `source` keeps that mapping.
+        var seededConditions = generatedEntry.Where(condition =>
+            !ConditionsIntroducedAfterSeeding.Contains(condition.Key)
+            || existingEntry.ContainsKey(condition.Key)
+        );
+
+        return seededConditions.All(condition =>
+            existingEntry.TryGetPropertyValue(condition.Key, out var target)
+            && JsonNode.DeepEquals(target, condition.Value)
+        );
+    }
+
+    /// <summary>
     /// Builds the <c>imports</c> object with conditional exports for the <c>#/*</c> alias.
-    /// Format: dist (.js + .d.ts) is preferred, source .ts is the fallback for dev.
+    /// Format: an opt-in <c>source</c> condition comes first (resolves straight to the
+    /// .ts sources for tools configured with it, e.g. Vite <c>resolve.conditions</c> or
+    /// TS <c>customConditions</c>), then dist (.js + .d.ts), with the source .ts as the
+    /// <c>default</c> fallback for dev.
     /// </summary>
     private static JsonObject BuildImports(
         string srcRelative,
@@ -378,9 +469,10 @@ public static class PackageJsonWriter
         {
             [starKey] = new JsonObject
             {
+                ["source"] = SourceTarget(src, "*.ts"),
                 ["types"] = $"./{distBase}/*.d.ts",
                 ["import"] = $"./{distBase}/*.js",
-                ["default"] = $"./{src}/*.ts",
+                ["default"] = SourceTarget(src, "*.ts"),
             },
         };
 
@@ -388,9 +480,10 @@ public static class PackageJsonWriter
         {
             imports[aliasPrefix] = new JsonObject
             {
+                ["source"] = SourceTarget(src, "index.ts"),
                 ["types"] = $"./{distBase}/index.d.ts",
                 ["import"] = $"./{distBase}/index.js",
-                ["default"] = $"./{src}/index.ts",
+                ["default"] = SourceTarget(src, "index.ts"),
             };
         }
 
@@ -402,14 +495,18 @@ public static class PackageJsonWriter
     /// Only namespace barrel files (<c>index.ts</c>) become export entries — individual type
     /// files are accessed through their barrel, matching the namespace-first convention
     /// from ADR-0006. When <paramref name="outputPrefix"/> is non-empty, it is prepended
-    /// to both the subpath key and the dist path.
+    /// to both the subpath key and the dist path. Each entry lists the opt-in
+    /// <c>source</c> condition first (the barrel's .ts file), so tools configured with
+    /// it read the sources directly while default resolution keeps using dist.
     /// </summary>
     private static JsonObject BuildExports(
         IReadOnlyList<TsSourceFile> files,
+        string srcRelative,
         string distRelative,
         string outputPrefix
     )
     {
+        var src = NormalizePath(srcRelative).TrimEnd('/');
         var dist = NormalizePath(distRelative).TrimEnd('/');
         var prefix = outputPrefix.TrimEnd('/');
         var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
@@ -438,6 +535,7 @@ public static class PackageJsonWriter
 
             exports[subpath] = new JsonObject
             {
+                ["source"] = SourceTarget(src, $"{withoutExt}.ts"),
                 ["types"] = $"./{distBase}/{withoutExt}.d.ts",
                 ["import"] = $"./{distBase}/{withoutExt}.js",
             };
@@ -445,6 +543,14 @@ public static class PackageJsonWriter
 
         return exports;
     }
+
+    /// <summary>
+    /// Package-relative target for a generated .ts file. The source dir is
+    /// empty when the output dir is the package root; joining it naively
+    /// would yield <c>.//index.ts</c>, an empty segment Node rejects.
+    /// </summary>
+    private static string SourceTarget(string src, string relativePath) =>
+        src.Length > 0 ? $"./{src}/{relativePath}" : $"./{relativePath}";
 
     private static string NormalizePath(string path) => path.Replace('\\', '/').TrimStart('.', '/');
 }

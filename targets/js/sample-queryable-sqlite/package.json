@@ -6,6 +6,7 @@
   "main": "./src/sample-queryable-sqlite/main.ts",
   "imports": {
     "#/*": {
+      "source": "./src/*.ts",
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./src/*.ts"
@@ -32,10 +33,12 @@
   },
   "exports": {
     "./sample-queryable-sqlite": {
+      "source": "./src/sample-queryable-sqlite/index.ts",
       "types": "./dist/sample-queryable-sqlite/index.d.ts",
       "import": "./dist/sample-queryable-sqlite/index.js"
     },
     "./sample-queryable-sqlite/provider": {
+      "source": "./src/sample-queryable-sqlite/provider/index.ts",
       "types": "./dist/sample-queryable-sqlite/provider/index.d.ts",
       "import": "./dist/sample-queryable-sqlite/provider/index.js"
     }

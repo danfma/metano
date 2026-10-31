@@ -1033,6 +1033,402 @@ public class EmitPackageTests
         await Assert.That(wildcard["default"]?.GetValue<string>()).DoesNotContain("//");
     }
 
+    [Test]
+    public async Task Exports_SourceConditionListedFirst()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("domain/index.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+
+        var exports = ReadJson(tempDir)["exports"] as JsonObject;
+        var rootExport = exports!["."] as JsonObject;
+        var domainExport = exports["./domain"] as JsonObject;
+
+        await Assert.That(ConditionOrder(rootExport)).IsEqualTo("source,types,import");
+        await Assert.That(rootExport!["source"]?.GetValue<string>()).IsEqualTo("./src/index.ts");
+
+        await Assert.That(ConditionOrder(domainExport)).IsEqualTo("source,types,import");
+
+        await Assert
+            .That(domainExport!["source"]?.GetValue<string>())
+            .IsEqualTo("./src/domain/index.ts");
+    }
+
+    [Test]
+    public async Task Exports_SubdirectoryOutput_SourceConditionUsesOutputDir()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src", "domain");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("users/index.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir + Path.DirectorySeparatorChar,
+            files,
+            authoritativePackageName: "pkg"
+        );
+
+        var exports = ReadJson(tempDir)["exports"] as JsonObject;
+        var domainExport = exports!["./domain"] as JsonObject;
+        var usersExport = exports["./domain/users"] as JsonObject;
+
+        await Assert
+            .That(domainExport!["source"]?.GetValue<string>())
+            .IsEqualTo("./src/domain/index.ts");
+
+        await Assert
+            .That(usersExport!["source"]?.GetValue<string>())
+            .IsEqualTo("./src/domain/users/index.ts");
+    }
+
+    [Test]
+    public async Task Exports_LegacyEntryGainsSourceFirstAndKeepsUserConditions()
+    {
+        // A manifest written before the `source` condition existed: the
+        // regeneration must add it at the top (resolution picks the first
+        // matching key) while the consumer's `require` keeps its place.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "exports": {
+                ".": {
+                  "types": "./dist/index.d.ts",
+                  "import": "./dist/index.js",
+                  "require": "./dist/index.cjs"
+                }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var rootExport = ReadJson(tempDir)["exports"]?["."] as JsonObject;
+
+        await Assert.That(ConditionOrder(rootExport)).IsEqualTo("source,types,import,require");
+
+        await Assert.That(rootExport!["source"]?.GetValue<string>()).IsEqualTo("./src/index.ts");
+        await Assert.That(rootExport["require"]?.GetValue<string>()).IsEqualTo("./dist/index.cjs");
+    }
+
+    [Test]
+    public async Task Exports_Regeneration_IsIdempotent()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+        var firstRun = File.ReadAllText(Path.Combine(tempDir, "package.json"));
+
+        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+        var secondRun = File.ReadAllText(Path.Combine(tempDir, "package.json"));
+
+        await Assert.That(secondRun).IsEqualTo(firstRun);
+    }
+
+    [Test]
+    public async Task Imports_SourceConditionListedFirst()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "pkg"
+        );
+
+        var imports = ReadJson(tempDir)["imports"] as JsonObject;
+        var wildcard = imports!["#/*"] as JsonObject;
+        var rootAlias = imports["#"] as JsonObject;
+
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,import,default");
+
+        await Assert.That(ConditionOrder(rootAlias)).IsEqualTo("source,types,import,default");
+
+        await Assert.That(wildcard!["source"]?.GetValue<string>()).IsEqualTo("./src/*.ts");
+        await Assert.That(rootAlias!["source"]?.GetValue<string>()).IsEqualTo("./src/index.ts");
+    }
+
+    [Test]
+    public async Task Imports_LegacyTranspilerAliasesGainSourceCondition()
+    {
+        // `#/*` and `#` still hold the mapping an older transpiler seeded, so
+        // the upgrade adds `source` on top; the consumer-added `bun` condition
+        // keeps its position.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "imports": {
+                "#/*": {
+                  "types": "./dist/*.d.ts",
+                  "import": "./dist/*.js",
+                  "bun": "./src/*.ts",
+                  "default": "./src/*.ts"
+                },
+                "#": {
+                  "types": "./dist/index.d.ts",
+                  "import": "./dist/index.js",
+                  "default": "./src/index.ts"
+                }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var imports = ReadJson(tempDir)["imports"] as JsonObject;
+        var wildcard = imports!["#/*"] as JsonObject;
+        var rootAlias = imports["#"] as JsonObject;
+
+        await Assert.That(ConditionOrder(rootAlias)).IsEqualTo("source,types,import,default");
+
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,import,bun,default");
+
+        await Assert.That(wildcard!["source"]?.GetValue<string>()).IsEqualTo("./src/*.ts");
+    }
+
+    [Test]
+    public async Task Imports_ReorderedLegacyAlias_GainsSourceAndKeepsConsumerOrder()
+    {
+        // The consumer swapped `import` and `types` by hand. Upgrading adds
+        // `source` on top and must not reshuffle the consumer's order.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "imports": {
+                "#/*": { "import": "./dist/*.js", "types": "./dist/*.d.ts", "default": "./src/*.ts" }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("item.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var wildcard = ReadJson(tempDir)["imports"]?["#/*"] as JsonObject;
+
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,import,types,default");
+    }
+
+    [Test]
+    public async Task Imports_HostAliasOverlappingOneCondition_StaysUntouched()
+    {
+        // A host-authored `#/*` that only shares `default` with the generated
+        // mapping is not transpiler-owned: it must not gain `source`, `types`
+        // or `import` (which would redirect the host's imports into dist).
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "host",
+              "imports": {
+                "#/*": { "default": "./src/*.ts" },
+                "#": "./src/index.ts"
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "host"
+        );
+
+        var imports = ReadJson(tempDir)["imports"] as JsonObject;
+
+        await Assert.That(ConditionOrder(imports!["#/*"] as JsonObject)).IsEqualTo("default");
+        await Assert.That(imports["#"]?.GetValue<string>()).IsEqualTo("./src/index.ts");
+    }
+
+    [Test]
+    public async Task Imports_RetargetedSourceCondition_PreservedAcrossRegenerations()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "imports": {
+                "#/*": {
+                  "source": "./src-alt/*.ts",
+                  "types": "./dist/*.d.ts",
+                  "import": "./dist/*.js",
+                  "default": "./src/*.ts"
+                }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("item.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var wildcard = ReadJson(tempDir)["imports"]?["#/*"] as JsonObject;
+
+        await Assert.That(wildcard!["source"]?.GetValue<string>()).IsEqualTo("./src-alt/*.ts");
+    }
+
+    [Test]
+    public async Task Imports_Regeneration_IsIdempotent()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+        var firstImports = ReadJson(tempDir)["imports"]!.ToJsonString();
+
+        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+        var secondImports = ReadJson(tempDir)["imports"]!.ToJsonString();
+
+        await Assert.That(secondImports).IsEqualTo(firstImports);
+    }
+
+    [Test]
+    public async Task Imports_WithImportAlias_SourceConditionListedFirst()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src", "contracts");
+        Directory.CreateDirectory(srcDir);
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "pkg",
+            importAlias: "contracts"
+        );
+
+        var wildcard = ReadJson(tempDir)["imports"]?["#contracts/*"] as JsonObject;
+
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,import,default");
+
+        await Assert
+            .That(wildcard!["source"]?.GetValue<string>())
+            .IsEqualTo("./src/contracts/*.ts");
+    }
+
+    [Test]
+    public async Task OutputAtPackageRoot_SourceTargetsHaveNoEmptySegment()
+    {
+        var tempDir = CreateTempDir();
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            tempDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "pkg"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var rootExport = pkg["exports"]?["."] as JsonObject;
+        var wildcard = pkg["imports"]?["#/*"] as JsonObject;
+
+        await Assert.That(rootExport!["source"]?.GetValue<string>()).IsEqualTo("./index.ts");
+        await Assert.That(wildcard!["source"]?.GetValue<string>()).IsEqualTo("./*.ts");
+        await Assert.That(wildcard["default"]?.GetValue<string>()).IsEqualTo("./*.ts");
+    }
+
+    [Test]
+    public async Task Imports_RetargetedAlias_DoesNotGainSourceCondition()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "imports": {
+                "#/*": { "types": "./lib/*.d.ts", "import": "./lib/*.js", "default": "./src/*.ts" }
+              }
+            }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("item.ts", [], "")],
+            authoritativePackageName: "consumer"
+        );
+
+        var wildcard = ReadJson(tempDir)["imports"]?["#/*"] as JsonObject;
+
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("types,import,default");
+        await Assert.That(wildcard!["types"]?.GetValue<string>()).IsEqualTo("./lib/*.d.ts");
+        await Assert.That(wildcard["import"]?.GetValue<string>()).IsEqualTo("./lib/*.js");
+    }
+
     private string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"metasharp-test-{Guid.NewGuid():N}");
@@ -1040,6 +1436,9 @@ public class EmitPackageTests
         _tempDirs.Add(dir);
         return dir;
     }
+
+    private static string ConditionOrder(JsonObject? entry) =>
+        string.Join(",", entry?.Select(condition => condition.Key) ?? []);
 
     private static JsonObject ReadJson(string dir) =>
         (JsonNode.Parse(File.ReadAllText(Path.Combine(dir, "package.json"))) as JsonObject)!;
