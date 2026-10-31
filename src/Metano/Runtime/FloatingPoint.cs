@@ -12,6 +12,9 @@
 //     `===` only for NaN and ±0, neither of which can equal ±Infinity.
 //   - `(Math.abs($0) === Infinity)` evaluates the argument once, unlike
 //     `$0 === Infinity || $0 === -Infinity`.
+//   - NaN is written `Number.NaN`: TypeScript 5+ rejects a comparison against the
+//     bare `NaN` global (TS2845, "this condition will always return false"),
+//     which a C# `x == double.NaN` would otherwise produce.
 //   - Negative constants use a named property or parentheses so a unary minus at the
 //     call site cannot glue into `--`.
 //
@@ -43,7 +46,7 @@ using Metano.Annotations;
     JsTemplate = "Object.is($0, -Infinity)"
 )]
 
-[assembly: MapProperty(typeof(double), nameof(double.NaN), JsTemplate = "NaN")]
+[assembly: MapProperty(typeof(double), nameof(double.NaN), JsTemplate = "Number.NaN")]
 [assembly: MapProperty(typeof(double), nameof(double.PositiveInfinity), JsTemplate = "Infinity")]
 
 [assembly: MapProperty(
@@ -79,7 +82,7 @@ using Metano.Annotations;
     JsTemplate = "Object.is($0, -Infinity)"
 )]
 
-[assembly: MapProperty(typeof(float), nameof(float.NaN), JsTemplate = "NaN")]
+[assembly: MapProperty(typeof(float), nameof(float.NaN), JsTemplate = "Number.NaN")]
 [assembly: MapProperty(typeof(float), nameof(float.PositiveInfinity), JsTemplate = "Infinity")]
 
 [assembly: MapProperty(

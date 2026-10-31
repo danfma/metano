@@ -64,7 +64,7 @@ public class FloatingPointMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return NaN;");
+        await Assert.That(output).Contains("return Number.NaN;");
         await Assert.That(output).Contains("return Infinity;");
         await Assert.That(output).Contains("return Number.NEGATIVE_INFINITY;");
         await Assert.That(output).Contains("return Number.MIN_VALUE;");
@@ -89,7 +89,7 @@ public class FloatingPointMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return NaN;");
+        await Assert.That(output).Contains("return Number.NaN;");
         await Assert.That(output).Contains("return Infinity;");
         await Assert.That(output).Contains("return Number.NEGATIVE_INFINITY;");
         await Assert.That(output).Contains("return 1.401298464324817e-45;");
@@ -167,7 +167,7 @@ public class FloatingPointMappingTests
             .Contains(
                 "return Number.isNaN(v) ? \"missing\" : v === Infinity ? \"overflow\" : \"value\";"
             );
-        await Assert.That(output).DoesNotContain("=== NaN");
+        await Assert.That(output).DoesNotContain("=== Number.NaN");
         await AssertNoBclNumericReceiverLeaks(output);
     }
 
@@ -267,7 +267,7 @@ public class FloatingPointMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return v === NaN;");
+        await Assert.That(output).Contains("return v === Number.NaN;");
         await AssertNoBclNumericReceiverLeaks(output);
     }
 
@@ -292,12 +292,47 @@ public class FloatingPointMappingTests
         );
 
         var output = result["limits.ts"];
-        await Assert.That(output).Contains("= NaN");
+        await Assert.That(output).Contains("= Number.NaN");
         await Assert.That(output).Contains("= 3.4028234663852886e+38");
-        await Assert.That(output).Contains("v: number = NaN");
+        await Assert.That(output).Contains("v: number = Number.NaN");
         await Assert.That(output).Contains("return Number.isNaN(v);");
         await AssertNoBclNumericReceiverLeaks(output);
     }
+
+    [Test]
+    public async Task FloatingPointLowering_MatchesGolden()
+    {
+        // Pins the whole emitted shape (printer parenthesization included), which
+        // `Contains` assertions cannot: helpers, constants in operand position, NaN
+        // patterns, NaN equality, and the `switch (true)` rewrite.
+        var output = TranspileNumbers(GoldenSource);
+
+        await Assert.That(output).IsEqualTo(TranspileHelper.ReadExpected("floating-point.ts"));
+    }
+
+    private const string GoldenSource = """
+        public static bool IsBroken(double v) => double.IsNaN(v) || double.IsInfinity(v);
+        public static bool IsFallbackInfinite(double? a, double b) => double.IsInfinity(a ?? b);
+        public static bool IsNotOverflow(double a, double b) => !double.IsPositiveInfinity(a - b);
+        public static double Scale(double x) => x * float.MaxValue;
+        public static double Lowest() => -double.MinValue;
+        public static bool IsMissing(double? v) => v is double.NaN;
+        public static bool IsPresent(double v) => v is not double.NaN;
+        public static bool EqualsNaN(double v) => v == double.NaN;
+        public static string Describe(double v)
+        {
+            switch (v)
+            {
+                case double.NaN:
+                    return "missing";
+                case 0:
+                case double.PositiveInfinity:
+                    return "edge";
+                default:
+                    return "value";
+            }
+        }
+        """;
 
     private static string TranspileNumbers(string members)
     {

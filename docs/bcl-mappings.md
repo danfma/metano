@@ -288,7 +288,7 @@ values map to JavaScript globals. The same mappings apply to `float.X`, except t
 | `double.IsInfinity(x)` | `(Math.abs(x) === Infinity)` |
 | `double.IsPositiveInfinity(x)` | `Object.is(x, Infinity)` |
 | `double.IsNegativeInfinity(x)` | `Object.is(x, -Infinity)` |
-| `double.NaN` | `NaN` |
+| `double.NaN` | `Number.NaN` |
 | `double.PositiveInfinity` | `Infinity` |
 | `double.NegativeInfinity` | `Number.NEGATIVE_INFINITY` |
 | `double.Epsilon` | `Number.MIN_VALUE` |
@@ -304,7 +304,9 @@ site cannot produce `--`. `float` constants are the exact double value of the
 corresponding `float`.
 A constant pattern against NaN (`x is double.NaN`, a `double.NaN =>` switch arm)
 lowers to `Number.isNaN(x)`, because `x === NaN` is always false in JavaScript;
-plain equality `x == double.NaN` stays `x === NaN`, which is also false in .NET.
+plain equality `x == double.NaN` stays `x === Number.NaN`, which is also false in .NET.
+`NaN` is written `Number.NaN` because TypeScript rejects a comparison against the
+bare `NaN` global (TS2845).
 
 Not mapped: `IsNormal`/`IsSubnormal`; method groups such as
 `Func<double, bool> f = double.IsNaN` (templates apply to calls only); and generic
