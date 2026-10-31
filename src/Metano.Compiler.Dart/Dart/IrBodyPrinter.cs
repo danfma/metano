@@ -282,16 +282,20 @@ public static class IrBodyPrinter
                 if (un.IsPrefix)
                 {
                     sb.Append(FormatUnaryOp(un.Operator));
-                    PrintExpression(sb, un.Operand);
+                    PrintGroupedOperand(sb, un.Operand);
                 }
                 else
                 {
-                    PrintExpression(sb, un.Operand);
+                    PrintGroupedOperand(sb, un.Operand);
                     sb.Append(FormatUnaryOp(un.Operator));
                 }
                 break;
             case IrConditionalExpression cond:
-                PrintExpression(sb, cond.Condition);
+                PrintOperand(
+                    sb,
+                    cond.Condition,
+                    DartBinaryOperandGrouping.BindsLooserThanAnyOperator(cond.Condition)
+                );
                 sb.Append(" ? ");
                 PrintExpression(sb, cond.WhenTrue);
                 sb.Append(" : ");
@@ -307,7 +311,7 @@ public static class IrBodyPrinter
                 break;
             case IrCastExpression cast:
                 // Dart uses `expr as Type` for downcasts.
-                PrintExpression(sb, cast.Expression);
+                PrintGroupedOperand(sb, cast.Expression);
                 sb.Append(" as ").Append(FormatType(cast.TargetType));
                 break;
             case IrLambdaExpression lambda:
@@ -360,6 +364,11 @@ public static class IrBodyPrinter
                 break;
             case IrNullConditionalAccess access:
                 PrintNullConditionalAccess(sb, access);
+                break;
+            case IrConditionalReceiver:
+                // Read outside an access chain only under a guard, where it
+                // is the bound parameter.
+                PrintExpression(sb, CurrentConditionalReceiver().Expression);
                 break;
             case IrUnsupportedExpression u:
                 // Already reported as MS0001 by the extractor; `throw` is an
@@ -415,12 +424,12 @@ public static class IrBodyPrinter
         switch (node.Pattern)
         {
             case IrConstantPattern constant:
-                PrintExpression(sb, node.Expression);
+                PrintGroupedOperand(sb, node.Expression);
                 sb.Append(" == ");
                 PrintExpression(sb, constant.Value);
                 break;
             case IrTypePattern { Designator: null } typePat:
-                PrintExpression(sb, node.Expression);
+                PrintGroupedOperand(sb, node.Expression);
                 sb.Append(" is ").Append(FormatType(typePat.Type));
                 break;
             case IrDiscardPattern:
@@ -716,49 +725,103 @@ public static class IrBodyPrinter
     }
 
     /// <summary>
-    /// The receiver of the null-conditional access being printed, while its
-    /// <c>WhenNotNull</c> is printed.
+    /// The parameter a guarded null-conditional access binds its receiver
+    /// to. Nested guards may reuse the name: a nested receiver is the
+    /// closure's argument, printed outside the nested closure, where the
+    /// name still means the enclosing receiver. <c>$</c> cannot appear in a
+    /// C# identifier, so the name never captures a source local.
+    /// </summary>
+    private const string GuardedReceiverParameter = "$receiver";
+
+    /// <summary>
+    /// What each <see cref="IrConditionalReceiver"/> prints as, innermost
+    /// access on top, while that access's <c>WhenNotNull</c> is printed:
+    /// the receiver itself followed by the null-shorting <c>?</c>, or the
+    /// guard's bound parameter.
     /// </summary>
     [ThreadStatic]
-    private static Stack<IrExpression>? _conditionalReceivers;
+    private static Stack<ConditionalReceiver>? _conditionalReceivers;
+
+    private sealed record ConditionalReceiver(IrExpression Expression, bool IsNullShorting);
 
     /// <summary>
     /// Dart null-shorting covers the rest of a <c>?.</c> chain like C#, so a
     /// null-conditional access whose steps read the receiver once, at the
     /// root of a member/element chain, prints natively
-    /// (<c>order?.items.length</c>). Other shapes (a step lowered to a helper
-    /// that takes the receiver as an argument, a receiver read twice) emit a
-    /// <c>/* TODO */</c> marker and the unsupported placeholder, which throws
-    /// if reached.
+    /// (<c>order?.items.length</c>). Other shapes (an operator over the
+    /// chain, a step lowered to a helper that takes the receiver as an
+    /// argument, a receiver read twice) bind the receiver once and guard it:
+    /// <c>(($receiver) =&gt; $receiver == null ? null : step($receiver))(order)</c>.
     /// </summary>
     private static void PrintNullConditionalAccess(StringBuilder sb, IrNullConditionalAccess access)
     {
-        if (
-            IrEvaluationTraits.CountConditionalReceiverReads(access.WhenNotNull) != 1
-            || !ReadsConditionalReceiverAtChainRoot(access.WhenNotNull)
-        )
+        if (!PrintsAsNullShortingChain(access))
         {
-            // Same marker as the printer's other unprinted shapes, ahead of a
-            // placeholder that still parses and throws if reached.
-            sb.Append("/* TODO: unsupported NullConditionalAccess shape */ ")
-                .Append(
-                    "(throw UnsupportedError('Unsupported expression: NullConditionalAccess'))"
-                );
+            PrintGuardedNullConditionalAccess(sb, access);
             return;
         }
 
-        var receivers = _conditionalReceivers ??= new Stack<IrExpression>();
-        receivers.Push(access.Receiver);
+        PrintWithConditionalReceiver(
+            sb,
+            access.WhenNotNull,
+            new ConditionalReceiver(access.Receiver, IsNullShorting: true)
+        );
+    }
+
+    private static bool PrintsAsNullShortingChain(IrNullConditionalAccess access) =>
+        IrEvaluationTraits.CountConditionalReceiverReads(access.WhenNotNull) == 1
+        && ReadsConditionalReceiverAtChainRoot(access.WhenNotNull);
+
+    private static void PrintGuardedNullConditionalAccess(
+        StringBuilder sb,
+        IrNullConditionalAccess access
+    )
+    {
+        sb.Append("((")
+            .Append(GuardedReceiverParameter)
+            .Append(") => ")
+            .Append(GuardedReceiverParameter)
+            .Append(" == null ? null : ");
+
+        PrintWithConditionalReceiver(
+            sb,
+            access.WhenNotNull,
+            new ConditionalReceiver(
+                new IrIdentifier(GuardedReceiverParameter),
+                IsNullShorting: false
+            )
+        );
+
+        sb.Append(")(");
+        PrintExpression(sb, access.Receiver);
+        sb.Append(')');
+    }
+
+    private static void PrintWithConditionalReceiver(
+        StringBuilder sb,
+        IrExpression whenNotNull,
+        ConditionalReceiver receiver
+    )
+    {
+        var receivers = _conditionalReceivers ??= new Stack<ConditionalReceiver>();
+        receivers.Push(receiver);
 
         try
         {
-            PrintExpression(sb, access.WhenNotNull);
+            PrintExpression(sb, whenNotNull);
         }
         finally
         {
             receivers.Pop();
         }
     }
+
+    private static ConditionalReceiver CurrentConditionalReceiver() =>
+        _conditionalReceivers is { Count: > 0 } receivers
+            ? receivers.Peek()
+            : throw new InvalidOperationException(
+                "A conditional receiver was printed outside its null-conditional access."
+            );
 
     private static bool ReadsConditionalReceiverAtChainRoot(IrExpression step) =>
         step switch
@@ -775,8 +838,8 @@ public static class IrBodyPrinter
 
     /// <summary>
     /// The object of a member or element access; the conditional receiver
-    /// prints as the null-shorting link (<c>receiver?</c>, followed by the
-    /// access's own <c>.name</c> / <c>[index]</c>).
+    /// of a null-shorting chain prints as the link (<c>receiver?</c>,
+    /// followed by the access's own <c>.name</c> / <c>[index]</c>).
     /// </summary>
     private static void PrintAccessTarget(StringBuilder sb, IrExpression target)
     {
@@ -786,15 +849,20 @@ public static class IrBodyPrinter
             return;
         }
 
-        var receivers =
-            _conditionalReceivers
-            ?? throw new InvalidOperationException(
-                "A conditional receiver was printed outside its null-conditional access."
-            );
+        var receiver = CurrentConditionalReceiver();
 
-        PrintCallTarget(sb, receivers.Peek());
-        sb.Append('?');
+        PrintCallTarget(sb, receiver.Expression);
+
+        if (receiver.IsNullShorting)
+            sb.Append('?');
     }
+
+    /// <summary>
+    /// The operand of a unary operator, <c>is</c>, <c>as</c> or a constant
+    /// pattern, parenthesized when it would otherwise regroup.
+    /// </summary>
+    private static void PrintGroupedOperand(StringBuilder sb, IrExpression operand) =>
+        PrintOperand(sb, operand, DartBinaryOperandGrouping.NeedsUnaryOperandParentheses(operand));
 
     private static void PrintOperand(StringBuilder sb, IrExpression operand, bool parenthesize)
     {

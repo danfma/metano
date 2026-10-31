@@ -951,6 +951,87 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task LiftedNullableOperators_GuardTheNullOperand()
+    {
+        // The lifted-operator lowering is target-agnostic IR (#287): Dart
+        // rejects `int? + int` and `null < 1` alike, so the guard is
+        // required there too.
+        var (files, _) = TranspileDart(
+            """
+            #nullable enable
+
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Lifted
+            {
+                public List<int> Items { get; } = [];
+                public Lifted? Next { get; set; }
+                public int? Qty { get; set; }
+                public int? Add(int? a, int k) => a + k;
+                public int? OrElse(int? a, int? b) => (a + 1) ?? b;
+                public int NegatedOrZero(int? a) => -a ?? 0;
+                #pragma warning disable CS8629
+                public int Unchecked(int? a) => a.Value;
+                #pragma warning restore CS8629
+                public int? NestedPlus(Lifted? o) => o?.Next?.Qty + 1;
+                public bool IsInt(int? a) => (a + 1) is int;
+                public int Twice(int a) => -(-a);
+                public int Pick(bool c, int a, int b) => c ? a : b;
+                public int? Assigned(int? a, int b)
+                {
+                    int? x = null;
+                    return a ?? (x = b);
+                }
+                public bool Less(int? a) => a < 5;
+                public bool Has(int? a) => a.HasValue;
+                public int OrZero(int? a) => a.GetValueOrDefault();
+                public int Sum(Lifted? o) => o?.Items.Count + 1 ?? 0;
+            }
+            """
+        );
+
+        var dart = files["lifted.dart"];
+
+        await Assert.That(dart).Contains("int? add(int? a, int k) => a == null ? null : a + k;");
+        await Assert.That(dart).Contains("bool less(int? a) => a != null && a < 5;");
+        await Assert.That(dart).Contains("bool has(int? a) => a != null;");
+        await Assert.That(dart).Contains("int orZero(int? a) => a ?? 0;");
+
+        // A conditional or `throw` operand binds looser than any operator.
+        await Assert
+            .That(dart)
+            .Contains("int? orElse(int? a, int? b) => (a == null ? null : a + 1) ?? b;");
+        await Assert
+            .That(dart)
+            .Contains("int negatedOrZero(int? a) => (a == null ? null : -a) ?? 0;");
+        await Assert.That(dart).Contains("int unchecked(int? a) => a ?? (throw ");
+
+        await Assert
+            .That(dart)
+            .Contains("bool isInt(int? a) => (a == null ? null : a + 1) is int;");
+        await Assert.That(dart).Contains("int twice(int a) => -(-a);");
+        await Assert.That(dart).Contains("int pick(bool c, int a, int b) => c ? a : b;");
+        await Assert.That(dart).Contains("return a ?? (x = b);");
+
+        // A nested access is the guard's argument, printed outside the guard
+        // closure (here as a native null-shorting chain).
+        await Assert
+            .That(dart)
+            .Contains(
+                "int? nestedPlus(Lifted? o) => (($receiver) => $receiver == null ? null : $receiver.qty == null ? null : $receiver.qty + 1)(o?.next);"
+            );
+
+        // The operator moved into the null-conditional guard prints as a
+        // guarded closure, not as an unsupported placeholder.
+        await Assert
+            .That(dart)
+            .Contains(
+                "int sum(Lifted? o) => (($receiver) => $receiver == null ? null : $receiver.items.length + 1)(o) ?? 0;"
+            );
+    }
+
+    [Test]
     public async Task NullConditionalAccess_PrintsNativeNullShorting()
     {
         var (files, _) = TranspileDart(
@@ -978,13 +1059,15 @@ public class DartBackendTests
         await Assert.That(dart).Contains("items?[0]");
         await Assert.That(dart).Contains("order?.next?.items.length");
 
+        // A receiver read twice (`^1`) cannot null-short natively, so it is
+        // bound once and guarded.
         await Assert
             .That(dart)
             .Contains(
-                "/* TODO: unsupported NullConditionalAccess shape */ (throw UnsupportedError('Unsupported expression: NullConditionalAccess'))"
+                "int? last(Order? order) => (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1])(order);"
             );
 
-        await Assert.That(dart).DoesNotContain("TODO: IrNullConditionalAccess");
+        await Assert.That(dart).DoesNotContain("TODO");
     }
 
     [Test]

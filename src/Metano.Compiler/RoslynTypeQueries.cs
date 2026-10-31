@@ -26,6 +26,21 @@ public static class RoslynTypeQueries
         return $"^{v.Major}.{v.Minor}.{build}";
     }
 
+    /// <summary>Whether <paramref name="type"/> is <c>Nullable&lt;T&gt;</c> (<c>int?</c>, <c>DateOnly?</c>).</summary>
+    public static bool IsNullableValueType(this ITypeSymbol? type) =>
+        type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+
+    /// <summary><c>T</c> for <c>Nullable&lt;T&gt;</c>, the type itself otherwise.</summary>
+    public static ITypeSymbol? UnderlyingValueType(this ITypeSymbol? type) =>
+        type
+            is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+                TypeArguments: [var underlying],
+            }
+            ? underlying
+            : type;
+
     public static bool IsDictionaryLike(this INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
