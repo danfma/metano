@@ -124,13 +124,72 @@ public static class IrConstructorExtractor
         var baseArguments = compilation is not null
             ? TryExtractBaseArguments(ctor, compilation, originResolver)
             : null;
+        var baseExceptionConstruction = compilation is not null
+            ? TryExtractBaseExceptionConstruction(ctor, baseArguments ?? [], compilation, target)
+            : null;
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
             Body: body,
-            BaseArguments: baseArguments
+            BaseArguments: baseArguments,
+            BaseExceptionConstruction: baseExceptionConstruction
         );
     }
+
+    /// <summary>
+    /// Classifies the base-constructor arguments by parameter role when the
+    /// base constructor — explicit <c>: base(...)</c>, a primary-constructor
+    /// base call, or the implicit parameterless one — belongs to an exception
+    /// type with no target declaration (see
+    /// <see cref="IrExceptionConstructionExtractor"/>). <c>: this(...)</c>
+    /// chains call no base constructor and yield <c>null</c>.
+    /// </summary>
+    private static IrExceptionConstruction? TryExtractBaseExceptionConstruction(
+        IMethodSymbol ctor,
+        IReadOnlyList<IrArgument> baseArguments,
+        Compilation compilation,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        var baseConstructor = ResolveBaseConstructor(ctor, compilation);
+
+        return IrExceptionConstructionExtractor.Extract(
+            baseConstructor,
+            baseArguments,
+            ctor.ContainingType,
+            target
+        );
+    }
+
+    private static IMethodSymbol? ResolveBaseConstructor(
+        IMethodSymbol ctor,
+        Compilation compilation
+    )
+    {
+        var declaringSyntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        var initializerSyntax = declaringSyntax switch
+        {
+            ConstructorDeclarationSyntax { Initializer: { } initializer } =>
+                (SyntaxNode)initializer,
+            TypeDeclarationSyntax type => FindPrimaryBase(type.BaseList),
+            _ => null,
+        };
+
+        if (initializerSyntax is ConstructorInitializerSyntax { ThisOrBaseKeyword.Text: "this" })
+            return null;
+
+        if (initializerSyntax is null)
+            return ImplicitBaseConstructor(ctor.ContainingType);
+
+        var model = compilation.GetSemanticModel(initializerSyntax.SyntaxTree);
+
+        return model.GetSymbolInfo(initializerSyntax).Symbol as IMethodSymbol;
+    }
+
+    private static IMethodSymbol? ImplicitBaseConstructor(INamedTypeSymbol type) =>
+        type.BaseType?.InstanceConstructors.FirstOrDefault(baseCtor =>
+            baseCtor.Parameters.Length == 0
+        );
 
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol ctor,

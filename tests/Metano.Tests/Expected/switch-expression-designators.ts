@@ -19,7 +19,7 @@ export class ClipDescription {
         return `silence ${silence.seconds}`;
       }
 
-      throw new Error("clip");
+      throw new Error("Specified argument was out of the range of valid values. (Parameter 'clip')");
     })(clip);
   }
 }

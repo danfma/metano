@@ -42,7 +42,17 @@ public static class IrToTsExceptionBridge
                 );
             }
 
-            if (ctor.BaseArguments is { Count: > 0 } baseArgs)
+            if (ctor.BaseExceptionConstruction is { } construction)
+            {
+                superArgs.AddRange(
+                    IrToTsExceptionConstructionBridge.MapErrorArguments(
+                        construction,
+                        ctor.BaseArguments ?? [],
+                        bclRegistry
+                    )
+                );
+            }
+            else if (ctor.BaseArguments is { Count: > 0 } baseArgs)
             {
                 foreach (var arg in baseArgs)
                     superArgs.Add(IrToTsExpressionBridge.Map(arg.Value, bclRegistry));
