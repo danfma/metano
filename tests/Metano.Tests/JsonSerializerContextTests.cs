@@ -432,4 +432,156 @@ public class JsonSerializerContextTests
         // `Seconds` is inherited but still a constructor slot, after `Path`.
         await Assert.That(ts).Contains("new ImageClip(p.path as string, p.seconds as number)");
     }
+
+    private const string ContextBoilerplate = """
+        public partial class JsonContext : JsonSerializerContext
+        {
+            public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+            protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+            public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+        }
+        """;
+
+    private static string TranspileContext(string declarations) =>
+        TranspileHelper.Transpile(
+            $$"""
+            using System.Collections.Generic;
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            {{declarations}}
+
+            {{ContextBoilerplate}}
+            """
+        )["test-app/json-context.ts"];
+
+    [Test]
+    public async Task ArrayElementOnlyType_GetsItsOwnSpecGetter()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record ScriptWord(string Text, double Start);
+
+            [Transpile]
+            public sealed record Script(ScriptWord[] Words);
+
+            [Transpile]
+            [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+            [JsonSerializable(typeof(Script))]
+            """
+        );
+
+        await Assert.That(ts).IsEqualTo(TranspileHelper.ReadExpected("json-context-closure.ts"));
+    }
+
+    [Test]
+    public async Task NestedRecordsAndCollections_EmitEveryReachableSpecOnce()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Leaf(string Name);
+
+            [Transpile]
+            public sealed record Tagged(string Tag);
+
+            [Transpile]
+            public sealed record Keyed(int Id);
+
+            [Transpile]
+            public sealed record Middle(Leaf Leaf, Leaf? Spare, HashSet<Tagged> Tags);
+
+            [Transpile]
+            public sealed record Root(
+                Middle Middle,
+                Dictionary<string, Keyed> ById,
+                List<Leaf?> Leaves
+            );
+
+            [Transpile]
+            [JsonSerializable(typeof(Root))]
+            """
+        );
+
+        string[] getters = ["root", "middle", "keyed", "leaf", "tagged"];
+        var positions = getters.Select(x => ts.IndexOf($"  get {x}(): TypeSpec<")).ToList();
+
+        await Assert.That(positions).DoesNotContain(-1);
+        // Roots first, then breadth-first discovery order.
+        await Assert
+            .That(string.Join(",", positions))
+            .IsEqualTo(string.Join(",", positions.Order()));
+
+        foreach (var getter in getters)
+            await Assert.That(ts.Split($"  get {getter}(): ").Length).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task CyclicReferences_TerminateWithOneGetterPerType()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Node(string Name, List<Edge> Edges);
+
+            [Transpile]
+            public sealed record Edge(double Weight, Node? Target);
+
+            [Transpile]
+            [JsonSerializable(typeof(Node))]
+            """
+        );
+
+        await Assert.That(ts.Split("  get node(): ").Length).IsEqualTo(2);
+        await Assert.That(ts.Split("  get edge(): ").Length).IsEqualTo(2);
+        await Assert.That(ts).Contains("spec: () => this.edge");
+        await Assert.That(ts).Contains("spec: () => this.node");
+    }
+
+    [Test]
+    public async Task ReachedDerivedType_PullsInItsBaseSpec()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public abstract record Clip(double Seconds);
+
+            [Transpile]
+            public sealed record ImageClip(string Path, double Seconds) : Clip(Seconds);
+
+            [Transpile]
+            public sealed record Timeline(List<ImageClip> Clips);
+
+            [Transpile]
+            [JsonSerializable(typeof(Timeline))]
+            """
+        );
+
+        await Assert.That(ts).Contains("get imageClip(): TypeSpec<ImageClip>");
+        await Assert.That(ts).Contains("base: this.clip");
+        await Assert.That(ts).Contains("get clip(): TypeSpec<Clip>");
+    }
+
+    [Test]
+    public async Task ExplicitRootAlsoReachable_IsNotDuplicated()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Leaf(string Name);
+
+            [Transpile]
+            public sealed record Root(Leaf Leaf);
+
+            [Transpile]
+            [JsonSerializable(typeof(Root))]
+            [JsonSerializable(typeof(Leaf))]
+            """
+        );
+
+        await Assert.That(ts.Split("  get leaf(): ").Length).IsEqualTo(2);
+        await Assert.That(ts.IndexOf("  get root(")).IsLessThan(ts.IndexOf("  get leaf("));
+    }
 }
