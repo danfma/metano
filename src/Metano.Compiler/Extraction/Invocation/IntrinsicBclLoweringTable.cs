@@ -9,7 +9,8 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// constructor wrapping, <c>System.Math</c> static helpers that lower
 /// to the receiver's instance method, and overloads normalized to a
 /// canonical overload the registry can tell apart by argument count —
-/// see the <c>OverloadNormalization</c> partial). Symbol-keyed via
+/// see the <c>Rounding</c>, <c>GetValueOrDefault</c> and <c>StringJoin</c>
+/// partials). Symbol-keyed via
 /// <see cref="SymbolEqualityComparer.Default"/> so dispatch is O(1)
 /// per call site and adding the next BCL form is one entry, not one
 /// rewriter class.
@@ -55,9 +56,11 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     public IntrinsicBclLoweringTable(Compilation compilation, InvocationLoweringHelpers helpers)
     {
         _helpers = helpers;
+
         _entries = new Dictionary<IMethodSymbol, Func<InvocationRewriteContext, IrExpression>>(
             SymbolEqualityComparer.Default
         );
+
         SeedDecimalParse(compilation);
         SeedMathDecimal(compilation);
         SeedRounding(compilation);

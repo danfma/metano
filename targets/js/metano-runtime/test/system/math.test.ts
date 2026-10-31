@@ -9,7 +9,9 @@ import {
 /**
  * Expected values were produced by `Math.Round(value, digits, mode)` on .NET 10. The
  * helper was also compared bit for bit against .NET on ~300k random and midpoint inputs
- * (every mode, digits 0–3 and 15) while it was written.
+ * (every mode, digits 0–3 and 15) while it was written. Re-verify against a harness
+ * pinned to `net10.0`: .NET 11 changed `Math.Round` to round the exact binary value, so a
+ * probe that runs on .NET 11 (as `dotnet run file.cs` can) reports different results.
  */
 const dotnetRoundCases: [number, number, MidpointRounding, number][] = [
   [0.5, 0, MidpointRounding.ToEven, 0],
@@ -121,19 +123,26 @@ describe("roundNumber", () => {
  * Records the `toDecimalPlaces` call so the tests pin the decimal.js rounding constant
  * each mode selects without the runtime depending on decimal.js.
  */
-class RecordingDecimal implements DecimalRoundable<RecordingDecimal> {
-  calls: [number, number][] = [];
+interface RecordingDecimal extends DecimalRoundable<RecordingDecimal> {
+  readonly calls: [number, number][];
+}
 
-  toDecimalPlaces(decimalPlaces: number, rounding: number): RecordingDecimal {
-    this.calls.push([decimalPlaces, rounding]);
+function createRecordingDecimal(): RecordingDecimal {
+  const recording: RecordingDecimal = {
+    calls: [],
+    toDecimalPlaces(decimalPlaces, rounding) {
+      recording.calls.push([decimalPlaces, rounding]);
 
-    return this;
-  }
+      return recording;
+    },
+  };
+
+  return recording;
 }
 
 describe("roundDecimal", () => {
   const roundingFor = (digits?: number, mode?: MidpointRounding) =>
-    roundDecimal(new RecordingDecimal(), digits, mode).calls;
+    roundDecimal(createRecordingDecimal(), digits, mode).calls;
 
   test("defaults to zero digits and ROUND_HALF_EVEN, like Math.Round(decimal)", () => {
     expect(roundingFor()).toEqual([[0, 6]]);
