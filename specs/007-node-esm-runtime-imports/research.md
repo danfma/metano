@@ -98,3 +98,13 @@ Temporal noise without blinding the check. Verified clean on tsgo 7 and tsc 5.9.
 specifier. Not shipped (excluded by tsconfig), but it violates the `test/` convention.
 **Decision**: Move to `test/type-checking/primitive-type-checks.test.ts`, import from
 `#/type-checking/primitive-type-checks.ts`. Baseline: 286 pass / 0 fail across 14 files — must stay 286.
+
+## R10 — Unresolvable peer dependency on the compiler
+
+**Evidence**: `metano-runtime` declared `peerDependencies: { "@typescript/native-preview": "^7" }`. Only
+`7.0.0-dev.*` prereleases exist, and a caret range never matches prereleases, so `bun add` warned
+"No version matching ^7" on every install; npm 7+ auto-installs peers and may refuse the install
+outright (inferred — the project does not use npm). The runtime imports nothing from the compiler at
+run time; it is a build tool, already listed in `devDependencies`.
+**Decision**: Remove the `peerDependencies` block (approved for this PR). The lockfile does not
+record it, so `bun.lock` is unchanged.
