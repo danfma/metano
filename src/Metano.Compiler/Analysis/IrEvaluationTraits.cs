@@ -22,6 +22,7 @@ public static class IrEvaluationTraits
         {
             IrIdentifier => true,
             IrThisExpression => true,
+            IrConditionalReceiver => true,
             IrBaseExpression => true,
             IrTypeReference => true,
             IrMemberAccess access => IsReusableReceiver(access.Target),
@@ -49,18 +50,18 @@ public static class IrEvaluationTraits
         };
 
     /// <summary>
-    /// <see cref="IsReusableReceiver"/>, also accepting null-conditional links
-    /// over such shapes (<c>o?.Next</c>): a guard over them may repeat the
-    /// receiver instead of binding it (<c>o?.next == null ? null : f(o?.next)</c>).
-    /// Kept apart from <see cref="IsReusableReceiver"/> because a write
-    /// through a repeated optional link is not a valid assignment target.
+    /// <see cref="IsReusableReceiver"/>, also accepting null-conditional
+    /// accesses over such shapes (<c>o?.Next</c>): a guard over them may
+    /// repeat the receiver instead of binding it
+    /// (<c>o?.next == null ? null : f(o?.next)</c>). Kept apart from
+    /// <see cref="IsReusableReceiver"/> because a write through a repeated
+    /// optional link is not a valid assignment target.
     /// </summary>
     public static bool IsReusableNullConditionalReceiver(IrExpression expression) =>
         expression switch
         {
-            IrNullConditionalAccess { IsBound: false } access => IsReusableNullConditionalReceiver(
-                access.Receiver
-            ) && IsReusableNullConditionalReceiver(access.WhenNotNull),
+            IrNullConditionalAccess access => IsReusableNullConditionalReceiver(access.Receiver)
+                && IsReusableNullConditionalReceiver(access.WhenNotNull),
             IrMemberAccess access => IsReusableNullConditionalReceiver(access.Target),
             _ => IsReusableReceiver(expression),
         };
@@ -75,17 +76,21 @@ public static class IrEvaluationTraits
         || IrNodeChildren.ExpressionsOf(expression).Any(ContainsAwait);
 
     /// <summary>
-    /// How many times <paramref name="expression"/> reads the identifier
-    /// <paramref name="name"/>, nested lambda bodies included.
+    /// How many times <paramref name="whenNotNull"/> reads its own
+    /// <see cref="IrConditionalReceiver"/>: placeholders inside a nested
+    /// access's <see cref="IrNullConditionalAccess.WhenNotNull"/> belong to
+    /// that access and are not counted.
     /// </summary>
-    public static int CountIdentifierReads(IrExpression expression, string name) =>
-        (expression is IrIdentifier identifier && identifier.Name == name ? 1 : 0)
-        + IrNodeChildren.ExpressionsOf(expression).Sum(child => CountIdentifierReads(child, name))
-        + IrNodeChildren
-            .StatementsOf(expression)
-            .Sum(statement => CountIdentifierReads(statement, name));
+    public static int CountConditionalReceiverReads(IrExpression whenNotNull) =>
+        whenNotNull switch
+        {
+            IrConditionalReceiver => 1,
+            IrNullConditionalAccess nested => CountConditionalReceiverReads(nested.Receiver),
+            _ => IrNodeChildren.ExpressionsOf(whenNotNull).Sum(CountConditionalReceiverReads)
+                + IrNodeChildren.StatementsOf(whenNotNull).Sum(CountConditionalReceiverReads),
+        };
 
-    private static int CountIdentifierReads(IrStatement statement, string name) =>
-        IrNodeChildren.ExpressionsOf(statement).Sum(child => CountIdentifierReads(child, name))
-        + IrNodeChildren.StatementsOf(statement).Sum(nested => CountIdentifierReads(nested, name));
+    private static int CountConditionalReceiverReads(IrStatement statement) =>
+        IrNodeChildren.ExpressionsOf(statement).Sum(CountConditionalReceiverReads)
+        + IrNodeChildren.StatementsOf(statement).Sum(CountConditionalReceiverReads);
 }

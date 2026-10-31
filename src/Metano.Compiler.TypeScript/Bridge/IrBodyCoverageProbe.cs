@@ -105,6 +105,7 @@ public static class IrBodyCoverageProbe
             IrArrayLiteral arr => arr.Elements.All(IsCoveredExpression),
             IrSpreadExpression spread => IsCoveredExpression(spread.Expression),
             IrYieldExpression ye => ye.Value is null || IsCoveredExpression(ye.Value),
+            IrConditionalReceiver => true,
             IrNullConditionalAccess access => IsCoveredExpression(access.Receiver)
                 && IsCoveredExpression(access.WhenNotNull),
             IrLinqChain linq => IsCoveredExpression(linq.Source)

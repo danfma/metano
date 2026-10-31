@@ -2,13 +2,28 @@ using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
-using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
 public static partial class IrToTsExpressionBridge
 {
     private static readonly TsLiteral NullLiteral = new("null");
+
+    /// <summary>
+    /// The parameter a receiver that must evaluate once is bound to. A nested
+    /// guard may reuse the name: its argument is evaluated in the enclosing
+    /// scope, so each placeholder still reads its own access's receiver.
+    /// <c>$</c> cannot appear in a C# identifier, so it never captures a
+    /// source local.
+    /// </summary>
+    private const string ConditionalReceiverParameter = "$receiver";
+
+    /// <summary>
+    /// What each <see cref="IrConditionalReceiver"/> lowers to, innermost
+    /// access on top, while that access's <c>WhenNotNull</c> is mapped.
+    /// </summary>
+    [ThreadStatic]
+    private static Stack<TsExpression>? _conditionalReceivers;
 
     /// <summary>
     /// Lowers a null-conditional access (<c>a?.B.C(x)</c>). When every mapped
@@ -68,49 +83,86 @@ public static partial class IrToTsExpressionBridge
         ]);
     }
 
+    /// <summary>
+    /// Decides how the receiver is evaluated once: a side-effect-free
+    /// receiver (<see cref="IrEvaluationTraits.IsReusableNullConditionalReceiver"/>)
+    /// is repeated wherever the steps read it; any other receiver is read
+    /// through <see cref="ConditionalReceiverParameter"/>. Either way the steps
+    /// become native optional chaining when they read the receiver only at
+    /// the chain's root (or anywhere, for a repeated receiver) and every
+    /// mapped step is a plain access or call.
+    /// </summary>
     private static LoweredNullConditional LowerNullConditional(
         IrNullConditionalAccess access,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
         var loweredReceiver = Map(access.Receiver, bclRegistry);
+        var repeatsReceiver = IrEvaluationTraits.IsReusableNullConditionalReceiver(access.Receiver);
 
-        // Same naming the body's `IrIdentifier(ReceiverName)` reads go through.
-        var receiverName = access.IsBound
-            ? TypeScriptNaming.ToCamelCase(access.ReceiverName)
-            : null;
-
-        TsExpression receiverReference = receiverName is null
+        var receiverReference = repeatsReceiver
             ? loweredReceiver
-            : new TsIdentifier(receiverName);
+            : new TsIdentifier(ConditionalReceiverParameter);
 
-        var whenNotNull = Map(access.WhenNotNull, bclRegistry);
+        var whenNotNull = MapWithConditionalReceiver(
+            access.WhenNotNull,
+            receiverReference,
+            bclRegistry
+        );
 
-        // A step that lowers to the receiver itself (a `[Branded]` value read,
-        // `slug?.Value`) needs no guard: a null receiver already yields null.
         var optionalChain =
-            whenNotNull.Equals(receiverReference) ? loweredReceiver
-            : CanChainOptionally(access)
+            whenNotNull.Equals(receiverReference)
+                // A step that lowers to the receiver itself (a `[Branded]` value
+                // read, `slug?.Value`) needs no guard: a null receiver is null.
+                ? loweredReceiver
+            : CanChainOptionally(access, repeatsReceiver)
                 ? TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
             : null;
 
         return new LoweredNullConditional(
             loweredReceiver,
-            receiverName,
+            repeatsReceiver ? null : ConditionalReceiverParameter,
             whenNotNull,
             optionalChain
         );
     }
 
     /// <summary>
-    /// Native <c>?.</c> replaces the receiver binding only at the chain's
-    /// root. A bound receiver read anywhere else too — an index-from-end
-    /// offset (<c>f()?[^1]</c>), a slice bound, an <c>[Inline]</c> body that
-    /// mentions it twice — needs the binding, so it keeps the guarded form.
+    /// Native <c>?.</c> replaces a bound receiver only at the chain's root,
+    /// so a receiver read anywhere else too — an index-from-end offset
+    /// (<c>f()?[^1]</c>), a slice bound, an <c>[Inline]</c> body that
+    /// mentions it twice — keeps the binding. A repeated receiver may appear
+    /// anywhere.
     /// </summary>
-    private static bool CanChainOptionally(IrNullConditionalAccess access) =>
-        !access.IsBound
-        || IrEvaluationTraits.CountIdentifierReads(access.WhenNotNull, access.ReceiverName) == 1;
+    private static bool CanChainOptionally(IrNullConditionalAccess access, bool repeatsReceiver) =>
+        repeatsReceiver
+        || IrEvaluationTraits.CountConditionalReceiverReads(access.WhenNotNull) == 1;
+
+    private static TsExpression MapWithConditionalReceiver(
+        IrExpression whenNotNull,
+        TsExpression receiverReference,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var receivers = _conditionalReceivers ??= new Stack<TsExpression>();
+        receivers.Push(receiverReference);
+
+        try
+        {
+            return Map(whenNotNull, bclRegistry);
+        }
+        finally
+        {
+            receivers.Pop();
+        }
+    }
+
+    private static TsExpression CurrentConditionalReceiver() =>
+        _conditionalReceivers is { Count: > 0 } receivers
+            ? receivers.Peek()
+            : throw new InvalidOperationException(
+                "A conditional receiver was read outside its null-conditional access."
+            );
 
     private static TsConditionalExpression GuardInline(
         TsExpression receiver,

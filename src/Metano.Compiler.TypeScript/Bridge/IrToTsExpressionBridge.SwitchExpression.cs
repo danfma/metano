@@ -39,7 +39,7 @@ public static partial class IrToTsExpressionBridge
         sw.Arms.Count > 0
         && sw.Arms[^1] is { Pattern: IrDiscardPattern, WhenClause: null }
         && sw.Arms.Take(sw.Arms.Count - 1).All(arm => CanLowerPatternAsBooleanTest(arm.Pattern))
-        && IsStableReference(sw.Scrutinee);
+        && IrEvaluationTraits.IsSideEffectFree(sw.Scrutinee);
 
     private static TsExpression LowerSwitchAsTernary(
         IrSwitchExpression sw,
@@ -260,25 +260,4 @@ public static partial class IrToTsExpressionBridge
         result is IrThrowExpression thrown
             ? new TsThrowStatement(Map(thrown.Expression, bclRegistry))
             : new TsReturnStatement(Map(result, bclRegistry));
-
-    /// <summary>
-    /// Shape-based check that reading the expression again yields the same
-    /// value without new side effects: identifiers, <c>this</c>, literals,
-    /// member-access chains, and operators over those. A member access may
-    /// still run a property getter, which is assumed to be side-effect free.
-    /// </summary>
-    private static bool IsStableReference(IrExpression expression) =>
-        expression switch
-        {
-            IrIdentifier or IrThisExpression or IrLiteral => true,
-            IrMemberAccess access => IsStableReference(access.Target),
-            IrBinaryExpression binary when !binary.Operator.IsAssignment() => IsStableReference(
-                binary.Left
-            ) && IsStableReference(binary.Right),
-            IrUnaryExpression
-            {
-                Operator: not (IrUnaryOp.Increment or IrUnaryOp.Decrement)
-            } unary => IsStableReference(unary.Operand),
-            _ => false,
-        };
 }

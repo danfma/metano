@@ -272,6 +272,11 @@ public static class IrToTsPlainObjectBridge
             {
                 Expression = RewriteThis(cast.Expression, identifierName),
             },
+            IrNullConditionalAccess access => access with
+            {
+                Receiver = RewriteThis(access.Receiver, identifierName),
+                WhenNotNull = RewriteThis(access.WhenNotNull, identifierName),
+            },
             IrAwaitExpression aw => aw with
             {
                 Expression = RewriteThis(aw.Expression, identifierName),
