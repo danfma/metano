@@ -87,8 +87,12 @@ public static partial class IrToTsExpressionBridge
 
         var whenNotNull = Map(access.WhenNotNull, bclRegistry);
 
-        var optionalChain = CanChainOptionally(access)
-            ? TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
+        // A step that lowers to the receiver itself (a `[Branded]` value read,
+        // `slug?.Value`) needs no guard: a null receiver already yields null.
+        var optionalChain =
+            whenNotNull.Equals(receiverReference) ? loweredReceiver
+            : CanChainOptionally(access)
+                ? TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
             : null;
 
         return new LoweredNullConditional(
