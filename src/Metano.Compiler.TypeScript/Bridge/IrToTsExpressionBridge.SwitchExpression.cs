@@ -155,15 +155,8 @@ public static partial class IrToTsExpressionBridge
     }
 
     private static bool ArmAwaits(IrSwitchArm arm) =>
-        (arm.WhenClause is not null && ContainsAwait(arm.WhenClause)) || ContainsAwait(arm.Result);
-
-    /// <summary>
-    /// Whether the expression awaits outside any nested lambda — a lambda's
-    /// own <c>await</c> belongs to that lambda, not to the arm.
-    /// </summary>
-    private static bool ContainsAwait(IrExpression expression) =>
-        expression is IrAwaitExpression
-        || IrNodeChildren.ExpressionsOf(expression).Any(ContainsAwait);
+        (arm.WhenClause is not null && IrEvaluationTraits.ContainsAwait(arm.WhenClause))
+        || IrEvaluationTraits.ContainsAwait(arm.Result);
 
     private static TsThrowStatement BuildNonExhaustiveSwitchThrow() =>
         new(

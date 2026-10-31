@@ -155,6 +155,11 @@ public sealed class DartIrRewriter
                 Body = RewriteExpression(l.Body),
             },
             IrOptionalChain o => o with { Target = RewriteExpression(o.Target) },
+            IrNullConditionalAccess n => n with
+            {
+                Receiver = RewriteExpression(n.Receiver),
+                WhenNotNull = RewriteExpression(n.WhenNotNull),
+            },
             IrLambdaExpression l => l with { Body = l.Body.Select(RewriteStatement).ToList() },
             IrArrayLiteral a => a with { Elements = a.Elements.Select(RewriteExpression).ToList() },
             IrObjectLiteral o => o with

@@ -24,6 +24,7 @@ public static class IrNodeChildren
                 slice.End,
             }.OfType<IrExpression>(),
             IrOptionalChain chain => [chain.Target],
+            IrNullConditionalAccess access => [access.Receiver, access.WhenNotNull],
             IrCallExpression call => [call.Target, .. call.Arguments.Select(a => a.Value)],
             IrNewExpression creation =>
             [

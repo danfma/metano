@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
@@ -76,6 +77,13 @@ public sealed partial class IrExpressionExtractor
     /// one (cheap defense against future Stage 4 indexer reuse).
     /// </summary>
     private int _receiverTempCounter;
+
+    /// <summary>
+    /// The receiver a leading <see cref="MemberBindingExpressionSyntax"/>
+    /// reads from while <see cref="LowerConditionalContinuation"/> extracts
+    /// the steps after a <c>?.</c>; <c>null</c> outside a continuation.
+    /// </summary>
+    private IrExpression? _conditionalReceiver;
 
     private string NextReceiverTempName() => $"receiver$temp${_receiverTempCounter++}";
 
@@ -190,6 +198,8 @@ public sealed partial class IrExpressionExtractor
             WithExpressionSyntax withExpr => ExtractWithExpression(withExpr),
             CollectionExpressionSyntax coll => ExtractCollectionExpression(coll),
             ConditionalAccessExpressionSyntax cond => ExtractConditionalAccess(cond),
+            MemberBindingExpressionSyntax binding when _conditionalReceiver is { } bound =>
+                ExtractConditionalMemberBinding(binding, bound),
             ArrayCreationExpressionSyntax arr when arr.Initializer is not null =>
                 new IrArrayLiteral(arr.Initializer.Expressions.Select(Extract).ToList()),
             ImplicitArrayCreationExpressionSyntax iarr => new IrArrayLiteral(
@@ -269,14 +279,6 @@ public sealed partial class IrExpressionExtractor
                     BuildOrigin(_semantic.GetSymbolInfo(mb).Symbol)
                 );
 
-            case MemberAccessExpressionSyntax ma:
-                var optionalTarget = LowerConditionalBinding(receiver, ma.Expression);
-                return new IrMemberAccess(
-                    optionalTarget,
-                    ma.Name.Identifier.ValueText,
-                    BuildOrigin(_semantic.GetSymbolInfo(ma).Symbol)
-                );
-
             case InvocationExpressionSyntax inv
                 when inv.Expression is MemberBindingExpressionSyntax mbCall:
                 var methodSymbol = _semantic.GetSymbolInfo(inv).Symbol;
@@ -316,21 +318,10 @@ public sealed partial class IrExpressionExtractor
 
                 return new IrCallExpression(chainTarget, args, Origin: BuildOrigin(methodSymbol));
 
-            case InvocationExpressionSyntax inv
-                when inv.Expression is MemberAccessExpressionSyntax maCall:
-                var target = LowerConditionalBinding(receiver, maCall);
-                var chainedMethod = _semantic.GetSymbolInfo(inv).Symbol;
-                var chainedArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-                ApplyParamsSpread(
-                    chainedArgs,
-                    chainedMethod as IMethodSymbol,
-                    inv.ArgumentList.Arguments
-                );
-                return new IrCallExpression(
-                    target,
-                    chainedArgs,
-                    Origin: BuildOrigin(chainedMethod)
-                );
+            case MemberAccessExpressionSyntax
+            or InvocationExpressionSyntax
+            or ElementAccessExpressionSyntax:
+                return LowerConditionalContinuation(receiver, whenNotNull);
 
             case ConditionalAccessExpressionSyntax nested:
                 var head = LowerConditionalBinding(receiver, nested.Expression);
@@ -345,6 +336,51 @@ public sealed partial class IrExpressionExtractor
                 return ReportUnsupported(whenNotNull, $"ConditionalAccess({whenNotNull.Kind()})");
         }
     }
+
+    /// <summary>
+    /// Lowers a null-conditional binding whose steps continue past the first
+    /// member (<c>a?.B.C(x)</c>, <c>a?.B[0]</c>) to an
+    /// <see cref="IrNullConditionalAccess"/>. The continuation goes through
+    /// the regular <see cref="Extract"/> pipeline with the leading
+    /// <see cref="MemberBindingExpressionSyntax"/> bound to the receiver, so
+    /// every step keeps its own lowering (extension rewrites, LINQ chains,
+    /// type arguments, member origins). A receiver that is not
+    /// <see cref="IsSimpleReceiver"/> gets a temp binding so it evaluates
+    /// once.
+    /// </summary>
+    private IrExpression LowerConditionalContinuation(
+        IrExpression receiver,
+        ExpressionSyntax whenNotNull
+    )
+    {
+        var receiverName = IsSimpleReceiver(receiver) ? null : NextReceiverTempName();
+        var boundReceiver = receiverName is null ? receiver : new IrIdentifier(receiverName);
+        var enclosingReceiver = _conditionalReceiver;
+        _conditionalReceiver = boundReceiver;
+
+        try
+        {
+            return new IrNullConditionalAccess(receiver, Extract(whenNotNull), receiverName);
+        }
+        finally
+        {
+            _conditionalReceiver = enclosingReceiver;
+        }
+    }
+
+    /// <summary>
+    /// The leading <c>.Member</c> of a null-conditional continuation, read off
+    /// the receiver bound by <see cref="LowerConditionalContinuation"/>.
+    /// </summary>
+    private IrExpression ExtractConditionalMemberBinding(
+        MemberBindingExpressionSyntax binding,
+        IrExpression receiver
+    ) =>
+        new IrMemberAccess(
+            receiver,
+            binding.Name.Identifier.ValueText,
+            BuildOrigin(_semantic.GetSymbolInfo(binding).Symbol)
+        );
 
     /// <summary>
     /// Lowers <c>a?.b = c</c> (and nested forms like
@@ -590,24 +626,11 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// True for IR shapes that can be referenced twice in the
-    /// generated code without observable side effects: identifiers,
-    /// <c>this</c>, and member-access chains rooted at one of those
-    /// (fields and properties alike — the IR does not distinguish
-    /// them, so a property getter is assumed side-effect free).
-    /// Method calls, element accesses and every other shape are
-    /// excluded — re-evaluating them would diverge from the C#
-    /// semantics where the receiver is evaluated exactly once.
+    /// generated code without observable side effects — see
+    /// <see cref="IrEvaluationTraits.IsReusableReceiver"/>.
     /// </summary>
     private static bool IsSimpleReceiver(IrExpression expression) =>
-        expression switch
-        {
-            IrIdentifier => true,
-            IrThisExpression => true,
-            IrBaseExpression => true,
-            IrTypeReference => true,
-            IrMemberAccess ma => IsSimpleReceiver(ma.Target),
-            _ => false,
-        };
+        IrEvaluationTraits.IsReusableReceiver(expression);
 
     /// <summary>
     /// Evaluates <paramref name="receiver"/> once when <paramref name="build"/>

@@ -1126,11 +1126,12 @@ public sealed class Printer(string indent = "  ")
     }
 
     /// <summary>
-    /// <c>a?.b</c> continues an optional chain on purpose; a plain
-    /// <c>.b</c> on an optional-chain object must close the chain first.
+    /// <c>a?.b</c> (and a step marked as continuing the chain, the <c>.c</c>
+    /// of <c>a?.b.c</c>) extends an optional chain on purpose; any other
+    /// plain <c>.b</c> on an optional-chain object must close the chain first.
     /// </summary>
-    private static TsOperandSlot AccessObjectSlot(TsPropertyAccess access) =>
-        access.Optional ? TsOperandSlot.AccessTarget : TsOperandSlot.MemberObject;
+    private static TsOperandSlot AccessObjectSlot(bool optional, bool continuesChain) =>
+        optional || continuesChain ? TsOperandSlot.AccessTarget : TsOperandSlot.MemberObject;
 
     private void PrintParenthesized(TsExpression expression)
     {
@@ -1188,7 +1189,10 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsPropertyAccess access:
-                PrintOperand(access.Object, AccessObjectSlot(access));
+                PrintOperand(
+                    access.Object,
+                    AccessObjectSlot(access.Optional, access.ContinuesChain)
+                );
                 _sb.Write(access.Optional ? "?." : ".");
                 _sb.Write(access.Property);
                 break;
@@ -1224,8 +1228,11 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsElementAccess elemAccess:
-                PrintOperand(elemAccess.Object, TsOperandSlot.MemberObject);
-                _sb.Write("[");
+                PrintOperand(
+                    elemAccess.Object,
+                    AccessObjectSlot(elemAccess.Optional, elemAccess.ContinuesChain)
+                );
+                _sb.Write(elemAccess.Optional ? "?.[" : "[");
                 PrintExpression(elemAccess.Index);
                 _sb.Write("]");
                 break;

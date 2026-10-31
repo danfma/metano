@@ -148,6 +148,26 @@ public sealed record IrOptionalChain(
     IrMemberOrigin? Origin = null
 ) : IrExpression;
 
+/// <summary>
+/// A null-conditional access whose steps continue past the first binding:
+/// <c>receiver?.A.B(x)</c>. <see cref="Receiver"/> is evaluated once; the
+/// whole expression yields <c>null</c> when it is null and
+/// <see cref="WhenNotNull"/> otherwise. <see cref="WhenNotNull"/> is the rest
+/// of the chain extracted as an ordinary expression over the receiver, so
+/// every step keeps its own lowering (member mappings, extension rewrites,
+/// LINQ). It refers to the receiver through
+/// <c>IrIdentifier(<see cref="ReceiverName"/>)</c> when the receiver needs a
+/// single-evaluation binding, or by repeating <see cref="Receiver"/> when it
+/// is a side-effect-free shape (<see cref="ReceiverName"/> is <c>null</c>).
+/// Backends may re-sugar it into native optional chaining when every step
+/// is a plain member access or call.
+/// </summary>
+public sealed record IrNullConditionalAccess(
+    IrExpression Receiver,
+    IrExpression WhenNotNull,
+    string? ReceiverName = null
+) : IrExpression;
+
 // -- Invocations --
 
 /// <summary>

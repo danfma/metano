@@ -1,5 +1,6 @@
 using System.Globalization;
 using Metano.Annotations;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -105,6 +106,7 @@ public static partial class IrToTsExpressionBridge
             IrLinqChain chain => MapLinqChain(chain, bclRegistry),
             IrLetExpression let => MapLetExpression(let, bclRegistry),
             IrOutArgumentCall outCall => MapOutArgumentCall(outCall, bclRegistry),
+            IrNullConditionalAccess access => MapNullConditionalAccess(access, bclRegistry),
             IrUnsupportedExpression u => MapUnsupported(u),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };
@@ -364,7 +366,12 @@ public static partial class IrToTsExpressionBridge
             }
 
             return optionalReceiver
-                ? IrToTsBclMapper.GuardOptionalReceiver(receiver, MapHelperCall)
+                ? NullConditionalGuard.Guard(
+                    memberReceiver,
+                    receiver,
+                    call.Arguments.Any(a => IrEvaluationTraits.ContainsAwait(a.Value)),
+                    MapHelperCall
+                )
                 : MapHelperCall(receiver);
         }
 
