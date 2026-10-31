@@ -93,6 +93,47 @@ public class BrandedValueObjectTests
     }
 
     [Test]
+    public async Task ValueRead_ThroughNullConditional_CollapsesToReceiver()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct EpisodeSlug
+            {
+                private EpisodeSlug(string value) => Value = value;
+
+                public string Value { get; }
+            }
+
+            public class Episode
+            {
+                public EpisodeSlug Slug { get; init; }
+            }
+
+            public static class Uses
+            {
+                public static string? Raw(EpisodeSlug? slug) => slug?.Value;
+
+                public static int? Length(EpisodeSlug? slug) => slug?.Value.Length;
+
+                public static int? SlugLength(Episode? episode) => episode?.Slug.Value.Length;
+            }
+            """
+        );
+
+        var output = result["uses.ts"];
+
+        await Assert.That(output).Contains("return slug;");
+        await Assert.That(output).Contains("return slug?.length;");
+        await Assert.That(output).Contains("return episode?.slug.length;");
+        await Assert.That(output).DoesNotContain(".value");
+    }
+
+    [Test]
     public async Task ValueRead_OnCrossPackageBrandedType_CollapsesToReceiver()
     {
         // The library wrapper reaches the consumer as a metadata symbol (no
