@@ -197,6 +197,7 @@ public class ExportsSubpathRootTests
             ["app/core/zeta/index.ts", "zeta/index.ts"],
             RootOf("App.Core")
         );
+
         var claimedSecond = PackageExportSubpaths.Resolve(
             ["shared/index.ts", "video-studio/domain/shared/index.ts"],
             RootOf(Root)
@@ -267,6 +268,7 @@ public class ExportsSubpathRootTests
         var cacheDir = CreateTempDir();
         var compilation = TranspileHelper.CompileLibrary(Library(Root));
         var (ir, _) = TranspileHelper.NewTransformerWithIr(compilation);
+
         var transformer = new TypeTransformer(ir, compilation)
         {
             NamespaceBarrels = true,
@@ -391,6 +393,7 @@ public class ExportsSubpathRootTests
                 public static string Shout(string text) => text + "!";
             }
             """;
+
         var consumer = """
             using VideoStudio.Domain.Formatting;
 
@@ -430,6 +433,7 @@ public class ExportsSubpathRootTests
                 public override JsxElement Render() => new Html.Span { Children = [Text("b")] };
             }
             """;
+
         var consumer = """
             using Metano.Annotations;
             using Metano.Annotations.TypeScript;
@@ -494,6 +498,7 @@ public class ExportsSubpathRootTests
 
             public record Clock(int Ticks);
             """;
+
         var compilation = TranspileHelper.CompileLibrary(source);
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(
@@ -585,16 +590,20 @@ public class ExportsSubpathRootTests
     private static CachedRun TransformConsumerWithCache(string cacheDir, string subpathRoot)
     {
         var library = TranspileHelper.CompileLibrary(Library(subpathRoot));
+
         var consumer = TranspileHelper.CompileConsumer(
             Consumer("VideoStudio.Domain.Episodes.Episode"),
             library
         );
+
         var (ir, _) = TranspileHelper.NewTransformerWithIr(consumer);
+
         var transformer = new TypeTransformer(ir, consumer)
         {
             CacheOutputDir = cacheDir,
             CacheConfigurationFingerprint = "fp",
         };
+
         var printer = new Printer();
 
         var files = transformer.TransformAll();
@@ -602,6 +611,7 @@ public class ExportsSubpathRootTests
         foreach (var file in files)
         {
             var path = Path.Combine(cacheDir, file.FileName);
+
             var content = transformer.CachedFileContents.TryGetValue(file.FileName, out var cached)
                 ? cached
                 : printer.Print(file);

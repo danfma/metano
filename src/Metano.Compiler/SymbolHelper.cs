@@ -955,6 +955,7 @@ public static class SymbolHelper
             attr,
             nameof(EmitPackageAttribute.SubpathRoot)
         );
+
         var hasValidSubpathRoot = PackageSubpathRoot.TryFrom(
             declaredSubpathRoot,
             out var subpathRoot

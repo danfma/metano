@@ -14,7 +14,7 @@ Metano's stable diagnostic contract. Source of truth: the diagnostic-code consta
 Each diagnostic carries: severity, stable code, message, optional source location. Stable codes are
 part of the transpiler contract (ADR-0010) and are searchable across docs, tests, issues, and ADRs.
 
-## Stable codes (`MS0001`–`MS0028`)
+## Stable codes (`MS0001`–`MS0030`)
 
 | Code | Symbolic name | Meaning |
 | --- | --- | --- |
