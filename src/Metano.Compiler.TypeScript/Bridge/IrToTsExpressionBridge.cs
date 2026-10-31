@@ -225,8 +225,10 @@ public static partial class IrToTsExpressionBridge
             return new TsElementAccess(
                 loweredTarget,
                 // Numeric index literal — TsLiteral carries the raw token, and the
-                // index is a non-negative int, so this prints as `value[0]`.
-                new TsLiteral(tupleOrigin.TupleIndex.ToString())
+                // index is a non-negative int, so this prints as `value[0]`
+                // (`value?.[0]` through a null-conditional receiver).
+                new TsLiteral(tupleOrigin.TupleIndex.ToString()),
+                optionalReceiver
             );
 
         if (bclRegistry is not null)

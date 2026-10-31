@@ -37,6 +37,29 @@ public class JsTupleTranspileTests
         await Assert.That(output).DoesNotContain("metano-runtime");
     }
 
+    // A positional member read through `?.` keeps the short-circuit: `p?.[1]`.
+    [Test]
+    public async Task PositionalMemberAccess_ThroughNullConditional_LowersToOptionalIndex()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, JsTuple]
+            public record Pair<A, B>(A First, B Second);
+
+            [Transpile]
+            public class Reader
+            {
+                public string? ReadSecond(Pair<int, string>? p) => p?.Second;
+            }
+            """
+        );
+
+        await Assert.That(result["reader.ts"]).Contains("return p?.[1];");
+    }
+
     // Contract T2 — positional member access → array index.
     [Test]
     public async Task PositionalMemberAccess_LowersToArrayIndex()
