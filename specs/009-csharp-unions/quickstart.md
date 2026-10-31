@@ -5,7 +5,7 @@ Run every step from the repo root. Each stage (plan.md) has its own section, and
 ## Prerequisites
 
 ```sh
-dotnet --list-sdks          # needs 10.0.x and 11.0.100-rc.1.* (global.json pins 11 RC after 009a)
+dotnet --list-sdks          # needs 10.0.x and the exact 11 RC pinned in global.json (11.0.100-rc.1.26425.128 after 009a)
 bun install && dotnet tool restore && dotnet husky install
 dotnet build Metano.slnx -maxcpucount:1
 ```
@@ -25,6 +25,8 @@ dotnet build Metano.slnx -maxcpucount:1
    **Expect**: the tool starts with no "You must install or update .NET" error (FR-002).
 
 ## 009b — Shape
+
+Union tests compile against the net11 reference pack resolved from `global.json` (FR-036). If the pack is missing, the test run fails with a message naming the expected `packs/Microsoft.NETCore.App.Ref/<version>/ref/net11.0` path; install the pinned SDK to fix it.
 
 ```sh
 dotnet run --project src/Metano.Compiler.TypeScript/ -- \
@@ -49,7 +51,7 @@ git diff --exit-code targets/js/sample-unions/test/fixtures
 cd targets/js/sample-unions && bun test
 ```
 
-**Expect**: every fixture round-trips byte-for-byte, and every error fixture throws with the STJ message prefix. The transpile run prints `warning MS0035 … 'Clip' … 'Object'`.
+**Expect**: every fixture round-trips byte-for-byte, and every error fixture throws with the STJ message prefix. The transpile run prints `warning MS0036 … 'Clip' … 'Object'`.
 
 ## Regression gate
 

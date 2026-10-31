@@ -12,7 +12,8 @@
 
 ## Requirement Completeness
 
-- [ ] No open decisions remain. **OD-1–OD-12** are listed in spec.md, each with a recommendation; none blocks stage 009a.
+- [ ] No open decisions remain. **OD-1–OD-17** are listed in spec.md, each with a recommendation; only OD-14 (release SDK) touches stage 009a.
+- [x] Spec-review gaps addressed (2026-10-31): JSON closure over union cases, labeled-block switch lowering, constructed-generic validation, value-domain overlap, guard ownership and imports, dispatcher coverage, relational patterns, hand-written unions, `IUnion` access, net11 test references, CI pinning, STJ option/token parity, cross-package JSON, default-value divergences, equality, nested unions and Dart details. New probes are recorded in research R10.
 - [x] Requirements are testable and unambiguous (each FR maps to a golden, a diagnostic test or a fixture)
 - [x] Success criteria are measurable (SC-001–SC-005)
 - [x] All acceptance scenarios are defined (US1–US6)
@@ -22,7 +23,7 @@
 
 ## Feature Readiness
 
-- [x] Diagnostic codes reserved (`MS0031`–`MS0036`) in the baseline catalog
+- [x] Diagnostic codes reserved (`MS0032`–`MS0037`) in the baseline catalog (renumbered from `MS0031`–`MS0036` after #278 took `MS0031`)
 - [x] Baseline feature-support matrix rows added (Planned)
 - [x] Issue created: #304
 - [ ] Open decisions resolved with the maintainer (`/speckit-clarify`) before `/speckit-tasks`
