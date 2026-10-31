@@ -450,6 +450,10 @@ public static class IrToTsJsxComponentBridge
             {
                 Elements = arr.Elements.Select(e => Rewrite(e, propNames, referenced)).ToList(),
             },
+            IrTupleLiteral tuple => tuple with
+            {
+                Elements = tuple.Elements.Select(e => Rewrite(e, propNames, referenced)).ToList(),
+            },
             IrSpreadExpression spread => spread with
             {
                 Expression = Rewrite(spread.Expression, propNames, referenced),

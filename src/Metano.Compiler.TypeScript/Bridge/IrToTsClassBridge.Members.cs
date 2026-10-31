@@ -95,7 +95,7 @@ internal static partial class IrToTsClassBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var name = IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes);
+        var name = IrToTsNamingPolicy.ToMethodName(method);
         // Abstract methods carry no body in C#; the printer emits the
         // signature followed by `;` and skips the not-implemented stub
         // that would otherwise replace a missing body.

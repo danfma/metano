@@ -233,6 +233,10 @@ public static class IrBodyPrinter
             case IrBaseExpression:
                 sb.Append("super");
                 break;
+            case IrMemberAccess { Origin: { } origin } ma when IsRecordFieldRead(origin):
+                PrintAccessTarget(sb, ma.Target);
+                sb.Append(".$").Append(origin.TupleIndex + 1);
+                break;
             case IrMemberAccess ma:
                 PrintAccessTarget(sb, ma.Target);
                 sb.Append('.').Append(IrToDartNamingPolicy.ToParameterName(ma.MemberName));
@@ -262,6 +266,15 @@ public static class IrBodyPrinter
                 sb.Append("(()");
                 PrintClosureBody(sb, sequence);
                 sb.Append(")()");
+                break;
+            case IrCallExpression
+            {
+                Target: IrMemberAccess hashed,
+                Arguments.Count: 0,
+                Origin: { } hashOrigin,
+            } when IsObjectHashCode(hashOrigin):
+                PrintAccessTarget(sb, hashed.Target);
+                sb.Append(".hashCode");
                 break;
             case IrCallExpression call:
                 PrintCallTarget(sb, call.Target);
@@ -347,6 +360,9 @@ public static class IrBodyPrinter
                     PrintExpression(sb, a.Value);
                 }
                 sb.Append(')');
+                break;
+            case IrTupleLiteral tuple:
+                PrintRecordLiteral(sb, tuple);
                 break;
             case IrArrayLiteral array:
                 sb.Append('[');
@@ -1059,6 +1075,53 @@ public static class IrBodyPrinter
     private static string EscapeString(string s) =>
         s.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");
 
+    /// <summary>
+    /// A positional element read of a C# tuple, which Dart models as a record:
+    /// its positional fields are <c>$1</c>, <c>$2</c>, … whatever the C#
+    /// element name. A <c>[JsTuple]</c> record's positional member is a plain
+    /// field of the emitted class and keeps its name.
+    /// </summary>
+    private static bool IsRecordFieldRead(IrMemberOrigin origin) =>
+        origin is { IsTupleElement: true, TupleIndex: >= 0 }
+        && IsValueTupleName(origin.DeclaringTypeFullName);
+
+    /// <summary>
+    /// A C# tuple's stable full name: its tuple syntax (<c>(T1, T2)</c>), or
+    /// the <c>ValueTuple</c> generic it stands for.
+    /// </summary>
+    private static bool IsValueTupleName(string fullName) =>
+        fullName.StartsWith('(')
+        || fullName.StartsWith("System.ValueTuple<", StringComparison.Ordinal);
+
+    /// <summary>
+    /// <c>object.GetHashCode</c> — every <c>GetHashCode()</c> call carries its
+    /// origin — reads Dart's <c>hashCode</c> getter.
+    /// </summary>
+    private static bool IsObjectHashCode(IrMemberOrigin origin) =>
+        origin is { DeclaringTypeFullName: "object", MemberName: nameof(object.GetHashCode) };
+
+    /// <summary>
+    /// A C# tuple literal as a Dart 3 record literal, <c>(a, b)</c>; a
+    /// one-element record needs the trailing comma, <c>(a,)</c>.
+    /// </summary>
+    private static void PrintRecordLiteral(StringBuilder sb, IrTupleLiteral tuple)
+    {
+        sb.Append('(');
+
+        for (var i = 0; i < tuple.Elements.Count; i++)
+        {
+            if (i > 0)
+                sb.Append(", ");
+
+            PrintExpression(sb, tuple.Elements[i]);
+        }
+
+        if (tuple.Elements.Count == 1)
+            sb.Append(',');
+
+        sb.Append(')');
+    }
+
     private static string FormatBinaryOp(IrBinaryOp op) =>
         op switch
         {
@@ -1068,8 +1131,10 @@ public static class IrBodyPrinter
             IrBinaryOp.Divide => "/",
             IrBinaryOp.IntegerDivide => "~/",
             IrBinaryOp.Modulo => "%",
-            IrBinaryOp.Equal => "==",
-            IrBinaryOp.NotEqual => "!=",
+            // Dart's `==` dispatches to the operand's `operator ==`, which is
+            // value equality for the classes emitted from records.
+            IrBinaryOp.Equal or IrBinaryOp.ValueEqual => "==",
+            IrBinaryOp.NotEqual or IrBinaryOp.ValueNotEqual => "!=",
             IrBinaryOp.LessThan => "<",
             IrBinaryOp.LessThanOrEqual => "<=",
             IrBinaryOp.GreaterThan => ">",

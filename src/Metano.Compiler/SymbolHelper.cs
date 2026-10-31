@@ -14,6 +14,16 @@ namespace Metano.Compiler;
 public static class SymbolHelper
 {
     /// <summary>
+    /// Arity of the widest C# tuple whose elements sit side by side: from the
+    /// eighth element on, C# nests the tail in <c>ValueTuple</c>'s <c>Rest</c>
+    /// element, and the type mapping keeps that nesting.
+    /// </summary>
+    public const int MaxFlatTupleArity = 7;
+
+    /// <summary>The prefix of a C# tuple's default element names (<c>Item1</c>, …).</summary>
+    private const string TupleItemPrefix = "Item";
+
+    /// <summary>
     /// Stable display format used when the same type symbol must produce the
     /// same string in two unrelated places — for instance, both
     /// <c>DeclarativeMappingRegistry</c> and <c>IrExpressionExtractor</c> key
@@ -878,6 +888,57 @@ public static class SymbolHelper
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// The zero-based array position <paramref name="member"/> reads on a
+    /// value that lowers to a positional array: a <c>[JsTuple]</c> record's
+    /// positional member (<see cref="GetJsTupleElementIndex"/>), or a C# tuple
+    /// element read by its name or as <c>ItemN</c> (<c>t.x</c>, <c>t.Item2</c>).
+    /// Returns <c>-1</c> for any other member, and for the elements from the
+    /// eighth on, which C# nests in the tuple's <c>Rest</c> element.
+    /// </summary>
+    public static int GetPositionalTupleElementIndex(ISymbol member)
+    {
+        var jsTupleIndex = GetJsTupleElementIndex(member);
+
+        return jsTupleIndex >= 0 ? jsTupleIndex : GetValueTupleElementIndex(member);
+    }
+
+    /// <summary>
+    /// The position of a C# tuple element field: a named element and its
+    /// <c>ItemN</c> alias both correspond to the default <c>ItemN</c> field,
+    /// whose number is the one-based position. <c>-1</c> for any other member
+    /// (<c>Rest</c> included) and for the elements C# nests in <c>Rest</c>.
+    /// </summary>
+    private static int GetValueTupleElementIndex(ISymbol member)
+    {
+        if (member is not IFieldSymbol { ContainingType.IsTupleType: true } field)
+            return -1;
+
+        var defaultName = (field.CorrespondingTupleField ?? field).Name;
+
+        if (!TryParseItemPosition(defaultName, out var position))
+            return -1;
+
+        return position <= MaxFlatTupleArity ? position - 1 : -1;
+    }
+
+    /// <summary>
+    /// The default name C# gives the tuple element at
+    /// <paramref name="zeroBasedIndex"/> (<c>Item1</c> for 0).
+    /// </summary>
+    public static string TupleItemName(int zeroBasedIndex) =>
+        TupleItemPrefix
+        + (zeroBasedIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The one-based <c>N</c> of a default tuple element name <c>ItemN</c>.</summary>
+    private static bool TryParseItemPosition(string defaultName, out int position)
+    {
+        position = 0;
+
+        return defaultName.StartsWith(TupleItemPrefix, StringComparison.Ordinal)
+            && int.TryParse(defaultName.AsSpan(TupleItemPrefix.Length), out position);
     }
 
     /// <summary>

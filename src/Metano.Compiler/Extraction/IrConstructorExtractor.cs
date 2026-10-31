@@ -94,6 +94,42 @@ public static class IrConstructorExtractor
             )
             .ToList();
 
+    /// <summary>
+    /// Whether <paramref name="constructor"/> is the C# 12 primary constructor
+    /// (or a record's positional one): declared by the type declaration's
+    /// parameter list rather than by a constructor declaration.
+    /// </summary>
+    public static bool IsPrimaryConstructor(IMethodSymbol constructor) =>
+        constructor.DeclaringSyntaxReferences.Any(r =>
+            r.GetSyntax() is TypeDeclarationSyntax { ParameterList: not null }
+        );
+
+    /// <summary>
+    /// How many constructors <see cref="Extract"/> models for
+    /// <paramref name="type"/> (the main one plus its overloads).
+    /// </summary>
+    public static int ExplicitConstructorCount(INamedTypeSymbol type) =>
+        ExplicitConstructors(type).Count;
+
+    /// <summary>
+    /// A primary-constructor parameter paired with a property that computes
+    /// its value from it rather than exposing it. Without a compilation (no
+    /// syntax to inspect) the pairing keeps the promotion, as before.
+    /// </summary>
+    private static bool IsComputedFromPrimaryParameter(
+        IPropertySymbol property,
+        IParameterSymbol parameter,
+        Compilation? compilation
+    )
+    {
+        if (compilation is null)
+            return false;
+
+        return parameter.ContainingSymbol is IMethodSymbol constructor
+            && IsPrimaryConstructor(constructor)
+            && !PrimaryConstructorPropertyAlias.IsAliasOf(property, parameter, compilation);
+    }
+
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
         ctor.IsImplicitlyDeclared
         && ctor.ContainingType.IsRecord
@@ -125,6 +161,7 @@ public static class IrConstructorExtractor
                 var (promotion, promotedVisibility, emittedName) = ResolvePromotionInfo(
                     p,
                     propertiesByName,
+                    compilation,
                     target
                 );
                 return new IrConstructorParameter(
@@ -360,7 +397,10 @@ public static class IrConstructorExtractor
     /// Resolves the promotion mode for a primary-constructor parameter and,
     /// when promoted, surfaces the matching property's visibility and any
     /// target-scoped <c>[Name]</c> override so backends don't need to walk
-    /// Roslyn again to render the shorthand declaration.
+    /// Roslyn again to render the shorthand declaration. A primary-constructor
+    /// parameter is promoted only when the matching property merely exposes
+    /// it (<see cref="PrimaryConstructorPropertyAlias"/>); a property computed
+    /// from it keeps its own declaration.
     /// </summary>
     private static (
         IrParameterPromotion Promotion,
@@ -369,10 +409,14 @@ public static class IrConstructorExtractor
     ) ResolvePromotionInfo(
         IParameterSymbol param,
         Dictionary<string, IPropertySymbol> propertiesByName,
+        Compilation? compilation,
         Metano.Annotations.TargetLanguage? target
     )
     {
         if (!propertiesByName.TryGetValue(param.Name, out var prop))
+            return (IrParameterPromotion.None, null, null);
+
+        if (IsComputedFromPrimaryParameter(prop, param, compilation))
             return (IrParameterPromotion.None, null, null);
 
         var promotion =

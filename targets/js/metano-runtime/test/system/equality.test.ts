@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { equals, hashCode } from "#/system/equality.ts";
+import { equals, hashCode, valueEquals, valueHashCode } from "#/system/equality.ts";
 
 describe("equals", () => {
   describe("primitives", () => {
@@ -250,5 +250,40 @@ describe("hashCode", () => {
       expect(equals(a, b)).toBe(true);
       expect(hashCode(a)).toBe(hashCode(b));
     }
+  });
+});
+
+describe("valueEquals / valueHashCode (the names generated code calls)", () => {
+  class Point {
+    constructor(
+      readonly x: number,
+      readonly y: number,
+    ) {}
+
+    equals(other: unknown): boolean {
+      return other instanceof Point && other.x === this.x && other.y === this.y;
+    }
+
+    hashCode(): number {
+      return this.x * 31 + this.y;
+    }
+  }
+
+  test("valueEquals is null-safe and delegates to equals, like C# record ==", () => {
+    expect(valueEquals(new Point(1, 2), new Point(1, 2))).toBe(true);
+    expect(valueEquals(new Point(1, 2), new Point(2, 1))).toBe(false);
+    expect(valueEquals(null, null)).toBe(true);
+    expect(valueEquals(new Point(1, 2), null)).toBe(false);
+    expect(valueEquals(null, new Point(1, 2))).toBe(false);
+  });
+
+  test("valueHashCode delegates to a hashCode method", () => {
+    expect(valueHashCode(new Point(1, 2))).toBe(33);
+  });
+
+  test("valueHashCode hashes null and primitives like hashCode", () => {
+    expect(valueHashCode(null)).toBe(0);
+    expect(valueHashCode(42)).toBe(hashCode(42));
+    expect(valueHashCode("hello")).toBe(hashCode("hello"));
   });
 });

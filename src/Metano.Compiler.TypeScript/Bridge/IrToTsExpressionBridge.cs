@@ -22,6 +22,10 @@ public static partial class IrToTsExpressionBridge
     private static readonly string IntegerDivisionHelper =
         IrRuntimeRequirementToTsImport.ImportedNameOf("IntegerDivision");
 
+    /// <summary>The <c>metano-runtime</c> helper backing C# record value equality.</summary>
+    private static readonly string ValueEqualityHelper =
+        IrRuntimeRequirementToTsImport.ImportedNameOf("ValueEquals");
+
     /// <summary>
     /// Maps an IR expression to TS. When <paramref name="bclRegistry"/> is provided,
     /// member accesses and calls consult <see cref="IrToTsBclMapper"/> first and
@@ -86,6 +90,7 @@ public static partial class IrToTsExpressionBridge
             IrArrayLiteral arr => new TsArrayLiteral(
                 arr.Elements.Select(e => Map(e, bclRegistry)).ToList()
             ),
+            IrTupleLiteral tuple => MapTupleLiteral(tuple, bclRegistry),
             IrSpreadExpression spread => new TsSpreadExpression(
                 Map(spread.Expression, bclRegistry)
             ),
@@ -156,6 +161,9 @@ public static partial class IrToTsExpressionBridge
         )
             return MapInitOnlyInitializerWrite(initOnlyMember, bin.Right, bclRegistry);
 
+        if (bin.Operator is IrBinaryOp.ValueEqual or IrBinaryOp.ValueNotEqual)
+            return MapValueEquality(bin, bclRegistry);
+
         if (bin.Operator is IrBinaryOp.NullCoalescing)
             return MapNullCoalescing(bin, rightToleratesUndefined: false, bclRegistry);
 
@@ -225,6 +233,48 @@ public static partial class IrToTsExpressionBridge
         {
             RuntimeImports = [IntegerDivisionHelper],
         };
+
+    /// <summary>
+    /// JS <c>===</c> compares references, where C# compares records by value.
+    /// The runtime <c>valueEquals</c> helper is null-safe and delegates to the
+    /// record's synthesized <c>equals</c>; calling it evaluates each operand
+    /// exactly once, left to right.
+    /// </summary>
+    private static TsExpression MapValueEquality(
+        IrBinaryExpression bin,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var equality = new TsTemplate(
+            $"{ValueEqualityHelper}($0, $1)",
+            Receiver: null,
+            [Map(bin.Left, bclRegistry), Map(bin.Right, bclRegistry)]
+        )
+        {
+            RuntimeImports = [ValueEqualityHelper],
+        };
+
+        return bin.Operator is IrBinaryOp.ValueNotEqual
+            ? new TsUnaryExpression("!", equality)
+            : equality;
+    }
+
+    /// <summary>
+    /// A C# tuple is a positional JS array. An array literal infers an array
+    /// of the element union, so the literal is asserted to its tuple type to
+    /// keep per-position types.
+    /// </summary>
+    private static TsExpression MapTupleLiteral(
+        IrTupleLiteral tuple,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var array = new TsArrayLiteral(tuple.Elements.Select(e => Map(e, bclRegistry)).ToList());
+
+        return tuple.Type is { } type
+            ? new TsCastExpression(array, IrToTsTypeMapper.Map(type))
+            : array;
+    }
 
     private static TsExpression MapElementAccess(
         IrElementAccess ea,
@@ -307,7 +357,7 @@ public static partial class IrToTsExpressionBridge
         // lowers to array-index access `value[0]` / `value[1]`. The element
         // index is the member's positional declaration order, resolved by the
         // extractor against the record's primary constructor.
-        if (ma.Origin is { IsJsTupleElement: true, TupleIndex: >= 0 } tupleOrigin)
+        if (ma.Origin is { IsTupleElement: true, TupleIndex: >= 0 } tupleOrigin)
             return new TsElementAccess(
                 loweredTarget,
                 // Numeric index literal — TsLiteral carries the raw token, and the
@@ -358,6 +408,10 @@ public static partial class IrToTsExpressionBridge
     ///   <item>any other <c>[Name]</c> override comes through verbatim;</item>
     ///   <item><c>[Branded]</c> methods are namespace functions, whose
     ///     declarations require reserved-word escapes;</item>
+    ///   <item>a <c>GetHashCode()</c> the declarative mapping left alone (a
+    ///     <c>base.GetHashCode()</c> bound to an emitted override) reads the
+    ///     name the override is declared with,
+    ///     <see cref="IrToTsNamingPolicy.HashCodeMethodName"/>;</item>
     ///   <item>everything else (methods, events, foreign members) is camelCased
     ///     without escaping — JS accepts reserved words after a dot.</item>
     /// </list>
@@ -373,6 +427,8 @@ public static partial class IrToTsExpressionBridge
             ),
             { EmittedName: { } overridden } => overridden,
             { IsBrandedMember: true } => TypeScriptNaming.ToCamelCase(ma.MemberName),
+            { } origin when IrToTsNamingPolicy.IsHashCodeOverrideAccess(origin) =>
+                IrToTsNamingPolicy.HashCodeMethodName,
             _ => TypeScriptNaming.ToCamelCaseMember(ma.MemberName),
         };
 
@@ -417,6 +473,17 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression TypeValueReference(string name, TsTypeOrigin? origin) =>
         origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin);
 
+    /// <summary>
+    /// <c>base.GetHashCode()</c> bound to <c>object</c>'s (or
+    /// <c>ValueType</c>'s) identity hash: JS has no identity hash, and the
+    /// base of an emitted class has no <c>hashCode</c> method to call, so it
+    /// is a constant every instance shares — which keeps the hash consistent
+    /// with whatever equality the derived class defines.
+    /// </summary>
+    private static bool IsBaseIdentityHash(IrCallExpression call) =>
+        call is { Target: IrMemberAccess { Target: IrBaseExpression }, Origin: { } origin }
+        && IrToTsNamingPolicy.IsObjectHashCode(origin);
+
     private static TsExpression MapCall(
         IrCallExpression call,
         DeclarativeMappingRegistry? bclRegistry
@@ -428,6 +495,9 @@ public static partial class IrToTsExpressionBridge
         // for call sites using `Name: value` is handled earlier (at the
         // dispatcher or object-literal pass).
         var loweredArgs = call.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
+
+        if (IsBaseIdentityHash(call))
+            return new TsLiteral("0");
 
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
         // the receiver `recv(args)`. After destructuring, the receiver IS the
@@ -1500,6 +1570,10 @@ public static partial class IrToTsExpressionBridge
             IrBinaryOp.IntegerDivide => throw new System.Diagnostics.UnreachableException(
                 "Integer division has no JS operator; it lowers through MapIntegerDivision."
             ),
+            IrBinaryOp.ValueEqual or IrBinaryOp.ValueNotEqual =>
+                throw new System.Diagnostics.UnreachableException(
+                    "Value equality has no JS operator; it lowers through MapValueEquality."
+                ),
             _ => "?",
         };
 

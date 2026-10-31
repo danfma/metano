@@ -57,6 +57,7 @@ public static class IrClassExtractor
         var captureScan = ImplicitCaptureDetector.Scan(type, compilation, originResolver);
         var members = ExtractWithCaptureContext(
             captureScan.ParamFieldMap,
+            PrimaryConstructorInitializerDeferral.AppliesTo(type),
             () => ExtractMembers(type, originResolver, compilation, target)
         );
         members.AddRange(captureScan.SynthesizedFields);
@@ -78,6 +79,19 @@ public static class IrClassExtractor
         // captures.
         constructor = AnnotateImplicitCaptures(constructor, captureScan.ParamFieldMap);
 
+        // Initializers that read a primary-constructor parameter move into
+        // the constructor body, where the parameter is in scope. Runs after
+        // both capture annotations: reads of a captured field trigger it.
+        var deferral = PrimaryConstructorInitializerDeferral.Apply(
+            type,
+            members,
+            constructor,
+            target
+        );
+
+        members = deferral.Members;
+        constructor = deferral.Constructor;
+
         return new IrClassDeclaration(
             type.Name,
             IrVisibilityMapper.Map(type.DeclaredAccessibility),
@@ -95,6 +109,7 @@ public static class IrClassExtractor
 
     private static T ExtractWithCaptureContext<T>(
         IReadOnlyDictionary<ISymbol, string>? captureMap,
+        bool initializersRunInConstructor,
         Func<T> extract
     )
     {
@@ -102,7 +117,10 @@ public static class IrClassExtractor
             return extract();
 
         var previous = IrExpressionExtractor.CapturedPrimaryCtorParams;
+        var previousInitializers = IrExpressionExtractor.InitializersRunInConstructor;
         IrExpressionExtractor.CapturedPrimaryCtorParams = captureMap;
+        IrExpressionExtractor.InitializersRunInConstructor = initializersRunInConstructor;
+
         try
         {
             return extract();
@@ -110,6 +128,7 @@ public static class IrClassExtractor
         finally
         {
             IrExpressionExtractor.CapturedPrimaryCtorParams = previous;
+            IrExpressionExtractor.InitializersRunInConstructor = previousInitializers;
         }
     }
 

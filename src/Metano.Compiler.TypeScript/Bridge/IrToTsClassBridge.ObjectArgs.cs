@@ -28,7 +28,7 @@ internal static partial class IrToTsClassBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var name = IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes);
+        var name = IrToTsNamingPolicy.ToMethodName(method);
         var (argsParam, destructureHeader) = IrToTsObjectArgsBridge.BuildArgsParam(
             method.Parameters,
             bclRegistry

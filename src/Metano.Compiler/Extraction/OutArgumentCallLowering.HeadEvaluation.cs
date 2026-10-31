@@ -63,6 +63,9 @@ internal sealed partial class OutArgumentCallLowering
                 case IrArrayLiteral array:
                     return array with { Elements = array.Elements.Select(Bind).ToList() };
 
+                case IrTupleLiteral tuple:
+                    return tuple with { Elements = tuple.Elements.Select(Bind).ToList() };
+
                 case IrCallExpression call:
                     return StopAfter(BindCallParts(call));
 

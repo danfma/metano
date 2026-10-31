@@ -66,6 +66,22 @@ public sealed partial class IrExpressionExtractor
         set => _capturedPrimaryCtorParams.Value = value;
     }
 
+    private static readonly AsyncLocal<bool> _initializersRunInConstructor = new();
+
+    /// <summary>
+    /// Whether the member initializers of the type under extraction run in its
+    /// constructor body, after the captured fields are assigned
+    /// (<see cref="PrimaryConstructorInitializerDeferral.AppliesTo"/>). Then an
+    /// initializer reads a captured parameter through its field too, sharing
+    /// the storage a member body mutates; otherwise initializers keep the bare
+    /// parameter. Scoped like <see cref="CapturedPrimaryCtorParams"/>.
+    /// </summary>
+    internal static bool InitializersRunInConstructor
+    {
+        get => _initializersRunInConstructor.Value;
+        set => _initializersRunInConstructor.Value = value;
+    }
+
     /// <summary>
     /// When an <c>[Inline]</c> method is being expanded, the outer
     /// extractor binds each of the method's parameter symbols to the
@@ -104,6 +120,13 @@ public sealed partial class IrExpressionExtractor
     private ExpressionSyntax? _conditionalReceiverSyntax;
 
     private string NextReceiverTempName() => $"receiver$temp${_receiverTempCounter++}";
+
+    /// <summary>
+    /// A fresh temporary holding one operand value of a tuple comparison;
+    /// shares the receiver counter so the two kinds of temporaries never
+    /// collide in one body.
+    /// </summary>
+    private string NextTupleOperandTempName() => $"tuple$temp${_receiverTempCounter++}";
 
     public IrExpressionExtractor(
         SemanticModel semanticModel,
@@ -219,6 +242,7 @@ public sealed partial class IrExpressionExtractor
             SwitchExpressionSyntax switchExpr => ExtractSwitchExpression(switchExpr),
             WithExpressionSyntax withExpr => ExtractWithExpression(withExpr),
             CollectionExpressionSyntax coll => ExtractCollectionExpression(coll),
+            TupleExpressionSyntax tuple => ExtractTupleLiteral(tuple),
             ConditionalAccessExpressionSyntax cond => ExtractConditionalAccess(cond),
             MemberBindingExpressionSyntax binding
                 when _conditionalReceiverSyntax is not null
@@ -1217,19 +1241,18 @@ public sealed partial class IrExpressionExtractor
         // `IrClassExtractor` around member-body extraction; outside
         // that scope the lookup is a no-op.
         //
-        // Field / property initializers are exempt from the rewrite:
-        // they execute during class construction BEFORE the ctor
-        // body assigns the synthesized field, so reading
-        // `this._view` from an initializer would observe `undefined`.
-        // Keep the bare param reference in those positions — the
-        // primary-ctor parameter is still in scope at that point and
-        // the ctor body captures the value once initializers
-        // complete.
+        // Field / property initializers are exempt from the rewrite
+        // unless they run in the constructor body after the captured
+        // fields are assigned (`InitializersRunInConstructor`): a class
+        // field initializer executes BEFORE the ctor body assigns the
+        // synthesized field, so reading `this._view` there would
+        // observe `undefined`. Keep the bare param reference in those
+        // positions.
         if (
             symbol is IParameterSymbol paramSymbol
             && CapturedPrimaryCtorParams is { } captured
             && captured.TryGetValue(paramSymbol, out var capturedFieldName)
-            && !IsInsideInitializer(id)
+            && (InitializersRunInConstructor || !IsInsideInitializer(id))
         )
             return new IrMemberAccess(new IrThisExpression(), capturedFieldName);
 
@@ -1452,7 +1475,8 @@ public sealed partial class IrExpressionExtractor
 
         var op = NarrowToIntegerDivision(mappedOp, bin);
 
-        return TryExtractLiftedBinary(bin, op)
+        return TryExtractValueEquality(bin)
+            ?? TryExtractLiftedBinary(bin, op)
             ?? TryExtractStringConcatenation(bin)
             ?? BuildBinary(op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false);
     }
@@ -2602,13 +2626,14 @@ public sealed partial class IrExpressionExtractor
         // `[ExportedAsModule]` flattens like `[NoContainer]` at call sites (#286).
         var isDeclaringTypeNoContainer = symbol.ContainingType.IsContainerless();
         // `[JsCallable]` interface `Invoke(…)` call → the receiver IS the JS
-        // function, so the call lowers to `recv(args)`. `[JsTuple]` positional
-        // member read → array-index access `recv[i]`. Both reuse the member
-        // origin dispatch channel so the TS bridge can branch without
+        // function, so the call lowers to `recv(args)`. A `[JsTuple]`
+        // positional member or C# tuple element read carries its position,
+        // which each backend reads its own way. Both reuse the member
+        // origin dispatch channel so the backends can branch without
         // re-reading the Roslyn symbol.
         var isJsCallableInvoke =
             symbol is IMethodSymbol invokeMethod && SymbolHelper.IsJsCallableInvoke(invokeMethod);
-        var tupleIndex = SymbolHelper.GetJsTupleElementIndex(symbol);
+        var tupleIndex = SymbolHelper.GetPositionalTupleElementIndex(symbol);
         return new IrMemberOrigin(
             declaringTypeName,
             symbol.Name,
@@ -2621,7 +2646,7 @@ public sealed partial class IrExpressionExtractor
             IsDeclaringTypeExternal: isDeclaringTypeExternal,
             IsDeclaringTypeNoContainer: isDeclaringTypeNoContainer,
             IsJsCallableInvoke: isJsCallableInvoke,
-            IsJsTupleElement: tupleIndex >= 0,
+            IsTupleElement: tupleIndex >= 0,
             TupleIndex: tupleIndex,
             IsBrandedValueMember: isBrandedValueMember,
             IsTranspiledDataMember: IsTranspiledDataMember(symbol),

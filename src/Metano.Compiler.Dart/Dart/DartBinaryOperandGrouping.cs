@@ -95,6 +95,8 @@ internal static class DartBinaryOperandGrouping
         op
             is IrBinaryOp.Equal
                 or IrBinaryOp.NotEqual
+                or IrBinaryOp.ValueEqual
+                or IrBinaryOp.ValueNotEqual
                 or IrBinaryOp.LessThan
                 or IrBinaryOp.LessThanOrEqual
                 or IrBinaryOp.GreaterThan
@@ -117,7 +119,10 @@ internal static class DartBinaryOperandGrouping
             or IrBinaryOp.LessThanOrEqual
             or IrBinaryOp.GreaterThan
             or IrBinaryOp.GreaterThanOrEqual => 7,
-            IrBinaryOp.Equal or IrBinaryOp.NotEqual => 6,
+            IrBinaryOp.Equal
+            or IrBinaryOp.NotEqual
+            or IrBinaryOp.ValueEqual
+            or IrBinaryOp.ValueNotEqual => 6,
             IrBinaryOp.LogicalAnd => 5,
             IrBinaryOp.LogicalOr => 4,
             IrBinaryOp.NullCoalescing => 3,

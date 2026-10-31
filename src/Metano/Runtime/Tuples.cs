@@ -3,6 +3,10 @@
 // A System.Tuple<T1, …> is a positional JS array at runtime (the same `[a, b]` shape as
 // a value tuple), so construction builds the array, asserted to its tuple type so a
 // local keeps per-position types, and ItemN reads position N - 1.
+//
+// A C# value tuple is the same positional array in TypeScript (the bridge lowers its
+// literals and positional element reads); its instance `Equals` compares element-wise,
+// the contract of the runtime `valueEquals` over arrays.
 
 using Metano.Annotations;
 
@@ -188,4 +192,56 @@ using Metano.Annotations;
     typeof(Tuple<,,,,,,>),
     nameof(Tuple<int, int, int, int, int, int, int>.Item7),
     JsTemplate = "$this[6]"
+)]
+
+// ─── ValueTuple equality ──────────────────────────────────
+
+[assembly: MapMethod(
+    typeof(ValueTuple<>),
+    nameof(ValueTuple<int>.Equals),
+    JsTemplate = "valueEquals($this, $0)",
+    RuntimeImports = "valueEquals",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ValueTuple<,>),
+    nameof(ValueTuple<int, int>.Equals),
+    JsTemplate = "valueEquals($this, $0)",
+    RuntimeImports = "valueEquals",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ValueTuple<,,>),
+    nameof(ValueTuple<int, int, int>.Equals),
+    JsTemplate = "valueEquals($this, $0)",
+    RuntimeImports = "valueEquals",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ValueTuple<,,,>),
+    nameof(ValueTuple<int, int, int, int>.Equals),
+    JsTemplate = "valueEquals($this, $0)",
+    RuntimeImports = "valueEquals",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ValueTuple<,,,,>),
+    nameof(ValueTuple<int, int, int, int, int>.Equals),
+    JsTemplate = "valueEquals($this, $0)",
+    RuntimeImports = "valueEquals",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ValueTuple<,,,,,>),
+    nameof(ValueTuple<int, int, int, int, int, int>.Equals),
+    JsTemplate = "valueEquals($this, $0)",
+    RuntimeImports = "valueEquals",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(ValueTuple<,,,,,,>),
+    nameof(ValueTuple<int, int, int, int, int, int, int>.Equals),
+    JsTemplate = "valueEquals($this, $0)",
+    RuntimeImports = "valueEquals",
+    WhenArgCount = 1
 )]

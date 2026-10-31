@@ -7,7 +7,9 @@
  * `equals` methods whenever a constructor parameter has a non-primitive type that
  * exposes a value-equality contract (Decimal, Temporal types, nested records, …).
  * The previous lowering used `===` for every field which silently diverged from C#
- * semantics for value-wrapper types — see #202.
+ * semantics for value-wrapper types — see #202. It also lowers C# `==` / `!=` over
+ * records to {@link valueEquals}, and every C# `GetHashCode()` call to
+ * {@link valueHashCode} (#254).
  */
 import { HashCode } from "./hash-code.ts";
 
@@ -178,3 +180,10 @@ export function hashCode(value: unknown): number {
  * recursive method-call ambiguity for human readers).
  */
 export const valueEquals = equals;
+
+/**
+ * Alias the compiler emits for every C# `GetHashCode()` call. Same contract as
+ * {@link hashCode}; the distinct name keeps a call site from colliding with a
+ * local or a method the user named `hashCode` (records declare one).
+ */
+export const valueHashCode = hashCode;

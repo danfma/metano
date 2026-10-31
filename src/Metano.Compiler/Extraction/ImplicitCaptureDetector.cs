@@ -68,7 +68,7 @@ internal static class ImplicitCaptureDetector
             // bridge handles them end-to-end. Synthesizing a private
             // backing field would duplicate state and surface as
             // double-emitted fields in regenerated samples.
-            if (IsPromotedToProperty(param, type))
+            if (IsPromotedToProperty(param, type, compilation))
                 continue;
             primaryParams[param] = param;
         }
@@ -97,6 +97,7 @@ internal static class ImplicitCaptureDetector
             .Select(m => m.Name)
             .ToHashSet(StringComparer.Ordinal);
         var captured = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        var initializersRunInConstructor = PrimaryConstructorInitializerDeferral.AppliesTo(type);
 
         // Walk only the members of THIS type (skip nested types); C# 12
         // primary-ctor parameters are not in scope for a nested type,
@@ -111,6 +112,10 @@ internal static class ImplicitCaptureDetector
             {
                 if (IsInsidePrimaryCtor(identifier, primaryCtorSyntaxNodes))
                     continue;
+
+                if (initializersRunInConstructor && IsInsideMemberInitializer(identifier))
+                    continue;
+
                 var resolved = model.GetSymbolInfo(identifier).Symbol;
                 if (
                     resolved is IParameterSymbol paramSymbol
@@ -227,20 +232,21 @@ internal static class ImplicitCaptureDetector
     /// public storage slot; synthesizing a separate private field
     /// would duplicate state. Match is case-insensitive to mirror
     /// <c>IrConstructorExtractor.ResolvePromotionInfo</c>, which
-    /// also pairs camelCase params with PascalCase properties.
+    /// also pairs camelCase params with PascalCase properties, and — like
+    /// it — only a property that merely exposes the parameter
+    /// (<see cref="PrimaryConstructorPropertyAlias"/>) counts.
     /// </summary>
-    private static bool IsPromotedToProperty(IParameterSymbol param, INamedTypeSymbol type)
-    {
-        foreach (var member in type.GetMembers())
-        {
-            if (
-                member is IPropertySymbol
-                && string.Equals(member.Name, param.Name, StringComparison.OrdinalIgnoreCase)
-            )
-                return true;
-        }
-        return false;
-    }
+    private static bool IsPromotedToProperty(
+        IParameterSymbol param,
+        INamedTypeSymbol type,
+        Compilation compilation
+    ) =>
+        type.GetMembers()
+            .OfType<IPropertySymbol>()
+            .Any(property =>
+                string.Equals(property.Name, param.Name, StringComparison.OrdinalIgnoreCase)
+                && PrimaryConstructorPropertyAlias.IsAliasOf(property, param, compilation)
+            );
 
     /// <summary>
     /// Returns the syntax nodes of every direct member of the type
@@ -322,6 +328,25 @@ internal static class ImplicitCaptureDetector
         }
         return false;
     }
+
+    /// <summary>
+    /// True inside a field or property initializer. When the class extractor
+    /// moves the initializers into the constructor body
+    /// (<see cref="PrimaryConstructorInitializerDeferral.AppliesTo"/>), the
+    /// parameter is in scope there, so a read captures nothing (as in C#,
+    /// which only captures parameters read by members that outlive
+    /// construction).
+    /// </summary>
+    private static bool IsInsideMemberInitializer(SyntaxNode identifier) =>
+        identifier.Ancestors().OfType<EqualsValueClauseSyntax>().Any(IsMemberInitializerClause);
+
+    private static bool IsMemberInitializerClause(EqualsValueClauseSyntax clause) =>
+        clause.Parent
+            is PropertyDeclarationSyntax
+                or VariableDeclaratorSyntax
+                {
+                    Parent: VariableDeclarationSyntax { Parent: FieldDeclarationSyntax },
+                };
 
     /// <summary>
     /// Picks the synthesized field name from a primary-ctor param's

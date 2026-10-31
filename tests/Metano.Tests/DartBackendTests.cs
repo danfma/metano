@@ -1139,6 +1139,45 @@ public class DartBackendTests
         await Assert.That(dart).Contains("a / b");
     }
 
+    [Test]
+    public async Task ValueEqualityAndTuples_InTheDartTarget_UseNativeOperatorsAndRecords()
+    {
+        // Record `==` is value equality in Dart too (the emitted class defines
+        // `operator ==`), so it keeps the native operator, and a tuple literal
+        // is a Dart record literal.
+        var (files, diagnostics) = TranspileDart(
+            """
+            [Transpile]
+            public record Point(int X, int Y);
+
+            [Transpile]
+            public class Comparisons(int seed)
+            {
+                public int Twice { get; } = seed * 2;
+
+                public bool Same(Point a, Point b) => a == b;
+
+                public bool Differ(Point a, Point b) => a != b;
+
+                public bool SameTuple((int, int) t) => t == (1, 2);
+
+                public (int, int) Pair() => (seed, 2);
+
+                public int Hash(Point a) => a.GetHashCode();
+            }
+            """
+        );
+
+        var dart = files["comparisons.dart"];
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(dart).Contains("a == b");
+        await Assert.That(dart).Contains("a != b");
+        await Assert.That(dart).Contains("(this._seed, 2)");
+        await Assert.That(dart).Contains("t.$1 == 1 && t.$2 == 2");
+        await Assert.That(dart).Contains("a.hashCode");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (
