@@ -79,7 +79,7 @@ public static class IrExceptionConstructionExtractor
     /// <param name="callingType">The class whose code performs the
     /// construction: the exception itself for <c>new</c>, the derived user
     /// class for a base call. It names <c>System.Exception</c>'s default
-    /// message and decides whether <c>Message</c> is overridden.</param>
+    /// message.</param>
     /// <param name="target">The active backend, for target-scoped <c>[Ignore]</c>.</param>
     /// <param name="sourceArguments">The source argument list, used with
     /// <paramref name="model"/> to read the message argument's nullable flow
@@ -101,32 +101,23 @@ public static class IrExceptionConstructionExtractor
             .Select((argument, index) => RoleOf(BoundParameter(constructor, argument, index)))
             .ToList();
 
-        var isMessageOverridden = OverridesMessage(callingType, target);
-
         return new IrExceptionConstruction(
             roles,
             DefaultMessageOf(constructor.ContainingType, callingType),
             MessageMayBeNull: MessageMayBeNull(sourceArguments, model),
-            IsMessageOverridden: isMessageOverridden,
-            RequiresArgumentTemporaries: RequiresArgumentTemporaries(
-                arguments,
-                roles,
-                isMessageOverridden
-            )
+            RequiresArgumentTemporaries: RequiresArgumentTemporaries(arguments, roles)
         );
     }
 
     /// <summary>
     /// The role-ordered lowering reorders arguments and drops the unmapped
-    /// ones (and the message, when overridden). That is unobservable when at
-    /// most one argument has side effects and that argument is still
-    /// evaluated exactly once; otherwise the arguments need source-order
-    /// temporaries.
+    /// ones. That is unobservable when at most one argument has side effects
+    /// and that argument is mapped (so still evaluated exactly once);
+    /// otherwise the arguments need source-order temporaries.
     /// </summary>
     private static bool RequiresArgumentTemporaries(
         IReadOnlyList<IrArgument> arguments,
-        IReadOnlyList<IrExceptionArgumentRole> roles,
-        bool isMessageOverridden
+        IReadOnlyList<IrExceptionArgumentRole> roles
     )
     {
         var effectfulRoles = arguments
@@ -138,18 +129,10 @@ public static class IrExceptionConstructionExtractor
         return effectfulRoles switch
         {
             [] => false,
-            [var role] => !IsEvaluatedOnce(role, isMessageOverridden),
+            [var role] => role is IrExceptionArgumentRole.Unmapped,
             _ => true,
         };
     }
-
-    private static bool IsEvaluatedOnce(IrExceptionArgumentRole role, bool isMessageOverridden) =>
-        role switch
-        {
-            IrExceptionArgumentRole.Unmapped => false,
-            IrExceptionArgumentRole.Message => !isMessageOverridden,
-            _ => true,
-        };
 
     private static bool LacksTargetDeclaration(
         INamedTypeSymbol exceptionType,
@@ -195,32 +178,6 @@ public static class IrExceptionConstructionExtractor
             && model.GetTypeInfo(messageArgument.Expression).Nullability.FlowState
                 is NullableFlowState.MaybeNull;
     }
-
-    /// <summary>
-    /// Whether <paramref name="callingType"/> or one of its transpilable bases
-    /// overrides <c>Exception.Message</c>. Bases without a target declaration
-    /// (the BCL) never count — their message is the native one.
-    /// </summary>
-    private static bool OverridesMessage(
-        INamedTypeSymbol callingType,
-        Metano.Annotations.TargetLanguage? target
-    )
-    {
-        for (
-            var current = callingType;
-            current is not null && IrTypeRefMapper.IsTranspilableType(current, target);
-            current = current.BaseType
-        )
-        {
-            if (DeclaresMessageOverride(current))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool DeclaresMessageOverride(INamedTypeSymbol type) =>
-        type.GetMembers("Message").OfType<IPropertySymbol>().Any(property => property.IsOverride);
 
     private static string? DefaultMessageOf(
         INamedTypeSymbol exceptionType,

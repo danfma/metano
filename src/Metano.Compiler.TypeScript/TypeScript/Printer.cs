@@ -705,6 +705,8 @@ public sealed class Printer(string indent = "  ")
             case TsGetterMember getter:
                 if (getter.Static)
                     _sb.Write("static ");
+                if (getter.Override)
+                    _sb.Write("override ");
                 _sb.Write("get ");
                 _sb.Write(getter.Name);
                 _sb.Write("(): ");

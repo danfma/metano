@@ -56,10 +56,13 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             )
         );
 
-        // `base.Message` reads in a class that keeps its base message lower
-        // to the kept `#baseMessage` field for the whole class emission.
+        // A class overriding `Message` keeps its base message in a private
+        // field; its `base.Message` reads lower to that field for the whole
+        // class emission.
+        var keepsBaseMessage = IrToTsExceptionConstructionBridge.OverridesMessage(ir);
+
         using var exceptionClassScope = IrToTsExceptionConstructionBridge.EnterClass(
-            ir.Constructor
+            keepsBaseMessage
         );
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
@@ -71,17 +74,22 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         );
 
         var explicitCtors = IrConstructorExtractor.PublicExplicitConstructors(type);
-        var constructor = BuildClassConstructor(type, ir, ctorParams, explicitCtors, extendsType);
+        var constructor = BuildClassConstructor(
+            type,
+            ir,
+            ctorParams,
+            explicitCtors,
+            extendsType,
+            keepsBaseMessage
+        );
 
         var classMembers = new List<TsClassMember>();
 
-        if (
-            IrToTsExceptionConstructionBridge.BaseMessageFieldFor(ir.Constructor) is { } baseMessage
-        )
-            classMembers.Add(baseMessage);
+        if (keepsBaseMessage)
+            classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
 
         EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
-        EmitClassMembers(ir, classMembers);
+        EmitClassMembers(ir, classMembers, keepsBaseMessage);
         EmitDeferredOperatorsAndMethods(type, ir, classMembers);
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers);
 
@@ -112,7 +120,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         IrClassDeclaration ir,
         IReadOnlyList<TsConstructorParam> ctorParams,
         List<IMethodSymbol> explicitCtors,
-        TsType? extendsType
+        TsType? extendsType,
+        bool keepsBaseMessage
     )
     {
         if (explicitCtors.Count > 1)
@@ -122,7 +131,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             // build-time diagnostic and emit an empty constructor stub —
             // crashing here would abort the whole transpile for an otherwise
             // valid type, and silently dropping the type would hide the gap.
-            return TryBuildConstructorDispatcherFromIr(ir.Constructor)
+            return TryBuildConstructorDispatcherFromIr(ir.Constructor, keepsBaseMessage)
                 ?? EmitUnsupportedConstructor(
                     type,
                     $"Constructor overload group on '{type.Name}' contains constructs the IR "
@@ -133,7 +142,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         return IrToTsClassBridge.BuildSimpleConstructor(
             ir.Constructor,
             ctorParams,
-            ResolveBaseCall(extendsType, ir),
+            ResolveBaseCall(extendsType, ir, keepsBaseMessage),
             _context.DeclarativeMappings
         );
     }
@@ -147,7 +156,11 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// "operators before methods" ordering the legacy emitter
     /// established.
     /// </summary>
-    private void EmitClassMembers(IrClassDeclaration ir, List<TsClassMember> classMembers)
+    private void EmitClassMembers(
+        IrClassDeclaration ir,
+        List<TsClassMember> classMembers,
+        bool keepsBaseMessage
+    )
     {
         var promotedNames = IrToTsClassBridge.PromotedMemberNames(ir.Constructor);
 
@@ -169,13 +182,21 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     when !promotedNames.Contains(
                         IrToTsNamingPolicy.ToInterfaceMemberName(irProp.Name, irProp.Attributes)
                     ):
-                    classMembers.AddRange(
-                        IrToTsClassBridge.BuildProperty(
-                            irProp,
-                            IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
-                            _context.DeclarativeMappings
-                        )
+                    var propertyMembers = IrToTsClassBridge.BuildProperty(
+                        irProp,
+                        IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
+                        _context.DeclarativeMappings
                     );
+
+                    classMembers.AddRange(
+                        keepsBaseMessage
+                            ? IrToTsExceptionConstructionBridge.MarkMessageOverride(
+                                irProp,
+                                propertyMembers
+                            )
+                            : propertyMembers
+                    );
+
                     break;
 
                 case IrEventDeclaration irEvent:
@@ -636,7 +657,10 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// or any body fails <see cref="IrBodyCoverageProbe"/>); the caller emits
     /// an unsupported stub and surfaces the gap as a diagnostic.
     /// </summary>
-    private TsConstructor? TryBuildConstructorDispatcherFromIr(IrConstructorDeclaration? primary)
+    private TsConstructor? TryBuildConstructorDispatcherFromIr(
+        IrConstructorDeclaration? primary,
+        bool keepsBaseMessage
+    )
     {
         if (!_context.UseIrBodiesWhenCovered)
             return null;
@@ -649,7 +673,11 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 return null;
         }
 
-        return IrToTsConstructorDispatcherBridge.Build(primary, _context.DeclarativeMappings);
+        return IrToTsConstructorDispatcherBridge.Build(
+            primary,
+            _context.DeclarativeMappings,
+            keepsBaseMessage
+        );
     }
 
     /// <summary>
@@ -741,15 +769,19 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// parameterless constructor, so the result is an empty list
     /// (<c>super()</c>).
     /// </summary>
-    private TsBaseConstructorCall? ResolveBaseCall(TsType? extendsType, IrClassDeclaration ir)
+    private TsBaseConstructorCall? ResolveBaseCall(
+        TsType? extendsType,
+        IrClassDeclaration ir,
+        bool keepsBaseMessage
+    )
     {
         if (extendsType is null)
             return null;
 
         var baseCall = ir.Constructor is { } ctor
-            ? IrToTsExceptionConstructionBridge.MapBaseArguments(ctor, _context.DeclarativeMappings)
+            ? IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, _context.DeclarativeMappings)
             : null;
 
-        return baseCall ?? new TsBaseConstructorCall([], []);
+        return baseCall ?? new TsBaseConstructorCall([], [], keepsBaseMessage);
     }
 }

@@ -169,6 +169,49 @@ internal static partial class IrToTsClassBridge
     ///     primary-ctor classes don't have one).</item>
     /// </list>
     /// </summary>
+    /// <summary>
+    /// The base-constructor call of <paramref name="ctor"/>: role-mapped
+    /// <c>Error</c> arguments when the base is a BCL exception (see
+    /// <see cref="IrToTsExceptionConstructionBridge"/>), the plain base
+    /// arguments otherwise. Returns <c>null</c> when the constructor passes
+    /// nothing to its base and the class keeps no base message.
+    /// </summary>
+    /// <param name="ctor">The constructor making the base call.</param>
+    /// <param name="keepsBaseMessage">Whether the class overrides
+    /// <c>Message</c>, so the call is followed by the base-message capture.</param>
+    /// <param name="bclRegistry">The declarative BCL mappings.</param>
+    public static TsBaseConstructorCall? BuildBaseCall(
+        IrConstructorDeclaration ctor,
+        bool keepsBaseMessage,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        if (ctor.BaseExceptionConstruction is { } construction)
+        {
+            return IrToTsExceptionConstructionBridge.MapBaseExceptionCall(
+                ctor,
+                construction,
+                bclRegistry
+            ) with
+            {
+                KeepsBaseMessage = keepsBaseMessage,
+            };
+        }
+
+        var baseArguments = ctor.BaseArguments ?? [];
+
+        if (baseArguments.Count == 0 && !keepsBaseMessage)
+            return null;
+
+        return new TsBaseConstructorCall(
+            [],
+            baseArguments
+                .Select(argument => IrToTsExpressionBridge.MapArgument(argument, bclRegistry))
+                .ToList(),
+            keepsBaseMessage
+        );
+    }
+
     public static TsConstructor BuildSimpleConstructor(
         IrConstructorDeclaration? ir,
         IReadOnlyList<TsConstructorParam> tsCtorParams,
@@ -235,5 +278,32 @@ internal static partial class IrToTsClassBridge
         }
 
         return new TsConstructor(tsCtorParams, body);
+    }
+}
+
+/// <summary>
+/// A lowered base-constructor call: <paramref name="Temporaries"/> to declare
+/// before <c>super(...)</c> (arguments evaluated in source order), the
+/// <c>super</c> <paramref name="Arguments"/>, and whether the class keeps its
+/// base message (overrides <c>Message</c>), which appends the capture of the
+/// native message right after <c>super</c>.
+/// </summary>
+public sealed record TsBaseConstructorCall(
+    IReadOnlyList<TsVariableDeclaration> Temporaries,
+    IReadOnlyList<TsExpression> Arguments,
+    bool KeepsBaseMessage = false
+)
+{
+    /// <summary>The temporaries, the <c>super(...)</c> statement and, when
+    /// the class keeps its base message, its capture.</summary>
+    public IReadOnlyList<TsStatement> ToStatements()
+    {
+        var superCall = new TsExpressionStatement(
+            new TsCallExpression(new TsIdentifier("super"), Arguments)
+        );
+
+        return KeepsBaseMessage
+            ? [.. Temporaries, superCall, .. IrToTsExceptionConstructionBridge.CaptureBaseMessage()]
+            : [.. Temporaries, superCall];
     }
 }

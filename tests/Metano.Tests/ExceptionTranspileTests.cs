@@ -253,7 +253,7 @@ public class ExceptionTranspileTests
     }
 
     [Test]
-    public async Task ExceptionOverridingMessage_LeavesNativeMessageUnset()
+    public async Task ExceptionOverridingMessage_MovesNativeMessageIntoKeptField()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -269,8 +269,13 @@ public class ExceptionTranspileTests
         var output = result["retry-exception.ts"];
 
         await Assert.That(output).Contains("readonly #baseMessage: string;");
-        await Assert.That(output).Contains("super(undefined, { cause: inner });");
-        await Assert.That(output).Contains("this.#baseMessage = \"ignored\";");
+        await Assert.That(output).Contains("super(\"ignored\", { cause: inner });");
+        await Assert
+            .That(output)
+            .Contains(
+                "this.#baseMessage = Object.hasOwn(this, \"message\") ? this.message : super.message;"
+            );
+        await Assert.That(output).Contains("Reflect.deleteProperty(this, \"message\");");
         await Assert.That(output).Contains("get message(): string {");
     }
 
@@ -319,10 +324,10 @@ public class ExceptionTranspileTests
 
         await Assert
             .That(implicitCtor)
-            .Contains("this.#baseMessage = \"Exception of type 'NoCtorException' was thrown.\";");
+            .Contains("super(\"Exception of type 'NoCtorException' was thrown.\");");
 
         await Assert.That(primaryCtor).Contains("readonly #baseMessage: string;");
-        await Assert.That(primaryCtor).Contains("this.#baseMessage = detail;");
+        await Assert.That(primaryCtor).Contains("super(detail);");
     }
 
     [Test]
@@ -340,8 +345,87 @@ public class ExceptionTranspileTests
 
         var output = result["detailed-exception.ts"];
 
-        await Assert.That(output).Contains("super();");
-        await Assert.That(output).Contains("this.#baseMessage = detail;");
+        await Assert.That(output).Contains("super(detail);");
+        await Assert
+            .That(output)
+            .Contains(
+                "this.#baseMessage = Object.hasOwn(this, \"message\") ? this.message : super.message;"
+            );
         await Assert.That(output).Contains("return \"custom: \" + this.#baseMessage;");
+    }
+
+    [Test]
+    public async Task IgnoredMessageOverride_KeepsNativeMessage()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class QuietException(string detail) : Exception(detail)
+            {
+                [Ignore]
+                public override string Message => "dotnet only: " + base.Message;
+            }
+            """
+        );
+
+        var output = result["quiet-exception.ts"];
+
+        await Assert.That(output).Contains("super(detail);");
+        await Assert.That(output).DoesNotContain("#baseMessage");
+        await Assert.That(output).DoesNotContain("get message()");
+    }
+
+    [Test]
+    public async Task MessageOverridesAcrossDispatcherChainsAndAncestors_MatchGolden()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile]
+                public class OverloadOverrideException : Exception
+                {
+                    public OverloadOverrideException() { }
+
+                    public OverloadOverrideException(string message)
+                        : base(message) { }
+
+                    public OverloadOverrideException(string message, Exception inner)
+                        : this(message)
+                    {
+                        Origin = inner;
+                    }
+
+                    public Exception? Origin { get; }
+
+                    public override string Message => "wrapped: " + base.Message;
+                }
+
+                [Transpile]
+                public class InvalidSlotException : ArgumentException
+                {
+                    public InvalidSlotException(string message, string slot)
+                        : base(message, slot) { }
+                }
+
+                [Transpile]
+                public sealed class LabelledSlotException : InvalidSlotException
+                {
+                    public LabelledSlotException()
+                        : base("bad slot", "slot") { }
+
+                    public override string Message => "labelled: " + base.Message;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(result["app/overload-override-exception.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("exception-overload-message-override.ts"));
+
+        await Assert
+            .That(result["app/labelled-slot-exception.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("exception-ancestor-message-override.ts"));
     }
 }

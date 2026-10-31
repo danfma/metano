@@ -32,10 +32,6 @@ namespace Metano.Compiler.IR;
 /// may be <c>null</c> at runtime according to C# nullable flow analysis; a
 /// backend then falls back to <paramref name="DefaultMessage"/> at runtime,
 /// as .NET does.</param>
-/// <param name="IsMessageOverridden">Whether the class being constructed (or
-/// one of its transpilable bases) overrides <c>Exception.Message</c>; a
-/// backend must then leave the native message unset so the override is not
-/// shadowed.</param>
 /// <param name="RequiresArgumentTemporaries">Whether a role-ordered
 /// lowering (which reorders arguments and drops unmapped ones) would change
 /// when or whether a side-effecting argument is evaluated; the arguments must
@@ -46,7 +42,6 @@ public sealed record IrExceptionConstruction(
     IReadOnlyList<IrExceptionArgumentRole> ArgumentRoles,
     string? DefaultMessage = null,
     bool MessageMayBeNull = false,
-    bool IsMessageOverridden = false,
     bool RequiresArgumentTemporaries = false
 )
 {

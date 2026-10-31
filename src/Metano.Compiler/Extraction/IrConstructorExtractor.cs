@@ -28,7 +28,7 @@ public static class IrConstructorExtractor
         var primary = FindPrimaryConstructor(type);
 
         if (primary is null)
-            return ImplicitExceptionConstructor(type, target);
+            return ImplicitConstructorWithObservableBaseCall(type, target);
 
         var primaryDecl = BuildFromMethod(primary, type, originResolver, compilation, target);
 
@@ -43,11 +43,13 @@ public static class IrConstructorExtractor
 
     /// <summary>
     /// A type without explicit constructors still runs the implicit
-    /// parameterless one; when that chains into a BCL exception base, model it
-    /// so the backend can pass the base's default message (#246). Returns
-    /// <c>null</c> for every other type.
+    /// parameterless one. It is modelled only when its base call is
+    /// observable on the target side — today, a call into a BCL exception
+    /// base whose default message the backend must pass (#246); a backend
+    /// that emits it explicitly (Dart included) produces an empty constructor
+    /// that is equivalent to the implicit one. Returns <c>null</c> otherwise.
     /// </summary>
-    private static IrConstructorDeclaration? ImplicitExceptionConstructor(
+    private static IrConstructorDeclaration? ImplicitConstructorWithObservableBaseCall(
         INamedTypeSymbol type,
         Metano.Annotations.TargetLanguage? target
     )

@@ -8,7 +8,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Lowers the arguments of an <see cref="IrExceptionConstruction"/> (a BCL
 /// exception <c>new</c>, or the base call of a user exception deriving from
 /// one) into the arguments of the JS <c>Error(message, { cause })</c>
-/// constructor, and builds the <c>super(...)</c> call of any constructor.
+/// constructor, and keeps a class's <c>Message</c> override visible.
 /// <para>
 /// The message emulates how .NET composes <c>Exception.Message</c>:
 /// <list type="bullet">
@@ -20,9 +20,16 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   <item><c>"\nActual value was X."</c> for an <c>actualValue</c>.</item>
 /// </list>
 /// Suffixes are omitted for a <c>null</c> (or, for names, empty) literal. The
-/// <c>innerException</c> becomes <c>{ cause }</c>. When the constructed class
-/// overrides <c>Message</c>, no message is passed, so the native <c>Error</c>
-/// installs no own <c>message</c> property that would shadow the override.
+/// <c>innerException</c> becomes <c>{ cause }</c>.
+/// </para>
+/// <para>
+/// <c>Message</c> overrides: the native <c>Error</c> constructor installs an own
+/// <c>message</c> data property that would shadow a <c>get message()</c>
+/// override — whichever ancestor makes the BCL base call. A class that
+/// overrides <c>Message</c> therefore moves that own property, right after
+/// <c>super(...)</c>, into its private <c>#baseMessage</c> field (or, when an
+/// ancestor already did so, reads the ancestor's <c>super.message</c>), and its
+/// <c>base.Message</c> reads lower to that field.
 /// </para>
 /// <para>
 /// Evaluation order: the message composition reads the arguments in role
@@ -37,7 +44,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Known deviations: a non-literal <c>paramName</c>, <c>objectName</c> or
 /// <c>actualValue</c> that is <c>null</c> / empty at runtime is not
 /// suppressed, and an actual value is formatted with JS (not .NET)
-/// <c>ToString</c> rules. Type tests stay coarse: every BCL exception type is
+/// <c>ToString</c> rules. When a <c>Message</c> override supplies the message,
+/// the <c>stack</c> header (captured by the native constructor) keeps the base
+/// message, not the overridden one. Type tests stay coarse: every BCL exception type is
 /// <c>Error</c> on the TS side, so <c>o is ArgumentException</c> lowers to
 /// <c>instanceof Error</c> and typed <c>catch</c> clauses ignore their filter.
 /// </para>
@@ -45,34 +54,48 @@ namespace Metano.Compiler.TypeScript.Bridge;
 public static class IrToTsExceptionConstructionBridge
 {
     /// <summary>
-    /// The ES private field holding the message a class that overrides
-    /// <c>Message</c> composed for its native base. The native base keeps no
-    /// message (it would shadow the override), so <c>base.Message</c> reads in
-    /// that class lower to this field.
+    /// The ES private field holding the base message of a class that overrides
+    /// <c>Message</c>; its <c>base.Message</c> reads lower to it.
     /// </summary>
     public const string BaseMessageField = "#baseMessage";
 
     private const string TemporaryPrefix = "__baseArg";
 
     /// <summary>
-    /// Whether the class currently being emitted keeps its base message — set
-    /// per class by <see cref="EnterClass"/>. <see cref="AsyncLocal{T}"/>
+    /// Whether the class currently being emitted overrides <c>Message</c> —
+    /// set per class by <see cref="EnterClass"/>. <see cref="AsyncLocal{T}"/>
     /// scopes it to the emitting execution context, like the type mapper's
     /// per-file scopes.
     /// </summary>
     private static readonly AsyncLocal<bool> _keepsBaseMessage = new();
 
     /// <summary>
+    /// Whether <paramref name="ir"/> is an exception class that itself
+    /// declares a (non-ignored) <c>Message</c> override.
+    /// </summary>
+    public static bool OverridesMessage(IrClassDeclaration ir) =>
+        ir.Semantics.IsException
+        && (ir.Members ?? []).Any(member =>
+            member
+                is IrPropertyDeclaration
+                {
+                    Name: "Message",
+                    IsStatic: false,
+                    Semantics.IsOverride: true,
+                }
+        );
+
+    /// <summary>
     /// Scopes the emission of one class: while the returned handle is alive,
     /// <c>base.Message</c> reads (see <see cref="TryMapKeptBaseMessageRead"/>)
-    /// redirect to <c>#baseMessage</c> when one of the class's constructors
-    /// keeps the base message.
+    /// redirect to <c>#baseMessage</c> when <paramref name="keepsBaseMessage"/>
+    /// (the class overrides <c>Message</c>).
     /// </summary>
-    public static IDisposable EnterClass(IrConstructorDeclaration? primary)
+    public static IDisposable EnterClass(bool keepsBaseMessage)
     {
         var scope = new ClassScope(_keepsBaseMessage.Value);
 
-        _keepsBaseMessage.Value = KeepsBaseMessage(primary);
+        _keepsBaseMessage.Value = keepsBaseMessage;
 
         return scope;
     }
@@ -87,37 +110,82 @@ public static class IrToTsExceptionConstructionBridge
             : null;
 
     /// <summary>
-    /// The <c>#baseMessage</c> field declaration a class needs when it keeps
-    /// its base message; <c>null</c> otherwise.
+    /// Adds the <c>override</c> modifier to the <c>get message()</c> lowered
+    /// from a <c>Message</c> override (<paramref name="property"/>): the JS
+    /// <c>Error</c> base declares <c>message</c>, so <c>noImplicitOverride</c>
+    /// requires it. Other members pass through unchanged.
     /// </summary>
-    public static TsFieldMember? BaseMessageFieldFor(IrConstructorDeclaration? primary) =>
-        KeepsBaseMessage(primary)
-            ? new TsFieldMember(
-                BaseMessageField,
-                new TsStringType(),
-                Initializer: null,
-                Readonly: true,
-                Static: false,
-                Accessibility: TsAccessibility.None
-            )
-            : null;
+    public static IReadOnlyList<TsClassMember> MarkMessageOverride(
+        IrPropertyDeclaration property,
+        IReadOnlyList<TsClassMember> members
+    ) =>
+        property is { Name: "Message", Semantics.IsOverride: true }
+            ? members
+                .Select(member =>
+                    member is TsGetterMember getter ? getter with { Override = true } : member
+                )
+                .ToList()
+            : members;
 
-    internal static TsExpression BaseMessageAccess() =>
+    /// <summary>The <c>#baseMessage</c> field declaration.</summary>
+    public static TsFieldMember BaseMessageFieldDeclaration() =>
+        new(
+            BaseMessageField,
+            new TsStringType(),
+            Initializer: null,
+            Readonly: true,
+            Static: false,
+            Accessibility: TsAccessibility.None
+        );
+
+    /// <summary>
+    /// The statements that follow <c>super(...)</c> in a class that overrides
+    /// <c>Message</c>: keep the base message — the own <c>message</c> property
+    /// the native constructor installed, or the ancestor's
+    /// <c>super.message</c> when an ancestor already moved it — and delete the
+    /// own property so the override getter is visible.
+    /// <code>
+    /// this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
+    /// Reflect.deleteProperty(this, "message");
+    /// </code>
+    /// </summary>
+    public static IReadOnlyList<TsStatement> CaptureBaseMessage()
+    {
+        var self = new TsIdentifier("this");
+        var messageKey = new TsStringLiteral("message");
+
+        var hasOwnMessage = new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("Object"), "hasOwn"),
+            [self, messageKey]
+        );
+
+        var baseMessage = new TsConditionalExpression(
+            hasOwnMessage,
+            new TsPropertyAccess(self, "message"),
+            new TsPropertyAccess(new TsIdentifier("super"), "message")
+        );
+
+        var deleteOwnMessage = new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("Reflect"), "deleteProperty"),
+            [self, messageKey]
+        );
+
+        return
+        [
+            new TsExpressionStatement(
+                new TsBinaryExpression(BaseMessageAccess(), "=", baseMessage)
+            ),
+            new TsExpressionStatement(deleteOwnMessage),
+        ];
+    }
+
+    private static TsExpression BaseMessageAccess() =>
         new TsPropertyAccess(new TsIdentifier("this"), BaseMessageField);
 
     /// <summary>Restores the enclosing emission's kept-base-message state.</summary>
     private sealed class ClassScope(bool previous) : IDisposable
     {
         public void Dispose() => _keepsBaseMessage.Value = previous;
-    }
-
-    private static bool KeepsBaseMessage(IrConstructorDeclaration? primary)
-    {
-        var constructors = primary is null ? [] : (primary.Overloads ?? []).Prepend(primary);
-
-        return constructors.Any(ctor =>
-            ctor.BaseExceptionConstruction is { IsMessageOverridden: true }
-        );
     }
 
     /// <summary>
@@ -140,39 +208,21 @@ public static class IrToTsExceptionConstructionBridge
     }
 
     /// <summary>
-    /// The base-constructor call of <paramref name="ctor"/>: role-mapped
-    /// <c>Error</c> arguments when the base is a BCL exception, the plain base
-    /// arguments otherwise. Returns <c>null</c> when the constructor passes
-    /// nothing to its base.
+    /// The <c>super(...)</c> call of a constructor whose base is a BCL
+    /// exception: role-mapped <c>Error</c> arguments, preceded by source-order
+    /// temporaries when <see cref="IrExceptionConstruction.RequiresArgumentTemporaries"/>.
     /// </summary>
-    public static TsBaseConstructorCall? MapBaseArguments(
+    public static TsBaseConstructorCall MapBaseExceptionCall(
         IrConstructorDeclaration ctor,
+        IrExceptionConstruction construction,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var baseArguments = ctor.BaseArguments ?? [];
-
-        if (ctor.BaseExceptionConstruction is { } construction)
-        {
-            var operands = ErrorOperands.Bind(construction, baseArguments, bclRegistry);
-
-            var keptBaseMessage = construction.IsMessageOverridden
-                ? ComposeMessage(construction, operands) ?? new TsStringLiteral("")
-                : null;
-
-            return new TsBaseConstructorCall(
-                operands.Temporaries,
-                BuildErrorArguments(construction, operands),
-                keptBaseMessage
-            );
-        }
-
-        if (baseArguments.Count == 0)
-            return null;
+        var operands = ErrorOperands.Bind(construction, ctor.BaseArguments ?? [], bclRegistry);
 
         return new TsBaseConstructorCall(
-            [],
-            baseArguments.Select(a => IrToTsExpressionBridge.MapArgument(a, bclRegistry)).ToList()
+            operands.Temporaries,
+            BuildErrorArguments(construction, operands)
         );
     }
 
@@ -181,9 +231,7 @@ public static class IrToTsExceptionConstructionBridge
         ErrorOperands operands
     )
     {
-        var message = construction.IsMessageOverridden
-            ? null
-            : ComposeMessage(construction, operands);
+        var message = ComposeMessage(construction, operands);
 
         var cause = operands.SuppliedValueOf(IrExceptionArgumentRole.InnerException);
 
@@ -432,41 +480,5 @@ public static class IrToTsExceptionConstructionBridge
                 .Replace("${", "\\${")
                 .Replace("\n", "\\n")
                 .Replace("\r", "\\r");
-    }
-}
-
-/// <summary>
-/// A lowered base-constructor call: <paramref name="Temporaries"/> to declare
-/// before <c>super(...)</c> (arguments evaluated in source order), the
-/// <c>super</c> <paramref name="Arguments"/>, and — for a class that overrides
-/// <c>Message</c> — the <paramref name="KeptBaseMessage"/> stored in
-/// <c>#baseMessage</c> right after <c>super</c>.
-/// </summary>
-public sealed record TsBaseConstructorCall(
-    IReadOnlyList<TsVariableDeclaration> Temporaries,
-    IReadOnlyList<TsExpression> Arguments,
-    TsExpression? KeptBaseMessage = null
-)
-{
-    /// <summary>The temporaries, the <c>super(...)</c> statement and the
-    /// kept-base-message assignment, if any.</summary>
-    public IReadOnlyList<TsStatement> ToStatements()
-    {
-        var superCall = new TsExpressionStatement(
-            new TsCallExpression(new TsIdentifier("super"), Arguments)
-        );
-
-        if (KeptBaseMessage is null)
-            return [.. Temporaries, superCall];
-
-        var keepBaseMessage = new TsExpressionStatement(
-            new TsBinaryExpression(
-                IrToTsExceptionConstructionBridge.BaseMessageAccess(),
-                "=",
-                KeptBaseMessage
-            )
-        );
-
-        return [.. Temporaries, superCall, keepBaseMessage];
     }
 }

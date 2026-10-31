@@ -3670,46 +3670,62 @@ public sealed partial class IrExpressionExtractor
             ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax)
         );
 
-        return creation.ExceptionConstruction is { RequiresArgumentTemporaries: true }
-            ? BindExceptionArgumentsOnce(creation, 0)
-            : creation;
+        if (creation.ExceptionConstruction is not { RequiresArgumentTemporaries: true } exception)
+            return creation;
+
+        // The role-ordered BCL exception lowering may reorder or drop
+        // arguments, so the side-effecting ones are bound first.
+        return BindArgumentsOnce(
+            creation,
+            bound =>
+                bound with
+                {
+                    ExceptionConstruction = exception with { RequiresArgumentTemporaries = false },
+                }
+        );
     }
 
     /// <summary>
-    /// Let-binds the side-effecting arguments of a BCL exception construction
-    /// (from <paramref name="index"/> on), in source order, so the backend's
-    /// role-ordered lowering can reorder or drop them freely.
+    /// Evaluates the arguments of <paramref name="creation"/> once, in source
+    /// order: each side-effecting argument is let-bound to a temporary (see
+    /// <see cref="BindValueOnce"/>) and <paramref name="build"/> receives the
+    /// construction with those arguments replaced, free to reorder or drop
+    /// them.
     /// </summary>
-    private IrExpression BindExceptionArgumentsOnce(IrNewExpression creation, int index)
+    private IrExpression BindArgumentsOnce(
+        IrNewExpression creation,
+        Func<IrNewExpression, IrExpression> build
+    ) => BindArgumentsFrom(creation, 0, build);
+
+    private IrExpression BindArgumentsFrom(
+        IrNewExpression creation,
+        int index,
+        Func<IrNewExpression, IrExpression> build
+    )
     {
         if (index == creation.Arguments.Count)
-        {
-            return creation with
-            {
-                ExceptionConstruction = creation.ExceptionConstruction! with
-                {
-                    RequiresArgumentTemporaries = false,
-                },
-            };
-        }
+            return build(creation);
 
         return BindValueOnce(
             creation.Arguments[index].Value,
-            bound =>
-                BindExceptionArgumentsOnce(
-                    creation with
-                    {
-                        Arguments = creation
-                            .Arguments.Select(
-                                (argument, position) =>
-                                    position == index ? argument with { Value = bound } : argument
-                            )
-                            .ToList(),
-                    },
-                    index + 1
-                )
+            bound => BindArgumentsFrom(WithArgumentValue(creation, index, bound), index + 1, build)
         );
     }
+
+    private static IrNewExpression WithArgumentValue(
+        IrNewExpression creation,
+        int index,
+        IrExpression value
+    ) =>
+        creation with
+        {
+            Arguments = creation
+                .Arguments.Select(
+                    (argument, position) =>
+                        position == index ? argument with { Value = value } : argument
+                )
+                .ToList(),
+        };
 
     /// <summary>
     /// Classifies the arguments of a <c>new</c> of a BCL exception by
