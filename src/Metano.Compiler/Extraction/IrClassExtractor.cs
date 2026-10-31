@@ -232,7 +232,7 @@ public static class IrClassExtractor
     /// <summary>
     /// Extracts the underlying primitive of an <c>[Branded]</c> struct: the
     /// type of the single wrapped value member resolved by
-    /// <see cref="SymbolHelper.GetBrandedValueMember"/>. Returns <c>null</c>
+    /// <see cref="SymbolHelper.GetBrandedValueType"/>. Returns <c>null</c>
     /// when the type isn't a real wrapper, signalling to the consumer that it
     /// should fall through to the regular class/record path.
     /// </summary>
@@ -240,12 +240,9 @@ public static class IrClassExtractor
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver
     ) =>
-        SymbolHelper.GetBrandedValueMember(type) switch
-        {
-            IFieldSymbol field => IrTypeRefMapper.Map(field.Type, originResolver),
-            IPropertySymbol property => IrTypeRefMapper.Map(property.Type, originResolver),
-            _ => null,
-        };
+        SymbolHelper.GetBrandedValueType(type) is { } valueType
+            ? IrTypeRefMapper.Map(valueType, originResolver)
+            : null;
 
     private static bool IsException(INamedTypeSymbol type)
     {

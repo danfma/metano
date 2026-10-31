@@ -99,4 +99,25 @@ public class MethodOverloadFastPathTests
             .That(output)
             .Contains("this.logMsgLevel(args[0] as string, args[1] as number)");
     }
+
+    [Test]
+    public async Task FastPath_GenericOverloads_DeclareTypeParametersPerSignature()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Picker
+            {
+                public static T Pick<T>(T a) => a;
+                public static T Pick<T>(T a, T b) => b;
+            }
+            """
+        );
+
+        var output = result["picker.ts"];
+        await Assert.That(output).Contains("static pick<T>(a: T): T;");
+        await Assert.That(output).Contains("static pick<T>(a: T, b: T): T;");
+        await Assert.That(output).Contains("static pick(...args: unknown[]): any");
+        await Assert.That(output).Contains("Picker.pickAB(args[0] as any, args[1] as any)");
+    }
 }

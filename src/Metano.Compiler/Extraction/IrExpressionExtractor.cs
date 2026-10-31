@@ -2344,6 +2344,12 @@ public sealed partial class IrExpressionExtractor
         return -1;
     }
 
+    private static bool IsPrimitiveBackedBrandedValueRead(ISymbol symbol) =>
+        SymbolHelper.IsBrandedValueMember(symbol)
+        && SymbolHelper.GetBrandedValueType(symbol.ContainingType.OriginalDefinition)
+            is { } valueType
+        && IrTypeRefMapper.Map(valueType).IsBrandablePrimitive();
+
     private IrMemberOrigin? BuildOrigin(ISymbol? symbol)
     {
         if (symbol?.ContainingType is null)
@@ -2356,11 +2362,13 @@ public sealed partial class IrExpressionExtractor
         var isEnumMember =
             symbol.ContainingType.TypeKind == TypeKind.Enum && symbol is IFieldSymbol;
         var isStringEnumMember = isEnumMember && SymbolHelper.HasStringEnum(symbol.ContainingType);
-        var isBrandedMember =
+        var isBrandedMethod =
             symbol is IMethodSymbol && SymbolHelper.HasBranded(symbol.ContainingType);
-        // Reading the wrapped value of a `[Branded]` receiver (`id.Value`) is
-        // the identity at runtime — the brand IS the primitive (ADR-0005).
-        var isBrandedValueMember = SymbolHelper.IsBrandedValueMember(symbol);
+        // Reading the wrapped value of a primitive-backed `[Branded]` receiver
+        // (`id.Value`) is the identity at runtime — the brand IS the primitive
+        // (ADR-0005). A wrapper over anything else falls back to a class, so
+        // its `.value` read must stay.
+        var isBrandedValueMember = IsPrimitiveBackedBrandedValueRead(symbol);
         var isPlainObjectInstanceMethod =
             symbol is IMethodSymbol { IsStatic: false, MethodKind: MethodKind.Ordinary }
             && SymbolHelper.HasPlainObject(symbol.ContainingType);
@@ -2389,7 +2397,7 @@ public sealed partial class IrExpressionExtractor
             symbol.Name,
             symbol.IsStatic,
             isEnumMember,
-            isBrandedMember,
+            isBrandedMethod,
             EmittedName: emittedName,
             IsPlainObjectInstanceMethod: isPlainObjectInstanceMethod,
             IsStringEnumMember: isStringEnumMember,

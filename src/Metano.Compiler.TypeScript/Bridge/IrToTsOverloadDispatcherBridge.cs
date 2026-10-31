@@ -43,46 +43,43 @@ public static class IrToTsOverloadDispatcherBridge
         DeclarativeMappingRegistry? bclRegistry = null
     )
     {
-        var overloads = CollectOverloads(primary);
-        if (overloads.Count < 2)
+        var primaryName = TypeScriptNaming.ToCamelCaseMember(primary.Name);
+        var plan = PlanOverloadGroup(CollectOverloads(primary), primaryName);
+
+        if (plan is null)
             return [];
 
-        // Sort by descending parameter count so the most specific overload is
-        // tried first in the dispatcher body (matches legacy behavior).
-        var sorted = overloads.OrderByDescending(m => m.Parameters.Count).ToList();
-        var primaryName = TypeScriptNaming.ToCamelCaseMember(primary.Name);
         var isStatic = primary.IsStatic;
-        var isAsync = sorted.Any(m => m.Semantics.IsAsync);
-
-        var commonReturn = ResolveCommonReturnType(sorted, isAsync);
-        var overloadSignatures = sorted.Select(BuildOverloadSignature).ToList();
-        var fastPathNames = ComputeFastPathNames(primaryName, sorted);
-
         var members = new List<TsClassMember>();
-        for (var i = 0; i < sorted.Count; i++)
+
+        for (var i = 0; i < plan.Sorted.Count; i++)
         {
-            var fastPath = BuildFastPathMember(sorted[i], fastPathNames[i], isStatic, bclRegistry);
+            var fastPath = BuildFastPathMember(
+                plan.Sorted[i],
+                plan.FastPathNames[i],
+                isStatic,
+                bclRegistry
+            );
+
             if (fastPath is not null)
                 members.Add(fastPath);
         }
 
-        var receiver = isStatic
-            ? (TsExpression)new TsIdentifier(containingTypeName)
-            : new TsIdentifier("this");
-        var body = BuildDispatcherBody(sorted, fastPathNames, receiver);
+        var receiver = DispatchReceiver(isStatic, containingTypeName);
 
         members.Add(
             new TsMethodMember(
                 primaryName,
-                [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)],
-                commonReturn,
-                body,
+                DispatcherParameters(),
+                plan.CommonReturn,
+                BuildDispatcherBody(plan.Sorted, plan.FastPathNames, receiver),
                 Static: isStatic,
-                Async: isAsync,
+                Async: plan.IsAsync,
                 Accessibility: VisibilityToAccessibility(primary.Visibility),
-                Overloads: overloadSignatures
+                Overloads: plan.Signatures
             )
         );
+
         return members;
     }
 
@@ -91,48 +88,56 @@ public static class IrToTsOverloadDispatcherBridge
     /// that lowers to free functions inside a TS namespace (the
     /// <c>[Branded]</c> companion) instead of class members. The fast paths
     /// are non-exported namespace-local functions called by bare name; the
-    /// exported dispatcher carries the overload signatures. Returns an empty
-    /// list when the group has fewer than two overloads.
+    /// exported dispatcher carries the overload signatures.
     /// </summary>
-    /// <param name="primary">The method that groups the overloads.</param>
+    /// <param name="overloads">
+    /// The overload group, two or more methods — the caller lowers a single
+    /// method through its regular path.
+    /// </param>
     /// <param name="functionName">
     /// Emitted dispatcher name — already reserved-word escaped, since
     /// namespace function declarations can't use reserved words.
+    /// </param>
+    /// <param name="takenNames">
+    /// Function names already claimed in the namespace. Namespace functions
+    /// share one scope, so a fast-path name that collides with one of them
+    /// (or with a sibling fast path) gets a <c>$</c> suffix; the chosen names
+    /// are added to the set.
     /// </param>
     /// <param name="bclRegistry">
     /// Optional BCL mapping registry threaded through to the body bridge.
     /// </param>
     public static IReadOnlyList<TsFunction> BuildNamespaceFunctions(
-        IrMethodDeclaration primary,
+        IReadOnlyList<IrMethodDeclaration> overloads,
         string functionName,
+        ISet<string> takenNames,
         DeclarativeMappingRegistry? bclRegistry = null
     )
     {
-        var overloads = CollectOverloads(primary);
+        var plan =
+            PlanOverloadGroup(overloads, functionName)
+            ?? throw new ArgumentException(
+                "An overload group needs two or more methods.",
+                nameof(overloads)
+            );
 
-        if (overloads.Count < 2)
-            return [];
+        var fastPathNames = plan.FastPathNames.Select(name => ClaimName(name, takenNames)).ToList();
 
-        var sorted = overloads.OrderByDescending(m => m.Parameters.Count).ToList();
-        var isAsync = sorted.Any(m => m.Semantics.IsAsync);
-        var fastPathNames = ComputeFastPathNames(functionName, sorted);
-        var functions = new List<TsFunction>();
-
-        for (var i = 0; i < sorted.Count; i++)
-        {
-            if (BuildFastPathFunction(sorted[i], fastPathNames[i], bclRegistry) is { } fastPath)
-                functions.Add(fastPath);
-        }
+        var functions = plan
+            .Sorted.Select(
+                (method, i) => BuildFastPathFunction(method, fastPathNames[i], bclRegistry)
+            )
+            .ToList();
 
         functions.Add(
             new TsFunction(
                 functionName,
-                [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)],
-                ResolveCommonReturnType(sorted, isAsync),
-                BuildDispatcherBody(sorted, fastPathNames, receiver: null),
+                DispatcherParameters(),
+                plan.CommonReturn,
+                BuildDispatcherBody(plan.Sorted, fastPathNames, receiver: null),
                 Exported: true,
-                Async: isAsync,
-                Overloads: sorted.Select(BuildOverloadSignature).ToList()
+                Async: plan.IsAsync,
+                Overloads: plan.Signatures
             )
         );
 
@@ -140,6 +145,45 @@ public static class IrToTsOverloadDispatcherBridge
     }
 
     // ── Phases ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The target-shape-independent part of a dispatcher: the overloads in
+    /// dispatch order, their fast-path names, the async flag, the
+    /// implementation return type and the public overload signatures.
+    /// </summary>
+    private sealed record OverloadGroupPlan(
+        IReadOnlyList<IrMethodDeclaration> Sorted,
+        IReadOnlyList<string> FastPathNames,
+        bool IsAsync,
+        TsType CommonReturn,
+        IReadOnlyList<TsMethodOverload> Signatures
+    );
+
+    /// <summary>
+    /// Plans the dispatcher for <paramref name="overloads"/>, or returns
+    /// <c>null</c> when there are fewer than two (no dispatch needed).
+    /// </summary>
+    private static OverloadGroupPlan? PlanOverloadGroup(
+        IReadOnlyList<IrMethodDeclaration> overloads,
+        string dispatcherName
+    )
+    {
+        if (overloads.Count < 2)
+            return null;
+
+        // Sort by descending parameter count so the most specific overload is
+        // tried first in the dispatcher body (matches legacy behavior).
+        var sorted = overloads.OrderByDescending(m => m.Parameters.Count).ToList();
+        var isAsync = sorted.Any(m => m.Semantics.IsAsync);
+
+        return new OverloadGroupPlan(
+            sorted,
+            ComputeFastPathNames(dispatcherName, sorted),
+            isAsync,
+            ResolveCommonReturnType(sorted, isAsync),
+            sorted.Select(BuildOverloadSignature).ToList()
+        );
+    }
 
     private static List<IrMethodDeclaration> CollectOverloads(IrMethodDeclaration primary)
     {
@@ -149,21 +193,53 @@ public static class IrToTsOverloadDispatcherBridge
         return list;
     }
 
+    /// <summary>
+    /// The implementation signature takes <c>...args: unknown[]</c> and can't
+    /// name the overloads' method type parameters, so a group with any
+    /// generic overload — or differing return types — falls back to an
+    /// erased return type; the overload signatures keep the precise one.
+    /// </summary>
     private static TsType ResolveCommonReturnType(
         IReadOnlyList<IrMethodDeclaration> sorted,
         bool isAsync
     )
     {
         var returns = sorted.Select(m => IrToTsTypeMapper.Map(m.ReturnType)).ToList();
-        if (returns.All(t => t.Equals(returns[0])))
+        var isGeneric = sorted.Any(IsGeneric);
+
+        if (!isGeneric && returns.All(t => t.Equals(returns[0])))
             return returns[0];
+
         return isAsync
             ? new TsNamedType("Promise", [new TsNamedType("unknown")])
             : (TsType)new TsAnyType();
     }
 
+    private static bool IsGeneric(IrMethodDeclaration method) =>
+        method.TypeParameters is { Count: > 0 };
+
     private static TsMethodOverload BuildOverloadSignature(IrMethodDeclaration method) =>
-        new(MapParameters(method), IrToTsTypeMapper.Map(method.ReturnType));
+        new(
+            MapParameters(method),
+            IrToTsTypeMapper.Map(method.ReturnType),
+            MapTypeParameters(method.TypeParameters)
+        );
+
+    private static List<TsParameter> DispatcherParameters() =>
+        [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)];
+
+    private static TsExpression DispatchReceiver(bool isStatic, string containingTypeName) =>
+        isStatic ? new TsIdentifier(containingTypeName) : new TsIdentifier("this");
+
+    private static string ClaimName(string candidate, ISet<string> takenNames)
+    {
+        var name = candidate;
+
+        while (!takenNames.Add(name))
+            name += "$";
+
+        return name;
+    }
 
     private static TsMethodMember? BuildFastPathMember(
         IrMethodDeclaration method,
@@ -174,6 +250,7 @@ public static class IrToTsOverloadDispatcherBridge
     {
         if (method.Body is null)
             return null;
+
         return new TsMethodMember(
             fastPathName,
             MapParameters(method),
@@ -190,25 +267,29 @@ public static class IrToTsOverloadDispatcherBridge
         );
     }
 
-    private static TsFunction? BuildFastPathFunction(
+    /// <summary>
+    /// A namespace fast path is always emitted — the dispatcher branches to it
+    /// by bare name — so a body-less overload lowers to the same
+    /// not-implemented stub a single companion function gets.
+    /// </summary>
+    private static TsFunction BuildFastPathFunction(
         IrMethodDeclaration method,
         string fastPathName,
         DeclarativeMappingRegistry? bclRegistry
     ) =>
-        method.Body is null
-            ? null
-            : new TsFunction(
-                fastPathName,
-                MapParameters(method),
-                IrToTsTypeMapper.Map(method.ReturnType),
-                IrToTsStatementBridge.MapBody(method.Body, bclRegistry),
-                // Namespace-local: the exported dispatcher is the public entry point.
-                Exported: false,
-                Async: method.Semantics.IsAsync,
-                TypeParameters: MapTypeParameters(method.TypeParameters)
-            );
+        new(
+            fastPathName,
+            MapParameters(method),
+            IrToTsTypeMapper.Map(method.ReturnType),
+            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry),
+            // Namespace-local: the exported dispatcher is the public entry point.
+            Exported: false,
+            Async: method.Semantics.IsAsync,
+            TypeParameters: MapTypeParameters(method.TypeParameters)
+        );
 
-    private static List<TsParameter> MapParameters(IrMethodDeclaration method) =>
+    /// <summary>Maps a method's parameters to TS parameters (camelCase names, rest for <c>params</c>).</summary>
+    internal static List<TsParameter> MapParameters(IrMethodDeclaration method) =>
         method
             .Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
@@ -254,17 +335,15 @@ public static class IrToTsOverloadDispatcherBridge
                 callArgs.Add(
                     new TsCastExpression(
                         new TsIdentifier($"args[{j}]"),
-                        IrToTsTypeMapper.Map(method.Parameters[j].Type)
+                        DispatchArgumentType(method, method.Parameters[j].Type)
                     )
                 );
             }
 
-            // A null receiver means the fast path is a namespace-local
-            // function reachable by bare name.
-            TsExpression callee = receiver is null
-                ? new TsIdentifier(fastPathName)
-                : new TsPropertyAccess(receiver, fastPathName);
-            var delegateCall = new TsCallExpression(callee, callArgs);
+            var delegateCall = new TsCallExpression(
+                FastPathCallee(receiver, fastPathName),
+                callArgs
+            );
 
             var branchStatements = new List<TsStatement>();
             if (method.ReturnType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void })
@@ -295,6 +374,23 @@ public static class IrToTsOverloadDispatcherBridge
         );
         return body;
     }
+
+    /// <summary>
+    /// The cast applied to <c>args[i]</c> before delegating. The dispatcher
+    /// body can't name a generic overload's method type parameters, so those
+    /// arguments are cast to <c>any</c> and the fast path infers its own.
+    /// </summary>
+    private static TsType DispatchArgumentType(IrMethodDeclaration method, IrTypeRef type) =>
+        IsGeneric(method) ? new TsAnyType() : IrToTsTypeMapper.Map(type);
+
+    /// <summary>
+    /// A null receiver means the fast path is a namespace-local function
+    /// reachable by bare name.
+    /// </summary>
+    private static TsExpression FastPathCallee(TsExpression? receiver, string fastPathName) =>
+        receiver is null
+            ? new TsIdentifier(fastPathName)
+            : new TsPropertyAccess(receiver, fastPathName);
 
     // ── Fast-path naming ─────────────────────────────────────────────────
 
