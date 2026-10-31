@@ -55,6 +55,7 @@ public static class IrNodeChildren
             IrWithExpression with => [with.Source, .. with.Assignments.Select(a => a.Value)],
             IrThrowExpression thrown => [thrown.Expression],
             IrLetExpression let => [let.Value, let.Body],
+            IrSequenceExpression sequence => [.. sequence.Effects, sequence.Result],
             IrOutArgumentCall outCall =>
             [
                 outCall.Call,

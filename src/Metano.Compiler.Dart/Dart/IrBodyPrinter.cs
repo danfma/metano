@@ -251,11 +251,17 @@ public static class IrBodyPrinter
                 // scopes the binding to the body, like the TypeScript IIFE.
                 sb.Append("((")
                     .Append(IrToDartNamingPolicy.ToParameterName(let.Name))
-                    .Append(") => ");
-                PrintExpression(sb, let.Body);
+                    .Append(')');
+                PrintClosureBody(sb, let.Body);
                 sb.Append(")(");
                 PrintExpression(sb, let.Value);
                 sb.Append(')');
+                break;
+            case IrSequenceExpression sequence:
+                // Dart has no comma operator: `(() { effect; return result; })()`.
+                sb.Append("(()");
+                PrintClosureBody(sb, sequence);
+                sb.Append(")()");
                 break;
             case IrCallExpression call:
                 PrintCallTarget(sb, call.Target);
@@ -873,6 +879,34 @@ public static class IrBodyPrinter
 
         if (parenthesize)
             sb.Append(')');
+    }
+
+    /// <summary>
+    /// The body of a closure that yields <paramref name="body"/>: an arrow
+    /// (<c> => body</c>) for a plain expression, or a block running each effect
+    /// of an <see cref="IrSequenceExpression"/> before returning its result.
+    /// </summary>
+    private static void PrintClosureBody(StringBuilder sb, IrExpression body)
+    {
+        if (body is not IrSequenceExpression sequence)
+        {
+            sb.Append(" => ");
+            PrintExpression(sb, body);
+
+            return;
+        }
+
+        sb.Append(" { ");
+
+        foreach (var effect in sequence.Effects)
+        {
+            PrintExpression(sb, effect);
+            sb.Append("; ");
+        }
+
+        sb.Append("return ");
+        PrintExpression(sb, sequence.Result);
+        sb.Append("; }");
     }
 
     /// <summary>

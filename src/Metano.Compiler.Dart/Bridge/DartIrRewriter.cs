@@ -154,6 +154,11 @@ public sealed class DartIrRewriter
                 Value = RewriteExpression(l.Value),
                 Body = RewriteExpression(l.Body),
             },
+            IrSequenceExpression s => s with
+            {
+                Effects = s.Effects.Select(RewriteExpression).ToList(),
+                Result = RewriteExpression(s.Result),
+            },
             IrNullConditionalAccess n => n with
             {
                 Receiver = RewriteExpression(n.Receiver),

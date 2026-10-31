@@ -73,6 +73,8 @@ public static class IrBodyCoverageProbe
                 && (slice.Start is null || IsCoveredExpression(slice.Start))
                 && (slice.End is null || IsCoveredExpression(slice.End)),
             IrLetExpression let => IsCoveredExpression(let.Value) && IsCoveredExpression(let.Body),
+            IrSequenceExpression sequence => sequence.Effects.All(IsCoveredExpression)
+                && IsCoveredExpression(sequence.Result),
             IrCallExpression call => IsCoveredExpression(call.Target)
                 && call.Arguments.All(a => IsCoveredExpression(a.Value)),
             IrNewExpression ne => ne.Arguments.All(a => IsCoveredExpression(a.Value)),

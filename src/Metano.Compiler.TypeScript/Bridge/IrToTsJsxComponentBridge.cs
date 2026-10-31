@@ -532,6 +532,11 @@ public static class IrToTsJsxComponentBridge
                 Value = Rewrite(le.Value, propNames, referenced),
                 Body = Rewrite(le.Body, propNames, referenced),
             },
+            IrSequenceExpression sequence => sequence with
+            {
+                Effects = sequence.Effects.Select(e => Rewrite(e, propNames, referenced)).ToList(),
+                Result = Rewrite(sequence.Result, propNames, referenced),
+            },
             IrOutArgumentCall outCall => outCall.MapExpressions(e =>
                 Rewrite(e, propNames, referenced)
             ),
