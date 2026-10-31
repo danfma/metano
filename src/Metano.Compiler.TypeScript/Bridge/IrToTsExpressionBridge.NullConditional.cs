@@ -2,103 +2,186 @@ using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
 public static partial class IrToTsExpressionBridge
 {
+    private static readonly TsLiteral NullLiteral = new("null");
+
     /// <summary>
-    /// Lowers a null-conditional continuation (<c>a?.B.C(x)</c>). When every
-    /// mapped step is a plain property access, element access or call on the
-    /// bound receiver, the result is native optional chaining
-    /// (<c>a?.b.c(x)</c>). Otherwise — a step mapped to a template, a wrapped
-    /// receiver, an extension or LINQ helper that takes the receiver as an
-    /// argument — <c>?.</c> cannot carry the short-circuit, so the receiver
-    /// is guarded explicitly (see <see cref="NullConditionalGuard"/>).
+    /// Lowers a null-conditional access (<c>a?.B.C(x)</c>). When every mapped
+    /// step is a plain property access, element access or call on the
+    /// receiver, the result is native optional chaining (<c>a?.b.c(x)</c>).
+    /// Otherwise — a step mapped to a template, a wrapped receiver, an
+    /// extension, <c>[PlainObject]</c> or LINQ helper that takes the receiver
+    /// as an argument — <c>?.</c> cannot carry the short-circuit, so the
+    /// receiver is guarded explicitly: <c>a == null ? null : step(a)</c>, or,
+    /// for a receiver that must evaluate once,
+    /// <c>((t) =&gt; t == null ? null : step(t))(a)</c>.
     /// </summary>
     private static TsExpression MapNullConditionalAccess(
         IrNullConditionalAccess access,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var receiver = Map(access.Receiver, bclRegistry);
-        var boundReceiver = access.ReceiverName is { } name
-            ? Map(new IrIdentifier(name), bclRegistry)
-            : receiver;
-        var whenNotNull = Map(access.WhenNotNull, bclRegistry);
+        var lowered = LowerNullConditional(access, bclRegistry);
 
-        if (TryChainOptionally(whenNotNull, boundReceiver, receiver) is { } chain)
+        if (lowered.OptionalChain is { } chain)
             return chain;
 
-        if (
-            boundReceiver is TsIdentifier { Name: var parameterName }
-            && access.ReceiverName is not null
-        )
-        {
-            return NullConditionalGuard.Bound(
-                parameterName,
-                receiver,
-                whenNotNull,
-                IrEvaluationTraits.ContainsAwait(access.WhenNotNull)
-            );
-        }
+        if (lowered.ReceiverName is not { } receiverName)
+            return GuardInline(lowered.Receiver, lowered.WhenNotNull);
 
-        return NullConditionalGuard.Inline(receiver, whenNotNull);
+        var guarded = GuardInline(new TsIdentifier(receiverName), lowered.WhenNotNull);
+
+        return TsImmediateInvocation.Of(
+            receiverName,
+            lowered.Receiver,
+            [new TsReturnStatement(guarded)],
+            isAsync: IrEvaluationTraits.ContainsAwait(access.WhenNotNull)
+        );
     }
 
     /// <summary>
+    /// A null-conditional access in statement position (its value unused):
+    /// native optional chaining when it applies, otherwise
+    /// <c>if (a != null) step(a);</c>, with a receiver that must evaluate
+    /// once bound first (<c>{ const t = a; if (t != null) step(t); }</c>).
+    /// </summary>
+    public static TsStatement MapNullConditionalStatement(
+        IrNullConditionalAccess access,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var lowered = LowerNullConditional(access, bclRegistry);
+
+        if (lowered.OptionalChain is { } chain)
+            return new TsExpressionStatement(chain);
+
+        if (lowered.ReceiverName is not { } receiverName)
+            return RunWhenNotNull(lowered.Receiver, lowered.WhenNotNull);
+
+        return new TsBlockStatement([
+            new TsVariableDeclaration(receiverName, lowered.Receiver),
+            RunWhenNotNull(new TsIdentifier(receiverName), lowered.WhenNotNull),
+        ]);
+    }
+
+    private static LoweredNullConditional LowerNullConditional(
+        IrNullConditionalAccess access,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var loweredReceiver = Map(access.Receiver, bclRegistry);
+
+        // Same naming the body's `IrIdentifier(ReceiverName)` reads go through.
+        var receiverName = access.IsBound
+            ? TypeScriptNaming.ToCamelCase(access.ReceiverName)
+            : null;
+
+        TsExpression receiverReference = receiverName is null
+            ? loweredReceiver
+            : new TsIdentifier(receiverName);
+
+        var whenNotNull = Map(access.WhenNotNull, bclRegistry);
+
+        return new LoweredNullConditional(
+            loweredReceiver,
+            receiverName,
+            whenNotNull,
+            TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
+        );
+    }
+
+    private static TsConditionalExpression GuardInline(
+        TsExpression receiver,
+        TsExpression whenNotNull
+    ) => new(new TsBinaryExpression(receiver, "==", NullLiteral), NullLiteral, whenNotNull);
+
+    private static TsIfStatement RunWhenNotNull(TsExpression receiver, TsExpression whenNotNull) =>
+        new(
+            new TsBinaryExpression(receiver, "!=", NullLiteral),
+            [new TsExpressionStatement(whenNotNull)]
+        );
+
+    /// <summary>
     /// Rebuilds <paramref name="step"/> as an optional chain rooted at
-    /// <paramref name="receiver"/>: the step applied directly to
-    /// <paramref name="boundReceiver"/> becomes the <c>?.</c> link and every
-    /// step above it continues the chain. Returns <c>null</c> when the spine
-    /// leaves plain property/element accesses and calls before reaching the
-    /// bound receiver.
+    /// <paramref name="loweredReceiver"/>: the step applied directly to
+    /// <paramref name="receiverReference"/> becomes the <c>?.</c> link and
+    /// every step above it continues the chain. Returns <c>null</c> when the
+    /// spine leaves plain property/element accesses and calls before
+    /// reaching the receiver.
     /// </summary>
     private static TsExpression? TryChainOptionally(
         TsExpression step,
-        TsExpression boundReceiver,
-        TsExpression receiver
+        TsExpression receiverReference,
+        TsExpression loweredReceiver
+    )
+    {
+        if (ChainObjectOf(step) is not { } chainObject)
+            return null;
+
+        if (chainObject.Equals(receiverReference))
+            return WithChainObject(step, loweredReceiver, isLink: true);
+
+        return TryChainOptionally(chainObject, receiverReference, loweredReceiver) is { } chained
+            ? WithChainObject(step, chained, isLink: false)
+            : null;
+    }
+
+    /// <summary>The object a property/element access or call is applied to.</summary>
+    private static TsExpression? ChainObjectOf(TsExpression step) =>
+        step switch
+        {
+            TsPropertyAccess access => access.Object,
+            TsElementAccess element => element.Object,
+            TsCallExpression call => call.Callee,
+            _ => null,
+        };
+
+    /// <summary>
+    /// <paramref name="step"/> applied to <paramref name="chainObject"/>,
+    /// either as the chain's <c>?.</c> link or as a step continuing it (a
+    /// call needs no marker: its callee never closes the chain).
+    /// </summary>
+    private static TsExpression WithChainObject(
+        TsExpression step,
+        TsExpression chainObject,
+        bool isLink
     ) =>
         step switch
         {
-            TsPropertyAccess access when access.Object.Equals(boundReceiver) => access with
+            TsPropertyAccess access => access with
             {
-                Object = receiver,
-                Optional = true,
+                Object = chainObject,
+                Optional = isLink || access.Optional,
+                ContinuesChain = !isLink,
             },
-            TsPropertyAccess access => TryChainOptionally(access.Object, boundReceiver, receiver)
-                is { } chained
-                ? access with
-                {
-                    Object = chained,
-                    ContinuesChain = true,
-                }
-                : null,
-            TsElementAccess element when element.Object.Equals(boundReceiver) => element with
+            TsElementAccess element => element with
             {
-                Object = receiver,
-                Optional = true,
+                Object = chainObject,
+                Optional = isLink || element.Optional,
+                ContinuesChain = !isLink,
             },
-            TsElementAccess element => TryChainOptionally(element.Object, boundReceiver, receiver)
-                is { } chained
-                ? element with
-                {
-                    Object = chained,
-                    ContinuesChain = true,
-                }
-                : null,
-            TsCallExpression call when call.Callee.Equals(boundReceiver) => call with
+            TsCallExpression call => call with
             {
-                Callee = receiver,
-                Optional = true,
+                Callee = chainObject,
+                Optional = isLink || call.Optional,
             },
-            TsCallExpression call => TryChainOptionally(call.Callee, boundReceiver, receiver)
-                is { } chained
-                ? call with
-                {
-                    Callee = chained,
-                }
-                : null,
-            _ => null,
+            _ => throw new InvalidOperationException($"Not a chain step: {step.GetType().Name}"),
         };
+
+    /// <summary>
+    /// A lowered null-conditional access: the receiver, its binding name when
+    /// it must evaluate once, the non-null branch, and the native optional
+    /// chain when every step allows one.
+    /// </summary>
+    private sealed record LoweredNullConditional(
+        TsExpression Receiver,
+        string? ReceiverName,
+        TsExpression WhenNotNull,
+        TsExpression? OptionalChain
+    );
 }

@@ -83,7 +83,6 @@ public static class IrToDartBclMapper
             : call.Target switch
             {
                 IrMemberAccess access => access with { MemberName = dartName },
-                IrOptionalChain chain => chain with { MemberName = dartName },
                 _ => call.Target,
             };
         return call with { Target = callee };

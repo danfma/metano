@@ -25,19 +25,20 @@ public sealed partial class IrExpressionExtractor
     ///   <c>IReadOnlyCollection&lt;…&gt;.Count</c>; for the concrete type the
     ///   rebinding changes nothing.</item>
     /// </list>
-    /// Returns <c>null</c> for any other member access, including the
-    /// null-conditional forms (<c>dictionary?.Count</c>), which do not reach
-    /// <see cref="ExtractMemberAccess"/>.
+    /// The leading step of a null-conditional access
+    /// (<c>dictionary?.Count</c>) matches too: its receiver is the conditional
+    /// receiver, which extracts to the bound value. Returns <c>null</c> for
+    /// any other member access.
     /// </summary>
     private IrMemberAccess? TryExtractDictionaryCount(
-        MemberAccessExpressionSyntax member,
+        QualifiedMemberSyntax member,
         ISymbol? symbol
     )
     {
         if (symbol is not IPropertySymbol { Name: "Count", IsStatic: false } count)
             return null;
 
-        if (FindCountedDictionary(member.Expression) is not (var dictionary, var dictionaryType))
+        if (FindCountedDictionary(member.Receiver) is not (var dictionary, var dictionaryType))
             return null;
 
         // A property always has a containing type, so BuildOrigin returns an origin.

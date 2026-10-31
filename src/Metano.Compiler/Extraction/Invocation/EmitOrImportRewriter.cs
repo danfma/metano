@@ -138,9 +138,9 @@ public sealed class EmitOrImportRewriter(InvocationLoweringHelpers helpers) : II
     {
         if (
             !symbol.IsStatic
-            && context.Invocation.Expression is MemberAccessExpressionSyntax memberAccess
+            && QualifiedMemberSyntax.From(context.Invocation.Expression) is { } memberAccess
         )
-            templateArgs.Add(context.Recurse(memberAccess.Expression));
+            templateArgs.Add(context.Recurse(memberAccess.Receiver));
     }
 
     private IReadOnlyList<IrArgument> BuildNormalizedArguments(

@@ -97,7 +97,7 @@ public sealed partial class IrExpressionExtractor
                 break;
             }
 
-            if (current.Expression is not MemberAccessExpressionSyntax memberAccess)
+            if (QualifiedMemberSyntax.From(current.Expression) is not { } memberAccess)
                 return null; // static-direct calls (e.g. Enumerable.Where(items, p)) — MVP only handles extension form.
 
             // Static call syntax (`Enumerable.Where(items, p)`) also matches
@@ -105,20 +105,25 @@ public sealed partial class IrExpressionExtractor
             // to a type symbol — extension form's receiver always resolves
             // to a value (parameter, local, member). Bail to legacy fluent
             // emission so the call shape stays correct.
-            if (_semantic.GetSymbolInfo(memberAccess.Expression).Symbol is INamedTypeSymbol)
+            if (_semantic.GetSymbolInfo(memberAccess.Receiver).Symbol is INamedTypeSymbol)
                 return null;
 
             var args = current.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
             var queryable = TryCaptureQueryableMeta(current, sym, memberAccess);
             stages.Add(new IrLinqStage(op, args, queryable));
 
-            if (memberAccess.Expression is InvocationExpressionSyntax innerInv)
+            // A leading `?.Stage(…)` reads the null-conditional receiver,
+            // which is already extracted (and bound): the chain starts there.
+            if (
+                memberAccess.Node is MemberAccessExpressionSyntax
+                && memberAccess.Receiver is InvocationExpressionSyntax innerInv
+            )
             {
                 current = innerInv;
             }
             else
             {
-                sourceSyntax = memberAccess.Expression;
+                sourceSyntax = memberAccess.Receiver;
                 current = null;
             }
         }
@@ -150,13 +155,13 @@ public sealed partial class IrExpressionExtractor
     private IrQueryableMeta? TryCaptureQueryableMeta(
         InvocationExpressionSyntax stage,
         IMethodSymbol? stageMethod,
-        MemberAccessExpressionSyntax memberAccess
+        QualifiedMemberSyntax memberAccess
     )
     {
         if (stageMethod is null)
             return null;
 
-        var receiverIsQueryable = ReceiverIsIQueryable(memberAccess.Expression);
+        var receiverIsQueryable = ReceiverIsIQueryable(memberAccess.Receiver);
         var methodHasQueryable = HasQueryableAttribute(stageMethod);
 
         for (var i = 0; i < stage.ArgumentList.Arguments.Count; i++)
@@ -374,10 +379,10 @@ public sealed partial class IrExpressionExtractor
     private ExpressionSyntax? ResolveAsQueryableInner(InvocationExpressionSyntax inv)
     {
         if (
-            inv.Expression is MemberAccessExpressionSyntax member
-            && _semantic.GetSymbolInfo(member.Expression).Symbol is not INamedTypeSymbol
+            QualifiedMemberSyntax.From(inv.Expression) is { } member
+            && _semantic.GetSymbolInfo(member.Receiver).Symbol is not INamedTypeSymbol
         )
-            return member.Expression;
+            return member.Receiver;
         if (inv.ArgumentList.Arguments.Count > 0)
             return inv.ArgumentList.Arguments[0].Expression;
         return null;

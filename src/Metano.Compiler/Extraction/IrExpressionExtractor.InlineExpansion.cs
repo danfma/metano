@@ -82,12 +82,12 @@ public sealed partial class IrExpressionExtractor
 
         if (
             symbol.ReducedFrom is not null
-            && inv.Expression is MemberAccessExpressionSyntax memberAccess
+            && QualifiedMemberSyntax.From(inv.Expression) is { } memberAccess
         )
         {
             if (parameters.Length == 0)
                 return null;
-            subs[parameters[0]] = Extract(memberAccess.Expression);
+            subs[parameters[0]] = Extract(memberAccess.Receiver);
             argIndex = 1;
         }
 
@@ -155,10 +155,10 @@ public sealed partial class IrExpressionExtractor
 
         if (
             symbol.ReducedFrom is not null
-            && inv.Expression is MemberAccessExpressionSyntax memberAccess
+            && QualifiedMemberSyntax.From(inv.Expression) is { } memberAccess
         )
         {
-            args.Add(new IrArgument(Extract(memberAccess.Expression)));
+            args.Add(new IrArgument(Extract(memberAccess.Receiver)));
             argIndex = 1;
         }
 

@@ -29,6 +29,23 @@ public static class IrEvaluationTraits
         };
 
     /// <summary>
+    /// <see cref="IsReusableReceiver"/>, also accepting null-conditional links
+    /// over such shapes (<c>o?.Next</c>): a guard over them may repeat the
+    /// receiver instead of binding it (<c>o?.next == null ? null : f(o?.next)</c>).
+    /// Kept apart from <see cref="IsReusableReceiver"/> because a write
+    /// through a repeated optional link is not a valid assignment target.
+    /// </summary>
+    public static bool IsReusableNullConditionalReceiver(IrExpression expression) =>
+        expression switch
+        {
+            IrNullConditionalAccess { IsBound: false } access => IsReusableNullConditionalReceiver(
+                access.Receiver
+            ) && IsReusableNullConditionalReceiver(access.WhenNotNull),
+            IrMemberAccess access => IsReusableNullConditionalReceiver(access.Target),
+            _ => IsReusableReceiver(expression),
+        };
+
+    /// <summary>
     /// Whether the expression awaits outside any nested lambda — a lambda's
     /// own <c>await</c> belongs to that lambda, not to the enclosing
     /// expression.

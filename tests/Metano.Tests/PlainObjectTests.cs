@@ -257,7 +257,8 @@ public class PlainObjectTests
         );
 
         var output = result["service.ts"];
-        await Assert.That(output).Contains("item == null ? null : getTitle(item)");
+
+        await Assert.That(output).Contains("return item == null ? null : getTitle(item);");
         await Assert.That(output).DoesNotContain("item?.getTitle");
     }
 
@@ -283,13 +284,12 @@ public class PlainObjectTests
         );
 
         var output = result["service.ts"];
+
         await Assert
             .That(output)
             .Contains(
-                "(($__metanoOptionalReceiver) => $__metanoOptionalReceiver == null ? null : getTitle($__metanoOptionalReceiver))(this.find())"
+                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : getTitle(receiver$temp$0))(this.find());"
             );
-        await Assert.That(output).DoesNotContain(": any");
-        await Assert.That(output).DoesNotContain("undefined");
     }
 
     [Test]

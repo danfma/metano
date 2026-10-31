@@ -138,19 +138,8 @@ public sealed record IrSliceExpression(
 ) : IrExpression;
 
 /// <summary>
-/// Optional chaining member access: <c>target?.memberName</c>. <see cref="Origin"/>
-/// preserves the resolved member symbol so target backends can apply member
-/// mappings before emitting the optional access.
-/// </summary>
-public sealed record IrOptionalChain(
-    IrExpression Target,
-    string MemberName,
-    IrMemberOrigin? Origin = null
-) : IrExpression;
-
-/// <summary>
-/// A null-conditional access whose steps continue past the first binding:
-/// <c>receiver?.A.B(x)</c>. <see cref="Receiver"/> is evaluated once; the
+/// A null-conditional access: <c>receiver?.A</c>, <c>receiver?.A.B(x)</c>,
+/// <c>receiver?[i]</c>. <see cref="Receiver"/> is evaluated once; the
 /// whole expression yields <c>null</c> when it is null and
 /// <see cref="WhenNotNull"/> otherwise. <see cref="WhenNotNull"/> is the rest
 /// of the chain extracted as an ordinary expression over the receiver, so
@@ -166,7 +155,15 @@ public sealed record IrNullConditionalAccess(
     IrExpression Receiver,
     IrExpression WhenNotNull,
     string? ReceiverName = null
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// Whether <see cref="WhenNotNull"/> reads the receiver through the
+    /// <see cref="ReceiverName"/> binding.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(ReceiverName))]
+    public bool IsBound => ReceiverName is not null;
+}
 
 // -- Invocations --
 

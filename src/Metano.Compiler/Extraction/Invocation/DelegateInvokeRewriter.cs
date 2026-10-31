@@ -38,10 +38,10 @@ public sealed class DelegateInvokeRewriter(InvocationLoweringHelpers helpers) : 
             return null;
         if (InvocationLoweringHelpers.HasThisParameter(invoke))
             return null;
-        if (context.Invocation.Expression is not MemberAccessExpressionSyntax invokeMember)
+        if (QualifiedMemberSyntax.From(context.Invocation.Expression) is not { } invokeMember)
             return null;
 
-        var receiver = context.Recurse(invokeMember.Expression);
+        var receiver = context.Recurse(invokeMember.Receiver);
         var args = context
             .Invocation.ArgumentList.Arguments.Select(context.ExtractArgument)
             .ToList();
