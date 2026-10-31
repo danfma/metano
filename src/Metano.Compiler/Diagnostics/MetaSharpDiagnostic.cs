@@ -291,9 +291,16 @@ public static class DiagnosticCodes
     public const string InvalidJsCallable = "MS0028";
 
     /// <summary>MS0029 — <c>[EmitPackage(SubpathRoot = …)]</c> is not a dotted C#
-    /// namespace (the value is ignored), or stripping it makes two namespace barrels
-    /// claim the same <c>package.json#exports</c> key (the barrel under the root keeps
-    /// the key; the other is left out). Either way some consumer import would resolve
-    /// to the wrong place, so the code is an error. See spec 008.</summary>
+    /// namespace. Raised by the producer's TypeScript build (an error, so the build
+    /// fails); consumers of such a package fall back to full-namespace subpaths. See
+    /// spec 008.</summary>
     public const string InvalidExportsSubpathRoot = "MS0029";
+
+    /// <summary>MS0030 — two namespace barrels claim the same
+    /// <c>package.json#exports</c> key under <c>[EmitPackage(SubpathRoot = …)]</c>
+    /// (e.g. the root namespace's barrel and the opt-in root aggregation barrel both
+    /// claim <c>.</c>). The barrel under the root keeps the key; the error stops the
+    /// run because some consumer import would resolve to the wrong barrel. See spec
+    /// 008.</summary>
+    public const string ExportsSubpathKeyCollision = "MS0030";
 }

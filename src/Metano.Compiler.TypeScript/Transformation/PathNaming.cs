@@ -56,17 +56,11 @@ public sealed class PathNaming(string rootNamespace, string? importAlias = null)
     /// </summary>
     public string GetRelativePath(string ns, string typeName, bool isJsx = false)
     {
-        var relative = StripRootNamespace(ns);
-        var segments =
-            relative.Length > 0
-                ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
-                : [];
-
+        var folder = ToKebabPath(StripRootNamespace(ns));
         var extension = isJsx ? ".tsx" : ".ts";
         var fileName = SymbolHelper.ToKebabCase(typeName);
-        return segments.Length > 0
-            ? string.Join("/", segments) + "/" + fileName + extension
-            : fileName + extension;
+
+        return folder.Length > 0 ? folder + "/" + fileName + extension : fileName + extension;
     }
 
     public string StripRootNamespace(string ns)
@@ -100,15 +94,11 @@ public sealed class PathNaming(string rootNamespace, string? importAlias = null)
             return "./" + fileName;
 
         // Different namespace: import the defining file directly under the local alias.
-        var toRelative = StripRootNamespace(toNs);
-        var toParts =
-            toRelative.Length > 0
-                ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
-                : [];
+        var toFolder = ToKebabPath(StripRootNamespace(toNs));
 
-        return toParts.Length == 0
+        return toFolder.Length == 0
             ? AliasPrefix + "/" + fileName
-            : AliasPrefix + "/" + string.Join("/", toParts) + "/" + fileName;
+            : AliasPrefix + "/" + toFolder + "/" + fileName;
     }
 
     /// <summary>
@@ -119,13 +109,19 @@ public sealed class PathNaming(string rootNamespace, string? importAlias = null)
     /// producing package writes to <c>package.json#exports</c>; <c>""</c> means the
     /// bare package.
     /// </summary>
-    public static string ComputeExportedSubPath(string? packageSubpathRoot, string typeNamespace)
-    {
-        var fullPath =
-            typeNamespace.Length > 0
-                ? string.Join("/", typeNamespace.Split('.').Select(SymbolHelper.ToKebabCase))
-                : "";
+    public static string ComputeExportedSubPath(
+        PackageSubpathRoot packageSubpathRoot,
+        string typeNamespace
+    ) => PackageExportSubpaths.Strip(packageSubpathRoot, ToKebabPath(typeNamespace));
 
-        return ExportsSubpathRoot.From(packageSubpathRoot).Apply(fullPath);
-    }
+    /// <summary>
+    /// Maps a dotted namespace to its folder path, one kebab-cased segment per
+    /// namespace segment: <c>VideoStudio.Domain</c> → <c>video-studio/domain</c>,
+    /// <c>""</c> → <c>""</c>. The single namespace-to-path rule shared by the on-disk
+    /// layout, internal imports and the exported subpaths.
+    /// </summary>
+    public static string ToKebabPath(string dottedNamespace) =>
+        dottedNamespace.Length > 0
+            ? string.Join("/", dottedNamespace.Split('.').Select(SymbolHelper.ToKebabCase))
+            : "";
 }

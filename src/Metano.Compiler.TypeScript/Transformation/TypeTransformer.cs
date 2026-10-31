@@ -431,6 +431,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // of debugging it through tsgo's downstream error.
         CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic, ImportAlias);
 
+        ReportExportKeyCollisions(files);
+
         DrainCrossPackageMisses(typeMappingContext);
         DrainCrossPackageDependencies(typeMappingContext);
 
@@ -438,6 +440,44 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         return files;
     }
+
+    /// <summary>
+    /// Reports MS0030 for every pair of namespace barrels that would claim the same
+    /// <c>package.json#exports</c> key (spec 008 FR-007). Raised here, at transform time,
+    /// so the error stops the run before any file or cache entry is written — even with
+    /// <c>--skip-package-json</c> or <c>--dry-run</c>. Executables publish no exports.
+    /// </summary>
+    private void ReportExportKeyCollisions(IReadOnlyList<TsSourceFile> files)
+    {
+        if (compilation.Options.OutputKind == OutputKind.ConsoleApplication)
+            return;
+
+        var resolution = PackageExportSubpaths.Resolve(
+            files.Select(f => f.FileName),
+            ir.PackageSubpathRoot
+        );
+
+        foreach (var collision in resolution.Collisions)
+            ReportDiagnostic(ExportKeyCollisionDiagnostic(collision, ir.PackageSubpathRoot));
+    }
+
+    private static MetanoDiagnostic ExportKeyCollisionDiagnostic(
+        ExportKeyCollision collision,
+        PackageSubpathRoot subpathRoot
+    ) =>
+        new(
+            MetanoDiagnosticSeverity.Error,
+            DiagnosticCodes.ExportsSubpathKeyCollision,
+            $"package.json#exports key '{collision.Key}' is claimed by the barrels of "
+                + $"'{DisplayDirectory(collision.Kept.Directory)}' and "
+                + $"'{DisplayDirectory(collision.Dropped.Directory)}' "
+                + $"(SubpathRoot = \"{subpathRoot}\"). Rename one namespace, narrow "
+                + "SubpathRoot, or drop --namespace-barrels when the root aggregation barrel "
+                + "is one of them."
+        );
+
+    private static string DisplayDirectory(string directory) =>
+        directory.Length == 0 ? "<output root>" : directory;
 
     /// <summary>
     /// Drains MS0007 cross-package misses recorded by
@@ -1157,12 +1197,32 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (
             !string.Equals(
                 cache.ConfigurationFingerprint,
-                CacheConfigurationFingerprint ?? string.Empty,
+                GroupCacheFingerprint(),
                 StringComparison.Ordinal
             )
         )
             return null;
         return cache;
+    }
+
+    /// <summary>
+    /// The configuration fingerprint plus the identity of every referenced package
+    /// (name and <c>SubpathRoot</c>). Group closure hashes cover only the current
+    /// assembly's types, so without this a producer that changes its
+    /// <c>SubpathRoot</c> would leave consumer groups reused with stale cross-package
+    /// specifiers (spec 008).
+    /// </summary>
+    private string GroupCacheFingerprint()
+    {
+        var referencedPackages = ir
+            .CrossAssemblyOrigins.Values.Select(origin =>
+                $"{origin.PackageId}:{origin.PackageSubpathRoot}"
+            )
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal);
+
+        return $"{CacheConfigurationFingerprint ?? string.Empty};"
+            + $"referencedPackages={string.Join(",", referencedPackages)}";
     }
 
     private bool TryReuseFromCache(
@@ -1247,7 +1307,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
         var cache = new GroupCacheFile(
             GroupCacheFile.CurrentFormatVersion,
-            CacheConfigurationFingerprint ?? string.Empty,
+            GroupCacheFingerprint(),
             entries
         );
         cache.Write(CacheOutputDir);
@@ -1994,12 +2054,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 else if (type.ContainingAssembly is { } sourceAsm)
                     typeMappingContext.CrossPackageVersionHints[packageInfo.Name] =
                         RoslynTypeQueries.FormatAssemblyVersion(sourceAsm);
+
                 // Full-namespace layout (D1, ADR-0025) minus the producer's declared
                 // exports subpath root (spec 008).
                 var subPath = PathNaming.ComputeExportedSubPath(
                     packageInfo.SubpathRoot,
                     typeOrigin.Namespace ?? ""
                 );
+
                 var origin = new TsTypeOrigin(packageInfo.Name, subPath);
                 var stub = new IrTranspilableTypeRef(
                     Key: originKey,

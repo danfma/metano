@@ -46,7 +46,8 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0026` | `JsxRenderableUnrecognized` | A type used in a JSX-renderable position is not a component, `[JsxNativeElement]`, or imported renderable typed as `JsxElement` (or a `[JsxComponentBuilder]` render returns a non-element). |
 | `MS0027` | `InvalidJsTuple` | `[JsTuple]` applied to a type with no positional shape (a record/class with no primary-constructor parameter list), or a `[JsTuple]` record that declares an instance member beyond its positional elements (it must be positional-only — the bare array tuple has no object to host extra members). |
 | `MS0028` | `InvalidJsCallable` | `[JsCallable]` applied to a non-interface, or a `[JsCallable]` interface exposing a member other than `Invoke` — declared or inherited from a base interface. |
-| `MS0029` | `InvalidExportsSubpathRoot` | `[EmitPackage(SubpathRoot = …)]` is not a dotted C# namespace (value ignored), or stripping it makes two barrels claim one `package.json#exports` key (the barrel under the root keeps it; the CLI exits non-zero). |
+| `MS0029` | `InvalidExportsSubpathRoot` | `[EmitPackage(SubpathRoot = …)]` is not a dotted C# namespace (TypeScript producer; the build fails, consumers treat the package as having no root). |
+| `MS0030` | `ExportsSubpathKeyCollision` | Under `[EmitPackage(SubpathRoot = …)]`, two namespace barrels claim one `package.json#exports` key (e.g. `--namespace-barrels` root barrel + types in the root namespace on `.`); raised by the transform before files are written. |
 
 ## Build integration (`Metano.Build`)
 

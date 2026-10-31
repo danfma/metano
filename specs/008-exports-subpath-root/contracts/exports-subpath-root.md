@@ -18,7 +18,7 @@
 | `video-studio/domain/episodes/cuts/index.ts` | `./episodes/cuts` | `@video-studio/domain/episodes/cuts` |
 | `video-studio/domain-events/index.ts` | `./video-studio/domain-events` | `@video-studio/domain/video-studio/domain-events` |
 | `shared/kernel/index.ts` | `./shared/kernel` | `@video-studio/domain/shared/kernel` |
-| `index.ts` (opt-in root aggregation barrel) | `.` → collides with the root-namespace barrel when both exist (`MS0029`) | — |
+| `index.ts` (opt-in root aggregation barrel) | `.` → collides with the root-namespace barrel when both exist (`MS0030`; drop `--namespace-barrels` or narrow the root) | — |
 
 Entry values are unchanged: `{ "source": "./src/<on-disk path>", "types": "./dist/<on-disk path>.d.ts", "import": "./dist/<on-disk path>.js" }`.
 
@@ -35,5 +35,5 @@ stripping: `./domain/episodes`, `./domain` for the root.
 
 | Code | Severity | When |
 |---|---|---|
-| `MS0029` | Error | `SubpathRoot` is not a dotted C# namespace (reported at the attribute; value ignored). |
-| `MS0029` | Error | Two barrels map to one `exports` key; the barrel under the root keeps it, the other is omitted, CLI exits non-zero. |
+| `MS0029` | Error | `SubpathRoot` is not a dotted C# namespace (TypeScript producer only, reported at the attribute; the build fails; consumers treat the package as having no root). |
+| `MS0030` | Error | Two barrels map to one `exports` key; reported by the transform, so the run stops before files, caches or `package.json` are written. |

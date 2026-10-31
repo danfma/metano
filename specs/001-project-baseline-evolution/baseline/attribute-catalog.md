@@ -55,7 +55,7 @@ project. Migrated from `old-spec/09-attribute-catalog.md` and **corrected agains
 
 | Attribute | Purpose | Code |
 | --- | --- | --- |
-| `[EmitPackage]` | Declare npm package identity for emitted output (SSOT for cross-package imports, ADR-0011). Optional `SubpathRoot` strips a namespace prefix from `package.json#exports` keys and consumer imports (spec 008; invalid/colliding → `MS0029`). | `Annotations/EmitPackageAttribute.cs` |
+| `[EmitPackage]` | Declare npm package identity for emitted output (SSOT for cross-package imports, ADR-0011). Optional `SubpathRoot` strips a namespace prefix from `package.json#exports` keys and consumer imports (spec 008; invalid → `MS0029`, colliding keys → `MS0030`). | `Annotations/EmitPackageAttribute.cs` |
 | `[Import]` | Map a C# facade to an external JS/TS module import. | `Annotations/ImportAttribute.cs` |
 | `[ImportAlias]` | Pin a deterministic alias when a local declaration shadows an import (silences MS0022). | `Annotations/ImportAliasAttribute.cs` |
 | `[ExportFromBcl]` | Expose selected BCL-mapped behavior into emitted output. | `Annotations/ExportFromBclAttribute.cs` |
