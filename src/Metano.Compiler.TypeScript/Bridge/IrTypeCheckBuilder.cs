@@ -93,18 +93,17 @@ internal static class IrTypeCheckBuilder
     }
 
     private static TsExpression BrandedCheck(IrNamedTypeRef named, TsExpression value) =>
-        named.Semantics?.BrandedUnderlyingPrimitive is { } primitive
-        && TypeofKind(primitive) is { } kind
-            ? TypeofTest(value, kind)
+        IrRuntimeTypeTest.Of(named) is IrRuntimeTypeTest.Typeof { Primitive: var primitive }
+            ? TypeofTest(value, TypeofKind(primitive))
             : TypeofObject(value);
 
     /// <summary>
-    /// The <c>typeof</c> result of the JS value a primitive lowers to, or
-    /// <c>null</c> when it lowers to an object (dates, <c>object</c>).
-    /// Numeric kinds all share <c>"number"</c>, so a <c>typeof</c> test
-    /// cannot tell <c>int</c> from <c>double</c>.
+    /// The <c>typeof</c> result of the JS value a primitive that
+    /// <see cref="IrRuntimeTypeTest.Typeof"/> classifies lowers to. Numeric
+    /// kinds all share <c>"number"</c>, so a <c>typeof</c> test cannot tell
+    /// <c>int</c> from <c>double</c>.
     /// </summary>
-    internal static string? TypeofKind(IrPrimitive primitive) =>
+    internal static string TypeofKind(IrPrimitive primitive) =>
         primitive switch
         {
             IrPrimitive.String or IrPrimitive.Char or IrPrimitive.Guid => "string",
@@ -117,7 +116,9 @@ internal static class IrTypeCheckBuilder
             or IrPrimitive.Float64
             or IrPrimitive.Decimal => "number",
             IrPrimitive.BigInteger => "bigint",
-            _ => null,
+            _ => throw new InvalidOperationException(
+                $"Primitive '{primitive}' lowers to an object, not a typeof-testable value."
+            ),
         };
 
     internal static TsExpression TypeofTest(TsExpression value, string kind) =>

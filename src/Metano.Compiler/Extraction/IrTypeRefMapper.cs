@@ -412,6 +412,8 @@ public static class IrTypeRefMapper
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
+                HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
+                IsPlainObject: SymbolHelper.HasPlainObject(named),
                 JsxNativeElementTag: jsxNativeTag,
                 IsJsxComponent: isJsxComponent,
                 RendersAsJsxElement: rendersAsJsx
@@ -422,7 +424,9 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Struct,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named)
+                IsExternal: SymbolHelper.HasExternal(named),
+                HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
+                IsPlainObject: SymbolHelper.HasPlainObject(named)
             );
 
         if (named.TypeKind == TypeKind.Class)
@@ -431,6 +435,8 @@ public static class IrTypeRefMapper
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
+                HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
+                IsPlainObject: SymbolHelper.HasPlainObject(named),
                 JsxNativeElementTag: jsxNativeTag,
                 IsJsxComponent: isJsxComponent,
                 RendersAsJsxElement: rendersAsJsx

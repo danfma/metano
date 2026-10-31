@@ -74,10 +74,13 @@ public sealed record IrNamedTypeRef(
 /// value position (component, native element, or imported renderable typed as
 /// the marked element). Drives the expression bridge's decision to route a
 /// <c>new</c> through the JSX bridge.</param>
-/// <param name="HasGeneratedGuard">The referenced interface carries
-/// <c>[GenerateGuard]</c>, so a backend that erases interfaces at runtime
-/// (TypeScript) can test it through the generated guard. Only recorded for
-/// interfaces: every other named kind has its own runtime test.</param>
+/// <param name="HasGeneratedGuard">The referenced type carries
+/// <c>[GenerateGuard]</c>, so a backend that erases it at runtime (an
+/// interface or a <c>[PlainObject]</c> in TypeScript) can test it through the
+/// generated guard. See <see cref="IrRuntimeTypeTest"/>.</param>
+/// <param name="IsPlainObject">The referenced type carries
+/// <c>[PlainObject]</c>: it lowers to a structural shape with no runtime
+/// class, like an interface.</param>
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,
     IReadOnlyList<string>? StringEnumValues = null,
@@ -89,7 +92,8 @@ public sealed record IrNamedTypeSemantics(
     string? JsxNativeElementTag = null,
     bool IsJsxComponent = false,
     bool RendersAsJsxElement = false,
-    bool HasGeneratedGuard = false
+    bool HasGeneratedGuard = false,
+    bool IsPlainObject = false
 );
 
 /// <summary>
