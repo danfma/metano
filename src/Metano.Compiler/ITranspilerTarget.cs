@@ -61,4 +61,26 @@ public interface ITranspilerTarget
     /// configuration that needs pinning.
     /// </summary>
     string ConfigurationFingerprint => string.Empty;
+
+    /// <summary>
+    /// Called by the host instead of <see cref="Transform"/> when the incremental cache
+    /// short-circuits the whole run (ADR-0021): <paramref name="files"/> is the previous
+    /// output, reused byte-for-byte from disk. A target whose post-emit stage reads
+    /// per-run state (e.g. the TypeScript target's package.json reconciliation) refreshes
+    /// whatever of that state it can rebuild without transforming — anything only a
+    /// transform discovers is unavailable here, and the target documents how its
+    /// post-emit stage copes with that. Must NOT perform file I/O. Default does nothing —
+    /// targets without post-emit state have nothing to restore.
+    /// </summary>
+    /// <param name="ir">Shared IR built by the active <see cref="ISourceFrontend"/>.</param>
+    /// <param name="compilation">Roslyn compilation, if the active frontend produced one.
+    /// The cache path only runs after a successful load, so the C# frontend always
+    /// supplies it.</param>
+    /// <param name="files">The reused generated files only; copied assets are not
+    /// included.</param>
+    void AdoptCachedOutput(
+        IrCompilation ir,
+        Compilation? compilation,
+        IReadOnlyList<GeneratedFile> files
+    ) { }
 }

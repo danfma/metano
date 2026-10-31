@@ -85,29 +85,17 @@ public class Commands
                     ? Path.GetFullPath(packageRoot)
                     : FindPackageRoot(outputDir);
 
-                // Reconcile package.json when we emitted files, OR when nothing was
-                // emitted but a package.json already exists — the latter prunes stale
-                // transpiler exports after the last transpilable type is removed
-                // (without scaffolding a package.json for a project that never produced
-                // output).
-                var packageJsonExists = File.Exists(
-                    Path.Combine(resolvedPackageRoot, "package.json")
-                );
-                if (target.LastSourceFiles.Count == 0 && !packageJsonExists)
-                    return;
-
-                var pkgDiagnostics = PackageJsonWriter.UpdateOrCreate(
+                var pkgDiagnostics = PackageJsonReconciler.Reconcile(
+                    target,
                     resolvedPackageRoot,
                     outputDir,
-                    target.LastSourceFiles,
                     dist,
-                    authoritativePackageName: target.LastEmitPackageName,
-                    crossPackageDependencies: target.LastCrossPackageDependencies,
-                    isExecutable: target.LastIsExecutable,
-                    srcRoot: srcRoot,
-                    importAlias: importAlias,
-                    subpathRoot: target.LastPackageSubpathRoot
+                    srcRoot,
+                    importAlias
                 );
+
+                if (pkgDiagnostics is null)
+                    return;
 
                 foreach (var d in pkgDiagnostics)
                     Console.WriteLine(d.Format());

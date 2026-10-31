@@ -15,8 +15,9 @@ namespace Metano;
 /// </summary>
 /// <remarks>
 /// The list of generated <see cref="TsSourceFile"/>s is exposed via <see cref="LastSourceFiles"/>
-/// after a Transform call so the caller can perform target-specific post-processing
-/// (e.g., writing a package.json with imports/exports/sideEffects derived from the AST).
+/// after a Transform (or AdoptCachedOutput) call so the caller can perform target-specific
+/// post-processing (e.g., writing a package.json with imports/exports/sideEffects derived
+/// from the AST, see <see cref="PackageJsonReconciler"/>).
 /// </remarks>
 public sealed class TypeScriptTarget : ITranspilerTarget
 {
@@ -25,8 +26,9 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public TargetLanguage Language => TargetLanguage.TypeScript;
 
     /// <summary>
-    /// The TS AST source files produced by the most recent <see cref="Transform"/> call.
-    /// Empty until Transform is invoked.
+    /// The TS AST source files produced by the most recent <see cref="Transform"/> call,
+    /// or — after a full cache hit (<see cref="AdoptCachedOutput"/>) — statement-less
+    /// stubs carrying only the reused file names. Empty until either one is invoked.
     /// </summary>
     public IReadOnlyList<TsSourceFile> LastSourceFiles { get; private set; } = [];
 
@@ -133,14 +135,9 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         string? filePrefix = null
     )
     {
-        if (compilation is null)
-            throw new NotSupportedException(
-                "TypeScriptTarget currently requires a Roslyn-backed source frontend; "
-                    + "compilation was null. The Roslyn dependency will go away once the "
-                    + "TypeScript transformer reads everything it needs from IrCompilation."
-            );
+        var roslynCompilation = RequireRoslynCompilation(compilation);
 
-        var transformer = new TypeTransformer(ir, compilation)
+        var transformer = new TypeTransformer(ir, roslynCompilation)
         {
             NamespaceBarrels = NamespaceBarrels,
             StripInterfacePrefix = StripInterfacePrefix,
@@ -153,19 +150,13 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             ),
         };
         var sourceFiles = transformer.TransformAll();
-        LastSourceFiles = sourceFiles;
-        // Prefer the frontend-populated package name; the underlying Roslyn read
-        // remains as a defensive fallback while every consumer migrates onto IR.
-        LastEmitPackageName =
-            ir.PackageName
-            ?? SymbolHelper.GetEmitPackage(
-                compilation.Assembly,
-                targetEnumValue: (int)EmitTarget.JavaScript
-            );
 
-        LastPackageSubpathRoot = ir.PackageSubpathRoot;
-        LastCrossPackageDependencies = transformer.CrossPackageDependencies;
-        LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
+        CapturePackageManifestInputs(
+            ir,
+            roslynCompilation,
+            sourceFiles,
+            transformer.CrossPackageDependencies
+        );
 
         var printer = new Printer();
         var generated = new List<GeneratedFile>(sourceFiles.Count);
@@ -185,4 +176,65 @@ public sealed class TypeScriptTarget : ITranspilerTarget
 
         return new TargetOutput(generated, transformer.Diagnostics);
     }
+
+    /// <summary>
+    /// Restores the package.json inputs when the host reused the whole previous output
+    /// (issue #273). The package identity comes from the IR, exactly as in
+    /// <see cref="Transform"/>; the barrel list is rebuilt from the reused file names
+    /// (statement-less <see cref="TsSourceFile"/>s, enough for
+    /// <see cref="PackageJsonWriter"/>, which reads file names only). Cross-package
+    /// dependencies are only discovered while transforming, so none are reported here:
+    /// the writer merges them additively, so the entries the cold run wrote survive. A
+    /// package.json deleted between two cache-hit runs is therefore recreated with its
+    /// exports and imports but without those dependencies (#299 tracks persisting them).
+    /// Like <see cref="Transform"/>, it requires the Roslyn compilation (the
+    /// <c>[EmitPackage]</c> fallback and the executable check read it).
+    /// </summary>
+    public void AdoptCachedOutput(
+        IrCompilation ir,
+        Compilation? compilation,
+        IReadOnlyList<GeneratedFile> files
+    )
+    {
+        var roslynCompilation = RequireRoslynCompilation(compilation);
+        var reusedFiles = files.Select(file => new TsSourceFile(file.RelativePath, [])).ToList();
+
+        CapturePackageManifestInputs(
+            ir,
+            roslynCompilation,
+            reusedFiles,
+            crossPackageDependencies: new Dictionary<string, string>()
+        );
+    }
+
+    private void CapturePackageManifestInputs(
+        IrCompilation ir,
+        Compilation compilation,
+        IReadOnlyList<TsSourceFile> sourceFiles,
+        IReadOnlyDictionary<string, string> crossPackageDependencies
+    )
+    {
+        LastSourceFiles = sourceFiles;
+
+        // Prefer the frontend-populated package name; the underlying Roslyn read
+        // remains as a defensive fallback while every consumer migrates onto IR.
+        LastEmitPackageName =
+            ir.PackageName
+            ?? SymbolHelper.GetEmitPackage(
+                compilation.Assembly,
+                targetEnumValue: (int)EmitTarget.JavaScript
+            );
+
+        LastPackageSubpathRoot = ir.PackageSubpathRoot;
+        LastCrossPackageDependencies = crossPackageDependencies;
+        LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
+    }
+
+    private static Compilation RequireRoslynCompilation(Compilation? compilation) =>
+        compilation
+        ?? throw new NotSupportedException(
+            "TypeScriptTarget currently requires a Roslyn-backed source frontend; "
+                + "compilation was null. The Roslyn dependency will go away once the "
+                + "TypeScript transformer reads everything it needs from IrCompilation."
+        );
 }
