@@ -275,7 +275,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     {
         body.Add(
             new TsIfStatement(
-                new TsUnaryExpression("!", new TsParenthesized(discriminatorMatch)),
+                new TsUnaryExpression("!", discriminatorMatch),
                 [new TsReturnStatement(new TsLiteral("false"))]
             )
         );
@@ -456,7 +456,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                     new TsStringLiteral("number")
                 ),
                 "&&",
-                new TsParenthesized(valueChecks)
+                valueChecks
             );
         }
 
@@ -718,20 +718,14 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             ),
 
             // String literal union (from StringEnum that's not transpilable).
-            // Wrapped so the OR chain stays grouped when it lands in an
-            // outer AND conjunction — same precedence concern as
-            // NullableFieldCheck above.
-            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) =>
-                new TsParenthesized(
-                    types
-                        .Cast<TsStringLiteralType>()
-                        .Select<TsStringLiteralType, TsExpression>(t => new TsBinaryExpression(
-                            fieldAccess,
-                            "===",
-                            new TsStringLiteral(t.Value)
-                        ))
-                        .Aggregate((a, b) => new TsBinaryExpression(a, "||", b))
-                ),
+            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) => types
+                .Cast<TsStringLiteralType>()
+                .Select<TsStringLiteralType, TsExpression>(t => new TsBinaryExpression(
+                    fieldAccess,
+                    "===",
+                    new TsStringLiteral(t.Value)
+                ))
+                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
 
             TsTupleType { Elements: var elements } => new TsBinaryExpression(
                 new TsCallExpression(
@@ -790,18 +784,10 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                     .Select(t => GenerateFieldCheck(fieldAccess, t))
                     .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
 
-        // Parenthesize the `null || inner` disjunction — JS `&&` binds
-        // tighter than `||`, so when this expression lands in an
-        // AND-chain with other field checks
-        // (`typeof v.a === "number" && nullable-check && …`) the
-        // grouping must stay `a && (b || c) && d` instead of
-        // accidentally associating as `a && b || c && d`.
-        return new TsParenthesized(
-            new TsBinaryExpression(
-                new TsBinaryExpression(fieldAccess, "==", new TsLiteral("null")),
-                "||",
-                innerCheck
-            )
+        return new TsBinaryExpression(
+            new TsBinaryExpression(fieldAccess, "==", new TsLiteral("null")),
+            "||",
+            innerCheck
         );
     }
 }

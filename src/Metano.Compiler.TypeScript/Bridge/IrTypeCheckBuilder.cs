@@ -83,14 +83,13 @@ internal static class IrTypeCheckBuilder
     {
         if (named.Semantics?.StringEnumValues is not { Count: > 0 } values)
             return RuntimeIs("isString", value);
-        var check = values
+        return values
             .Select<string, TsExpression>(v => new TsBinaryExpression(
                 value,
                 "===",
                 new TsStringLiteral(v)
             ))
             .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
-        return new TsParenthesized(check);
     }
 
     private static TsExpression BrandedCheck(IrNamedTypeRef named, TsExpression value) =>

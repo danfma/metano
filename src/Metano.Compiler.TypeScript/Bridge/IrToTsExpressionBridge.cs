@@ -49,7 +49,7 @@ public static partial class IrToTsExpressionBridge
             IrBinaryExpression bin => MapBinary(bin, bclRegistry),
             IrUnaryExpression un when un.IsPrefix => new TsUnaryExpression(
                 PrefixOperatorToken(un.Operator),
-                ParenthesizeUnaryOperand(Map(un.Operand, bclRegistry))
+                Map(un.Operand, bclRegistry)
             ),
             IrUnaryExpression un => new TsPostfixUnaryExpression(
                 Map(un.Operand, bclRegistry),
@@ -94,9 +94,7 @@ public static partial class IrToTsExpressionBridge
                     .ToList()
             ),
             IrThrowExpression th => new TsCallExpression(
-                new TsParenthesized(
-                    new TsArrowFunction([], [new TsThrowStatement(Map(th.Expression, bclRegistry))])
-                ),
+                new TsArrowFunction([], [new TsThrowStatement(Map(th.Expression, bclRegistry))]),
                 Array.Empty<TsExpression>()
             ),
             IrLinqChain chain => MapLinqChain(chain, bclRegistry),
@@ -131,85 +129,13 @@ public static partial class IrToTsExpressionBridge
             var value = Map(bin.Right, bclRegistry);
             return new TsCallExpression(new TsPropertyAccess(target, "set"), [key, value]);
         }
-        var left = WrapForPrecedence(
-            Map(bin.Left, bclRegistry),
-            bin.Left,
-            bin.Operator,
-            isLeft: true
-        );
-        var right = WrapForPrecedence(
-            Map(bin.Right, bclRegistry),
-            bin.Right,
-            bin.Operator,
-            isLeft: false
-        );
+
         return new TsBinaryExpression(
-            left,
+            Map(bin.Left, bclRegistry),
             BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
-            right
+            Map(bin.Right, bclRegistry)
         );
     }
-
-    /// <summary>
-    /// A prefix operator binds tighter than any binary or conditional
-    /// operator, and the IR drops source parentheses, so an operand that
-    /// lowered to one — e.g. <c>!(o is Square)</c> →
-    /// <c>!(o instanceof Square)</c> — is wrapped explicitly.
-    /// </summary>
-    private static TsExpression ParenthesizeUnaryOperand(TsExpression operand) =>
-        operand is TsBinaryExpression or TsConditionalExpression
-            ? new TsParenthesized(operand)
-            : operand;
-
-    /// <summary>
-    /// JS doesn't auto-parenthesize lower-precedence sub-expressions, so the
-    /// bridge wraps a binary operand whose own operator has lower precedence
-    /// than the outer one — preserving the source-side grouping
-    /// (<c>(a - 1) * b</c> stays <c>(a - 1) * b</c> instead of collapsing to
-    /// <c>a - 1 * b</c>).
-    /// </summary>
-    private static TsExpression WrapForPrecedence(
-        TsExpression lowered,
-        IrExpression source,
-        IrBinaryOp outerOp,
-        bool isLeft
-    )
-    {
-        if (source is not IrBinaryExpression inner)
-            return lowered;
-        var innerPrec = OperatorPrecedence(inner.Operator);
-        var outerPrec = OperatorPrecedence(outerOp);
-        if (innerPrec < outerPrec)
-            return new TsParenthesized(lowered);
-        // Same precedence on the right side of a non-associative or
-        // left-associative operator also needs parentheses.
-        if (innerPrec == outerPrec && !isLeft && !IsRightAssociative(outerOp))
-            return new TsParenthesized(lowered);
-        return lowered;
-    }
-
-    private static int OperatorPrecedence(IrBinaryOp op) =>
-        op switch
-        {
-            IrBinaryOp.Multiply or IrBinaryOp.Divide or IrBinaryOp.Modulo => 12,
-            IrBinaryOp.Add or IrBinaryOp.Subtract => 11,
-            IrBinaryOp.LeftShift or IrBinaryOp.RightShift or IrBinaryOp.UnsignedRightShift => 10,
-            IrBinaryOp.LessThan
-            or IrBinaryOp.LessThanOrEqual
-            or IrBinaryOp.GreaterThan
-            or IrBinaryOp.GreaterThanOrEqual => 9,
-            IrBinaryOp.Equal or IrBinaryOp.NotEqual => 8,
-            IrBinaryOp.BitwiseAnd => 7,
-            IrBinaryOp.BitwiseXor => 6,
-            IrBinaryOp.BitwiseOr => 5,
-            IrBinaryOp.LogicalAnd => 4,
-            IrBinaryOp.LogicalOr => 3,
-            IrBinaryOp.NullCoalescing => 3,
-            _ => 1, // assignments are right-associative and lowest
-        };
-
-    private static bool IsRightAssociative(IrBinaryOp op) =>
-        op.IsAssignment() || op is IrBinaryOp.NullCoalescing;
 
     private static TsExpression MapElementAccess(
         IrElementAccess ea,
@@ -379,32 +305,19 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// `value?.member` becomes the TS optional chaining `value?.member` —
-    /// the AST doesn't have a dedicated node, so we suffix the receiver
-    /// text with `?` and let the printer emit it verbatim. Mirrors the
-    /// legacy <see cref="Metano.Compiler.TypeScript.Transformation.OptionalChainingHandler"/>
-    /// shape so call-sites stay byte-for-byte identical.
+    /// `value?.member` becomes the TS optional chaining `value?.member`: an
+    /// optional <see cref="TsPropertyAccess"/>, so any receiver shape keeps
+    /// its own node (and its grouping, <c>(a ?? b)?.length</c>).
     /// </summary>
     private static TsExpression MapOptionalChain(
         IrOptionalChain chain,
         DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        var receiver = Map(chain.Target, bclRegistry);
-        var receiverText = OptionalChainReceiverText(receiver);
-        return new TsPropertyAccess(
-            new TsIdentifier(receiverText + "?"),
-            TypeScriptNaming.ToCamelCaseMember(chain.MemberName)
+    ) =>
+        new TsPropertyAccess(
+            Map(chain.Target, bclRegistry),
+            TypeScriptNaming.ToCamelCaseMember(chain.MemberName),
+            Optional: true
         );
-    }
-
-    private static string OptionalChainReceiverText(TsExpression expr) =>
-        expr switch
-        {
-            TsIdentifier id => id.Name,
-            TsPropertyAccess pa => OptionalChainReceiverText(pa.Object) + "." + pa.Property,
-            _ => "unknown",
-        };
 
     private static TsType? LowerLambdaParameterType(IrParameter p)
     {
@@ -901,7 +814,7 @@ public static partial class IrToTsExpressionBridge
             [new TsParameter(let.Name, null)],
             [new TsReturnStatement(Map(let.Body, bclRegistry))]
         );
-        return new TsCallExpression(new TsParenthesized(arrow), [Map(let.Value, bclRegistry)]);
+        return new TsCallExpression(arrow, [Map(let.Value, bclRegistry)]);
     }
 
     private static TsExpression MapStringInterpolation(
@@ -925,14 +838,9 @@ public static partial class IrToTsExpressionBridge
                 case IrInterpolationExpression expr:
                     quasis.Add(pendingText.ToString());
                     pendingText.Clear();
-                    // Match the legacy ExpressionTransformer: defensively wrap
-                    // conditional expressions inside an interpolation hole so
-                    // the precedence stays obvious (`${(a ? b : c)}`) — the TS
-                    // printer doesn't add grouping of its own.
-                    var lowered = Map(expr.Expression, bclRegistry);
-                    if (expr.Expression is IrConditionalExpression)
-                        lowered = new TsParenthesized(lowered);
-                    expressions.Add(lowered);
+                    // A template-literal hole accepts any expression, so the
+                    // hole needs no grouping of its own.
+                    expressions.Add(Map(expr.Expression, bclRegistry));
                     break;
             }
         }
