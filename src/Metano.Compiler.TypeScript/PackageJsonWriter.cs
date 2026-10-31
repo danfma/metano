@@ -95,6 +95,7 @@ public static class PackageJsonWriter
                 outputPrefix,
                 subpathRoot
             );
+
         // Check for a root barrel from the file list — executables skip exports
         // but may still need the "#" import alias for internal barrel imports.
         // When outputPrefix is set, the root barrel is at {prefix}/index.ts.
