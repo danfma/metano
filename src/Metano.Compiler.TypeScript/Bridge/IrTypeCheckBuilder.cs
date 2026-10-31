@@ -93,36 +93,39 @@ internal static class IrTypeCheckBuilder
     }
 
     private static TsExpression BrandedCheck(IrNamedTypeRef named, TsExpression value) =>
-        named.Semantics?.BrandedUnderlyingPrimitive switch
+        named.Semantics?.BrandedUnderlyingPrimitive is { } primitive
+        && TypeofKind(primitive) is { } kind
+            ? TypeofTest(value, kind)
+            : TypeofObject(value);
+
+    /// <summary>
+    /// The <c>typeof</c> result of the JS value a primitive lowers to, or
+    /// <c>null</c> when it lowers to an object (dates, <c>object</c>).
+    /// Numeric kinds all share <c>"number"</c>, so a <c>typeof</c> test
+    /// cannot tell <c>int</c> from <c>double</c>.
+    /// </summary>
+    internal static string? TypeofKind(IrPrimitive primitive) =>
+        primitive switch
         {
-            IrPrimitive.String or IrPrimitive.Char or IrPrimitive.Guid => new TsBinaryExpression(
-                new TsUnaryExpression("typeof ", value),
-                "===",
-                new TsStringLiteral("string")
-            ),
-            IrPrimitive.Boolean => new TsBinaryExpression(
-                new TsUnaryExpression("typeof ", value),
-                "===",
-                new TsStringLiteral("boolean")
-            ),
+            IrPrimitive.String or IrPrimitive.Char or IrPrimitive.Guid => "string",
+            IrPrimitive.Boolean => "boolean",
             IrPrimitive.Int32
             or IrPrimitive.Int64
             or IrPrimitive.Int16
             or IrPrimitive.Byte
             or IrPrimitive.Float32
             or IrPrimitive.Float64
-            or IrPrimitive.Decimal => new TsBinaryExpression(
-                new TsUnaryExpression("typeof ", value),
-                "===",
-                new TsStringLiteral("number")
-            ),
-            IrPrimitive.BigInteger => new TsBinaryExpression(
-                new TsUnaryExpression("typeof ", value),
-                "===",
-                new TsStringLiteral("bigint")
-            ),
-            _ => TypeofObject(value),
+            or IrPrimitive.Decimal => "number",
+            IrPrimitive.BigInteger => "bigint",
+            _ => null,
         };
+
+    internal static TsExpression TypeofTest(TsExpression value, string kind) =>
+        new TsBinaryExpression(
+            new TsUnaryExpression("typeof ", value),
+            "===",
+            new TsStringLiteral(kind)
+        );
 
     /// <summary>
     /// Maps a semantic <see cref="IrPrimitive"/> to the same <c>metano-runtime</c>
@@ -185,12 +188,7 @@ internal static class IrTypeCheckBuilder
     private static TsExpression RuntimeIs(string helper, TsExpression value) =>
         new TsCallExpression(new TsIdentifier(helper), [value]);
 
-    private static TsExpression TypeofObject(TsExpression value) =>
-        new TsBinaryExpression(
-            new TsUnaryExpression("typeof ", value),
-            "===",
-            new TsStringLiteral("object")
-        );
+    private static TsExpression TypeofObject(TsExpression value) => TypeofTest(value, "object");
 
     private static TsExpression ArgAccess(int index) => new TsIdentifier($"args[{index}]");
 }

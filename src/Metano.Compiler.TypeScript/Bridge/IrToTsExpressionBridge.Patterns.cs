@@ -166,37 +166,40 @@ public static partial class IrToTsExpressionBridge
         test is null ? guard : new TsBinaryExpression(test, "&&", guard);
 
     /// <summary>
-    /// The runtime test a type pattern performs. An enum has no class value
+    /// The runtime test a type pattern performs. A primitive tests the
+    /// <c>typeof</c> of the JS value it lowers to; an enum has no class value
     /// to test with <c>instanceof</c> — it lowers to a number (numeric enum)
     /// or string union (<c>[StringEnum]</c>) — so it tests the primitive kind;
-    /// other named types test <c>instanceof</c>.
+    /// an interface is erased, so it calls its generated <c>[GenerateGuard]</c>
+    /// guard; other named types test <c>instanceof</c>.
     /// </summary>
     private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
         targetType switch
         {
-            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.NumericEnum } => TypeofTest(
-                value,
-                "number"
-            ),
-            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.StringEnum } => TypeofTest(
-                value,
-                "string"
-            ),
+            IrPrimitiveTypeRef { Primitive: var primitive }
+                when IrTypeCheckBuilder.TypeofKind(primitive) is { } kind =>
+                IrTypeCheckBuilder.TypeofTest(value, kind),
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.NumericEnum } =>
+                IrTypeCheckBuilder.TypeofTest(value, "number"),
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.StringEnum } =>
+                IrTypeCheckBuilder.TypeofTest(value, "string"),
             _ => IrToTsTypeMapper.Map(targetType) is TsNamedType named
-                ? new TsBinaryExpression(
-                    value,
-                    "instanceof",
-                    TypeValueReference(named.Name, named.Origin)
-                )
+                ? BuildNamedTypeTest(value, targetType, named)
                 : new TsIdentifier("/* TODO: non-named type pattern */"),
         };
 
-    private static TsExpression TypeofTest(TsExpression value, string kind) =>
-        new TsBinaryExpression(
-            new TsUnaryExpression("typeof ", value),
-            "===",
-            new TsStringLiteral(kind)
-        );
+    private static TsExpression BuildNamedTypeTest(
+        TsExpression value,
+        IrTypeRef targetType,
+        TsNamedType named
+    ) =>
+        targetType is IrNamedTypeRef { Semantics.HasGeneratedGuard: true }
+            ? new TsCallExpression(new TsIdentifier($"is{named.Name}"), [value])
+            : new TsBinaryExpression(
+                value,
+                "instanceof",
+                TypeValueReference(named.Name, named.Origin)
+            );
 
     /// <summary>
     /// Lowers <c>[p0, p1, …]</c> to a length-gated conjunction of per-index

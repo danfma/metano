@@ -1375,6 +1375,9 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
+        if (bin.Kind() == SyntaxKind.AsExpression && bin.Right is TypeSyntax asType)
+            return ExtractAsCast(bin, asType);
+
         // decimal arithmetic needs a special lowering: legacy emits
         // `a.plus(b)` / `.times(b)` / `.div(b)` / etc. on the decimal.js
         // Decimal class rather than raw `+` / `*` / `/`. Detect via
@@ -1416,6 +1419,54 @@ public sealed partial class IrExpressionExtractor
 
         return new IrBinaryExpression(Extract(bin.Left), op, Extract(bin.Right));
     }
+
+    /// <summary>
+    /// Lowers <c>x as T</c> to its definition, <c>x is T ? (T)x : null</c>,
+    /// over the existing type-pattern and conditional IR so every backend
+    /// reuses its own <c>is</c> lowering. A nullable target (<c>int?</c>,
+    /// <c>Person?</c>) tests its underlying type, and a non-stable <c>x</c>
+    /// is bound once. A target with no runtime type test reports MS0001
+    /// instead.
+    /// </summary>
+    private IrExpression ExtractAsCast(BinaryExpressionSyntax asCast, TypeSyntax typeSyntax)
+    {
+        var castType = ResolvePatternType(typeSyntax);
+        var testedType = castType is IrNullableTypeRef nullable ? nullable.Inner : castType;
+
+        if (!HasRuntimeTypeTest(testedType))
+            return ReportUnsupported(
+                asCast,
+                asCast.Kind().ToString(),
+                $"Expression '{asCast}' cannot be lowered: '{typeSyntax}' has no runtime "
+                    + "type test in the target (an interface needs [GenerateGuard]; a type "
+                    + "parameter is erased)."
+            );
+
+        return BindValueOnce(
+            Extract(asCast.Left),
+            value => new IrConditionalExpression(
+                new IrIsPatternExpression(value, new IrTypePattern(testedType)),
+                new IrCastExpression(value, castType),
+                new IrLiteral(null, IrLiteralKind.Null)
+            )
+        );
+    }
+
+    /// <summary>
+    /// TypeScript erases interfaces and type parameters, so a type test
+    /// against one exists only through a generated <c>[GenerateGuard]</c>
+    /// guard. Dart reifies both and tests any type natively.
+    /// </summary>
+    private bool HasRuntimeTypeTest(IrTypeRef type) =>
+        _target is not (null or Metano.Annotations.TargetLanguage.TypeScript)
+        || type switch
+        {
+            IrTypeParameterRef => false,
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Interface } named => named
+                .Semantics
+                .HasGeneratedGuard,
+            _ => true,
+        };
 
     private IrExpression ExtractAssignment(AssignmentExpressionSyntax assign)
     {
@@ -1636,9 +1687,9 @@ public sealed partial class IrExpressionExtractor
             SyntaxKind.RightShiftExpression => IrBinaryOp.RightShift,
             SyntaxKind.UnsignedRightShiftExpression => IrBinaryOp.UnsignedRightShift,
             SyntaxKind.CoalesceExpression => IrBinaryOp.NullCoalescing,
-            // Unmapped binary kinds (`x as T`) surface as null rather than
-            // silently miscompiling as IrBinaryOp.Add; the caller reports
-            // MS0001 at the expression.
+            // Unmapped binary kinds surface as null rather than silently
+            // miscompiling as IrBinaryOp.Add; the caller reports MS0001 at
+            // the expression.
             _ => null,
         };
 

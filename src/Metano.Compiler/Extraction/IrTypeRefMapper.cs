@@ -367,7 +367,8 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Interface,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named)
+                IsExternal: SymbolHelper.HasExternal(named),
+                HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named)
             );
 
         if (named.TypeKind == TypeKind.Delegate)

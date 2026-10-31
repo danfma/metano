@@ -217,6 +217,19 @@ public class IrExpressionExtractionTests
     }
 
     [Test]
+    public async Task AsCast_ExtractsTypePatternConditional()
+    {
+        var ir = ExtractFromMethod("int? AsInt(object o) => o as int?;");
+        var ret = GetAt<IrReturnStatement>(ir, 0);
+        var conditional = (ret.Value as IrConditionalExpression)!;
+        var test = (conditional.Condition as IrIsPatternExpression)!;
+        var typePat = (test.Pattern as IrTypePattern)!;
+        await Assert.That(typePat.Type).IsEqualTo(new IrPrimitiveTypeRef(IrPrimitive.Int32));
+        await Assert.That(conditional.WhenTrue).IsTypeOf<IrCastExpression>();
+        await Assert.That((conditional.WhenFalse as IrLiteral)!.Kind).IsEqualTo(IrLiteralKind.Null);
+    }
+
+    [Test]
     public async Task SwitchExpression_ExtractsArmsWithPatternsAndResults()
     {
         // A minimal switch expression with a constant arm, a discard arm, and
