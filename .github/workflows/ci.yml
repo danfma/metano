@@ -55,11 +55,21 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      # Node runs the metano-runtime packaging smoke test (same major as release).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
       - name: Install dependencies
         run: bun install
 
       - name: metano-runtime
         run: cd targets/js/metano-runtime && bun run build && bun test
+
+      # Packs metano-runtime and loads the tarball from plain Node ESM +
+      # NodeNext TypeScript, the way npm consumers see it (#249).
+      - name: metano-runtime packaging smoke test
+        run: bash scripts/smoke-test-runtime-package.sh
 
       - name: sample-todo
         run: cd targets/js/sample-todo && bun run build && bun test

@@ -139,6 +139,29 @@ Add `metano-runtime` as a dependency (most generated code imports from it):
 bun add metano-runtime
 ```
 
+### How generated code resolves `metano-runtime`
+
+Generated files import the runtime by its bare package name
+(`import { HashCode } from "metano-runtime"`, plus the `metano-runtime/system/json`
+and `metano-runtime/system/linq` subpaths), and Metano adds `metano-runtime` to the
+generated `package.json#dependencies`. The import only resolves if the package is
+actually installed where your tooling looks for it:
+
+- **Standalone package** — `bun add metano-runtime` (above) is enough.
+- **Bun workspace** — make the generated package a workspace member and run
+  `bun install` at the workspace root, so its declared dependency is linked into
+  `node_modules`. A folder of generated files that is *not* a workspace member has
+  no `node_modules` of its own and cannot resolve the runtime.
+- **Generated files consumed from outside a package** (e.g. copied into an app's
+  source tree) — install `metano-runtime` in the consuming app, or point the
+  specifier at an installed copy with a Vite `resolve.alias` or a tsconfig
+  `compilerOptions.paths` entry.
+
+The runtime is an ESM-only package. From the first release after `2.6.1` it loads
+directly in plain Node ESM, Vitest and NodeNext TypeScript projects. Older versions
+fail in Node with `ERR_UNSUPPORTED_DIR_IMPORT` and needed Vitest's
+`server.deps.inline: ["metano-runtime"]`; drop that workaround after upgrading.
+
 That's it — this package is **your normal TypeScript project**. You can add
 Vite, Next.js, Remix, React, Svelte, Playwright, Jest, Biome, ESLint,
 Prettier, whatever you want. None of it has to know that `src/` is

@@ -1,1 +1,1 @@
-export * from "./primitive-type-checks";
+export * from "./primitive-type-checks.ts";

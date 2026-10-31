@@ -14,7 +14,7 @@ import {
   isUInt16,
   isUInt32,
   isUInt64,
-} from "./primitive-type-checks";
+} from "#/type-checking/primitive-type-checks.ts";
 
 describe("String type checks", () => {
   test("isChar accepts single character", () => {
