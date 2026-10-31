@@ -1178,21 +1178,31 @@ public sealed partial class IrExpressionExtractor
     /// container's members name it unqualified while the emitted declaration lives in
     /// the container's companion namespace (#264). Segments honor <c>[Name]</c> overrides
     /// exactly like the type-position name. Top-level types keep their simple name.
+    /// A type from another <c>[EmitPackage]</c> package carries its cross-assembly
+    /// origin so the backend can import it from a value position.
     /// </summary>
     private IrTypeReference TypeReferenceTo(INamedTypeSymbol type) =>
-        new(QualifiedNestedName(type) ?? type.Name);
+        new(QualifiedNestedName(type) ?? type.Name, CrossAssemblyOriginOf(type));
 
     /// <summary>
     /// Overload for identifier positions: a nested named type is qualified, anything
     /// else (top-level type, type parameter, namespace) keeps the source
-    /// <paramref name="spelling"/>.
+    /// <paramref name="spelling"/>. Only a named type carries an origin.
     /// </summary>
     private IrTypeReference TypeReferenceFromIdentifier(ISymbol symbol, string spelling)
     {
-        var qualified = symbol is INamedTypeSymbol type ? QualifiedNestedName(type) : null;
+        if (symbol is not INamedTypeSymbol type)
+            return new(spelling);
 
-        return new(qualified ?? spelling);
+        return new(QualifiedNestedName(type) ?? spelling, CrossAssemblyOriginOf(type));
     }
+
+    /// <summary>
+    /// The cross-assembly origin of <paramref name="type"/> — the same lookup the
+    /// type-position mapper performs — or null for an intra-project or BCL type.
+    /// </summary>
+    private IrTypeOrigin? CrossAssemblyOriginOf(INamedTypeSymbol type) =>
+        _originResolver.ResolveThroughOutermost(type);
 
     /// <summary>
     /// The container-qualified name of a nested type, or <c>null</c> for a top-level
@@ -1704,11 +1714,13 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        // `Outer.Inner` naming a nested type (receiver of `Outer.Inner.Create()` or
-        // `Outer.Kind.A`) is a type reference, not a static member read — lowering it
-        // as a member access would camel-case the type segment (`Outer.inner`).
-        if (symbol is INamedTypeSymbol { ContainingType: not null } nestedType)
-            return TypeReferenceTo(nestedType);
+        // A qualified name naming a type — `Outer.Inner` (receiver of
+        // `Outer.Inner.Create()` or `Outer.Kind.A`) or a namespace-qualified
+        // `Acme.Domain.Kind` — is a type reference, not a static member read. Lowering
+        // it as a member access would camel-case the type segment (`Outer.inner`) and
+        // keep namespace segments, which are not value bindings (`Acme.domain`).
+        if (symbol is INamedTypeSymbol qualifiedType)
+            return TypeReferenceTo(qualifiedType);
 
         var target = Extract(member.Expression);
         var name = member.Name.Identifier.ValueText;
@@ -2383,7 +2395,8 @@ public sealed partial class IrExpressionExtractor
         // can diverge their lowering paths without churn; today's
         // bridge honors either to drop the enclosing type reference.
         var isDeclaringTypeExternal = SymbolHelper.HasExternal(symbol.ContainingType);
-        var isDeclaringTypeNoContainer = SymbolHelper.HasNoContainer(symbol.ContainingType);
+        // `[ExportedAsModule]` flattens like `[NoContainer]` at call sites (#286).
+        var isDeclaringTypeNoContainer = symbol.ContainingType.IsContainerless();
         // `[JsCallable]` interface `Invoke(…)` call → the receiver IS the JS
         // function, so the call lowers to `recv(args)`. `[JsTuple]` positional
         // member read → array-index access `recv[i]`. Both reuse the member

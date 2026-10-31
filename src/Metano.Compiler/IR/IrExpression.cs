@@ -44,8 +44,15 @@ public sealed record IrIdentifier(string Name) : IrExpression;
 /// <c>Counter.Zero</c>). Distinct from <see cref="IrIdentifier"/> so backends can
 /// preserve PascalCase for type names while still lower-camel-casing ordinary member
 /// and variable references.
+/// <para>
+/// <see cref="Origin"/> is the cross-assembly origin of the referenced type when it
+/// comes from another <c>[EmitPackage]</c> package — the same value
+/// <see cref="IrNamedTypeRef.Origin"/> carries in type positions — so backends can
+/// import a type that appears only in a value position. Null for intra-project,
+/// BCL and synthesized references.
+/// </para>
 /// </summary>
-public sealed record IrTypeReference(string Name) : IrExpression;
+public sealed record IrTypeReference(string Name, IrTypeOrigin? Origin = null) : IrExpression;
 
 /// <summary>
 /// A reference to <c>this</c> (the current instance).

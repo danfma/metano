@@ -139,6 +139,14 @@ public static class IrToTsTypeMapper
             : null;
 
     /// <summary>
+    /// Resolves the cross-package <see cref="TsTypeOrigin"/> of a value-position type
+    /// reference (<see cref="IrTypeReference"/>), or <see langword="null"/> when it is
+    /// intra-project, BCL or synthesized.
+    /// </summary>
+    public static TsTypeOrigin? TryResolveOrigin(IrTypeReference reference) =>
+        reference.Origin is { } origin ? BuildTsOrigin(origin, reference.Name) : null;
+
+    /// <summary>
     /// Converts a semantic <see cref="IrTypeOrigin"/> to a <see cref="TsTypeOrigin"/> whose
     /// <c>SubPath</c> is a kebab-case, namespace-relative path — matching what
     /// <c>TypeMapper.ResolveOrigin</c> produces on the legacy path.

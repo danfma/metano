@@ -286,13 +286,21 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapTypeReference(IrTypeReference reference)
     {
         var segments = IrToTsTypeMapper.ResolveAliasedName(reference.Name).Split('.');
+        var root = TypeValueReference(segments[0], IrToTsTypeMapper.TryResolveOrigin(reference));
+
         return segments
             .Skip(1)
-            .Aggregate(
-                (TsExpression)new TsIdentifier(segments[0]),
-                (target, segment) => new TsPropertyAccess(target, segment)
-            );
+            .Aggregate(root, (target, segment) => new TsPropertyAccess(target, segment));
     }
+
+    /// <summary>
+    /// The value-position reference to a type name. A cross-package type lowers to a
+    /// <see cref="TsTypeReference"/> — printed exactly like the bare identifier — so
+    /// the import collector sees the origin the file must import it from; every other
+    /// type stays a plain <see cref="TsIdentifier"/>.
+    /// </summary>
+    private static TsExpression TypeValueReference(string name, TsTypeOrigin? origin) =>
+        origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin);
 
     private static TsExpression MapCall(
         IrCallExpression call,
@@ -934,7 +942,7 @@ public static partial class IrToTsExpressionBridge
             IrSetTypeRef => new TsIdentifier("HashSet"),
             _ => IrToTsTypeMapper.Map(type) switch
             {
-                TsNamedType n => new TsIdentifier(n.Name),
+                TsNamedType n => TypeValueReference(n.Name, n.Origin),
                 _ => new TsIdentifier("Object"),
             },
         };
@@ -968,7 +976,13 @@ public static partial class IrToTsExpressionBridge
                 ? tArgs.Select(t => IrToTsTypeMapper.Map(t)).ToList()
                 : null;
             return new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier(objectArgsTarget.Name), "create"),
+                new TsPropertyAccess(
+                    TypeValueReference(
+                        objectArgsTarget.Name,
+                        IrToTsTypeMapper.TryResolveOrigin(objectArgsTarget)
+                    ),
+                    "create"
+                ),
                 args,
                 TypeArguments: typeArguments
             );
@@ -1005,7 +1019,10 @@ public static partial class IrToTsExpressionBridge
             // lowers to `UserId.create(v)` on the TS side.
             if (s.Kind is IrNamedTypeKind.Branded)
                 return new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier(named.Name), "create"),
+                    new TsPropertyAccess(
+                        TypeValueReference(named.Name, IrToTsTypeMapper.TryResolveOrigin(named)),
+                        "create"
+                    ),
                     args
                 );
         }

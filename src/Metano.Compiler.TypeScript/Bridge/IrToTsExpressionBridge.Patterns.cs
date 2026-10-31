@@ -183,7 +183,11 @@ public static partial class IrToTsExpressionBridge
                 "string"
             ),
             _ => IrToTsTypeMapper.Map(targetType) is TsNamedType named
-                ? new TsBinaryExpression(value, "instanceof", new TsIdentifier(named.Name))
+                ? new TsBinaryExpression(
+                    value,
+                    "instanceof",
+                    TypeValueReference(named.Name, named.Origin)
+                )
                 : new TsIdentifier("/* TODO: non-named type pattern */"),
         };
 

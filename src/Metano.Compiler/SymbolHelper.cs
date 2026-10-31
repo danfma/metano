@@ -763,6 +763,15 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// True when the type emits no container: <c>[NoContainer]</c> or its deprecated
+    /// predecessor <c>[ExportedAsModule]</c>. Its static methods become top-level
+    /// functions, so both its declaration and its qualified call sites flatten
+    /// (<c>Module.Count(x)</c> lowers to the bare imported function <c>count(x)</c>).
+    /// </summary>
+    public static bool IsContainerless(this ISymbol symbol) =>
+        HasNoContainer(symbol) || HasExportedAsModule(symbol);
+
+    /// <summary>
     /// Reads <c>[StrictUnionGuard]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. When present on
     /// a <c>[GenerateGuard]</c> abstract base, the emitted guard
