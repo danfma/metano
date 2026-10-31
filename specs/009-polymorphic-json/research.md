@@ -1,7 +1,7 @@
 # Research: System.Text.Json-faithful JSON contracts
 
 Evidence tags: **[Verified]** = reproduced by running code (probe or test) or by reading the cited
-source on `main` at `7ff7544`; **[Inferred]** = reasoned from code or docs, not executed.
+source on `main` at `7ff7544` (re-checked where noted against `0fa9f4c` after the rebase); **[Inferred]** = reasoned from code or docs, not executed.
 
 Sources: the phase 3/4 research notes (sections `stj-hierarchy`, `json-codegen-map`, design
 `polymorphic-json`) and the batch 3 triage (`json-collection-root`, `branded-validating-factory`),
@@ -26,6 +26,16 @@ kept outside the repository by the maintainer; plus a source-generation probe ru
 | Non-polymorphic hierarchy | also derived-first: `class CD` → `{"DerP":2,"BaseP":1}` |
 | Untagged derived `[JsonDerivedType(typeof(NA))]` | writes `{"V":1}`; reads back as the base (data lost) |
 | Concrete base instance | no tag (`{}`); missing tag on read → base |
+| Base registers itself `[JsonDerivedType(typeof(SBase), "b")]` | valid; writes `{"$type":"b","V":1}`; reads back as `SBase` (critic probe, net10.0) |
+| Abstract derived type `[JsonDerivedType(typeof(AMid))]` | `InvalidOperationException: … cannot be abstract classes or interfaces unless 'JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor' is specified` (critic probe) |
+| Closed generic base: `GDer : GBase<int>`, `[JsonDerivedType(typeof(GDer),"g")]` on `GBase<T>` | through `GBase<int>`: `{"$type":"g","Extra":2,"Value":1}`; throws only when reached through `GBase<string>` (critic probe) |
+| Nested polymorphism, `NMid : NBase`, both polymorphic | through `NBase`, an `NMid` writes only the outer tag `{"t":"mid","B":2,"A":1}`; an `NLeaf` registered only on `NMid` → `NotSupportedException` through `NBase`; the inner tag is ignored on read (critic probe) |
+| Overridden property (`ODer` overrides `Name`) | written once, at the derived position: `{"$type":"o","X":2,"Name":"x","Base":1}` (critic probe) |
+| Non-scalar tag | message names the token: `True`, `False`, `StartObject`, `StartArray`, `Null` (critic probe) |
+| Int tag written `1.0` | `JsonException: The JSON value could not be converted to IBase.` — not observable after `JSON.parse` (critic probe) |
+| `Deserialize<RefType>("null")` | `null` for every reference-type root, object and polymorphic included; throws for value types (critic probe) |
+| Object cycle | `JsonException: A possible object cycle was detected …` at MaxDepth 64 [Inferred from STJ docs; boundary pinned by a fixture in S8] |
+| Value roots | `byte[]` → base64 `"AQID"`; `TimeSpan` → `"01:02:03"`; `DateTimeOffset` → `…+00:00` (critic probe); TS side: number array, `PT1H2M3S` [Inferred from `converters.ts`] |
 | Tag not first (default) | `NotSupportedException: The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.` |
 | Tag not first + `AllowOutOfOrderMetadataProperties = true` on the context | reads `ImageClip` (source-gen probe) |
 | Unknown tag | `JsonException: Read unrecognized type discriminator id 'video'.` (case-sensitive: `Image` also fails) |
@@ -43,12 +53,15 @@ kept outside the repository by the maintainer; plus a source-generation probe ru
 | Tag present, read through the derived type | tag ignored as unknown property |
 | Doubles | shortest round-trip form (`2`, `1.5`), but `1E+21` and `-0` (JS: `1e+21`, `0`) |
 
-**Decision D1**: Mirror every row except duplicate-tag detection and exponent/negative-zero
-number text (not observable after `JSON.parse` / not reproducible by `JSON.stringify`).
+**Decision D1**: Mirror every row except duplicate-tag detection, `1.0` int tags and
+exponent/negative-zero number text (not observable after `JSON.parse` / not reproducible by
+`JSON.stringify`), and the value-root converter mismatches of OPEN-16. Each exception is listed in
+spec.md "Documented divergences".
 
-**Gaps not measured**: nested polymorphism (a derived type that has its own `[JsonDerivedType]`s),
-`[JsonDerivedType]` on interfaces with diamonds, `UnknownDerivedTypeHandling` on interfaces. These
-are the subject of OPEN-8 and OPEN-9.
+**Gaps not measured**: `[JsonDerivedType]` on interfaces with diamonds and
+`UnknownDerivedTypeHandling` on interfaces (OPEN-8, rejected in v1); reading the tag of an abstract
+derived entry under `FallBackToNearestAncestor` (OPEN-12); the read-side depth limit (OPEN-15).
+Nested polymorphism is now measured (rows above), which closes OPEN-9.
 
 ## R2 — Where the generator stands on `main` (post #238 / #250)
 
@@ -59,8 +72,16 @@ are the subject of OPEN-8 and OPEN-9.
 - `ReadSerializableTypes` keeps only `ConstructorArguments[0].Value is INamedTypeSymbol` — array
   roots are dropped — and ignores `TypeInfoPropertyName`.
 - `CollectContractClosure` (#250) walks roots, then properties (through nullable / array / map /
-  hash-set) and the `base` chain; it discovers only non-generic, current-assembly, transpilable
-  classes/structs. Derived types named by `[JsonDerivedType]` are not discovered.
+  hash-set) and the `base` chain; `IsDiscoverableObjectType` admits only non-generic
+  (`IsGenericType: false`), current-assembly (`IsInCurrentAssembly`), transpilable
+  classes/structs. Consequences: a property typed `Page<EpisodeSummary>` emits
+  `ref → () => this.page` with no such getter (TS2339) → **FR-033**; a property typed with a
+  library record dangles the same way → **FR-047**. `TranspilableBaseOf(current)` is enqueued
+  with no `IsGenericType` check, so a closed generic base is linked as `this.gBase` /
+  `TypeSpec<GBase>` → **FR-015**. Derived types named by `[JsonDerivedType]` are not discovered.
+- `CollectSerializableProperties` reads own `GetMembers()` public properties only, with no dedupe
+  against base declarations: an overridden property appears in both the base and derived lists →
+  **FR-009**; `[JsonInclude]` fields are not collected → **FR-046**.
 - `SpecGetterName` = camelCase of `ResolveTsName` (honors `[Name]`, drops type arguments); used by
   roots, refs and base links (single helper since #250).
 - `SpecTypeReferenceName` already qualifies nested types (`Shape.Circle`).
@@ -72,6 +93,22 @@ are the subject of OPEN-8 and OPEN-9.
   `assemblyWideTranspile` / `currentAssembly`, so under `[assembly: TranspileAssembly]` no `base:`
   link is emitted and inherited properties vanish from the wire. The existing test
   `ReachedDerivedType_PullsInItsBaseSpec` uses `[Transpile]` and does not catch it → **FR-010**.
+  Passing the current assembly is not enough: `IsAssemblyWideOptIn` requires the type to live in
+  the current compilation, so a base from a referenced `[TranspileAssembly]` library would still be
+  dropped; transpilability must be evaluated against `type.ContainingAssembly` [Inferred from
+  `SymbolHelper.IsAssemblyWideOptIn`]. `JsonSerializerContextTests` has no `TranspileWithLibrary`
+  test.
+- The context bypasses the IR, so `IrRuntimeRequirementScanner` never sees the type arguments of
+  `ValueSpec<…>`; imports for `HashSet`, `Temporal`, `Decimal`, `UUID` and cross-package element
+  types must be produced by the context transformer (comment near `ImportCollector.cs` line 150)
+  → **FR-041**.
+- `IrTypeRefMapper` maps `IEnumerable<T>`, `IReadOnlyCollection<T>` and `IQueryable<T>` to TS
+  `Iterable<T>`, while `arrayConverter.serialize` does `(value as unknown[]).map(…)`, which throws
+  for a `Set`, a generator or a LINQ pipe → **FR-038** (affects properties today too).
+- `ReadNamingPolicy` reads only `PropertyNamingPolicy`; no other source-gen option is read →
+  **FR-046** (`MS0037`).
+- `deserializeWithSpec` throws plain `Error`s for non-object input and missing properties →
+  **FR-045**.
 - `ReadNamingPolicy` reads only the named `PropertyNamingPolicy` argument → OPEN-4.
 - `BuildBrandedDescriptor` always emits `create: <TsName>.create` → **FR-021**.
 - The non-object root problem is general: the root path never consults `ClassifyPropertyType`,
@@ -130,7 +167,12 @@ detected. Use 'JsonSerializableAttribute.TypeInfoPropertyName' to resolve this c
 **Decision D5**: one naming function (FR-031) mirroring these names, camel-cased for the getter.
 Deliberate divergence: a non-generic type keeps its resolved TS name, so `[Name("Bar")]` on `Foo`
 yields `bar` / `listBar` (STJ: `Foo` / `ListFoo`); this preserves every existing getter name.
-Collisions mirror `SYSLIB1031` (warning, first wins) → `MS0036`.
+Collisions mirror `SYSLIB1031` (warning, first wins) **only for unreferenced roots**. STJ can drop
+the loser safely because its generated `JsonTypeInfo` for a property is resolved by type, not by
+name; Metano's `ref` thunks resolve **by getter name** and are typed `() => TypeSpec`, so a dropped
+loser that is still referenced would silently serialize with the winner's contract and still
+compile. Hence `MS0036` is an Error in that case, and also when a name hits a `SerializerContext`
+member (`options`, `converters`, `createSpec`, `resolve`, `_registry`) → FR-036, OPEN-14.
 
 **Decision D6 — `ValueSpec` over the full descriptor union** (not a `CollectionSpec` limited to
 array/map/hashSet): primitive, enum, branded, temporal, decimal and nullable roots then work with no
@@ -143,8 +185,14 @@ the full validation body; only the descriptor points at `create`. `brandedConver
 `descriptor.create(value)` unguarded, so pointing `create` at `from` enforces validation with no
 runtime change (triage check: `"   "` throws, `"  ok "` → `"ok"`). Private static methods are
 emitted (no visibility filter in `IrClassExtractor.IsUserMethod`), so private factories are valid.
-`TypeScriptTransformContext.ResolveMethodHelperName` (private today) already computes
-`[Name] ?? camelCase` for static helpers; it is the single naming rule to share (no third copy).
+The companion declares each static as `IrToTsNamingPolicy.ToFunctionName(method.Name,
+method.Attributes)` (`IrToTsBrandedBridge`), so the factory reference MUST be computed by that same
+function. `TypeScriptTransformContext.ResolveMethodHelperName` is an extension-method registry
+helper that happens to agree today; it is not the rule to share [Verified, `0fa9f4c`]. The
+companion also synthesizes `create` and `toString`, so a factory named `Create` would collide →
+`MS0034`. Conversion operators are kept by `IsUserMethod` (as `op_Explicit`) and are rejected by
+`MS0034` (a JSON factory must be a named static). `BuildBrandedDescriptor` uses the unqualified
+`ResolveTsName`; nested branded types need the qualified reference (`SpecTypeReferenceName`).
 
 **Decision D7**: opt-in method-level `[JsonFactory]` (maintainer decision). *Rejected*: a `From`
 convention (silently changes how existing data loads); `[JsonConstructor]` (never applies to the
@@ -155,17 +203,29 @@ selects by the runtime JSON type and could call a different overload than the C#
 
 ## R6 — Diagnostics numbering
 
-[Verified]: `MetaSharpDiagnostic.cs` ends at `MS0030` on `main`; `MS0031` is introduced by the
-in-flight `fix/278-explicit-interface-members` (commit `ad80ef5`). No branch on `origin` mentions
-`MS0032`+ or a `specs/009*` directory. → reserve `MS0032`–`MS0036` (OPEN-2).
+[Verified, after rebasing on `origin/main` `0fa9f4c`]: `MetaSharpDiagnostic.cs` ends at `MS0031`
+(`ExplicitImplementationConflict`, landed with #278 in `d96909c`). No branch on `origin` mentions
+`MS0032`–`MS0039` outside this spec. → reserve `MS0032`–`MS0037` (OPEN-2).
 
 ## R7 — Conformance testing approach
 
-**Decision D8**: fixture files checked in once, verified from both sides. A TUnit test builds a real
-STJ source-generated context over the conformance sample's C# types and asserts that serializing
-each case equals the fixture bytes and that each error case throws the recorded exception type and
-message prefix. The Bun suite of the generated sample reads the same files and asserts
-`JSON.stringify(serialize(deserialize(JSON.parse(text)))) === text`, `instanceof`, and the error
-class/message. *Rationale*: no extra CI job, and each side fails independently when it drifts.
+**Decision D8**: one shared manifest (`cases.json`, contracts/wire-format.md) checked in once and
+verified from both sides. Each row carries id, context, getter, direction (`roundtrip` / `write` /
+`read`), the sides it applies to, the expected class, and the JSON text or the error class and
+message. Each side builds values through a per-id builder; a missing builder fails. The TUnit test
+runs every `stj` row against a real STJ source-generated context; the Bun suite runs every `ts`
+row against the generated context, asserting `instanceof` only for read and roundtrip rows.
+
+A single universal assertion `JSON.stringify(serialize(deserialize(JSON.parse(text)))) === text`
+was rejected because it cannot hold for every case: W13 (`FallBackToBaseType`) does not read back
+through an abstract base; W12 reads back as the ancestor, so `instanceof` fails; E8 is
+serialize-only; W16 is TypeScript-only (STJ writes a branded record struct as `{"Value":…}` and
+FR-026 ships no converter). Defining values separately on each side would also let them drift.
+*Rationale*: no extra CI job, and each side fails independently when it drifts.
 *Rejected*: a separate oracle console project run in CI (heavier, same signal); semantic JSON
 comparison (would hide the ordering rules this feature exists to honor).
+
+The STJ-side sample builds under `TreatWarningsAsErrors`: cases that produce `SYSLIB1031` (name
+collision) or a Metano warning (`MS0033`, warning-form `MS0036`, `MS0037`) stay in inline TUnit
+compilations and never enter `samples/SampleJsonContracts`. Biome scans only `targets/js/*/src/**`,
+so compact JSON under `test/fixtures/` is not reformatted [Verified].

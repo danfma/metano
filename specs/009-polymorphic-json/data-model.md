@@ -9,8 +9,8 @@ builds, and the runtime shapes the generated context emits.
 |---|---|---|
 | `JsonPolymorphicAttribute` (own attributes only) | `TypeDiscriminatorPropertyName` (default `$type`), `UnknownDerivedTypeHandling` (`FailSerialization` = 0, `FallBackToBaseType` = 1, `FallBackToNearestAncestor` = 2), `IgnoreUnrecognizedTypeDiscriminators` | Optional; `Inherited = false`. |
 | `JsonDerivedTypeAttribute` (own, repeatable) | ctor `(Type)`, `(Type, string)`, `(Type, int)` | ≥ 1 makes the type polymorphic. Attribute order = entry order. |
-| `JsonSourceGenerationOptionsAttribute` on the context | `PropertyNamingPolicy`, `AllowOutOfOrderMetadataProperties`, ctor `JsonSerializerDefaults` (OPEN-4) | |
-| `JsonSerializableAttribute` on the context (repeatable) | ctor `Type` (named **or array** type), `TypeInfoPropertyName` | |
+| `JsonSourceGenerationOptionsAttribute` on the context | `PropertyNamingPolicy`, `AllowOutOfOrderMetadataProperties`, ctor `JsonSerializerDefaults` (OPEN-4); every other named argument is only checked against the FR-046 list (`MS0037`) | |
+| `JsonSerializableAttribute` on the context (repeatable) | ctor `Type` (named **or rank-1 array** type), `TypeInfoPropertyName` | Rank > 1 → `MS0035`. |
 | `JsonFactoryAttribute` (new, `Metano.Annotations`) | marker on a static method | `[AttributeUsage(AttributeTargets.Method)]`. |
 
 ## 2. Compile-time model (TypeScript target, `Transformation/Json/`)
@@ -51,12 +51,13 @@ classDiagram
 
 | Entity | Responsibility | Validation (diagnostic) |
 |---|---|---|
-| `JsonContractRoot` | One `[JsonSerializable]` entry. | `MS0035` for open generic / type parameter / error type / `object` / non-collection interface. |
+| `JsonContractRoot` | One `[JsonSerializable]` entry. | `MS0035` for open generic / type parameter / error type / `object` / non-collection interface / non-transpilable object kind / array rank > 1. |
 | `JsonPolymorphism` | Read once per type by a reader (`TryRead`). `null` for non-polymorphic types. | `MS0032` / `MS0033` rules (spec FR-012, FR-013). |
-| `JsonDerivedType` | One derived registration. `Tag == null` → untagged. | Duplicate type/tag, non-subtype, generic, interface/`[PlainObject]` → `MS0032`. |
-| `JsonTypeInfoNames` | The single naming function (spec FR-031) with the context's `TypeInfoPropertyName` overrides. | Collision → `MS0036` (first wins). |
-| `JsonBrandedFactory` | The resolved `[JsonFactory]` of a branded type and its TS member name (shared `[Name] ?? camelCase` rule). | `MS0034`. |
-| Contract closure | Ordered, deduplicated (by `JsonTypeInfoNames.Getter`) list of context entries: roots, then BFS over properties, `base` chain and `[JsonDerivedType]` targets. | — |
+| `JsonDerivedType` | One derived registration (may be the base itself). `Tag == null` → untagged. | Duplicate type/tag, not assignable to the base, abstract without `FallBackToNearestAncestor`, generic, interface/`[PlainObject]`, not transpilable in its declaring assembly → `MS0032`. |
+| `JsonTypeInfoNames` | The single naming function (spec FR-031) with the context's `TypeInfoPropertyName` overrides; also used for constructed generic types (FR-015, FR-033). | Collision → `MS0036` (first wins; Error when the loser is referenced or the name is a reserved `SerializerContext` member). |
+| `JsonBrandedFactory` | The resolved `[JsonFactory]` of a branded type and its TS member name, computed by `IrToTsNamingPolicy.ToFunctionName` (the function the companion declares it with). | `MS0034` (incl. operators and names equal to `create` / `toString`). |
+| Contract closure | Ordered, deduplicated (by `JsonTypeInfoNames.Getter`) list of context entries: roots, then BFS over properties, `base` chain and `[JsonDerivedType]` targets, including closed generic object types and types from referenced Metano packages (FR-010, FR-033, FR-047). Each entry records whether it is the target of a `ref` / `base` / derived link (drives `MS0036` severity). | — |
+| Property list | Per contract, own declarations deduplicated by final JSON name against the base chain; an `override` / `new` declaration replaces the base one (FR-009). | — |
 
 ### Naming function (FR-031)
 
@@ -72,6 +73,7 @@ classDiagram
 | `int?` | `NullableInt32` | `nullableInt32` |
 | `string` / `int` / `Guid` | `String` / `Int32` / `Guid` | `string` / `int32` / `guid` |
 | `Page<EpisodeSummary>` | `PageEpisodeSummary` | `pageEpisodeSummary` |
+| `GBase<int>` (closed generic polymorphic base) | `GBaseInt32` | `gBaseInt32` |
 
 ## 3. Runtime shapes (`metano-runtime/system/json`, all additive)
 
@@ -109,7 +111,8 @@ export interface TypeSpec<T = unknown> {
 
 export interface ValueSpec<T = unknown> {
   readonly descriptor: TypeDescriptor;
-  /** OPEN-6: reference-type roots read JSON null as null. */
+  /** FR-037: reference-type roots read JSON null as null; the generator then types the
+   *  getter `ValueSpec<T | null>`, so T already includes null. */
   readonly acceptsNull?: boolean;
   /** Phantom member that keeps T in the type. */
   readonly __type?: (value: T) => void;
@@ -120,7 +123,8 @@ export type JsonTypeInfo<T = unknown> = TypeSpec<T> | ValueSpec<T>;
 export class JsonException extends Error {}
 export class NotSupportedException extends Error {}
 
-/** Wire order: own properties, then base's, recursively (STJ). */
+/** Wire order: own properties, then base's, recursively (STJ); deduplicated by JSON name,
+ *  keeping the most-derived declaration (FR-009). */
 export function collectWireProperties(spec: TypeSpec): readonly PropertySpec[];
 ```
 
@@ -131,7 +135,7 @@ and `collectProperties` are unchanged.
 
 | Field | Type | Built |
 |---|---|---|
-| `byCtor` | `Map<constructor, { tag?: TypeDiscriminator; spec: TypeSpec }>` | first serialize/deserialize through the base spec, never inside a getter |
+| `byCtor` | `Map<constructor, { tag?: TypeDiscriminator; spec: TypeSpec }>`; includes the base's constructor when the base registers itself | first serialize/deserialize through the base spec, never inside a getter |
 | `byTag` | `Map<TypeDiscriminator, TypeSpec>` | same; `Map` keeps `1` and `"1"` distinct |
 
 Cached in a module-level `WeakMap<PolymorphismSpec, Index>`.
@@ -142,15 +146,18 @@ Cached in a module-level `WeakMap<PolymorphismSpec, Index>`.
 stateDiagram-v2
     [*] --> Polymorphic: spec.polymorphism set
     [*] --> Contract: no polymorphism
-    Polymorphic --> Contract: ctor is base (no tag)
-    Polymorphic --> Tagged: ctor registered
-    Polymorphic --> Unknown: ctor not registered
+    Polymorphic --> Tagged: byCtor has ctor (checked first, base included when self-registered)
+    Polymorphic --> Contract: ctor is base, not registered (no tag)
+    Polymorphic --> Unknown: ctor neither registered nor base
     Unknown --> Fail: failSerialization
     Unknown --> Contract: fallBackToBaseType (base, no tag)
-    Unknown --> Tagged: fallBackToNearestAncestor (ancestor found)
+    Unknown --> Tagged: fallBackToNearestAncestor (ancestor found, abstract entries included)
     Unknown --> Contract: fallBackToNearestAncestor (none, base)
-    Tagged --> Contract: write tag first, then derived contract
-    Contract --> [*]: own props, then base props
+    Tagged --> Contract: write tag first, then the entry's contract
+    Contract --> DepthCheck: own props, then base props (deduplicated)
+    DepthCheck --> [*]: depth <= 64
+    DepthCheck --> Cycle: depth > 64
+    Cycle --> [*]: JsonException (possible object cycle, FR-016)
     Fail --> [*]: NotSupportedException
 ```
 
@@ -160,7 +167,7 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> Inspect: spec.polymorphism set
     Inspect --> Missing: no own key == discriminator, or not first key (and not allowOutOfOrder)
-    Inspect --> BadTag: tag neither string nor number
+    Inspect --> BadTag: tag neither string nor number (Null / True / False / StartObject / StartArray)
     Inspect --> Known: byTag has tag
     Inspect --> UnknownTag: byTag lacks tag
     Missing --> Abstract: abstract base
@@ -168,7 +175,10 @@ stateDiagram-v2
     UnknownTag --> BaseContract: ignoreUnrecognizedTags and concrete
     UnknownTag --> Abstract: ignoreUnrecognizedTags and abstract
     UnknownTag --> Unrecognized: otherwise
-    Known --> DerivedContract
+    Known --> DerivedContract: tag of a derived entry
+    Known --> BaseContract: tag of the base's self-registration
+    Known --> AbstractEntry: tag of an abstract entry (OPEN-12)
+    AbstractEntry --> [*]: pending probe
     Abstract --> [*]: NotSupportedException (must specify a type discriminator)
     Unrecognized --> [*]: JsonException (Read unrecognized type discriminator id)
     BadTag --> [*]: JsonException (metadata properties must be JSON strings)

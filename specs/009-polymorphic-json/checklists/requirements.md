@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — no markers, but OPEN-1 to OPEN-11 await maintainer confirmation (each has a recommended default)
+- [ ] No [NEEDS CLARIFICATION] markers remain — no markers, but OPEN-1 to OPEN-17 (OPEN-9 closed by measurement) await maintainer confirmation (each has a recommended default)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -36,6 +36,12 @@
   mirrored), not implementation choices. Generator units, file layout and runtime internals live in
   plan.md, data-model.md and contracts/.
 - Every STJ behavior the spec mirrors is backed by a measurement in research.md R1/R4; unmeasured
-  corners are open decisions (OPEN-8, OPEN-9), not assumptions.
+  corners are open decisions (OPEN-8, OPEN-12, OPEN-15), not assumptions. Known mismatches are
+  listed under spec.md "Documented divergences" and marked in the shared conformance manifest.
+- Revised after a critic review (base self-registration, abstract derived types, closed generic
+  bases and properties, name collisions, cross-package closure, shared manifest, null roots,
+  iterables, value-root divergences, unmirrored options, extra root rules, nested polymorphism,
+  tag token names, factory corner cases, error classes, overridden properties, type-only imports,
+  CI risks, cycles, stale text).
 - `tasks.md` is intentionally not written yet: generate it with `/speckit-tasks` once the open
   decisions are settled.

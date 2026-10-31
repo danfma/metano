@@ -1,17 +1,20 @@
 # Quickstart: System.Text.Json-faithful JSON contracts
 
-## Set up a worktree
+## Set up a worktree (one per implementation slice)
+
+Each slice of plan.md ("Implementation slices") gets its own worktree and branch from
+`origin/main`. Example for S1 (issue #268):
 
 ```bash
 git fetch origin
 ```
 
 ```bash
-git worktree add ../Metano-issue-268 -b feat/268-polymorphic-json origin/main
+git worktree add ../Metano-issue-268-s1 -b fix/268-json-declaring-assembly origin/main
 ```
 
 ```bash
-cd ../Metano-issue-268 && bun install && dotnet tool restore && dotnet husky install
+cd ../Metano-issue-268-s1 && bun install && dotnet tool restore && dotnet husky install
 ```
 
 ```bash
@@ -29,7 +32,8 @@ dotnet run --project src/Metano.Compiler.TypeScript/ -- -p <scratch>/Scratch.csp
 ```
 
 Expected today: `clip` has no discriminator handling, `imageClip` is missing unless listed,
-`TypeSpec<IReadOnlyList>` with `new IReadOnlyList()`, no getter for `EpisodeSummary[]`, and
+`TypeSpec<IReadOnlyList>` with `new IReadOnlyList()`, no getter for `EpisodeSummary[]`, a
+`ref → () => this.page` with no `page` getter for a `Page<EpisodeSummary>` property, and
 `create: Title.create`.
 
 ## Verify after implementation
@@ -48,8 +52,9 @@ cd targets/js/metano-runtime && bun run build && bun test
 cd targets/js/sample-json-contracts && bun run build && bun test
 ```
 
-Expected: every fixture round-trips byte-for-byte; every error fixture throws the recorded class and
-message prefix.
+Expected: every `ts` row of `test/fixtures/stj/cases.json` passes per its direction (byte equality
+for write / roundtrip, `instanceof` for read / roundtrip); every error row throws the recorded class
+and message prefix.
 
 ## Regenerate the STJ fixtures (deliberate, local only)
 
@@ -57,7 +62,9 @@ message prefix.
 METANO_UPDATE_STJ_FIXTURES=1 dotnet run --project tests/Metano.Tests/ --no-build -- --treenode-filter "/*/*/StjConformanceFixtureTests/*"
 ```
 
-Review the fixture diff like any other golden change.
+Review the `cases.json` diff like any other golden change; a row whose STJ text changes but whose
+TS text cannot follow becomes `divergent` only with a matching entry in spec.md "Documented
+divergences".
 
 ## Existing suites (regression)
 

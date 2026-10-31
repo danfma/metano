@@ -1,7 +1,14 @@
 # Contract: `metano-runtime/system/json` public API changes
 
-All changes are additive. Existing signatures keep compiling and behaving the same, except the
-serialization key order of specs that have a `base` (FR-009; JSON-semantically identical).
+All changes are additive. Existing signatures keep compiling and behaving the same, except:
+
+- the serialization key order of specs that have a `base` (FR-009; JSON-semantically identical);
+- the error **class** of the two existing `deserializeWithSpec` failures (non-object input, missing
+  non-optional property): `Error` → `JsonException` (FR-045). `JsonException` extends `Error`, so
+  `catch (e)` and `instanceof Error` callers are unaffected; message text changes for the
+  non-object case;
+- `arrayConverter` / hash-set serialization accept any `Iterable` (FR-038; previously a non-array
+  iterable threw `TypeError`).
 
 ## New exports
 
@@ -51,6 +58,14 @@ interface TypeSpec<T> {
    `error.message` equals the STJ message without the path suffix.
 5. The dispatch index is built lazily, outside every generated getter, and is safe whichever getter
    is accessed first.
-6. `collectProperties` keeps returning base-first order.
+6. `collectProperties` keeps returning base-first order; `collectWireProperties` returns own-then-base
+   order deduplicated by JSON name (most-derived declaration wins).
 7. Custom converters registered for `kind: "ref"` replace dispatch for every `ref` (unchanged rule:
    converters match by kind).
+8. `serializeContract` / `deserializeContract` count JSON container depth; beyond 64 on serialize
+   they throw `JsonException` "A possible object cycle was detected. …" (FR-016); read side per
+   OPEN-15.
+9. A `ValueSpec` with `acceptsNull` returns `null` for JSON `null` and writes `null` for a `null`
+   value; otherwise JSON `null` at a root throws `JsonException` (FR-037, OPEN-6).
+10. A non-scalar tag throws `JsonException` naming the STJ token type (`Null`, `True`, `False`,
+    `StartObject`, `StartArray`).
