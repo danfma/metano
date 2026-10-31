@@ -278,4 +278,28 @@ public class InvocationRewriterCanaryTests
 
         await Assert.That(output).Contains("countChars(text)");
     }
+
+    [Test]
+    public async Task DictionaryKeysContains_FoldsToHasBeforeTheGenericCallLowering()
+    {
+        // Pins DictionaryKeysContainsRewriter: without it the call keeps the
+        // KeyCollection.Contains origin and lowers to an `includes` scan of the
+        // `[...d.keys()]` copy, which still runs, so only this canary notices.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public static class Lookup
+            {
+                public static bool Has(Dictionary<string, int> d, string key) => d.Keys.Contains(key);
+            }
+            """
+        );
+
+        var output = result["lookup.ts"];
+
+        await Assert.That(output).Contains("return d.has(key);");
+        await Assert.That(output).DoesNotContain("includes(key)");
+    }
 }

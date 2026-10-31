@@ -131,6 +131,7 @@ public sealed partial class IrExpressionExtractor
         _invocationRewriters = new Invocation.IInvocationRewriter[]
         {
             new Invocation.DelegateInvokeRewriter(helpers),
+            new Invocation.DictionaryKeysContainsRewriter(helpers),
             new Invocation.IntrinsicBclLoweringTable(semanticModel.Compilation, helpers),
             new Invocation.EmitOrImportRewriter(helpers),
             // Bespoke callback (not via helpers) — inline expansion is tied
@@ -1721,6 +1722,9 @@ public sealed partial class IrExpressionExtractor
         // keep namespace segments, which are not value bindings (`Acme.domain`).
         if (symbol is INamedTypeSymbol qualifiedType)
             return TypeReferenceTo(qualifiedType);
+
+        if (TryExtractDictionaryCount(member, symbol) is { } dictionaryCount)
+            return dictionaryCount;
 
         var target = Extract(member.Expression);
         var name = member.Name.Identifier.ValueText;

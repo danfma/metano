@@ -870,6 +870,41 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task DictionaryCounts_MapToLength()
+    {
+        // #295 rebinds interface dictionary counts and folds view counts into the
+        // dictionary's own Count, so the dictionary entries carry the Dart `length`.
+        var (files, _) = TranspileDart(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Counts
+            {
+                public int Concrete(Dictionary<string, int> d) => d.Count;
+                public int Mutable(IDictionary<string, int> d) => d.Count;
+                public int ReadOnly(IReadOnlyDictionary<string, int> d) => d.Count;
+                public int Keys(Dictionary<string, int> d) => d.Keys.Count;
+                public int Values(IDictionary<string, int> d) => d.Values.Count;
+                public int Held(Dictionary<string, int> d)
+                {
+                    var keys = d.Keys;
+                    return keys.Count;
+                }
+            }
+            """
+        );
+
+        var dart = files["counts.dart"];
+        await Assert.That(dart).Contains("int concrete(Map<String, int> d) => d.length;");
+        await Assert.That(dart).Contains("int mutable(Map<String, int> d) => d.length;");
+        await Assert.That(dart).Contains("int readOnly(Map<String, int> d) => d.length;");
+        await Assert.That(dart).Contains("int keys(Map<String, int> d) => d.length;");
+        await Assert.That(dart).Contains("int values(Map<String, int> d) => d.length;");
+        await Assert.That(dart).Contains("return keys.length;");
+    }
+
+    [Test]
     public async Task StaticClassWithNonPublicNestedTypes_TranspilesWithoutCrashing()
     {
         // #264 widened assembly-wide transpilability to nested types of any
