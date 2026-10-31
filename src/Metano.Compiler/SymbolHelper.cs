@@ -620,6 +620,17 @@ public static class SymbolHelper
     public static bool IsInlineMember(this ISymbol symbol) =>
         symbol.HasInline() || HasInheritedInlineFromStaticClass(symbol);
 
+    /// <summary>
+    /// A method whose every call site is rewritten, so it is never declared as a
+    /// member. <c>[Emit]</c> methods are inline templates with no real body: a
+    /// declaration would be a stub whose generated body is never called.
+    /// <c>[Import]</c> methods follow the same contract (every call site is
+    /// rewritten to the imported identifier), and so do <c>[Inline]</c> members
+    /// (<see cref="IsInlineMember"/>).
+    /// </summary>
+    public static bool IsInlinedAtCallSite(this IMethodSymbol method) =>
+        method.HasEmit() || method.GetImport() is not null || method.IsInlineMember();
+
     private static bool HasInheritedInlineFromStaticClass(ISymbol symbol)
     {
         // Reduced extension calls (`value.Method()`) surface a non-static
@@ -1056,12 +1067,7 @@ public static class SymbolHelper
     /// </summary>
     public static bool HasTranspileAssembly(this Compilation compilation)
     {
-        var hasSemanticAttr = compilation
-            .Assembly.GetAttributes()
-            .Any(a =>
-                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
-            );
-        if (hasSemanticAttr)
+        if (compilation.Assembly.HasTranspileAssembly())
             return true;
 
         foreach (var tree in compilation.SyntaxTrees)
@@ -1214,6 +1220,18 @@ public static class SymbolHelper
     /// 4. assemblyWideTranspile + public, or nested (any accessibility) in an
     ///    opted-in container → included (see <see cref="IsAssemblyWideOptIn"/>).
     /// </summary>
+    /// <summary>
+    /// Whether <paramref name="assembly"/> carries <c>[assembly: TranspileAssembly]</c>
+    /// as a bound attribute (a referenced package, or a compilation whose attribute
+    /// already resolved).
+    /// </summary>
+    public static bool HasTranspileAssembly(this IAssemblySymbol assembly) =>
+        assembly
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+            );
+
     public static bool IsTranspilable(
         ISymbol symbol,
         bool assemblyWideTranspile = false,
