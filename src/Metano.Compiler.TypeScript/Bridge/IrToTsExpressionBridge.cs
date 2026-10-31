@@ -106,6 +106,7 @@ public static partial class IrToTsExpressionBridge
             IrLetExpression let => MapLetExpression(let, bclRegistry),
             IrOutArgumentCall outCall => MapOutArgumentCall(outCall, bclRegistry),
             IrNullConditionalAccess access => MapNullConditionalAccess(access, bclRegistry),
+            IrConditionalReceiver => CurrentConditionalReceiver(),
             IrUnsupportedExpression u => MapUnsupported(u),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };

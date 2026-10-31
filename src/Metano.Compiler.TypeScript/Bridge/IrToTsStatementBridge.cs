@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -181,7 +182,7 @@ public static class IrToTsStatementBridge
             );
         }
 
-        if (!IsSafeToReread(sw.Expression))
+        if (!IrEvaluationTraits.IsReusableReceiver(sw.Expression))
         {
             return new TsSwitchStatement(
                 loweredSubject,
@@ -210,14 +211,6 @@ public static class IrToTsStatementBridge
 
     private static bool HasNaNCaseLabel(IrSwitchStatement sw) =>
         sw.Cases.Any(c => c.Labels.Any(IrToTsExpressionBridge.IsNaNConstant));
-
-    private static bool IsSafeToReread(IrExpression subject) =>
-        subject switch
-        {
-            IrIdentifier or IrThisExpression => true,
-            IrMemberAccess access => IsSafeToReread(access.Target),
-            _ => false,
-        };
 
     private static List<TsSwitchCase> MapSwitchCases(
         IrSwitchStatement sw,

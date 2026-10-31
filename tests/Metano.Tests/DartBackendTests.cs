@@ -905,6 +905,41 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task NullConditionalAccess_PrintsNativeNullShorting()
+    {
+        var (files, _) = TranspileDart(
+            """
+            #nullable enable
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Order
+            {
+                public List<int> Items { get; } = [];
+                public Order? Next { get; set; }
+
+                public int? Count(Order? order) => order?.Items.Count;
+                public int? First(List<int>? items) => items?[0];
+                public int? NextCount(Order? order) => order?.Next?.Items.Count;
+                public int? Last(Order? order) => order?.Items[^1];
+            }
+            """
+        );
+
+        var dart = files["order.dart"];
+
+        await Assert.That(dart).Contains("order?.items.length");
+        await Assert.That(dart).Contains("items?[0]");
+        await Assert.That(dart).Contains("order?.next?.items.length");
+
+        await Assert
+            .That(dart)
+            .Contains("(throw UnsupportedError('Unsupported expression: NullConditionalAccess'))");
+
+        await Assert.That(dart).DoesNotContain("TODO: IrNullConditionalAccess");
+    }
+
+    [Test]
     public async Task StaticClassWithNonPublicNestedTypes_TranspilesWithoutCrashing()
     {
         // #264 widened assembly-wide transpilability to nested types of any

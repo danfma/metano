@@ -562,6 +562,7 @@ public static class IrToTsJsxComponentBridge
             or IrTypeReference
             or IrThisExpression
             or IrBaseExpression
+            or IrConditionalReceiver
             or IrUnsupportedExpression => expr,
             // Fail loud instead of silently passing an unhandled node through: a
             // prop read nested inside an un-rewritten node would leak as a `this`

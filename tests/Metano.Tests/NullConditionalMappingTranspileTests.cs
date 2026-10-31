@@ -212,24 +212,24 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : receiver$temp$0[receiver$temp$0.length - 1])(find(items));"
+                "return (($receiver) => $receiver == null ? null : $receiver[$receiver.length - 1])(find(items));"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : receiver$temp$0.slice(0, receiver$temp$0.length - 1))(find(items));"
+                "return (($receiver) => $receiver == null ? null : $receiver.slice(0, $receiver.length - 1))(find(items));"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : receiver$temp$0.items[receiver$temp$0.items.length - 1])(order.getNext());"
+                "return (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1])(order.getNext());"
             );
 
-        await Assert.That(output).DoesNotContain("?.[receiver$temp$");
-        await Assert.That(output).DoesNotContain("?.items[receiver$temp$");
-        await Assert.That(output).DoesNotContain("?.slice(0, receiver$temp$");
+        await Assert.That(output).DoesNotContain("?.[$receiver");
+        await Assert.That(output).DoesNotContain("?.items[$receiver");
+        await Assert.That(output).DoesNotContain("?.slice(0, $receiver");
     }
 
     [Test]
@@ -258,7 +258,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : listRemove(receiver$temp$0.items, item))(order.getNext());"
+                "return (($receiver) => $receiver == null ? null : listRemove($receiver.items, item))(order.getNext());"
             );
     }
 
@@ -272,7 +272,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return await (async (receiver$temp$0) => receiver$temp$0 == null ? null : listRemove(receiver$temp$0.items, await item))(order.getNext());"
+                "return await (async ($receiver) => $receiver == null ? null : listRemove($receiver.items, await item))(order.getNext());"
             );
     }
 
@@ -296,7 +296,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "const receiver$temp$0 = order.getNext();\n\n    if (receiver$temp$0 != null) {\n      listRemove(receiver$temp$0.items, await item);\n    }"
+                "const $receiver = order.getNext();\n\n    if ($receiver != null) {\n      listRemove($receiver.items, await item);\n    }"
             );
 
         await Assert.That(output).DoesNotContain("? null :");

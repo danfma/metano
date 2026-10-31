@@ -18,10 +18,10 @@ export function remove(order: Order | null, item: number): boolean | null {
 
 export function clearNext(order: Order | null): void {
   {
-    const receiver$temp$0 = order?.getNext();
+    const $receiver = order?.getNext();
 
-    if (receiver$temp$0 != null) {
-      receiver$temp$0.items.length = 0;
+    if ($receiver != null) {
+      $receiver.items.length = 0;
     }
   }
 }
@@ -39,5 +39,5 @@ export function first(items: number[] | null): number | null {
 }
 
 export async function removeLater(order: Order, item: Promise<number>): Promise<boolean | null> {
-  return await (async (receiver$temp$0) => receiver$temp$0 == null ? null : listRemove(receiver$temp$0.items, await item))(order.getNext());
+  return await (async ($receiver) => $receiver == null ? null : listRemove($receiver.items, await item))(order.getNext());
 }

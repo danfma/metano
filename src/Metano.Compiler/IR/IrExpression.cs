@@ -138,32 +138,31 @@ public sealed record IrSliceExpression(
 ) : IrExpression;
 
 /// <summary>
-/// A null-conditional access: <c>receiver?.A</c>, <c>receiver?.A.B(x)</c>,
-/// <c>receiver?[i]</c>. <see cref="Receiver"/> is evaluated once; the
-/// whole expression yields <c>null</c> when it is null and
+/// A null-conditional access (<c>receiver?.A</c>, <c>receiver?.A.B(x)</c>,
+/// <c>receiver?[i]</c>), shaped like Roslyn's
+/// <c>IConditionalAccessOperation</c>: <see cref="Receiver"/> is evaluated
+/// once; the whole expression yields <c>null</c> when it is null and
 /// <see cref="WhenNotNull"/> otherwise. <see cref="WhenNotNull"/> is the rest
-/// of the chain extracted as an ordinary expression over the receiver, so
-/// every step keeps its own lowering (member mappings, extension rewrites,
-/// LINQ). It refers to the receiver through
-/// <c>IrIdentifier(<see cref="ReceiverName"/>)</c> when the receiver needs a
-/// single-evaluation binding, or by repeating <see cref="Receiver"/> when it
-/// is a side-effect-free shape (<see cref="ReceiverName"/> is <c>null</c>).
-/// Backends may re-sugar it into native optional chaining when every step
-/// is a plain member access or call.
+/// of the chain extracted as an ordinary expression, so every step keeps its
+/// own lowering (member mappings, extension rewrites, LINQ); it reads the
+/// receiver through <see cref="IrConditionalReceiver"/> placeholders. How the
+/// receiver is evaluated once (native optional chaining, repeating a
+/// side-effect-free receiver, or binding it) is the backend's decision.
 /// </summary>
-public sealed record IrNullConditionalAccess(
-    IrExpression Receiver,
-    IrExpression WhenNotNull,
-    string? ReceiverName = null
-) : IrExpression
-{
-    /// <summary>
-    /// Whether <see cref="WhenNotNull"/> reads the receiver through the
-    /// <see cref="ReceiverName"/> binding.
-    /// </summary>
-    [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(ReceiverName))]
-    public bool IsBound => ReceiverName is not null;
-}
+public sealed record IrNullConditionalAccess(IrExpression Receiver, IrExpression WhenNotNull)
+    : IrExpression;
+
+/// <summary>
+/// The value of the nearest enclosing <see cref="IrNullConditionalAccess"/>'s
+/// receiver, read inside that access's
+/// <see cref="IrNullConditionalAccess.WhenNotNull"/> (Roslyn's
+/// <c>IConditionalAccessInstanceOperation</c>). It is never null there and
+/// reading it has no side effects. A placeholder inside a nested access's
+/// <see cref="IrNullConditionalAccess.Receiver"/> still refers to the
+/// enclosing access; one inside a nested access's
+/// <see cref="IrNullConditionalAccess.WhenNotNull"/> refers to the nested one.
+/// </summary>
+public sealed record IrConditionalReceiver : IrExpression;
 
 // -- Invocations --
 

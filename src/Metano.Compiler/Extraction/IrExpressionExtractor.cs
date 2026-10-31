@@ -79,14 +79,15 @@ public sealed partial class IrExpressionExtractor
     private int _receiverTempCounter;
 
     /// <summary>
-    /// The receiver bound while <see cref="LowerConditionalContinuation"/>
-    /// extracts the steps after a <c>?.</c>; <c>null</c> outside a
-    /// continuation. Kept as extractor state rather than threaded through
+    /// The receiver syntax of the null-conditional access whose steps
+    /// <see cref="LowerConditionalContinuation"/> is extracting; <c>null</c>
+    /// outside one. Kept as extractor state rather than threaded through
     /// <see cref="Extract"/> because every receiver-aware lowering reaches
     /// the receiver by extracting its syntax: <see cref="Extract"/> answers
-    /// that syntax with the bound IR, so the receiver is evaluated once.
+    /// that syntax with an <see cref="IrConditionalReceiver"/>, so the
+    /// receiver is never re-extracted.
     /// </summary>
-    private BoundConditionalReceiver? _conditionalReceiver;
+    private ExpressionSyntax? _conditionalReceiverSyntax;
 
     private string NextReceiverTempName() => $"receiver$temp${_receiverTempCounter++}";
 
@@ -163,8 +164,8 @@ public sealed partial class IrExpressionExtractor
     internal HashSet<ISymbol> InlineExpandingSet => _inlineExpanding;
 
     public IrExpression Extract(ExpressionSyntax expression) =>
-        _conditionalReceiver is { } bound && expression == bound.Syntax
-            ? bound.Receiver
+        _conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax
+            ? new IrConditionalReceiver()
             : ExtractUnbound(expression);
 
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
@@ -209,11 +210,11 @@ public sealed partial class IrExpressionExtractor
             CollectionExpressionSyntax coll => ExtractCollectionExpression(coll),
             ConditionalAccessExpressionSyntax cond => ExtractConditionalAccess(cond),
             MemberBindingExpressionSyntax binding
-                when _conditionalReceiver is not null
+                when _conditionalReceiverSyntax is not null
                     && QualifiedMemberSyntax.From(binding) is { } boundMember =>
                 ExtractMemberAccess(boundMember),
             ElementBindingExpressionSyntax elementBinding
-                when _conditionalReceiver is not null
+                when _conditionalReceiverSyntax is not null
                     && QualifiedMemberSyntax.ConditionalReceiverOf(elementBinding)
                         is { } receiver => ExtractElementRead(
                 elementBinding,
@@ -354,12 +355,10 @@ public sealed partial class IrExpressionExtractor
     /// Lowers the steps after a <c>?.</c> (<c>a?.B</c>, <c>a?.B.C(x)</c>,
     /// <c>a?[0].B</c>) to an <see cref="IrNullConditionalAccess"/>. The
     /// steps go through the regular <see cref="Extract"/> pipeline with
-    /// <paramref name="receiverSyntax"/> bound to the receiver IR, so every
-    /// step — the leading one included — keeps its own lowering (extension
-    /// rewrites, <c>[Emit]</c>, <c>[Inline]</c>, LINQ chains, type
-    /// arguments, member origins). A receiver that is not
-    /// <see cref="IrEvaluationTraits.IsReusableNullConditionalReceiver"/>
-    /// gets a temp binding so it evaluates once.
+    /// <paramref name="receiverSyntax"/> read as an
+    /// <see cref="IrConditionalReceiver"/>, so every step — the leading one
+    /// included — keeps its own lowering (extension rewrites, <c>[Emit]</c>,
+    /// <c>[Inline]</c>, LINQ chains, type arguments, member origins).
     /// </summary>
     private IrExpression LowerConditionalContinuation(
         IrExpression receiver,
@@ -367,30 +366,18 @@ public sealed partial class IrExpressionExtractor
         ExpressionSyntax whenNotNull
     )
     {
-        var receiverName = IrEvaluationTraits.IsReusableNullConditionalReceiver(receiver)
-            ? null
-            : NextReceiverTempName();
-
-        var receiverReference = receiverName is null ? receiver : new IrIdentifier(receiverName);
-        var enclosingReceiver = _conditionalReceiver;
-        _conditionalReceiver = new BoundConditionalReceiver(receiverSyntax, receiverReference);
+        var enclosingReceiverSyntax = _conditionalReceiverSyntax;
+        _conditionalReceiverSyntax = receiverSyntax;
 
         try
         {
-            return new IrNullConditionalAccess(receiver, Extract(whenNotNull), receiverName);
+            return new IrNullConditionalAccess(receiver, Extract(whenNotNull));
         }
         finally
         {
-            _conditionalReceiver = enclosingReceiver;
+            _conditionalReceiverSyntax = enclosingReceiverSyntax;
         }
     }
-
-    /// <summary>
-    /// The receiver of the null-conditional access being extracted: its
-    /// <paramref name="Syntax"/> and the IR every read of that syntax
-    /// resolves to (the receiver itself, or its temp binding).
-    /// </summary>
-    private sealed record BoundConditionalReceiver(ExpressionSyntax Syntax, IrExpression Receiver);
 
     /// <summary>
     /// Lowers <c>a?.b = c</c> (and nested forms like

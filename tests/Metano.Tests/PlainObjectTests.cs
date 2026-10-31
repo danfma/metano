@@ -288,7 +288,7 @@ public class PlainObjectTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : getTitle(receiver$temp$0))(this.find());"
+                "return (($receiver) => $receiver == null ? null : getTitle($receiver))(this.find());"
             );
     }
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Dart.Bridge;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
@@ -243,11 +244,11 @@ public static class IrBodyPrinter
                 sb.Append("super");
                 break;
             case IrMemberAccess ma:
-                PrintExpression(sb, ma.Target);
+                PrintAccessTarget(sb, ma.Target);
                 sb.Append('.').Append(IrToDartNamingPolicy.ToParameterName(ma.MemberName));
                 break;
             case IrElementAccess ea:
-                PrintExpression(sb, ea.Target);
+                PrintAccessTarget(sb, ea.Target);
                 sb.Append('[');
                 PrintExpression(sb, ea.Index);
                 sb.Append(']');
@@ -366,6 +367,9 @@ public static class IrBodyPrinter
                 sb.Append("/* TODO: [Emit] template ‘")
                     .Append(tpl.Template)
                     .Append("’ has no Dart mapping */ null");
+                break;
+            case IrNullConditionalAccess access:
+                PrintNullConditionalAccess(sb, access);
                 break;
             case IrUnsupportedExpression u:
                 // Already reported as MS0001 by the extractor; `throw` is an
@@ -685,6 +689,81 @@ public static class IrBodyPrinter
                     .Append(" */");
                 break;
         }
+    }
+
+    /// <summary>
+    /// The receiver of the null-conditional access being printed, while its
+    /// <c>WhenNotNull</c> is printed.
+    /// </summary>
+    [ThreadStatic]
+    private static Stack<IrExpression>? _conditionalReceivers;
+
+    /// <summary>
+    /// Dart null-shorting covers the rest of a <c>?.</c> chain like C#, so a
+    /// null-conditional access whose steps read the receiver once, at the
+    /// root of a member/element chain, prints natively
+    /// (<c>order?.items.length</c>). Other shapes (a step lowered to a helper
+    /// that takes the receiver as an argument, a receiver read twice) emit
+    /// the unsupported placeholder, which throws if reached.
+    /// </summary>
+    private static void PrintNullConditionalAccess(StringBuilder sb, IrNullConditionalAccess access)
+    {
+        if (
+            IrEvaluationTraits.CountConditionalReceiverReads(access.WhenNotNull) != 1
+            || !ReadsConditionalReceiverAtChainRoot(access.WhenNotNull)
+        )
+        {
+            sb.Append("(throw UnsupportedError('Unsupported expression: NullConditionalAccess'))");
+            return;
+        }
+
+        var receivers = _conditionalReceivers ??= new Stack<IrExpression>();
+        receivers.Push(access.Receiver);
+
+        try
+        {
+            PrintExpression(sb, access.WhenNotNull);
+        }
+        finally
+        {
+            receivers.Pop();
+        }
+    }
+
+    private static bool ReadsConditionalReceiverAtChainRoot(IrExpression step) =>
+        step switch
+        {
+            IrMemberAccess { Target: IrConditionalReceiver } => true,
+            IrElementAccess { Target: IrConditionalReceiver } => true,
+            IrMemberAccess access => ReadsConditionalReceiverAtChainRoot(access.Target),
+            IrElementAccess element => ReadsConditionalReceiverAtChainRoot(element.Target),
+            IrCallExpression { IsOptional: false } call => ReadsConditionalReceiverAtChainRoot(
+                call.Target
+            ),
+            _ => false,
+        };
+
+    /// <summary>
+    /// The object of a member or element access; the conditional receiver
+    /// prints as the null-shorting link (<c>receiver?</c>, followed by the
+    /// access's own <c>.name</c> / <c>[index]</c>).
+    /// </summary>
+    private static void PrintAccessTarget(StringBuilder sb, IrExpression target)
+    {
+        if (target is not IrConditionalReceiver)
+        {
+            PrintExpression(sb, target);
+            return;
+        }
+
+        var receivers =
+            _conditionalReceivers
+            ?? throw new InvalidOperationException(
+                "A conditional receiver was printed outside its null-conditional access."
+            );
+
+        PrintCallTarget(sb, receivers.Peek());
+        sb.Append('?');
     }
 
     private static void PrintOperand(StringBuilder sb, IrExpression operand, bool parenthesize)
