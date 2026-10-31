@@ -1041,7 +1041,7 @@ public sealed partial class IrExpressionExtractor
     {
         var symbol = _semantic.GetSymbolInfo(generic).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
-            return TypeReferenceTo(symbol, generic.Identifier.ValueText);
+            return TypeReferenceFromIdentifier(symbol, generic.Identifier.ValueText);
 
         if (
             symbol
@@ -1085,7 +1085,7 @@ public sealed partial class IrExpressionExtractor
     {
         var symbol = _semantic.GetSymbolInfo(id).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
-            return TypeReferenceTo(symbol, id.Identifier.ValueText);
+            return TypeReferenceFromIdentifier(symbol, id.Identifier.ValueText);
 
         // Inline method expansion: when the enclosing extractor is
         // lowering an `[Inline]` method body, each use of a method
@@ -1187,9 +1187,17 @@ public sealed partial class IrExpressionExtractor
     /// else (top-level type, type parameter, namespace) keeps the source
     /// <paramref name="spelling"/>.
     /// </summary>
-    private IrTypeReference TypeReferenceTo(ISymbol symbol, string spelling) =>
-        new(symbol is INamedTypeSymbol type ? QualifiedNestedName(type) ?? spelling : spelling);
+    private IrTypeReference TypeReferenceFromIdentifier(ISymbol symbol, string spelling)
+    {
+        var qualified = symbol is INamedTypeSymbol type ? QualifiedNestedName(type) : null;
 
+        return new(qualified ?? spelling);
+    }
+
+    /// <summary>
+    /// The container-qualified name of a nested type, or <c>null</c> for a top-level
+    /// type (callers fall back to their own spelling on <c>null</c>).
+    /// </summary>
     private string? QualifiedNestedName(INamedTypeSymbol type) =>
         type.ContainingType is null ? null : IrTypeRefMapper.BuildQualifiedName(type, _target);
 

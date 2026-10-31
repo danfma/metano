@@ -160,7 +160,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private void TransformNestedTypes(INamedTypeSymbol parent, List<TsTopLevel> statements)
     {
-        var nested = parent.GetTypeMembers().Where(IsExportableNestedType).ToList();
+        var nested = parent.GetTypeMembers().Where(ShouldEmitInCompanionNamespace).ToList();
 
         if (nested.Count == 0)
             return;
@@ -189,33 +189,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// A companion namespace merged with an emitted class must share its
-    /// <c>export</c> modifier (TS2395), so it is always exported. A module-shaped
-    /// static class (<c>[NoContainer]</c>, <c>[ExportedAsModule]</c>, extension
-    /// holder) emits no declaration of its own: its companion namespace stands
-    /// alone and is exported only when some nested type is reachable outside the
-    /// container. Holding only <c>private</c> nested types, it stays module-local so
-    /// neither the module nor the barrel exposes them (#264).
-    /// </summary>
-    private static bool IsCompanionNamespaceExported(
-        INamedTypeSymbol parent,
-        IReadOnlyList<INamedTypeSymbol> nested
-    )
-    {
-        var parentEmitsNoDeclaration = parent.IsStatic && IsStaticModuleShape(parent);
-
-        return !parentEmitsNoDeclaration
-            || nested.Any(type => type.DeclaredAccessibility != Accessibility.Private);
-    }
-
-    /// <summary>
     /// A nested type is emitted into its parent's companion namespace whenever it is
     /// transpilable, whatever its C# accessibility: the parent's members (and, for
     /// <c>internal</c>, other files) reference it as <c>Outer.Inner</c>, which only
     /// resolves through an exported namespace member. The barrel re-exports only the
     /// top-level parent, so a non-public nested type never gets its own barrel entry.
     /// </summary>
-    private bool IsExportableNestedType(INamedTypeSymbol type) =>
+    private bool ShouldEmitInCompanionNamespace(INamedTypeSymbol type) =>
+        // Assembly-wide opt-in already rejects implicit nested types; this guard
+        // keeps the explicit-[Transpile] path equally strict.
         !type.IsImplicitlyDeclared
         && SymbolHelper.IsTranspilable(
             type,
@@ -683,16 +665,43 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private bool TryEmitStaticModule(INamedTypeSymbol type, List<TsTopLevel> sink)
     {
-        if (!type.IsStatic || !IsStaticModuleShape(type))
+        if (!IsModuleShapedStaticClass(type))
             return false;
         TryEmitModuleViaIr(type, sink);
         return true;
     }
 
-    private static bool IsStaticModuleShape(INamedTypeSymbol type) =>
-        SymbolHelper.HasExportedAsModule(type)
-        || SymbolHelper.HasNoContainer(type)
-        || HasExtensionMembers(type);
+    /// <summary>
+    /// The single source of truth for "which static classes emit no class
+    /// declaration of their own": static classes shaped as a module.
+    /// </summary>
+    private static bool IsModuleShapedStaticClass(INamedTypeSymbol type) =>
+        type.IsStatic
+        && (
+            SymbolHelper.HasExportedAsModule(type)
+            || SymbolHelper.HasNoContainer(type)
+            || HasExtensionMembers(type)
+        );
+
+    /// <summary>
+    /// A companion namespace merged with an emitted class must share its
+    /// <c>export</c> modifier (TS2395), so it is always exported. A module-shaped
+    /// static class (<c>[NoContainer]</c>, <c>[ExportedAsModule]</c>, extension
+    /// holder) emits no declaration of its own: its companion namespace stands
+    /// alone and is exported only when some nested type is reachable outside the
+    /// container. Holding only <c>private</c> nested types, it stays module-local so
+    /// neither the module nor the barrel exposes them (#264).
+    /// </summary>
+    private static bool IsCompanionNamespaceExported(
+        INamedTypeSymbol parent,
+        IReadOnlyList<INamedTypeSymbol> nested
+    )
+    {
+        var parentEmitsNoDeclaration = IsModuleShapedStaticClass(parent);
+
+        return !parentEmitsNoDeclaration
+            || nested.Any(type => type.DeclaredAccessibility != Accessibility.Private);
+    }
 
     /// <summary>
     /// Class / struct / record fallback: prefer the <c>[PlainObject]</c>
@@ -980,7 +989,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// the parent's file by <see cref="TransformNestedTypes"/>, so the helpers their bodies
     /// use (e.g. <c>valueEquals</c> for a non-strict variant field) must be imported there
     /// too. Recursion is bounded by type-nesting depth and gated by
-    /// <see cref="IsExportableNestedType"/> so a nested type the backend does not emit never
+    /// <see cref="ShouldEmitInCompanionNamespace"/> so a nested type the backend does not emit never
     /// contributes a spurious requirement. Runtime collection stays a target concern because
     /// only the target knows which nested types share the parent's file.
     /// </summary>
@@ -991,7 +1000,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     )
     {
         // [Import]/[Ignore] types are discoverable but emit no declaration (BuildTypeStatements
-        // skips them). The recursion gate IsExportableNestedType lets an [Import] nested variant
+        // skips them). The recursion gate ShouldEmitInCompanionNamespace lets an [Import] nested variant
         // through (it is still IsTranspilable), so this guard is what drops it — without it a
         // non-emitted variant's fields would pull a spurious runtime import.
         if (SymbolHelper.HasImport(type) || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
@@ -1011,7 +1020,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 acc.Add(req);
 
         foreach (var nested in type.GetTypeMembers())
-            if (IsExportableNestedType(nested))
+            if (ShouldEmitInCompanionNamespace(nested))
                 ScanTypeAndEmittedNested(nested, acc, irCache);
     }
 

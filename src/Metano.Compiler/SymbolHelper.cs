@@ -1079,7 +1079,7 @@ public static class SymbolHelper
     /// of any accessibility (<c>private</c>, <c>internal</c>, <c>protected</c>) is part
     /// of its emitted container's surface — the container's members reference it as
     /// <c>Outer.Inner</c>, so it must be emitted into the companion namespace (#264).
-    /// Unnamed nested types (C# 14 extension blocks) never qualify.
+    /// <c>[Ignore]</c> on a nested type opts it out.
     /// </summary>
     private static bool IsAssemblyWideOptIn(ISymbol symbol, IAssemblySymbol? currentAssembly)
     {
@@ -1093,11 +1093,22 @@ public static class SymbolHelper
         if (symbol.DeclaredAccessibility == Accessibility.Public)
             return true;
 
-        return symbol is INamedTypeSymbol { ContainingType: { } container } nested
-            && !string.IsNullOrEmpty(nested.Name)
-            && !nested.IsImplicitlyDeclared
-            && IsDeclaredTranspilable(container, assemblyWideTranspile: true, currentAssembly);
+        return IsNestedInOptedInContainer(symbol, currentAssembly);
     }
+
+    /// <summary>
+    /// True for a named, source-declared nested type whose container is itself opted
+    /// into transpilation. Unnamed nested types (C# 14 extension blocks) and
+    /// compiler-synthesized ones never qualify.
+    /// </summary>
+    private static bool IsNestedInOptedInContainer(
+        ISymbol symbol,
+        IAssemblySymbol? currentAssembly
+    ) =>
+        symbol is INamedTypeSymbol { ContainingType: { } container } nested
+        && !string.IsNullOrEmpty(nested.Name)
+        && !nested.IsImplicitlyDeclared
+        && IsDeclaredTranspilable(container, assemblyWideTranspile: true, currentAssembly);
 
     /// <summary>
     /// "Author opted this type into transpilation" — it carries

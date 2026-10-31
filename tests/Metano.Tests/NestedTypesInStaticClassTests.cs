@@ -104,8 +104,10 @@ public class NestedTypesInStaticClassTests
 
         var barrel = result["index.ts"];
         await Assert.That(barrel).Contains("export { ShotSchedule } from \"./shot-schedule\"");
-        await Assert.That(barrel).DoesNotContain("ShotEntry");
-        await Assert.That(barrel).DoesNotContain("Kind");
+        await Assert.That(barrel).DoesNotContain("ShotEntry }");
+        await Assert.That(barrel).DoesNotContain("ShotSchedule.ShotEntry");
+        await Assert.That(barrel).DoesNotContain("export { Kind");
+        await Assert.That(barrel).DoesNotContain("ShotSchedule.Kind");
     }
 
     [Test]
@@ -158,6 +160,8 @@ public class NestedTypesInStaticClassTests
                     return pair.A + pair.B;
                 }
             }
+
+            public sealed record Marker(int Id);
             """
         );
 
@@ -165,7 +169,9 @@ public class NestedTypesInStaticClassTests
         await Assert.That(output).Contains("const pair = new Pairs.Pair(a, b);");
         await Assert.That(output).Contains("\nnamespace Pairs {");
         await Assert.That(output).DoesNotContain("export namespace Pairs");
-        await Assert.That(result["index.ts"]).DoesNotContain("Pairs");
+        var barrel = result["index.ts"];
+        await Assert.That(barrel).Contains("export { Marker } from \"./marker\"");
+        await Assert.That(barrel).DoesNotContain("Pairs");
     }
 
     [Test]
@@ -246,5 +252,34 @@ public class NestedTypesInStaticClassTests
         // Outside [assembly: TranspileAssembly] a nested type still needs its own
         // [Transpile] opt-in, whatever its accessibility.
         await Assert.That(output).DoesNotContain("Untracked");
+    }
+
+    [Test]
+    public async Task IgnoredNonPublicNestedType_IsNotEmitted()
+    {
+        // Assembly-wide mode emits every nested type of an opted-in container, even
+        // one no emitted member references; [Ignore] is the documented opt-out.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Svc
+            {
+                public int Count() => 1;
+
+                [Ignore]
+                private static class NativeOnly
+                {
+                    public static int Sum(int a, int b) => a + b;
+                }
+
+                private sealed record Kept(int Value);
+            }
+            """
+        );
+
+        var output = result["svc.ts"];
+        await Assert.That(output).Contains("export class Kept {");
+        await Assert.That(output).DoesNotContain("NativeOnly");
     }
 }
