@@ -138,8 +138,7 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     ) =>
         TsImmediateInvocation.Of(
-            ScrutineeParameterName,
-            Map(sw.Scrutinee, bclRegistry),
+            [new TsImmediateBinding(ScrutineeParameterName, Map(sw.Scrutinee, bclRegistry))],
             body,
             isAsync: sw.Arms.Any(ArmAwaits)
         );

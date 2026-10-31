@@ -56,6 +56,30 @@ public class IndexAndRangeTests
     }
 
     [Test]
+    public async Task IndexFromEnd_WithAwaitedOffsetOnCallReceiver_MakesTheBindingAsync()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Threading.Tasks;
+
+            [Transpile]
+            public class Sequences
+            {
+                private static int[] Make() => [1, 2, 3];
+
+                public async Task<int> FromEnd(Task<int> offset) => Make()[^(await offset)];
+            }
+            """
+        );
+
+        await Assert
+            .That(result["sequences.ts"])
+            .Contains(
+                "return await (async (receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0[receiver$temp$0.length - receiver$temp$1])(await offset))(Sequences.make());"
+            );
+    }
+
+    [Test]
     public async Task IndexFromEnd_OnCallReceiver_EvaluatesReceiverOnce()
     {
         var result = TranspileHelper.Transpile(
