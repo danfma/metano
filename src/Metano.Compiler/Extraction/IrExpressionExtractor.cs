@@ -654,8 +654,15 @@ public sealed partial class IrExpressionExtractor
     private IrExpression BindValueOnce(
         IrExpression value,
         Func<IrExpression, IrExpression> build
-    ) => BindOnce(value, IsSideEffectFree(value), build);
+    ) => BindOnce(value, IrEvaluationTraits.IsSideEffectFree(value), build);
 
+    /// <summary>
+    /// The single "evaluate once" lowering: a reusable value is passed to
+    /// <paramref name="build"/> as-is, anything else is bound once by an
+    /// <see cref="IrLetExpression"/>. Every binding gets a fresh name, so a
+    /// nested rewrite (a setter whose new value triggers another setter)
+    /// never shadows an enclosing one.
+    /// </summary>
     private IrExpression BindOnce(
         IrExpression value,
         bool isReusable,
@@ -669,25 +676,6 @@ public sealed partial class IrExpressionExtractor
 
         return new IrLetExpression(tempName, value, build(new IrIdentifier(tempName)));
     }
-
-    /// <summary>
-    /// Shape-based: literals, <see cref="IrEvaluationTraits.IsReusableReceiver">reusable
-    /// receivers</see>, and non-assigning operators over those. Property
-    /// getters are assumed side-effect free, as in <see cref="IrEvaluationTraits.IsReusableReceiver"/>.
-    /// </summary>
-    private static bool IsSideEffectFree(IrExpression expression) =>
-        expression switch
-        {
-            IrLiteral => true,
-            IrUnaryExpression
-            {
-                Operator: not (IrUnaryOp.Increment or IrUnaryOp.Decrement)
-            } unary => IsSideEffectFree(unary.Operand),
-            IrBinaryExpression binary when !binary.Operator.IsAssignment() => IsSideEffectFree(
-                binary.Left
-            ) && IsSideEffectFree(binary.Right),
-            _ => IrEvaluationTraits.IsReusableReceiver(expression),
-        };
 
     /// <summary>
     /// An unsupported (already reported) placeholder is not an assignable
@@ -3128,35 +3116,29 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression, IReadOnlyList<IrExpression>, IrExpression> buildNewValue
     )
     {
-        if (IrEvaluationTraits.IsReusableReceiver(receiver))
-        {
-            var setterArgs = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(receiver) };
-            foreach (var idx in indexArgs)
-                setterArgs.Add(new IrArgument(idx));
-            setterArgs.Add(new IrArgument(buildNewValue(receiver, indexArgs)));
-            return BuildExtensionHelperCall(
-                helperContainer,
-                setterName,
-                emittedSetterName,
-                setterArgs,
-                typeArguments: null
-            );
-        }
+        return BindReceiverOnce(
+            receiver,
+            target =>
+            {
+                var setterArgs = new List<IrArgument>(indexArgs.Count + 2)
+                {
+                    new IrArgument(target),
+                };
 
-        var tempName = NextReceiverTempName();
-        var tempRef = new IrIdentifier(tempName);
-        var args = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(tempRef) };
-        foreach (var idx in indexArgs)
-            args.Add(new IrArgument(idx));
-        args.Add(new IrArgument(buildNewValue(tempRef, indexArgs)));
-        var setterCall = BuildExtensionHelperCall(
-            helperContainer,
-            setterName,
-            emittedSetterName,
-            args,
-            typeArguments: null
+                foreach (var idx in indexArgs)
+                    setterArgs.Add(new IrArgument(idx));
+
+                setterArgs.Add(new IrArgument(buildNewValue(target, indexArgs)));
+
+                return BuildExtensionHelperCall(
+                    helperContainer,
+                    setterName,
+                    emittedSetterName,
+                    setterArgs,
+                    typeArguments: null
+                );
+            }
         );
-        return new IrLetExpression(tempName, receiver, setterCall);
     }
 
     /// <summary>
@@ -3244,31 +3226,17 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression, IrExpression> buildNewValue
     )
     {
-        if (IrEvaluationTraits.IsReusableReceiver(receiver))
-        {
-            return BuildExtensionHelperCall(
-                helperContainer,
-                setterName,
-                emittedSetterName,
-                [new IrArgument(receiver), new IrArgument(buildNewValue(receiver))],
-                typeArguments: null
-            );
-        }
-
-        // Fresh binding name per call site so nested setter rewrites
-        // (a setter whose new-value expression triggers another
-        // setter on a different impure receiver) don't shadow each
-        // other under IIFE scoping.
-        var tempName = NextReceiverTempName();
-        var tempRef = new IrIdentifier(tempName);
-        var setterCall = BuildExtensionHelperCall(
-            helperContainer,
-            setterName,
-            emittedSetterName,
-            [new IrArgument(tempRef), new IrArgument(buildNewValue(tempRef))],
-            typeArguments: null
+        return BindReceiverOnce(
+            receiver,
+            target =>
+                BuildExtensionHelperCall(
+                    helperContainer,
+                    setterName,
+                    emittedSetterName,
+                    [new IrArgument(target), new IrArgument(buildNewValue(target))],
+                    typeArguments: null
+                )
         );
-        return new IrLetExpression(tempName, receiver, setterCall);
     }
 
     /// <summary>

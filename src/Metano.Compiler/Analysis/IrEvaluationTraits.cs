@@ -29,6 +29,26 @@ public static class IrEvaluationTraits
         };
 
     /// <summary>
+    /// Shape-based: literals, <see cref="IsReusableReceiver">reusable
+    /// receivers</see>, and non-assigning operators over those. Property
+    /// getters are assumed side-effect free, as in
+    /// <see cref="IsReusableReceiver"/>.
+    /// </summary>
+    public static bool IsSideEffectFree(IrExpression expression) =>
+        expression switch
+        {
+            IrLiteral => true,
+            IrUnaryExpression
+            {
+                Operator: not (IrUnaryOp.Increment or IrUnaryOp.Decrement)
+            } unary => IsSideEffectFree(unary.Operand),
+            IrBinaryExpression binary when !binary.Operator.IsAssignment() => IsSideEffectFree(
+                binary.Left
+            ) && IsSideEffectFree(binary.Right),
+            _ => IsReusableReceiver(expression),
+        };
+
+    /// <summary>
     /// <see cref="IsReusableReceiver"/>, also accepting null-conditional links
     /// over such shapes (<c>o?.Next</c>): a guard over them may repeat the
     /// receiver instead of binding it (<c>o?.next == null ? null : f(o?.next)</c>).
