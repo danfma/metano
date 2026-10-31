@@ -367,7 +367,7 @@ public sealed class ImportCollector(
                 // Track for auto-deps when [Import] declared a Version. The package
                 // name is `extImport.From` (the module specifier).
                 if (extImport.Version is not null && extImport.Version.Length > 0)
-                    _typeMappingContext.UsedCrossPackages[extImport.From] = extImport.Version;
+                    _typeMappingContext.UsedCrossPackages.Record(extImport.From, extImport.Version);
                 continue;
             }
 
@@ -544,7 +544,7 @@ public sealed class ImportCollector(
                 );
                 importedNames.Add(bindingName);
                 if (ext.Version is { Length: > 0 } version)
-                    _typeMappingContext.UsedCrossPackages[ext.From] = version;
+                    _typeMappingContext.UsedCrossPackages.Record(ext.From, version);
             }
         }
 

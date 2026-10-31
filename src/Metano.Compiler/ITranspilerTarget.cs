@@ -78,9 +78,12 @@ public interface ITranspilerTarget
     /// supplies it.</param>
     /// <param name="files">The reused generated files only; copied assets are not
     /// included.</param>
+    /// <param name="packageDependencies">The <see cref="TargetOutput.PackageDependencies"/>
+    /// of the run that produced <paramref name="files"/>, restored from the cache.</param>
     void AdoptCachedOutput(
         IrCompilation ir,
         Compilation? compilation,
-        IReadOnlyList<GeneratedFile> files
+        IReadOnlyList<GeneratedFile> files,
+        IReadOnlyDictionary<string, string> packageDependencies
     ) { }
 }

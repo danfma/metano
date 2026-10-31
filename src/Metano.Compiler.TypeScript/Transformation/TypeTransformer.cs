@@ -278,8 +278,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             );
 
         // Build the explicit per-compilation context that replaces TypeMapper statics.
-        // Omit the optional sinks so the context provisions concurrent defaults
-        // (ConcurrentHashSet for misses, ConcurrentDictionary for used packages) —
+        // Omit the optional sink so the context provisions concurrent defaults
+        // (ConcurrentHashSet for misses, a thread-safe ledger for used packages) —
         // the per-group transform loop below fans out across worker threads.
         var typeMappingContext = new TypeMappingContext(
             ir.BclExports,
@@ -327,7 +327,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();
         var perGroupClosure = new Dictionary<string, string>(StringComparer.Ordinal);
-        var perGroupMetadata = Array.Empty<CachedFileMetadata[]>();
+        var perGroupEmissions = Array.Empty<GroupEmission>();
 
         // Publish the interface-prefix rename dict for the duration
         // of this transform so `IrToTsTypeMapper.MapNamed` rewrites
@@ -355,7 +355,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // above), publishes its own per-group AsyncLocal slots for
             // UsingAliases, and only writes back into thread-safe sinks
             // (TypeMapping.CrossPackageMisses is a ConcurrentHashSet,
-            // UsedCrossPackages is ConcurrentDictionary-backed, and
+            // UsedCrossPackages is a thread-safe ledger, and
             // _diagnostics is guarded by a lock). Parallel.For captures the
             // ambient ExecutionContext when each iteration starts so
             // AsyncLocal writes inside a worker stay isolated. The result
@@ -381,7 +381,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
                     : ComputePerGroupClosure(ir, groups);
             var perGroupResults = new TsSourceFile?[groups.Count];
-            perGroupMetadata = new CachedFileMetadata[groups.Count][];
+            perGroupEmissions = new GroupEmission[groups.Count];
             var skippedGroupCount = 0;
             Parallel.For(
                 0,
@@ -395,7 +395,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                             cachedGroups,
                             perGroupClosure,
                             perGroupResults,
-                            perGroupMetadata
+                            perGroupEmissions
                         )
                     )
                     {
@@ -436,7 +436,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         DrainCrossPackageMisses(typeMappingContext);
         DrainCrossPackageDependencies(typeMappingContext);
 
-        WriteGroupCache(groups, perGroupClosure, perGroupMetadata);
+        WriteGroupCache(groups, perGroupClosure, perGroupEmissions);
 
         return files;
     }
@@ -510,12 +510,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// Drains the auto-generated cross-package dependency map. The
     /// map is already pre-formatted (string → version specifier),
-    /// populated by three paths in <c>TypeMapper</c> / <c>ImportCollector</c>;
-    /// the CLI driver merges it into the consumer's <c>package.json</c>.
+    /// populated by three paths in <c>TypeMapper</c> / <c>ImportCollector</c>
+    /// for transformed groups and restored from the group cache for reused
+    /// ones; the CLI driver merges it into the consumer's <c>package.json</c>.
     /// </summary>
     private void DrainCrossPackageDependencies(TypeMappingContext typeMappingContext)
     {
-        foreach (var (packageName, version) in typeMappingContext.UsedCrossPackages)
+        foreach (var (packageName, version) in typeMappingContext.UsedCrossPackages.All)
         {
             _crossPackageDependencies[packageName] = version;
         }
@@ -752,9 +753,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// Per-iteration worker for the Parallel.For pass. Returns
     /// <see langword="true"/> when the group hit the cache (caller
     /// increments the skip counter); <see langword="false"/> when
-    /// <see cref="TransformGroup"/> ran. Result + metadata land in
-    /// the shared index-keyed arrays so the caller can preserve
-    /// source order after the parallel pass completes.
+    /// <see cref="TransformGroup"/> ran. Result + cacheable emission
+    /// land in the shared index-keyed arrays so the caller can preserve
+    /// source order after the parallel pass completes. A reused group
+    /// restores the cross-package dependencies it recorded when it was
+    /// last transformed (#299).
     /// </summary>
     private bool TransformGroupOrReuseFromCache(
         int index,
@@ -762,43 +765,59 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         GroupCacheFile? cachedGroups,
         IReadOnlyDictionary<string, string> perGroupClosure,
         TsSourceFile?[] perGroupResults,
-        CachedFileMetadata[][] perGroupMetadata
+        GroupEmission[] perGroupEmissions
     )
     {
         var group = groups[index];
         var groupKey = GroupKey(group);
-        if (
-            TryReuseFromCache(
-                groupKey,
-                cachedGroups,
-                perGroupClosure,
-                out var stub,
-                out var fileMeta
-            )
-        )
+        var dependencyLedger = Context.TypeMapping!.UsedCrossPackages;
+
+        if (TryReuseFromCache(groupKey, cachedGroups, perGroupClosure, out var stub, out var entry))
         {
+            dependencyLedger.Restore(entry!.Dependencies);
             perGroupResults[index] = stub;
-            perGroupMetadata[index] = [fileMeta!];
+            perGroupEmissions[index] = new GroupEmission(entry.Files, entry.Dependencies);
+
             return true;
         }
 
+        using var dependencies = dependencyLedger.BeginGroup();
         var produced = TransformGroup(group);
         perGroupResults[index] = produced;
-        if (produced is not null)
+
+        if (produced is null)
         {
-            // Print once: the printed bytes are what the target emits
-            // AND what the cache fingerprints. Stash in
-            // _cachedFileContents so the target skips its own Printer
-            // call for this path.
-            var printedContent = new Printer().Print(produced);
-            _cachedFileContents[produced.FileName] = printedContent;
-            perGroupMetadata[index] = [FileMetadataExtractor.Extract(produced, printedContent)];
+            perGroupEmissions[index] = GroupEmission.Empty;
+
+            return false;
         }
-        else
-        {
-            perGroupMetadata[index] = [];
-        }
+
+        // Print once: the printed bytes are what the target emits
+        // AND what the cache fingerprints. Stash in
+        // _cachedFileContents so the target skips its own Printer
+        // call for this path.
+        var printedContent = new Printer().Print(produced);
+        _cachedFileContents[produced.FileName] = printedContent;
+
+        perGroupEmissions[index] = new GroupEmission(
+            [FileMetadataExtractor.Extract(produced, printedContent)],
+            dependencies.Dependencies
+        );
+
         return false;
+    }
+
+    /// <summary>
+    /// What a group contributes to the per-group cache: the metadata of the file it
+    /// emitted and the cross-package dependencies that file requires.
+    /// </summary>
+    private sealed record GroupEmission(
+        IReadOnlyList<CachedFileMetadata> Files,
+        IReadOnlyDictionary<string, string> Dependencies
+    )
+    {
+        public static GroupEmission Empty { get; } =
+            new([], new Dictionary<string, string>(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -1218,22 +1237,22 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         GroupCacheFile? cachedGroups,
         IReadOnlyDictionary<string, string> closures,
         out TsSourceFile? stub,
-        out CachedFileMetadata? fileMeta
+        out GroupCacheEntry? entry
     )
     {
         stub = null;
-        fileMeta = null;
+        entry = null;
         if (CacheOutputDir is null || cachedGroups is null)
             return false;
         if (!closures.TryGetValue(groupKey, out var closure))
             return false;
-        if (!cachedGroups.Groups.TryGetValue(groupKey, out var entry))
+        if (!cachedGroups.Groups.TryGetValue(groupKey, out var cachedEntry))
             return false;
-        if (!string.Equals(entry.ClosureHash, closure, StringComparison.Ordinal))
+        if (!string.Equals(cachedEntry.ClosureHash, closure, StringComparison.Ordinal))
             return false;
-        if (entry.Files.Count != 1)
+        if (cachedEntry.Files.Count != 1)
             return false;
-        var meta = entry.Files[0];
+        var meta = cachedEntry.Files[0];
         if (!FileMetadataExtractor.IsSafeRelativePath(meta.Path))
             return false;
         var diskPath = Path.Combine(
@@ -1264,14 +1283,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         _cachedFileContents[meta.Path] = diskContent;
         stub = FileMetadataExtractor.BuildStub(meta);
-        fileMeta = meta;
+        entry = cachedEntry;
         return true;
     }
 
     private void WriteGroupCache(
         IReadOnlyList<TypeFileGroup> groups,
         IReadOnlyDictionary<string, string> closures,
-        IReadOnlyList<CachedFileMetadata[]> metadata
+        IReadOnlyList<GroupEmission> emissions
     )
     {
         if (CacheOutputDir is null)
@@ -1288,10 +1307,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var key = GroupKey(groups[i]);
             if (!closures.TryGetValue(key, out var closure))
                 continue;
-            var files = metadata[i] ?? [];
-            if (files.Length == 0)
+            var emission = emissions[i] ?? GroupEmission.Empty;
+            if (emission.Files.Count == 0)
                 continue;
-            entries[key] = new GroupCacheEntry(closure, files);
+            entries[key] = new GroupCacheEntry(closure, emission.Files, emission.Dependencies);
         }
         var cache = new GroupCacheFile(
             GroupCacheFile.CurrentFormatVersion,

@@ -160,12 +160,20 @@ public static class PackageJsonWriter
 
         // Merge auto-generated cross-package dependencies into the existing
         // `dependencies` object, leaving any user-hand-written entries for OTHER
-        // packages alone.
+        // packages alone. New entries are appended in ordinal order so the bytes never
+        // depend on the order the transform discovered them in.
         if (crossPackageDependencies is { Count: > 0 })
         {
             var deps = root["dependencies"] as JsonObject ?? new JsonObject();
-            foreach (var (pkg, version) in crossPackageDependencies)
+
+            foreach (
+                var (pkg, version) in crossPackageDependencies.OrderBy(
+                    entry => entry.Key,
+                    StringComparer.Ordinal
+                )
+            )
                 deps[pkg] = version;
+
             root["dependencies"] = deps;
         }
 

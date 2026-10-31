@@ -34,8 +34,9 @@ public sealed record GroupCacheFile(
     // shapes on rehydration when deserialised by v3 code (the missing
     // `kind` field would default to 0 = Class). Bumping the version
     // invalidates every stale v2 file so the next run rebuilds the
-    // group cache from scratch.
-    public const int CurrentFormatVersion = 3;
+    // group cache from scratch. v4 added the per-group cross-package
+    // Dependencies (#299) so a reused group still reports them.
+    public const int CurrentFormatVersion = 4;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -62,6 +63,8 @@ public sealed record GroupCacheFile(
                 return null;
             if (cache.Groups is null || cache.ConfigurationFingerprint is null)
                 return null;
+            if (cache.Groups.Values.Any(entry => entry?.Dependencies is null))
+                return null;
             return cache;
         }
         catch
@@ -78,4 +81,13 @@ public sealed record GroupCacheFile(
     }
 }
 
-public sealed record GroupCacheEntry(string ClosureHash, IReadOnlyList<CachedFileMetadata> Files);
+/// <param name="ClosureHash">The group's type-signature closure hash.</param>
+/// <param name="Files">Metadata of the file the group emitted.</param>
+/// <param name="Dependencies">The cross-package npm dependencies (package name → version
+/// specifier) the group's emitted code required, restored into the run's
+/// <c>package.json#dependencies</c> when the group is reused (#299).</param>
+public sealed record GroupCacheEntry(
+    string ClosureHash,
+    IReadOnlyList<CachedFileMetadata> Files,
+    IReadOnlyDictionary<string, string> Dependencies
+);

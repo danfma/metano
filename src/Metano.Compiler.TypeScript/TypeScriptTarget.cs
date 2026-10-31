@@ -14,10 +14,11 @@ namespace Metano;
 /// Wraps the legacy <see cref="TypeTransformer"/> + <see cref="Printer"/> pipeline.
 /// </summary>
 /// <remarks>
-/// The list of generated <see cref="TsSourceFile"/>s is exposed via <see cref="LastSourceFiles"/>
-/// after a Transform (or AdoptCachedOutput) call so the caller can perform target-specific
-/// post-processing (e.g., writing a package.json with imports/exports/sideEffects derived
-/// from the AST, see <see cref="PackageJsonReconciler"/>).
+/// The package.json inputs of the run (generated <see cref="TsSourceFile"/>s, package
+/// identity, cross-package dependencies) are exposed via
+/// <see cref="LastPackageManifestInputs"/> after a Transform (or AdoptCachedOutput) call so
+/// the caller can perform target-specific post-processing (writing a package.json with
+/// imports/exports/dependencies, see <see cref="PackageJsonReconciler"/>).
 /// </remarks>
 public sealed class TypeScriptTarget : ITranspilerTarget
 {
@@ -26,42 +27,12 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public TargetLanguage Language => TargetLanguage.TypeScript;
 
     /// <summary>
-    /// The TS AST source files produced by the most recent <see cref="Transform"/> call,
-    /// or — after a full cache hit (<see cref="AdoptCachedOutput"/>) — statement-less
-    /// stubs carrying only the reused file names. Empty until either one is invoked.
+    /// The package.json inputs captured by the most recent <see cref="Transform"/> call,
+    /// or rebuilt by <see cref="AdoptCachedOutput"/> after a full cache hit.
+    /// <see cref="PackageManifestInputs.None"/> until either one is invoked.
     /// </summary>
-    public IReadOnlyList<TsSourceFile> LastSourceFiles { get; private set; } = [];
-
-    /// <summary>
-    /// The package name read from <c>[assembly: EmitPackage(name)]</c> on the compiled
-    /// assembly, or null when the attribute isn't present. Used by the CLI driver to
-    /// pass an authoritative name to <see cref="PackageJsonWriter"/>.
-    /// </summary>
-    public string? LastEmitPackageName { get; private set; }
-
-    /// <summary>
-    /// The validated <c>[assembly: EmitPackage(SubpathRoot = …)]</c> of the compiled
-    /// assembly (<see cref="PackageSubpathRoot.None"/> when absent). The CLI driver passes it to <see cref="PackageJsonWriter"/>
-    /// so the <c>exports</c> keys drop that namespace prefix (spec 008).
-    /// </summary>
-    public PackageSubpathRoot LastPackageSubpathRoot { get; private set; }
-
-    /// <summary>
-    /// Cross-package dependencies inferred from the most recent <see cref="Transform"/>
-    /// call: each entry maps a referenced npm package name to its version specifier
-    /// (e.g., <c>^1.2.3</c> or <c>workspace:*</c>). The CLI driver merges these into
-    /// the consumer's <c>package.json#dependencies</c> so the user doesn't have to
-    /// manually track which sibling packages their code imports.
-    /// </summary>
-    public IReadOnlyDictionary<string, string> LastCrossPackageDependencies { get; private set; } =
-        new Dictionary<string, string>();
-
-    /// <summary>
-    /// Whether the source project is an executable (ConsoleApplication). Executables
-    /// don't need <c>package.json#exports</c> because they're not consumed by other
-    /// packages — only <c>imports</c> (for internal barrel references and tests).
-    /// </summary>
-    public bool LastIsExecutable { get; private set; }
+    public PackageManifestInputs LastPackageManifestInputs { get; private set; } =
+        PackageManifestInputs.None;
 
     /// <summary>
     /// When <c>true</c>, <see cref="BarrelFileGenerator"/> emits an
@@ -151,11 +122,13 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         };
         var sourceFiles = transformer.TransformAll();
 
-        CapturePackageManifestInputs(
+        var crossPackageDependencies = transformer.CrossPackageDependencies;
+
+        LastPackageManifestInputs = CapturePackageManifestInputs(
             ir,
             roslynCompilation,
             sourceFiles,
-            transformer.CrossPackageDependencies
+            crossPackageDependencies
         );
 
         var printer = new Printer();
@@ -174,61 +147,62 @@ public sealed class TypeScriptTarget : ITranspilerTarget
                 generated.Add(new GeneratedFile(file.FileName, printer.Print(file)));
         }
 
-        return new TargetOutput(generated, transformer.Diagnostics);
+        return new TargetOutput(generated, transformer.Diagnostics)
+        {
+            PackageDependencies = crossPackageDependencies,
+        };
     }
 
     /// <summary>
     /// Restores the package.json inputs when the host reused the whole previous output
-    /// (issue #273). The package identity comes from the IR, exactly as in
+    /// (issues #273, #299). The package identity comes from the IR, exactly as in
     /// <see cref="Transform"/>; the barrel list is rebuilt from the reused file names
     /// (statement-less <see cref="TsSourceFile"/>s, enough for
-    /// <see cref="PackageJsonWriter"/>, which reads file names only). Cross-package
-    /// dependencies are only discovered while transforming, so none are reported here:
-    /// the writer merges them additively, so the entries the cold run wrote survive. A
-    /// package.json deleted between two cache-hit runs is therefore recreated with its
-    /// exports and imports but without those dependencies (#299 tracks persisting them).
-    /// Like <see cref="Transform"/>, it requires the Roslyn compilation (the
-    /// <c>[EmitPackage]</c> fallback and the executable check read it).
+    /// <see cref="PackageJsonWriter"/>, which reads file names only); the cross-package
+    /// dependencies are the ones the producing run returned as
+    /// <see cref="TargetOutput.PackageDependencies"/>, restored by the host from its cache.
+    /// The package.json stage therefore writes the same manifest as a cold run, even when
+    /// package.json was deleted in between. Like <see cref="Transform"/>, it requires the
+    /// Roslyn compilation (the <c>[EmitPackage]</c> fallback and the executable check read
+    /// it).
     /// </summary>
     public void AdoptCachedOutput(
         IrCompilation ir,
         Compilation? compilation,
-        IReadOnlyList<GeneratedFile> files
+        IReadOnlyList<GeneratedFile> files,
+        IReadOnlyDictionary<string, string> packageDependencies
     )
     {
         var roslynCompilation = RequireRoslynCompilation(compilation);
         var reusedFiles = files.Select(file => new TsSourceFile(file.RelativePath, [])).ToList();
 
-        CapturePackageManifestInputs(
+        LastPackageManifestInputs = CapturePackageManifestInputs(
             ir,
             roslynCompilation,
             reusedFiles,
-            crossPackageDependencies: new Dictionary<string, string>()
+            packageDependencies
         );
     }
 
-    private void CapturePackageManifestInputs(
+    private static PackageManifestInputs CapturePackageManifestInputs(
         IrCompilation ir,
         Compilation compilation,
         IReadOnlyList<TsSourceFile> sourceFiles,
         IReadOnlyDictionary<string, string> crossPackageDependencies
-    )
-    {
-        LastSourceFiles = sourceFiles;
-
-        // Prefer the frontend-populated package name; the underlying Roslyn read
-        // remains as a defensive fallback while every consumer migrates onto IR.
-        LastEmitPackageName =
-            ir.PackageName
-            ?? SymbolHelper.GetEmitPackage(
-                compilation.Assembly,
-                targetEnumValue: (int)EmitTarget.JavaScript
-            );
-
-        LastPackageSubpathRoot = ir.PackageSubpathRoot;
-        LastCrossPackageDependencies = crossPackageDependencies;
-        LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
-    }
+    ) =>
+        new(
+            sourceFiles,
+            // Prefer the frontend-populated package name; the underlying Roslyn read
+            // remains as a defensive fallback while every consumer migrates onto IR.
+            PackageName: ir.PackageName
+                ?? SymbolHelper.GetEmitPackage(
+                    compilation.Assembly,
+                    targetEnumValue: (int)EmitTarget.JavaScript
+                ),
+            SubpathRoot: ir.PackageSubpathRoot,
+            CrossPackageDependencies: crossPackageDependencies,
+            IsExecutable: compilation.Options.OutputKind == OutputKind.ConsoleApplication
+        );
 
     private static Compilation RequireRoslynCompilation(Compilation? compilation) =>
         compilation
