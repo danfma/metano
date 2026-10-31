@@ -152,9 +152,16 @@ preserving immutability semantics.
 `getValueOrDefault` tests membership with `has`, so a key stored with a `null` value
 returns `null` rather than the default, as in C#. For the single-argument overload the
 compiler passes `default(TValue)`: `0` for numeric types, `false`, `null` for reference
-and nullable types, `new Decimal("0")`, and the enum member whose value is `0`. Other
-structs (`char`, `Guid`, user structs) have no faithful JS default and receive
-`undefined`, as a `default` literal does.
+and nullable types, `new Decimal("0")`, `"\0"` for `char`, `UUID.empty` for `Guid`,
+and the enum member whose value is `0`. Known gaps:
+
+- An enum that declares no zero member receives a bare `0`, other structs (user structs,
+  temporal types) receive `undefined`, and an unconstrained generic `TValue` receives
+  `null`. The emitted call runs, but `tsc --strict` rejects it because the default is
+  not assignable to `TValue` (#291).
+- The null-conditional form `dict?.GetValueOrDefault(k)` does not go through this
+  lowering yet and still emits `dict?.getValueOrDefault(k)`, which does not exist on
+  `Map` (tracked with the optional-chain work in #248).
 
 ### Sets
 
@@ -275,6 +282,9 @@ native array methods directly:
 | `string.Join(sep, items)` (array, `List<T>`, `IReadOnlyList<T>`, …) | `items.join(sep)` |
 | `string.Join(sep, items)` (other `IEnumerable<T>`) | `[...items].join(sep)` |
 | `string.Join(sep, a, b, c)` (`params`) | `[a, b, c].join(sep)` |
+
+`Dictionary.Keys` / `Dictionary.Values` have no mapping yet, so
+`string.Join(sep, dict.Keys)` spreads the `Map.keys` method instead of its iterator (#292).
 | `int.Parse(s)` | `Number.parseInt(s, 10)` |
 
 ## Math
@@ -301,7 +311,9 @@ midpoint toward +Infinity (`Math.round(-2.5)` is `-2`), while C# rounds it to th
 nearest even number (`Math.Round(2.5)` is `2`). The runtime `roundNumber` reproduces
 .NET's algorithm (scale by `10^digits`, round, scale back), so its results match .NET
 bit for bit, including `Math.Round(2.675, 2)` (`2.68`, because the double product `2.675 * 100`
-rounds to `267.5`) and the sign of a zero result. `MidpointRounding` maps to
+rounds to `267.5`) and the sign of a zero result. Parity is pinned to the .NET 10
+algorithm: .NET 11 rounds the exact binary value instead (`Math.Round(2.675, 2)` is `2.67`
+there). `MidpointRounding` maps to
 the runtime `MidpointRounding` object, which keeps the .NET member names and values.
 
 ## Floating point (`double` / `float`)

@@ -3659,10 +3659,7 @@ public sealed partial class IrExpressionExtractor
         // raw `1`.
         if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType)
         {
-            var member = enumType
-                .GetMembers()
-                .OfType<IFieldSymbol>()
-                .FirstOrDefault(f => f.HasConstantValue && Equals(f.ConstantValue, value));
+            var member = DefaultValueLiterals.FindEnumMember(enumType, value);
             if (member is not null)
                 return new IrMemberAccess(TypeReferenceTo(enumType), member.Name);
         }

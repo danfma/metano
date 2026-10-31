@@ -50,6 +50,9 @@ const DECIMAL_JS_ROUNDING = [
   2, // ToPositiveInfinity → ROUND_CEIL
 ] as const;
 
+/** Number of {@link MidpointRounding} modes; the values run from 0 upward. */
+const MIDPOINT_ROUNDING_MODE_COUNT = Object.keys(MidpointRounding).length;
+
 /** Structural view of a `decimal.js` `Decimal`, the only operation the helper uses. */
 export interface DecimalRoundable<D> {
   toDecimalPlaces(decimalPlaces: number, rounding: number): D;
@@ -58,10 +61,15 @@ export interface DecimalRoundable<D> {
 /**
  * Rounds `value` to `digits` fractional digits, resolving a midpoint with `mode`.
  * Mirrors `System.Math.Round(double, int, MidpointRounding)` and its shorter overloads:
- * the value is scaled by `10^digits`, rounded to an integer and scaled back, so a
- * literal such as `2.675` (stored as `2.67499999…`) rounds to `2.67` exactly as it does
- * in .NET. `NaN`, the infinities and magnitudes of `1e16` or more are returned
- * unchanged, and the sign of a zero result is preserved.
+ * the value is scaled by `10^digits`, rounded to an integer and scaled back, the
+ * algorithm .NET 10 uses. `2.675 * 100` rounds to the double `267.5`, so
+ * `roundNumber(2.675, 2)` is `2.68`, as `Math.Round(2.675, 2)` is on .NET 10. `NaN`, the
+ * infinities and magnitudes of `1e16` or more are returned unchanged, and the sign of a
+ * zero result is preserved.
+ *
+ * .NET 11 rounds the exact binary value instead (`Math.Round(2.675, 2)` is `2.67`
+ * there), so parity is pinned to the .NET 10 algorithm; revisit this helper when the
+ * supported target framework moves past .NET 10.
  *
  * @throws RangeError when `digits` is outside 0–15 or `mode` is not a
  *   {@link MidpointRounding} value, the cases where .NET throws
@@ -127,6 +135,7 @@ function roundHalfToEven(value: number): number {
   const fraction = value - floor;
 
   if (fraction < 0.5) return floor;
+
   if (fraction > 0.5) return floor + 1;
 
   return floor % 2 === 0 ? floor : floor + 1;
@@ -150,6 +159,6 @@ function assertDigits(digits: number, max: number): void {
 }
 
 function assertMode(mode: number): asserts mode is MidpointRounding {
-  if (!Number.isInteger(mode) || mode < 0 || mode >= DECIMAL_JS_ROUNDING.length)
+  if (!Number.isInteger(mode) || mode < 0 || mode >= MIDPOINT_ROUNDING_MODE_COUNT)
     throw new RangeError(`The value '${mode}' is not a valid MidpointRounding mode.`);
 }

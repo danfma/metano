@@ -69,6 +69,33 @@ public class GetValueOrDefaultMappingTests
     }
 
     [Test]
+    public async Task SingleArgumentOverload_PassesTypedDefaultForCharAndGuid()
+    {
+        var output = TranspileLookups(
+            """
+            public static char Initial(Dictionary<string, char> d) => d.GetValueOrDefault("a");
+            public static System.Guid Id(Dictionary<string, System.Guid> d) => d.GetValueOrDefault("a");
+            """
+        );
+
+        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", \"\\u0000\");");
+        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", UUID.empty);");
+        await Assert.That(output).DoesNotContain("undefined");
+    }
+
+    [Test]
+    public async Task SingleArgumentOverload_FindsTheZeroMemberOfAnUnsignedEnum()
+    {
+        var output = TranspileLookups(
+            """
+            public static Wide Mask(Dictionary<string, Wide> d) => d.GetValueOrDefault("a");
+            """
+        );
+
+        await Assert.That(output).Contains("return getValueOrDefault(d, \"a\", Wide.None);");
+    }
+
+    [Test]
     public async Task DefaultValueOverload_PassesTheCallerDefault()
     {
         var output = TranspileLookups(
@@ -94,6 +121,9 @@ public class GetValueOrDefaultMappingTests
 
             [Transpile]
             public enum Level { Low, High }
+
+            [Transpile]
+            public enum Wide : ulong { Top = ulong.MaxValue, None = 0 }
 
             [Transpile]
             public static class Lookups
