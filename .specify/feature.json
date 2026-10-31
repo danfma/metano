@@ -1,3 +1,3 @@
 {
-  "feature_directory": "specs/006-fix-nested-variant-imports"
+  "feature_directory": "specs/007-node-esm-runtime-imports"
 }

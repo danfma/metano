@@ -209,7 +209,13 @@ Rules:
 - **Diagrams.** Always use Mermaid for any diagram in markdown (README, docs/, ADRs, specs). Never ASCII art — it breaks in proportional fonts and can't be zoomed. Prefer GitHub-native syntax: `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/006-fix-nested-variant-imports/plan.md`
+Active feature plan: `specs/007-node-esm-runtime-imports/plan.md`
+(bug fix #249 — `metano-runtime` dist kept three extensionless barrel specifiers
+[`./system`, `./type-checking`, `./primitive-type-checks`], so Node ESM rejected the root
+import as a directory import. Fix: explicit `.ts` specifiers, a packed-tarball smoke test
+[`scripts/smoke-test-runtime-package.sh`] gating CI and release *before* semantic-release,
+a tightened `exports` map, and consumer docs).
+Previous feature plan: `specs/006-fix-nested-variant-imports/plan.md`
 (bug fix — generated TypeScript for the companion-namespace lowering of an abstract
 record with nested record variants [the `[StrictUnionGuard]` pattern] dropped imports
 for any symbol referenced only inside the nested `namespace` block. Two independent
