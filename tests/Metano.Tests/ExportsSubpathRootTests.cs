@@ -375,6 +375,7 @@ public class ExportsSubpathRootTests
         await Assert
             .That(output)
             .Contains("EpisodeStatus } from \"@video-studio/domain/episodes\"");
+
         await Assert.That(output).DoesNotContain(FullEpisodesSubpath);
     }
 

@@ -162,6 +162,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
                 compilation.Assembly,
                 targetEnumValue: (int)EmitTarget.JavaScript
             );
+
         LastPackageSubpathRoot = ir.PackageSubpathRoot;
         LastCrossPackageDependencies = transformer.CrossPackageDependencies;
         LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
