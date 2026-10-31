@@ -22,4 +22,20 @@ public static class IrBinaryOpExtensions
                 or IrBinaryOp.RightShiftAssign
                 or IrBinaryOp.UnsignedRightShiftAssign
                 or IrBinaryOp.NullCoalescingAssign;
+
+    /// <summary>Whether the operator is <c>&lt;</c>, <c>&lt;=</c>, <c>&gt;</c> or <c>&gt;=</c>.</summary>
+    public static bool IsRelational(this IrBinaryOp op) =>
+        op
+            is IrBinaryOp.LessThan
+                or IrBinaryOp.LessThanOrEqual
+                or IrBinaryOp.GreaterThan
+                or IrBinaryOp.GreaterThanOrEqual;
+
+    /// <summary>Whether the operator is <c>==</c> or <c>!=</c>.</summary>
+    public static bool IsEquality(this IrBinaryOp op) =>
+        op is IrBinaryOp.Equal or IrBinaryOp.NotEqual;
+
+    /// <summary>Whether the operator is <c>&amp;</c>, <c>|</c> or <c>^</c>.</summary>
+    public static bool IsBitwise(this IrBinaryOp op) =>
+        op is IrBinaryOp.BitwiseAnd or IrBinaryOp.BitwiseOr or IrBinaryOp.BitwiseXor;
 }

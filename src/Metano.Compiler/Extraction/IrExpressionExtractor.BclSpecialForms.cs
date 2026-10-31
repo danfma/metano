@@ -36,23 +36,16 @@ public sealed partial class IrExpressionExtractor
     private string? GetTemporalTypeName(ExpressionSyntax expression)
     {
         var info = _semantic.GetTypeInfo(expression);
-        var type = info.ConvertedType ?? info.Type;
-        if (type is null)
-            return null;
 
         // Nullable-value wrappers (`DateOnly?`, `TimeSpan?`, …) still
         // trip the same runtime error when the inner value is used in
         // a relational operator. Peel `System.Nullable<T>` so the
         // underlying Temporal-backed type resolves against the map
         // below.
-        if (
-            type is INamedTypeSymbol
-            {
-                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
-                TypeArguments: [{ } inner],
-            }
-        )
-            type = inner;
+        var type = (info.ConvertedType ?? info.Type).UnderlyingValueType();
+
+        if (type is null)
+            return null;
 
         // BCL types map to Temporal subtypes. `DateTime` / `TimeSpan`
         // carry `SpecialType`s so `OriginalDefinition.ToDisplayString`
@@ -69,18 +62,9 @@ public sealed partial class IrExpressionExtractor
         };
     }
 
-    private static IrBinaryOp? MapRelationalOp(SyntaxKind kind) =>
-        kind switch
-        {
-            SyntaxKind.GreaterThanExpression => IrBinaryOp.GreaterThan,
-            SyntaxKind.GreaterThanOrEqualExpression => IrBinaryOp.GreaterThanOrEqual,
-            SyntaxKind.LessThanExpression => IrBinaryOp.LessThan,
-            SyntaxKind.LessThanOrEqualExpression => IrBinaryOp.LessThanOrEqual,
-            _ => null,
-        };
-
-    private IrExpression BuildTemporalCompareCall(
-        BinaryExpressionSyntax bin,
+    private static IrExpression BuildTemporalCompareCall(
+        IrExpression left,
+        IrExpression right,
         IrBinaryOp op,
         string temporalTypeName
     )
@@ -91,16 +75,28 @@ public sealed partial class IrExpressionExtractor
         // would otherwise turn `.PlainDate` into `.plainDate`).
         var call = new IrCallExpression(
             new IrMemberAccess(new IrTypeReference(temporalTypeName), "compare"),
-            [new IrArgument(Extract(bin.Left)), new IrArgument(Extract(bin.Right))]
+            [new IrArgument(left), new IrArgument(right)]
         );
         return new IrBinaryExpression(call, op, new IrLiteral(0, IrLiteralKind.Int32));
     }
 
-    private bool IsDecimalOperand(ExpressionSyntax expr)
+    private bool IsDecimalOperand(ExpressionSyntax expr) =>
+        OperandType(expr)?.SpecialType == SpecialType.System_Decimal;
+
+    /// <summary>
+    /// A <c>decimal</c> or <c>decimal?</c> operand: a lifted operator works
+    /// on the underlying <c>decimal</c>, while an unlifted one over a
+    /// <c>decimal?</c> (<c>a == null</c>) is not a Decimal method call and
+    /// checks <see cref="IsDecimalOperand"/>.
+    /// </summary>
+    private bool IsDecimalOrNullableDecimalOperand(ExpressionSyntax expr) =>
+        OperandType(expr).UnderlyingValueType()?.SpecialType == SpecialType.System_Decimal;
+
+    private ITypeSymbol? OperandType(ExpressionSyntax expr)
     {
         var info = _semantic.GetTypeInfo(expr);
-        var t = info.ConvertedType ?? info.Type;
-        return t?.SpecialType == SpecialType.System_Decimal;
+
+        return info.ConvertedType ?? info.Type;
     }
 
     /// <summary>
@@ -108,30 +104,32 @@ public sealed partial class IrExpressionExtractor
     /// need a logical negation (<c>!=</c>) carry a leading <c>"!"</c> so the
     /// builder wraps the call in <c>IrUnaryExpression(LogicalNot, …)</c>.
     /// </summary>
-    private static string? MapDecimalBinaryMethod(SyntaxKind kind) =>
-        kind switch
+    private static string? MapDecimalBinaryMethod(IrBinaryOp op) =>
+        op switch
         {
-            SyntaxKind.AddExpression => "plus",
-            SyntaxKind.SubtractExpression => "minus",
-            SyntaxKind.MultiplyExpression => "times",
-            SyntaxKind.DivideExpression => "div",
-            SyntaxKind.ModuloExpression => "mod",
-            SyntaxKind.EqualsExpression => "eq",
-            SyntaxKind.NotEqualsExpression => "!eq",
-            SyntaxKind.LessThanExpression => "lt",
-            SyntaxKind.GreaterThanExpression => "gt",
-            SyntaxKind.LessThanOrEqualExpression => "lte",
-            SyntaxKind.GreaterThanOrEqualExpression => "gte",
+            IrBinaryOp.Add => "plus",
+            IrBinaryOp.Subtract => "minus",
+            IrBinaryOp.Multiply => "times",
+            IrBinaryOp.Divide => "div",
+            IrBinaryOp.Modulo => "mod",
+            IrBinaryOp.Equal => "eq",
+            IrBinaryOp.NotEqual => "!eq",
+            IrBinaryOp.LessThan => "lt",
+            IrBinaryOp.GreaterThan => "gt",
+            IrBinaryOp.LessThanOrEqual => "lte",
+            IrBinaryOp.GreaterThanOrEqual => "gte",
             _ => null,
         };
 
-    private IrExpression BuildDecimalBinaryCall(BinaryExpressionSyntax bin, string method)
+    private static IrExpression BuildDecimalBinaryCall(
+        IrExpression left,
+        IrExpression right,
+        string method
+    )
     {
         var negate = method.StartsWith('!');
         if (negate)
             method = method[1..];
-        var left = Extract(bin.Left);
-        var right = Extract(bin.Right);
         IrExpression call = new IrCallExpression(
             new IrMemberAccess(left, method),
             [new IrArgument(right)]

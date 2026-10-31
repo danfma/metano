@@ -7,7 +7,10 @@ namespace Metano.Compiler.Dart;
 /// parenthesized to keep the IR's grouping under Dart's operator precedence
 /// (<c>a - (b + c)</c>, <c>(a + b) * c</c>). The IR carries grouping only as
 /// tree shape, so the printer has to restore the parentheses the source had.
-/// Unary and conditional operands are not covered yet.
+/// A conditional, <c>throw</c>, lambda or assignment operand binds looser
+/// than every operator, so it is parenthesized as a binary, unary,
+/// <c>is</c> / <c>as</c> operand and as a conditional's condition
+/// (<c>(a == null ? null : a + 1) ?? b</c>, <c>x ?? (throw e)</c>).
 /// </summary>
 internal static class DartBinaryOperandGrouping
 {
@@ -18,7 +21,13 @@ internal static class DartBinaryOperandGrouping
     /// </summary>
     public static bool NeedsLeftParentheses(IrBinaryExpression binary)
     {
-        if (binary.Left is not IrBinaryExpression inner || binary.Operator.IsAssignment())
+        if (binary.Operator.IsAssignment())
+            return false;
+
+        if (BindsLooserThanAnyOperator(binary.Left))
+            return true;
+
+        if (binary.Left is not IrBinaryExpression inner)
             return false;
 
         var outerPrecedence = Precedence(binary.Operator);
@@ -37,7 +46,13 @@ internal static class DartBinaryOperandGrouping
     /// </summary>
     public static bool NeedsRightParentheses(IrBinaryExpression binary)
     {
-        if (binary.Right is not IrBinaryExpression inner || binary.Operator.IsAssignment())
+        if (binary.Operator.IsAssignment())
+            return false;
+
+        if (BindsLooserThanAnyOperator(binary.Right))
+            return true;
+
+        if (binary.Right is not IrBinaryExpression inner)
             return false;
 
         var outerPrecedence = Precedence(binary.Operator);
@@ -46,6 +61,31 @@ internal static class DartBinaryOperandGrouping
         return innerPrecedence <= outerPrecedence
             && !IsAssociativeChain(binary.Operator, inner.Operator);
     }
+
+    /// <summary>
+    /// Whether the operand of a prefix or postfix operator, or of
+    /// <c>is</c> / <c>as</c> / a constant-pattern <c>==</c>, must be
+    /// parenthesized: any binary expression (<c>-(a + b)</c>), a nested
+    /// prefix operator (<c>-(-a)</c>, which would otherwise print as the
+    /// decrement <c>--a</c>), a type test or cast (<c>!(o is T)</c>), and
+    /// every shape that binds looser than an operator.
+    /// </summary>
+    public static bool NeedsUnaryOperandParentheses(IrExpression operand) =>
+        operand
+            is IrBinaryExpression
+                or IrUnaryExpression { IsPrefix: true }
+                or IrIsPatternExpression
+                or IrCastExpression
+        || BindsLooserThanAnyOperator(operand);
+
+    /// <summary>
+    /// Shapes Dart parses below every binary operator: a conditional, a
+    /// <c>throw</c> or a lambda would swallow the rest of the enclosing
+    /// expression, and an assignment is the loosest binary operator.
+    /// </summary>
+    public static bool BindsLooserThanAnyOperator(IrExpression operand) =>
+        operand is IrConditionalExpression or IrThrowExpression or IrLambdaExpression
+        || operand is IrBinaryExpression { Operator: var op } && op.IsAssignment();
 
     private static bool IsAssociativeChain(IrBinaryOp outer, IrBinaryOp inner) =>
         inner == outer

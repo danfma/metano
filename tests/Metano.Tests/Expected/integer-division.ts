@@ -20,7 +20,7 @@ export class Quotients {
   }
 
   static lifted(a: number | null, b: number): number | null {
-    return intDiv(a, b);
+    return a == null ? null : intDiv(a, b);
   }
 
   static mixed(a: number, b: number): number {

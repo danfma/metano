@@ -831,7 +831,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsArrayType array:
-                PrintType(array.ElementType);
+                PrintArrayElementType(array.ElementType);
                 _sb.Write("[]");
                 break;
 
@@ -946,6 +946,27 @@ public sealed class Printer(string indent = "  ")
         else
         {
             PrintType(type);
+        }
+    }
+
+    /// <summary>
+    /// Wraps an array element type that binds looser than the <c>[]</c>
+    /// suffix in parentheses. Without this, a nullable element prints as
+    /// <c>T | null[]</c>, which TypeScript parses as <c>T | (null[])</c>
+    /// instead of <c>(T | null)[]</c>; a function element would likewise
+    /// read as a function returning an array.
+    /// </summary>
+    private void PrintArrayElementType(TsType elementType)
+    {
+        if (elementType is TsUnionType or TsIntersectionType or TsFunctionType)
+        {
+            _sb.Write("(");
+            PrintType(elementType);
+            _sb.Write(")");
+        }
+        else
+        {
+            PrintType(elementType);
         }
     }
 

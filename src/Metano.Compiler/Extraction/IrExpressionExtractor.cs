@@ -1397,11 +1397,7 @@ public sealed partial class IrExpressionExtractor
     }
 
     private static bool IsNullableType(ITypeSymbol type) =>
-        type.NullableAnnotation == NullableAnnotation.Annotated
-        || (
-            type is INamedTypeSymbol named
-            && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
-        );
+        type.NullableAnnotation == NullableAnnotation.Annotated || type.IsNullableValueType();
 
     private static IrLiteral ClassifyNumeric(object? value) =>
         value switch
@@ -1427,6 +1423,31 @@ public sealed partial class IrExpressionExtractor
         if (bin.Kind() == SyntaxKind.AsExpression && bin.Right is TypeSyntax asType)
             return ExtractAsCast(bin, asType);
 
+        if (MapBinaryOp(bin.Kind()) is not { } mappedOp)
+            return ReportUnsupported(bin, bin.Kind().ToString());
+
+        var op = NarrowToIntegerDivision(mappedOp, bin);
+
+        return TryExtractLiftedBinary(bin, op)
+            ?? TryExtractStringConcatenation(bin)
+            ?? BuildBinary(op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false);
+    }
+
+    /// <summary>
+    /// The ordinary lowering of <c>left op right</c> over already extracted
+    /// operands, whose syntax gives their types. A lifted operator reuses it
+    /// for its non-null case: <paramref name="isLifted"/> peels
+    /// <c>Nullable&lt;T&gt;</c> from the operand types. It stays false for
+    /// an unlifted operator such as <c>a == null</c> on a <c>decimal?</c>,
+    /// which is not a Decimal method call.
+    /// </summary>
+    private IrExpression BuildBinary(
+        IrBinaryOp op,
+        OperatorOperand left,
+        OperatorOperand right,
+        bool isLifted
+    )
+    {
         // decimal arithmetic needs a special lowering: legacy emits
         // `a.plus(b)` / `.times(b)` / `.div(b)` / etc. on the decimal.js
         // Decimal class rather than raw `+` / `*` / `/`. Detect via
@@ -1434,12 +1455,11 @@ public sealed partial class IrExpressionExtractor
         // backend that supports BCL-style dispatch produces the same
         // shape without re-walking types later.
         if (
-            MapDecimalBinaryMethod(bin.Kind()) is { } decimalMethod
-            && IsDecimalOperand(bin.Left)
-            && IsDecimalOperand(bin.Right)
+            MapDecimalBinaryMethod(op) is { } decimalMethod
+            && AreDecimalOperands(left, right, isLifted)
         )
         {
-            return BuildDecimalBinaryCall(bin, decimalMethod);
+            return BuildDecimalBinaryCall(left.Value, right.Value, decimalMethod);
         }
 
         // Temporal types reject the built-in relational operators at
@@ -1456,22 +1476,21 @@ public sealed partial class IrExpressionExtractor
         // specific backend).
         if (
             (_target is null or Metano.Annotations.TargetLanguage.TypeScript)
-            && MapRelationalOp(bin.Kind()) is { } relOp
-            && GetTemporalTypeName(bin.Left, bin.Right) is { } temporalTypeName
+            && op.IsRelational()
+            && GetTemporalTypeName(left.Syntax, right.Syntax) is { } temporalTypeName
         )
         {
-            return BuildTemporalCompareCall(bin, relOp, temporalTypeName);
+            return BuildTemporalCompareCall(left.Value, right.Value, op, temporalTypeName);
         }
 
-        if (MapBinaryOp(bin.Kind()) is not { } op)
-            return ReportUnsupported(bin, bin.Kind().ToString());
-
-        return new IrBinaryExpression(
-            Extract(bin.Left),
-            NarrowToIntegerDivision(op, bin),
-            Extract(bin.Right)
-        );
+        return new IrBinaryExpression(left.Value, op, right.Value);
     }
+
+    private bool AreDecimalOperands(OperatorOperand left, OperatorOperand right, bool isLifted) =>
+        isLifted
+            ? IsDecimalOrNullableDecimalOperand(left.Syntax)
+                && IsDecimalOrNullableDecimalOperand(right.Syntax)
+            : IsDecimalOperand(left.Syntax) && IsDecimalOperand(right.Syntax);
 
     /// <summary>
     /// Lowers <c>x as T</c> to its definition, <c>x is T ? (T)x : null</c>,
@@ -1645,7 +1664,9 @@ public sealed partial class IrExpressionExtractor
         if (IsUnsupportedPlaceholder(target))
             return target;
 
-        return BuildAssignmentWithIntegerDivision(target, assign);
+        return TryExtractLiftedCompoundAssignment(assign, target)
+            ?? TryExtractStringCompoundConcatenation(assign, target)
+            ?? BuildAssignmentWithIntegerDivision(target, assign);
     }
 
     private IrExpression ExtractUnary(ExpressionSyntax node, bool isPrefix)
@@ -1676,22 +1697,17 @@ public sealed partial class IrExpressionExtractor
 
         var isIncrementOrDecrement = op is IrUnaryOp.Increment or IrUnaryOp.Decrement;
 
-        // Decimal negation: `-x` on a decimal.js receiver isn't a JS unary op —
-        // the value is a Decimal instance, so rewrite to `x.neg()`.
-        if (op is IrUnaryOp.Negate && isPrefix)
-        {
-            var operandType = _semantic.GetTypeInfo(operand).Type;
-            if (operandType?.SpecialType == SpecialType.System_Decimal)
-                return new IrCallExpression(new IrMemberAccess(Extract(operand), "neg"), []);
-        }
+        if (!isIncrementOrDecrement)
+            return TryExtractLiftedUnary(node, op, operand)
+                ?? BuildUnary(op, Extract(operand), operand);
+
         // `receiver.Prop++` against an extension property rewrites to a
         // let-bound setter call so the receiver evaluates exactly once.
         // Prefix vs postfix is collapsed to the same shape — the MVP only
         // covers the statement-position use, which doesn't observe the
         // pre/post value distinction.
         if (
-            isIncrementOrDecrement
-            && operand is MemberAccessExpressionSyntax incMember
+            operand is MemberAccessExpressionSyntax incMember
             && _semantic.GetSymbolInfo(incMember).Symbol is IPropertySymbol incProp
             && TryResolveExtensionPropertyLowering(incProp, incMember.Expression) is { } incLowering
         )
@@ -1703,8 +1719,7 @@ public sealed partial class IrExpressionExtractor
         // `item$set(r, i, item$get(r, i) + 1)`. Statement-position only;
         // the postfix value isn't observable in MVP scope.
         if (
-            isIncrementOrDecrement
-            && operand is ElementAccessExpressionSyntax incIndexer
+            operand is ElementAccessExpressionSyntax incIndexer
             && _semantic.GetSymbolInfo(incIndexer).Symbol is IPropertySymbol incIndexerProp
             && incIndexerProp.IsIndexer
             && TryResolveExtensionIndexerLowering(incIndexerProp, incIndexer)
@@ -1721,10 +1736,27 @@ public sealed partial class IrExpressionExtractor
 
         var extractedOperand = Extract(operand);
 
-        if (isIncrementOrDecrement && IsUnsupportedPlaceholder(extractedOperand))
+        if (IsUnsupportedPlaceholder(extractedOperand))
             return extractedOperand;
 
         return new IrUnaryExpression(op, extractedOperand, isPrefix);
+    }
+
+    /// <summary>
+    /// The ordinary lowering of a prefix <c>-x</c>, <c>!x</c> or <c>~x</c>
+    /// over an extracted operand, which a lifted operator reuses for its
+    /// non-null case. Decimal negation is not a JS unary operator — the value
+    /// is a Decimal instance — so it becomes <c>x.neg()</c>.
+    /// </summary>
+    private IrExpression BuildUnary(
+        IrUnaryOp op,
+        IrExpression operand,
+        ExpressionSyntax operandSyntax
+    )
+    {
+        return op is IrUnaryOp.Negate && IsDecimalOrNullableDecimalOperand(operandSyntax)
+            ? new IrCallExpression(new IrMemberAccess(operand, "neg"), [])
+            : new IrUnaryExpression(op, operand);
     }
 
     private static IrBinaryOp? MapBinaryOp(SyntaxKind kind) =>
@@ -1878,21 +1910,8 @@ public sealed partial class IrExpressionExtractor
         var target = Extract(member.Receiver);
         var name = member.Name.Identifier.ValueText;
 
-        // `Nullable<T>.Value` is a no-op at the TS level — `T?` nullable
-        // values are the value itself. Elide the `.Value` suffix so
-        // `patch.Priority.Value` lowers to `patch.priority` instead of
-        // dereferencing a property that doesn't exist at runtime.
-        if (name == "Value")
-        {
-            var receiverType = _semantic.GetTypeInfo(member.Receiver).Type;
-            if (
-                receiverType is INamedTypeSymbol
-                {
-                    OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
-                }
-            )
-                return target;
-        }
+        if (TryExtractNullableValueMember(member, target) is { } nullableValueMember)
+            return nullableValueMember;
 
         // Property-getter `[Emit]` template: a property whose getter (or the
         // property itself) carries `[Emit("…$0…")]` lowers its read to the
@@ -2230,6 +2249,13 @@ public sealed partial class IrExpressionExtractor
             return constant;
 
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
+
+        // `Nullable<T>.GetValueOrDefault` lives with the other `Nullable<T>`
+        // members rather than in `IntrinsicBclLoweringTable`: a side-effecting
+        // default must be bound once (`BindOnce`), which the table's
+        // `InvocationLoweringHelpers` facade does not expose.
+        if (TryExtractNullableGetValueOrDefault(inv, symbol) is { } valueOrDefault)
+            return valueOrDefault;
 
         // LINQ chain detection (#20 pipe lowering). When this invocation
         // is the OUTERMOST stage of a System.Linq.Enumerable / Queryable
@@ -2791,7 +2817,9 @@ public sealed partial class IrExpressionExtractor
                     break;
                 case InterpolationSyntax expr:
                     var formatSpec = expr.FormatClause?.FormatStringToken.ValueText;
-                    parts.Add(new IrInterpolationExpression(Extract(expr.Expression), formatSpec));
+                    parts.Add(
+                        new IrInterpolationExpression(ExtractInterpolationHole(expr), formatSpec)
+                    );
                     break;
             }
         }
