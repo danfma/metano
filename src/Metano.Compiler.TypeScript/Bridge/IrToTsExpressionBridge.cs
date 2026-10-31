@@ -109,6 +109,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrLinqChain chain => MapLinqChain(chain, bclRegistry),
             IrLetExpression let => MapLetExpression(let, bclRegistry),
+            IrSequenceExpression sequence => MapSequence(sequence, bclRegistry),
             IrOutArgumentCall outCall => MapOutArgumentCall(outCall, bclRegistry),
             IrNullConditionalAccess access => MapNullConditionalAccess(access, bclRegistry),
             IrConditionalReceiver => CurrentConditionalReceiver(),
@@ -144,12 +145,48 @@ public static partial class IrToTsExpressionBridge
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, bclRegistry);
 
+        if (
+            bin is { Operator: IrBinaryOp.Assign, Left: IrMemberAccess initOnlyMember }
+            && IsInitOnlyInitializerWrite(initOnlyMember)
+        )
+            return MapInitOnlyInitializerWrite(initOnlyMember, bin.Right, bclRegistry);
+
         return new TsBinaryExpression(
             Map(bin.Left, bclRegistry),
             BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
             Map(bin.Right, bclRegistry)
         );
     }
+
+    /// <summary>
+    /// A write to an <c>init</c>-only property through a receiver other than
+    /// <c>this</c> / <c>base</c>, which C# allows only in an object
+    /// initializer (see <see cref="IrMemberOrigin.IsInitOnly"/>).
+    /// </summary>
+    private static bool IsInitOnlyInitializerWrite(IrMemberAccess member) =>
+        member is { Origin.IsInitOnly: true, Target: not (IrThisExpression or IrBaseExpression) };
+
+    /// <summary>
+    /// <c>Object.assign(receiver, { member: value })</c>. An <c>init</c>-only
+    /// property is declared <c>readonly</c>, which rejects a plain assignment
+    /// outside the constructor; <c>Object.assign</c> performs the same
+    /// <c>[[Set]]</c> (a setter still runs) and evaluates the receiver before
+    /// the value, as the assignment would.
+    /// </summary>
+    private static TsExpression MapInitOnlyInitializerWrite(
+        IrMemberAccess member,
+        IrExpression value,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("Object"), "assign"),
+            [
+                Map(member.Target, bclRegistry),
+                new TsObjectLiteral([
+                    new TsObjectProperty(AccessedMemberName(member), Map(value, bclRegistry)),
+                ]),
+            ]
+        );
 
     /// <summary>
     /// JS has no integer division: <c>7 / 2</c> is <c>3.5</c>. The runtime
@@ -939,12 +976,121 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapLetExpression(
         IrLetExpression let,
         DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var value = Map(let.Value, bclRegistry);
+
+        return TryFoldPlainObjectInitializer(let, value, bclRegistry)
+            ?? TsImmediateInvocation.Of(
+                [new TsImmediateBinding(let.Name, value)],
+                ReturningBody(let.Body, bclRegistry),
+                isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
+            );
+    }
+
+    /// <summary>
+    /// Folds an object-initialized <c>[PlainObject]</c> construction —
+    /// <c>let o = { a: x } in (o.b = y, o)</c>, the extractor's lowering of
+    /// <c>new T(x) { B = y }</c> — into the single literal
+    /// <c>{ a: x, b: y }</c>. Applies only when every effect assigns a member
+    /// of the bound object and no key repeats (a repeated key is a TypeScript
+    /// error); the literal evaluates its values in the same order. Returns
+    /// <c>null</c> for any other let-binding.
+    /// </summary>
+    private static TsExpression? TryFoldPlainObjectInitializer(
+        IrLetExpression let,
+        TsExpression mappedValue,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        if (
+            let
+                is not {
+                    Value: IrNewExpression { IsPlainObject: true },
+                    Body: IrSequenceExpression { Result: IrIdentifier result } sequence,
+                }
+            || result.Name != let.Name
+            || mappedValue is not TsObjectLiteral literal
+        )
+            return null;
+
+        var writes = sequence
+            .Effects.Select(effect => PlainObjectMemberWrite(effect, let.Name))
+            .ToList();
+
+        if (writes.Any(write => write is null))
+            return null;
+
+        var members = writes.Select(write => write!.Value).ToList();
+        var keys = members.Select(write => AccessedMemberName(write.Member)).ToList();
+
+        if (
+            keys.Concat(literal.Properties.Select(property => property.Key)).Distinct().Count()
+            != keys.Count + literal.Properties.Count
+        )
+            return null;
+
+        return new TsObjectLiteral([
+            .. literal.Properties,
+            .. members.Select(
+                (write, index) => new TsObjectProperty(keys[index], Map(write.Value, bclRegistry))
+            ),
+        ]);
+    }
+
+    /// <summary>
+    /// The member and value of <c>instance.Member = value</c> written straight
+    /// to the let-bound <paramref name="instanceName"/>; <c>null</c> for any
+    /// other effect.
+    /// </summary>
+    private static (IrMemberAccess Member, IrExpression Value)? PlainObjectMemberWrite(
+        IrExpression effect,
+        string instanceName
+    ) =>
+        effect
+            is IrBinaryExpression
+            {
+                Operator: IrBinaryOp.Assign,
+                Left: IrMemberAccess { Target: IrIdentifier target } member,
+                Right: var value,
+            }
+        && target.Name == instanceName
+            ? (member, value)
+            : null;
+
+    /// <summary>
+    /// Lowers <see cref="IrSequenceExpression"/> outside a let-binding to a
+    /// parameterless IIFE whose body runs the effects and returns the result.
+    /// </summary>
+    private static TsExpression MapSequence(
+        IrSequenceExpression sequence,
+        DeclarativeMappingRegistry? bclRegistry
     ) =>
         TsImmediateInvocation.Of(
-            [new TsImmediateBinding(let.Name, Map(let.Value, bclRegistry))],
-            [new TsReturnStatement(Map(let.Body, bclRegistry))],
-            isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
+            [],
+            ReturningBody(sequence, bclRegistry),
+            isAsync: IrEvaluationTraits.ContainsAwait(sequence)
         );
+
+    /// <summary>
+    /// The statements of an IIFE body that yields <paramref name="body"/>: a
+    /// <see cref="IrSequenceExpression"/> spreads into one statement per
+    /// effect followed by the <c>return</c> of its result, anything else is a
+    /// single <c>return</c>.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> ReturningBody(
+        IrExpression body,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        body is IrSequenceExpression sequence
+            ?
+            [
+                .. sequence.Effects.Select(effect => new TsExpressionStatement(
+                    Map(effect, bclRegistry)
+                )),
+                new TsReturnStatement(Map(sequence.Result, bclRegistry)),
+            ]
+            : [new TsReturnStatement(Map(body, bclRegistry))];
 
     private static TsExpression MapStringInterpolation(
         IrStringInterpolation interp,
@@ -1048,6 +1194,7 @@ public static partial class IrToTsExpressionBridge
                     new TsObjectProperty(TypeScriptNaming.ToCamelCase(paramName), args[i])
                 );
             }
+
             return new TsObjectLiteral(properties);
         }
         // `[JsTuple]` construction: `new T(a, b)` lowers to a positional array

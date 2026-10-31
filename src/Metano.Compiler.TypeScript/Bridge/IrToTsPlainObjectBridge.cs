@@ -303,6 +303,11 @@ public static class IrToTsPlainObjectBridge
                 Value = RewriteThis(let.Value, identifierName),
                 Body = RewriteThis(let.Body, identifierName),
             },
+            IrSequenceExpression sequence => sequence with
+            {
+                Effects = sequence.Effects.Select(e => RewriteThis(e, identifierName)).ToList(),
+                Result = RewriteThis(sequence.Result, identifierName),
+            },
             _ => expr,
         };
 }

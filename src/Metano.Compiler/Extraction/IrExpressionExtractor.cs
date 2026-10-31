@@ -2601,7 +2601,8 @@ public sealed partial class IrExpressionExtractor
             TupleIndex: tupleIndex,
             IsBrandedValueMember: isBrandedValueMember,
             IsTranspiledDataMember: IsTranspiledDataMember(symbol),
-            ParameterTypes: OverloadParameterTypes(symbol)
+            ParameterTypes: OverloadParameterTypes(symbol),
+            IsInitOnly: symbol is IPropertySymbol { SetMethod.IsInitOnly: true }
         );
     }
 
@@ -3759,17 +3760,23 @@ public sealed partial class IrExpressionExtractor
         if (ctor is not null && args.Any(a => a.Name is not null))
             args = NormalizeArguments(args, ctor);
 
+        var initializer = InitializerOf(creationSyntax);
+
         if (ctor is not null && SymbolHelper.HasObjectArgs(ctor))
         {
             var properties = BuildObjectArgsProperties(ctor, args);
-            return new IrNewExpression(
+            var objectArgsCreation = new IrNewExpression(
                 type,
                 [new IrArgument(new IrObjectLiteral(properties))],
                 IsObjectArgsCtor: true
             );
+
+            return ApplyInitializer(objectArgsCreation, typeSymbol, initializer);
         }
 
-        var initializers = ExtractObjectInitializer(creationSyntax);
+        var keepsInitializer = RendersInitializerAsJsx(type, initializer);
+
+        var initializers = keepsInitializer ? ExtractObjectInitializer(creationSyntax) : null;
 
         var creation = new IrNewExpression(
             type,
@@ -3784,11 +3791,22 @@ public sealed partial class IrExpressionExtractor
             TypeArguments: ConstructedTypeArguments(typeSymbol)
         );
 
+        var constructed = BindExceptionArguments(creation);
+
+        return keepsInitializer
+            ? constructed
+            : ApplyInitializer(constructed, typeSymbol, initializer);
+    }
+
+    /// <summary>
+    /// The role-ordered BCL exception lowering may reorder or drop arguments,
+    /// so the side-effecting ones are bound first.
+    /// </summary>
+    private IrExpression BindExceptionArguments(IrNewExpression creation)
+    {
         if (creation.ExceptionConstruction is not { RequiresArgumentTemporaries: true } exception)
             return creation;
 
-        // The role-ordered BCL exception lowering may reorder or drop
-        // arguments, so the side-effecting ones are bound first.
         return BindArgumentsOnce(
             creation,
             bound =>

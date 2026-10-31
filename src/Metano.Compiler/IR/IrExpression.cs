@@ -86,6 +86,7 @@ public sealed record IrBaseExpression() : IrExpression;
 /// <param name="IsTranspiledDataMember">The member is a field or property (not an enum member or indexer) declared on a type whose declaration the toolchain emits — a type of the current compilation or of a transpiled package, neither <c>[External]</c> nor <c>[Import]</c>. A backend that renames data members at their declaration (TypeScript escapes reserved words: <c>Default</c> → <c>default_</c>) applies the same rename at the access; a foreign member keeps the name its real declaration has.</param>
 /// <param name="IsBrandedValueMember">The member access reads the single wrapped value member of a <c>[Branded]</c> struct (<c>id.Value</c>). The branded value IS the primitive at runtime, so backends that lower the wrapper to a branded primitive collapse the read to the receiver.</param>
 /// <param name="ParameterTypes">For a method or constructor, the stable full names of the bound overload's parameter types (open definitions), so a declarative mapping can tell same-arity overloads apart; <c>null</c> for other members.</param>
+/// <param name="IsInitOnly">The member is a property whose setter is an <c>init</c> accessor. C# writes such a property only from the declaring type's constructors and accessors (through <c>this</c> / <c>base</c>) and from object initializers, so a write through any other receiver is an object-initializer write; a backend that declares init-only properties read-only (TypeScript <c>readonly</c>) lowers that write to a form its type checker accepts.</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
     string MemberName,
@@ -102,7 +103,8 @@ public sealed record IrMemberOrigin(
     int TupleIndex = -1,
     bool IsBrandedValueMember = false,
     bool IsTranspiledDataMember = false,
-    IReadOnlyList<string>? ParameterTypes = null
+    IReadOnlyList<string>? ParameterTypes = null,
+    bool IsInitOnly = false
 );
 
 /// <summary>
@@ -559,6 +561,20 @@ public sealed record IrThrowExpression(IrExpression Expression) : IrExpression;
 /// body expression and the surrounding statement remains an expression.
 /// </summary>
 public sealed record IrLetExpression(string Name, IrExpression Value, IrExpression Body)
+    : IrExpression;
+
+/// <summary>
+/// Evaluates every expression of <see cref="Effects"/> in order for its side
+/// effects, then evaluates and yields <see cref="Result"/> — the comma
+/// operator of C-family languages, as an expression. An object or collection
+/// initializer lowers to one: <c>new T(args) { X = x, Y = { Z = z } }</c>
+/// binds the new instance with an <see cref="IrLetExpression"/> whose body is
+/// the sequence of the initializer's member assignments and <c>Add</c> calls
+/// against that binding, ending in the binding itself. Backends without a
+/// sequencing operator lower it to a block-bodied immediately invoked
+/// function.
+/// </summary>
+public sealed record IrSequenceExpression(IReadOnlyList<IrExpression> Effects, IrExpression Result)
     : IrExpression;
 
 // -- Calls with out arguments --
