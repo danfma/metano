@@ -116,6 +116,18 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 | Interop | `[JsCallable]` interface → direct invocation | TS | Implemented | `Bridge/IrToTsExpressionBridge.cs`, `Annotations/TypeScript/JsCallableAttribute.cs` | `tests/Metano.Tests/JsCallableTranspileTests.cs` | `recv.Invoke(a)`→`recv(a)`; overloaded `Invoke`; erased; misuse → MS0028. |
 | Interop | Tuple deconstruction `var (a,b)=e` | TS | Implemented | `Extraction/IrStatementExtractor.cs`, `TypeScript/AST/TsDestructuringDeclaration.cs` | `tests/Metano.Tests/DeconstructionTranspileTests.cs` | → `const [a, b] = e`; discards supported; flat only. |
 
+## C# 15 unions
+
+Planned. A C# 15 `union` declaration is erased to a TS type union, case tests are typed, exhaustive switches end with a `never` check, and JSON matches .NET 11 STJ. Spec: [specs/009-csharp-unions/](../../009-csharp-unions/spec.md) (issue #304). Diagnostics `MS0031`–`MS0036` are reserved.
+
+| Area | Feature | Backend | Status | Code area | Test | Constraints |
+| --- | --- | --- | --- | --- | --- | --- |
+| Toolchain | Roslyn 5.9.0, SDK 11 RC `global.json`, `RollForward=Major` tools | core | Planned | `Directory.Packages.props`, `global.json`, tool csproj files, `.github/workflows/` | — | 009 FR-001–FR-004. The tools stay `net10.0`. |
+| Types | `union U(A, B)` → `export type U = A \| B` | TS | Planned | — | — | 009 FR-005–FR-018. Erased; `.Value` / `new U(x)` / conversions are identity; unfaithful shapes → MS0031–MS0034. |
+| Pattern matching | Union case tests + `satisfies never` tail; `case T x:` statement labels | TS | Planned | — | — | 009 FR-019–FR-021. Depends on PR #298 (`IrRuntimeTypeTest`). |
+| Serialization | Union bare-payload JSON, token-kind classification | TS | Planned | — | — | 009 FR-023–FR-026. Ambiguous cases → MS0035; roots and `[JsonPolymorphic]` cases deferred. |
+| Dart | `typedef U = Object` | Dart | Planned | — | — | 009 FR-027. Shape only. |
+
 ## UI components (JSX/TSX)
 
 First vertical slice of UI-component transpilation — C# renderable record components → idiomatic SolidJS TSX. Spec: [specs/002-jsx-codegen-from-csharp/](../../002-jsx-codegen-from-csharp/spec.md). Proving target SolidJS; recognition is library-agnostic (validated against an imported `solid-router` type).

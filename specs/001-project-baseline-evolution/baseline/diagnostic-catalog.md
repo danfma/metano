@@ -50,6 +50,19 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0030` | `ExportsSubpathKeyCollision` | Under `[EmitPackage(SubpathRoot = …)]`, two namespace barrels claim one `package.json#exports` key (e.g. `--namespace-barrels` root barrel + types in the root namespace on `.`); raised by the transform before files are written. |
 | `MS0031` | `ExplicitImplementationConflict` | An explicit interface implementation (`string IPlain.Name`) cannot be declared under its interface member's name because another emitted member of the type or a base class (an implicit `Name`, or `IOther.Name`) with the same static-ness already claims it (case-insensitive, `[Name]`-aware). Only for interfaces of the transpiled contract (source, `[Transpile]`, or a `[TranspileAssembly]` package); a BCL bridge such as `IEnumerable.GetEnumerator` is dropped silently. The explicit member is dropped; rename one, implement implicitly, or mark the explicit member `[Ignore]` (#278). |
 
+## Reserved codes (specified, not yet implemented)
+
+Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0037`).
+
+| Code | Symbolic name | Severity | Meaning | Spec |
+| --- | --- | --- | --- | --- |
+| `MS0031` | `UnsupportedUnionShape` | Error | A C# 15 `union` uses a shape the erased TS union cannot represent: body members, extra interfaces, a union-typed case, an unsupported Metano attribute, or a JSON-reachable custom type classifier / `[JsonPolymorphic]` case. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0032` | `IndistinguishableUnionCases` | Error | Two union cases are assignable to each other, or share one JS runtime test (`int`/`double`, `Guid`/`string`, …). | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0033` | `UntestableUnionCase` | Error | A union case has no runtime test (an interface or `[PlainObject]` without `[GenerateGuard]`, an array or collection, an open type parameter at a test site). | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0034` | `UnionDefaultValue` | Error (spec 009 OD-3) | `default(U)`, a target-typed `default`, or an unassigned union member. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0035` | `AmbiguousUnionJsonCases` | Warning | A JSON-reachable union has cases with the same JSON token kind (the analogue of STJ SYSLIB1227); deserialization throws, as STJ does. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0036` | `UnionErasureDivergence` | Warning | `ToString`/interpolation, `GetType`, or `is U` over a non-union input behaves differently after erasure. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+
 ## Build integration (`Metano.Build`)
 
 Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` code space.
