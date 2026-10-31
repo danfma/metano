@@ -10,6 +10,10 @@ small `Money` domain type.
 - `Currency.cs` — currency enum used by the value object.
 - `NoSameMoneyCurrencyException.cs` — domain exception emitted as a TypeScript
   error class.
+- `CurrencyExceptions.cs` — exceptions deriving from BCL exceptions: .NET-style
+  message composition (`ArgumentException` parameter suffix), a `Message`
+  override two levels below the BCL base, and `: this(...)` chained
+  constructors forwarding the inner exception as `cause`.
 - `Program.cs` — top-level code that creates money, applies `+=`, and writes the
   result.
 
@@ -25,6 +29,8 @@ The related TypeScript source is in
 - `money.ts`
 - `currency.ts`
 - `no-same-money-currency-exception.ts`
+- `invalid-currency-code-exception.ts`, `unsupported-currency-exception.ts`,
+  `currency-conversion-exception.ts`
 - `program.ts`
 - `index.ts`
 

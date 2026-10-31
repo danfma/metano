@@ -29,9 +29,15 @@ public static class IrToTsConstructorDispatcherBridge
     /// Builds the dispatcher constructor. Returns <c>null</c> when the IR
     /// carries a single constructor (no dispatcher needed).
     /// </summary>
+    /// <param name="primary">The primary constructor carrying the overloads.</param>
+    /// <param name="bclRegistry">The declarative BCL mappings.</param>
+    /// <param name="keepsBaseMessage">Whether the class overrides
+    /// <c>Message</c>, so every <c>super(...)</c> is followed by the
+    /// base-message capture.</param>
     public static TsConstructor? Build(
         IrConstructorDeclaration primary,
-        DeclarativeMappingRegistry? bclRegistry = null
+        DeclarativeMappingRegistry? bclRegistry = null,
+        bool keepsBaseMessage = false
     )
     {
         if (primary.Overloads is not { Count: > 0 })
@@ -63,7 +69,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         var body = new List<TsStatement>();
         foreach (var ctor in sorted)
-            body.Add(BuildBranch(ctor, bclRegistry));
+            body.Add(BuildBranch(ctor, keepsBaseMessage, bclRegistry));
 
         // Unmatched — match the legacy behavior: the bare TS `throw` so a
         // caller that passes an unsupported signature fails loudly at runtime.
@@ -92,6 +98,7 @@ public static class IrToTsConstructorDispatcherBridge
 
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
+        bool keepsBaseMessage,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -132,7 +139,9 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        branch.AddRange(LowerConstructorInvocation(ctor, chainDepth: 0, bclRegistry));
+        branch.AddRange(
+            LowerConstructorInvocation(ctor, chainDepth: 0, keepsBaseMessage, bclRegistry)
+        );
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
@@ -150,15 +159,16 @@ public static class IrToTsConstructorDispatcherBridge
     private static IReadOnlyList<TsStatement> LowerConstructorInvocation(
         IrConstructorDeclaration ctor,
         int chainDepth,
+        bool keepsBaseMessage,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
         var statements = new List<TsStatement>();
 
         if (ctor.ThisChain is { } chain)
-            statements.AddRange(LowerThisChain(chain, chainDepth, bclRegistry));
+            statements.AddRange(LowerThisChain(chain, chainDepth, keepsBaseMessage, bclRegistry));
         else if (
-            IrToTsExceptionConstructionBridge.MapBaseArguments(ctor, bclRegistry) is { } baseCall
+            IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, bclRegistry) is { } baseCall
         )
             statements.AddRange(baseCall.ToStatements());
 
@@ -182,6 +192,7 @@ public static class IrToTsConstructorDispatcherBridge
     private static IReadOnlyList<TsStatement> LowerThisChain(
         IrConstructorChain chain,
         int chainDepth,
+        bool keepsBaseMessage,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -210,7 +221,9 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        targetScope.AddRange(LowerConstructorInvocation(target, chainDepth + 1, bclRegistry));
+        targetScope.AddRange(
+            LowerConstructorInvocation(target, chainDepth + 1, keepsBaseMessage, bclRegistry)
+        );
 
         return [.. temporaries, new TsBlockStatement(targetScope)];
     }

@@ -371,12 +371,28 @@ public class BclExceptionConstructionTests
             public static Exception? Inner(Exception error) => error.InnerException;
 
             public static string? Trace(Exception error) => error.StackTrace;
+
+            public static Exception InnerOr(Exception error, Exception other) => error.InnerException ?? other;
+
+            public static string TraceOrEmpty(Exception error) => error.StackTrace ?? "";
             """
         );
 
-        await Assert.That(output).Contains("return ((error.cause as Error | undefined) ?? null);");
+        await Assert
+            .That(output)
+            .Contains("return (error.cause instanceof Error ? error.cause : null);");
 
-        await Assert.That(output).Contains("return (error.stack ?? null);");
+        await Assert
+            .That(output)
+            .Contains("return (error.stack !== undefined ? error.stack : null);");
+
+        await Assert
+            .That(output)
+            .Contains("return (error.cause instanceof Error ? error.cause : null) ?? other;");
+
+        await Assert
+            .That(output)
+            .Contains("return (error.stack !== undefined ? error.stack : null) ?? \"\";");
     }
 
     [Test]

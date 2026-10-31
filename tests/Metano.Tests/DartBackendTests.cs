@@ -201,6 +201,25 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task ExceptionWithoutConstructors_EmitsHarmlessExplicitConstructor()
+    {
+        // The core models the implicit constructor of a BCL-derived exception
+        // (its base call is observable on the TS side); Dart renders it as an
+        // empty constructor, equivalent to the implicit one.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class NoConstructorException : System.Exception { }
+            """
+        );
+
+        var dart = files["no_constructor_exception.dart"];
+
+        await Assert.That(dart).Contains("class NoConstructorException extends Exception {");
+        await Assert.That(dart).Contains("NoConstructorException();");
+    }
+
+    [Test]
     public async Task Delegate_LowersToDartTypedef()
     {
         // C# delegates lower to Dart typedefs aliasing a function signature.
