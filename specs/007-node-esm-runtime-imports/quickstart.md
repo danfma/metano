@@ -18,7 +18,7 @@ Expected failure: `ERR_UNSUPPORTED_DIR_IMPORT … dist/system`.
 bash scripts/smoke-test-runtime-package.sh
 ```
 
-Expected: three `OK` import lines, `no extensionless relative specifiers`, `tsgo: ok`, `tsc: ok`, exit 0.
+Expected: five `ok` import lines, `ok   metano-runtime/system/collections rejected (ERR_MODULE_NOT_FOUND)`, `ok   no extensionless relative specifiers`, `ok   tsgo (…)`, `ok   tsc (…)`, `metano-runtime packaging smoke test passed`, exit 0.
 
 ## Regression proof (SC-003)
 
