@@ -1798,9 +1798,6 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ExtractMemberAccess(QualifiedMemberSyntax member)
     {
-        if (IsBaseExceptionMessageRead(member))
-            return new IrExceptionBaseMessage();
-
         // `decimal.Zero` / `.One` / `.MinusOne` — no static counterpart in
         // decimal.js, so synthesize `new Decimal(N)` matching the legacy
         // BclMapper behavior. Similarly `decimal.Parse(s)` rewrites to
@@ -3625,7 +3622,7 @@ public sealed partial class IrExpressionExtractor
     /// name (the shape <c>[PlainObject]</c> expects), mirroring the legacy
     /// <c>ObjectCreationHandler.CreatePlainObjectLiteral</c> behavior.
     /// </summary>
-    private IrNewExpression BuildNewExpression(
+    private IrExpression BuildNewExpression(
         IrTypeRef type,
         IReadOnlyList<IrArgument> args,
         ITypeSymbol? typeSymbol,
@@ -3661,7 +3658,8 @@ public sealed partial class IrExpressionExtractor
         }
 
         var initializers = ExtractObjectInitializer(creationSyntax);
-        return new IrNewExpression(
+
+        var creation = new IrNewExpression(
             type,
             args,
             isPlainObject,
@@ -3671,17 +3669,47 @@ public sealed partial class IrExpressionExtractor
             ExternalImports: BuildImportedRenderableImports(typeSymbol),
             ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax)
         );
+
+        return creation.ExceptionConstruction is { RequiresArgumentTemporaries: true }
+            ? BindExceptionArgumentsOnce(creation, 0)
+            : creation;
     }
 
     /// <summary>
-    /// <c>base.Message</c> inside a class that keeps its base message itself
-    /// (see <see cref="IrExceptionConstructionExtractor.KeepsBaseMessage"/>).
+    /// Let-binds the side-effecting arguments of a BCL exception construction
+    /// (from <paramref name="index"/> on), in source order, so the backend's
+    /// role-ordered lowering can reorder or drop them freely.
     /// </summary>
-    private bool IsBaseExceptionMessageRead(MemberAccessExpressionSyntax member) =>
-        member.Expression is BaseExpressionSyntax
-        && _semantic.GetSymbolInfo(member).Symbol is IPropertySymbol { Name: "Message" }
-        && _semantic.GetEnclosingSymbol(member.SpanStart)?.ContainingType is { } enclosingType
-        && IrExceptionConstructionExtractor.KeepsBaseMessage(enclosingType, _target);
+    private IrExpression BindExceptionArgumentsOnce(IrNewExpression creation, int index)
+    {
+        if (index == creation.Arguments.Count)
+        {
+            return creation with
+            {
+                ExceptionConstruction = creation.ExceptionConstruction! with
+                {
+                    RequiresArgumentTemporaries = false,
+                },
+            };
+        }
+
+        return BindValueOnce(
+            creation.Arguments[index].Value,
+            bound =>
+                BindExceptionArgumentsOnce(
+                    creation with
+                    {
+                        Arguments = creation
+                            .Arguments.Select(
+                                (argument, position) =>
+                                    position == index ? argument with { Value = bound } : argument
+                            )
+                            .ToList(),
+                    },
+                    index + 1
+                )
+        );
+    }
 
     /// <summary>
     /// Classifies the arguments of a <c>new</c> of a BCL exception by

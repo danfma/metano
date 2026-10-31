@@ -224,7 +224,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((__exceptionArg0, __exceptionArg1) => new Error(__exceptionArg0))(Guard.describe(), Guard.locate());"
+                "throw ((receiver$temp$0) => ((receiver$temp$1) => new Error(receiver$temp$0))(Guard.locate()))(Guard.describe());"
             );
     }
 
@@ -244,7 +244,7 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((__exceptionArg0, __exceptionArg1) => new Error(`${__exceptionArg1} (Parameter '${__exceptionArg0}')`))(Guard.name(), Guard.describe());"
+                "throw ((receiver$temp$0) => ((receiver$temp$1) => new Error(`${receiver$temp$1} (Parameter '${receiver$temp$0}')`))(Guard.describe()))(Guard.name());"
             );
     }
 
@@ -277,9 +277,7 @@ public class BclExceptionConstructionTests
 
         await Assert
             .That(output)
-            .Contains(
-                "throw ((__exceptionArg0, __exceptionArg1) => new Error(__exceptionArg0))(\"missing\", Guard.locate());"
-            );
+            .Contains("throw ((receiver$temp$0) => new Error(\"missing\"))(Guard.locate());");
     }
 
     [Test]
@@ -421,6 +419,58 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains("throw new Error(\"Attempted to read past the end of the stream.\");");
+    }
+
+    [Test]
+    public async Task SideEffectingBaseArguments_DeclareTemporariesBeforeSuper()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+
+            [Transpile]
+            public sealed class MissingFileException(string name)
+                : System.IO.FileNotFoundException(Describe(name), Locate(name))
+            {
+                private static string Describe(string name) => "missing " + name;
+
+                private static string Locate(string name) => "/" + name;
+            }
+            """
+        );
+
+        var output = result["missing-file-exception.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    const __baseArg0 = MissingFileException.describe(name);
+                    const __baseArg1 = MissingFileException.locate(name);
+                    super(__baseArg0);
+                """
+            );
+    }
+
+    [Test]
+    public async Task AwaitedSideEffectingArguments_BindInsideAsyncIife()
+    {
+        var output = TranspileGuard(
+            """
+            public static async System.Threading.Tasks.Task<Exception> Build() =>
+                new ArgumentOutOfRangeException(await Name(), await Describe());
+
+            public static async System.Threading.Tasks.Task<string> Name() { await System.Threading.Tasks.Task.CompletedTask; return "value"; }
+
+            public static async System.Threading.Tasks.Task<string> Describe() { await System.Threading.Tasks.Task.CompletedTask; return "too big"; }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return await (async (receiver$temp$0) => ((receiver$temp$1) => new Error(`${receiver$temp$1} (Parameter '${receiver$temp$0}')`))(await Guard.describe()))(await Guard.name());"
+            );
     }
 
     private static string TranspileGuard(string members)

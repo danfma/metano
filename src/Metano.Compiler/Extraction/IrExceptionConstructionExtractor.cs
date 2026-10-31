@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -100,27 +101,55 @@ public static class IrExceptionConstructionExtractor
             .Select((argument, index) => RoleOf(BoundParameter(constructor, argument, index)))
             .ToList();
 
+        var isMessageOverridden = OverridesMessage(callingType, target);
+
         return new IrExceptionConstruction(
             roles,
             DefaultMessageOf(constructor.ContainingType, callingType),
             MessageMayBeNull: MessageMayBeNull(sourceArguments, model),
-            IsMessageOverridden: OverridesMessage(callingType, target)
+            IsMessageOverridden: isMessageOverridden,
+            RequiresArgumentTemporaries: RequiresArgumentTemporaries(
+                arguments,
+                roles,
+                isMessageOverridden
+            )
         );
     }
 
     /// <summary>
-    /// Whether <paramref name="type"/> overrides <c>Message</c> while deriving
-    /// directly from an exception without a target declaration: its base
-    /// constructor call then leaves the native message unset and the class
-    /// keeps the composed base message for <c>base.Message</c> reads.
+    /// The role-ordered lowering reorders arguments and drops the unmapped
+    /// ones (and the message, when overridden). That is unobservable when at
+    /// most one argument has side effects and that argument is still
+    /// evaluated exactly once; otherwise the arguments need source-order
+    /// temporaries.
     /// </summary>
-    public static bool KeepsBaseMessage(
-        INamedTypeSymbol type,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
-        DeclaresMessageOverride(type)
-        && type.BaseType is { } baseType
-        && LacksTargetDeclaration(baseType, target);
+    private static bool RequiresArgumentTemporaries(
+        IReadOnlyList<IrArgument> arguments,
+        IReadOnlyList<IrExceptionArgumentRole> roles,
+        bool isMessageOverridden
+    )
+    {
+        var effectfulRoles = arguments
+            .Select((argument, index) => (argument, role: roles[index]))
+            .Where(pair => !IrEvaluationTraits.IsSideEffectFree(pair.argument.Value))
+            .Select(pair => pair.role)
+            .ToList();
+
+        return effectfulRoles switch
+        {
+            [] => false,
+            [var role] => !IsEvaluatedOnce(role, isMessageOverridden),
+            _ => true,
+        };
+    }
+
+    private static bool IsEvaluatedOnce(IrExceptionArgumentRole role, bool isMessageOverridden) =>
+        role switch
+        {
+            IrExceptionArgumentRole.Unmapped => false,
+            IrExceptionArgumentRole.Message => !isMessageOverridden,
+            _ => true,
+        };
 
     private static bool LacksTargetDeclaration(
         INamedTypeSymbol exceptionType,

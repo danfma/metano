@@ -43,7 +43,6 @@ public static partial class IrToTsExpressionBridge
             IrTypeReference tr => MapTypeReference(tr),
             IrThisExpression => new TsIdentifier("this"),
             IrBaseExpression => new TsIdentifier("super"),
-            IrExceptionBaseMessage => IrToTsExceptionConstructionBridge.BaseMessageAccess(),
             IrMemberAccess ma => MapMemberAccess(ma, bclRegistry),
             IrElementAccess ea => MapElementAccess(ea, bclRegistry),
             IrSliceExpression slice => MapSlice(slice, bclRegistry),
@@ -208,6 +207,9 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
+        if (IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead(ma) is { } keptBaseMessage)
+            return keptBaseMessage;
+
         var loweredTarget = Map(ma.Target, bclRegistry);
 
         // `[Branded]` value read: the companion lowers the wrapper to

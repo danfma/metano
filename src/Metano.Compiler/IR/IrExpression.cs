@@ -64,15 +64,6 @@ public sealed record IrThisExpression() : IrExpression;
 /// </summary>
 public sealed record IrBaseExpression() : IrExpression;
 
-/// <summary>
-/// <c>base.Message</c> read inside an exception class that overrides
-/// <c>Message</c> and derives directly from an exception without a target
-/// declaration (the BCL). The native base cannot hold that message (it would
-/// shadow the override), so the class keeps the message composed by its base
-/// constructor call itself; backends read it from there.
-/// </summary>
-public sealed record IrExceptionBaseMessage() : IrExpression;
-
 // -- Member access --
 
 /// <summary>

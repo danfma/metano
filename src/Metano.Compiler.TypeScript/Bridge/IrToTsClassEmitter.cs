@@ -56,6 +56,12 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             )
         );
 
+        // `base.Message` reads in a class that keeps its base message lower
+        // to the kept `#baseMessage` field for the whole class emission.
+        using var exceptionClassScope = IrToTsExceptionConstructionBridge.EnterClass(
+            ir.Constructor
+        );
+
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
 
         var ctorParams = IrToTsClassBridge.BuildPrimaryCtorParams(

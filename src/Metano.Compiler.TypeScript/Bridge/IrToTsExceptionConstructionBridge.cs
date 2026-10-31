@@ -26,10 +26,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </para>
 /// <para>
 /// Evaluation order: the message composition reads the arguments in role
-/// order and ignores unmapped ones. That is only safe when at most one
-/// argument has side effects and it is still used exactly once; otherwise all
-/// arguments are first evaluated once, in source order, into temporaries (an
-/// IIFE for <c>new</c>, <c>const</c> declarations before <c>super</c>).
+/// order and ignores unmapped ones. When that would change when or whether a
+/// side-effecting argument runs
+/// (<see cref="IrExceptionConstruction.RequiresArgumentTemporaries"/>), the
+/// arguments are evaluated once, in source order, first: the extractor
+/// let-binds them for <c>new</c>; a base call declares <c>const</c>
+/// temporaries before <c>super</c>, which cannot move into a let IIFE.
 /// </para>
 /// <para>
 /// Known deviations: a non-literal <c>paramName</c>, <c>objectName</c> or
@@ -44,31 +46,52 @@ public static class IrToTsExceptionConstructionBridge
 {
     /// <summary>
     /// The ES private field holding the message a class that overrides
-    /// <c>Message</c> composed for its native base (see
-    /// <see cref="IrExceptionBaseMessage"/>).
+    /// <c>Message</c> composed for its native base. The native base keeps no
+    /// message (it would shadow the override), so <c>base.Message</c> reads in
+    /// that class lower to this field.
     /// </summary>
     public const string BaseMessageField = "#baseMessage";
 
-    private const string TemporaryPrefix = "__exceptionArg";
-
-    /// <summary><c>this.#baseMessage</c>: the lowering of <c>base.Message</c>
-    /// in a class that keeps its base message.</summary>
-    public static TsExpression BaseMessageAccess() =>
-        new TsPropertyAccess(new TsIdentifier("this"), BaseMessageField);
+    private const string TemporaryPrefix = "__baseArg";
 
     /// <summary>
-    /// The <c>#baseMessage</c> field declaration a class needs when any of its
-    /// constructors keeps the base message; <c>null</c> otherwise.
+    /// Whether the class currently being emitted keeps its base message — set
+    /// per class by <see cref="EnterClass"/>. <see cref="AsyncLocal{T}"/>
+    /// scopes it to the emitting execution context, like the type mapper's
+    /// per-file scopes.
     /// </summary>
-    public static TsFieldMember? BaseMessageFieldFor(IrConstructorDeclaration? primary)
+    private static readonly AsyncLocal<bool> _keepsBaseMessage = new();
+
+    /// <summary>
+    /// Scopes the emission of one class: while the returned handle is alive,
+    /// <c>base.Message</c> reads (see <see cref="TryMapKeptBaseMessageRead"/>)
+    /// redirect to <c>#baseMessage</c> when one of the class's constructors
+    /// keeps the base message.
+    /// </summary>
+    public static IDisposable EnterClass(IrConstructorDeclaration? primary)
     {
-        var constructors = primary is null ? [] : (primary.Overloads ?? []).Prepend(primary);
+        var scope = new ClassScope(_keepsBaseMessage.Value);
 
-        var keepsBaseMessage = constructors.Any(ctor =>
-            ctor.BaseExceptionConstruction is { IsMessageOverridden: true }
-        );
+        _keepsBaseMessage.Value = KeepsBaseMessage(primary);
 
-        return keepsBaseMessage
+        return scope;
+    }
+
+    /// <summary>
+    /// <c>this.#baseMessage</c> for a <c>base.Message</c> read inside a class
+    /// that keeps its base message; <c>null</c> for every other access.
+    /// </summary>
+    public static TsExpression? TryMapKeptBaseMessageRead(IrMemberAccess access) =>
+        _keepsBaseMessage.Value && access is { Target: IrBaseExpression, MemberName: "Message" }
+            ? BaseMessageAccess()
+            : null;
+
+    /// <summary>
+    /// The <c>#baseMessage</c> field declaration a class needs when it keeps
+    /// its base message; <c>null</c> otherwise.
+    /// </summary>
+    public static TsFieldMember? BaseMessageFieldFor(IrConstructorDeclaration? primary) =>
+        KeepsBaseMessage(primary)
             ? new TsFieldMember(
                 BaseMessageField,
                 new TsStringType(),
@@ -78,12 +101,29 @@ public static class IrToTsExceptionConstructionBridge
                 Accessibility: TsAccessibility.None
             )
             : null;
+
+    internal static TsExpression BaseMessageAccess() =>
+        new TsPropertyAccess(new TsIdentifier("this"), BaseMessageField);
+
+    /// <summary>Restores the enclosing emission's kept-base-message state.</summary>
+    private sealed class ClassScope(bool previous) : IDisposable
+    {
+        public void Dispose() => _keepsBaseMessage.Value = previous;
+    }
+
+    private static bool KeepsBaseMessage(IrConstructorDeclaration? primary)
+    {
+        var constructors = primary is null ? [] : (primary.Overloads ?? []).Prepend(primary);
+
+        return constructors.Any(ctor =>
+            ctor.BaseExceptionConstruction is { IsMessageOverridden: true }
+        );
     }
 
     /// <summary>
-    /// Lowers <c>new BclException(...)</c> to <c>new Error(...)</c>, wrapped in
-    /// an IIFE that evaluates the arguments in source order when any of them
-    /// may have side effects.
+    /// Lowers <c>new BclException(...)</c> to <c>new Error(...)</c>. The
+    /// extractor has already let-bound any side-effecting arguments the
+    /// role-ordered lowering would reorder or drop.
     /// </summary>
     public static TsExpression MapNewError(
         IrNewExpression creation,
@@ -93,24 +133,9 @@ public static class IrToTsExceptionConstructionBridge
     {
         var operands = ErrorOperands.Bind(construction, creation.Arguments, bclRegistry);
 
-        var newError = new TsNewExpression(
+        return new TsNewExpression(
             new TsIdentifier("Error"),
             BuildErrorArguments(construction, operands)
-        );
-
-        if (operands.Temporaries.Count == 0)
-            return newError;
-
-        var evaluator = new TsArrowFunction(
-            operands
-                .Temporaries.Select(temporary => new TsParameter(temporary.Name, null))
-                .ToList(),
-            [new TsReturnStatement(newError)]
-        );
-
-        return new TsCallExpression(
-            evaluator,
-            operands.Temporaries.Select(temporary => temporary.Initializer).ToList()
         );
     }
 
@@ -253,8 +278,8 @@ public static class IrToTsExceptionConstructionBridge
 
     /// <summary>
     /// The arguments of one exception construction, each lowered either
-    /// inline (every argument side-effect free) or to a temporary holding its
-    /// source-order evaluation.
+    /// inline or — when the construction requires argument temporaries — to a
+    /// temporary holding its source-order evaluation.
     /// </summary>
     private sealed class ErrorOperands
     {
@@ -284,7 +309,7 @@ public static class IrToTsExceptionConstructionBridge
                 .Select(argument => IrToTsExpressionBridge.Map(argument.Value, bclRegistry))
                 .ToList();
 
-            if (CanEvaluateInline(construction, arguments))
+            if (!construction.RequiresArgumentTemporaries)
             {
                 var inline = arguments
                     .Select((argument, index) => new ErrorOperand(argument.Value, lowered[index]))
@@ -331,56 +356,6 @@ public static class IrToTsExceptionConstructionBridge
 
         private static bool IsNullLiteral(IrExpression expression) =>
             expression is IrLiteral { Kind: IrLiteralKind.Null or IrLiteralKind.Default };
-
-        /// <summary>
-        /// Inline lowering reorders arguments into role order and drops the
-        /// unmapped ones (and the message, when overridden). That is
-        /// unobservable when at most one argument has side effects and that
-        /// argument is still evaluated exactly once.
-        /// </summary>
-        private static bool CanEvaluateInline(
-            IrExceptionConstruction construction,
-            IReadOnlyList<IrArgument> arguments
-        )
-        {
-            var effectfulIndices = Enumerable
-                .Range(0, arguments.Count)
-                .Where(index => !IsSideEffectFree(arguments[index].Value))
-                .ToList();
-
-            return effectfulIndices switch
-            {
-                [] => true,
-                [var index] => IsEvaluatedOnce(
-                    construction,
-                    construction.ArgumentRoles.ElementAtOrDefault(index)
-                ),
-                _ => false,
-            };
-        }
-
-        private static bool IsEvaluatedOnce(
-            IrExceptionConstruction construction,
-            IrExceptionArgumentRole role
-        ) =>
-            role switch
-            {
-                IrExceptionArgumentRole.Unmapped => false,
-                IrExceptionArgumentRole.Message => !construction.IsMessageOverridden,
-                _ => true,
-            };
-
-        private static bool IsSideEffectFree(IrExpression expression) =>
-            expression switch
-            {
-                IrLiteral or IrIdentifier or IrThisExpression or IrTypeReference => true,
-                IrMemberAccess access => IsSideEffectFree(access.Target),
-                IrCastExpression cast => IsSideEffectFree(cast.Expression),
-                IrStringInterpolation interpolation => interpolation
-                    .Parts.OfType<IrInterpolationExpression>()
-                    .All(hole => IsSideEffectFree(hole.Expression)),
-                _ => false,
-            };
     }
 
     /// <summary>An argument's IR source (for literal folding) and its TS lowering.</summary>

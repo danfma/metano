@@ -257,8 +257,9 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   exception construction (`new ArgumentException(...)`, or a user exception's
   base / `: this(...)`-chained call) to `Error(message, { cause })`, composing
   the message from the constructor-parameter roles of `IrExceptionConstruction`
-  the way .NET does, and evaluating side-effecting arguments once in source
-  order. It emits no declaration: user exceptions go through
+  the way .NET does. Side-effecting arguments are evaluated once in source
+  order: the extractor let-binds them for `new` (the shared evaluate-once
+  machinery), a base call declares `const` temporaries before `super`. It emits no declaration: user exceptions go through
   `IrToTsClassEmitter` and extend `Error`; BCL exception types map to `Error`
   in type positions. Known limitations: since every BCL exception type is
   `Error` at runtime, `o is ArgumentException` lowers to `instanceof Error`
