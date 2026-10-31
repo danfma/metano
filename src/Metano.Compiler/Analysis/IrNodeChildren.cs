@@ -17,6 +17,12 @@ public static class IrNodeChildren
         {
             IrMemberAccess access => [access.Target],
             IrElementAccess element => [element.Target, element.Index],
+            IrSliceExpression slice => new[]
+            {
+                slice.Target,
+                slice.Start,
+                slice.End,
+            }.OfType<IrExpression>(),
             IrOptionalChain chain => [chain.Target],
             IrCallExpression call => [call.Target, .. call.Arguments.Select(a => a.Value)],
             IrNewExpression creation =>

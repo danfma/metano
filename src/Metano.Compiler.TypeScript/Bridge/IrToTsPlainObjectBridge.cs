@@ -284,6 +284,17 @@ public static class IrToTsPlainObjectBridge
             {
                 Elements = arr.Elements.Select(e => RewriteThis(e, identifierName)).ToList(),
             },
+            IrSliceExpression slice => slice with
+            {
+                Target = RewriteThis(slice.Target, identifierName),
+                Start = slice.Start is null ? null : RewriteThis(slice.Start, identifierName),
+                End = slice.End is null ? null : RewriteThis(slice.End, identifierName),
+            },
+            IrLetExpression let => let with
+            {
+                Value = RewriteThis(let.Value, identifierName),
+                Body = RewriteThis(let.Body, identifierName),
+            },
             _ => expr,
         };
 }

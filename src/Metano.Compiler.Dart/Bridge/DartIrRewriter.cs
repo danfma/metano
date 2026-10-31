@@ -143,6 +143,17 @@ public sealed class DartIrRewriter
                 Target = RewriteExpression(e.Target),
                 Index = RewriteExpression(e.Index),
             },
+            IrSliceExpression s => s with
+            {
+                Target = RewriteExpression(s.Target),
+                Start = s.Start is null ? null : RewriteExpression(s.Start),
+                End = s.End is null ? null : RewriteExpression(s.End),
+            },
+            IrLetExpression l => l with
+            {
+                Value = RewriteExpression(l.Value),
+                Body = RewriteExpression(l.Body),
+            },
             IrOptionalChain o => o with { Target = RewriteExpression(o.Target) },
             IrLambdaExpression l => l with { Body = l.Body.Select(RewriteStatement).ToList() },
             IrArrayLiteral a => a with { Elements = a.Elements.Select(RewriteExpression).ToList() },

@@ -978,7 +978,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         )
             return;
 
-        var typeIr = GetOrExtractIr(type, irCache);
+        var typeIr = ExtractIrForRequirementScan(type, irCache);
         if (typeIr is not null)
             foreach (var req in IrRuntimeRequirementScanner.Scan(typeIr))
                 acc.Add(req);
@@ -986,6 +986,26 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         foreach (var nested in type.GetTypeMembers())
             if (IsExportableNestedType(nested))
                 ScanTypeAndEmittedNested(nested, acc, irCache);
+    }
+
+    /// <summary>
+    /// A JsonSerializerContext is emitted by <see cref="JsonSerializerContextTransformer"/>
+    /// from the symbol, not from IR: its IR is extracted only to collect the runtime
+    /// requirements (e.g. <c>Temporal</c>) of the types it serializes. Its System.Text.Json
+    /// source-generated members are never emitted, so the unsupported expressions in them
+    /// must not surface as MS0001 against generated code the user cannot change.
+    /// </summary>
+    private IrTypeDeclaration? ExtractIrForRequirementScan(
+        INamedTypeSymbol type,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration> irCache
+    )
+    {
+        if (!IsJsonSerializerContextType(type))
+            return GetOrExtractIr(type, irCache);
+
+        using var muted = ExtractionDiagnostics.Suppress();
+
+        return GetOrExtractIr(type, irCache);
     }
 
     /// <summary>

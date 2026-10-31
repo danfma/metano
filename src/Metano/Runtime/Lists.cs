@@ -22,24 +22,38 @@ using Metano.Annotations;
 
 // ─── Count ──────────────────────────────────────────────────
 // All five collection interfaces expose Count. JS uses .length on arrays, which is what
-// the runtime representation of every transpiled collection ultimately is.
+// the runtime representation of every transpiled collection ultimately is; Dart's List
+// exposes .length as well.
 
-[assembly: MapProperty(typeof(List<>), nameof(List<int>.Count), JsProperty = "length")]
-[assembly: MapProperty(typeof(IList<>), nameof(IList<int>.Count), JsProperty = "length")]
+[assembly: MapProperty(
+    typeof(List<>),
+    nameof(List<int>.Count),
+    JsProperty = "length",
+    DartProperty = "length"
+)]
+[assembly: MapProperty(
+    typeof(IList<>),
+    nameof(IList<int>.Count),
+    JsProperty = "length",
+    DartProperty = "length"
+)]
 [assembly: MapProperty(
     typeof(ICollection<>),
     nameof(ICollection<int>.Count),
-    JsProperty = "length"
+    JsProperty = "length",
+    DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IReadOnlyList<>),
     nameof(IReadOnlyList<int>.Count),
-    JsProperty = "length"
+    JsProperty = "length",
+    DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IReadOnlyCollection<>),
     nameof(IReadOnlyCollection<int>.Count),
-    JsProperty = "length"
+    JsProperty = "length",
+    DartProperty = "length"
 )]
 
 // ─── Add ────────────────────────────────────────────────────
