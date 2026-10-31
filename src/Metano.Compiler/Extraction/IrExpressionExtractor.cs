@@ -1798,6 +1798,9 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ExtractMemberAccess(QualifiedMemberSyntax member)
     {
+        if (IsBaseExceptionMessageRead(member))
+            return new IrExceptionBaseMessage();
+
         // `decimal.Zero` / `.One` / `.MinusOne` — no static counterpart in
         // decimal.js, so synthesize `new Decimal(N)` matching the legacy
         // BclMapper behavior. Similarly `decimal.Parse(s)` rewrites to
@@ -3669,6 +3672,16 @@ public sealed partial class IrExpressionExtractor
             ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax)
         );
     }
+
+    /// <summary>
+    /// <c>base.Message</c> inside a class that keeps its base message itself
+    /// (see <see cref="IrExceptionConstructionExtractor.KeepsBaseMessage"/>).
+    /// </summary>
+    private bool IsBaseExceptionMessageRead(MemberAccessExpressionSyntax member) =>
+        member.Expression is BaseExpressionSyntax
+        && _semantic.GetSymbolInfo(member).Symbol is IPropertySymbol { Name: "Message" }
+        && _semantic.GetEnclosingSymbol(member.SpanStart)?.ContainingType is { } enclosingType
+        && IrExceptionConstructionExtractor.KeepsBaseMessage(enclosingType, _target);
 
     /// <summary>
     /// Classifies the arguments of a <c>new</c> of a BCL exception by

@@ -51,6 +51,18 @@ public static class IrExceptionConstructionExtractor
         ["System.ArithmeticException"] = "Overflow or underflow in the arithmetic operation.",
         ["System.UnauthorizedAccessException"] = "Attempted to perform an unauthorized operation.",
         ["System.ObjectDisposedException"] = "Cannot access a disposed object.",
+        ["System.IO.IOException"] = "I/O error occurred.",
+        ["System.IO.FileNotFoundException"] = "Unable to find the specified file.",
+        ["System.IO.DirectoryNotFoundException"] =
+            "Attempted to access a path that is not on the disk.",
+        ["System.IO.EndOfStreamException"] = "Attempted to read past the end of the stream.",
+        ["System.IO.PathTooLongException"] =
+            "The specified file name or path is too long, or a component of the specified path is too long.",
+        ["System.IO.DriveNotFoundException"] =
+            "Could not find the drive. The drive might not be ready or might not be mapped.",
+        ["System.Threading.Tasks.TaskCanceledException"] = "A task was canceled.",
+        ["System.Text.Json.JsonException"] =
+            "Exception of type 'System.Text.Json.JsonException' was thrown.",
     };
 
     /// <summary>
@@ -95,6 +107,20 @@ public static class IrExceptionConstructionExtractor
             IsMessageOverridden: OverridesMessage(callingType, target)
         );
     }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> overrides <c>Message</c> while deriving
+    /// directly from an exception without a target declaration: its base
+    /// constructor call then leaves the native message unset and the class
+    /// keeps the composed base message for <c>base.Message</c> reads.
+    /// </summary>
+    public static bool KeepsBaseMessage(
+        INamedTypeSymbol type,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        DeclaresMessageOverride(type)
+        && type.BaseType is { } baseType
+        && LacksTargetDeclaration(baseType, target);
 
     private static bool LacksTargetDeclaration(
         INamedTypeSymbol exceptionType,

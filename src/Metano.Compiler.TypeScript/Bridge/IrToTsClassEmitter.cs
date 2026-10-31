@@ -68,6 +68,12 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         var constructor = BuildClassConstructor(type, ir, ctorParams, explicitCtors, extendsType);
 
         var classMembers = new List<TsClassMember>();
+
+        if (
+            IrToTsExceptionConstructionBridge.BaseMessageFieldFor(ir.Constructor) is { } baseMessage
+        )
+            classMembers.Add(baseMessage);
+
         EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
         EmitClassMembers(ir, classMembers);
         EmitDeferredOperatorsAndMethods(type, ir, classMembers);

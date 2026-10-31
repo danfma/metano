@@ -268,7 +268,9 @@ public class ExceptionTranspileTests
 
         var output = result["retry-exception.ts"];
 
+        await Assert.That(output).Contains("readonly #baseMessage: string;");
         await Assert.That(output).Contains("super(undefined, { cause: inner });");
+        await Assert.That(output).Contains("this.#baseMessage = \"ignored\";");
         await Assert.That(output).Contains("get message(): string {");
     }
 
@@ -285,5 +287,25 @@ public class ExceptionTranspileTests
         await Assert
             .That(result["no-constructor-exception.ts"])
             .Contains("super(\"Exception of type 'NoConstructorException' was thrown.\");");
+    }
+
+    [Test]
+    public async Task ExceptionOverridingMessage_ReadsBaseMessageFromKeptField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class DetailedException(string detail) : Exception(detail)
+            {
+                public override string Message => "custom: " + base.Message;
+            }
+            """
+        );
+
+        var output = result["detailed-exception.ts"];
+
+        await Assert.That(output).Contains("super();");
+        await Assert.That(output).Contains("this.#baseMessage = detail;");
+        await Assert.That(output).Contains("return \"custom: \" + this.#baseMessage;");
     }
 }
