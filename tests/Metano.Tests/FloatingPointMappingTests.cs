@@ -202,7 +202,7 @@ public class FloatingPointMappingTests
     }
 
     [Test]
-    public async Task NaNSwitchLabels_OnACallSubject_FailLoudly()
+    public async Task NaNSwitchLabels_OnACallSubject_EmitUncompilableTodo()
     {
         // Rewriting would evaluate the call once per label; emit a TODO that does not
         // compile rather than a case that silently never matches.
@@ -226,8 +226,11 @@ public class FloatingPointMappingTests
         await Assert.That(output).Contains("switch (Numbers.next())");
         await Assert
             .That(output)
-            .Contains("/* TODO: NaN case label needs a local or field switch subject */");
+            .Contains(
+                "/* TODO: NaN case label needs an identifier or member-access switch subject */"
+            );
         await Assert.That(output).DoesNotContain("case NaN:");
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]
@@ -250,6 +253,8 @@ public class FloatingPointMappingTests
 
         await Assert.That(output).Contains("switch (v)");
         await Assert.That(output).Contains("case Infinity:");
+        await Assert.That(output).DoesNotContain("switch (true)");
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]

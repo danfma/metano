@@ -171,52 +171,51 @@ public static class IrToTsStatementBridge
     /// A JS <c>switch</c> compares with <c>===</c>, so a <c>case double.NaN:</c>
     /// label would never match. When a NaN label is present the switch is
     /// rewritten to <c>switch (true)</c> with one boolean test per label. That
-    /// repeats the subject in every test, so it is only done for a subject that
-    /// is safe to re-read; any other subject gets a TODO label that fails to
-    /// compile instead of a case that silently never matches.
+    /// re-reads the subject in every test, so it is only done when the subject is
+    /// an identifier, <c>this</c>, or a member-access chain on one (a property
+    /// getter in that chain runs once per test); any other subject gets a TODO
+    /// label that fails to compile instead of a case that silently never matches.
     /// </summary>
     private static TsSwitchStatement MapSwitch(
         IrSwitchStatement sw,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var subject = IrToTsExpressionBridge.Map(sw.Expression, bclRegistry);
+        var loweredSubject = IrToTsExpressionBridge.Map(sw.Expression, bclRegistry);
 
         if (!HasNaNCaseLabel(sw))
         {
             return new TsSwitchStatement(
-                subject,
-                MapSwitchCases(
-                    sw,
-                    label => IrToTsExpressionBridge.Map(label, bclRegistry),
-                    bclRegistry
-                )
+                loweredSubject,
+                MapSwitchCases(sw, LowerLabelAsConstant, bclRegistry)
             );
         }
 
         if (!IsSafeToReread(sw.Expression))
         {
             return new TsSwitchStatement(
-                subject,
+                loweredSubject,
                 MapSwitchCases(sw, LowerNaNLabelAsUnsupported, bclRegistry)
             );
         }
 
         return new TsSwitchStatement(
             new TsLiteral("true"),
-            MapSwitchCases(
-                sw,
-                label => IrToTsExpressionBridge.BuildCaseLabelTest(subject, label, bclRegistry),
-                bclRegistry
-            )
+            MapSwitchCases(sw, LowerLabelAsBooleanTest, bclRegistry)
         );
+
+        TsExpression LowerLabelAsConstant(IrExpression label) =>
+            IrToTsExpressionBridge.Map(label, bclRegistry);
+
+        TsExpression LowerLabelAsBooleanTest(IrExpression label) =>
+            IrToTsExpressionBridge.BuildCaseLabelTest(loweredSubject, label, bclRegistry);
 
         TsExpression LowerNaNLabelAsUnsupported(IrExpression label) =>
             IrToTsExpressionBridge.IsNaNConstant(label)
                 ? new TsIdentifier(
-                    "/* TODO: NaN case label needs a local or field switch subject */"
+                    "/* TODO: NaN case label needs an identifier or member-access switch subject */"
                 )
-                : IrToTsExpressionBridge.Map(label, bclRegistry);
+                : LowerLabelAsConstant(label);
     }
 
     private static bool HasNaNCaseLabel(IrSwitchStatement sw) =>
