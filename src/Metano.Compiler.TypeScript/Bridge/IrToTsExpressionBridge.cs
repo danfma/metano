@@ -1,5 +1,6 @@
 using System.Globalization;
 using Metano.Annotations;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -874,24 +875,24 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// Lowers <see cref="IrLetExpression"/> to an IIFE: the binding becomes
-    /// the arrow's lone parameter and the value supplies the single
-    /// argument. The arrow's body is a one-statement <c>return</c> of the
-    /// body expression so the let-binding stays a pure expression at the
-    /// call site (compound-assignment, increment, null-conditional writes
-    /// in expression position all need an expression, not a statement).
+    /// Lowers <see cref="IrLetExpression"/> to an IIFE (see
+    /// <see cref="TsImmediateInvocation.Of"/>): the binding becomes the
+    /// arrow's lone parameter and the value supplies the single argument.
+    /// The arrow's body is a one-statement <c>return</c> of the body
+    /// expression so the let-binding stays a pure expression at the call site
+    /// (compound-assignment, increment, index-from-end and null-conditional
+    /// lowerings all need an expression, not a statement). A body that
+    /// awaits makes the IIFE async and awaited.
     /// </summary>
     private static TsExpression MapLetExpression(
         IrLetExpression let,
         DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        var arrow = new TsArrowFunction(
-            [new TsParameter(let.Name, null)],
-            [new TsReturnStatement(Map(let.Body, bclRegistry))]
+    ) =>
+        TsImmediateInvocation.Of(
+            [new TsImmediateBinding(let.Name, Map(let.Value, bclRegistry))],
+            [new TsReturnStatement(Map(let.Body, bclRegistry))],
+            isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
         );
-        return new TsCallExpression(arrow, [Map(let.Value, bclRegistry)]);
-    }
 
     private static TsExpression MapStringInterpolation(
         IrStringInterpolation interp,

@@ -37,8 +37,7 @@ public static partial class IrToTsExpressionBridge
         var guarded = GuardInline(new TsIdentifier(receiverName), lowered.WhenNotNull);
 
         return TsImmediateInvocation.Of(
-            receiverName,
-            lowered.Receiver,
+            [new TsImmediateBinding(receiverName, lowered.Receiver)],
             [new TsReturnStatement(guarded)],
             isAsync: IrEvaluationTraits.ContainsAwait(access.WhenNotNull)
         );
