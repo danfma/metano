@@ -12,7 +12,10 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <c>SerializerContext</c> subclass with pre-computed <c>TypeSpec</c> definitions.
 ///
 /// Reads <c>[JsonSourceGenerationOptions]</c> for the naming policy and
-/// <c>[JsonSerializable(typeof(T))]</c> to discover which types need specs.
+/// <c>[JsonSerializable(typeof(T))]</c> to discover the root types. Like
+/// System.Text.Json, the context also carries a spec for every object type
+/// reachable from those roots (see <see cref="CollectSpecTypes"/>), so each
+/// <c>ref</c> descriptor and <c>base</c> link resolves to an emitted getter.
 /// JSON property names are pre-computed at transpile time.
 /// </summary>
 public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext context)
@@ -29,10 +32,12 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     {
         var contextName = type.Name;
         var namingPolicy = ReadNamingPolicy(type);
-        var serializableTypes = ReadSerializableTypes(type);
+        var rootTypes = ReadSerializableTypes(type);
 
-        if (serializableTypes.Count == 0)
+        if (rootTypes.Count == 0)
             return;
+
+        var specTypes = CollectSpecTypes(rootTypes, namingPolicy);
 
         var members = new List<TsClassMember>();
 
@@ -59,9 +64,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         );
 
         // Per-type: private _typeName? field + get typeName() lazy getter
-        foreach (var targetType in serializableTypes)
+        foreach (var (targetType, tsTypeName) in specTypes)
         {
-            var tsTypeName = _context.ResolveTsName(targetType);
             var fieldName = "_" + TypeScriptNaming.ToCamelCase(tsTypeName);
             var getterName = TypeScriptNaming.ToCamelCase(tsTypeName);
             var runtimeJsonOrigin = new TsTypeOrigin("metano-runtime", "system/json");
@@ -187,6 +191,101 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
+    /// Computes the contract closure of the <c>[JsonSerializable]</c> roots:
+    /// the roots in declaration order, followed by every object type reached
+    /// through their serializable properties (walking the same nullable /
+    /// array / map / hash-set shapes <see cref="BuildTypeDescriptor"/> emits)
+    /// or through their <c>base</c> link, in breadth-first discovery order.
+    /// Entries are keyed by spec name, which is exactly the name
+    /// <see cref="BuildRefDescriptor"/> and the <c>base</c> link derive their
+    /// getter from, so cycles (<c>A → B → A</c>) terminate and every
+    /// <c>this.x</c> reference has a matching getter. Only non-generic
+    /// current-assembly transpilable classes and structs are discovered;
+    /// interfaces (which need polymorphic JSON), generic types, and types
+    /// from referenced packages are not.
+    /// </summary>
+    private List<(INamedTypeSymbol Type, string TsName)> CollectSpecTypes(
+        IReadOnlyList<INamedTypeSymbol> rootTypes,
+        Func<string, string>? namingPolicy
+    )
+    {
+        var specTypes = new List<(INamedTypeSymbol Type, string TsName)>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Queue<INamedTypeSymbol>();
+
+        foreach (var root in rootTypes)
+            Enqueue(root, _context.ResolveTsName(root));
+
+        while (pending.TryDequeue(out var current))
+        {
+            if (TranspilableBaseOf(current) is { } baseType)
+                Enqueue(baseType, _context.ResolveTsName(baseType));
+
+            foreach (var property in CollectSerializableProperties(current, namingPolicy))
+            foreach (var reached in ReachableObjectTypes(property.Property.Type))
+                Enqueue(reached, RefSpecName(reached));
+        }
+
+        return specTypes;
+
+        void Enqueue(INamedTypeSymbol type, string tsName)
+        {
+            if (!seenNames.Add(TypeScriptNaming.ToCamelCase(tsName)))
+                return;
+
+            specTypes.Add((type, tsName));
+            pending.Enqueue(type);
+        }
+    }
+
+    /// <summary>
+    /// Yields the object types a property type points at through
+    /// <c>ref</c> descriptors, mirroring the recursion of
+    /// <see cref="BuildTypeDescriptor"/> (nullable inner, array / hash-set
+    /// element, map key and value).
+    /// </summary>
+    private IEnumerable<INamedTypeSymbol> ReachableObjectTypes(ITypeSymbol type) =>
+        ClassifyPropertyType(type) switch
+        {
+            JsonPropertyKind.Nullable => ReachableObjectTypes(UnwrapNullable(type)),
+            JsonPropertyKind.Array => ReachableObjectTypes(GetElementType(type)),
+            JsonPropertyKind.HashSet => ReachableObjectTypes(
+                ((INamedTypeSymbol)type).TypeArguments[0]
+            ),
+            JsonPropertyKind.Map => ((INamedTypeSymbol)type)
+                .TypeArguments.Take(2)
+                .SelectMany(ReachableObjectTypes),
+            JsonPropertyKind.Ref when IsDiscoverableObjectType(type) => [(INamedTypeSymbol)type],
+            _ => [],
+        };
+
+    private bool IsDiscoverableObjectType(ITypeSymbol type) =>
+        type
+            is INamedTypeSymbol
+            {
+                TypeKind: TypeKind.Class or TypeKind.Struct,
+                IsGenericType: false
+            } named
+        && !IsSystemObject(named)
+        && SymbolHelper.IsTranspilable(
+            named,
+            _context.AssemblyWideTranspile,
+            _context.CurrentAssembly
+        );
+
+    /// <summary>
+    /// The base type a spec links to through <c>base: this.x</c>, or
+    /// <c>null</c> when the type has no transpilable base.
+    /// </summary>
+    private static INamedTypeSymbol? TranspilableBaseOf(INamedTypeSymbol type) =>
+        type.BaseType is { } baseType
+        && baseType.SpecialType == SpecialType.None
+        && !IsSystemObject(baseType)
+        && SymbolHelper.IsTranspilable(baseType)
+            ? baseType
+            : null;
+
+    /// <summary>
     /// Builds the TypeSpec object literal for a given type:
     /// { type: T, factory: (p) => new T(...), properties: [...] }
     /// </summary>
@@ -217,12 +316,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
         // base: this.baseSpec (if type has a transpilable base)
         TsObjectProperty? baseProperty = null;
-        if (
-            targetType.BaseType is { } baseType
-            && baseType.SpecialType == SpecialType.None
-            && !IsSystemObject(baseType)
-            && SymbolHelper.IsTranspilable(baseType)
-        )
+        if (TranspilableBaseOf(targetType) is { } baseType)
         {
             var baseTsName = _context.ResolveTsName(baseType);
             var baseGetterName = TypeScriptNaming.ToCamelCase(baseTsName);
@@ -683,11 +777,15 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         ]);
     }
 
+    /// <summary>
+    /// The TS type name a <c>ref</c> descriptor's spec getter is derived from.
+    /// </summary>
+    private string RefSpecName(ITypeSymbol type) =>
+        MapType(type) is TsNamedType namedTs ? namedTs.Name : "unknown";
+
     private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type)
     {
-        var tsType = MapType(type);
-        var refName = tsType is TsNamedType namedTs ? namedTs.Name : "unknown";
-        var getterName = TypeScriptNaming.ToCamelCase(refName);
+        var getterName = TypeScriptNaming.ToCamelCase(RefSpecName(type));
         return new TsObjectLiteral([
             new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Ref)),
             new TsObjectProperty(

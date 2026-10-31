@@ -118,14 +118,24 @@ When it sees a class that inherits from `JsonSerializerContext`:
 2. **Collects `[JsonSerializable(typeof(T))]` attributes** — each `T` becomes a
    lazy getter on the context class.
 
-3. **For each serializable type `T`**, walks its public properties and:
+3. **Adds every object type reachable from those roots**, as System.Text.Json
+   does: types reached through property types, array / list / set elements,
+   dictionary keys and values, nullable underlying types, and base types each
+   get their own getter, so every `ref` descriptor and `base` link resolves.
+   Roots come first, in declaration order, followed by the discovered types in
+   breadth-first order; each type is emitted once, and cycles (`A → B → A`)
+   terminate. Only non-generic classes and structs transpiled by the current
+   project are discovered — interfaces, generic types, and types from
+   referenced packages are not.
+
+4. **For each serializable type `T`**, walks its public properties and:
    - Excludes `[JsonIgnore]` properties
    - Resolves the JSON name: `[JsonPropertyName]` override wins, otherwise
      applies the context's naming policy to the C# property name
    - Classifies the property type (primitive, temporal, decimal, array, map,
      branded, enum, ref, etc.)
 
-4. **Emits a `TypeSpec<T>`** as a lazy getter on the `SerializerContext`
+5. **Emits a `TypeSpec<T>`** as a lazy getter on the `SerializerContext`
    subclass, with pre-computed `ts`/`json` names.
 
 ## Supported type descriptors
@@ -151,7 +161,7 @@ handles these kinds:
 
 | C# attribute | Handled by Metano? | Effect |
 |---|---|---|
-| `[JsonSerializable(typeof(T))]` | ✅ | Adds `T` to the context's type list |
+| `[JsonSerializable(typeof(T))]` | ✅ | Adds `T` and every object type reachable from it to the context's type list |
 | `[JsonSourceGenerationOptions]` with `PropertyNamingPolicy` | ✅ | Applies the naming policy to all properties |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
 | `[JsonIgnore]` | ✅ | Excludes the property from the spec |
