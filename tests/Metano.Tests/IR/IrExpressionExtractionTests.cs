@@ -203,17 +203,21 @@ public class IrExpressionExtractionTests
         var isPattern = (ret.Value as IrIsPatternExpression)!;
         var typePat = isPattern.Pattern as IrTypePattern;
         await Assert.That(typePat).IsNotNull();
-        await Assert.That(typePat!.DesignatorName).IsNull();
+        await Assert.That(typePat!.Designator).IsNull();
     }
 
     [Test]
-    public async Task IsTypePatternWithDesignator_CapturesVariableName()
+    public async Task IsTypePatternWithDesignator_CapturesTypedDesignatorDeclaredAhead()
     {
         var ir = ExtractFromMethod("bool IsString(object o) => o is string s;");
-        var ret = GetAt<IrReturnStatement>(ir, 0);
+        var declaration = GetAt<IrVariableDeclaration>(ir, 0);
+        var ret = GetAt<IrReturnStatement>(ir, 1);
         var isPattern = (ret.Value as IrIsPatternExpression)!;
         var typePat = (isPattern.Pattern as IrTypePattern)!;
-        await Assert.That(typePat.DesignatorName).IsEqualTo("s");
+        var stringType = new IrPrimitiveTypeRef(IrPrimitive.String);
+
+        await Assert.That(typePat.Designator).IsEqualTo(new IrPatternDesignator("s", stringType));
+        await Assert.That(declaration).IsEqualTo(new IrVariableDeclaration("s", stringType, null));
     }
 
     [Test]
@@ -478,7 +482,34 @@ public class IrExpressionExtractionTests
         );
         var sw = GetAt<IrSwitchStatement>(ir, 0);
         await Assert.That(sw.Cases).Count().IsEqualTo(3);
-        await Assert.That(sw.Cases.Last().Labels).IsEmpty();
+        await Assert.That(sw.Cases.Last().Labels.Single()).IsTypeOf<IrDefaultCaseLabel>();
+    }
+
+    [Test]
+    public async Task Switch_KeepsMixedLabelsInSourceOrder()
+    {
+        var ir = ExtractFromMethod(
+            """
+            string Classify(object o) {
+                switch (o) {
+                    case 1:
+                    default:
+                    case string s when s.Length > 2:
+                        return "mixed";
+                }
+            }
+            """
+        );
+        var labels = GetAt<IrSwitchStatement>(ir, 0).Cases.Single().Labels;
+
+        await Assert.That(labels).Count().IsEqualTo(3);
+        await Assert.That(labels[0]).IsTypeOf<IrConstantCaseLabel>();
+        await Assert.That(labels[1]).IsTypeOf<IrDefaultCaseLabel>();
+
+        var pattern = (IrPatternCaseLabel)labels[2];
+
+        await Assert.That(pattern.Pattern).IsTypeOf<IrTypePattern>();
+        await Assert.That(pattern.WhenClause).IsNotNull();
     }
 
     [Test]

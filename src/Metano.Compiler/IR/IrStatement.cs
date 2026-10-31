@@ -67,12 +67,14 @@ public sealed record IrSwitchStatement(IrExpression Expression, IReadOnlyList<Ir
     : IrStatement;
 
 /// <summary>
-/// A case within a <c>switch</c> statement.
+/// A section of a <c>switch</c> statement: one or more labels sharing a body.
 /// </summary>
-/// <param name="Labels">Case label expressions; empty for the default case.</param>
-/// <param name="Body">Statements in this case.</param>
+/// <param name="Labels">The section's labels in source order — constants,
+/// patterns (with their <c>when</c> guards) and <c>default</c>, which may sit
+/// anywhere among them.</param>
+/// <param name="Body">Statements in this section.</param>
 public sealed record IrSwitchCase(
-    IReadOnlyList<IrExpression> Labels,
+    IReadOnlyList<IrCaseLabel> Labels,
     IReadOnlyList<IrStatement> Body
 );
 

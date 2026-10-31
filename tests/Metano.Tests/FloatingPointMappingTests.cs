@@ -202,10 +202,10 @@ public class FloatingPointMappingTests
     }
 
     [Test]
-    public async Task NaNSwitchLabels_OnACallSubject_EmitUncompilableTodo()
+    public async Task NaNSwitchLabels_OnACallSubject_HoistTheSubjectOnce()
     {
-        // Rewriting would evaluate the call once per label; emit a TODO that does not
-        // compile rather than a case that silently never matches.
+        // The boolean tests read the subject once each, so a call subject is
+        // evaluated into a block-scoped const first (#271).
         var output = TranspileNumbers(
             """
             public static double Next() => 1;
@@ -223,14 +223,38 @@ public class FloatingPointMappingTests
             """
         );
 
-        await Assert.That(output).Contains("switch (Numbers.next())");
-        await Assert
-            .That(output)
-            .Contains(
-                "/* TODO: NaN case label needs an identifier or member-access switch subject */"
-            );
-        await Assert.That(output).DoesNotContain("case NaN:");
+        await Assert.That(output).Contains("const $subject = Numbers.next();");
+        await Assert.That(output).Contains("switch (true)");
+        await Assert.That(output).Contains("case Number.isNaN($subject):");
+        await Assert.That(output).DoesNotContain("TODO");
         await AssertNoBclNumericReceiverLeaks(output);
+    }
+
+    [Test]
+    public async Task NaNSwitchLabels_OnAPropertySubject_ReadTheGetterOnce()
+    {
+        var output = TranspileNumbers(
+            """
+            public static double Current { get; set; }
+
+            public static string Describe()
+            {
+                switch (Current)
+                {
+                    case double.NaN:
+                        return "missing";
+                    case 0:
+                        return "zero";
+                    default:
+                        return "value";
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("const $subject = Numbers.current;");
+        await Assert.That(output).Contains("case Number.isNaN($subject):");
+        await Assert.That(output).Contains("case $subject === 0:");
     }
 
     [Test]

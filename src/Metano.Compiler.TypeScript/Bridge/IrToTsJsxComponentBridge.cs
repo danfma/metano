@@ -314,7 +314,9 @@ public static class IrToTsJsxComponentBridge
                         c with
                         {
                             Labels = c
-                                .Labels.Select(l => Rewrite(l, propNames, referenced))
+                                .Labels.Select(l =>
+                                    l.MapExpressions(e => Rewrite(e, propNames, referenced))
+                                )
                                 .ToList(),
                             Body = RewriteList(c.Body, propNames, referenced),
                         }

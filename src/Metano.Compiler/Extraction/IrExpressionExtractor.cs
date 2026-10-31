@@ -79,6 +79,13 @@ public sealed partial class IrExpressionExtractor
     private int _receiverTempCounter;
 
     /// <summary>
+    /// Counter for the synthesized <c>$subjectN</c> locals that capture an
+    /// <c>is</c> subject evaluated once (see <c>ExtractIsPattern</c>).
+    /// <c>$</c> keeps them clear of every C# identifier.
+    /// </summary>
+    private int _patternSubjectCounter;
+
+    /// <summary>
     /// The receiver syntax of the null-conditional access whose steps
     /// <see cref="LowerConditionalContinuation"/> is extracting; <c>null</c>
     /// outside one. Kept as extractor state rather than threaded through
@@ -201,10 +208,7 @@ public sealed partial class IrExpressionExtractor
             ParenthesizedLambdaExpressionSyntax parenLambda => ExtractParenthesizedLambda(
                 parenLambda
             ),
-            IsPatternExpressionSyntax isPattern => new IrIsPatternExpression(
-                Extract(isPattern.Expression),
-                ExtractPattern(isPattern.Pattern)
-            ),
+            IsPatternExpressionSyntax isPattern => ExtractIsPattern(isPattern),
             SwitchExpressionSyntax switchExpr => ExtractSwitchExpression(switchExpr),
             WithExpressionSyntax withExpr => ExtractWithExpression(withExpr),
             CollectionExpressionSyntax coll => ExtractCollectionExpression(coll),
@@ -792,14 +796,14 @@ public sealed partial class IrExpressionExtractor
             DeclarationPatternSyntax decl => ExtractTypePattern(
                 decl,
                 ResolvePatternType(decl.Type),
-                ResolveDesignatorName(decl.Designation)
+                ResolveOptionalDesignator(decl.Designation)
             ),
             TypePatternSyntax typeOnly => ExtractTypePattern(
                 typeOnly,
                 ResolvePatternType(typeOnly.Type)
             ),
-            VarPatternSyntax varPat when varPat.Designation is SingleVariableDesignationSyntax v =>
-                new IrVarPattern(v.Identifier.ValueText),
+            VarPatternSyntax { Designation: SingleVariableDesignationSyntax single } =>
+                new IrVarPattern(ResolveDesignator(single)),
             DiscardPatternSyntax => new IrDiscardPattern(),
             RecursivePatternSyntax recursive => ExtractRecursivePattern(recursive),
             RelationalPatternSyntax rel => ExtractRelationalPattern(rel),
@@ -821,15 +825,15 @@ public sealed partial class IrExpressionExtractor
     /// a type that does not exist at runtime.
     /// </summary>
     private IrPattern ExtractTypePattern(
-        PatternSyntax pattern,
+        SyntaxNode pattern,
         IrTypeRef type,
-        string? designatorName = null
+        IrPatternDesignator? designator = null
     ) =>
         HasRuntimeTypeTest(type)
-            ? new IrTypePattern(type, designatorName)
+            ? new IrTypePattern(type, designator)
             : ReportUnsupportedPattern(pattern);
 
-    private static IrUnsupportedPattern ReportUnsupportedPattern(PatternSyntax pattern)
+    private static IrUnsupportedPattern ReportUnsupportedPattern(SyntaxNode pattern)
     {
         ReportUnsupportedFeature(pattern, NoRuntimeTypeTestMessage("Pattern", pattern));
 
@@ -901,7 +905,7 @@ public sealed partial class IrExpressionExtractor
         var type = recursive.Type is not null
             ? ResolvePatternType(recursive.Type)
             : (IrTypeRef?)null;
-        var designator = ResolveDesignatorName(recursive.Designation);
+        var designator = ResolveOptionalDesignator(recursive.Designation);
 
         if (type is not null && !HasRuntimeTypeTest(type))
             return ReportUnsupportedPattern(recursive);
@@ -1084,8 +1088,22 @@ public sealed partial class IrExpressionExtractor
             : new IrUnknownTypeRef();
     }
 
-    private static string? ResolveDesignatorName(VariableDesignationSyntax? designation) =>
-        designation is SingleVariableDesignationSyntax single ? single.Identifier.ValueText : null;
+    /// <summary>
+    /// The local a pattern designation declares, typed as C# declared it, or
+    /// <c>null</c> for no designation or a discard (<c>Foo _</c>).
+    /// </summary>
+    private IrPatternDesignator? ResolveOptionalDesignator(
+        VariableDesignationSyntax? designation
+    ) => designation is SingleVariableDesignationSyntax single ? ResolveDesignator(single) : null;
+
+    private IrPatternDesignator ResolveDesignator(SingleVariableDesignationSyntax designation)
+    {
+        IrTypeRef type = _semantic.GetDeclaredSymbol(designation) is ILocalSymbol local
+            ? IrTypeRefMapper.Map(local.Type, _originResolver, _target)
+            : new IrUnknownTypeRef();
+
+        return new IrPatternDesignator(designation.Identifier.ValueText, type);
+    }
 
     /// <summary>
     /// An identifier can refer to a local, parameter, field, property, method, <em>or

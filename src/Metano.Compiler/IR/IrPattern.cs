@@ -16,13 +16,29 @@ public abstract record IrPattern;
 /// <summary>Constant pattern: <c>case 1:</c>, <c>x is null</c>, <c>x is "foo"</c>.</summary>
 public sealed record IrConstantPattern(IrExpression Value) : IrPattern;
 
-/// <summary>Type pattern: <c>x is Foo</c> / <c>x is Foo f</c>.
-/// When <see cref="DesignatorName"/> is non-null the match also binds the value
-/// to that variable name.</summary>
-public sealed record IrTypePattern(IrTypeRef Type, string? DesignatorName = null) : IrPattern;
+/// <summary>
+/// A local a pattern declares (<c>f</c> in <c>x is Foo f</c>, <c>y</c> in
+/// <c>var y</c>) and its C# type, so a backend can declare it ahead of the
+/// test that assigns it.
+/// </summary>
+/// <param name="Name">The local's name.</param>
+/// <param name="Type">The local's declared type.</param>
+public sealed record IrPatternDesignator(string Name, IrTypeRef Type);
 
-/// <summary>Var pattern: <c>x is var y</c> — always matches, binds the value.</summary>
-public sealed record IrVarPattern(string Name) : IrPattern;
+/// <summary>Type pattern: <c>x is Foo</c> / <c>x is Foo f</c>.
+/// When <see cref="Designator"/> is non-null the match also binds the value
+/// to that local.</summary>
+public sealed record IrTypePattern(IrTypeRef Type, IrPatternDesignator? Designator = null)
+    : IrPattern;
+
+/// <summary>
+/// Var pattern: <c>x is var y</c> — always matches, binds the value. As the
+/// left operand of an <c>and</c> it captures the whole value, so a backend may
+/// read the captured local on the right instead of the value; extraction
+/// relies on this to evaluate an <c>is</c> subject once
+/// (<c>F() is var $subject0 and Circle c</c>).
+/// </summary>
+public sealed record IrVarPattern(IrPatternDesignator Designator) : IrPattern;
 
 /// <summary>Discard pattern: <c>_</c> — always matches, no binding.</summary>
 public sealed record IrDiscardPattern : IrPattern;
@@ -33,14 +49,14 @@ public sealed record IrDiscardPattern : IrPattern;
 /// <see cref="Type"/> is the optional type filter (null for bare
 /// <c>{ … }</c> patterns that match any object). <see cref="Subpatterns"/>
 /// names each member that must match a nested pattern (constant, type,
-/// var, or further nested property patterns). <see cref="DesignatorName"/>
+/// var, or further nested property patterns). <see cref="Designator"/>
 /// captures the whole matched value when present (<c>is Point { } p</c>).
 /// </para>
 /// </summary>
 public sealed record IrPropertyPattern(
     IrTypeRef? Type,
     IReadOnlyList<IrPropertySubpattern> Subpatterns,
-    string? DesignatorName = null
+    IrPatternDesignator? Designator = null
 ) : IrPattern;
 
 /// <summary>
@@ -118,7 +134,7 @@ public sealed record IrListPattern(
 public sealed record IrPositionalPattern(
     IrTypeRef? Type,
     IReadOnlyList<IrPattern> Elements,
-    string? DesignatorName = null,
+    IrPatternDesignator? Designator = null,
     IReadOnlyList<IrPositionalElementMember?>? ElementMembers = null,
     bool InputMayBeNull = false
 ) : IrPattern;

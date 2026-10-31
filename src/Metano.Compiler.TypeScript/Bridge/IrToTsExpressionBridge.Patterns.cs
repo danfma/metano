@@ -17,12 +17,13 @@ public static partial class IrToTsExpressionBridge
     private const string PatternSubjectParameterName = "$v";
 
     /// <summary>
-    /// Lowers <c>expr is pattern</c> to a boolean TS expression. Binding patterns
-    /// (type-with-designator, var) emit a TODO comment because expression-scoped
-    /// variable introductions need a higher-level rewrite than a single
-    /// expression can carry in TS. The common non-binding shapes — constant
-    /// comparisons and bare type tests — lower cleanly. A side-effecting
-    /// subject is evaluated once, whatever the pattern reads.
+    /// Lowers <c>expr is pattern</c> to a boolean TS expression. A pattern that
+    /// declares locals lowers through <see cref="BuildBindingPatternTest"/>:
+    /// extraction declares them ahead of the statement (capturing a subject it
+    /// must not read twice in a <c>var</c> designator), and the test assigns
+    /// them — an arrow could not assign them visibly to TypeScript's
+    /// definite-assignment analysis. Any other side-effecting subject is
+    /// evaluated once, whatever the pattern reads.
     /// </summary>
     private static TsExpression MapIsPattern(
         IrIsPatternExpression node,
@@ -30,6 +31,9 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var subject = Map(node.Expression, bclRegistry);
+
+        if (IrPatternDesignators.Declares(node.Pattern))
+            return BuildBindingPatternTest(subject, node.Pattern, bclRegistry);
 
         if (IrEvaluationTraits.IsSideEffectFree(node.Expression) || ReadsSubjectOnce(node.Pattern))
             return MapIsPatternTest(subject, node, bclRegistry);
@@ -59,9 +63,7 @@ public static partial class IrToTsExpressionBridge
             IrLogicalPattern { Operator: IrLogicalOp.Not } notPattern => ReadsSubjectOnce(
                 notPattern.Left
             ),
-            IrTypePattern { DesignatorName: null } typePattern => IrRuntimeTypeTest.Of(
-                typePattern.Type
-            )
+            IrTypePattern { Designator: null } typePattern => IrRuntimeTypeTest.Of(typePattern.Type)
                 is not IrRuntimeTypeTest.ArrayTuple,
             _ => false,
         };
@@ -81,17 +83,17 @@ public static partial class IrToTsExpressionBridge
                     constant.Value,
                     bclRegistry
                 );
-            case IrTypePattern typePat when typePat.DesignatorName is null:
+            case IrTypePattern typePat:
                 return BuildTypeTest(lowered, typePat.Type);
             case IrDiscardPattern:
                 return new TsLiteral("true");
-            case IrPropertyPattern prop when prop.DesignatorName is null:
+            case IrPropertyPattern prop:
                 return BuildPropertyPatternTest(lowered, prop, bclRegistry);
             case IrRelationalPattern:
             case IrLogicalPattern:
             case IrListPattern:
                 return BuildPatternTest(lowered, node.Pattern, bclRegistry);
-            case IrPositionalPattern pos when pos.DesignatorName is null:
+            case IrPositionalPattern pos:
                 return BuildPositionalPatternTest(lowered, pos, bclRegistry);
             default:
                 return new TsIdentifier(
@@ -293,10 +295,11 @@ public static partial class IrToTsExpressionBridge
     /// Lowers <c>[p0, p1, …]</c> to a length-gated conjunction of per-index
     /// tests. When the pattern carries a <c>..</c> slice we drop the exact
     /// length check (<c>&gt;=</c> instead of <c>===</c>) and reverse-index
-    /// the tail sub-patterns with <c>arr.length - k</c>. Slice sub-pattern
-    /// bindings (<c>.. var tail</c>) aren't modeled yet — the IR extractor
-    /// drops them, so the tail is treated as `always match`. Always-matching
-    /// elements add no test.
+    /// the tail sub-patterns with <c>arr.length - k</c>. This test binds
+    /// nothing, so the slice always matches; a <c>.. var rest</c> slice binds
+    /// through <see cref="SliceBinding"/> and
+    /// <see cref="BuildBindingListPatternTest"/>. Always-matching elements add
+    /// no test.
     /// </summary>
     private static TsExpression BuildListPatternTest(
         TsExpression value,
@@ -304,19 +307,27 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var lengthCheck = new TsBinaryExpression(
-            new TsPropertyAccess(value, "length"),
-            pattern.SliceIndex is null ? "===" : ">=",
-            new TsLiteral(pattern.Elements.Count.ToString())
-        );
-
         var elementTests = pattern.Elements.Select(
             (element, i) =>
                 BuildPatternTestOrNull(ListElementAccess(value, pattern, i), element, bclRegistry)
         );
 
-        return JoinWithAnd([lengthCheck, .. elementTests.OfType<TsExpression>()]);
+        return JoinWithAnd([
+            ListLengthCheck(value, pattern),
+            .. elementTests.OfType<TsExpression>(),
+        ]);
     }
+
+    /// <summary>
+    /// <c>value.length === n</c>, or <c>&gt;= n</c> when a <c>..</c> slice
+    /// absorbs any further elements.
+    /// </summary>
+    private static TsExpression ListLengthCheck(TsExpression value, IrListPattern pattern) =>
+        new TsBinaryExpression(
+            new TsPropertyAccess(value, "length"),
+            pattern.SliceIndex is null ? "===" : ">=",
+            new TsLiteral(pattern.Elements.Count.ToString())
+        );
 
     /// <summary>
     /// The element a list sub-pattern inspects: <c>arr[i]</c> before the
@@ -513,9 +524,12 @@ public static partial class IrToTsExpressionBridge
     ) =>
         pattern switch
         {
-            IrTypePattern { DesignatorName: { } name } => [new PatternBinding(name, value)],
-            IrVarPattern varPattern => [new PatternBinding(varPattern.Name, value)],
-            IrPropertyPattern property => DesignatorBinding(property.DesignatorName, value)
+            IrTypePattern { Designator: { } designator } =>
+            [
+                new PatternBinding(designator.Name, value),
+            ],
+            IrVarPattern varPattern => [new PatternBinding(varPattern.Designator.Name, value)],
+            IrPropertyPattern property => DesignatorBinding(property.Designator, value)
                 .Concat(
                     property.Subpatterns.SelectMany(sub =>
                         EnumeratePatternBindings(
@@ -524,7 +538,7 @@ public static partial class IrToTsExpressionBridge
                         )
                     )
                 ),
-            IrPositionalPattern positional => DesignatorBinding(positional.DesignatorName, value)
+            IrPositionalPattern positional => DesignatorBinding(positional.Designator, value)
                 .Concat(
                     positional.Elements.SelectMany(
                         (element, i) =>
@@ -534,9 +548,12 @@ public static partial class IrToTsExpressionBridge
                             )
                     )
                 ),
-            IrListPattern list => list.Elements.SelectMany(
-                (element, i) => EnumeratePatternBindings(ListElementAccess(value, list, i), element)
-            ),
+            IrListPattern list => list
+                .Elements.SelectMany(
+                    (element, i) =>
+                        EnumeratePatternBindings(ListElementAccess(value, list, i), element)
+                )
+                .Concat(SliceBinding(value, list)),
             IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
                 EnumeratePatternBindings(value, and.Left)
                     .Concat(EnumeratePatternBindings(value, right)),
@@ -544,9 +561,38 @@ public static partial class IrToTsExpressionBridge
         };
 
     private static IEnumerable<PatternBinding> DesignatorBinding(
-        string? designatorName,
+        IrPatternDesignator? designator,
         TsExpression value
-    ) => designatorName is null ? [] : [new PatternBinding(designatorName, value)];
+    ) => designator is null ? [] : [new PatternBinding(designator.Name, value)];
+
+    /// <summary>
+    /// <c>.. var rest</c> binds the elements the slice spans (see
+    /// <see cref="ListSliceAccess"/>); a slice with a nested pattern binds
+    /// nothing, as its test is not modeled.
+    /// </summary>
+    private static IEnumerable<PatternBinding> SliceBinding(
+        TsExpression value,
+        IrListPattern list
+    ) =>
+        list.SlicePattern is IrVarPattern rest
+            ? [new PatternBinding(rest.Designator.Name, ListSliceAccess(value, list))]
+            : [];
+
+    /// <summary>
+    /// The elements a <c>..</c> slice spans: <c>value.slice(i)</c>, or
+    /// <c>value.slice(i, -k)</c> when <c>k</c> elements follow it.
+    /// </summary>
+    private static TsExpression ListSliceAccess(TsExpression value, IrListPattern list)
+    {
+        var start = list.SliceIndex ?? list.Elements.Count;
+        var tailCount = list.Elements.Count - start;
+        var startLiteral = new TsLiteral(start.ToString());
+
+        TsExpression[] arguments =
+            tailCount == 0 ? [startLiteral] : [startLiteral, new TsLiteral($"-{tailCount}")];
+
+        return new TsCallExpression(new TsPropertyAccess(value, "slice"), arguments);
+    }
 
     /// <summary>A designator a pattern binds and the value it reads.</summary>
     private sealed record PatternBinding(string Name, TsExpression Value);

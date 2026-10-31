@@ -85,8 +85,8 @@ public static partial class IrToTsExpressionBridge
         pattern switch
         {
             IrConstantPattern or IrDiscardPattern or IrRelationalPattern => true,
-            IrTypePattern t => t.DesignatorName is null,
-            IrPropertyPattern p => p.DesignatorName is null
+            IrTypePattern t => t.Designator is null,
+            IrPropertyPattern p => p.Designator is null
                 && p.Subpatterns.All(s => CanLowerPatternAsBooleanTest(s.Pattern)),
             IrLogicalPattern { Operator: IrLogicalOp.Not } n => CanLowerPatternAsBooleanTest(
                 n.Left
