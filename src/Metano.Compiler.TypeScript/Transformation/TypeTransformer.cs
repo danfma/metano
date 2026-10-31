@@ -1920,7 +1920,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var type in transpilableTypes)
         {
-            if (!SymbolHelper.HasNoContainer(type))
+            if (!SymbolHelper.IsContainerless(type))
                 continue;
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
                 continue;
@@ -2035,7 +2035,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         TypeMappingContext typeMappingContext
     )
     {
-        if (type.DeclaredAccessibility == Accessibility.Public && SymbolHelper.HasNoContainer(type))
+        if (
+            type.DeclaredAccessibility == Accessibility.Public
+            && SymbolHelper.IsContainerless(type)
+        )
         {
             var originKey = type.GetCrossAssemblyOriginKey();
             if (crossAssemblyOrigins.TryGetValue(originKey, out var typeOrigin))
@@ -2118,7 +2121,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var type in transpilableTypes)
         {
-            if (SymbolHelper.HasNoContainer(type))
+            if (SymbolHelper.IsContainerless(type))
                 continue;
             if (SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
                 continue;

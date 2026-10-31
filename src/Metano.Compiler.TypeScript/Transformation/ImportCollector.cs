@@ -850,7 +850,7 @@ public sealed class ImportCollector(
                 // resolution loop to try (and fail) to find a local type by that name.
                 if (named.Origin is not null)
                 {
-                    crossPackageOrigins[named.Name] = named.Origin;
+                    crossPackageOrigins[RootSegment(named.Name)] = named.Origin;
                 }
                 else
                 {
@@ -971,11 +971,14 @@ public sealed class ImportCollector(
         switch (expr)
         {
             case TsTypeReference typeRef:
-                // Cross-package type used in expression position (e.g., the receiver of
-                // a static member access like `Priority.High`). The wrapper carries the
+                // Cross-package type used in expression position (`new EntityId(…)`,
+                // `EpisodeKind.Feature`, `x instanceof Circle`). The wrapper carries the
                 // origin so we can register the import without going through name-based
-                // resolution.
-                crossPackageOrigins[typeRef.Name] = typeRef.Origin;
+                // resolution. A value position needs the runtime binding, never a
+                // type-only import.
+                var typeRefRoot = RootSegment(typeRef.Name);
+                crossPackageOrigins[typeRefRoot] = typeRef.Origin;
+                valueNames.Add(typeRefRoot);
                 break;
             case TsIdentifier bareId:
                 // Bare identifiers starting with uppercase may reference transpilable
@@ -1008,11 +1011,16 @@ public sealed class ImportCollector(
                     // For nested types like "Outer.Inner", also mark the root as value
                     if (id.Name.Contains('.'))
                     {
-                        var rootName = id.Name[..id.Name.IndexOf('.')];
+                        var rootName = RootSegment(id.Name);
                         names.Add(rootName);
                         valueNames.Add(rootName);
                     }
                 }
+                else
+                {
+                    CollectFromExpression(newExpr.Callee, sink);
+                }
+
                 foreach (var arg in newExpr.Arguments)
                     CollectFromExpression(arg, sink);
                 break;
@@ -1065,6 +1073,10 @@ public sealed class ImportCollector(
                 {
                     CollectFromExpression(call.Callee, sink);
                 }
+
+                foreach (var typeArgument in call.TypeArguments ?? [])
+                    CollectFromType(typeArgument, names, crossPackageOrigins);
+
                 foreach (var arg in call.Arguments)
                     CollectFromExpression(arg, sink);
                 break;
@@ -1236,6 +1248,17 @@ public sealed class ImportCollector(
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// The importable binding of a possibly dotted type name: a nested type
+    /// (<c>Outer.Inner</c>) is reached through its top-level container's import.
+    /// </summary>
+    private static string RootSegment(string typeName)
+    {
+        var dot = typeName.IndexOf('.');
+
+        return dot < 0 ? typeName : typeName[..dot];
     }
 
     /// <summary>

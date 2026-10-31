@@ -251,8 +251,9 @@ public static class IrTypeRefMapper
                 return MapDelegateType(named, originResolver, target);
             }
 
-            // User-defined named types: may carry a cross-package origin.
-            var origin = originResolver?.Invoke(named);
+            // User-defined named types: may carry a cross-package origin. A nested
+            // type resolves through its top-level container, which the package exports.
+            var origin = originResolver.ResolveThroughOutermost(named);
             var semantics = BuildNamedTypeSemantics(named, target);
 
             if (named.TypeArguments.Length > 0)
