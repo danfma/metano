@@ -32,9 +32,10 @@ public static class IrClassExtractor
                 ? IrTypeRefMapper.Map(type.BaseType, originResolver)
                 : null;
 
+        var emittedInterfaces = SymbolHelper.EmittedInterfaces(type, target).ToList();
         var interfaces =
-            type.Interfaces.Length > 0
-                ? type.Interfaces.Select(i => IrTypeRefMapper.Map(i, originResolver)).ToList()
+            emittedInterfaces.Count > 0
+                ? emittedInterfaces.Select(i => IrTypeRefMapper.Map(i, originResolver)).ToList()
                 : null;
 
         var typeParameters =

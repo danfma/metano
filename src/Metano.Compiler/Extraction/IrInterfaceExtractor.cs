@@ -44,10 +44,11 @@ public static class IrInterfaceExtractor
 
         var visibility = IrVisibilityMapper.Map(type.DeclaredAccessibility);
 
+        var emittedBaseInterfaces = SymbolHelper.EmittedInterfaces(type, target).ToList();
         var baseInterfaces =
-            type.Interfaces.Length > 0
-                ? type
-                    .Interfaces.Select(i => IrTypeRefMapper.Map(i, originResolver, target))
+            emittedBaseInterfaces.Count > 0
+                ? emittedBaseInterfaces
+                    .Select(i => IrTypeRefMapper.Map(i, originResolver, target))
                     .ToList()
                 : null;
 

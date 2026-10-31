@@ -45,7 +45,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         var assemblyName = Path.GetFileNameWithoutExtension(projectPath);
         var diagnostics = new List<MetanoDiagnostic>();
 
-        var (compilation, errorCount) = await LoadCompilationAsync(projectPath, diagnostics, ct);
+        var (compilation, generatedFilePaths, errorCount) = await LoadCompilationAsync(
+            projectPath,
+            diagnostics,
+            ct
+        );
         LoadedCompilation = compilation;
         LoadErrorCount = errorCount;
 
@@ -53,7 +57,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             compilation,
             fallbackAssemblyName: assemblyName,
             diagnostics: diagnostics,
-            target: target
+            target: target,
+            generatedSources: new GeneratedSourceTrees(generatedFilePaths)
         );
     }
 
@@ -65,19 +70,27 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// production path: stores the compilation on
     /// <see cref="LoadedCompilation"/>, resets <see cref="LoadErrorCount"/>
     /// to <c>0</c>, and returns the populated record.
+    /// <paramref name="generatedTrees"/> lists the source-generator output inside
+    /// <paramref name="compilation"/> (what <c>GeneratorDriverRunResult.GeneratedTrees</c>
+    /// reports) so user-code validations skip it; when omitted, generated trees are
+    /// recognized by their <c>.g.cs</c> path or <c>&lt;auto-generated&gt;</c> header.
     /// </summary>
     public IrCompilation ExtractFromCompilation(
         Compilation compilation,
-        TargetLanguage target = TargetLanguage.TypeScript
+        TargetLanguage target = TargetLanguage.TypeScript,
+        IEnumerable<SyntaxTree>? generatedTrees = null
     )
     {
         LoadedCompilation = compilation;
         LoadErrorCount = 0;
+        var generatedFilePaths = generatedTrees?.Select(tree => tree.FilePath) ?? [];
+
         return BuildIrCompilation(
             compilation,
             fallbackAssemblyName: compilation.AssemblyName ?? "",
             diagnostics: new List<MetanoDiagnostic>(),
-            target: target
+            target: target,
+            generatedSources: new GeneratedSourceTrees(generatedFilePaths)
         );
     }
 
@@ -85,7 +98,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         Compilation? compilation,
         string fallbackAssemblyName,
         List<MetanoDiagnostic> diagnostics,
-        TargetLanguage target
+        TargetLanguage target,
+        GeneratedSourceTrees generatedSources
     )
     {
         // The queryable-extraction diagnostic sink (#205 / MS0024) is
@@ -151,7 +165,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateThisAttribute(compilation, diagnostics);
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
             ValidateEmitAttribute(compilation, diagnostics);
-            ValidateIgnoreReferences(compilation, assemblyWideTranspile, target, diagnostics);
+            ValidateIgnoreReferences(
+                compilation,
+                assemblyWideTranspile,
+                target,
+                generatedSources,
+                diagnostics
+            );
             ValidateJsTupleAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsCallableAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
@@ -528,11 +548,19 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// non-emitted type stays silent. Target-aware: a
     /// <c>[Ignore(TargetLanguage.Dart)]</c> type does not light up under a
     /// TS run.
+    /// <para>
+    /// Exempt positions (#247), since nothing from them reaches the output:
+    /// source-generator output (<paramref name="generatedSources"/>), an
+    /// <c>[Ignore]</c> interface listed directly in the base list (the
+    /// class/interface extractors erase it from <c>implements</c> /
+    /// <c>extends</c>), and attribute applications (never emitted).
+    /// </para>
     /// </summary>
     private static void ValidateIgnoreReferences(
         Compilation compilation,
         bool assemblyWideTranspile,
         Metano.Annotations.TargetLanguage target,
+        GeneratedSourceTrees generatedSources,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -545,9 +573,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 if (
                     !SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly)
                     || SymbolHelper.HasIgnore(type, target)
+                    || generatedSources.DeclaresOnlyGeneratedCode(type)
                 )
                     return;
-                ScanTypeReferences(type, target, compilation, diagnostics, seen);
+                ScanTypeReferences(type, target, compilation, generatedSources, diagnostics, seen);
             }
         );
     }
@@ -556,14 +585,17 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         INamedTypeSymbol containing,
         Metano.Annotations.TargetLanguage target,
         Compilation compilation,
+        GeneratedSourceTrees generatedSources,
         List<MetanoDiagnostic> diagnostics,
         HashSet<Location> seen
     )
     {
-        // Signature surface — base, interfaces, generic constraints.
+        // Signature surface — base, interfaces, generic constraints. An
+        // [Ignore] interface is erased from the emitted heritage clause
+        // (SymbolHelper.EmittedInterfaces), so only the kept ones count.
         if (containing.BaseType is { } baseType)
             CheckType(baseType, containing.Locations.FirstOrDefault(), target, diagnostics, seen);
-        foreach (var iface in containing.Interfaces)
+        foreach (var iface in SymbolHelper.EmittedInterfaces(containing, target))
             CheckType(iface, containing.Locations.FirstOrDefault(), target, diagnostics, seen);
         foreach (var typeParam in containing.TypeParameters)
         foreach (var constraint in typeParam.ConstraintTypes)
@@ -574,7 +606,12 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             // Members marked [Ignore] are not emitted, so references *from*
             // their signature/body don't reach the target — skip them so
             // an [Ignore] helper that takes an [Ignore] marker stays silent.
-            if (SymbolHelper.HasIgnore(member, target))
+            // Members a source generator added to a partial type are not
+            // user-authored, so they are not policed either.
+            if (
+                SymbolHelper.HasIgnore(member, target)
+                || generatedSources.DeclaresOnlyGeneratedCode(member)
+            )
                 continue;
 
             switch (member)
@@ -622,7 +659,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                             diagnostics,
                             seen
                         );
-                    ScanMethodBody(method, target, compilation, diagnostics, seen);
+                    ScanMethodBody(
+                        method,
+                        target,
+                        compilation,
+                        generatedSources,
+                        diagnostics,
+                        seen
+                    );
                     break;
             }
         }
@@ -635,23 +679,38 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     currentAssembly: containing.ContainingAssembly
                 ) && !SymbolHelper.HasIgnore(nested, target)
             )
-                ScanTypeReferences(nested, target, compilation, diagnostics, seen);
+                ScanTypeReferences(
+                    nested,
+                    target,
+                    compilation,
+                    generatedSources,
+                    diagnostics,
+                    seen
+                );
     }
 
     private static void ScanMethodBody(
         IMethodSymbol method,
         Metano.Annotations.TargetLanguage target,
         Compilation compilation,
+        GeneratedSourceTrees generatedSources,
         List<MetanoDiagnostic> diagnostics,
         HashSet<Location> seen
     )
     {
         foreach (var reference in method.DeclaringSyntaxReferences)
         {
+            if (generatedSources.Contains(reference.SyntaxTree))
+                continue;
+
             var syntax = reference.GetSyntax();
             var tree = syntax.SyntaxTree;
             var semantic = compilation.GetSemanticModel(tree);
-            foreach (var node in syntax.DescendantNodesAndSelf())
+            // Attribute applications are never emitted, so the walk does not
+            // descend into them: `[JsonConverter(typeof(IgnoredConverter))]`
+            // on the method, its parameters, or — through a record's primary
+            // constructor, whose syntax is the whole declaration — the type.
+            foreach (var node in syntax.DescendantNodesAndSelf(IsEmittedSyntax))
             {
                 ITypeSymbol? referenced = null;
                 Location? location = node.GetLocation();
@@ -715,6 +774,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         }
     }
+
+    private static bool IsEmittedSyntax(SyntaxNode node) => node is not AttributeListSyntax;
 
     private static void CheckType(
         ITypeSymbol? candidate,
@@ -3020,7 +3081,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// the host (and any future programmatic caller) can react via
     /// <see cref="IrCompilation.Diagnostics"/>.
     /// </summary>
-    private static async Task<(Compilation? Compilation, int ErrorCount)> LoadCompilationAsync(
+    private static async Task<(
+        Compilation? Compilation,
+        IReadOnlyList<string> GeneratedFilePaths,
+        int ErrorCount
+    )> LoadCompilationAsync(
         string projectPath,
         List<MetanoDiagnostic> diagnostics,
         CancellationToken ct
@@ -3037,7 +3102,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     message
                 )
             );
-            return (null, 1);
+            return (null, [], 1);
         }
 
         Console.WriteLine($"Metano: Loading project {Path.GetFileName(projectPath)}...");
@@ -3079,7 +3144,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     message
                 )
             );
-            return (null, 1);
+            return (null, [], 1);
         }
 
         var roslynErrors = compilation
@@ -3107,9 +3172,34 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 );
             }
 
-            return (null, roslynErrors.Count);
+            return (null, [], roslynErrors.Count);
         }
 
-        return (compilation, 0);
+        var generatedFilePaths = await CollectGeneratedFilePathsAsync(project, ct);
+
+        return (compilation, generatedFilePaths, 0);
+    }
+
+    /// <summary>
+    /// Paths of the source-generator output trees inside the project's compilation,
+    /// read off the generated documents' own syntax trees so they match the paths
+    /// <see cref="Compilation.SyntaxTrees"/> carries.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> CollectGeneratedFilePathsAsync(
+        Project project,
+        CancellationToken ct
+    )
+    {
+        var paths = new List<string>();
+
+        foreach (var document in await project.GetSourceGeneratedDocumentsAsync(ct))
+        {
+            var tree = await document.GetSyntaxTreeAsync(ct);
+
+            if (tree is not null)
+                paths.Add(tree.FilePath);
+        }
+
+        return paths;
     }
 }

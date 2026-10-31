@@ -23,6 +23,27 @@
     <ProjectReference Include="../../bindings/Metano.TypeScript.DOM/Metano.TypeScript.DOM.csproj" />
   </ItemGroup>
 
+  <!-- The MS0013 source-generator tests (#247) run the real System.Text.Json
+       source generator over inline compilations. Its location is whatever
+       analyzer the SDK hands this very project, so record that path as
+       assembly metadata instead of guessing the targeting-pack layout. -->
+  <Target
+    Name="EmbedJsonSourceGeneratorPath"
+    BeforeTargets="GetAssemblyAttributes"
+    DependsOnTargets="ResolveTargetingPackAssets"
+  >
+    <ItemGroup>
+      <_JsonSourceGenerator
+        Include="@(Analyzer)"
+        Condition="'%(Filename)' == 'System.Text.Json.SourceGeneration'"
+      />
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>JsonSourceGeneratorPath</_Parameter1>
+        <_Parameter2>@(_JsonSourceGenerator->'%(FullPath)')</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <None Include="Expected/**/*.ts" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Expected/**/*.tsx" CopyToOutputDirectory="PreserveNewest" />
