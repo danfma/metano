@@ -182,6 +182,7 @@ public class FloatingPointMappingTests
         );
 
         await Assert.That(output).Contains("return v === NaN;");
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]
