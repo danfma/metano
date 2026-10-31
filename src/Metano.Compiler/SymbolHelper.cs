@@ -1347,6 +1347,31 @@ public static class SymbolHelper
     }
 
     /// <summary>
+    /// Whether the toolchain names <paramref name="type"/>'s members — so a
+    /// reference to one must use the name the backend declares it with: a
+    /// type of <paramref name="currentAssembly"/> or of a transpiled package
+    /// (<c>[Transpile]</c> or <c>[assembly: TranspileAssembly]</c>). A source
+    /// type that is not emitted (<c>[Ignore]</c>) still counts: it has no
+    /// declaration a reference could disagree with. <c>object</c> and other special
+    /// types, the BCL, <c>[External]</c> stubs and <c>[Import]</c> bindings are
+    /// declared outside the toolchain.
+    /// </summary>
+    public static bool IsToolchainDeclared(
+        INamedTypeSymbol type,
+        IAssemblySymbol? currentAssembly
+    ) =>
+        type.SpecialType == SpecialType.None
+        && !HasExternal(type)
+        && !HasImport(type)
+        && (IsDeclaredIn(type, currentAssembly) || IsTranspiledPackageType(type));
+
+    private static bool IsDeclaredIn(INamedTypeSymbol type, IAssemblySymbol? assembly) =>
+        SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, assembly);
+
+    private static bool IsTranspiledPackageType(INamedTypeSymbol type) =>
+        HasTranspile(type) || type.ContainingAssembly?.HasTranspileAssembly() == true;
+
+    /// <summary>
     /// Reads <c>[Import("name", from: "module", AsDefault = ?, Version = ?)]</c> from
     /// a symbol.
     /// </summary>

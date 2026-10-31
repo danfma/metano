@@ -36,7 +36,7 @@ internal static partial class IrToTsClassBridge
         if (prop.Visibility is IrVisibility.PrivateProtected)
             return [];
 
-        var name = IrToTsNamingPolicy.ToInterfaceMemberName(prop.Name, prop.Attributes);
+        var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
         var hasGetterBody = prop.Semantics?.HasGetterBody == true;
         var hasSetterBody = prop.Semantics?.HasSetterBody == true;
 
@@ -201,7 +201,7 @@ internal static partial class IrToTsClassBridge
         if (field.Visibility is IrVisibility.PrivateProtected)
             return null;
 
-        var name = IrToTsNamingPolicy.ToInterfaceMemberName(field.Name, field.Attributes);
+        var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(field.Name, field.Attributes);
 
         // When the field captures a constructor parameter (DI shape) the
         // assignment moves to the ctor body — emit the field with no

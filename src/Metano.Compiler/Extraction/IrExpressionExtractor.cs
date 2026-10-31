@@ -935,7 +935,8 @@ public sealed partial class IrExpressionExtractor
             .Select(s => new IrPropertySubpattern(
                 s.NameColon!.Name.Identifier.ValueText,
                 ExtractPattern(s.Pattern),
-                ResolveMemberNameOverride(s.NameColon.Name)
+                ResolveMemberNameOverride(s.NameColon.Name),
+                IsTranspiledDataMember(_semantic.GetSymbolInfo(s.NameColon.Name).Symbol)
             ))
             .ToList();
         return new IrPropertyPattern(
@@ -1020,7 +1021,11 @@ public sealed partial class IrExpressionExtractor
 
     private IrPositionalElementMember? ToPositionalElementMember(ITypeSymbol record, string name) =>
         SymbolHelper.FindInstanceDataMemberInHierarchy(record, name) is { } member
-            ? new IrPositionalElementMember(member.Name, member.GetNameOverride(_target))
+            ? new IrPositionalElementMember(
+                member.Name,
+                member.GetNameOverride(_target),
+                IsTranspiledDataMember(member)
+            )
             : null;
 
     /// <summary>
@@ -2554,9 +2559,26 @@ public sealed partial class IrExpressionExtractor
             IsJsCallableInvoke: isJsCallableInvoke,
             IsJsTupleElement: tupleIndex >= 0,
             TupleIndex: tupleIndex,
-            IsBrandedValueMember: isBrandedValueMember
+            IsBrandedValueMember: isBrandedValueMember,
+            IsTranspiledDataMember: IsTranspiledDataMember(symbol)
         );
     }
+
+    /// <summary>
+    /// A field or property, other than an enum member or an indexer, whose
+    /// declaring type the toolchain declares (see
+    /// <see cref="IrMemberOrigin.IsTranspiledDataMember"/> and
+    /// <see cref="SymbolHelper.IsToolchainDeclared"/>).
+    /// </summary>
+    private bool IsTranspiledDataMember(ISymbol? symbol) =>
+        symbol is not null
+        && IsDataMember(symbol)
+        && SymbolHelper.IsToolchainDeclared(symbol.ContainingType, _semantic.Compilation.Assembly);
+
+    private static bool IsDataMember(ISymbol symbol) =>
+        symbol
+            is IPropertySymbol { IsIndexer: false }
+                or IFieldSymbol { ContainingType.TypeKind: not TypeKind.Enum };
 
     private IrExpression ExtractElementAccess(ElementAccessExpressionSyntax elem)
     {

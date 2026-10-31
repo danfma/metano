@@ -1,3 +1,5 @@
+using System.Globalization;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -12,20 +14,64 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static partial class IrToTsExpressionBridge
 {
+    private const string PatternSubjectParameterName = "$v";
+
     /// <summary>
     /// Lowers <c>expr is pattern</c> to a boolean TS expression. Binding patterns
     /// (type-with-designator, var) emit a TODO comment because expression-scoped
     /// variable introductions need a higher-level rewrite than a single
     /// expression can carry in TS. The common non-binding shapes — constant
-    /// comparisons and bare type tests — lower cleanly.
+    /// comparisons and bare type tests — lower cleanly. A side-effecting
+    /// subject is evaluated once, whatever the pattern reads.
     /// </summary>
     private static TsExpression MapIsPattern(
         IrIsPatternExpression node,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var lowered = Map(node.Expression, bclRegistry);
+        var subject = Map(node.Expression, bclRegistry);
 
+        if (IrEvaluationTraits.IsSideEffectFree(node.Expression) || ReadsSubjectOnce(node.Pattern))
+            return MapIsPatternTest(subject, node, bclRegistry);
+
+        var boundSubject = new TsIdentifier(PatternSubjectParameterName);
+
+        return TsImmediateInvocation.Of(
+            [new TsImmediateBinding(PatternSubjectParameterName, subject)],
+            [new TsReturnStatement(MapIsPatternTest(boundSubject, node, bclRegistry))],
+            isAsync: false
+        );
+    }
+
+    /// <summary>
+    /// Whether the test a pattern lowers to reads the subject at most once:
+    /// a constant or relational comparison, <c>_</c>, a type test other than
+    /// the two-read <see cref="IrRuntimeTypeTest.ArrayTuple"/> shape, or the
+    /// negation of one of these.
+    /// Any other pattern reads the subject (or its members) repeatedly, so a
+    /// side-effecting subject is bound once first:
+    /// <c>(($v) =&gt; test)(subject)</c>.
+    /// </summary>
+    private static bool ReadsSubjectOnce(IrPattern pattern) =>
+        pattern switch
+        {
+            IrConstantPattern or IrRelationalPattern or IrDiscardPattern => true,
+            IrLogicalPattern { Operator: IrLogicalOp.Not } notPattern => ReadsSubjectOnce(
+                notPattern.Left
+            ),
+            IrTypePattern { DesignatorName: null } typePattern => IrRuntimeTypeTest.Of(
+                typePattern.Type
+            )
+                is not IrRuntimeTypeTest.ArrayTuple,
+            _ => false,
+        };
+
+    private static TsExpression MapIsPatternTest(
+        TsExpression lowered,
+        IrIsPatternExpression node,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
         switch (node.Pattern)
         {
             case IrConstantPattern constant:
@@ -170,8 +216,10 @@ public static partial class IrToTsExpressionBridge
     /// <see cref="IrRuntimeTypeTest"/> classifies the type: <c>typeof</c> of the
     /// JS primitive it lowers to (primitives, enums, branded wrappers), its
     /// generated <c>[GenerateGuard]</c> guard (erased interfaces and
-    /// <c>[PlainObject]</c>s), or <c>instanceof</c> its class. Extraction
-    /// reports MS0001 for a type with no test, so none reaches this point.
+    /// <c>[PlainObject]</c>s), the array shape and length of a
+    /// <c>[JsTuple]</c> (a type alias with no runtime value to reference), or
+    /// <c>instanceof</c> its class. Extraction reports MS0001 for a type with
+    /// no test, so none reaches this point.
     /// </summary>
     private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
         IrRuntimeTypeTest.Of(targetType) switch
@@ -184,9 +232,50 @@ public static partial class IrToTsExpressionBridge
                 new TsIdentifier($"is{RuntimeNamedType(targetType).Name}"),
                 [value]
             ),
+            IrRuntimeTypeTest.ArrayTuple { Arity: var arity } => ArrayTupleTest(value, arity),
             IrRuntimeTypeTest.Instanceof => InstanceofTest(value, RuntimeNamedType(targetType)),
             _ => throw NoRuntimeTypeTest(targetType),
         };
+
+    /// <summary>
+    /// The structural <see cref="IrRuntimeTypeTest.ArrayTuple"/> test: an
+    /// array of the tuple's length.
+    /// </summary>
+    private static TsExpression ArrayTupleTest(TsExpression value, int arity) =>
+        new TsBinaryExpression(
+            new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
+                [value]
+            ),
+            "&&",
+            new TsBinaryExpression(
+                new TsPropertyAccess(value, "length"),
+                "===",
+                new TsLiteral(arity.ToString(CultureInfo.InvariantCulture))
+            )
+        );
+
+    /// <summary>
+    /// Lowers a cast. JS has no runtime cast, so the value passes through —
+    /// except for a cast to a <c>[JsTuple]</c>: <c>Array.isArray</c> narrows a
+    /// value to <c>any[]</c>, never to the tuple, so unlike a class (narrowed
+    /// by <c>instanceof</c>) or a guarded shape (narrowed by its type
+    /// predicate) the cast stays a TS assertion for the result to type-check.
+    /// </summary>
+    private static TsExpression MapCast(
+        IrCastExpression cast,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var value = Map(cast.Expression, bclRegistry);
+        var testedType = cast.TargetType is IrNullableTypeRef nullable
+            ? nullable.Inner
+            : cast.TargetType;
+
+        return IrRuntimeTypeTest.Of(testedType) is IrRuntimeTypeTest.ArrayTuple
+            ? new TsCastExpression(value, IrToTsTypeMapper.Map(cast.TargetType))
+            : value;
+    }
 
     private static TsExpression InstanceofTest(TsExpression value, TsNamedType type) =>
         new TsBinaryExpression(value, "instanceof", TypeValueReference(type.Name, type.Origin));
@@ -309,7 +398,7 @@ public static partial class IrToTsExpressionBridge
             null => new TsElementAccess(value, new TsLiteral(index.ToString())),
             var members when members[index] is { } member => new TsPropertyAccess(
                 value,
-                IrToTsNamingPolicy.ToDataMemberName(member.Name, member.EmittedName)
+                ReadDataMemberName(member.Name, member.EmittedName, member.IsTranspiledDataMember)
             ),
             _ => new TsIdentifier(
                 $"undefined /* TODO: positional element {index} has no member to read */"
@@ -367,7 +456,7 @@ public static partial class IrToTsExpressionBridge
     ) =>
         new TsPropertyAccess(
             value,
-            IrToTsNamingPolicy.ToDataMemberName(sub.MemberName, sub.EmittedName)
+            ReadDataMemberName(sub.MemberName, sub.EmittedName, sub.IsTranspiledDataMember)
         );
 
     private static string RelationalOpToken(IrRelationalOp op) =>

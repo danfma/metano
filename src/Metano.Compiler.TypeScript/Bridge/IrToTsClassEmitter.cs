@@ -180,7 +180,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
 
                 case IrPropertyDeclaration irProp
                     when !promotedNames.Contains(
-                        IrToTsNamingPolicy.ToInterfaceMemberName(irProp.Name, irProp.Attributes)
+                        IrToTsNamingPolicy.ToDeclaredDataMemberName(irProp.Name, irProp.Attributes)
                     ):
                     var propertyMembers = IrToTsClassBridge.BuildProperty(
                         irProp,

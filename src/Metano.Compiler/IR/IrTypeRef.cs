@@ -81,6 +81,12 @@ public sealed record IrNamedTypeRef(
 /// <param name="IsPlainObject">The referenced type carries
 /// <c>[PlainObject]</c>: it lowers to a structural shape with no runtime
 /// class, like an interface.</param>
+/// <param name="IsJsTuple">The referenced type carries <c>[JsTuple]</c>: it
+/// lowers to a fixed-length array with no runtime class, so a runtime test can
+/// only check the array shape and its length.</param>
+/// <param name="JsTupleArity">The element count of a <c>[JsTuple]</c> type's
+/// positional shape; <c>null</c> when the type is not a <c>[JsTuple]</c> or
+/// its shape cannot be read.</param>
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,
     IReadOnlyList<string>? StringEnumValues = null,
@@ -93,7 +99,9 @@ public sealed record IrNamedTypeSemantics(
     bool IsJsxComponent = false,
     bool RendersAsJsxElement = false,
     bool HasGeneratedGuard = false,
-    bool IsPlainObject = false
+    bool IsPlainObject = false,
+    bool IsJsTuple = false,
+    int? JsTupleArity = null
 );
 
 /// <summary>

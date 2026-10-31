@@ -177,4 +177,198 @@ public class JsTupleTranspileTests
 
         await Assert.That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidJsTuple)).IsFalse();
     }
+
+    // A [JsTuple] is a type alias with no runtime value, so a type test
+    // checks the array shape and arity instead of `instanceof`, and the file
+    // never value-imports the alias (#253).
+    [Test]
+    public async Task PositionalPatternOnJsTuple_TestsArrayShapeWithoutValueImport()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, JsTuple]
+            public record JPair(int First, string Second);
+
+            [Transpile]
+            public class Matcher
+            {
+                public bool StartsWithOne(object o) => o is JPair(1, _);
+                public bool IsNotPair(object o) => o is not JPair;
+            }
+            """
+        );
+
+        var output = result["matcher.ts"];
+        await Assert
+            .That(output)
+            .Contains("return Array.isArray(o) && o.length === 2 && o[0] === 1;");
+        await Assert.That(output).Contains("return !(Array.isArray(o) && o.length === 2);");
+        // Nothing references the alias as a value, so no value import exists.
+        await Assert.That(output).DoesNotContain("import { JPair }");
+        await Assert.That(output).DoesNotContain("instanceof JPair");
+    }
+
+    // A designated type pattern binds the matched array (#253).
+    [Test]
+    public async Task TypePatternWithDesignatorOnJsTuple_BindsTheMatchedArray()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, JsTuple]
+            public record JPair(int First, string Second);
+
+            [Transpile]
+            public class Matcher
+            {
+                public int FirstOrZero(object o) => o switch { JPair p => p.First, _ => 0 };
+            }
+            """
+        );
+
+        var output = result["matcher.ts"];
+        await Assert.That(output).Contains("if (Array.isArray($s) && $s.length === 2) {");
+        await Assert.That(output).Contains("const p = $s;");
+        await Assert.That(output).Contains("return p[0];");
+        await Assert.That(output).DoesNotContain("instanceof JPair");
+    }
+
+    // A [JsTuple] from a referenced package has no source syntax; its arity
+    // comes from the record's synthesized Deconstruct (#253).
+    [Test]
+    public async Task TypeTestOnReferencedJsTuple_ReadsArityFromMetadata()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("tuple-lib")]
+
+            [JsTuple]
+            public record Triple(int A, int B, int C);
+            """,
+            """
+            [Transpile]
+            public class Matcher
+            {
+                public bool IsTriple(object o) => o is Triple;
+            }
+            """
+        );
+
+        await Assert
+            .That(result["matcher.ts"])
+            .Contains("return Array.isArray(o) && o.length === 3;");
+        await Assert.That(result["matcher.ts"]).DoesNotContain("instanceof Triple");
+    }
+
+    // A side-effecting subject is evaluated once even though the array-shape
+    // test reads it twice (#253).
+    [Test]
+    public async Task TypeTestOnSideEffectingSubject_EvaluatesItOnce()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, JsTuple]
+            public record JPair(int First, string Second);
+
+            [Transpile]
+            public class Matcher
+            {
+                public bool IsPair(Func<object> next) => next() is JPair;
+            }
+            """
+        );
+
+        var output = result["matcher.ts"];
+        await Assert.That(output).Contains("Array.isArray($v) && $v.length === 2");
+        await Assert.That(output).Contains("(next())");
+        await Assert.That(output).DoesNotContain("Array.isArray(next())");
+    }
+
+    // A pattern that reads the subject once (`not null`) stays inline even on
+    // a side-effecting subject; one that reads it repeatedly binds an awaited
+    // subject as the argument of a non-async arrow (#253).
+    [Test]
+    public async Task PatternSubjectBinding_OnlyWhenThePatternReadsItRepeatedly()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Threading.Tasks;
+
+            [Transpile]
+            public record Box(int X);
+
+            [Transpile]
+            public class Probe
+            {
+                public Box? Next() => null;
+                public Task<Box> Load() => Task.FromResult(new Box(1));
+
+                public bool HasNext() => Next() is not null;
+                public async Task<bool> IsOne() => await Load() is { X: 1 };
+            }
+            """
+        );
+
+        var output = result["probe.ts"];
+        await Assert.That(output).Contains("return !(this.next() == null);");
+        await Assert.That(output).Contains("(($v) => $v != null && $v.x === 1)(await this.load())");
+        await Assert.That(output).DoesNotContain("async ($v)");
+    }
+
+    // An explicit cast keeps the TS assertion like `as` (#253).
+    [Test]
+    public async Task ExplicitCastToJsTuple_KeepsTypeAssertion()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, JsTuple]
+            public record JPair(int First, string Second);
+
+            [Transpile]
+            public class Matcher
+            {
+                public JPair Force(object o) => (JPair)o;
+            }
+            """
+        );
+
+        await Assert.That(result["matcher.ts"]).Contains("return o as JPair;");
+    }
+
+    // `Array.isArray` narrows to `any[]`, not to the tuple, so a cast to a
+    // [JsTuple] keeps a TS assertion for the result to type-check (#253).
+    [Test]
+    public async Task AsCastToJsTuple_KeepsTypeAssertion()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, JsTuple]
+            public record JPair(int First, string Second);
+
+            [Transpile]
+            public class Matcher
+            {
+                public JPair? AsPair(object o) => o as JPair;
+            }
+            """
+        );
+
+        await Assert
+            .That(result["matcher.ts"])
+            .Contains("return Array.isArray(o) && o.length === 2 ? o as JPair : null;");
+    }
 }
