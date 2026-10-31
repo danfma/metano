@@ -52,16 +52,16 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 
 ## Reserved codes (specified, not yet implemented)
 
-Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0037`).
+Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0038`).
 
 | Code | Symbolic name | Severity | Meaning | Spec |
 | --- | --- | --- | --- | --- |
-| `MS0031` | `UnsupportedUnionShape` | Error | A C# 15 `union` uses a shape the erased TS union cannot represent: body members, extra interfaces, a union-typed case, an unsupported Metano attribute, or a JSON-reachable custom type classifier / `[JsonPolymorphic]` case. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
-| `MS0032` | `IndistinguishableUnionCases` | Error | Two union cases are assignable to each other, or share one JS runtime test (`int`/`double`, `Guid`/`string`, …). | [009](../../009-csharp-unions/contracts/diagnostics.md) |
-| `MS0033` | `UntestableUnionCase` | Error | A union case has no runtime test (an interface or `[PlainObject]` without `[GenerateGuard]`, an array or collection, an open type parameter at a test site). | [009](../../009-csharp-unions/contracts/diagnostics.md) |
-| `MS0034` | `UnionDefaultValue` | Error (spec 009 OD-3) | `default(U)`, a target-typed `default`, or an unassigned union member. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
-| `MS0035` | `AmbiguousUnionJsonCases` | Warning | A JSON-reachable union has cases with the same JSON token kind (the analogue of STJ SYSLIB1227); deserialization throws, as STJ does. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
-| `MS0036` | `UnionErasureDivergence` | Warning | `ToString`/interpolation, `GetType`, or `is U` over a non-union input behaves differently after erasure. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0032` | `UnsupportedUnionShape` | Error | A C# 15 `union` uses a shape the erased TS union cannot represent: body members, extra interfaces, a union-typed case (also through a type argument), an unsupported Metano attribute, a hand-written `[Union]` type, `IUnion` access, or a JSON-reachable custom type classifier / `[JsonPolymorphic]` case / dictionary key / case whose STJ wire form Metano does not reproduce. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0033` | `IndistinguishableUnionCases` | Error | Two union cases have overlapping erased JS value domains: assignable to each other, the same primitive domain (`int`/`double`, `Guid`/`string`, …), a class and its subclass, two structural (guarded) cases or a structural case next to a class, or two array cases. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0034` | `UntestableUnionCase` | Error | A union case has no runtime test (an interface or `[PlainObject]` without `[GenerateGuard]`, an array or collection, an open type parameter at a test site). | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0035` | `UnionDefaultValue` | Error (spec 009 OD-3) | `default(U)`, a target-typed `default`, or an unassigned union member. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0036` | `AmbiguousUnionJsonCases` | Warning | A JSON-reachable union has cases with the same JSON token kind (the analogue of STJ SYSLIB1227); deserialization throws, as STJ does. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
+| `MS0037` | `UnionErasureDivergence` | Warning | `ToString`/interpolation, `GetType`, or `is U` over a non-union input behaves differently after erasure. | [009](../../009-csharp-unions/contracts/diagnostics.md) |
 
 ## Build integration (`Metano.Build`)
 
