@@ -85,11 +85,12 @@ public static class TranspilerHost
                     options.FilePrefix,
                     options.ShowTimings,
                     totalSw,
-                    out var cachedFiles
+                    out var cachedFiles,
+                    out var cachedPackageDependencies
                 )
             )
             {
-                target.AdoptCachedOutput(ir, compilation, cachedFiles);
+                target.AdoptCachedOutput(ir, compilation, cachedFiles, cachedPackageDependencies);
 
                 // Refresh the MSBuild stamp so the next incremental
                 // build still sees a fresh Outputs timestamp even when
@@ -135,7 +136,7 @@ public static class TranspilerHost
                 options,
                 target,
                 outputDir,
-                output.Files,
+                output,
                 configFingerprint,
                 sourceHashes,
                 referenceFingerprints,
@@ -191,7 +192,7 @@ public static class TranspilerHost
             options,
             target,
             outputDir,
-            output.Files,
+            output,
             configFingerprint,
             sourceHashes,
             referenceFingerprints,
@@ -246,7 +247,7 @@ public static class TranspilerHost
         TranspileOptions options,
         ITranspilerTarget target,
         string outputDir,
-        IReadOnlyList<GeneratedFile> files,
+        TargetOutput output,
         string configFingerprint,
         IReadOnlyDictionary<string, string>? sourceHashes,
         IReadOnlyDictionary<string, string>? referenceFingerprints,
@@ -260,7 +261,7 @@ public static class TranspilerHost
         var prefixBlock = string.IsNullOrEmpty(options.FilePrefix)
             ? null
             : options.FilePrefix + "\n";
-        var outputHashes = CacheKeyBuilder.HashGeneratedContent(files, prefixBlock);
+        var outputHashes = CacheKeyBuilder.HashGeneratedContent(output.Files, prefixBlock);
         // The read path may have skipped these on a --clean run (no cache
         // to consult). Compute now so the freshly written cache is
         // consultable on the next run.
@@ -274,7 +275,8 @@ public static class TranspilerHost
             SourceHashes: sourceHashes,
             ReferenceFingerprints: referenceFingerprints,
             AssetSourceHashes: assetSourceHashes,
-            OutputHashes: outputHashes
+            OutputHashes: outputHashes,
+            PackageDependencies: output.PackageDependencies
         );
         cache.Write(outputDir);
     }
@@ -291,10 +293,12 @@ public static class TranspilerHost
         string? filePrefix,
         bool showTimings,
         Stopwatch totalSw,
-        out IReadOnlyList<GeneratedFile> cachedFiles
+        out IReadOnlyList<GeneratedFile> cachedFiles,
+        out IReadOnlyDictionary<string, string> cachedPackageDependencies
     )
     {
         cachedFiles = [];
+        cachedPackageDependencies = new Dictionary<string, string>(StringComparer.Ordinal);
         var cache = TranspilationCache.TryRead(outputDir);
         if (cache is null)
             return false;
@@ -327,6 +331,7 @@ public static class TranspilerHost
             return false;
 
         cachedFiles = rehydrated;
+        cachedPackageDependencies = cache.PackageDependencies;
         totalSw.Stop();
         Console.WriteLine(
             $"Metano: incremental cache hit — {cache.OutputHashes.Count} output file(s) reused, no work to do."

@@ -35,6 +35,10 @@ namespace Metano.Compiler.Caching;
 ///   run emitted into the output directory. If a user (or
 ///   <c>--clean</c> on a sibling target, or a manual <c>rm</c>) deletes
 ///   a file we treat the cache as stale and regenerate.</item>
+///   <item><b>Package dependencies</b>: the previous run's
+///   <see cref="TargetOutput.PackageDependencies"/>, not part of the key
+///   but restored on a hit so the target's package manifest stage sees
+///   them without transforming (#299).</item>
 /// </list>
 ///
 /// <para>
@@ -50,10 +54,11 @@ public sealed record TranspilationCache(
     IReadOnlyDictionary<string, string> SourceHashes,
     IReadOnlyDictionary<string, string> ReferenceFingerprints,
     IReadOnlyDictionary<string, string> AssetSourceHashes,
-    IReadOnlyDictionary<string, string> OutputHashes
+    IReadOnlyDictionary<string, string> OutputHashes,
+    IReadOnlyDictionary<string, string> PackageDependencies
 )
 {
-    public const int CurrentFormatVersion = 3;
+    public const int CurrentFormatVersion = 4;
     public const string FileName = ".metano-cache.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -103,7 +108,8 @@ public sealed record TranspilationCache(
         && cache.SourceHashes is not null
         && cache.ReferenceFingerprints is not null
         && cache.AssetSourceHashes is not null
-        && cache.OutputHashes is not null;
+        && cache.OutputHashes is not null
+        && cache.PackageDependencies is not null;
 
     public void Write(string outputDir)
     {

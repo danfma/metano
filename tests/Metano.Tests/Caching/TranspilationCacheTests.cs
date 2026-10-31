@@ -45,6 +45,10 @@ public class TranspilationCacheTests
             OutputHashes: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["src/foo.ts"] = "def456",
+            },
+            PackageDependencies: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["@acme/shared"] = "^1.2.3",
             }
         );
 
@@ -65,6 +69,7 @@ public class TranspilationCacheTests
             .That(roundTripped.AssetSourceHashes["/proj/schema.sql"])
             .IsEqualTo("asset-hash-1");
         await Assert.That(roundTripped.OutputHashes["src/foo.ts"]).IsEqualTo("def456");
+        await Assert.That(roundTripped.PackageDependencies["@acme/shared"]).IsEqualTo("^1.2.3");
     }
 
     [Test]

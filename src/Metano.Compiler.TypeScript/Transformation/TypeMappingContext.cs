@@ -54,8 +54,7 @@ public sealed class TypeMappingContext(
     IReadOnlyDictionary<string, IrBclExport> bclExportMap,
     IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
     IReadOnlySet<string> assembliesNeedingEmitPackage,
-    ICollection<string>? crossPackageMisses = null,
-    IDictionary<string, string>? usedCrossPackages = null
+    ICollection<string>? crossPackageMisses = null
 )
 {
     /// <summary>
@@ -98,12 +97,11 @@ public sealed class TypeMappingContext(
 
     /// <summary>
     /// Cross-package npm dependencies the run touched, keyed by package name and
-    /// pre-formatted to a version specifier. <see cref="ConcurrentDictionary{TKey, TValue}"/>
-    /// so the resolver helpers and import collector can populate it from
-    /// parallel worker threads.
+    /// pre-formatted to a version specifier, run-wide and per file group. Thread-safe so
+    /// the resolver helpers and import collector can populate it from parallel worker
+    /// threads.
     /// </summary>
-    public IDictionary<string, string> UsedCrossPackages { get; } =
-        usedCrossPackages ?? new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+    public CrossPackageDependencyLedger UsedCrossPackages { get; } = new();
 
     /// <summary>
     /// Version specifiers for cross-package origins the resolver has *seen* but
@@ -131,6 +129,6 @@ public sealed class TypeMappingContext(
     public void ConfirmCrossPackageDependency(string packageName)
     {
         if (CrossPackageVersionHints.TryGetValue(packageName, out var version))
-            UsedCrossPackages[packageName] = version;
+            UsedCrossPackages.Record(packageName, version);
     }
 }

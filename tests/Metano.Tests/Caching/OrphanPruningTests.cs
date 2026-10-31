@@ -134,7 +134,8 @@ public class OrphanPruningTests
             {
                 ["../secret.txt"] = "hash",
                 ["widget.ts"] = "hash",
-            }
+            },
+            PackageDependencies: new Dictionary<string, string>()
         ).Write(outputDir);
 
         // The run drops widget.ts; the `..` escape key must be ignored, not deleted.
@@ -178,7 +179,8 @@ public class OrphanPruningTests
             SourceHashes: new Dictionary<string, string>(),
             ReferenceFingerprints: new Dictionary<string, string>(),
             AssetSourceHashes: new Dictionary<string, string>(),
-            OutputHashes: manifest
+            OutputHashes: manifest,
+            PackageDependencies: new Dictionary<string, string>()
         ).Write(outputDir);
 
         return outputDir;

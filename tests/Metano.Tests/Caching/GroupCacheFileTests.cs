@@ -60,7 +60,11 @@ public class GroupCacheFileTests
                             [],
                             [new CachedExport("Foo", CachedExportKind.TypeAlias)]
                         ),
-                    ]
+                    ],
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["@acme/shared"] = "^1.2.3",
+                    }
                 ),
             }
         );
@@ -76,6 +80,31 @@ public class GroupCacheFileTests
         await Assert
             .That(roundTripped!.Groups["g"].Files[0].Exports[0].Kind)
             .IsEqualTo(CachedExportKind.TypeAlias);
+
+        await Assert
+            .That(roundTripped.Groups["g"].Dependencies["@acme/shared"])
+            .IsEqualTo("^1.2.3");
+    }
+
+    [Test]
+    public async Task TryRead_RejectsEntryWithoutDependencies()
+    {
+        var dir = MakeTempDir();
+
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, GroupCacheFile.FileName),
+            $$"""
+            {
+              "formatVersion": {{GroupCacheFile.CurrentFormatVersion}},
+              "configurationFingerprint": "fp",
+              "groups": { "g": { "closureHash": "closure-hash", "files": [] } }
+            }
+            """
+        );
+
+        var cache = GroupCacheFile.TryRead(dir);
+
+        await Assert.That(cache).IsNull();
     }
 
     private string MakeTempDir()

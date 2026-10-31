@@ -85,8 +85,8 @@ public class Commands
                     ? Path.GetFullPath(packageRoot)
                     : FindPackageRoot(outputDir);
 
-                var pkgDiagnostics = PackageJsonReconciler.Reconcile(
-                    target,
+                var reconciliation = PackageJsonReconciler.Reconcile(
+                    target.LastPackageManifestInputs,
                     resolvedPackageRoot,
                     outputDir,
                     dist,
@@ -94,10 +94,10 @@ public class Commands
                     importAlias
                 );
 
-                if (pkgDiagnostics is null)
+                if (!reconciliation.WasWritten)
                     return;
 
-                foreach (var d in pkgDiagnostics)
+                foreach (var d in reconciliation.Diagnostics)
                     Console.WriteLine(d.Format());
 
                 Console.WriteLine(

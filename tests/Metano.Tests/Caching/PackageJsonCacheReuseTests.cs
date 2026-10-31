@@ -8,8 +8,9 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Metano.Tests.Caching;
 
 /// <summary>
-/// Issue #273: a run served from the incremental cache must leave <c>package.json</c>
-/// exactly as the cold run wrote it. Each test drives the real CLI pipeline twice —
+/// Issues #273 and #299: a run served from the incremental cache must leave
+/// <c>package.json</c> exactly as the cold run wrote it, even when it was deleted in
+/// between. Each test drives the real CLI pipeline twice —
 /// <see cref="TranspilerHost"/> followed by <see cref="PackageJsonReconciler"/>, with a
 /// fresh <see cref="TypeScriptTarget"/> per run as in separate CLI invocations — into the
 /// same output directory, then compares the two manifests byte for byte.
@@ -37,6 +38,39 @@ public class PackageJsonCacheReuseTests
             public class TodoList
             {
                 public int Count() => 0;
+            }
+        }
+        """;
+
+    private const string SharedLibrarySource = """
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("@acme/shared", Version = "1.2.3")]
+
+        namespace Acme.Shared
+        {
+            public record Tag(string Name);
+        }
+        """;
+
+    private const string TaggedItemsSource = """
+        using Metano.Annotations;
+        using Acme.Shared;
+
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("@acme/todo")]
+
+        namespace Acme.Todo.Items
+        {
+            public record TodoItem(string Title, Tag Tag);
+        }
+        """;
+
+    private const string DecimalListsSource = """
+        namespace Acme.Todo.Lists
+        {
+            public class TodoList
+            {
+                public decimal Total() => 0m;
             }
         }
         """;
@@ -106,34 +140,14 @@ public class PackageJsonCacheReuseTests
     public async Task FullCacheHit_KeepsCrossPackageDependencies()
     {
         var package = NewPackage();
+        var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
 
-        var library = TranspileHelper.CompileLibrary(
-            """
-            [assembly: TranspileAssembly]
-            [assembly: EmitPackage("@acme/shared", Version = "1.2.3")]
-
-            namespace Acme.Shared
-            {
-                public record Tag(string Name);
-            }
-            """
+        var coldManifest = await TranspileColdAndReadManifest(
+            package,
+            [TaggedItemsSource],
+            library
         );
-
-        var consumerSource = """
-            using Metano.Annotations;
-            using Acme.Shared;
-
-            [assembly: TranspileAssembly]
-            [assembly: EmitPackage("@acme/todo")]
-
-            namespace Acme.Todo.Items
-            {
-                public record TodoItem(string Title, Tag Tag);
-            }
-            """;
-
-        var coldManifest = await TranspileColdAndReadManifest(package, [consumerSource], library);
-        var reused = await TranspileAndReconcile(package, [consumerSource], library);
+        var reused = await TranspileAndReconcile(package, [TaggedItemsSource], library);
         var reusedManifest = ReadManifest(package);
 
         await Assert.That(reused.ServedFromCache).IsTrue();
@@ -142,6 +156,99 @@ public class PackageJsonCacheReuseTests
         await Assert
             .That(JsonNode.Parse(reusedManifest)!["dependencies"]?["@acme/shared"]?.ToString())
             .IsEqualTo("1.2.3");
+    }
+
+    /// <summary>
+    /// Issue #299: the full-hit path never transforms, so the cross-package dependencies
+    /// must come back from the cache for a package.json deleted after the cold run.
+    /// </summary>
+    [Test]
+    public async Task FullCacheHit_RebuildsDeletedPackageJsonWithDependencies()
+    {
+        var package = NewPackage();
+        var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
+        var sources = new[] { TaggedItemsSource, DecimalListsSource };
+
+        var coldManifest = await TranspileColdAndReadManifest(package, sources, library);
+        DeleteManifest(package);
+        var reused = await TranspileAndReconcile(package, sources, library);
+        var rebuiltManifest = ReadManifest(package);
+
+        await Assert.That(reused.ServedFromCache).IsTrue();
+        await Assert.That(rebuiltManifest).IsEqualTo(coldManifest);
+
+        await Assert
+            .That(DependencyNames(rebuiltManifest))
+            .IsEquivalentTo(["@acme/shared", "decimal.js"]);
+    }
+
+    /// <summary>
+    /// Issue #299: a partial hit reuses unchanged groups from the per-group cache, so the
+    /// dependencies only those groups require must come back from that cache.
+    /// </summary>
+    [Test]
+    public async Task PartialCacheHit_RebuildsDeletedPackageJsonWithReusedGroupDependencies()
+    {
+        var package = NewPackage();
+        var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
+        var editedLists = DecimalListsSource.Replace("Total() => 0m", "Total() => 1m");
+
+        await TranspileColdAndReadManifest(
+            package,
+            [TaggedItemsSource, DecimalListsSource],
+            library
+        );
+        var coldEditedManifest = await TranspileColdInFreshPackage(
+            [TaggedItemsSource, editedLists],
+            library
+        );
+        DeleteManifest(package);
+        var partial = await TranspileAndReconcile(
+            package,
+            [TaggedItemsSource, editedLists],
+            library
+        );
+        var rebuiltManifest = ReadManifest(package);
+
+        await Assert.That(partial.ServedFromCache).IsFalse();
+        await Assert.That(rebuiltManifest).IsEqualTo(coldEditedManifest);
+
+        await Assert
+            .That(DependencyNames(rebuiltManifest))
+            .IsEquivalentTo(["@acme/shared", "decimal.js"]);
+    }
+
+    /// <summary>
+    /// A dependency dropped by a re-transformed group must not survive from the cache:
+    /// the rebuilt manifest matches a cold run of the edited sources.
+    /// </summary>
+    [Test]
+    public async Task PartialCacheHit_DropsDependencyOfReTransformedGroup()
+    {
+        var package = NewPackage();
+        var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
+        var sources = new[] { TaggedItemsSource, DecimalListsSource };
+        var listsWithoutDecimal = DecimalListsSource.Replace(
+            "decimal Total() => 0m",
+            "int Total() => 0"
+        );
+
+        await TranspileColdAndReadManifest(package, sources, library);
+        var coldEditedManifest = await TranspileColdInFreshPackage(
+            [TaggedItemsSource, listsWithoutDecimal],
+            library
+        );
+        DeleteManifest(package);
+        var partial = await TranspileAndReconcile(
+            package,
+            [TaggedItemsSource, listsWithoutDecimal],
+            library
+        );
+        var rebuiltManifest = ReadManifest(package);
+
+        await Assert.That(partial.ServedFromCache).IsFalse();
+        await Assert.That(rebuiltManifest).IsEqualTo(coldEditedManifest);
+        await Assert.That(DependencyNames(rebuiltManifest)).IsEquivalentTo(["@acme/shared"]);
     }
 
     /// <summary>
@@ -161,6 +268,15 @@ public class PackageJsonCacheReuseTests
 
         return ReadManifest(package);
     }
+
+    /// <summary>
+    /// The cold-run manifest of <paramref name="sources"/> in a package of its own, the
+    /// reference a cache-served run of the same sources must reproduce.
+    /// </summary>
+    private async Task<string> TranspileColdInFreshPackage(
+        IReadOnlyList<string> sources,
+        Compilation library
+    ) => await TranspileColdAndReadManifest(NewPackage(), sources, library);
 
     private static async Task<PipelineRun> TranspileAndReconcile(
         PackageLayout package,
@@ -184,8 +300,8 @@ public class PackageJsonCacheReuseTests
                 $"Transpilation failed: {result.ErrorCount} error(s)."
             );
 
-        var diagnostics = PackageJsonReconciler.Reconcile(
-            target,
+        var reconciliation = PackageJsonReconciler.Reconcile(
+            target.LastPackageManifestInputs,
             package.Root,
             package.OutputDir,
             dist: "./dist",
@@ -193,7 +309,7 @@ public class PackageJsonCacheReuseTests
             importAlias: null
         );
 
-        if (diagnostics is null || diagnostics.Count > 0)
+        if (!reconciliation.WasWritten || reconciliation.Diagnostics.Count > 0)
             throw new InvalidOperationException("package.json was not reconciled cleanly.");
 
         return new PipelineRun(recordingTarget.AdoptedCachedOutput);
@@ -235,6 +351,12 @@ public class PackageJsonCacheReuseTests
 
     private static string ReadManifest(PackageLayout package) =>
         File.ReadAllText(Path.Combine(package.Root, "package.json"));
+
+    private static void DeleteManifest(PackageLayout package) =>
+        File.Delete(Path.Combine(package.Root, "package.json"));
+
+    private static IReadOnlyList<string> DependencyNames(string manifest) =>
+        JsonNode.Parse(manifest)!["dependencies"]!.AsObject().Select(entry => entry.Key).ToList();
 
     private static IReadOnlyList<string> ExportKeys(string manifest) =>
         JsonNode.Parse(manifest)!["exports"]!.AsObject().Select(entry => entry.Key).ToList();
@@ -286,11 +408,12 @@ public class PackageJsonCacheReuseTests
         public void AdoptCachedOutput(
             IrCompilation ir,
             Compilation? compilation,
-            IReadOnlyList<GeneratedFile> files
+            IReadOnlyList<GeneratedFile> files,
+            IReadOnlyDictionary<string, string> packageDependencies
         )
         {
             AdoptedCachedOutput = true;
-            inner.AdoptCachedOutput(ir, compilation, files);
+            inner.AdoptCachedOutput(ir, compilation, files, packageDependencies);
         }
     }
 

@@ -3,9 +3,10 @@ using Metano.Compiler.Diagnostics;
 namespace Metano;
 
 /// <summary>
-/// The post-emit package.json stage of a TypeScript run: feeds the per-run state the
-/// <see cref="TypeScriptTarget"/> captured (from <see cref="TypeScriptTarget.Transform"/>,
-/// or from <see cref="TypeScriptTarget.AdoptCachedOutput"/> on a full cache hit) into
+/// The post-emit package.json stage of a TypeScript run: feeds the
+/// <see cref="PackageManifestInputs"/> the <see cref="TypeScriptTarget"/> captured (from
+/// <see cref="TypeScriptTarget.Transform"/>, or from
+/// <see cref="TypeScriptTarget.AdoptCachedOutput"/> on a full cache hit) into
 /// <see cref="PackageJsonWriter"/>, so the generated barrels are exposed via subpath
 /// imports/exports.
 /// </summary>
@@ -18,10 +19,8 @@ public static class PackageJsonReconciler
     /// removed, without scaffolding a package.json for a project that never produced
     /// output.
     /// </summary>
-    /// <returns>The writer's diagnostics, or <see langword="null"/> when the stage was
-    /// skipped and no package.json was touched.</returns>
-    public static IReadOnlyList<MetanoDiagnostic>? Reconcile(
-        TypeScriptTarget target,
+    public static PackageJsonReconciliation Reconcile(
+        PackageManifestInputs inputs,
         string packageRoot,
         string outputDir,
         string dist,
@@ -31,20 +30,45 @@ public static class PackageJsonReconciler
     {
         var packageJsonExists = File.Exists(Path.Combine(packageRoot, "package.json"));
 
-        if (target.LastSourceFiles.Count == 0 && !packageJsonExists)
-            return null;
+        if (inputs.SourceFiles.Count == 0 && !packageJsonExists)
+            return PackageJsonReconciliation.Skipped;
 
-        return PackageJsonWriter.UpdateOrCreate(
+        var diagnostics = PackageJsonWriter.UpdateOrCreate(
             packageRoot,
             outputDir,
-            target.LastSourceFiles,
+            inputs.SourceFiles,
             dist,
-            authoritativePackageName: target.LastEmitPackageName,
-            crossPackageDependencies: target.LastCrossPackageDependencies,
-            isExecutable: target.LastIsExecutable,
+            authoritativePackageName: inputs.PackageName,
+            crossPackageDependencies: inputs.CrossPackageDependencies,
+            isExecutable: inputs.IsExecutable,
             srcRoot: srcRoot,
             importAlias: importAlias,
-            subpathRoot: target.LastPackageSubpathRoot
+            subpathRoot: inputs.SubpathRoot
         );
+
+        return PackageJsonReconciliation.Written(diagnostics);
     }
+}
+
+/// <summary>
+/// The outcome of <see cref="PackageJsonReconciler.Reconcile"/>: whether package.json was
+/// written, and the writer's diagnostics when it was.
+/// </summary>
+public sealed record PackageJsonReconciliation
+{
+    private PackageJsonReconciliation(bool wasWritten, IReadOnlyList<MetanoDiagnostic> diagnostics)
+    {
+        WasWritten = wasWritten;
+        Diagnostics = diagnostics;
+    }
+
+    /// <summary>The stage did not run: nothing was produced and no package.json exists.</summary>
+    public static PackageJsonReconciliation Skipped { get; } = new(false, []);
+
+    public bool WasWritten { get; }
+
+    public IReadOnlyList<MetanoDiagnostic> Diagnostics { get; }
+
+    public static PackageJsonReconciliation Written(IReadOnlyList<MetanoDiagnostic> diagnostics) =>
+        new(true, diagnostics);
 }
