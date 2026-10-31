@@ -63,6 +63,7 @@ public static class IrToTsExceptionConstructionBridge
     public static TsFieldMember? BaseMessageFieldFor(IrConstructorDeclaration? primary)
     {
         var constructors = primary is null ? [] : (primary.Overloads ?? []).Prepend(primary);
+
         var keepsBaseMessage = constructors.Any(ctor =>
             ctor.BaseExceptionConstruction is { IsMessageOverridden: true }
         );
@@ -129,6 +130,7 @@ public static class IrToTsExceptionConstructionBridge
         if (ctor.BaseExceptionConstruction is { } construction)
         {
             var operands = ErrorOperands.Bind(construction, baseArguments, bclRegistry);
+
             var keptBaseMessage = construction.IsMessageOverridden
                 ? ComposeMessage(construction, operands) ?? new TsStringLiteral("")
                 : null;

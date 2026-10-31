@@ -290,6 +290,42 @@ public class ExceptionTranspileTests
     }
 
     [Test]
+    public async Task ExceptionOverridingMessageWithoutExplicitConstructor_DeclaresKeptField()
+    {
+        // Implicit and primary constructors must still declare and assign the kept
+        // base-message field that `base.Message` reads.
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+
+            [Transpile]
+            public class NoCtorException : Exception
+            {
+                public override string Message => "custom: " + base.Message;
+            }
+
+            [Transpile]
+            public class PrimaryException(string detail) : Exception(detail)
+            {
+                public override string Message => "p: " + base.Message;
+            }
+            """
+        );
+
+        var implicitCtor = result["no-ctor-exception.ts"];
+        var primaryCtor = result["primary-exception.ts"];
+
+        await Assert.That(implicitCtor).Contains("readonly #baseMessage: string;");
+
+        await Assert
+            .That(implicitCtor)
+            .Contains("this.#baseMessage = \"Exception of type 'NoCtorException' was thrown.\";");
+
+        await Assert.That(primaryCtor).Contains("readonly #baseMessage: string;");
+        await Assert.That(primaryCtor).Contains("this.#baseMessage = detail;");
+    }
+
+    [Test]
     public async Task ExceptionOverridingMessage_ReadsBaseMessageFromKeptField()
     {
         var result = TranspileHelper.Transpile(
