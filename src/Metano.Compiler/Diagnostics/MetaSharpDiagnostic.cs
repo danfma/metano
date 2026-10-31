@@ -102,7 +102,10 @@ public static class DiagnosticCodes
     /// refuses to emit code that mentions the type so the contract
     /// stays explicit. Migrate the reference to use <c>[External]</c>
     /// (ambient TS shape) or remove the dependency from transpiled
-    /// code.</summary>
+    /// code. Not raised for source-generator output, for an
+    /// <c>[Ignore]</c> interface listed directly in a base list (erased
+    /// from <c>implements</c>/<c>extends</c>), or for references inside
+    /// attribute applications (attributes are never emitted).</summary>
     public const string IgnoreReferencedByTranspiledCode = "MS0013";
 
     /// <summary>MS0011 — <c>[Discriminator("FieldName")]</c> (from
