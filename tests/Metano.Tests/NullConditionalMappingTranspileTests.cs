@@ -27,7 +27,7 @@ public class NullConditionalMappingTranspileTests
             "public static int? Size(List<int>? items) => items?.Count;"
         );
 
-        await Assert.That(output).Contains("return items?.length;");
+        await Assert.That(output).Contains("return items?.length ?? null;");
     }
 
     [Test]
@@ -165,9 +165,9 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return items?.[0];");
-        await Assert.That(output).Contains("return names?.[0].length;");
-        await Assert.That(output).Contains("return scores?.get(\"k\");");
+        await Assert.That(output).Contains("return items?.[0] ?? null;");
+        await Assert.That(output).Contains("return names?.[0].length ?? null;");
+        await Assert.That(output).Contains("return scores?.get(\"k\") ?? null;");
     }
 
     [Test]
@@ -183,9 +183,9 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return items?.[items.length - 1];");
-        await Assert.That(output).Contains("return items?.slice(1);");
-        await Assert.That(output).Contains("return order?.items[order.items.length - 1];");
+        await Assert.That(output).Contains("return items?.[items.length - 1] ?? null;");
+        await Assert.That(output).Contains("return items?.slice(1) ?? null;");
+        await Assert.That(output).Contains("return order?.items[order.items.length - 1] ?? null;");
 
         await Assert
             .That(output)
@@ -261,9 +261,9 @@ public class NullConditionalMappingTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return order?.self.self.items.length;");
-        await Assert.That(output).Contains("return order?.items[0];");
-        await Assert.That(output).Contains("return value?.substring(1).trim();");
+        await Assert.That(output).Contains("return order?.self.self.items.length ?? null;");
+        await Assert.That(output).Contains("return order?.items[0] ?? null;");
+        await Assert.That(output).Contains("return value?.substring(1).trim() ?? null;");
     }
 
     [Test]
@@ -320,10 +320,10 @@ public class NullConditionalMappingTranspileTests
         await Assert.That(output).DoesNotContain("? null :");
     }
 
-    // Native optional chains (`value?.trim()`, `order?.self.self.items.length`)
-    // yield `undefined` for a null receiver, while the guarded forms yield
-    // `null`; a declared `T | null` result therefore fails `tsc --strict` on
-    // the native forms. Known deviation tracked by #256.
+    // Native optional chains (`order?.self.self.items.length`) yield
+    // `undefined` for a null receiver, while the guarded forms yield `null`, so
+    // a chain read as a value is normalized with `?? null` (#256); the left
+    // operand of `??` (`value?.trim() ?? ""`) keeps the bare chain.
     [Test]
     public async Task NullConditionalGuards_MatchGolden()
     {

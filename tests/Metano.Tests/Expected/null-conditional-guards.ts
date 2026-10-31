@@ -27,7 +27,7 @@ export function clearNext(order: Order | null): void {
 }
 
 export function third(order: Order | null): number | null {
-  return order?.self.self.items.length;
+  return order?.self.self.items.length ?? null;
 }
 
 export function scoreOf(order: Order | null): number | null {
@@ -35,7 +35,7 @@ export function scoreOf(order: Order | null): number | null {
 }
 
 export function first(items: number[] | null): number | null {
-  return items?.[0];
+  return items?.[0] ?? null;
 }
 
 export function clearNextItems(order: Order | null): void {

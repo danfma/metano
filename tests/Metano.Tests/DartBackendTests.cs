@@ -975,6 +975,7 @@ public class DartBackendTests
                 public int Unchecked(int? a) => a.Value;
                 #pragma warning restore CS8629
                 public int? NestedPlus(Lifted? o) => o?.Next?.Qty + 1;
+                public string Size(int? n) => n switch { > 5 => "big", _ => "small" };
                 public bool IsInt(int? a) => (a + 1) is int;
                 public int Twice(int a) => -(-a);
                 public int Pick(bool c, int a, int b) => c ? a : b;
@@ -1011,6 +1012,11 @@ public class DartBackendTests
             .That(dart)
             .Contains("bool isInt(int? a) => (a == null ? null : a + 1) is int;");
         await Assert.That(dart).Contains("int twice(int a) => -(-a);");
+
+        // A nullable relational pattern's implicit non-null test is Dart's
+        // null-check pattern (#256).
+        await Assert.That(dart).Contains("_? && > 5");
+        await Assert.That(dart).DoesNotContain("Dart lacks `not` patterns");
         await Assert.That(dart).Contains("int pick(bool c, int a, int b) => c ? a : b;");
         await Assert.That(dart).Contains("return a ?? (x = b);");
 

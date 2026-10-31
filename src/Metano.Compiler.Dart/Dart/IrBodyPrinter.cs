@@ -671,6 +671,14 @@ public static class IrBodyPrinter
                 sb.Append(RelationalOpToken(rel.Operator)).Append(' ');
                 PrintExpression(sb, rel.Value);
                 break;
+            case IrLogicalPattern
+            {
+                Operator: IrLogicalOp.Not,
+                Left: IrConstantPattern { Value: IrLiteral { Kind: IrLiteralKind.Null } },
+            }:
+                // `not null` is Dart's null-check pattern on a wildcard.
+                sb.Append("_?");
+                break;
             case IrLogicalPattern { Operator: IrLogicalOp.Not } notPat:
                 // Dart doesn't have a unary `not` pattern; the idiomatic form
                 // uses a when-guard instead. At the pattern level we fall back

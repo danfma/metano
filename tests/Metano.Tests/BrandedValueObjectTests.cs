@@ -128,8 +128,8 @@ public class BrandedValueObjectTests
         var output = result["uses.ts"];
 
         await Assert.That(output).Contains("return slug;");
-        await Assert.That(output).Contains("return slug?.length;");
-        await Assert.That(output).Contains("return episode?.slug.length;");
+        await Assert.That(output).Contains("return slug?.length ?? null;");
+        await Assert.That(output).Contains("return episode?.slug.length ?? null;");
         await Assert.That(output).DoesNotContain(".value");
     }
 

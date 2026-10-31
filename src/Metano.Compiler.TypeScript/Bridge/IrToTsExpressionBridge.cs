@@ -51,6 +51,11 @@ public static partial class IrToTsExpressionBridge
             IrMemberAccess ma => MapMemberAccess(ma, bclRegistry),
             IrElementAccess ea => MapElementAccess(ea, bclRegistry),
             IrSliceExpression slice => MapSlice(slice, bclRegistry),
+            // An optional call (`handler?.(x)`) yields `undefined` for a null
+            // delegate; read as a value it becomes the C# `null`.
+            IrCallExpression { IsOptional: true } call => NormalizedToNull(
+                MapCall(call, bclRegistry)
+            ),
             IrCallExpression call => MapCall(call, bclRegistry),
             IrNewExpression ne => MapNewExpression(ne, bclRegistry),
             IrBinaryExpression bin => MapBinary(bin, bclRegistry),
@@ -151,10 +156,15 @@ public static partial class IrToTsExpressionBridge
         )
             return MapInitOnlyInitializerWrite(initOnlyMember, bin.Right, bclRegistry);
 
+        if (bin.Operator is IrBinaryOp.NullCoalescing)
+            return MapNullCoalescing(bin, rightToleratesUndefined: false, bclRegistry);
+
+        var comparesWithLiteral = ComparesWithLiteral(bin);
+
         return new TsBinaryExpression(
-            Map(bin.Left, bclRegistry),
+            MapOperand(bin.Left, comparesWithLiteral, bclRegistry),
             BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
-            Map(bin.Right, bclRegistry)
+            MapOperand(bin.Right, comparesWithLiteral, bclRegistry)
         );
     }
 
@@ -189,6 +199,15 @@ public static partial class IrToTsExpressionBridge
         );
 
     /// <summary>
+    /// An equality with a literal operand, where an <c>undefined</c> other
+    /// operand compares exactly like <c>null</c>: loose <c>== null</c>
+    /// matches both, and <c>=== 5</c> matches neither.
+    /// </summary>
+    private static bool ComparesWithLiteral(IrBinaryExpression bin) =>
+        bin.Operator is IrBinaryOp.Equal or IrBinaryOp.NotEqual
+        && (bin.Left is IrLiteral || bin.Right is IrLiteral);
+
+    /// <summary>
     /// JS has no integer division: <c>7 / 2</c> is <c>3.5</c>. The runtime
     /// <c>intDiv</c> helper truncates toward zero like C# and throws on a zero
     /// divisor, where a bare <c>Math.trunc(a / b)</c> would yield
@@ -212,7 +231,7 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var target = Map(ea.Target, bclRegistry);
+        var target = MapNullTolerant(ea.Target, bclRegistry);
         var index = Map(ea.Index, bclRegistry);
         if (ea.TargetType is IrMapTypeRef)
             return new TsCallExpression(new TsPropertyAccess(target, "get"), [index]);
@@ -229,7 +248,7 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     ) =>
         new TsCallExpression(
-            new TsPropertyAccess(Map(slice.Target, bclRegistry), "slice"),
+            new TsPropertyAccess(MapNullTolerant(slice.Target, bclRegistry), "slice"),
             MapSliceBounds(slice, bclRegistry)
         );
 
@@ -274,14 +293,15 @@ public static partial class IrToTsExpressionBridge
         if (IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead(ma) is { } keptBaseMessage)
             return keptBaseMessage;
 
-        var loweredTarget = Map(ma.Target, bclRegistry);
-
         // `[Branded]` value read: the companion lowers the wrapper to
         // `T = primitive & { __brand }`, so the receiver already IS the
         // wrapped value — `id.Value` → `id`, `id.Value.Length` → `id.length`
-        // (ADR-0005).
+        // (ADR-0005). The receiver is the value read, so it is not
+        // null-tolerant.
         if (ma.Origin is { IsBrandedValueMember: true })
-            return loweredTarget;
+            return Map(ma.Target, bclRegistry);
+
+        var loweredTarget = MapNullTolerant(ma.Target, bclRegistry);
 
         // `[JsTuple]` positional member read: `value.First` / `value.Second`
         // lowers to array-index access `value[0]` / `value[1]`. The element
@@ -440,7 +460,7 @@ public static partial class IrToTsExpressionBridge
             // value (no .methodName suffix applied yet). For unqualified calls the
             // target is an IrIdentifier — pass no receiver.
             TsExpression? loweredReceiver = call.Target is IrMemberAccess memberTarget
-                ? Map(memberTarget.Target, bclRegistry)
+                ? MapNullTolerant(memberTarget.Target, bclRegistry)
                 : null;
             var typeArgNames = call
                 .TypeArguments?.Select(TsTypeArgName)
@@ -458,7 +478,11 @@ public static partial class IrToTsExpressionBridge
                 return mapped;
         }
 
-        return new TsCallExpression(Map(call.Target, bclRegistry), loweredArgs, call.IsOptional);
+        return new TsCallExpression(
+            MapNullTolerant(call.Target, bclRegistry),
+            loweredArgs,
+            call.IsOptional
+        );
     }
 
     private static TsCallExpression MapPlainObjectHelperCall(
@@ -471,9 +495,38 @@ public static partial class IrToTsExpressionBridge
         var helperName = method.EmittedName ?? TypeScriptNaming.ToCamelCase(method.MemberName);
 
         return new TsCallExpression(
-            new TsIdentifier(helperName),
+            CompanionFunctionReference(helperName, method.CompanionOwner),
             [Map(receiver, bclRegistry), .. loweredArgs]
         );
+    }
+
+    /// <summary>
+    /// The value reference to a helper exported from <paramref name="owner"/>'s
+    /// module, carrying what the import collector needs to import it: the
+    /// owner's cross-package origin, or else the owner type itself. A nested
+    /// owner's helper is exported from its container's namespace
+    /// (<c>Outer.dbl</c>), so it is reached through the container, which is
+    /// imported like any type reference.
+    /// </summary>
+    private static TsExpression CompanionFunctionReference(
+        string helperName,
+        IrTypeReference? owner
+    )
+    {
+        if (owner is null)
+            return new TsIdentifier(helperName);
+
+        var containerLength = owner.Name.LastIndexOf('.');
+
+        if (containerLength > 0)
+            return new TsPropertyAccess(
+                MapTypeReference(owner with { Name = owner.Name[..containerLength] }),
+                helperName
+            );
+
+        return IrToTsTypeMapper.TryResolveOrigin(owner) is { } origin
+            ? new TsTypeReference(helperName, origin)
+            : new TsCompanionFunctionReference(helperName, owner.Name);
     }
 
     private static string? TsTypeArgName(IrTypeRef type) =>
@@ -824,7 +877,7 @@ public static partial class IrToTsExpressionBridge
         var parameters = DeduplicateParameterNames(
             DropTrailingErasedDiscards(lambda.Parameters, mappedParameters)
         );
-        var body = IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry);
+        var body = MapLambdaBody(lambda, bclRegistry);
         // Named function expression: emitted when the lambda is the
         // lowered body of a directly-recursive [Inline] method (#194).
         // The internal name lets the body call itself without relying
@@ -857,6 +910,23 @@ public static partial class IrToTsExpressionBridge
             return new TsCallExpression(new TsIdentifier("bindReceiver"), [arrow]);
         return arrow;
     }
+
+    /// <summary>
+    /// The lambda's statements. A <c>void</c> lambda's expression body
+    /// (<c>() =&gt; handler?.()</c>) is discarded by its caller, so it maps
+    /// null-tolerant: an <c>undefined</c> value needs no normalization.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> MapLambdaBody(
+        IrLambdaExpression lambda,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        lambda
+            is {
+                ReturnType: IrPrimitiveTypeRef { Primitive: IrPrimitive.Void },
+                Body: [IrReturnStatement { Value: { } discarded }],
+            }
+            ? [new TsReturnStatement(MapNullTolerant(discarded, bclRegistry))]
+            : IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry);
 
     /// <summary>
     /// Drops a trailing C# discard parameter (named <c>_</c>) ONLY when its TS type
