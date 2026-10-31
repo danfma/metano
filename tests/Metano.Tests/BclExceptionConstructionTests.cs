@@ -381,6 +381,48 @@ public class BclExceptionConstructionTests
         await Assert.That(output).Contains("return (error.stack ?? null);");
     }
 
+    [Test]
+    public async Task CastNullArguments_CountAsAbsent()
+    {
+        var output = TranspileGuard(
+            """
+            public static void Check() { throw new ArgumentNullException((string?)null); }
+
+            public static void Use() { throw new ObjectDisposedException((string?)null); }
+            """
+        );
+
+        await Assert.That(output).Contains("throw new Error(\"Value cannot be null.\");");
+
+        await Assert
+            .That(output)
+            .Contains("throw new Error(\"Cannot access a disposed object.\");");
+    }
+
+    [Test]
+    public async Task ParameterlessIoAndTaskExceptions_UseDotNetDefaultMessages()
+    {
+        var output = TranspileGuard(
+            """
+            public static void Missing() { throw new System.IO.FileNotFoundException(); }
+
+            public static void Canceled() { throw new System.Threading.Tasks.TaskCanceledException(); }
+
+            public static void Truncated() { throw new System.IO.EndOfStreamException(); }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains("throw new Error(\"Unable to find the specified file.\");");
+
+        await Assert.That(output).Contains("throw new Error(\"A task was canceled.\");");
+
+        await Assert
+            .That(output)
+            .Contains("throw new Error(\"Attempted to read past the end of the stream.\");");
+    }
+
     private static string TranspileGuard(string members)
     {
         var result = TranspileHelper.Transpile(

@@ -43,6 +43,7 @@ public static partial class IrToTsExpressionBridge
             IrTypeReference tr => MapTypeReference(tr),
             IrThisExpression => new TsIdentifier("this"),
             IrBaseExpression => new TsIdentifier("super"),
+            IrExceptionBaseMessage => IrToTsExceptionConstructionBridge.BaseMessageAccess(),
             IrMemberAccess ma => MapMemberAccess(ma, bclRegistry),
             IrElementAccess ea => MapElementAccess(ea, bclRegistry),
             IrSliceExpression slice => MapSlice(slice, bclRegistry),

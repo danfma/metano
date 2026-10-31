@@ -243,6 +243,9 @@ public static class IrBodyPrinter
             case IrBaseExpression:
                 sb.Append("super");
                 break;
+            case IrExceptionBaseMessage:
+                sb.Append("super.message");
+                break;
             case IrMemberAccess ma:
                 PrintAccessTarget(sb, ma.Target);
                 sb.Append('.').Append(IrToDartNamingPolicy.ToParameterName(ma.MemberName));

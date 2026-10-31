@@ -42,7 +42,42 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsExceptionConstructionBridge
 {
+    /// <summary>
+    /// The ES private field holding the message a class that overrides
+    /// <c>Message</c> composed for its native base (see
+    /// <see cref="IrExceptionBaseMessage"/>).
+    /// </summary>
+    public const string BaseMessageField = "#baseMessage";
+
     private const string TemporaryPrefix = "__exceptionArg";
+
+    /// <summary><c>this.#baseMessage</c>: the lowering of <c>base.Message</c>
+    /// in a class that keeps its base message.</summary>
+    public static TsExpression BaseMessageAccess() =>
+        new TsPropertyAccess(new TsIdentifier("this"), BaseMessageField);
+
+    /// <summary>
+    /// The <c>#baseMessage</c> field declaration a class needs when any of its
+    /// constructors keeps the base message; <c>null</c> otherwise.
+    /// </summary>
+    public static TsFieldMember? BaseMessageFieldFor(IrConstructorDeclaration? primary)
+    {
+        var constructors = primary is null ? [] : (primary.Overloads ?? []).Prepend(primary);
+        var keepsBaseMessage = constructors.Any(ctor =>
+            ctor.BaseExceptionConstruction is { IsMessageOverridden: true }
+        );
+
+        return keepsBaseMessage
+            ? new TsFieldMember(
+                BaseMessageField,
+                new TsStringType(),
+                Initializer: null,
+                Readonly: true,
+                Static: false,
+                Accessibility: TsAccessibility.None
+            )
+            : null;
+    }
 
     /// <summary>
     /// Lowers <c>new BclException(...)</c> to <c>new Error(...)</c>, wrapped in
@@ -94,10 +129,14 @@ public static class IrToTsExceptionConstructionBridge
         if (ctor.BaseExceptionConstruction is { } construction)
         {
             var operands = ErrorOperands.Bind(construction, baseArguments, bclRegistry);
+            var keptBaseMessage = construction.IsMessageOverridden
+                ? ComposeMessage(construction, operands) ?? new TsStringLiteral("")
+                : null;
 
             return new TsBaseConstructorCall(
                 operands.Temporaries,
-                BuildErrorArguments(construction, operands)
+                BuildErrorArguments(construction, operands),
+                keptBaseMessage
             );
         }
 
@@ -192,7 +231,7 @@ public static class IrToTsExceptionConstructionBridge
         string suffix
     )
     {
-        if (name is null || name.Source is IrLiteral { Value: "" })
+        if (name is null || ErrorOperands.Unwrapped(name.Source) is IrLiteral { Value: "" })
             return;
 
         composer.AppendText(prefix);
@@ -278,11 +317,15 @@ public static class IrToTsExceptionConstructionBridge
                 if (_construction.ArgumentRoles.ElementAtOrDefault(index) != role)
                     continue;
 
-                return IsNullLiteral(_operands[index].Source) ? null : _operands[index];
+                return IsNullLiteral(Unwrapped(_operands[index].Source)) ? null : _operands[index];
             }
 
             return null;
         }
+
+        /// <summary>The expression under any casts (<c>(string?)null</c>).</summary>
+        public static IrExpression Unwrapped(IrExpression expression) =>
+            expression is IrCastExpression cast ? Unwrapped(cast.Expression) : expression;
 
         private static bool IsNullLiteral(IrExpression expression) =>
             expression is IrLiteral { Kind: IrLiteralKind.Null or IrLiteralKind.Default };
@@ -330,6 +373,7 @@ public static class IrToTsExceptionConstructionBridge
             {
                 IrLiteral or IrIdentifier or IrThisExpression or IrTypeReference => true,
                 IrMemberAccess access => IsSideEffectFree(access.Target),
+                IrCastExpression cast => IsSideEffectFree(cast.Expression),
                 IrStringInterpolation interpolation => interpolation
                     .Parts.OfType<IrInterpolationExpression>()
                     .All(hole => IsSideEffectFree(hole.Expression)),
@@ -416,18 +460,36 @@ public static class IrToTsExceptionConstructionBridge
 
 /// <summary>
 /// A lowered base-constructor call: <paramref name="Temporaries"/> to declare
-/// before <c>super(...)</c> (arguments evaluated in source order) and the
-/// <c>super</c> <paramref name="Arguments"/>.
+/// before <c>super(...)</c> (arguments evaluated in source order), the
+/// <c>super</c> <paramref name="Arguments"/>, and — for a class that overrides
+/// <c>Message</c> — the <paramref name="KeptBaseMessage"/> stored in
+/// <c>#baseMessage</c> right after <c>super</c>.
 /// </summary>
 public sealed record TsBaseConstructorCall(
     IReadOnlyList<TsVariableDeclaration> Temporaries,
-    IReadOnlyList<TsExpression> Arguments
+    IReadOnlyList<TsExpression> Arguments,
+    TsExpression? KeptBaseMessage = null
 )
 {
-    /// <summary>The temporaries followed by the <c>super(...)</c> statement.</summary>
-    public IReadOnlyList<TsStatement> ToStatements() =>
-        [
-            .. Temporaries,
-            new TsExpressionStatement(new TsCallExpression(new TsIdentifier("super"), Arguments)),
-        ];
+    /// <summary>The temporaries, the <c>super(...)</c> statement and the
+    /// kept-base-message assignment, if any.</summary>
+    public IReadOnlyList<TsStatement> ToStatements()
+    {
+        var superCall = new TsExpressionStatement(
+            new TsCallExpression(new TsIdentifier("super"), Arguments)
+        );
+
+        if (KeptBaseMessage is null)
+            return [.. Temporaries, superCall];
+
+        var keepBaseMessage = new TsExpressionStatement(
+            new TsBinaryExpression(
+                IrToTsExceptionConstructionBridge.BaseMessageAccess(),
+                "=",
+                KeptBaseMessage
+            )
+        );
+
+        return [.. Temporaries, superCall, keepBaseMessage];
+    }
 }
