@@ -33,6 +33,7 @@ public static class IrClassExtractor
                 : null;
 
         var emittedInterfaces = SymbolHelper.EmittedInterfaces(type, target);
+
         var interfaces =
             emittedInterfaces.Count > 0
                 ? emittedInterfaces.Select(i => IrTypeRefMapper.Map(i, originResolver)).ToList()

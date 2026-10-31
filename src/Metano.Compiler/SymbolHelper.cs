@@ -259,6 +259,7 @@ public static class SymbolHelper
     )
     {
         var emitted = new List<INamedTypeSymbol>();
+
         var included = new HashSet<INamedTypeSymbol>(
             type.Interfaces.Where(iface => !HasIgnore(iface, target)),
             SymbolEqualityComparer.Default
