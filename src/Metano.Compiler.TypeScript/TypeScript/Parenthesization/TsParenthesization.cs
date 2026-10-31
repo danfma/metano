@@ -203,7 +203,7 @@ internal static class TsParenthesization
         operand switch
         {
             TsPropertyAccess access => access.Optional || EndsWithOptionalLink(access.Object),
-            TsElementAccess element => EndsWithOptionalLink(element.Object),
+            TsElementAccess element => element.Optional || EndsWithOptionalLink(element.Object),
             TsCallExpression call => call.Optional || EndsWithOptionalLink(call.Callee),
             TsTemplate template
                 when TsTemplateShape.TransparentSubstitution(template) is { } inner =>
@@ -220,7 +220,7 @@ internal static class TsParenthesization
         {
             TsCallExpression or TsLinqCall or TsTemplate => true,
             TsPropertyAccess access => access.Optional || ChainContainsCall(access.Object),
-            TsElementAccess element => ChainContainsCall(element.Object),
+            TsElementAccess element => element.Optional || ChainContainsCall(element.Object),
             _ => false,
         };
 

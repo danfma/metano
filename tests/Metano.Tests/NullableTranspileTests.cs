@@ -191,11 +191,7 @@ public class NullableTranspileTests
         await Assert.That(output).Contains("value?.substring(1).trim()");
         await Assert.That(output).Contains("value?.size");
         await Assert.That(output).Contains("value?.has(key)");
-        await Assert
-            .That(output)
-            .Contains(
-                "$__metanoOptionalReceiver == null ? undefined : $__metanoOptionalReceiver.length = 0"
-            );
+        await Assert.That(output).Contains("value == null ? null : value.length = 0");
     }
 
     [Test]

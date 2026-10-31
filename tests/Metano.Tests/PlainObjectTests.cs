@@ -257,12 +257,39 @@ public class PlainObjectTests
         );
 
         var output = result["service.ts"];
+        await Assert.That(output).Contains("item == null ? null : getTitle(item)");
+        await Assert.That(output).DoesNotContain("item?.getTitle");
+    }
+
+    [Test]
+    public async Task OptionalPlainObjectMethodCall_OnImpureReceiver_BindsItOnce()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            [Transpile, PlainObject]
+            public record TodoItem(string Title)
+            {
+                public string GetTitle() => Title;
+            }
+
+            [Transpile]
+            public class Service
+            {
+                public TodoItem? Find() => null;
+                public string? FirstTitle() => Find()?.GetTitle();
+            }
+            """
+        );
+
+        var output = result["service.ts"];
         await Assert
             .That(output)
             .Contains(
-                "$__metanoOptionalReceiver == null ? undefined : getTitle($__metanoOptionalReceiver)"
+                "(($__metanoOptionalReceiver) => $__metanoOptionalReceiver == null ? null : getTitle($__metanoOptionalReceiver))(this.find())"
             );
-        await Assert.That(output).DoesNotContain("item?.getTitle");
+        await Assert.That(output).DoesNotContain(": any");
+        await Assert.That(output).DoesNotContain("undefined");
     }
 
     [Test]

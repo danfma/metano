@@ -380,6 +380,11 @@ public static class IrToTsJsxComponentBridge
                 Start = slice.Start is null ? null : Rewrite(slice.Start, propNames, referenced),
                 End = slice.End is null ? null : Rewrite(slice.End, propNames, referenced),
             },
+            IrNullConditionalAccess nca => nca with
+            {
+                Receiver = Rewrite(nca.Receiver, propNames, referenced),
+                WhenNotNull = Rewrite(nca.WhenNotNull, propNames, referenced),
+            },
             IrCallExpression call => call with
             {
                 Target = Rewrite(call.Target, propNames, referenced),

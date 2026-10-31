@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -36,6 +37,20 @@ public static class IrToTsBclMapper
         if (!entry.HasJsMapping)
             return null;
         var receiver = access.Origin.IsStatic ? null : loweredTarget;
+
+        // A template can place work around the receiver (`$0.size`), which
+        // `?.` cannot express: guard the receiver instead.
+        if (optionalReceiver && receiver is not null && entry.HasTemplate)
+        {
+            return NullConditionalGuard.Guard(
+                access.Target,
+                receiver,
+                awaitsWhenNotNull: false,
+                guardedReceiver =>
+                    ApplyPropertyMapping(entry, guardedReceiver, optionalReceiver: false)
+            );
+        }
+
         return ApplyPropertyMapping(entry, receiver, optionalReceiver);
     }
 
@@ -98,12 +113,15 @@ public static class IrToTsBclMapper
         // and the arguments remain unevaluated when the receiver is null.
         if (
             optionalReceiver
+            && call.Target is IrOptionalChain chain
             && loweredReceiver is not null
             && (match.HasTemplate || match.HasWrapReceiver)
         )
         {
-            return GuardOptionalReceiver(
+            return NullConditionalGuard.Guard(
+                chain.Target,
                 loweredReceiver,
+                call.Arguments.Any(a => IrEvaluationTraits.ContainsAwait(a.Value)),
                 guardedReceiver =>
                 {
                     var mappedReceiver =
@@ -149,18 +167,10 @@ public static class IrToTsBclMapper
     )
     {
         if (mapping.HasTemplate)
-        {
-            var template = new TsTemplate(mapping.JsTemplate!, receiver, Arguments: [])
+            return new TsTemplate(mapping.JsTemplate!, receiver, Arguments: [])
             {
                 RuntimeImports = mapping.RuntimeImportsList,
             };
-            return optionalReceiver && receiver is not null
-                ? GuardOptionalReceiver(
-                    receiver,
-                    guardedReceiver => template with { Receiver = guardedReceiver }
-                )
-                : template;
-        }
 
         var name = mapping.JsName!;
         return receiver is not null
@@ -188,27 +198,5 @@ public static class IrToTsBclMapper
             ? (TsExpression)new TsPropertyAccess(receiver, name, optionalReceiver)
             : new TsIdentifier(name);
         return new TsCallExpression(callee, args);
-    }
-
-    internal static TsExpression GuardOptionalReceiver(
-        TsExpression receiver,
-        Func<TsExpression, TsExpression> mapWithGuardedReceiver
-    )
-    {
-        // `$` cannot appear in a C# local identifier, so this generated TS
-        // parameter cannot capture a source local referenced by a mapping.
-        const string receiverName = "$__metanoOptionalReceiver";
-        var guardedReceiver = new TsIdentifier(receiverName);
-        var condition = new TsBinaryExpression(guardedReceiver, "==", new TsLiteral("null"));
-        var guardedExpression = new TsConditionalExpression(
-            condition,
-            new TsIdentifier("undefined"),
-            mapWithGuardedReceiver(guardedReceiver)
-        );
-        var guard = new TsArrowFunction(
-            [new TsParameter(receiverName, new TsAnyType())],
-            [new TsReturnStatement(guardedExpression)]
-        );
-        return new TsCallExpression(new TsParenthesized(guard), [receiver]);
     }
 }
