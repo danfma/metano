@@ -18,8 +18,12 @@ public class NameAttributeConsistencyTests
         // Class declaration uses the overridden name
         await Assert.That(ts).Contains("export class Renamed");
         // Constructor uses the overridden name in equals/hashCode/with
-        await Assert.That(ts).Contains("other instanceof Renamed");
-        await Assert.That(ts).Contains("new Renamed(");
+        await Assert
+            .That(ts)
+            .Contains(
+                "other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this)"
+            );
+        await Assert.That(ts).Contains("copyRecordWith<Renamed>(this, overrides)");
         // Should NOT contain the original C# name in the declaration
         await Assert.That(ts).DoesNotContain("export class Original");
     }

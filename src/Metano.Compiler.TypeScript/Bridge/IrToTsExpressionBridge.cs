@@ -14,7 +14,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// kinds fall through to a <see cref="TsIdentifier"/> carrying a <c>/* TODO */</c>
 /// comment so the generated file remains syntactically valid.
 /// </summary>
-public static class IrToTsExpressionBridge
+public static partial class IrToTsExpressionBridge
 {
     /// <summary>
     /// Maps an IR expression to TS. When <paramref name="bclRegistry"/> is provided,
@@ -49,7 +49,7 @@ public static class IrToTsExpressionBridge
             IrBinaryExpression bin => MapBinary(bin, bclRegistry),
             IrUnaryExpression un when un.IsPrefix => new TsUnaryExpression(
                 PrefixOperatorToken(un.Operator),
-                Map(un.Operand, bclRegistry)
+                ParenthesizeUnaryOperand(Map(un.Operand, bclRegistry))
             ),
             IrUnaryExpression un => new TsPostfixUnaryExpression(
                 Map(un.Operand, bclRegistry),
@@ -151,6 +151,17 @@ public static class IrToTsExpressionBridge
     }
 
     /// <summary>
+    /// A prefix operator binds tighter than any binary or conditional
+    /// operator, and the IR drops source parentheses, so an operand that
+    /// lowered to one — e.g. <c>!(o is Square)</c> →
+    /// <c>!(o instanceof Square)</c> — is wrapped explicitly.
+    /// </summary>
+    private static TsExpression ParenthesizeUnaryOperand(TsExpression operand) =>
+        operand is TsBinaryExpression or TsConditionalExpression
+            ? new TsParenthesized(operand)
+            : operand;
+
+    /// <summary>
     /// JS doesn't auto-parenthesize lower-precedence sub-expressions, so the
     /// bridge wraps a binary operand whose own operator has lower precedence
     /// than the outer one — preserving the source-side grouping
@@ -198,21 +209,7 @@ public static class IrToTsExpressionBridge
         };
 
     private static bool IsRightAssociative(IrBinaryOp op) =>
-        op
-            is IrBinaryOp.Assign
-                or IrBinaryOp.AddAssign
-                or IrBinaryOp.SubtractAssign
-                or IrBinaryOp.MultiplyAssign
-                or IrBinaryOp.DivideAssign
-                or IrBinaryOp.ModuloAssign
-                or IrBinaryOp.BitwiseAndAssign
-                or IrBinaryOp.BitwiseOrAssign
-                or IrBinaryOp.BitwiseXorAssign
-                or IrBinaryOp.LeftShiftAssign
-                or IrBinaryOp.RightShiftAssign
-                or IrBinaryOp.UnsignedRightShiftAssign
-                or IrBinaryOp.NullCoalescingAssign
-                or IrBinaryOp.NullCoalescing;
+        op.IsAssignment() || op is IrBinaryOp.NullCoalescing;
 
     private static TsExpression MapElementAccess(
         IrElementAccess ea,
@@ -847,46 +844,6 @@ public static class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// Lowers <c>expr is pattern</c> to a boolean TS expression. Binding patterns
-    /// (type-with-designator, var) emit a TODO comment because expression-scoped
-    /// variable introductions need a higher-level rewrite than a single
-    /// expression can carry in TS. The common non-binding shapes — constant
-    /// comparisons and bare type tests — lower cleanly.
-    /// </summary>
-    private static TsExpression MapIsPattern(
-        IrIsPatternExpression node,
-        DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        var lowered = Map(node.Expression, bclRegistry);
-        switch (node.Pattern)
-        {
-            case IrConstantPattern constant:
-                return new TsBinaryExpression(
-                    lowered,
-                    BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
-                    Map(constant.Value, bclRegistry)
-                );
-            case IrTypePattern typePat when typePat.DesignatorName is null:
-                return BuildTypeTest(lowered, typePat.Type);
-            case IrDiscardPattern:
-                return new TsLiteral("true");
-            case IrPropertyPattern prop when prop.DesignatorName is null:
-                return BuildPropertyPatternTest(lowered, prop, bclRegistry);
-            case IrRelationalPattern:
-            case IrLogicalPattern:
-            case IrListPattern:
-                return BuildPatternTest(lowered, node.Pattern, bclRegistry);
-            case IrPositionalPattern pos when pos.DesignatorName is null:
-                return BuildPositionalPatternTest(lowered, pos, bclRegistry);
-            default:
-                return new TsIdentifier(
-                    $"/* TODO: unsupported is-pattern {node.Pattern.GetType().Name} */"
-                );
-        }
-    }
-
-    /// <summary>
     /// Lowers a C# <c>with</c> expression. Two shapes are possible:
     /// <list type="bullet">
     ///   <item>Regular records → <c>source.with({ x: expr, y: expr2 })</c>,
@@ -906,7 +863,7 @@ public static class IrToTsExpressionBridge
         var source = Map(w.Source, bclRegistry);
         var properties = w
             .Assignments.Select(a => new TsObjectProperty(
-                TypeScriptNaming.ToCamelCase(a.MemberName),
+                IrToTsNamingPolicy.ToDataMemberName(a.MemberName, a.EmittedName),
                 Map(a.Value, bclRegistry)
             ))
             .ToList();
@@ -927,11 +884,6 @@ public static class IrToTsExpressionBridge
         );
     }
 
-    private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
-        IrToTsTypeMapper.Map(targetType) is TsNamedType named
-            ? new TsBinaryExpression(value, "instanceof", new TsIdentifier(named.Name))
-            : new TsIdentifier("/* TODO: non-named type pattern */");
-
     /// <summary>
     /// Lowers <see cref="IrLetExpression"/> to an IIFE: the binding becomes
     /// the arrow's lone parameter and the value supplies the single
@@ -950,263 +902,6 @@ public static class IrToTsExpressionBridge
             [new TsReturnStatement(Map(let.Body, bclRegistry))]
         );
         return new TsCallExpression(new TsParenthesized(arrow), [Map(let.Value, bclRegistry)]);
-    }
-
-    /// <summary>
-    /// Lowers a C# <c>switch</c> expression. When the arm chain ends with a
-    /// bare discard (<c>_ =&gt; value</c>, no when-clause) and every earlier
-    /// arm has a pattern that can lower to a plain boolean test, we emit a
-    /// nested ternary chain — matching the legacy output byte-for-byte.
-    /// Non-exhaustive matches and patterns that need bindings fall back to
-    /// a self-invoking arrow function with an <c>if</c>-chain and a
-    /// trailing throw, mirroring C#'s non-exhaustive runtime failure.
-    /// </summary>
-    private static TsExpression MapSwitchExpression(
-        IrSwitchExpression sw,
-        DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        if (TryLowerSwitchAsTernary(sw, bclRegistry) is { } ternary)
-            return ternary;
-        return LowerSwitchAsIife(sw, bclRegistry);
-    }
-
-    private static TsExpression? TryLowerSwitchAsTernary(
-        IrSwitchExpression sw,
-        DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        if (sw.Arms.Count == 0)
-            return null;
-        var last = sw.Arms[^1];
-        if (last.Pattern is not IrDiscardPattern || last.WhenClause is not null)
-            return null;
-        for (var i = 0; i < sw.Arms.Count - 1; i++)
-        {
-            if (!CanLowerPatternAsBooleanTest(sw.Arms[i].Pattern))
-                return null;
-        }
-
-        var scrutinee = Map(sw.Scrutinee, bclRegistry);
-        TsExpression result = Map(last.Result, bclRegistry);
-        for (var i = sw.Arms.Count - 2; i >= 0; i--)
-        {
-            var arm = sw.Arms[i];
-            var test = BuildPatternTest(scrutinee, arm.Pattern, bclRegistry);
-            if (arm.WhenClause is not null)
-                test = new TsBinaryExpression(test, "&&", Map(arm.WhenClause, bclRegistry));
-            result = new TsConditionalExpression(test, Map(arm.Result, bclRegistry), result);
-        }
-        return result;
-    }
-
-    private static bool CanLowerPatternAsBooleanTest(IrPattern pattern) =>
-        pattern switch
-        {
-            IrConstantPattern or IrDiscardPattern or IrRelationalPattern => true,
-            IrTypePattern t => t.DesignatorName is null,
-            IrPropertyPattern p => p.DesignatorName is null
-                && p.Subpatterns.All(s => CanLowerPatternAsBooleanTest(s.Pattern)),
-            IrLogicalPattern { Operator: IrLogicalOp.Not } n => CanLowerPatternAsBooleanTest(
-                n.Left
-            ),
-            IrLogicalPattern l => CanLowerPatternAsBooleanTest(l.Left)
-                && l.Right is not null
-                && CanLowerPatternAsBooleanTest(l.Right),
-            _ => false,
-        };
-
-    private static TsExpression LowerSwitchAsIife(
-        IrSwitchExpression sw,
-        DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        const string scrutineeName = "$s";
-        var body = new List<TsStatement>();
-        foreach (var arm in sw.Arms)
-        {
-            var patternTest = BuildPatternTest(
-                new TsIdentifier(scrutineeName),
-                arm.Pattern,
-                bclRegistry
-            );
-            var guard = arm.WhenClause is null
-                ? patternTest
-                : new TsBinaryExpression(patternTest, "&&", Map(arm.WhenClause, bclRegistry));
-            body.Add(
-                new TsIfStatement(guard, [new TsReturnStatement(Map(arm.Result, bclRegistry))])
-            );
-        }
-        body.Add(
-            new TsThrowStatement(
-                new TsNewExpression(
-                    new TsIdentifier("Error"),
-                    [new TsStringLiteral("Non-exhaustive switch expression")]
-                )
-            )
-        );
-
-        var arrow = new TsArrowFunction([new TsParameter(scrutineeName, new TsAnyType())], body);
-        return new TsCallExpression(new TsParenthesized(arrow), [Map(sw.Scrutinee, bclRegistry)]);
-    }
-
-    /// <summary>
-    /// Lowers a pattern to a boolean test against <paramref name="value"/>.
-    /// Mirrors the shape in <see cref="MapIsPattern"/> without the binding
-    /// complication — switch-expression arms can't introduce bindings visible
-    /// outside the arm today (property/var bindings are TODO).
-    /// </summary>
-    private static TsExpression BuildPatternTest(
-        TsExpression value,
-        IrPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
-    ) =>
-        pattern switch
-        {
-            IrConstantPattern constant => new TsBinaryExpression(
-                value,
-                BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
-                Map(constant.Value, bclRegistry)
-            ),
-            IrTypePattern typePat => BuildTypeTest(value, typePat.Type),
-            IrDiscardPattern => new TsLiteral("true"),
-            IrVarPattern => new TsLiteral("true"),
-            IrPropertyPattern prop => BuildPropertyPatternTest(value, prop, bclRegistry),
-            IrRelationalPattern rel => new TsBinaryExpression(
-                value,
-                RelationalOpToken(rel.Operator),
-                Map(rel.Value, bclRegistry)
-            ),
-            IrLogicalPattern { Operator: IrLogicalOp.Not } notPat => new TsUnaryExpression(
-                "!",
-                new TsParenthesized(BuildPatternTest(value, notPat.Left, bclRegistry))
-            ),
-            IrLogicalPattern log => new TsBinaryExpression(
-                BuildPatternTest(value, log.Left, bclRegistry),
-                log.Operator is IrLogicalOp.And ? "&&" : "||",
-                BuildPatternTest(value, log.Right!, bclRegistry)
-            ),
-            IrListPattern list => BuildListPatternTest(value, list, bclRegistry),
-            IrPositionalPattern pos => BuildPositionalPatternTest(value, pos, bclRegistry),
-            _ => new TsIdentifier($"/* TODO: unsupported pattern {pattern.GetType().Name} */"),
-        };
-
-    /// <summary>
-    /// Lowers <c>[p0, p1, …]</c> to a length-gated conjunction of per-index
-    /// tests. When the pattern carries a <c>..</c> slice we drop the exact
-    /// length check (<c>&gt;=</c> instead of <c>===</c>) and reverse-index
-    /// the tail sub-patterns with <c>arr.length - k</c>. Slice sub-pattern
-    /// bindings (<c>.. var tail</c>) aren't modeled yet — the IR extractor
-    /// drops them, so the tail is treated as `always match`.
-    /// </summary>
-    private static TsExpression BuildListPatternTest(
-        TsExpression value,
-        IrListPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        var lengthAccess = new TsPropertyAccess(value, "length");
-        TsExpression lengthCheck;
-        if (pattern.SliceIndex is null)
-            lengthCheck = new TsBinaryExpression(
-                lengthAccess,
-                "===",
-                new TsLiteral(pattern.Elements.Count.ToString())
-            );
-        else
-            lengthCheck = new TsBinaryExpression(
-                lengthAccess,
-                ">=",
-                new TsLiteral(pattern.Elements.Count.ToString())
-            );
-
-        var result = lengthCheck;
-        for (var i = 0; i < pattern.Elements.Count; i++)
-        {
-            TsExpression indexExpr;
-            if (pattern.SliceIndex is not null && i >= pattern.SliceIndex)
-            {
-                // Tail element `k` positions past the slice — indexed from
-                // the end of the array so `[a, .., b]` tests `arr[arr.length - 1]`.
-                var tailOffset = pattern.Elements.Count - i;
-                indexExpr = new TsElementAccess(
-                    value,
-                    new TsBinaryExpression(lengthAccess, "-", new TsLiteral(tailOffset.ToString()))
-                );
-            }
-            else
-            {
-                indexExpr = new TsElementAccess(value, new TsLiteral(i.ToString()));
-            }
-            var subTest = BuildPatternTest(indexExpr, pattern.Elements[i], bclRegistry);
-            result = new TsBinaryExpression(result, "&&", subTest);
-        }
-        return result;
-    }
-
-    /// <summary>
-    /// Lowers <c>(p0, p1, …)</c> / <c>Point(p0, p1)</c>. For the tuple /
-    /// deconstruction shape we don't yet have a Deconstruct call modeled in
-    /// the IR, so we approximate with indexed access on the value
-    /// (<c>value[0]</c>, <c>value[1]</c>, …) — which lines up with how TS
-    /// tuples are represented in this pipeline. A type filter layers an
-    /// <c>instanceof</c> guard in front.
-    /// </summary>
-    private static TsExpression BuildPositionalPatternTest(
-        TsExpression value,
-        IrPositionalPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        TsExpression? result = pattern.Type is not null ? BuildTypeTest(value, pattern.Type) : null;
-        for (var i = 0; i < pattern.Elements.Count; i++)
-        {
-            var indexExpr = new TsElementAccess(value, new TsLiteral(i.ToString()));
-            var subTest = BuildPatternTest(indexExpr, pattern.Elements[i], bclRegistry);
-            result = result is null ? subTest : new TsBinaryExpression(result, "&&", subTest);
-        }
-        return result ?? new TsLiteral("true");
-    }
-
-    private static string RelationalOpToken(IrRelationalOp op) =>
-        op switch
-        {
-            IrRelationalOp.LessThan => "<",
-            IrRelationalOp.LessThanOrEqual => "<=",
-            IrRelationalOp.GreaterThan => ">",
-            IrRelationalOp.GreaterThanOrEqual => ">=",
-            _ => "<",
-        };
-
-    /// <summary>
-    /// Lowers a property pattern to a conjunction of sub-tests:
-    /// <list type="bullet">
-    ///   <item>When the pattern has a <see cref="IrPropertyPattern.Type"/> filter,
-    ///   start with <c>value instanceof T</c>.</item>
-    ///   <item>For each <c>{ MemberName: pattern }</c> entry, emit the inner
-    ///   pattern test against <c>value.memberName</c> (camelCased to match the
-    ///   TS backend's naming policy).</item>
-    /// </list>
-    /// An empty property-pattern with no type filter degenerates to <c>true</c>,
-    /// matching C#'s semantics for <c>is { }</c>.
-    /// </summary>
-    private static TsExpression BuildPropertyPatternTest(
-        TsExpression value,
-        IrPropertyPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        TsExpression? result = pattern.Type is not null ? BuildTypeTest(value, pattern.Type) : null;
-        foreach (var sub in pattern.Subpatterns)
-        {
-            var memberAccess = new TsPropertyAccess(
-                value,
-                TypeScriptNaming.ToCamelCaseMember(sub.MemberName)
-            );
-            var subTest = BuildPatternTest(memberAccess, sub.Pattern, bclRegistry);
-            result = result is null ? subTest : new TsBinaryExpression(result, "&&", subTest);
-        }
-        return result ?? new TsLiteral("true");
     }
 
     private static TsExpression MapStringInterpolation(

@@ -1,4 +1,4 @@
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Coord {
   constructor(readonly x: number, readonly y: number) { }
@@ -8,7 +8,7 @@ export class Coord {
   }
 
   equals(other: any): boolean {
-    return other instanceof Coord && this.x === other.x && this.y === other.y;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x && this.y === other.y;
   }
 
   hashCode(): number {
@@ -20,6 +20,6 @@ export class Coord {
   }
 
   with(overrides?: Partial<Coord>): Coord {
-    return new Coord(overrides?.x ?? this.x, overrides?.y ?? this.y);
+    return copyRecordWith<Coord>(this, overrides);
   }
 }

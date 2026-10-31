@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import type { Decimal } from "decimal.js";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import type { Comment } from "./comment";
@@ -27,7 +27,8 @@ export class IssueSnapshot {
 
   equals(other: any): boolean {
     return (
-      other instanceof IssueSnapshot &&
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.id === other.id &&
       this.title === other.title &&
       this.description === other.description &&
@@ -62,19 +63,6 @@ export class IssueSnapshot {
   }
 
   with(overrides?: Partial<IssueSnapshot>): IssueSnapshot {
-    return new IssueSnapshot(
-      overrides?.id ?? this.id,
-      overrides?.title ?? this.title,
-      overrides?.description ?? this.description,
-      overrides?.type ?? this.type,
-      overrides?.priority ?? this.priority,
-      overrides?.status ?? this.status,
-      overrides?.assigneeId ?? this.assigneeId,
-      overrides?.sprintKey ?? this.sprintKey,
-      overrides?.createdAt ?? this.createdAt,
-      overrides?.updatedAt ?? this.updatedAt,
-      overrides?.estimatedHours ?? this.estimatedHours,
-      overrides?.comments ?? this.comments,
-    );
+    return copyRecordWith<IssueSnapshot>(this, overrides);
   }
 }

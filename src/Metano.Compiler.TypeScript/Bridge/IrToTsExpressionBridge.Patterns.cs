@@ -1,0 +1,439 @@
+using Metano.Compiler.IR;
+using Metano.Compiler.Mappings;
+using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
+
+namespace Metano.Compiler.TypeScript.Bridge;
+
+/// <summary>
+/// Pattern lowering: the boolean test a pattern performs against a value
+/// (<c>is</c> expressions and switch-expression arms), the access path each
+/// sub-pattern inspects, and the designators a matched pattern binds.
+/// </summary>
+public static partial class IrToTsExpressionBridge
+{
+    /// <summary>
+    /// Lowers <c>expr is pattern</c> to a boolean TS expression. Binding patterns
+    /// (type-with-designator, var) emit a TODO comment because expression-scoped
+    /// variable introductions need a higher-level rewrite than a single
+    /// expression can carry in TS. The common non-binding shapes — constant
+    /// comparisons and bare type tests — lower cleanly.
+    /// </summary>
+    private static TsExpression MapIsPattern(
+        IrIsPatternExpression node,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var lowered = ParenthesizePatternSubject(Map(node.Expression, bclRegistry));
+
+        switch (node.Pattern)
+        {
+            case IrConstantPattern constant:
+                return new TsBinaryExpression(
+                    lowered,
+                    BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
+                    Map(constant.Value, bclRegistry)
+                );
+            case IrTypePattern typePat when typePat.DesignatorName is null:
+                return BuildTypeTest(lowered, typePat.Type);
+            case IrDiscardPattern:
+                return new TsLiteral("true");
+            case IrPropertyPattern prop when prop.DesignatorName is null:
+                return BuildPropertyPatternTest(lowered, prop, bclRegistry);
+            case IrRelationalPattern:
+            case IrLogicalPattern:
+            case IrListPattern:
+                return BuildPatternTest(lowered, node.Pattern, bclRegistry);
+            case IrPositionalPattern pos when pos.DesignatorName is null:
+                return BuildPositionalPatternTest(lowered, pos, bclRegistry);
+            default:
+                return new TsIdentifier(
+                    $"/* TODO: unsupported is-pattern {node.Pattern.GetType().Name} */"
+                );
+        }
+    }
+
+    /// <summary>
+    /// Lowers a pattern to a boolean test against <paramref name="value"/>.
+    /// The test never binds; <see cref="BuildPatternBindings"/> declares the
+    /// designators separately inside the matched branch.
+    /// </summary>
+    private static TsExpression BuildPatternTest(
+        TsExpression value,
+        IrPattern pattern,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        pattern switch
+        {
+            IrConstantPattern constant => new TsBinaryExpression(
+                value,
+                BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
+                Map(constant.Value, bclRegistry)
+            ),
+            IrTypePattern typePat => BuildTypeTest(value, typePat.Type),
+            IrDiscardPattern => new TsLiteral("true"),
+            IrVarPattern => new TsLiteral("true"),
+            IrPropertyPattern prop => BuildPropertyPatternTest(value, prop, bclRegistry),
+            IrRelationalPattern rel => new TsBinaryExpression(
+                value,
+                RelationalOpToken(rel.Operator),
+                Map(rel.Value, bclRegistry)
+            ),
+            IrLogicalPattern { Operator: IrLogicalOp.Not } notPat => new TsUnaryExpression(
+                "!",
+                new TsParenthesized(BuildPatternTest(value, notPat.Left, bclRegistry))
+            ),
+            IrLogicalPattern log => new TsBinaryExpression(
+                BuildPatternTest(value, log.Left, bclRegistry),
+                log.Operator is IrLogicalOp.And ? "&&" : "||",
+                BuildPatternTest(value, log.Right!, bclRegistry)
+            ),
+            IrListPattern list => BuildListPatternTest(value, list, bclRegistry),
+            IrPositionalPattern pos => BuildPositionalPatternTest(value, pos, bclRegistry),
+            _ => new TsIdentifier($"/* TODO: unsupported pattern {pattern.GetType().Name} */"),
+        };
+
+    /// <summary>
+    /// <see cref="BuildPatternTest"/>, or <c>null</c> for a pattern that
+    /// always matches (<c>_</c>, <c>var x</c>) and so needs no test.
+    /// </summary>
+    private static TsExpression? BuildPatternTestOrNull(
+        TsExpression value,
+        IrPattern pattern,
+        DeclarativeMappingRegistry? bclRegistry
+    ) => IsAlwaysMatchingPattern(pattern) ? null : BuildPatternTest(value, pattern, bclRegistry);
+
+    private static bool IsAlwaysMatchingPattern(IrPattern pattern) =>
+        pattern is IrDiscardPattern or IrVarPattern;
+
+    /// <summary>
+    /// Joins a pattern test with a <c>when</c> guard as <c>test &amp;&amp; guard</c>.
+    /// The printer does not parenthesize binary operands, so each side goes
+    /// through <see cref="ParenthesizeAsAndOperand"/>. Without a test the
+    /// guard alone is the condition.
+    /// </summary>
+    private static TsExpression JoinWithGuard(TsExpression? test, TsExpression guard) =>
+        test is null
+            ? guard
+            : new TsBinaryExpression(
+                ParenthesizeAsAndOperand(test),
+                "&&",
+                ParenthesizeAsAndOperand(guard)
+            );
+
+    /// <summary>
+    /// Wraps an operand of <c>&amp;&amp;</c> whose own operator binds looser
+    /// (an <c>||</c> / <c>??</c> chain or a conditional), so joining it does
+    /// not regroup it.
+    /// </summary>
+    private static TsExpression ParenthesizeAsAndOperand(TsExpression expression) =>
+        expression is TsBinaryExpression { Operator: "||" or "??" } or TsConditionalExpression
+            ? new TsParenthesized(expression)
+            : expression;
+
+    /// <summary>
+    /// Wraps a pattern subject that would regroup as the left operand of the
+    /// test's own operator (<c>===</c>, <c>instanceof</c>, <c>&lt;</c>, …):
+    /// <c>(x ?? 0) is 0</c> must test <c>(x ?? 0) === 0</c>, not
+    /// <c>x ?? 0 === 0</c>.
+    /// </summary>
+    private static TsExpression ParenthesizePatternSubject(TsExpression subject) =>
+        subject
+            is TsBinaryExpression
+                or TsConditionalExpression
+                or TsArrowFunction
+                or TsCastExpression
+            ? new TsParenthesized(subject)
+            : subject;
+
+    /// <summary>
+    /// The runtime test a type pattern performs. An enum has no class value
+    /// to test with <c>instanceof</c> — it lowers to a number (numeric enum)
+    /// or string union (<c>[StringEnum]</c>) — so it tests the primitive kind;
+    /// other named types test <c>instanceof</c>.
+    /// </summary>
+    private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
+        targetType switch
+        {
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.NumericEnum } => TypeofTest(
+                value,
+                "number"
+            ),
+            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.StringEnum } => TypeofTest(
+                value,
+                "string"
+            ),
+            _ => IrToTsTypeMapper.Map(targetType) is TsNamedType named
+                ? new TsBinaryExpression(value, "instanceof", new TsIdentifier(named.Name))
+                : new TsIdentifier("/* TODO: non-named type pattern */"),
+        };
+
+    private static TsExpression TypeofTest(TsExpression value, string kind) =>
+        new TsBinaryExpression(
+            new TsUnaryExpression("typeof ", value),
+            "===",
+            new TsStringLiteral(kind)
+        );
+
+    /// <summary>
+    /// Lowers <c>[p0, p1, …]</c> to a length-gated conjunction of per-index
+    /// tests. When the pattern carries a <c>..</c> slice we drop the exact
+    /// length check (<c>&gt;=</c> instead of <c>===</c>) and reverse-index
+    /// the tail sub-patterns with <c>arr.length - k</c>. Slice sub-pattern
+    /// bindings (<c>.. var tail</c>) aren't modeled yet — the IR extractor
+    /// drops them, so the tail is treated as `always match`. Always-matching
+    /// elements add no test.
+    /// </summary>
+    private static TsExpression BuildListPatternTest(
+        TsExpression value,
+        IrListPattern pattern,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var lengthCheck = new TsBinaryExpression(
+            new TsPropertyAccess(value, "length"),
+            pattern.SliceIndex is null ? "===" : ">=",
+            new TsLiteral(pattern.Elements.Count.ToString())
+        );
+
+        var elementTests = pattern.Elements.Select(
+            (element, i) =>
+                BuildPatternTestOrNull(ListElementAccess(value, pattern, i), element, bclRegistry)
+        );
+
+        return JoinWithAnd([lengthCheck, .. elementTests.OfType<TsExpression>()]);
+    }
+
+    /// <summary>
+    /// The element a list sub-pattern inspects: <c>arr[i]</c> before the
+    /// slice, and — for the tail element <c>k</c> positions past a
+    /// <c>..</c> slice — <c>arr[arr.length - k]</c>, so <c>[a, .., b]</c>
+    /// tests <c>arr[arr.length - 1]</c>.
+    /// </summary>
+    private static TsExpression ListElementAccess(
+        TsExpression value,
+        IrListPattern pattern,
+        int index
+    )
+    {
+        if (pattern.SliceIndex is null || index < pattern.SliceIndex)
+            return new TsElementAccess(value, new TsLiteral(index.ToString()));
+
+        var tailOffset = pattern.Elements.Count - index;
+        var lengthAccess = new TsPropertyAccess(value, "length");
+
+        return new TsElementAccess(
+            value,
+            new TsBinaryExpression(lengthAccess, "-", new TsLiteral(tailOffset.ToString()))
+        );
+    }
+
+    /// <summary>
+    /// Lowers <c>(p0, p1, …)</c> / <c>Point(p0, p1)</c>: an optional
+    /// <c>instanceof</c> type filter followed by one test per element, read
+    /// through <see cref="PositionalElementAccess"/>. Always-matching
+    /// elements add no test. Without a type filter, an input whose type
+    /// admits <c>null</c> (a record, a nullable tuple or <c>KeyValuePair</c>)
+    /// is tested for <c>null</c> first, as C# does.
+    /// </summary>
+    private static TsExpression BuildPositionalPatternTest(
+        TsExpression value,
+        IrPositionalPattern pattern,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var typeTest = PositionalTypeTest(value, pattern);
+
+        var elementTests = pattern.Elements.Select(
+            (element, i) =>
+                BuildPatternTestOrNull(
+                    PositionalElementAccess(value, pattern, i),
+                    element,
+                    bclRegistry
+                )
+        );
+
+        var tests = new[] { typeTest }.Concat(elementTests).OfType<TsExpression>().ToList();
+
+        return tests.Count == 0 ? new TsLiteral("true") : JoinWithAnd(tests);
+    }
+
+    private static TsExpression? PositionalTypeTest(TsExpression value, IrPositionalPattern pattern)
+    {
+        if (pattern.Type is not null)
+            return BuildTypeTest(value, pattern.Type);
+
+        return pattern.InputMayBeNull ? NonNullTest(value) : null;
+    }
+
+    /// <summary>
+    /// The value a positional element reads. A value that lowers to an array
+    /// tuple (tuples, <c>KeyValuePair</c>, <c>[JsTuple]</c> records) is read by
+    /// position (<c>value[i]</c>); a record's synthesized <c>Deconstruct</c>
+    /// element reads the positional property (<c>value.radius</c>). An element
+    /// the extractor could not resolve (already reported as MS0001) reads <c>undefined</c> with a marker
+    /// comment, so the output still parses.
+    /// </summary>
+    private static TsExpression PositionalElementAccess(
+        TsExpression value,
+        IrPositionalPattern pattern,
+        int index
+    ) =>
+        pattern.ElementMembers switch
+        {
+            null => new TsElementAccess(value, new TsLiteral(index.ToString())),
+            var members when members[index] is { } member => new TsPropertyAccess(
+                value,
+                IrToTsNamingPolicy.ToDataMemberName(member.Name, member.EmittedName)
+            ),
+            _ => new TsIdentifier(
+                $"undefined /* TODO: positional element {index} has no member to read */"
+            ),
+        };
+
+    /// <summary>
+    /// Lowers a property pattern to a conjunction of sub-tests:
+    /// <list type="bullet">
+    ///   <item>When the pattern has a <see cref="IrPropertyPattern.Type"/> filter,
+    ///   start with <c>value instanceof T</c>.</item>
+    ///   <item>For each <c>{ MemberName: pattern }</c> entry, emit the inner
+    ///   pattern test against <c>value.memberName</c> (camelCased to match the
+    ///   TS backend's naming policy); always-matching entries add no test.</item>
+    /// </list>
+    /// Without a type filter the pattern still requires a non-null value, as
+    /// C# does (<c>is { }</c> is a null check), so the member reads never
+    /// dereference <c>null</c>.
+    /// </summary>
+    private static TsExpression BuildPropertyPatternTest(
+        TsExpression value,
+        IrPropertyPattern pattern,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var typeTest = pattern.Type is null
+            ? NonNullTest(value)
+            : BuildTypeTest(value, pattern.Type);
+
+        var memberTests = pattern.Subpatterns.Select(sub =>
+            BuildPatternTestOrNull(
+                PropertyPatternMemberAccess(value, sub),
+                sub.Pattern,
+                bclRegistry
+            )
+        );
+
+        return JoinWithAnd([typeTest, .. memberTests.OfType<TsExpression>()]);
+    }
+
+    private static TsExpression NonNullTest(TsExpression value) =>
+        new TsBinaryExpression(value, "!=", new TsLiteral("null"));
+
+    private static TsExpression JoinWithAnd(IReadOnlyList<TsExpression> tests) =>
+        tests
+            .Skip(1)
+            .Aggregate(
+                tests[0],
+                (accumulated, test) => new TsBinaryExpression(accumulated, "&&", test)
+            );
+
+    private static TsExpression PropertyPatternMemberAccess(
+        TsExpression value,
+        IrPropertySubpattern sub
+    ) =>
+        new TsPropertyAccess(
+            value,
+            IrToTsNamingPolicy.ToDataMemberName(sub.MemberName, sub.EmittedName)
+        );
+
+    private static string RelationalOpToken(IrRelationalOp op) =>
+        op switch
+        {
+            IrRelationalOp.LessThan => "<",
+            IrRelationalOp.LessThanOrEqual => "<=",
+            IrRelationalOp.GreaterThan => ">",
+            IrRelationalOp.GreaterThanOrEqual => ">=",
+            _ => "<",
+        };
+
+    /// <summary>
+    /// One declaration per designator the pattern introduces, reading the
+    /// access path the pattern test inspected (<c>$s</c>, <c>$s.member</c>,
+    /// <c>$s[i]</c>). Inside the matched <c>if</c> TypeScript narrows those
+    /// paths by the <c>instanceof</c> test, so a type-pattern designator gets
+    /// the tested type. A designator the arm reassigns
+    /// (<paramref name="reassigned"/>) is a <c>let</c>, every other one a
+    /// <c>const</c>.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> BuildPatternBindings(
+        TsExpression value,
+        IrPattern pattern,
+        IReadOnlySet<string> reassigned
+    ) =>
+        EnumeratePatternBindings(value, pattern)
+            .Select(binding =>
+                (TsStatement)
+                    new TsVariableDeclaration(
+                        binding.Name,
+                        binding.Value,
+                        Const: !reassigned.Contains(binding.Name)
+                    )
+            )
+            .ToList();
+
+    /// <summary>
+    /// Whether the pattern binds any designator. Enumerates
+    /// <see cref="EnumeratePatternBindings"/> lazily, so it stops at the
+    /// first one.
+    /// </summary>
+    private static bool HasDesignators(IrPattern pattern) =>
+        EnumeratePatternBindings(new TsIdentifier(ScrutineeParameterName), pattern).Any();
+
+    /// <summary>
+    /// Every designator the pattern introduces with the value it reads, in
+    /// source order. Designators under <c>or</c> / <c>not</c> are never
+    /// definitely assigned in C#, so they are not bound.
+    /// </summary>
+    private static IEnumerable<PatternBinding> EnumeratePatternBindings(
+        TsExpression value,
+        IrPattern pattern
+    ) =>
+        pattern switch
+        {
+            IrTypePattern { DesignatorName: { } name } => [new PatternBinding(name, value)],
+            IrVarPattern varPattern => [new PatternBinding(varPattern.Name, value)],
+            IrPropertyPattern property => DesignatorBinding(property.DesignatorName, value)
+                .Concat(
+                    property.Subpatterns.SelectMany(sub =>
+                        EnumeratePatternBindings(
+                            PropertyPatternMemberAccess(value, sub),
+                            sub.Pattern
+                        )
+                    )
+                ),
+            IrPositionalPattern positional => DesignatorBinding(positional.DesignatorName, value)
+                .Concat(
+                    positional.Elements.SelectMany(
+                        (element, i) =>
+                            EnumeratePatternBindings(
+                                PositionalElementAccess(value, positional, i),
+                                element
+                            )
+                    )
+                ),
+            IrListPattern list => list.Elements.SelectMany(
+                (element, i) => EnumeratePatternBindings(ListElementAccess(value, list, i), element)
+            ),
+            IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
+                EnumeratePatternBindings(value, and.Left)
+                    .Concat(EnumeratePatternBindings(value, right)),
+            _ => [],
+        };
+
+    private static IEnumerable<PatternBinding> DesignatorBinding(
+        string? designatorName,
+        TsExpression value
+    ) => designatorName is null ? [] : [new PatternBinding(designatorName, value)];
+
+    /// <summary>A designator a pattern binds and the value it reads.</summary>
+    private sealed record PatternBinding(string Name, TsExpression Value);
+}

@@ -137,14 +137,20 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// producer routes through this single locked entry-point so the
     /// per-group parallel transform loop and any future parallel-emit
     /// PR cannot corrupt the list. Open
-    /// <see cref="Metano.Compiler.Extraction.QueryableExtractionDiagnostics"/>
+    /// <see cref="Metano.Compiler.Extraction.ExtractionDiagnostics"/>
     /// against this method instead of <c>_diagnostics.Add</c> so the
-    /// walker's MS0024 reports share the same lock.
+    /// walker's MS0024 reports share the same lock. The same IR is
+    /// extracted more than once per type (runtime-requirement scan, then
+    /// emission), so an identical diagnostic at the same location is kept
+    /// once.
     /// </summary>
     internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
     {
         lock (_diagnosticsLock)
-            _diagnostics.Add(diagnostic);
+        {
+            if (!_diagnostics.Contains(diagnostic))
+                _diagnostics.Add(diagnostic);
+        }
     }
 
     /// <summary>
@@ -207,7 +213,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // parallel per-group transform share the same lock the
         // rest of the transformer uses — bare-list binding would
         // mean two distinct monitors over one non-thread-safe list.
-        using var queryableDiagnosticSink = QueryableExtractionDiagnostics.Open(ReportDiagnostic);
+        using var extractionDiagnosticSink = ExtractionDiagnostics.Open(ReportDiagnostic);
 
         _currentAssembly = compilation.Assembly;
 
@@ -859,6 +865,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsIfStatement ifStmt => ContainsJsxInExpression(ifStmt.Condition)
                 || ContainsJsxInStatements(ifStmt.Then)
                 || (ifStmt.Else is { } @else && ContainsJsxInStatements(@else)),
+            TsBlockStatement block => ContainsJsxInStatements(block.Statements),
             TsSwitchStatement switchStmt => ContainsJsxInExpression(switchStmt.Discriminant)
                 || switchStmt.Cases.Any(c =>
                     (c.Test is { } test && ContainsJsxInExpression(test))
@@ -2057,10 +2064,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     {
         "Enumerable",
         "Grouping",
-        "HashCode",
+        IrRuntimeRequirementToTsImport.ImportedNameOf("HashCode"),
         "HashSet",
         "UUID",
         "bindReceiver",
+        IrRuntimeRequirementToTsImport.ImportedNameOf("RecordCopy"),
         "delegateAdd",
         "delegateRemove",
     };

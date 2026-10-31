@@ -443,7 +443,15 @@ public sealed record IrWithExpression(
 /// A single <c>MemberName = value</c> entry inside an
 /// <see cref="IrWithExpression"/>.
 /// </summary>
-public sealed record IrWithAssignment(string MemberName, IrExpression Value);
+/// <param name="MemberName">The C# member name.</param>
+/// <param name="Value">The new value.</param>
+/// <param name="EmittedName">Target-resolved <c>[Name]</c> override of the
+/// member, or <c>null</c> to apply the backend's naming policy.</param>
+public sealed record IrWithAssignment(
+    string MemberName,
+    IrExpression Value,
+    string? EmittedName = null
+);
 
 // -- Throw --
 

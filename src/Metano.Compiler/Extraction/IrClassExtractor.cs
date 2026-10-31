@@ -85,7 +85,8 @@ public static class IrClassExtractor
             Constructor: constructor,
             NestedTypes: null,
             TypeParameters: typeParameters,
-            Attributes: IrAttributeExtractor.Extract(type)
+            Attributes: IrAttributeExtractor.Extract(type),
+            EqualityMembers: IrRecordEqualityMemberExtractor.Extract(type, originResolver, target)
         );
     }
 

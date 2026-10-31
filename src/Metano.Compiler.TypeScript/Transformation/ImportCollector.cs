@@ -42,7 +42,8 @@ public sealed class ImportCollector(
     /// expressions (<c>typeof</c>), and runtime helpers that the
     /// codegen wires in through a dedicated path
     /// (<c>delegateAdd</c>/<c>delegateRemove</c>,
-    /// <c>getUnionGuard</c>/<c>registerUnionGuard</c>, <c>HashCode</c>).
+    /// <c>getUnionGuard</c>/<c>registerUnionGuard</c>, <c>HashCode</c>,
+    /// <c>copyRecordWith</c>).
     /// Hoisted out of the original 28-arm pattern match to drop the
     /// scrolling cost when adding a new bypass.
     /// </summary>
@@ -55,7 +56,8 @@ public sealed class ImportCollector(
         "null",
         "Partial",
         "Error",
-        "HashCode",
+        IrRuntimeRequirementToTsImport.ImportedNameOf("HashCode"),
+        IrRuntimeRequirementToTsImport.ImportedNameOf("RecordCopy"),
         "Array",
         "v",
         "value",
@@ -932,6 +934,21 @@ public sealed class ImportCollector(
                 if (ifStmt.Else is not null)
                     CollectFromStatements(ifStmt.Else, sink);
                 break;
+            case TsBlockStatement block:
+                CollectFromStatements(block.Statements, sink);
+                break;
+            case TsSwitchStatement switchStmt:
+                CollectFromExpression(switchStmt.Discriminant, sink);
+
+                foreach (var switchCase in switchStmt.Cases)
+                {
+                    if (switchCase.Test is not null)
+                        CollectFromExpression(switchCase.Test, sink);
+
+                    CollectFromStatements(switchCase.Body, sink);
+                }
+
+                break;
             case TsVariableDeclaration varDecl:
                 CollectFromExpression(varDecl.Initializer, sink);
                 break;
@@ -1092,6 +1109,12 @@ public sealed class ImportCollector(
                 break;
             case TsParenthesized paren:
                 CollectFromExpression(paren.Expression, sink);
+                break;
+            case TsUnaryExpression unary:
+                CollectFromExpression(unary.Operand, sink);
+                break;
+            case TsPostfixUnaryExpression postfix:
+                CollectFromExpression(postfix.Operand, sink);
                 break;
             case TsSpreadExpression spread:
                 CollectFromExpression(spread.Expression, sink);

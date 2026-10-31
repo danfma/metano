@@ -468,6 +468,16 @@ public class IrExpressionExtractionTests
         await Assert.That(sw.Cases.Last().Labels).IsEmpty();
     }
 
+    [Test]
+    public async Task NameOf_ExtractsAsStringLiteral()
+    {
+        var ir = ExtractFromMethod("string Name(int value) => nameof(value);");
+        var literal = (GetAt<IrReturnStatement>(ir, 0).Value as IrLiteral)!;
+
+        await Assert.That(literal.Kind).IsEqualTo(IrLiteralKind.String);
+        await Assert.That(literal.Value).IsEqualTo("value");
+    }
+
     // -- helpers --
 
     private static IReadOnlyList<IrStatement> ExtractFromMethod(

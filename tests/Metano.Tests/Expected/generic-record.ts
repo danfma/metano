@@ -1,10 +1,10 @@
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Result<T> {
   constructor(readonly value: T, readonly success: boolean) { }
 
   equals(other: any): boolean {
-    return other instanceof Result && this.value === other.value && this.success === other.success;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.value === other.value && this.success === other.success;
   }
 
   hashCode(): number {
@@ -16,6 +16,6 @@ export class Result<T> {
   }
 
   with(overrides?: Partial<Result<T>>): Result<T> {
-    return new Result(overrides?.value ?? this.value, overrides?.success ?? this.success);
+    return copyRecordWith<Result<T>>(this, overrides);
   }
 }

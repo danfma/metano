@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class OperationResult<T> {
   constructor(
@@ -23,7 +23,8 @@ export class OperationResult<T> {
 
   equals(other: any): boolean {
     return (
-      other instanceof OperationResult &&
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.success === other.success &&
       this.value === other.value &&
       this.errorCode === other.errorCode &&
@@ -42,11 +43,6 @@ export class OperationResult<T> {
   }
 
   with(overrides?: Partial<OperationResult<T>>): OperationResult<T> {
-    return new OperationResult(
-      overrides?.success ?? this.success,
-      overrides?.value ?? this.value,
-      overrides?.errorCode ?? this.errorCode,
-      overrides?.errorMessage ?? this.errorMessage,
-    );
+    return copyRecordWith<OperationResult<T>>(this, overrides);
   }
 }

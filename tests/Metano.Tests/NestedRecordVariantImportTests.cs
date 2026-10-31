@@ -51,7 +51,7 @@ public class NestedRecordVariantImportTests
         // the runtime helper must be imported alongside HashCode.
         await Assert
             .That(output)
-            .Contains("import { HashCode, valueEquals } from \"metano-runtime\"");
+            .Contains("import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\"");
         await Assert.That(output).Contains("valueEquals(this.userProfile, other.userProfile)");
     }
 

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Counter {
   static readonly zero: Counter = new Counter(0);
@@ -15,7 +15,11 @@ export class Counter {
   }
 
   equals(other: any): boolean {
-    return other instanceof Counter && this.count === other.count;
+    return (
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
+      this.count === other.count
+    );
   }
 
   hashCode(): number {
@@ -26,6 +30,6 @@ export class Counter {
   }
 
   with(overrides?: Partial<Counter>): Counter {
-    return new Counter(overrides?.count ?? this.count);
+    return copyRecordWith<Counter>(this, overrides);
   }
 }

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 import type { Priority } from "./priority";
 
 export class TodoItem {
@@ -23,7 +23,8 @@ export class TodoItem {
 
   equals(other: any): boolean {
     return (
-      other instanceof TodoItem &&
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.title === other.title &&
       this.completed === other.completed &&
       this.priority === other.priority
@@ -40,10 +41,6 @@ export class TodoItem {
   }
 
   with(overrides?: Partial<TodoItem>): TodoItem {
-    return new TodoItem(
-      overrides?.title ?? this.title,
-      overrides?.completed ?? this.completed,
-      overrides?.priority ?? this.priority,
-    );
+    return copyRecordWith<TodoItem>(this, overrides);
   }
 }

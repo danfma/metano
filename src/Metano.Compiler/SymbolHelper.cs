@@ -108,6 +108,69 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// The instance property named <paramref name="name"/> declared on
+    /// <paramref name="type"/> or the nearest base that declares one — how a
+    /// constructor parameter (<c>title</c>) finds the property it initializes.
+    /// Uses the same match rule as <see cref="FindInstanceDataMemberInHierarchy"/>:
+    /// an exact (case-sensitive) name first, then the same name ignoring case.
+    /// </summary>
+    public static IPropertySymbol? FindInstancePropertyInHierarchy(
+        ITypeSymbol? type,
+        string name
+    ) => FindInstanceMemberInHierarchy<IPropertySymbol>(type, name);
+
+    /// <summary>
+    /// The instance property or field named <paramref name="name"/> declared
+    /// on <paramref name="type"/> or the nearest base that declares one — how
+    /// a record's positional <c>Deconstruct</c> parameter finds the member it
+    /// reads (a positional parameter may be backed by an explicit field).
+    /// An exact (case-sensitive) name wins anywhere in the hierarchy, so
+    /// <c>record R(int X) { private int x; }</c> resolves <c>X</c> to the
+    /// property, not the field; only when nothing matches exactly does the
+    /// name match ignoring case (the C# convention between a parameter
+    /// <c>title</c> and its property <c>Title</c>). Indexers and static
+    /// members never match.
+    /// </summary>
+    public static ISymbol? FindInstanceDataMemberInHierarchy(ITypeSymbol? type, string name) =>
+        FindInstanceMemberInHierarchy<ISymbol>(type, name);
+
+    private static TMember? FindInstanceMemberInHierarchy<TMember>(ITypeSymbol? type, string name)
+        where TMember : class, ISymbol =>
+        FindInstanceMemberInHierarchy<TMember>(type, name, StringComparison.Ordinal)
+        ?? FindInstanceMemberInHierarchy<TMember>(type, name, StringComparison.OrdinalIgnoreCase);
+
+    private static TMember? FindInstanceMemberInHierarchy<TMember>(
+        ITypeSymbol? type,
+        string name,
+        StringComparison comparison
+    )
+        where TMember : class, ISymbol
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var member = current
+                .GetMembers()
+                .OfType<TMember>()
+                .FirstOrDefault(m => IsInstanceDataMemberNamed(m, name, comparison));
+
+            if (member is not null)
+                return member;
+        }
+
+        return null;
+    }
+
+    private static bool IsInstanceDataMemberNamed(
+        ISymbol member,
+        string name,
+        StringComparison comparison
+    ) =>
+        member
+            is IPropertySymbol { IsStatic: false, IsIndexer: false }
+                or IFieldSymbol { IsStatic: false, IsImplicitlyDeclared: false }
+        && string.Equals(member.Name, name, comparison);
+
+    /// <summary>
     /// Reads a symbol's <c>[Name]</c> override. Multiple <c>[Name]</c>
     /// attributes can coexist on the same symbol — at most one untargeted
     /// plus at most one per <see cref="TargetLanguage"/> — so resolution

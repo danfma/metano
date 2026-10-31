@@ -46,7 +46,15 @@ public sealed record IrPropertyPattern(
 /// <summary>
 /// A single <c>Name: pattern</c> entry inside an <see cref="IrPropertyPattern"/>.
 /// </summary>
-public sealed record IrPropertySubpattern(string MemberName, IrPattern Pattern);
+/// <param name="MemberName">The C# member name.</param>
+/// <param name="Pattern">The pattern the member's value must match.</param>
+/// <param name="EmittedName">Target-resolved <c>[Name]</c> override of the
+/// member, or <c>null</c> to apply the backend's naming policy.</param>
+public sealed record IrPropertySubpattern(
+    string MemberName,
+    IrPattern Pattern,
+    string? EmittedName = null
+);
 
 /// <summary>
 /// Relational pattern: <c>x is &gt; 0</c>, <c>x is &lt;= 10</c>, etc.
@@ -95,11 +103,30 @@ public sealed record IrListPattern(
 /// tuples and records that expose a <c>Deconstruct</c>. <see cref="Type"/>
 /// is the optional type filter (null for plain tuple deconstruction).
 /// </summary>
+/// <param name="ElementMembers">How each element reads the matched value:
+/// <c>null</c> for tuple deconstruction (elements by position); otherwise,
+/// per element, the property a record's compiler-synthesized
+/// <c>Deconstruct</c> reads, or <c>null</c> when the member is unknown — a
+/// user-written <c>Deconstruct</c> may compute anything.</param>
+/// <param name="InputMayBeNull">Whether the matched value's static type admits
+/// <c>null</c> (a reference type, <c>Nullable&lt;T&gt;</c>, or an unconstrained
+/// type parameter). C# positional patterns fail on <c>null</c>, so backends
+/// test for it before reading elements when no type filter already does.</param>
 public sealed record IrPositionalPattern(
     IrTypeRef? Type,
     IReadOnlyList<IrPattern> Elements,
-    string? DesignatorName = null
+    string? DesignatorName = null,
+    IReadOnlyList<IrPositionalElementMember?>? ElementMembers = null,
+    bool InputMayBeNull = false
 ) : IrPattern;
+
+/// <summary>
+/// The property a positional pattern element reads.
+/// </summary>
+/// <param name="Name">The C# property name.</param>
+/// <param name="EmittedName">Target-resolved <c>[Name]</c> override, or
+/// <c>null</c> to apply the backend's naming policy.</param>
+public sealed record IrPositionalElementMember(string Name, string? EmittedName);
 
 /// <summary>Placeholder for patterns the extractor doesn't yet cover
 /// (parenthesized wrappers are unwrapped before reaching this fallback).

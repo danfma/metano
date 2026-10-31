@@ -23,21 +23,21 @@ public class IrToTsRecordSynthesisBridgeTests
     [Test]
     public async Task EqualsHashCodeWith_EmitExpectedShape()
     {
-        var (_, ir, _, ctorParams) = Extract(
+        var ir = Extract(
             """
             [Transpile]
             public record Money(int Amount, string Currency);
             """,
             "Money"
         );
-        var printed = PrintMembers(IrToTsRecordSynthesisBridge.Generate(ir, ctorParams));
+        var printed = PrintMembers(IrToTsRecordSynthesisBridge.Generate(ir));
 
         // equals: narrow to the record type, then compare every field with ===.
         await Assert.That(printed).Contains("equals(other: any): boolean");
         await Assert
             .That(printed)
             .Contains(
-                "other instanceof Money && this.amount === other.amount && this.currency === other.currency"
+                "other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.amount === other.amount && this.currency === other.currency"
             );
         // hashCode: drive the HashCode builder over every field.
         await Assert.That(printed).Contains("hashCode(): number");
@@ -45,25 +45,22 @@ public class IrToTsRecordSynthesisBridgeTests
         await Assert.That(printed).Contains("hc.add(this.amount);");
         await Assert.That(printed).Contains("hc.add(this.currency);");
         await Assert.That(printed).Contains("return hc.toHashCode();");
-        // with: rebuild the record, preferring overrides (?? falls back to this).
+        // with: copy the instance, then apply the defined overrides.
         await Assert.That(printed).Contains("with(overrides?: Partial<Money>): Money");
-        await Assert.That(printed).Contains("overrides?.amount ?? this.amount");
-        await Assert.That(printed).Contains("overrides?.currency ?? this.currency");
-        await Assert.That(printed).Contains("new Money(");
+        await Assert.That(printed).Contains("return copyRecordWith<Money>(this, overrides);");
     }
 
     [Test]
     public async Task GenericRecord_CarriesTypeParametersOnWithReturnType()
     {
-        var (_, ir, _, ctorParams) = Extract(
+        var ir = Extract(
             """
             [Transpile]
             public record Pair<K, V>(K Key, V Value);
             """,
             "Pair"
         );
-        var members = IrToTsRecordSynthesisBridge.Generate(ir, ctorParams);
-        var printed = PrintMembers(members);
+        var printed = PrintMembers(IrToTsRecordSynthesisBridge.Generate(ir));
 
         // `with` must retain the full self type so the return signature
         // reads Pair<K, V>.
@@ -72,11 +69,28 @@ public class IrToTsRecordSynthesisBridgeTests
     }
 
     [Test]
+    public async Task AbstractRecord_WithCopiesInsteadOfConstructing()
+    {
+        var ir = Extract(
+            """
+            [Transpile]
+            public abstract record Clip(double Seconds);
+            """,
+            "Clip"
+        );
+        var printed = PrintMembers(IrToTsRecordSynthesisBridge.Generate(ir));
+
+        await Assert.That(printed).Contains("with(overrides?: Partial<Clip>): Clip {");
+        await Assert.That(printed).Contains("return copyRecordWith<Clip>(this, overrides);");
+        await Assert.That(printed).DoesNotContain("new Clip(");
+    }
+
+    [Test]
     public async Task PlainObjectRecord_IsSkippedByShouldSynthesize()
     {
         // [PlainObject] records must NOT receive synthesized members — they
         // emit as plain data carriers. ShouldSynthesize is the gate.
-        var (_, ir, _, _) = Extract(
+        var ir = Extract(
             """
             [Transpile, PlainObject]
             public record Money(int Amount);
@@ -89,7 +103,7 @@ public class IrToTsRecordSynthesisBridgeTests
     [Test]
     public async Task NonRecordClass_IsSkippedByShouldSynthesize()
     {
-        var (_, ir, _, _) = Extract(
+        var ir = Extract(
             """
             [Transpile]
             public class Bag { public int Count { get; } }
@@ -101,12 +115,7 @@ public class IrToTsRecordSynthesisBridgeTests
 
     // ── helpers ──────────────────────────────────────────────────────────
 
-    private static (
-        INamedTypeSymbol Unused,
-        IrClassDeclaration Ir,
-        INamedTypeSymbol Symbol,
-        IReadOnlyList<TsConstructorParam> CtorParams
-    ) Extract(string source, string typeName)
+    private static IrClassDeclaration Extract(string source, string typeName)
     {
         var compilation = IrTestHelper.Compile(source);
         var tree = compilation.SyntaxTrees.First();
@@ -117,20 +126,7 @@ public class IrToTsRecordSynthesisBridgeTests
         var model = compilation.GetSemanticModel(tree);
         var symbol = (INamedTypeSymbol)model.GetDeclaredSymbol(typeDecl)!;
 
-        var ir = IrClassExtractor.Extract(symbol, compilation: compilation);
-
-        // Build TsConstructorParams from the IR — mirrors what
-        // IrToTsClassEmitter passes to IrToTsRecordSynthesisBridge.
-        var ctorParams =
-            ir.Constructor?.Parameters.Select(p => new TsConstructorParam(
-                    TypeScriptNaming.ToCamelCase(p.Parameter.Name),
-                    IrToTsTypeMapper.Map(p.Parameter.Type),
-                    Readonly: p.Promotion == IrParameterPromotion.ReadonlyProperty,
-                    Accessibility: TsAccessibility.Public
-                ))
-                .ToList()
-            ?? (IReadOnlyList<TsConstructorParam>)[];
-        return (symbol, ir, symbol, ctorParams);
+        return IrClassExtractor.Extract(symbol, compilation: compilation);
     }
 
     private static string PrintMembers(IReadOnlyList<TsClassMember> members)

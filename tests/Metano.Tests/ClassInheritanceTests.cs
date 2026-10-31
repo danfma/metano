@@ -149,30 +149,6 @@ public class ClassInheritanceTests
     }
 
     [Test]
-    public async Task AbstractRecord_SuppressesAbstractModifier()
-    {
-        // Records get synthesized `with(...)` that calls `new
-        // TypeName(...)`, which TypeScript rejects on abstract
-        // classes. Skip the abstract modifier on records until
-        // record synthesis grows a constructor-aware shape.
-        var result = TranspileHelper.Transpile(
-            """
-            namespace App;
-
-            [Transpile]
-            public abstract record Animal(string Name);
-
-            [Transpile]
-            public sealed record Dog(string Name, string Breed) : Animal(Name);
-            """
-        );
-
-        var animal = result["app/animal.ts"];
-        await Assert.That(animal).Contains("export class Animal");
-        await Assert.That(animal).DoesNotContain("abstract class Animal");
-    }
-
-    [Test]
     public async Task ObjectBase_DoesNotEmitExtends()
     {
         var result = TranspileHelper.Transpile(

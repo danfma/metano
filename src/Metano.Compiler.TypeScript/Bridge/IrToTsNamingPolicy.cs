@@ -20,11 +20,20 @@ public static class IrToTsNamingPolicy
     public static string ToInterfaceMemberName(
         string irName,
         IReadOnlyList<IrAttribute>? attributes
-    )
-    {
-        var overrideName = FindNameOverride(attributes);
-        return overrideName ?? TypeScriptNaming.ToCamelCase(irName);
-    }
+    ) => ToDataMemberName(irName, FindNameOverride(attributes));
+
+    /// <summary>
+    /// The emitted name of a data member (field or property): its
+    /// target-resolved <c>[Name]</c> override, otherwise the camelCased C#
+    /// name with JS reserved words escaped — the policy the class emitter
+    /// declares the member with (a promoted constructor parameter cannot be
+    /// named <c>default</c>, so the property it declares is
+    /// <c>default_</c>). Every read of the member — record equality,
+    /// <c>with</c> keys, pattern member reads — goes through here so it
+    /// names what was declared.
+    /// </summary>
+    public static string ToDataMemberName(string irName, string? emittedName) =>
+        emittedName ?? TypeScriptNaming.ToCamelCase(irName);
 
     /// <summary>
     /// Resolves the parameter name: camelCase with reserved-word escaping

@@ -24,17 +24,19 @@ export class IssueWorkflow {
   }
 
   static describeLane(issue: Issue): string {
-    return issue.status === IssueStatus.Backlog
+    return issue != null && issue.status === IssueStatus.Backlog
       ? "triage"
-      : issue.status === IssueStatus.Ready && issue.priority === IssuePriority.Urgent
+      : issue != null &&
+          issue.status === IssueStatus.Ready &&
+          issue.priority === IssuePriority.Urgent
         ? "expedite"
-        : issue.status === IssueStatus.Ready
+        : issue != null && issue.status === IssueStatus.Ready
           ? "ready"
-          : issue.status === IssueStatus.InProgress
+          : issue != null && issue.status === IssueStatus.InProgress
             ? "building"
-            : issue.status === IssueStatus.InReview
+            : issue != null && issue.status === IssueStatus.InReview
               ? "review"
-              : issue.status === IssueStatus.Done
+              : issue != null && issue.status === IssueStatus.Done
                 ? "done"
                 : "cancelled";
   }

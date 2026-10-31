@@ -37,7 +37,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     /// Thread-safe sink for diagnostic emission. Mirrors the TypeScript
     /// transformer's sink contract (#218 / #226): every producer routes
     /// through this single locked entry-point so a future parallel-Dart
-    /// sweep does not corrupt the list. Open <c>QueryableExtractionDiagnostics</c>
+    /// sweep does not corrupt the list. Open <c>ExtractionDiagnostics</c>
     /// against this method instead of <c>_diagnostics.Add</c>.
     /// </summary>
     internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
@@ -52,8 +52,9 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
         // runs here — open the MS0024 sink (#218) so reports land
         // in this transformer's diagnostics list and surface via
         // the host's standard merge.
-        using var queryableDiagnosticSink =
-            Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(ReportDiagnostic);
+        using var extractionDiagnosticSink = Metano.Compiler.Extraction.ExtractionDiagnostics.Open(
+            ReportDiagnostic
+        );
 
         var files = new List<DartSourceFile>();
         var transpilable = DiscoverTranspilableTypes();

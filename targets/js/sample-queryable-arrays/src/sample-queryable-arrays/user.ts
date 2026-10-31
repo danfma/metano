@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class User {
   constructor(
@@ -10,7 +10,8 @@ export class User {
 
   equals(other: any): boolean {
     return (
-      other instanceof User &&
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.name === other.name &&
       this.age === other.age &&
       this.active === other.active
@@ -27,10 +28,6 @@ export class User {
   }
 
   with(overrides?: Partial<User>): User {
-    return new User(
-      overrides?.name ?? this.name,
-      overrides?.age ?? this.age,
-      overrides?.active ?? this.active,
-    );
+    return copyRecordWith<User>(this, overrides);
   }
 }

@@ -1,4 +1,4 @@
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Vec2 {
   constructor(readonly x: number, readonly y: number) { }
@@ -12,7 +12,7 @@ export class Vec2 {
   }
 
   equals(other: any): boolean {
-    return other instanceof Vec2 && this.x === other.x && this.y === other.y;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x && this.y === other.y;
   }
 
   hashCode(): number {
@@ -24,6 +24,6 @@ export class Vec2 {
   }
 
   with(overrides?: Partial<Vec2>): Vec2 {
-    return new Vec2(overrides?.x ?? this.x, overrides?.y ?? this.y);
+    return copyRecordWith<Vec2>(this, overrides);
   }
 }

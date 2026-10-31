@@ -30,7 +30,7 @@ public class RecordValueEqualityTests
         var output = result["money.ts"];
         await Assert
             .That(output)
-            .Contains("import { HashCode, valueEquals } from \"metano-runtime\"");
+            .Contains("import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\"");
         await Assert.That(output).Contains("valueEquals(this.amount, other.amount)");
         // Plain primitives stay on `===` so the cheap path keeps working.
         await Assert.That(output).Contains("this.currency === other.currency");
@@ -51,7 +51,7 @@ public class RecordValueEqualityTests
         var output = result["event.ts"];
         await Assert
             .That(output)
-            .Contains("import { HashCode, valueEquals } from \"metano-runtime\"");
+            .Contains("import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\"");
         await Assert.That(output).Contains("valueEquals(this.when, other.when)");
     }
 

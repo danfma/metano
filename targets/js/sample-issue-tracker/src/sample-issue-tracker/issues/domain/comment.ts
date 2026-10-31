@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 export class Comment {
@@ -17,7 +17,8 @@ export class Comment {
 
   equals(other: any): boolean {
     return (
-      other instanceof Comment &&
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.authorId === other.authorId &&
       this.message === other.message &&
       valueEquals(this.createdAt, other.createdAt) &&
@@ -36,11 +37,6 @@ export class Comment {
   }
 
   with(overrides?: Partial<Comment>): Comment {
-    return new Comment(
-      overrides?.authorId ?? this.authorId,
-      overrides?.message ?? this.message,
-      overrides?.createdAt ?? this.createdAt,
-      overrides?.isSystem ?? this.isSystem,
-    );
+    return copyRecordWith<Comment>(this, overrides);
   }
 }

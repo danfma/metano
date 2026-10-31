@@ -100,27 +100,21 @@ public static class IrRuntimeRequirementScanner
         )
         {
             acc.Add(new IrRuntimeRequirement("HashCode", IrRuntimeCategory.Hashing));
+            acc.Add(new IrRuntimeRequirement("RecordCopy", IrRuntimeCategory.RecordCopy));
             // The synthesized `equals` falls back to `valueEquals` for
-            // every constructor parameter whose type is not strictly
+            // every equality member whose type is not strictly
             // primitive / enum / branded / type-parameter so wrapper
             // types (Decimal, Temporal, nested records) compare via
             // their own `equals` contract instead of `===`. Mirror the
             // bridge's UseStrictEquality decision here so the import
             // line lands only when a non-strict field actually exists.
-            if (c.Constructor is { Parameters.Count: > 0 } ctor && HasNonStrictField(ctor))
+            if (HasNonStrictEqualityMember(c))
                 acc.Add(new IrRuntimeRequirement("ValueEquals", IrRuntimeCategory.Equality));
         }
     }
 
-    private static bool HasNonStrictField(IrConstructorDeclaration ctor)
-    {
-        foreach (var p in ctor.Parameters)
-        {
-            if (!IrEqualityClassifier.UseStrictEquality(p.Parameter.Type))
-                return true;
-        }
-        return false;
-    }
+    private static bool HasNonStrictEqualityMember(IrClassDeclaration c) =>
+        (c.EqualityMembers ?? []).Any(m => !IrEqualityClassifier.UseStrictEquality(m.Type));
 
     private static void ScanInterface(IrInterfaceDeclaration i, HashSet<IrRuntimeRequirement> acc)
     {
