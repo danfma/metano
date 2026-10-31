@@ -245,6 +245,18 @@ public static class SymbolHelper
         HasTargetableFlag(symbol, "Ignore", target);
 
     /// <summary>
+    /// The interfaces <paramref name="type"/> lists directly that reach the emitted
+    /// heritage clause (<c>implements</c> for classes/records/structs, <c>extends</c>
+    /// for interfaces). An <c>[Ignore]</c> interface is .NET-only and erased in every
+    /// target instead of raising <c>MS0013</c> (#247); its members stay on the type
+    /// as ordinary members.
+    /// </summary>
+    public static IEnumerable<INamedTypeSymbol> EmittedInterfaces(
+        INamedTypeSymbol type,
+        TargetLanguage? target
+    ) => type.Interfaces.Where(iface => !HasIgnore(iface, target));
+
+    /// <summary>
     /// Shared matcher for per-target "flag" attributes (e.g. <c>[Ignore]</c>)
     /// that carry only an optional <see cref="TargetLanguage"/>.
     /// <para>Match rules:</para>

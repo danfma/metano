@@ -1,3 +1,4 @@
+using System.Reflection;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.IR;
@@ -6,6 +7,7 @@ using Metano.Compiler.TypeScript;
 using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Metano.Tests;
 
@@ -78,15 +80,11 @@ public static class TranspileHelper
         IEnumerable<MetadataReference>? extraReferences = null
     )
     {
-        var tree = ParseSource(csharpSource);
-        var references = extraReferences is null
-            ? (IEnumerable<MetadataReference>)BaseReferences
-            : BaseReferences.Concat(extraReferences);
-        var compilation = CSharpCompilation.Create(
+        var compilation = CreateCompilation(
+            csharpSource,
             assemblyName,
-            [tree],
-            references,
-            new CSharpCompilationOptions(outputKind)
+            outputKind,
+            extraReferences
         );
         var errors = compilation
             .GetDiagnostics()
@@ -98,6 +96,26 @@ public static class TranspileHelper
                     + string.Join("\n", errors.Select(e => e.ToString()))
             );
         return compilation;
+    }
+
+    private static CSharpCompilation CreateCompilation(
+        string csharpSource,
+        string assemblyName,
+        OutputKind outputKind,
+        IEnumerable<MetadataReference>? extraReferences = null
+    )
+    {
+        var tree = ParseSource(csharpSource);
+        var references = extraReferences is null
+            ? (IEnumerable<MetadataReference>)BaseReferences
+            : BaseReferences.Concat(extraReferences);
+
+        return CSharpCompilation.Create(
+            assemblyName,
+            [tree],
+            references,
+            new CSharpCompilationOptions(outputKind)
+        );
     }
 
     /// <summary>
@@ -134,10 +152,14 @@ public static class TranspileHelper
         bool useIrBodies = true,
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
-        string? importAlias = null
+        string? importAlias = null,
+        IEnumerable<SyntaxTree>? generatedTrees = null
     )
     {
-        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(
+            compilation,
+            generatedTrees: generatedTrees
+        );
         var transformer = new TypeTransformer(ir, compilation)
         {
             UseIrBodiesWhenCovered = useIrBodies,
@@ -300,6 +322,87 @@ public static class TranspileHelper
             OutputKind.DynamicallyLinkedLibrary
         );
         return TranspileCore(compilation, importAlias: importAlias);
+    }
+
+    /// <summary>
+    /// Like <see cref="TranspileWithDiagnostics"/> but first runs the real
+    /// System.Text.Json source generator over the compilation, mirroring what
+    /// <c>MSBuildWorkspace</c> hands the frontend in production (the generated
+    /// <c>*.g.cs</c> trees are part of the compilation). The generator's
+    /// location is recorded as assembly metadata by the test project.
+    /// </summary>
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithJsonSourceGenerator(string csharpSource)
+    {
+        // The context's abstract members only exist once the generator ran,
+        // so the error check happens on the updated compilation.
+        var compilation = CreateCompilation(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary
+        );
+        var (updated, generatedTrees) = RunJsonSourceGenerator(compilation);
+
+        return TranspileCore(updated, generatedTrees: generatedTrees);
+    }
+
+    private static (
+        CSharpCompilation Compilation,
+        IReadOnlyList<SyntaxTree> GeneratedTrees
+    ) RunJsonSourceGenerator(CSharpCompilation compilation)
+    {
+        var generators = new AnalyzerFileReference(
+            JsonSourceGeneratorPath(),
+            new GeneratorAssemblyLoader()
+        ).GetGenerators(LanguageNames.CSharp);
+        var driver = CSharpGeneratorDriver.Create(
+            generators,
+            parseOptions: (CSharpParseOptions)compilation.SyntaxTrees[0].Options
+        );
+        var runResult = driver
+            .RunGeneratorsAndUpdateCompilation(
+                compilation,
+                out var updated,
+                out var generatorDiagnostics
+            )
+            .GetRunResult();
+        var errors = updated
+            .GetDiagnostics()
+            .Concat(generatorDiagnostics)
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+
+        if (errors.Count > 0)
+            throw new InvalidOperationException(
+                "C# compilation with generated sources failed:\n"
+                    + string.Join("\n", errors.Select(e => e.ToString()))
+            );
+
+        if (runResult.GeneratedTrees.IsEmpty)
+            throw new InvalidOperationException("The JSON source generator produced no sources.");
+
+        return ((CSharpCompilation)updated, runResult.GeneratedTrees);
+    }
+
+    private static string JsonSourceGeneratorPath() =>
+        typeof(TranspileHelper)
+            .Assembly.GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(a =>
+                a.Key == "JsonSourceGeneratorPath" && !string.IsNullOrEmpty(a.Value)
+            )
+            ?.Value
+        ?? throw new InvalidOperationException(
+            "The test assembly does not record the System.Text.Json source generator path."
+        );
+
+    private sealed class GeneratorAssemblyLoader : IAnalyzerAssemblyLoader
+    {
+        public void AddDependencyLocation(string fullPath) { }
+
+        public System.Reflection.Assembly LoadFromPath(string fullPath) =>
+            System.Reflection.Assembly.LoadFrom(fullPath);
     }
 
     /// <summary>
