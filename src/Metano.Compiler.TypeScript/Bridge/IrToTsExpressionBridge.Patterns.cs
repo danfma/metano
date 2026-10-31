@@ -24,7 +24,7 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var lowered = ParenthesizePatternSubject(Map(node.Expression, bclRegistry));
+        var lowered = Map(node.Expression, bclRegistry);
 
         switch (node.Pattern)
         {
@@ -81,7 +81,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrLogicalPattern { Operator: IrLogicalOp.Not } notPat => new TsUnaryExpression(
                 "!",
-                new TsParenthesized(BuildPatternTest(value, notPat.Left, bclRegistry))
+                BuildPatternTest(value, notPat.Left, bclRegistry)
             ),
             IrLogicalPattern log => new TsBinaryExpression(
                 BuildPatternTest(value, log.Left, bclRegistry),
@@ -108,43 +108,11 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// Joins a pattern test with a <c>when</c> guard as <c>test &amp;&amp; guard</c>.
-    /// The printer does not parenthesize binary operands, so each side goes
-    /// through <see cref="ParenthesizeAsAndOperand"/>. Without a test the
-    /// guard alone is the condition.
+    /// Without a test the guard alone is the condition. The printer keeps
+    /// each side's grouping (<c>(n === 1 || n === 2) &amp;&amp; flag</c>).
     /// </summary>
     private static TsExpression JoinWithGuard(TsExpression? test, TsExpression guard) =>
-        test is null
-            ? guard
-            : new TsBinaryExpression(
-                ParenthesizeAsAndOperand(test),
-                "&&",
-                ParenthesizeAsAndOperand(guard)
-            );
-
-    /// <summary>
-    /// Wraps an operand of <c>&amp;&amp;</c> whose own operator binds looser
-    /// (an <c>||</c> / <c>??</c> chain or a conditional), so joining it does
-    /// not regroup it.
-    /// </summary>
-    private static TsExpression ParenthesizeAsAndOperand(TsExpression expression) =>
-        expression is TsBinaryExpression { Operator: "||" or "??" } or TsConditionalExpression
-            ? new TsParenthesized(expression)
-            : expression;
-
-    /// <summary>
-    /// Wraps a pattern subject that would regroup as the left operand of the
-    /// test's own operator (<c>===</c>, <c>instanceof</c>, <c>&lt;</c>, …):
-    /// <c>(x ?? 0) is 0</c> must test <c>(x ?? 0) === 0</c>, not
-    /// <c>x ?? 0 === 0</c>.
-    /// </summary>
-    private static TsExpression ParenthesizePatternSubject(TsExpression subject) =>
-        subject
-            is TsBinaryExpression
-                or TsConditionalExpression
-                or TsArrowFunction
-                or TsCastExpression
-            ? new TsParenthesized(subject)
-            : subject;
+        test is null ? guard : new TsBinaryExpression(test, "&&", guard);
 
     /// <summary>
     /// The runtime test a type pattern performs. An enum has no class value

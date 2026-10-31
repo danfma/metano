@@ -1,4 +1,6 @@
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Parenthesization;
+using Metano.Compiler.TypeScript.Parenthesization.Templates;
 
 namespace Metano.Compiler.TypeScript;
 
@@ -984,7 +986,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsExpressionStatement exprStmt:
-                PrintExpression(exprStmt.Expression);
+                PrintOperand(exprStmt.Expression, TsOperandSlot.ExpressionStatement);
                 _sb.Write(";");
                 break;
 
@@ -1030,35 +1032,42 @@ public sealed class Printer(string indent = "  ")
     // ─── Expressions ────────────────────────────────────────
 
     /// <summary>
-    /// Print the target of a call, member access, or element access, wrapping it in parentheses when its node kind has lower
-    /// precedence than the access itself. Required because the IR may
-    /// surface low-precedence shapes there (e.g. <c>(a ?? b)?.Invoke()</c>
-    /// lowers to a call whose callee is a binary expression — printed bare
-    /// it would parse as <c>a ?? b()</c>; <c>(c = next).radius</c> would
-    /// parse as <c>c = next.radius</c>).
+    /// Prints <paramref name="operand"/> in <paramref name="slot"/>, wrapping
+    /// it in parentheses when printing it bare would regroup it (or be
+    /// rejected by the grammar). The IR carries no source parentheses, so
+    /// this is where the tree's grouping is turned back into text.
     /// </summary>
-    private void PrintAccessTarget(TsExpression target)
+    private void PrintOperand(TsExpression operand, TsOperandSlot slot) =>
+        PrintGrouped(operand, TsParenthesization.NeedsParens(operand, slot));
+
+    /// <summary>
+    /// An argument, array element or object value: any assignment-level
+    /// expression prints bare.
+    /// </summary>
+    private void PrintListElement(TsExpression element) =>
+        PrintOperand(element, TsOperandSlot.AssignmentExpression);
+
+    private void PrintGrouped(TsExpression expression, bool parenthesized)
     {
-        if (AccessTargetRequiresParens(target))
-        {
-            _sb.Write("(");
-            PrintExpression(target);
-            _sb.Write(")");
-        }
+        if (parenthesized)
+            PrintParenthesized(expression);
         else
-        {
-            PrintExpression(target);
-        }
+            PrintExpression(expression);
     }
 
-    private static bool AccessTargetRequiresParens(TsExpression expression) =>
-        expression
-            is TsBinaryExpression
-                or TsConditionalExpression
-                or TsAwaitExpression
-                or TsArrowFunction
-                or TsUnaryExpression
-                or TsCastExpression;
+    /// <summary>
+    /// <c>a?.b</c> continues an optional chain on purpose; a plain
+    /// <c>.b</c> on an optional-chain object must close the chain first.
+    /// </summary>
+    private static TsOperandSlot AccessObjectSlot(TsPropertyAccess access) =>
+        access.Optional ? TsOperandSlot.AccessTarget : TsOperandSlot.MemberObject;
+
+    private void PrintParenthesized(TsExpression expression)
+    {
+        _sb.Write("(");
+        PrintExpression(expression);
+        _sb.Write(")");
+    }
 
     private void PrintExpression(TsExpression expr)
     {
@@ -1103,19 +1112,19 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsBinaryExpression bin:
-                PrintExpression(bin.Left);
+                PrintOperand(bin.Left, TsOperandSlot.BinaryLeft(bin.Operator));
                 _sb.Write($" {bin.Operator} ");
-                PrintExpression(bin.Right);
+                PrintOperand(bin.Right, TsOperandSlot.BinaryRight(bin.Operator));
                 break;
 
             case TsPropertyAccess access:
-                PrintAccessTarget(access.Object);
-                _sb.Write(".");
+                PrintOperand(access.Object, AccessObjectSlot(access));
+                _sb.Write(access.Optional ? "?." : ".");
                 _sb.Write(access.Property);
                 break;
 
             case TsCallExpression call:
-                PrintAccessTarget(call.Callee);
+                PrintOperand(call.Callee, TsOperandSlot.AccessTarget);
                 if (call.Optional)
                     _sb.Write("?.");
                 if (call.TypeArguments is { Count: > 0 } typeArgs)
@@ -1125,13 +1134,13 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write(">");
                 }
                 _sb.Write("(");
-                _sb.WriteList(call.Arguments, PrintExpression);
+                _sb.WriteList(call.Arguments, PrintListElement);
                 _sb.Write(")");
                 break;
 
             case TsLinqCall linq:
                 _sb.Write("linq(");
-                _sb.WriteList(linq.Args, PrintExpression);
+                _sb.WriteList(linq.Args, PrintListElement);
                 _sb.Write(")");
                 break;
 
@@ -1141,11 +1150,11 @@ public sealed class Printer(string indent = "  ")
 
             case TsSpreadExpression spread:
                 _sb.Write("...");
-                PrintExpression(spread.Expression);
+                PrintOperand(spread.Expression, TsOperandSlot.AssignmentExpression);
                 break;
 
             case TsElementAccess elemAccess:
-                PrintAccessTarget(elemAccess.Object);
+                PrintOperand(elemAccess.Object, TsOperandSlot.MemberObject);
                 _sb.Write("[");
                 PrintExpression(elemAccess.Index);
                 _sb.Write("]");
@@ -1159,7 +1168,7 @@ public sealed class Printer(string indent = "  ")
                     _sb.Indent();
                     foreach (var elem in arrayLit.Elements)
                     {
-                        PrintExpression(elem);
+                        PrintListElement(elem);
                         _sb.Write(",");
                         _sb.WriteLn();
                     }
@@ -1169,22 +1178,22 @@ public sealed class Printer(string indent = "  ")
                 else
                 {
                     _sb.Write("[");
-                    _sb.WriteList(arrayLit.Elements, PrintExpression);
+                    _sb.WriteList(arrayLit.Elements, PrintListElement);
                     _sb.Write("]");
                 }
                 break;
 
             case TsNewExpression newExpr:
                 _sb.Write("new ");
-                PrintExpression(newExpr.Callee);
+                PrintOperand(newExpr.Callee, TsOperandSlot.NewCallee);
                 _sb.Write("(");
-                _sb.WriteList(newExpr.Arguments, PrintExpression);
+                _sb.WriteList(newExpr.Arguments, PrintListElement);
                 _sb.Write(")");
                 break;
 
             case TsAwaitExpression awaitExpr:
                 _sb.Write("await ");
-                PrintExpression(awaitExpr.Expression);
+                PrintOperand(awaitExpr.Expression, TsOperandSlot.Await);
                 break;
 
             case TsArrowFunction arrow:
@@ -1202,19 +1211,7 @@ public sealed class Printer(string indent = "  ")
                 if (arrow.Body is [TsReturnStatement { Expression: { } returnExpr }])
                 {
                     _sb.Write(" ");
-                    // Object literals in concise arrow bodies must be wrapped in
-                    // parentheses — without them, `=> { id: ... }` is parsed as a
-                    // block body with a label, not a returned object literal.
-                    if (returnExpr is TsObjectLiteral)
-                    {
-                        _sb.Write("(");
-                        PrintExpression(returnExpr);
-                        _sb.Write(")");
-                    }
-                    else
-                    {
-                        PrintExpression(returnExpr);
-                    }
+                    PrintOperand(returnExpr, TsOperandSlot.ConciseArrowBody);
                 }
                 else
                 {
@@ -1240,32 +1237,30 @@ public sealed class Printer(string indent = "  ")
 
             case TsUnaryExpression unary:
                 _sb.Write(unary.Operator);
-                PrintExpression(unary.Operand);
+                PrintOperand(unary.Operand, TsOperandSlot.Prefix(unary.Operator));
                 break;
 
             case TsPostfixUnaryExpression postfix:
-                PrintExpression(postfix.Operand);
+                PrintOperand(postfix.Operand, TsOperandSlot.Postfix);
                 _sb.Write(postfix.Operator);
                 break;
 
             case TsParenthesized paren:
-                _sb.Write("(");
-                PrintExpression(paren.Expression);
-                _sb.Write(")");
+                PrintParenthesized(paren.Expression);
                 break;
 
             case TsCastExpression cast:
-                PrintExpression(cast.Expression);
+                PrintOperand(cast.Expression, TsOperandSlot.CastOperand);
                 _sb.Write(" as ");
                 PrintType(cast.Type);
                 break;
 
             case TsConditionalExpression cond:
-                PrintExpression(cond.Condition);
+                PrintOperand(cond.Condition, TsOperandSlot.ConditionalTest);
                 _sb.Write(" ? ");
-                PrintExpression(cond.WhenTrue);
+                PrintOperand(cond.WhenTrue, TsOperandSlot.AssignmentExpression);
                 _sb.Write(" : ");
-                PrintExpression(cond.WhenFalse);
+                PrintOperand(cond.WhenFalse, TsOperandSlot.AssignmentExpression);
                 break;
 
             case TsJsxElement jsx:
@@ -1378,17 +1373,21 @@ public sealed class Printer(string indent = "  ")
     /// <c>$this</c>/<c>$N</c>/<c>$TN</c> placeholders trigger a substitution. Value
     /// placeholders (<c>$this</c>, <c>$N</c>) recurse via <see cref="PrintExpression"/>
     /// so complex argument shapes (nested calls, lambdas, binary operators) round-trip
-    /// correctly. Type placeholders (<c>$TN</c>) are plain identifier names and emit
-    /// as raw text.
+    /// correctly, parenthesized when the placeholder's neighbor tokens would regroup
+    /// them (see <see cref="TsTemplateShape.SlotsAt"/>). Type placeholders (<c>$TN</c>)
+    /// are plain identifier names and emit as raw text.
     /// </summary>
     private void PrintTemplate(TsTemplate template)
     {
         var text = template.Template;
+        var shape = TsTemplateShape.Of(template);
         var i = 0;
+
         while (i < text.Length)
         {
             // Look for the next placeholder; everything before it is literal text.
             var dollar = text.IndexOf('$', i);
+
             if (dollar < 0)
             {
                 _sb.Write(text[i..]);
@@ -1398,63 +1397,52 @@ public sealed class Printer(string indent = "  ")
             if (dollar > i)
                 _sb.Write(text[i..dollar]);
 
-            // Try $this first.
-            if (dollar + 5 <= text.Length && text.AsSpan(dollar, 5).SequenceEqual("$this".AsSpan()))
-            {
-                if (template.Receiver is not null)
-                    PrintExpression(template.Receiver);
-                i = dollar + 5;
-                continue;
-            }
-
-            // Then $T<n> (type-argument name placeholder).
-            if (
-                dollar + 2 < text.Length
-                && text[dollar + 1] == 'T'
-                && char.IsDigit(text[dollar + 2])
-            )
-            {
-                var typeArgStart = dollar + 2;
-                var typeArgEnd = typeArgStart;
-                while (typeArgEnd < text.Length && char.IsDigit(text[typeArgEnd]))
-                    typeArgEnd++;
-
-                if (
-                    int.TryParse(
-                        text.AsSpan(typeArgStart, typeArgEnd - typeArgStart),
-                        out var typeArgIndex
-                    )
-                    && typeArgIndex < template.TypeArgumentNames.Count
-                )
-                {
-                    _sb.Write(template.TypeArgumentNames[typeArgIndex]);
-                    i = typeArgEnd;
-                    continue;
-                }
-            }
-
-            // Then $0, $1, … — read the integer suffix.
-            var argStart = dollar + 1;
-            var argEnd = argStart;
-            while (argEnd < text.Length && char.IsDigit(text[argEnd]))
-                argEnd++;
-
-            if (
-                argEnd > argStart
-                && int.TryParse(text.AsSpan(argStart, argEnd - argStart), out var argIndex)
-                && argIndex < template.Arguments.Count
-            )
-            {
-                PrintExpression(template.Arguments[argIndex]);
-                i = argEnd;
-                continue;
-            }
-
-            // Lone $ or unrecognized placeholder — emit verbatim and advance one char.
-            _sb.Write("$");
-            i = dollar + 1;
+            i = PrintPlaceholderAt(template, shape, dollar);
         }
     }
+
+    /// <summary>
+    /// Writes the placeholder at <paramref name="dollar"/> and returns the
+    /// offset after it. A lone <c>$</c>, an out-of-range <c>$N</c>/<c>$TN</c>
+    /// or an unrecognized placeholder emits the <c>$</c> verbatim and
+    /// advances one character.
+    /// </summary>
+    private int PrintPlaceholderAt(TsTemplate template, TsTemplateShape shape, int dollar)
+    {
+        var placeholder = TsTemplatePlaceholder.Match(template.Template, dollar);
+
+        switch (placeholder)
+        {
+            case { Kind: TsTemplatePlaceholderKind.Receiver } receiver:
+                if (template.Receiver is not null)
+                    PrintTemplateValue(template.Receiver, shape.SlotsAt(dollar));
+
+                return dollar + receiver.Length;
+
+            case { Kind: TsTemplatePlaceholderKind.TypeArgument } typeArgument
+                when typeArgument.Index < template.TypeArgumentNames.Count:
+                _sb.Write(template.TypeArgumentNames[typeArgument.Index]);
+
+                return dollar + typeArgument.Length;
+
+            case { } argument when argument.Resolve(template) is { } value:
+                PrintTemplateValue(value, shape.SlotsAt(dollar));
+
+                return dollar + argument.Length;
+
+            default:
+                _sb.Write("$");
+
+                return dollar + 1;
+        }
+    }
+
+    /// <summary>
+    /// Substitutes a value placeholder, parenthesized when either neighbor
+    /// token of the placeholder would regroup the substituted node.
+    /// </summary>
+    private void PrintTemplateValue(TsExpression value, IReadOnlyList<TsOperandSlot> slots) =>
+        PrintGrouped(value, TsParenthesization.NeedsParensInAny(value, slots));
 
     private void PrintObjectLiteral(TsObjectLiteral obj)
     {
@@ -1492,7 +1480,7 @@ public sealed class Printer(string indent = "  ")
         if (prop.Value is TsSpreadExpression spread)
         {
             _sb.Write("...");
-            PrintExpression(spread.Expression);
+            PrintOperand(spread.Expression, TsOperandSlot.AssignmentExpression);
         }
         else if (prop.Shorthand)
         {
@@ -1502,7 +1490,7 @@ public sealed class Printer(string indent = "  ")
         {
             _sb.Write(prop.Key);
             _sb.Write(": ");
-            PrintExpression(prop.Value);
+            PrintListElement(prop.Value);
         }
     }
 

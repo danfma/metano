@@ -46,7 +46,7 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var scrutinee = ParenthesizePatternSubject(Map(sw.Scrutinee, bclRegistry));
+        var scrutinee = Map(sw.Scrutinee, bclRegistry);
         var fallback = Map(sw.Arms[^1].Result, bclRegistry);
 
         return sw
@@ -149,10 +149,7 @@ public static partial class IrToTsExpressionBridge
             Async: isAsync
         );
 
-        var call = new TsCallExpression(
-            new TsParenthesized(arrow),
-            [Map(sw.Scrutinee, bclRegistry)]
-        );
+        var call = new TsCallExpression(arrow, [Map(sw.Scrutinee, bclRegistry)]);
 
         return isAsync ? new TsAwaitExpression(call) : call;
     }
