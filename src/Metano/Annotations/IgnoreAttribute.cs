@@ -15,7 +15,8 @@ namespace Metano.Annotations;
 /// non-ignored base interfaces; references inside attribute applications
 /// (e.g. <c>[JsonConverter(typeof(MyConverter&lt;T&gt;))]</c>) are allowed
 /// because attributes are never emitted — except attributes the compiler reads
-/// for emission, such as <c>[JsonSerializable(typeof(T))]</c>; and
+/// for emission, such as <c>[JsonSerializable(typeof(T))]</c>; <c>nameof</c>
+/// arguments are allowed because they fold to a string constant; and
 /// source-generator output is not scanned.
 /// </para>
 ///
