@@ -154,7 +154,6 @@ public sealed class DartIrRewriter
                 Value = RewriteExpression(l.Value),
                 Body = RewriteExpression(l.Body),
             },
-            IrOptionalChain o => o with { Target = RewriteExpression(o.Target) },
             IrNullConditionalAccess n => n with
             {
                 Receiver = RewriteExpression(n.Receiver),

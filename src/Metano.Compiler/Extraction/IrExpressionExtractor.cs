@@ -79,11 +79,14 @@ public sealed partial class IrExpressionExtractor
     private int _receiverTempCounter;
 
     /// <summary>
-    /// The receiver a leading <see cref="MemberBindingExpressionSyntax"/>
-    /// reads from while <see cref="LowerConditionalContinuation"/> extracts
-    /// the steps after a <c>?.</c>; <c>null</c> outside a continuation.
+    /// The receiver bound while <see cref="LowerConditionalContinuation"/>
+    /// extracts the steps after a <c>?.</c>; <c>null</c> outside a
+    /// continuation. Kept as extractor state rather than threaded through
+    /// <see cref="Extract"/> because every receiver-aware lowering reaches
+    /// the receiver by extracting its syntax: <see cref="Extract"/> answers
+    /// that syntax with the bound IR, so the receiver is evaluated once.
     /// </summary>
-    private IrExpression? _conditionalReceiver;
+    private BoundConditionalReceiver? _conditionalReceiver;
 
     private string NextReceiverTempName() => $"receiver$temp${_receiverTempCounter++}";
 
@@ -160,6 +163,11 @@ public sealed partial class IrExpressionExtractor
     internal HashSet<ISymbol> InlineExpandingSet => _inlineExpanding;
 
     public IrExpression Extract(ExpressionSyntax expression) =>
+        _conditionalReceiver is { } bound && expression == bound.Syntax
+            ? bound.Receiver
+            : ExtractUnbound(expression);
+
+    private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
         expression switch
         {
             LiteralExpressionSyntax lit => ExtractLiteral(lit),
@@ -170,7 +178,9 @@ public sealed partial class IrExpressionExtractor
             ParenthesizedExpressionSyntax paren => Extract(paren.Expression),
             BinaryExpressionSyntax bin => ExtractBinary(bin),
             AssignmentExpressionSyntax assign => ExtractAssignment(assign),
-            MemberAccessExpressionSyntax member => ExtractMemberAccess(member),
+            MemberAccessExpressionSyntax member => ExtractMemberAccess(
+                QualifiedMemberSyntax.Of(member)
+            ),
             InvocationExpressionSyntax inv => ExtractInvocation(inv),
             ObjectCreationExpressionSyntax oc => ExtractObjectCreation(oc),
             ImplicitObjectCreationExpressionSyntax ioc => ExtractImplicitObjectCreation(ioc),
@@ -198,8 +208,18 @@ public sealed partial class IrExpressionExtractor
             WithExpressionSyntax withExpr => ExtractWithExpression(withExpr),
             CollectionExpressionSyntax coll => ExtractCollectionExpression(coll),
             ConditionalAccessExpressionSyntax cond => ExtractConditionalAccess(cond),
-            MemberBindingExpressionSyntax binding when _conditionalReceiver is { } bound =>
-                ExtractConditionalMemberBinding(binding, bound),
+            MemberBindingExpressionSyntax binding
+                when _conditionalReceiver is not null
+                    && QualifiedMemberSyntax.From(binding) is { } boundMember =>
+                ExtractMemberAccess(boundMember),
+            ElementBindingExpressionSyntax elementBinding
+                when _conditionalReceiver is not null
+                    && QualifiedMemberSyntax.ConditionalReceiverOf(elementBinding)
+                        is { } receiver => ExtractElementRead(
+                elementBinding,
+                receiver,
+                elementBinding.ArgumentList
+            ),
             ArrayCreationExpressionSyntax arr when arr.Initializer is not null =>
                 new IrArrayLiteral(arr.Initializer.Expressions.Select(Extract).ToList()),
             ImplicitArrayCreationExpressionSyntax iarr => new IrArrayLiteral(
@@ -255,78 +275,42 @@ public sealed partial class IrExpressionExtractor
     /// arrays satisfy that interface natively.
     /// </summary>
     /// <summary>
-    /// Lowers <c>value?.member</c> (and <c>value?.member(args)</c>) to the
-    /// IR optional-chain / call nodes. Deeper chains
-    /// (<c>a?.b?.c</c>, <c>a?.b.c</c>) recurse on the right-hand binding.
+    /// Lowers a null-conditional access (<c>a?.B</c>, <c>a?.B(x).C</c>,
+    /// <c>a?[i]</c>, <c>a?.B?.C</c>, <c>a?.B = c</c>). Every step after the
+    /// <c>?.</c> goes through <see cref="LowerConditionalContinuation"/>;
+    /// a delegate <c>?.Invoke(args)</c> and an assignment keep dedicated
+    /// shapes.
     /// </summary>
     private IrExpression ExtractConditionalAccess(ConditionalAccessExpressionSyntax cond)
     {
         var target = Extract(cond.Expression);
-        return LowerConditionalBinding(target, cond.WhenNotNull);
+        return LowerConditionalBinding(target, cond.Expression, cond.WhenNotNull);
     }
 
     private IrExpression LowerConditionalBinding(
         IrExpression receiver,
+        ExpressionSyntax receiverSyntax,
         ExpressionSyntax whenNotNull
     )
     {
         switch (whenNotNull)
         {
-            case MemberBindingExpressionSyntax mb:
-                return new IrOptionalChain(
-                    receiver,
-                    mb.Name.Identifier.ValueText,
-                    BuildOrigin(_semantic.GetSymbolInfo(mb).Symbol)
-                );
-
             case InvocationExpressionSyntax inv
-                when inv.Expression is MemberBindingExpressionSyntax mbCall:
-                var methodSymbol = _semantic.GetSymbolInfo(inv).Symbol;
-                var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-                ApplyParamsSpread(args, methodSymbol as IMethodSymbol, inv.ArgumentList.Arguments);
+                when inv.Expression is MemberBindingExpressionSyntax
+                    && TryLowerOptionalDelegateInvoke(receiver, inv) is { } delegateCall:
+                return delegateCall;
 
-                // `handler?.Invoke(args)` lowers to a delegate
-                // optional call. The `.Invoke` member binding has no
-                // runtime counterpart in JS/TS — the delegate is the
-                // function — so the IR drops the binding name and
-                // marks the call as optional. The Dart bridge
-                // re-introduces the explicit `.call` segment because
-                // Dart's optional-call shape is `receiver?.call(...)`.
-                //
-                // `[This]`-bearing delegates fall through: the
-                // first parameter rebinds JS `this`, so the binding
-                // must remain visible to whatever lowering decides
-                // to wire the receiver argument into the runtime
-                // trampoline.
-                if (
-                    methodSymbol is IMethodSymbol delegateMethod
-                    && IsDelegateInvoke(delegateMethod)
-                    && !HasThisParameter(delegateMethod)
-                )
-                    return new IrCallExpression(
-                        receiver,
-                        args,
-                        Origin: BuildOrigin(methodSymbol),
-                        IsOptional: true
-                    );
-
-                var chainTarget = new IrOptionalChain(
-                    receiver,
-                    mbCall.Name.Identifier.ValueText,
-                    BuildOrigin(methodSymbol)
-                );
-
-                return new IrCallExpression(chainTarget, args, Origin: BuildOrigin(methodSymbol));
-
-            case MemberAccessExpressionSyntax
+            case MemberBindingExpressionSyntax
+            or ElementBindingExpressionSyntax
+            or MemberAccessExpressionSyntax
             or InvocationExpressionSyntax
             or ElementAccessExpressionSyntax:
-                return LowerConditionalContinuation(receiver, whenNotNull);
+                return LowerConditionalContinuation(receiver, receiverSyntax, whenNotNull);
 
             case ConditionalAccessExpressionSyntax nested:
-                var head = LowerConditionalBinding(receiver, nested.Expression);
+                var head = LowerConditionalBinding(receiver, receiverSyntax, nested.Expression);
 
-                return LowerConditionalBinding(head, nested.WhenNotNull);
+                return LowerConditionalBinding(head, nested.Expression, nested.WhenNotNull);
 
             case AssignmentExpressionSyntax assign
                 when TryLowerNullConditionalAssignment(receiver, assign) is { } shortCircuit:
@@ -338,25 +322,58 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Lowers a null-conditional binding whose steps continue past the first
-    /// member (<c>a?.B.C(x)</c>, <c>a?.B[0]</c>) to an
-    /// <see cref="IrNullConditionalAccess"/>. The continuation goes through
-    /// the regular <see cref="Extract"/> pipeline with the leading
-    /// <see cref="MemberBindingExpressionSyntax"/> bound to the receiver, so
-    /// every step keeps its own lowering (extension rewrites, LINQ chains,
-    /// type arguments, member origins). A receiver that is not
-    /// <see cref="IsSimpleReceiver"/> gets a temp binding so it evaluates
-    /// once.
+    /// <c>handler?.Invoke(args)</c> lowers to a delegate optional call. The
+    /// <c>.Invoke</c> member binding has no runtime counterpart in JS/TS —
+    /// the delegate is the function — so the IR drops the binding name and
+    /// marks the call as optional. The Dart bridge re-introduces the
+    /// explicit <c>.call</c> segment because Dart's optional-call shape is
+    /// <c>receiver?.call(...)</c>. <c>[This]</c>-bearing delegates fall
+    /// through: the first parameter rebinds JS <c>this</c>, so the binding
+    /// must remain visible to whatever lowering wires the receiver argument
+    /// into the runtime trampoline.
+    /// </summary>
+    private IrCallExpression? TryLowerOptionalDelegateInvoke(
+        IrExpression receiver,
+        InvocationExpressionSyntax inv
+    )
+    {
+        if (
+            _semantic.GetSymbolInfo(inv).Symbol is not IMethodSymbol method
+            || !IsDelegateInvoke(method)
+            || HasThisParameter(method)
+        )
+            return null;
+
+        var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+        ApplyParamsSpread(args, method, inv.ArgumentList.Arguments);
+
+        return new IrCallExpression(receiver, args, Origin: BuildOrigin(method), IsOptional: true);
+    }
+
+    /// <summary>
+    /// Lowers the steps after a <c>?.</c> (<c>a?.B</c>, <c>a?.B.C(x)</c>,
+    /// <c>a?[0].B</c>) to an <see cref="IrNullConditionalAccess"/>. The
+    /// steps go through the regular <see cref="Extract"/> pipeline with
+    /// <paramref name="receiverSyntax"/> bound to the receiver IR, so every
+    /// step — the leading one included — keeps its own lowering (extension
+    /// rewrites, <c>[Emit]</c>, <c>[Inline]</c>, LINQ chains, type
+    /// arguments, member origins). A receiver that is not
+    /// <see cref="IrEvaluationTraits.IsReusableNullConditionalReceiver"/>
+    /// gets a temp binding so it evaluates once.
     /// </summary>
     private IrExpression LowerConditionalContinuation(
         IrExpression receiver,
+        ExpressionSyntax receiverSyntax,
         ExpressionSyntax whenNotNull
     )
     {
-        var receiverName = IsSimpleReceiver(receiver) ? null : NextReceiverTempName();
-        var boundReceiver = receiverName is null ? receiver : new IrIdentifier(receiverName);
+        var receiverName = IrEvaluationTraits.IsReusableNullConditionalReceiver(receiver)
+            ? null
+            : NextReceiverTempName();
+
+        var receiverReference = receiverName is null ? receiver : new IrIdentifier(receiverName);
         var enclosingReceiver = _conditionalReceiver;
-        _conditionalReceiver = boundReceiver;
+        _conditionalReceiver = new BoundConditionalReceiver(receiverSyntax, receiverReference);
 
         try
         {
@@ -369,18 +386,11 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// The leading <c>.Member</c> of a null-conditional continuation, read off
-    /// the receiver bound by <see cref="LowerConditionalContinuation"/>.
+    /// The receiver of the null-conditional access being extracted: its
+    /// <paramref name="Syntax"/> and the IR every read of that syntax
+    /// resolves to (the receiver itself, or its temp binding).
     /// </summary>
-    private IrExpression ExtractConditionalMemberBinding(
-        MemberBindingExpressionSyntax binding,
-        IrExpression receiver
-    ) =>
-        new IrMemberAccess(
-            receiver,
-            binding.Name.Identifier.ValueText,
-            BuildOrigin(_semantic.GetSymbolInfo(binding).Symbol)
-        );
+    private sealed record BoundConditionalReceiver(ExpressionSyntax Syntax, IrExpression Receiver);
 
     /// <summary>
     /// Lowers <c>a?.b = c</c> (and nested forms like
@@ -424,7 +434,7 @@ public sealed partial class IrExpressionExtractor
     {
         if (_target is not null && _target != Metano.Annotations.TargetLanguage.TypeScript)
             return null;
-        if (!IsSimpleReceiver(receiver))
+        if (!IrEvaluationTraits.IsReusableReceiver(receiver))
             return null;
         if (RebindAssignmentTarget(assign.Left, receiver) is not { } rebound)
             return null;
@@ -462,7 +472,7 @@ public sealed partial class IrExpressionExtractor
     /// Mirror of <see cref="BuildExtensionPropertyAssignment"/> for the
     /// inner write of a null-conditional assignment. The receiver was
     /// already validated to be side-effect free by
-    /// <see cref="IsSimpleReceiver"/>, so we can pass it directly into the
+    /// <see cref="IrEvaluationTraits.IsReusableReceiver"/>, so we can pass it directly into the
     /// helper call without an additional let-binding. Returns
     /// <c>null</c> when the LHS isn't an extension property — the caller
     /// falls back to the legacy member-write shape.
@@ -625,14 +635,6 @@ public sealed partial class IrExpressionExtractor
         method.Parameters.Length > 0 && SymbolHelper.HasThis(method.Parameters[0]);
 
     /// <summary>
-    /// True for IR shapes that can be referenced twice in the
-    /// generated code without observable side effects — see
-    /// <see cref="IrEvaluationTraits.IsReusableReceiver"/>.
-    /// </summary>
-    private static bool IsSimpleReceiver(IrExpression expression) =>
-        IrEvaluationTraits.IsReusableReceiver(expression);
-
-    /// <summary>
     /// Evaluates <paramref name="receiver"/> once when <paramref name="build"/>
     /// needs to reference it more than once: a simple receiver is reused
     /// as-is, anything else is let-bound to a fresh temporary.
@@ -640,7 +642,7 @@ public sealed partial class IrExpressionExtractor
     private IrExpression BindReceiverOnce(
         IrExpression receiver,
         Func<IrExpression, IrExpression> build
-    ) => BindOnce(receiver, IsSimpleReceiver(receiver), build);
+    ) => BindOnce(receiver, IrEvaluationTraits.IsReusableReceiver(receiver), build);
 
     /// <summary>
     /// Like <see cref="BindReceiverOnce"/> for a value that is not a receiver
@@ -667,9 +669,9 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// Shape-based: literals, <see cref="IsSimpleReceiver">simple
+    /// Shape-based: literals, <see cref="IrEvaluationTraits.IsReusableReceiver">reusable
     /// receivers</see>, and non-assigning operators over those. Property
-    /// getters are assumed side-effect free, as in <see cref="IsSimpleReceiver"/>.
+    /// getters are assumed side-effect free, as in <see cref="IrEvaluationTraits.IsReusableReceiver"/>.
     /// </summary>
     private static bool IsSideEffectFree(IrExpression expression) =>
         expression switch
@@ -682,7 +684,7 @@ public sealed partial class IrExpressionExtractor
             IrBinaryExpression binary when !binary.Operator.IsAssignment() => IsSideEffectFree(
                 binary.Left
             ) && IsSideEffectFree(binary.Right),
-            _ => IsSimpleReceiver(expression),
+            _ => IrEvaluationTraits.IsReusableReceiver(expression),
         };
 
     /// <summary>
@@ -1449,7 +1451,8 @@ public sealed partial class IrExpressionExtractor
         if (
             assign.Left is MemberAccessExpressionSyntax setterMember
             && _semantic.GetSymbolInfo(setterMember).Symbol is IPropertySymbol setterProp
-            && TryResolveExtensionPropertyLowering(setterProp, setterMember) is { } setterLowering
+            && TryResolveExtensionPropertyLowering(setterProp, setterMember.Expression)
+                is { } setterLowering
         )
         {
             return BuildExtensionPropertyAssignment(
@@ -1599,7 +1602,7 @@ public sealed partial class IrExpressionExtractor
             isIncrementOrDecrement
             && operand is MemberAccessExpressionSyntax incMember
             && _semantic.GetSymbolInfo(incMember).Symbol is IPropertySymbol incProp
-            && TryResolveExtensionPropertyLowering(incProp, incMember) is { } incLowering
+            && TryResolveExtensionPropertyLowering(incProp, incMember.Expression) is { } incLowering
         )
         {
             return BuildExtensionPropertyIncrement(incMember, incProp, incLowering, op);
@@ -1721,13 +1724,13 @@ public sealed partial class IrExpressionExtractor
 
     // ── Member access / invocation ────────────────────────────────────────
 
-    private IrExpression ExtractMemberAccess(MemberAccessExpressionSyntax member)
+    private IrExpression ExtractMemberAccess(QualifiedMemberSyntax member)
     {
         // `decimal.Zero` / `.One` / `.MinusOne` — no static counterpart in
         // decimal.js, so synthesize `new Decimal(N)` matching the legacy
         // BclMapper behavior. Similarly `decimal.Parse(s)` rewrites to
         // `new Decimal(s)`.
-        var symbol = _semantic.GetSymbolInfo(member).Symbol;
+        var symbol = _semantic.GetSymbolInfo(member.Node).Symbol;
         if (symbol is IFieldSymbol { IsStatic: true } field)
         {
             var displayName = field.ContainingType?.ToDisplayString();
@@ -1755,12 +1758,12 @@ public sealed partial class IrExpressionExtractor
         // — the helper has no parameter list at all.
         if (
             symbol is IPropertySymbol propSymbol
-            && TryResolveExtensionPropertyLowering(propSymbol, member) is { } propLowering
+            && TryResolveExtensionPropertyLowering(propSymbol, member.Receiver) is { } propLowering
         )
         {
             var propArgs = propLowering.IsStatic
                 ? Array.Empty<IrArgument>()
-                : new[] { new IrArgument(Extract(member.Expression)) };
+                : new[] { new IrArgument(Extract(member.Receiver)) };
             return BuildExtensionHelperCall(
                 propLowering.HelperContainer,
                 propLowering.HelperName,
@@ -1781,7 +1784,7 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractDictionaryCount(member, symbol) is { } dictionaryCount)
             return dictionaryCount;
 
-        var target = Extract(member.Expression);
+        var target = Extract(member.Receiver);
         var name = member.Name.Identifier.ValueText;
 
         // `Nullable<T>.Value` is a no-op at the TS level — `T?` nullable
@@ -1790,7 +1793,7 @@ public sealed partial class IrExpressionExtractor
         // dereferencing a property that doesn't exist at runtime.
         if (name == "Value")
         {
-            var receiverType = _semantic.GetTypeInfo(member.Expression).Type;
+            var receiverType = _semantic.GetTypeInfo(member.Receiver).Type;
             if (
                 receiverType is INamedTypeSymbol
                 {
@@ -1858,9 +1861,9 @@ public sealed partial class IrExpressionExtractor
         )
             return folded;
 
-        var origin = BuildOrigin(_semantic.GetSymbolInfo(member).Symbol);
+        var origin = BuildOrigin(_semantic.GetSymbolInfo(member.Node).Symbol);
         var memberAccess = new IrMemberAccess(target, name, origin);
-        return WrapMethodGroupForDelegate(member, symbol, memberAccess);
+        return WrapMethodGroupForDelegate(member.Node, symbol, memberAccess);
     }
 
     /// <summary>
@@ -1953,7 +1956,7 @@ public sealed partial class IrExpressionExtractor
     /// shape (identifier, <c>this</c>, <c>base</c>, or a chain of
     /// <see cref="IrMemberAccess"/> nodes rooted at one of those)
     /// emits the simple <c>obj.method.bind(obj)</c>. The shape
-    /// predicate matches what <see cref="IsSimpleReceiver"/>
+    /// predicate matches what <see cref="IrEvaluationTraits.IsReusableReceiver"/>
     /// already accepts elsewhere in the extractor, so a property
     /// getter that observably mutates state is treated as pure
     /// here too — symbol-aware purity tracking is a separate
@@ -1966,7 +1969,7 @@ public sealed partial class IrExpressionExtractor
     private static IrExpression BuildBoundReference(IrMemberAccess instanceAccess)
     {
         var receiver = instanceAccess.Target;
-        if (IsSimpleReceiver(receiver))
+        if (IrEvaluationTraits.IsReusableReceiver(receiver))
             return new IrCallExpression(
                 new IrMemberAccess(instanceAccess, "bind"),
                 [new IrArgument(BindArgumentFor(receiver))]
@@ -2498,22 +2501,46 @@ public sealed partial class IrExpressionExtractor
             return BuildExtensionIndexerGetCall(elem, indexerProp, readLowering);
         }
 
-        if (TryExtractIndexOrRangeAccess(elem) is { } indexOrRangeAccess)
-            return indexOrRangeAccess;
-
-        var target = Extract(elem.Expression);
-        // Treat the first argument as the index; multi-arg indexers are uncommon.
-        var index =
-            elem.ArgumentList.Arguments.Count > 0
-                ? Extract(elem.ArgumentList.Arguments[0].Expression)
-                : new IrLiteral(0, IrLiteralKind.Int32);
-
-        return new IrElementAccess(target, index, MapExpressionType(elem.Expression));
+        return ExtractElementRead(elem, elem.Expression, elem.ArgumentList);
     }
 
+    /// <summary>
+    /// Bracket read <c>receiver[index]</c>, shared by an element access and
+    /// the leading <c>?[index]</c> of a null-conditional access
+    /// (<paramref name="node"/> is either), index-from-end and ranges
+    /// included.
+    /// </summary>
+    private IrExpression ExtractElementRead(
+        ExpressionSyntax node,
+        ExpressionSyntax receiverSyntax,
+        BracketedArgumentListSyntax arguments
+    )
+    {
+        if (TryExtractIndexOrRangeAccess(node, receiverSyntax, arguments) is { } indexOrRangeAccess)
+            return indexOrRangeAccess;
+
+        var target = Extract(receiverSyntax);
+        // Treat the first argument as the index; multi-arg indexers are uncommon.
+        var index =
+            arguments.Arguments.Count > 0
+                ? Extract(arguments.Arguments[0].Expression)
+                : new IrLiteral(0, IrLiteralKind.Int32);
+
+        return new IrElementAccess(target, index, MapExpressionType(receiverSyntax));
+    }
+
+    /// <summary>
+    /// The IR type of a receiver expression. A <c>?[index]</c> receiver is
+    /// typed nullable (<c>Dictionary&lt;K, V&gt;?</c>), but the read only runs
+    /// on the non-null value, so the annotation is dropped.
+    /// </summary>
     private IrTypeRef? MapExpressionType(ExpressionSyntax expression) =>
         _semantic.GetTypeInfo(expression).Type is { } type
-            ? IrTypeRefMapper.Map(type, _originResolver, _target)
+            ? IrTypeRefMapper.Map(
+                type.WithNullableAnnotation(NullableAnnotation.NotAnnotated),
+                _originResolver,
+                _target
+            )
             : null;
 
     // ── Lambdas ──────────────────────────────────────────────────────────
@@ -2679,9 +2706,12 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol extensionCallee
     )
     {
-        if (inv.Expression is not MemberAccessExpressionSyntax extensionAccess)
+        if (QualifiedMemberSyntax.From(inv.Expression) is not { } extensionAccess)
             return null;
-        if (TryResolveExtensionLowering(extensionCallee, extensionAccess) is not { } extLowering)
+        if (
+            TryResolveExtensionLowering(extensionCallee, extensionAccess.Receiver)
+            is not { } extLowering
+        )
             return null;
 
         var extensionArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
@@ -2710,7 +2740,7 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        var receiver = Extract(extensionAccess.Expression);
+        var receiver = Extract(extensionAccess.Receiver);
         return BuildExtensionHelperCall(
             extLowering.HelperContainer,
             extLowering.HelperName,
@@ -3093,7 +3123,7 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression, IReadOnlyList<IrExpression>, IrExpression> buildNewValue
     )
     {
-        if (IsSimpleReceiver(receiver))
+        if (IrEvaluationTraits.IsReusableReceiver(receiver))
         {
             var setterArgs = new List<IrArgument>(indexArgs.Count + 2) { new IrArgument(receiver) };
             foreach (var idx in indexArgs)
@@ -3209,7 +3239,7 @@ public sealed partial class IrExpressionExtractor
         Func<IrExpression, IrExpression> buildNewValue
     )
     {
-        if (IsSimpleReceiver(receiver))
+        if (IrEvaluationTraits.IsReusableReceiver(receiver))
         {
             return BuildExtensionHelperCall(
                 helperContainer,
@@ -3292,7 +3322,7 @@ public sealed partial class IrExpressionExtractor
 
     private ExtensionPropertyLowering? TryResolveExtensionPropertyLowering(
         IPropertySymbol prop,
-        MemberAccessExpressionSyntax access
+        ExpressionSyntax receiver
     )
     {
         if (prop.IsIndexer)
@@ -3309,7 +3339,7 @@ public sealed partial class IrExpressionExtractor
             && IsTranspilableExtensionContainer(parentStatic)
         )
         {
-            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            var receiverSymbol = _semantic.GetSymbolInfo(receiver).Symbol;
             // Static extension property: LHS is the type, the helper takes
             // no receiver, the call site emits `prop$get()` / `prop$set(v)`.
             if (prop.IsStatic && receiverSymbol is INamedTypeSymbol)
@@ -3339,7 +3369,7 @@ public sealed partial class IrExpressionExtractor
             && IsTranspilableExtensionContainer(containing)
         )
         {
-            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            var receiverSymbol = _semantic.GetSymbolInfo(receiver).Symbol;
             if (receiverSymbol is INamedTypeSymbol)
                 return null;
             return new ExtensionPropertyLowering(
@@ -3375,7 +3405,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private ExtensionCallLowering? TryResolveExtensionLowering(
         IMethodSymbol callee,
-        MemberAccessExpressionSyntax access
+        ExpressionSyntax receiver
     )
     {
         if (
@@ -3401,7 +3431,7 @@ public sealed partial class IrExpressionExtractor
             && IsTranspilableExtensionContainer(parentStatic)
         )
         {
-            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            var receiverSymbol = _semantic.GetSymbolInfo(receiver).Symbol;
             // Static extension members dispatch through `Type.Member(args)` —
             // the LHS is the receiver-type symbol, the receiver isn't a value,
             // and the helper takes no implicit first argument. Treat the

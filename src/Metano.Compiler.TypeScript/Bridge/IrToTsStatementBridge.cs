@@ -266,6 +266,8 @@ public static class IrToTsStatementBridge
                     ? IrToTsExpressionBridge.Map(ye.Value, bclRegistry)
                     : new TsIdentifier("undefined")
             ),
+            IrExpressionStatement { Expression: IrNullConditionalAccess access } =>
+                IrToTsExpressionBridge.MapNullConditionalStatement(access, bclRegistry),
             IrExpressionStatement es => new TsExpressionStatement(
                 IrToTsExpressionBridge.Map(es.Expression, bclRegistry)
             ),

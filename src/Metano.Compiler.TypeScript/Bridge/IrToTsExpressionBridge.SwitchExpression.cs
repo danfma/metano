@@ -128,31 +128,21 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// <c>(($s) =&gt; { … })(scrutinee)</c>. The parameter carries no type
-    /// annotation: TypeScript types an IIFE parameter from its argument, which
-    /// stays exact under every strict flag (indexed access, nullability,
-    /// BCL-mapped types), and the arms' <c>instanceof</c> tests narrow it for
-    /// the designators. An arm that awaits makes the arrow <c>async</c> and
-    /// the call awaited, so the <c>await</c> stays inside an async function.
+    /// <c>(($s) =&gt; { … })(scrutinee)</c> (see
+    /// <see cref="TsImmediateInvocation.Of"/>); the arms' <c>instanceof</c>
+    /// tests narrow the untyped parameter for the designators.
     /// </summary>
     private static TsExpression BuildSwitchIife(
         IrSwitchExpression sw,
         IReadOnlyList<TsStatement> body,
         DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        var isAsync = sw.Arms.Any(ArmAwaits);
-
-        var arrow = new TsArrowFunction(
-            [new TsParameter(ScrutineeParameterName, null)],
+    ) =>
+        TsImmediateInvocation.Of(
+            ScrutineeParameterName,
+            Map(sw.Scrutinee, bclRegistry),
             body,
-            Async: isAsync
+            isAsync: sw.Arms.Any(ArmAwaits)
         );
-
-        var call = new TsCallExpression(arrow, [Map(sw.Scrutinee, bclRegistry)]);
-
-        return isAsync ? new TsAwaitExpression(call) : call;
-    }
 
     private static bool ArmAwaits(IrSwitchArm arm) =>
         (arm.WhenClause is not null && IrEvaluationTraits.ContainsAwait(arm.WhenClause))

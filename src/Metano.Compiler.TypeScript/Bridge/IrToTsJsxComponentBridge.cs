@@ -373,7 +373,6 @@ public static class IrToTsJsxComponentBridge
                 Target = Rewrite(ea.Target, propNames, referenced),
                 Index = Rewrite(ea.Index, propNames, referenced),
             },
-            IrOptionalChain oc => oc with { Target = Rewrite(oc.Target, propNames, referenced) },
             IrSliceExpression slice => slice with
             {
                 Target = Rewrite(slice.Target, propNames, referenced),

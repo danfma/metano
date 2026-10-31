@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -16,7 +17,7 @@ namespace Metano.Compiler.Extraction;
 /// <see cref="IrSliceExpression"/>.
 ///
 /// <para>
-/// A receiver that is not a <see cref="IsSimpleReceiver">simple
+/// A receiver that is not a <see cref="IrEvaluationTraits.IsReusableReceiver">reusable
 /// receiver</see> is bound once through an <see cref="IrLetExpression"/>, so
 /// its side effects run exactly once even though the desugared form reads it
 /// twice (indexing and length). Writes through such a receiver
@@ -53,9 +54,13 @@ public sealed partial class IrExpressionExtractor
     /// Returns <c>null</c> for every other element access, which keeps the
     /// ordinary indexer lowering.
     /// </summary>
-    private IrExpression? TryExtractIndexOrRangeAccess(ElementAccessExpressionSyntax elem)
+    private IrExpression? TryExtractIndexOrRangeAccess(
+        ExpressionSyntax elem,
+        ExpressionSyntax receiverSyntax,
+        BracketedArgumentListSyntax arguments
+    )
     {
-        if (elem.ArgumentList.Arguments is not [var argument])
+        if (arguments.Arguments is not [var argument])
             return null;
 
         var argumentType = _semantic.GetTypeInfo(argument.Expression).Type;
@@ -70,29 +75,30 @@ public sealed partial class IrExpressionExtractor
         var operand = Unparenthesize(argument.Expression);
 
         if (length is not null && isIndex && AsIndexFromEnd(operand) is { } indexFromEnd)
-            return ExtractIndexFromEndAccess(elem, indexFromEnd, length);
+            return ExtractIndexFromEndAccess(elem, receiverSyntax, indexFromEnd, length);
 
         if (
             length is not null
             && operand is RangeExpressionSyntax range
             && IsLowerableRange(access, range)
         )
-            return ExtractRangeAccess(elem, range, length);
+            return ExtractRangeAccess(receiverSyntax, range, length);
 
         return ReportUnsupported(
             elem,
             isIndex ? "IndexElementAccess" : "RangeElementAccess",
-            DescribeUnsupportedIndexOrRange(elem, operand, access)
+            DescribeUnsupportedIndexOrRange(elem, receiverSyntax, operand, access)
         );
     }
 
     private string DescribeUnsupportedIndexOrRange(
-        ElementAccessExpressionSyntax elem,
+        ExpressionSyntax elem,
+        ExpressionSyntax receiverSyntax,
         ExpressionSyntax operand,
         IOperation? access
     )
     {
-        var receiverType = _semantic.GetTypeInfo(elem.Expression).Type?.ToDisplayString();
+        var receiverType = _semantic.GetTypeInfo(receiverSyntax).Type?.ToDisplayString();
 
         return operand switch
         {
@@ -119,15 +125,16 @@ public sealed partial class IrExpressionExtractor
     /// an assignable location — there the length is read before the offset.
     /// </summary>
     private IrExpression ExtractIndexFromEndAccess(
-        ElementAccessExpressionSyntax elem,
+        ExpressionSyntax elem,
+        ExpressionSyntax receiverSyntax,
         PrefixUnaryExpressionSyntax indexFromEnd,
         ISymbol length
     )
     {
-        var receiver = Extract(elem.Expression);
+        var receiver = Extract(receiverSyntax);
         var isWriteTarget = IsWriteTarget(elem);
 
-        if (!IsSimpleReceiver(receiver) && isWriteTarget)
+        if (!IrEvaluationTraits.IsReusableReceiver(receiver) && isWriteTarget)
             return ReportUnsupported(
                 elem,
                 "IndexFromEndWrite",
@@ -136,7 +143,7 @@ public sealed partial class IrExpressionExtractor
             );
 
         var offset = Extract(indexFromEnd.Operand);
-        var targetType = MapExpressionType(elem.Expression);
+        var targetType = MapExpressionType(receiverSyntax);
 
         IrExpression Access(IrExpression target, IrExpression boundOffset) =>
             new IrElementAccess(target, LengthMinus(target, length, boundOffset), targetType);
@@ -156,13 +163,13 @@ public sealed partial class IrExpressionExtractor
     /// read after every bound has been evaluated, as in C#.
     /// </summary>
     private IrExpression ExtractRangeAccess(
-        ElementAccessExpressionSyntax elem,
+        ExpressionSyntax receiverSyntax,
         RangeExpressionSyntax range,
         ISymbol length
     )
     {
-        var receiver = Extract(elem.Expression);
-        var targetType = MapExpressionType(elem.Expression);
+        var receiver = Extract(receiverSyntax);
+        var targetType = MapExpressionType(receiverSyntax);
         var start = ExtractRangeBound(range.LeftOperand);
         var end = ExtractRangeBound(range.RightOperand);
 
@@ -313,7 +320,7 @@ public sealed partial class IrExpressionExtractor
     /// an assignment target, an increment/decrement operand, or a
     /// <c>ref</c>/<c>out</c> argument.
     /// </summary>
-    private static bool IsWriteTarget(ElementAccessExpressionSyntax elem) =>
+    private static bool IsWriteTarget(ExpressionSyntax elem) =>
         elem.Parent switch
         {
             AssignmentExpressionSyntax assignment => assignment.Left == elem,
