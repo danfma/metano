@@ -111,6 +111,7 @@ public static class TranspileHelper
     )
     {
         var tree = ParseSource(csharpSource);
+
         var references = extraReferences is null
             ? (IEnumerable<MetadataReference>)BaseReferences
             : BaseReferences.Concat(extraReferences);
@@ -165,6 +166,7 @@ public static class TranspileHelper
             compilation,
             generatedTrees: generatedTrees
         );
+
         var transformer = new TypeTransformer(ir, compilation)
         {
             UseIrBodiesWhenCovered = useIrBodies,
