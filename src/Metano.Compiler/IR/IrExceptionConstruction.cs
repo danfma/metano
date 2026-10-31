@@ -28,9 +28,19 @@ namespace Metano.Compiler.IR;
 /// <c>null</c> one) is supplied — e.g. <c>"Value cannot be null."</c> for
 /// <c>ArgumentNullException</c>. <c>null</c> when the type's default message
 /// is not known.</param>
+/// <param name="MessageMayBeNull">Whether the supplied <c>message</c> argument
+/// may be <c>null</c> at runtime according to C# nullable flow analysis; a
+/// backend then falls back to <paramref name="DefaultMessage"/> at runtime,
+/// as .NET does.</param>
+/// <param name="IsMessageOverridden">Whether the class being constructed (or
+/// one of its transpilable bases) overrides <c>Exception.Message</c>; a
+/// backend must then leave the native message unset so the override is not
+/// shadowed.</param>
 public sealed record IrExceptionConstruction(
     IReadOnlyList<IrExceptionArgumentRole> ArgumentRoles,
-    string? DefaultMessage = null
+    string? DefaultMessage = null,
+    bool MessageMayBeNull = false,
+    bool IsMessageOverridden = false
 )
 {
     /// <summary>
@@ -57,8 +67,8 @@ public sealed record IrExceptionConstruction(
 public enum IrExceptionArgumentRole
 {
     /// <summary>A parameter with no emulated meaning (e.g.
-    /// <c>FileNotFoundException.fileName</c>); backends drop it.</summary>
-    Unsupported,
+    /// <c>FileNotFoundException.fileName</c>); backends drop its value.</summary>
+    Unmapped,
 
     /// <summary><c>message</c>: the human-readable error message.</summary>
     Message,
@@ -75,4 +85,9 @@ public enum IrExceptionArgumentRole
     /// (<c>ArgumentOutOfRangeException</c>); .NET appends
     /// <c>"Actual value was X."</c> on a new line.</summary>
     ActualValue,
+
+    /// <summary><c>objectName</c>: the disposed object
+    /// (<c>ObjectDisposedException</c>); .NET appends
+    /// <c>"Object name: 'X'."</c> on a new line.</summary>
+    ObjectName,
 }

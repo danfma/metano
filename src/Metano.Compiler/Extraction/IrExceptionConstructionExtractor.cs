@@ -1,5 +1,7 @@
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Metano.Compiler.Extraction;
 
@@ -12,19 +14,19 @@ namespace Metano.Compiler.Extraction;
 /// lowering is independent of argument order and overload shape.
 /// <para>
 /// The default messages mirror what .NET 10 reports for a parameterless
-/// construction (verified against the runtime); <c>System.Exception</c>
-/// itself reports <c>"Exception of type '&lt;runtime type&gt;' was thrown."</c>,
-/// where the runtime type is the most-derived class being constructed.
+/// construction (verified against the runtime). <c>System.Exception</c>
+/// itself reports <c>"Exception of type 'X' was thrown."</c>, where .NET names
+/// the runtime most-derived type; a static lowering names the class whose
+/// constructor makes the call instead, formatted like .NET's
+/// <c>Type.ToString()</c> (<c>Outer+Inner</c>, <c>Box`1[T]</c>).
 /// </para>
 /// </summary>
 public static class IrExceptionConstructionExtractor
 {
     private const string SystemExceptionName = "System.Exception";
+    private const string MessageParameterName = "message";
 
-    private static readonly IReadOnlyDictionary<string, string> DefaultMessages = new Dictionary<
-        string,
-        string
-    >
+    private static readonly Dictionary<string, string> DefaultMessages = new()
     {
         ["System.SystemException"] = "System error.",
         ["System.ApplicationException"] = "Error in the application.",
@@ -48,6 +50,7 @@ public static class IrExceptionConstructionExtractor
         ["System.OverflowException"] = "Arithmetic operation resulted in an overflow.",
         ["System.ArithmeticException"] = "Overflow or underflow in the arithmetic operation.",
         ["System.UnauthorizedAccessException"] = "Attempted to perform an unauthorized operation.",
+        ["System.ObjectDisposedException"] = "Cannot access a disposed object.",
     };
 
     /// <summary>
@@ -60,15 +63,22 @@ public static class IrExceptionConstructionExtractor
     /// <param name="constructor">The exception constructor being invoked.</param>
     /// <param name="arguments">The arguments, positional or named, as they
     /// appear in the owning IR argument list.</param>
-    /// <param name="runtimeType">The most-derived type being constructed (the
-    /// exception itself for <c>new</c>, the derived user class for a base
-    /// call); only <c>System.Exception</c>'s default message depends on it.</param>
+    /// <param name="callingType">The class whose code performs the
+    /// construction: the exception itself for <c>new</c>, the derived user
+    /// class for a base call. It names <c>System.Exception</c>'s default
+    /// message and decides whether <c>Message</c> is overridden.</param>
     /// <param name="target">The active backend, for target-scoped <c>[Ignore]</c>.</param>
+    /// <param name="sourceArguments">The source argument list, used with
+    /// <paramref name="model"/> to read the message argument's nullable flow
+    /// state; <c>null</c> for an implicit base call.</param>
+    /// <param name="model">The semantic model of <paramref name="sourceArguments"/>.</param>
     public static IrExceptionConstruction? Extract(
         IMethodSymbol? constructor,
         IReadOnlyList<IrArgument> arguments,
-        INamedTypeSymbol runtimeType,
-        Metano.Annotations.TargetLanguage? target
+        INamedTypeSymbol callingType,
+        Metano.Annotations.TargetLanguage? target,
+        ArgumentListSyntax? sourceArguments = null,
+        SemanticModel? model = null
     )
     {
         if (constructor is null || !LacksTargetDeclaration(constructor.ContainingType, target))
@@ -80,7 +90,9 @@ public static class IrExceptionConstructionExtractor
 
         return new IrExceptionConstruction(
             roles,
-            DefaultMessageOf(constructor.ContainingType, runtimeType)
+            DefaultMessageOf(constructor.ContainingType, callingType),
+            MessageMayBeNull: MessageMayBeNull(sourceArguments, model),
+            IsMessageOverridden: OverridesMessage(callingType, target)
         );
     }
 
@@ -106,23 +118,92 @@ public static class IrExceptionConstructionExtractor
     private static IrExceptionArgumentRole RoleOf(IParameterSymbol? parameter) =>
         parameter?.Name switch
         {
-            "message" => IrExceptionArgumentRole.Message,
+            MessageParameterName => IrExceptionArgumentRole.Message,
             "innerException" => IrExceptionArgumentRole.InnerException,
             "paramName" => IrExceptionArgumentRole.ParamName,
             "actualValue" => IrExceptionArgumentRole.ActualValue,
-            _ => IrExceptionArgumentRole.Unsupported,
+            "objectName" => IrExceptionArgumentRole.ObjectName,
+            _ => IrExceptionArgumentRole.Unmapped,
         };
+
+    private static bool MessageMayBeNull(ArgumentListSyntax? sourceArguments, SemanticModel? model)
+    {
+        if (sourceArguments is null || model is null)
+            return false;
+
+        var messageArgument = sourceArguments.Arguments.FirstOrDefault(argument =>
+            model.GetOperation(argument)
+                is IArgumentOperation { Parameter.Name: MessageParameterName }
+        );
+
+        return messageArgument is not null
+            && model.GetTypeInfo(messageArgument.Expression).Nullability.FlowState
+                is NullableFlowState.MaybeNull;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="callingType"/> or one of its transpilable bases
+    /// overrides <c>Exception.Message</c>. Bases without a target declaration
+    /// (the BCL) never count — their message is the native one.
+    /// </summary>
+    private static bool OverridesMessage(
+        INamedTypeSymbol callingType,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        for (
+            var current = callingType;
+            current is not null && IrTypeRefMapper.IsTranspilableType(current, target);
+            current = current.BaseType
+        )
+        {
+            if (DeclaresMessageOverride(current))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool DeclaresMessageOverride(INamedTypeSymbol type) =>
+        type.GetMembers("Message").OfType<IPropertySymbol>().Any(property => property.IsOverride);
 
     private static string? DefaultMessageOf(
         INamedTypeSymbol exceptionType,
-        INamedTypeSymbol runtimeType
+        INamedTypeSymbol callingType
     )
     {
         var exceptionName = exceptionType.ToDisplayString();
 
         if (exceptionName == SystemExceptionName)
-            return $"Exception of type '{runtimeType.ToDisplayString()}' was thrown.";
+            return $"Exception of type '{DotNetTypeName(callingType)}' was thrown.";
 
         return DefaultMessages.GetValueOrDefault(exceptionName);
     }
+
+    /// <summary>
+    /// Formats a type the way .NET's <c>Type.ToString()</c> does: nested types
+    /// joined with <c>+</c>, generic arity as <c>`N</c> followed by the type
+    /// arguments in brackets.
+    /// </summary>
+    private static string DotNetTypeName(INamedTypeSymbol type)
+    {
+        var typeArguments =
+            type.TypeArguments.Length > 0
+                ? "[" + string.Join(",", type.TypeArguments.Select(t => t.ToDisplayString())) + "]"
+                : "";
+
+        return QualifiedMetadataName(type) + typeArguments;
+    }
+
+    private static string QualifiedMetadataName(INamedTypeSymbol type)
+    {
+        var prefix = type.ContainingType is { } containing
+            ? QualifiedMetadataName(containing) + "+"
+            : NamespacePrefix(type.ContainingNamespace);
+
+        return prefix + type.MetadataName;
+    }
+
+    private static string NamespacePrefix(INamespaceSymbol? ns) =>
+        ns is null || ns.IsGlobalNamespace ? "" : ns.ToDisplayString() + ".";
 }

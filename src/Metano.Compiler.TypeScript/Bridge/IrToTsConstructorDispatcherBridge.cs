@@ -132,51 +132,128 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        // When the constructor has a `: base(...)` initializer (or calls a
-        // BCL exception base, even implicitly), emit the matching super(...)
-        // call right after the parameter rebinds so the arguments resolve to
-        // the just-declared locals.
-        var superArgs = BuildSuperArguments(ctor, bclRegistry);
-
-        if (superArgs is not null)
-        {
-            branch.Add(
-                new TsExpressionStatement(
-                    new TsCallExpression(new TsIdentifier("super"), superArgs)
-                )
-            );
-        }
-
-        // Inline the constructor body. The body references the original
-        // parameter names which are now in scope as the locals declared
-        // above.
-        if (ctor.Body is { Count: > 0 } body)
-        {
-            foreach (var stmt in body)
-                branch.Add(IrToTsStatementBridge.Map(stmt, bclRegistry));
-        }
+        branch.AddRange(LowerConstructorInvocation(ctor, chainDepth: 0, bclRegistry));
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
         return new TsIfStatement(condition, branch);
     }
 
-    private static IReadOnlyList<TsExpression>? BuildSuperArguments(
+    /// <summary>
+    /// The statements that run <paramref name="ctor"/> once its parameters are
+    /// in scope: either its <c>: this(...)</c> delegation (see
+    /// <see cref="LowerThisChain"/>) or its base call — the matching
+    /// <c>super(...)</c> after any argument temporaries — followed by its
+    /// body. Every path therefore reaches exactly one <c>super(...)</c> when
+    /// the chain ends in a base call.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> LowerConstructorInvocation(
         IrConstructorDeclaration ctor,
+        int chainDepth,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        if (ctor.BaseExceptionConstruction is { } construction)
+        var statements = new List<TsStatement>();
+
+        if (ctor.ThisChain is { } chain)
+            statements.AddRange(LowerThisChain(chain, chainDepth, bclRegistry));
+        else if (
+            IrToTsExceptionConstructionBridge.MapBaseArguments(ctor, bclRegistry) is { } baseCall
+        )
+            statements.AddRange(baseCall.ToStatements());
+
+        // The body references the original parameter names, which the caller
+        // already brought into scope.
+        foreach (var statement in ctor.Body ?? [])
+            statements.Add(IrToTsStatementBridge.Map(statement, bclRegistry));
+
+        return statements;
+    }
+
+    /// <summary>
+    /// Inlines a <c>: this(...)</c> delegation, since a TS constructor cannot
+    /// call a sibling overload. The chained arguments are evaluated once, in
+    /// source order, into temporaries; a nested block then binds the target's
+    /// parameters to them (named arguments by name, missing ones to their
+    /// default) and runs the target — recursively, so multi-level chains end
+    /// in the single base call. The block keeps the target's parameter names
+    /// from clashing with the caller's.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> LowerThisChain(
+        IrConstructorChain chain,
+        int chainDepth,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var temporaries = chain
+            .Arguments.Select(
+                (argument, index) =>
+                    new TsVariableDeclaration(
+                        $"__chain{chainDepth}Arg{index}",
+                        IrToTsExpressionBridge.Map(argument.Value, bclRegistry)
+                    )
+            )
+            .ToList();
+
+        var targetScope = new List<TsStatement>();
+        var target = chain.Target;
+
+        for (var index = 0; index < target.Parameters.Count; index++)
         {
-            return IrToTsExceptionConstructionBridge.MapErrorArguments(
-                construction,
-                ctor.BaseArguments ?? [],
-                bclRegistry
+            var parameter = target.Parameters[index].Parameter;
+
+            targetScope.Add(
+                new TsVariableDeclaration(
+                    TypeScriptNaming.ToCamelCase(parameter.Name),
+                    BindChainedParameter(chain, temporaries, parameter, index, bclRegistry)
+                )
             );
         }
 
-        return ctor.BaseArguments is { Count: > 0 } baseArgs
-            ? baseArgs.Select(a => IrToTsExpressionBridge.MapArgument(a, bclRegistry)).ToList()
-            : null;
+        targetScope.AddRange(LowerConstructorInvocation(target, chainDepth + 1, bclRegistry));
+
+        return [.. temporaries, new TsBlockStatement(targetScope)];
+    }
+
+    private static TsExpression BindChainedParameter(
+        IrConstructorChain chain,
+        IReadOnlyList<TsVariableDeclaration> temporaries,
+        IrParameter parameter,
+        int parameterIndex,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var argumentIndex = ChainedArgumentIndex(chain.Arguments, parameter.Name, parameterIndex);
+
+        if (argumentIndex >= 0)
+            return new TsIdentifier(temporaries[argumentIndex].Name);
+
+        return parameter.DefaultValue is { } defaultValue
+            ? IrToTsExpressionBridge.Map(defaultValue, bclRegistry)
+            : new TsIdentifier("undefined");
+    }
+
+    /// <summary>
+    /// The index of the chained argument bound to the parameter: a named
+    /// argument by name, otherwise the positional argument at
+    /// <paramref name="parameterIndex"/>; <c>-1</c> when the parameter is
+    /// omitted.
+    /// </summary>
+    private static int ChainedArgumentIndex(
+        IReadOnlyList<IrArgument> arguments,
+        string parameterName,
+        int parameterIndex
+    )
+    {
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            if (arguments[index].Name == parameterName)
+                return index;
+        }
+
+        var isPositional =
+            parameterIndex < arguments.Count && arguments[parameterIndex].Name is null;
+
+        return isPositional ? parameterIndex : -1;
     }
 }

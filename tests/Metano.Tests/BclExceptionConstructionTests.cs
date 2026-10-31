@@ -102,8 +102,9 @@ public class BclExceptionConstructionTests
             "public static Exception Rethrow(Exception error) { Exception local = error; return local; }"
         );
 
-        await Assert.That(output).Contains("static rethrow(error: Error): Error");
-        await Assert.That(output).DoesNotContain("Exception");
+        await Assert.That(output).Contains("static rethrow(error: Error): Error {");
+        await Assert.That(output).Contains("const local = error;");
+        await Assert.That(output).DoesNotContain(": Exception");
     }
 
     [Test]
@@ -129,6 +130,7 @@ public class BclExceptionConstructionTests
         );
 
         await Assert.That(output).Contains("} catch (e) {");
+
         await Assert.That(output).Contains("return e.message;");
     }
 
@@ -167,8 +169,216 @@ public class BclExceptionConstructionTests
         );
 
         var output = result["load-failed-exception.ts"];
+
         await Assert.That(output).Contains("constructor(message: string, inner: Error)");
         await Assert.That(output).Contains("super(message, { cause: inner });");
+    }
+
+    [Test]
+    public async Task NullMessageLiteral_UsesDefaultMessage()
+    {
+        var output = TranspileGuard(
+            "public static void Check(string value) { throw new ArgumentException(null, nameof(value)); }"
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "throw new Error(\"Value does not fall within the expected range. (Parameter 'value')\");"
+            );
+    }
+
+    [Test]
+    public async Task EmptyParamNameLiteral_OmitsParameterSuffix()
+    {
+        var output = TranspileGuard(
+            "public static void Check() { throw new ArgumentException(\"msg\", \"\"); }"
+        );
+
+        await Assert.That(output).Contains("throw new Error(\"msg\");");
+    }
+
+    [Test]
+    public async Task UnmappedSideEffectFreeArgument_IsDropped()
+    {
+        var output = TranspileGuard(
+            "public static void Load(string path) { throw new System.IO.FileNotFoundException(\"missing\", path); }"
+        );
+
+        await Assert.That(output).Contains("throw new Error(\"missing\");");
+    }
+
+    [Test]
+    public async Task SideEffectingArguments_EvaluateOnceInSourceOrder()
+    {
+        var output = TranspileGuard(
+            """
+            public static void Load() { throw new System.IO.FileNotFoundException(Describe(), Locate()); }
+
+            public static string Describe() => "missing";
+
+            public static string Locate() => "file.txt";
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "throw ((__exceptionArg0, __exceptionArg1) => new Error(__exceptionArg0))(Guard.describe(), Guard.locate());"
+            );
+    }
+
+    [Test]
+    public async Task SideEffectingArgumentsInParamNameFirstOrder_ComposeFromTemporaries()
+    {
+        var output = TranspileGuard(
+            """
+            public static void Check() { throw new ArgumentOutOfRangeException(Name(), Describe()); }
+
+            public static string Name() => "value";
+
+            public static string Describe() => "too big";
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "throw ((__exceptionArg0, __exceptionArg1) => new Error(`${__exceptionArg1} (Parameter '${__exceptionArg0}')`))(Guard.name(), Guard.describe());"
+            );
+    }
+
+    [Test]
+    public async Task SingleSideEffectingMappedArgument_StaysInline()
+    {
+        var output = TranspileGuard(
+            """
+            public static void Check() { throw new ArgumentOutOfRangeException(Name(), "too big"); }
+
+            public static string Name() => "value";
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains("throw new Error(`too big (Parameter '${Guard.name()}')`);");
+    }
+
+    [Test]
+    public async Task SideEffectingUnmappedArgument_IsStillEvaluated()
+    {
+        var output = TranspileGuard(
+            """
+            public static void Load() { throw new System.IO.FileNotFoundException("missing", Locate()); }
+
+            public static string Locate() => "file.txt";
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "throw ((__exceptionArg0, __exceptionArg1) => new Error(__exceptionArg0))(\"missing\", Guard.locate());"
+            );
+    }
+
+    [Test]
+    public async Task ObjectDisposedException_AppendsObjectName()
+    {
+        var output = TranspileGuard(
+            "public static void Use() { throw new ObjectDisposedException(\"Connection\"); }"
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "throw new Error(`Cannot access a disposed object.\\nObject name: 'Connection'.`);"
+            );
+    }
+
+    [Test]
+    public async Task NullableMessage_FallsBackToDefaultMessageAtRuntime()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using System;
+
+            [Transpile]
+            public sealed class OptionalMessageException(string? message = null, Exception? inner = null)
+                : Exception(message, inner);
+            """
+        );
+
+        await Assert
+            .That(result["optional-message-exception.ts"])
+            .Contains(
+                "super(message ?? \"Exception of type 'OptionalMessageException' was thrown.\", { cause: inner });"
+            );
+    }
+
+    [Test]
+    public async Task GenericUserException_NamesTypeLikeDotNet()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace App
+            {
+                [Transpile]
+                public sealed class LookupFailedException<TKey> : Exception
+                {
+                    public LookupFailedException(TKey key)
+                    {
+                        Key = key;
+                    }
+
+                    public TKey Key { get; }
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(result["app/lookup-failed-exception.ts"])
+            .Contains(
+                "super(\"Exception of type 'App.LookupFailedException`1[TKey]' was thrown.\");"
+            );
+    }
+
+    [Test]
+    public async Task NewOfTranspilableUserException_KeepsItsOwnClassAndArguments()
+    {
+        var output = TranspileGuard(
+            """
+            public static void Check(string value) { throw new SlugException("bad slug", value); }
+            }
+
+            [Transpile]
+            public sealed class SlugException(string message, string paramName) : Exception(message)
+            {
+                public string ParamName { get; } = paramName;
+            """
+        );
+
+        await Assert.That(output).Contains("throw new SlugException(\"bad slug\", value);");
+    }
+
+    [Test]
+    public async Task ExceptionMemberReads_MapToErrorShape()
+    {
+        var output = TranspileGuard(
+            """
+            public static Exception? Inner(Exception error) => error.InnerException;
+
+            public static string? Trace(Exception error) => error.StackTrace;
+            """
+        );
+
+        await Assert.That(output).Contains("return ((error.cause as Error | undefined) ?? null);");
+
+        await Assert.That(output).Contains("return (error.stack ?? null);");
     }
 
     private static string TranspileGuard(string members)

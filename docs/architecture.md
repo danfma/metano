@@ -253,11 +253,19 @@ Each shape has a dedicated IR → TS lowering, named consistently:
 - **`IrToTsPlainObjectBridge`** — `[PlainObject]` records → TS interface
   without a class wrapper.
 - **`IrToTsBrandedBridge`** — `[Branded]` structs → branded primitive types.
-- **`IrToTsExceptionConstructionBridge`** — BCL exception constructions
-  (`new ArgumentException(...)`, a user exception's base call) →
-  `Error(message, { cause })` arguments, composing the message from the
-  constructor-parameter roles like .NET. User exceptions themselves go
-  through `IrToTsClassEmitter` and extend `Error`.
+- **`IrToTsExceptionConstructionBridge`** — lowers the *arguments* of a BCL
+  exception construction (`new ArgumentException(...)`, or a user exception's
+  base / `: this(...)`-chained call) to `Error(message, { cause })`, composing
+  the message from the constructor-parameter roles of `IrExceptionConstruction`
+  the way .NET does, and evaluating side-effecting arguments once in source
+  order. It emits no declaration: user exceptions go through
+  `IrToTsClassEmitter` and extend `Error`; BCL exception types map to `Error`
+  in type positions. Known limitations: since every BCL exception type is
+  `Error` at runtime, `o is ArgumentException` lowers to `instanceof Error`
+  (true for any error) and typed `catch` clauses ignore their filter; the
+  `System.Exception` default message names the class that makes the call
+  (formatted like .NET's `Type.ToString()`), not the runtime most-derived
+  class; `AggregateException` inner-exception lists are not mapped.
 - **`IrToTsModuleBridge`** — `[NoContainer]` / legacy
   `[ExportedAsModule]` static classes + top-level statements → flat top-level
   functions.

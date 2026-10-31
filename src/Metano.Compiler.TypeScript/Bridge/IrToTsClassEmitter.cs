@@ -121,7 +121,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         return IrToTsClassBridge.BuildSimpleConstructor(
             ir.Constructor,
             ctorParams,
-            ResolveSuperArgs(extendsType, ir),
+            ResolveBaseCall(extendsType, ir),
             _context.DeclarativeMappings
         );
     }
@@ -729,25 +729,15 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// parameterless constructor, so the result is an empty list
     /// (<c>super()</c>).
     /// </summary>
-    private IReadOnlyList<TsExpression>? ResolveSuperArgs(
-        TsType? extendsType,
-        IrClassDeclaration ir
-    )
+    private TsBaseConstructorCall? ResolveBaseCall(TsType? extendsType, IrClassDeclaration ir)
     {
         if (extendsType is null)
             return null;
 
-        if (ir.Constructor?.BaseExceptionConstruction is { } construction)
-        {
-            return IrToTsExceptionConstructionBridge.MapErrorArguments(
-                construction,
-                ir.Constructor.BaseArguments ?? [],
-                _context.DeclarativeMappings
-            );
-        }
+        var baseCall = ir.Constructor is { } ctor
+            ? IrToTsExceptionConstructionBridge.MapBaseArguments(ctor, _context.DeclarativeMappings)
+            : null;
 
-        return (ir.Constructor?.BaseArguments ?? [])
-            .Select(a => IrToTsExpressionBridge.MapArgument(a, _context.DeclarativeMappings))
-            .ToList();
+        return baseCall ?? new TsBaseConstructorCall([], []);
     }
 }
