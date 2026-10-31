@@ -38,6 +38,20 @@ export function first(items: number[] | null): number | null {
   return items?.[0];
 }
 
+export function clearNextItems(order: Order | null): void {
+  {
+    const $receiver = order?.next;
+
+    if ($receiver != null) {
+      $receiver.items.length = 0;
+    }
+  }
+}
+
+export function removeFromNext(order: Order | null, item: number): boolean | null {
+  return (($receiver) => $receiver == null ? null : listRemove($receiver.items, item))(order?.next);
+}
+
 export async function removeLater(order: Order, item: Promise<number>): Promise<boolean | null> {
   return await (async ($receiver) => $receiver == null ? null : listRemove($receiver.items, await item))(order.getNext());
 }

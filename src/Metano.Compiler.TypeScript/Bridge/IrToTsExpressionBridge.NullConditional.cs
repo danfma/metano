@@ -10,11 +10,15 @@ public static partial class IrToTsExpressionBridge
     private static readonly TsLiteral NullLiteral = new("null");
 
     /// <summary>
-    /// The parameter a receiver that must evaluate once is bound to. A nested
-    /// guard may reuse the name: its argument is evaluated in the enclosing
-    /// scope, so each placeholder still reads its own access's receiver.
-    /// <c>$</c> cannot appear in a C# identifier, so it never captures a
-    /// source local.
+    /// The parameter a receiver that must evaluate once is bound to. Nested
+    /// guards reuse the name safely by a local rule: a receiver that reads
+    /// an enclosing access's placeholder is never repeated textually
+    /// (<see cref="IrEvaluationTraits.IsReusableNullConditionalReceiver"/>),
+    /// it is bound, and a bound value is the guard's argument — evaluated in
+    /// the enclosing scope, where <c>$receiver</c> still names the enclosing
+    /// receiver. Inside the guard, every placeholder belongs to the guard
+    /// itself. <c>$</c> cannot appear in a C# identifier, so the name never
+    /// captures a source local.
     /// </summary>
     private const string ConditionalReceiverParameter = "$receiver";
 

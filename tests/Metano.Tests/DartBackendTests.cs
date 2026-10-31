@@ -934,7 +934,9 @@ public class DartBackendTests
 
         await Assert
             .That(dart)
-            .Contains("(throw UnsupportedError('Unsupported expression: NullConditionalAccess'))");
+            .Contains(
+                "/* TODO: unsupported NullConditionalAccess shape */ (throw UnsupportedError('Unsupported expression: NullConditionalAccess'))"
+            );
 
         await Assert.That(dart).DoesNotContain("TODO: IrNullConditionalAccess");
     }
