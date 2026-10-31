@@ -13,7 +13,9 @@ namespace Metano.Compiler.TypeScript.Parenthesization.Templates;
 /// one: a template string (backtick) is one opaque operand, so neither
 /// <c>${…}</c> holes nor placeholders inside it are analyzed; <c>//</c>
 /// comments are not recognized; a placeholder glued to an identifier
-/// (<c>foo$0</c>) is part of that identifier.
+/// (<c>foo$0</c>) is part of that identifier. A number literal is one
+/// operand including its exponent sign (<c>1e+5</c>), radix prefix,
+/// separators and <c>n</c> suffix.
 /// </summary>
 internal sealed class TsTemplateLexer
 {
@@ -195,8 +197,9 @@ internal sealed class TsTemplateLexer
     private bool LexNumber()
     {
         var end = _position;
+        var isRadixPrefixed = IsRadixPrefixed();
 
-        while (end < _text.Length && IsNumberPart(_text[end]))
+        while (end < _text.Length && IsNumberContinuation(end, isRadixPrefixed))
             end++;
 
         return AddToken(TsTemplateTokenKind.Operand, end - _position);
@@ -219,6 +222,9 @@ internal sealed class TsTemplateLexer
         return true;
     }
 
+    private bool IsNumberContinuation(int index, bool isRadixPrefixed) =>
+        IsNumberPart(_text[index]) || (!isRadixPrefixed && IsExponentSign(index));
+
     private bool PreviousEndsOperand() => _tokens.Count > 0 && _tokens[^1].EndsOperand;
 
     private bool IsNumberStart() =>
@@ -228,6 +234,31 @@ internal sealed class TsTemplateLexer
             && _position + 1 < _text.Length
             && char.IsAsciiDigit(_text[_position + 1])
         );
+
+    /// <summary>
+    /// Whether the number starting at the current position carries a
+    /// <c>0x</c> / <c>0b</c> / <c>0o</c> prefix. In such a literal an
+    /// <c>e</c> is never an exponent marker (a hex digit under <c>0x</c>,
+    /// invalid under <c>0b</c> / <c>0o</c>), so <c>0x1e+5</c> stays an
+    /// addition.
+    /// </summary>
+    private bool IsRadixPrefixed() =>
+        _text[_position] == '0'
+        && _position + 1 < _text.Length
+        && _text[_position + 1] is 'x' or 'X' or 'b' or 'B' or 'o' or 'O';
+
+    /// <summary>
+    /// Whether the <c>+</c> / <c>-</c> at <paramref name="index"/> is the
+    /// sign of a decimal exponent (<c>1e+5</c>, <c>2.5E-3</c>): it directly
+    /// follows the <c>e</c> / <c>E</c> of the current number and precedes
+    /// an exponent digit.
+    /// </summary>
+    private bool IsExponentSign(int index) =>
+        _text[index] is '+' or '-'
+        && index > _position
+        && _text[index - 1] is 'e' or 'E'
+        && index + 1 < _text.Length
+        && char.IsAsciiDigit(_text[index + 1]);
 
     private static bool IsNumberPart(char c) => char.IsAsciiLetterOrDigit(c) || c is '_' or '.';
 
