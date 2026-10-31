@@ -138,9 +138,15 @@ public sealed record IrSliceExpression(
 ) : IrExpression;
 
 /// <summary>
-/// Optional chaining member access: <c>target?.memberName</c>.
+/// Optional chaining member access: <c>target?.memberName</c>. <see cref="Origin"/>
+/// preserves the resolved member symbol so target backends can apply member
+/// mappings before emitting the optional access.
 /// </summary>
-public sealed record IrOptionalChain(IrExpression Target, string MemberName) : IrExpression;
+public sealed record IrOptionalChain(
+    IrExpression Target,
+    string MemberName,
+    IrMemberOrigin? Origin = null
+) : IrExpression;
 
 // -- Invocations --
 

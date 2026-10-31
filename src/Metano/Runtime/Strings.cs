@@ -9,6 +9,7 @@ using Metano.Annotations;
 // ─── string property ────────────────────────────────────────
 
 [assembly: MapProperty(typeof(string), nameof(string.Length), JsProperty = "length")]
+[assembly: MapProperty(typeof(string), nameof(string.Empty), JsTemplate = "\"\"")]
 
 // ─── Case conversion ────────────────────────────────────────
 // JS string has no locale variants; both invariant and culture-aware C# helpers map to

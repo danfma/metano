@@ -17,7 +17,8 @@ public static class IrToTsBclMapper
     public static TsExpression? TryMapMemberAccess(
         IrMemberAccess access,
         TsExpression loweredTarget,
-        DeclarativeMappingRegistry registry
+        DeclarativeMappingRegistry registry,
+        bool optionalReceiver = false
     )
     {
         if (access.Origin is null)
@@ -35,7 +36,7 @@ public static class IrToTsBclMapper
         if (!entry.HasJsMapping)
             return null;
         var receiver = access.Origin.IsStatic ? null : loweredTarget;
-        return ApplyPropertyMapping(entry, receiver);
+        return ApplyPropertyMapping(entry, receiver, optionalReceiver);
     }
 
     /// <summary>
@@ -48,7 +49,8 @@ public static class IrToTsBclMapper
         TsExpression? loweredReceiver,
         IReadOnlyList<TsExpression> loweredArgs,
         IReadOnlyList<string> typeArgumentNames,
-        DeclarativeMappingRegistry registry
+        DeclarativeMappingRegistry registry,
+        bool optionalReceiver = false
     )
     {
         if (call.Origin is null)
@@ -82,6 +84,46 @@ public static class IrToTsBclMapper
         if (match is null)
             return null;
 
+        var receiverAlreadyWrapped =
+            match.HasWrapReceiver
+            && loweredReceiver is not null
+            && DeclarativeMappingRendering.IsAlreadyWrappedBy(
+                loweredReceiver,
+                match.WrapReceiver!,
+                registry
+            );
+
+        // A template or receiver wrapper can place work before the mapped
+        // member access. Guard the original receiver once so both that work
+        // and the arguments remain unevaluated when the receiver is null.
+        if (
+            optionalReceiver
+            && loweredReceiver is not null
+            && (match.HasTemplate || match.HasWrapReceiver)
+        )
+        {
+            return GuardOptionalReceiver(
+                loweredReceiver,
+                guardedReceiver =>
+                {
+                    var mappedReceiver =
+                        match.HasWrapReceiver && !receiverAlreadyWrapped
+                            ? DeclarativeMappingRendering.BuildWrapCall(
+                                match.WrapReceiver!,
+                                guardedReceiver
+                            )
+                            : guardedReceiver;
+                    return ApplyMethodMapping(
+                        match,
+                        mappedReceiver,
+                        loweredArgs,
+                        typeArgumentNames,
+                        optionalReceiver: false
+                    );
+                }
+            );
+        }
+
         var receiver =
             match.HasWrapReceiver && loweredReceiver is not null
                 ? DeclarativeMappingRendering.WrapReceiverIfNeeded(
@@ -91,29 +133,47 @@ public static class IrToTsBclMapper
                 )
                 : loweredReceiver;
 
-        return ApplyMethodMapping(match, receiver, loweredArgs, typeArgumentNames);
+        return ApplyMethodMapping(
+            match,
+            receiver,
+            loweredArgs,
+            typeArgumentNames,
+            optionalReceiver
+        );
     }
 
     private static TsExpression ApplyPropertyMapping(
         DeclarativeMappingEntry mapping,
-        TsExpression? receiver
+        TsExpression? receiver,
+        bool optionalReceiver
     )
     {
         if (mapping.HasTemplate)
-            return new TsTemplate(mapping.JsTemplate!, receiver, Arguments: [])
+        {
+            var template = new TsTemplate(mapping.JsTemplate!, receiver, Arguments: [])
             {
                 RuntimeImports = mapping.RuntimeImportsList,
             };
+            return optionalReceiver && receiver is not null
+                ? GuardOptionalReceiver(
+                    receiver,
+                    guardedReceiver => template with { Receiver = guardedReceiver }
+                )
+                : template;
+        }
 
         var name = mapping.JsName!;
-        return receiver is not null ? new TsPropertyAccess(receiver, name) : new TsIdentifier(name);
+        return receiver is not null
+            ? new TsPropertyAccess(receiver, name, optionalReceiver)
+            : new TsIdentifier(name);
     }
 
     private static TsExpression ApplyMethodMapping(
         DeclarativeMappingEntry mapping,
         TsExpression? receiver,
         IReadOnlyList<TsExpression> args,
-        IReadOnlyList<string> typeArgumentNames
+        IReadOnlyList<string> typeArgumentNames,
+        bool optionalReceiver
     )
     {
         if (mapping.HasTemplate)
@@ -125,8 +185,30 @@ public static class IrToTsBclMapper
 
         var name = mapping.JsName!;
         var callee = receiver is not null
-            ? (TsExpression)new TsPropertyAccess(receiver, name)
+            ? (TsExpression)new TsPropertyAccess(receiver, name, optionalReceiver)
             : new TsIdentifier(name);
         return new TsCallExpression(callee, args);
+    }
+
+    internal static TsExpression GuardOptionalReceiver(
+        TsExpression receiver,
+        Func<TsExpression, TsExpression> mapWithGuardedReceiver
+    )
+    {
+        // `$` cannot appear in a C# local identifier, so this generated TS
+        // parameter cannot capture a source local referenced by a mapping.
+        const string receiverName = "$__metanoOptionalReceiver";
+        var guardedReceiver = new TsIdentifier(receiverName);
+        var condition = new TsBinaryExpression(guardedReceiver, "==", new TsLiteral("null"));
+        var guardedExpression = new TsConditionalExpression(
+            condition,
+            new TsIdentifier("undefined"),
+            mapWithGuardedReceiver(guardedReceiver)
+        );
+        var guard = new TsArrowFunction(
+            [new TsParameter(receiverName, new TsAnyType())],
+            [new TsReturnStatement(guardedExpression)]
+        );
+        return new TsCallExpression(new TsParenthesized(guard), [receiver]);
     }
 }

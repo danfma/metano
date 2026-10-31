@@ -6,7 +6,7 @@ export class CounterView implements ICounterView {
 
   onButtonClick: (() => void) | null = null;
 
-  constructor() {}
+  constructor() { }
 
   render(container: HTMLElement): void {
     const root = document.createElement("div");
