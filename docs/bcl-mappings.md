@@ -278,7 +278,8 @@ All `Math.X(...)` methods map directly to JavaScript `Math.x(...)`:
 ## Floating point (`double` / `float`)
 
 `double` and `float` both lower to `number`, so their static helpers and special
-values map to JavaScript globals. The same mappings apply to `float.X`.
+values map to JavaScript globals. The same mappings apply to `float.X`, except the
+`Epsilon`/`MaxValue`/`MinValue` constants listed separately below.
 
 | C# | TypeScript |
 |----|----|
@@ -298,8 +299,17 @@ values map to JavaScript globals. The same mappings apply to `float.X`.
 Each argument stays in a call-argument position (or the template parenthesizes
 itself), so composite arguments keep their meaning: `double.IsInfinity(a ?? b)`
 becomes `(Math.abs(a ?? b) === Infinity)`, and the argument is evaluated once.
-`float` constants are the exact double value of the corresponding `float`.
-`IsNormal`/`IsSubnormal` are not mapped.
+Negative constants use a named property or parentheses so a unary minus at the call
+site cannot produce `--`. `float` constants are the exact double value of the
+corresponding `float`.
+A constant pattern against NaN (`x is double.NaN`, a `double.NaN =>` switch arm)
+lowers to `Number.isNaN(x)`, because `x === NaN` is always false in JavaScript;
+plain equality `x == double.NaN` stays `x === NaN`, which is also false in .NET.
+
+Not mapped: `IsNormal`/`IsSubnormal`; method groups such as
+`Func<double, bool> f = double.IsNaN` (templates apply to calls only); and generic
+math calls such as `T.IsNaN(v)` with `T : INumber<T>`, which bind to the generic
+interface rather than to `double`/`float`.
 
 ## Console
 

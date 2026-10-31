@@ -3,21 +3,23 @@ namespace Metano.Tests;
 /// <summary>
 /// Declarative <c>[MapMethod]</c>/<c>[MapProperty]</c> lowering of the
 /// <c>System.Double</c> and <c>System.Single</c> helpers and special values
-/// (<c>src/Metano/Runtime/Numbers.cs</c>). Both types lower to the JS
+/// (<c>src/Metano/Runtime/FloatingPoint.cs</c>). Both types lower to the JS
 /// <c>number</c>, so nothing may reach the output as an unbound
 /// <c>Double.</c>/<c>Single.</c> reference.
 /// </summary>
 public class FloatingPointMappingTests
 {
     [Test]
-    public async Task DoubleClassificationHelpers_LowerToNumberGlobals()
+    [Arguments("double")]
+    [Arguments("float")]
+    public async Task ClassificationHelpers_LowerToNumberGlobals(string numericKeyword)
     {
         var output = TranspileNumbers(
-            """
-            public static bool IsBroken(double v) => double.IsNaN(v) || double.IsInfinity(v);
-            public static bool IsUsable(double v) => double.IsFinite(v);
-            public static bool IsPositiveOverflow(double v) => double.IsPositiveInfinity(v);
-            public static bool IsNegativeOverflow(double v) => double.IsNegativeInfinity(v);
+            $"""
+            public static bool IsBroken({numericKeyword} v) => {numericKeyword}.IsNaN(v) || {numericKeyword}.IsInfinity(v);
+            public static bool IsUsable({numericKeyword} v) => {numericKeyword}.IsFinite(v);
+            public static bool IsPositiveOverflow({numericKeyword} v) => {numericKeyword}.IsPositiveInfinity(v);
+            public static bool IsNegativeOverflow({numericKeyword} v) => {numericKeyword}.IsNegativeInfinity(v);
             """
         );
 
@@ -25,26 +27,7 @@ public class FloatingPointMappingTests
         await Assert.That(output).Contains("return Number.isFinite(v);");
         await Assert.That(output).Contains("return Object.is(v, Infinity);");
         await Assert.That(output).Contains("return Object.is(v, -Infinity);");
-        await AssertNoUnboundNumericTypes(output);
-    }
-
-    [Test]
-    public async Task SingleClassificationHelpers_LowerToNumberGlobals()
-    {
-        var output = TranspileNumbers(
-            """
-            public static bool IsBroken(float v) => float.IsNaN(v) || float.IsInfinity(v);
-            public static bool IsUsable(float v) => float.IsFinite(v);
-            public static bool IsPositiveOverflow(float v) => float.IsPositiveInfinity(v);
-            public static bool IsNegativeOverflow(float v) => float.IsNegativeInfinity(v);
-            """
-        );
-
-        await Assert.That(output).Contains("return Number.isNaN(v) || (Math.abs(v) === Infinity);");
-        await Assert.That(output).Contains("return Number.isFinite(v);");
-        await Assert.That(output).Contains("return Object.is(v, Infinity);");
-        await Assert.That(output).Contains("return Object.is(v, -Infinity);");
-        await AssertNoUnboundNumericTypes(output);
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]
@@ -64,6 +47,7 @@ public class FloatingPointMappingTests
         await Assert.That(output).Contains("return (Math.abs(a ?? b) === Infinity);");
         await Assert.That(output).Contains("return !Object.is(a - b, Infinity);");
         await Assert.That(output).Contains("return !(Math.abs(v) === Infinity);");
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]
@@ -86,7 +70,7 @@ public class FloatingPointMappingTests
         await Assert.That(output).Contains("return Number.MIN_VALUE;");
         await Assert.That(output).Contains("return Number.MAX_VALUE;");
         await Assert.That(output).Contains("return (-Number.MAX_VALUE);");
-        await AssertNoUnboundNumericTypes(output);
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]
@@ -111,7 +95,7 @@ public class FloatingPointMappingTests
         await Assert.That(output).Contains("return 1.401298464324817e-45;");
         await Assert.That(output).Contains("return 3.4028234663852886e+38;");
         await Assert.That(output).Contains("return (-3.4028234663852886e+38);");
-        await AssertNoUnboundNumericTypes(output);
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]
@@ -130,6 +114,7 @@ public class FloatingPointMappingTests
         await Assert.That(output).Contains("return -Number.NEGATIVE_INFINITY;");
         await Assert.That(output).Contains("return -(-Number.MAX_VALUE);");
         await Assert.That(output).Contains("return x - Number.NEGATIVE_INFINITY;");
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     [Test]
@@ -155,7 +140,76 @@ public class FloatingPointMappingTests
 
         var output = result["distances.ts"];
         await Assert.That(output).Contains("return Number.isNaN(m);");
-        await AssertNoUnboundNumericTypes(output);
+        await AssertNoBclNumericReceiverLeaks(output);
+    }
+
+    [Test]
+    public async Task NaNConstantPatterns_LowerToNumberIsNaN()
+    {
+        // `x === NaN` is always false in JS, while C# `x is double.NaN` matches NaN.
+        var output = TranspileNumbers(
+            """
+            public static bool IsMissing(double v) => v is double.NaN;
+            public static bool IsPresent(float v) => v is not float.NaN;
+            public static string Describe(double v) => v switch
+            {
+                double.NaN => "missing",
+                double.PositiveInfinity => "overflow",
+                _ => "value",
+            };
+            """
+        );
+
+        await Assert.That(output).Contains("return Number.isNaN(v);");
+        await Assert.That(output).Contains("return !Number.isNaN(v);");
+        await Assert
+            .That(output)
+            .Contains(
+                "return Number.isNaN(v) ? \"missing\" : v === Infinity ? \"overflow\" : \"value\";"
+            );
+        await Assert.That(output).DoesNotContain("=== NaN");
+        await AssertNoBclNumericReceiverLeaks(output);
+    }
+
+    [Test]
+    public async Task NaNEquality_StaysStrictEquality()
+    {
+        // Unlike the constant pattern, `x == double.NaN` is false in .NET too.
+        var output = TranspileNumbers(
+            """
+            public static bool EqualsNaN(double v) => v == double.NaN;
+            """
+        );
+
+        await Assert.That(output).Contains("return v === NaN;");
+    }
+
+    [Test]
+    public async Task SpecialValues_MapInFieldInitializersDefaultsAndUsingStatic()
+    {
+        // Const fields are not folded away before mapping: every position that names
+        // the BCL member goes through the declarative mapping.
+        var result = TranspileHelper.Transpile(
+            """
+            using static System.Double;
+
+            [Transpile]
+            public static class Limits
+            {
+                public const double Missing = double.NaN;
+                public static readonly float Ceiling = float.MaxValue;
+                public static double OrMissing(double v = double.NaN) => v;
+                public static bool IsMissing(double v) => IsNaN(v);
+            }
+            """
+        );
+
+        var output = result["limits.ts"];
+        await Assert.That(output).Contains("= NaN");
+        await Assert.That(output).Contains("= 3.4028234663852886e+38");
+        await Assert.That(output).Contains("v: number = NaN");
+        await Assert.That(output).Contains("return Number.isNaN(v);");
+        await AssertNoBclNumericReceiverLeaks(output);
     }
 
     private static string TranspileNumbers(string members)
@@ -173,7 +227,7 @@ public class FloatingPointMappingTests
         return result["numbers.ts"];
     }
 
-    private static async Task AssertNoUnboundNumericTypes(string output)
+    private static async Task AssertNoBclNumericReceiverLeaks(string output)
     {
         await Assert.That(output).DoesNotContain("Double.");
         await Assert.That(output).DoesNotContain("Single.");

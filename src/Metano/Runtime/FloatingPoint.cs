@@ -24,16 +24,19 @@ using Metano.Annotations;
 
 [assembly: MapMethod(typeof(double), nameof(double.IsNaN), JsTemplate = "Number.isNaN($0)")]
 [assembly: MapMethod(typeof(double), nameof(double.IsFinite), JsTemplate = "Number.isFinite($0)")]
+
 [assembly: MapMethod(
     typeof(double),
     nameof(double.IsInfinity),
     JsTemplate = "(Math.abs($0) === Infinity)"
 )]
+
 [assembly: MapMethod(
     typeof(double),
     nameof(double.IsPositiveInfinity),
     JsTemplate = "Object.is($0, Infinity)"
 )]
+
 [assembly: MapMethod(
     typeof(double),
     nameof(double.IsNegativeInfinity),
@@ -42,11 +45,13 @@ using Metano.Annotations;
 
 [assembly: MapProperty(typeof(double), nameof(double.NaN), JsTemplate = "NaN")]
 [assembly: MapProperty(typeof(double), nameof(double.PositiveInfinity), JsTemplate = "Infinity")]
+
 [assembly: MapProperty(
     typeof(double),
     nameof(double.NegativeInfinity),
     JsTemplate = "Number.NEGATIVE_INFINITY"
 )]
+
 [assembly: MapProperty(typeof(double), nameof(double.Epsilon), JsTemplate = "Number.MIN_VALUE")]
 [assembly: MapProperty(typeof(double), nameof(double.MaxValue), JsTemplate = "Number.MAX_VALUE")]
 [assembly: MapProperty(typeof(double), nameof(double.MinValue), JsTemplate = "(-Number.MAX_VALUE)")]
@@ -55,16 +60,19 @@ using Metano.Annotations;
 
 [assembly: MapMethod(typeof(float), nameof(float.IsNaN), JsTemplate = "Number.isNaN($0)")]
 [assembly: MapMethod(typeof(float), nameof(float.IsFinite), JsTemplate = "Number.isFinite($0)")]
+
 [assembly: MapMethod(
     typeof(float),
     nameof(float.IsInfinity),
     JsTemplate = "(Math.abs($0) === Infinity)"
 )]
+
 [assembly: MapMethod(
     typeof(float),
     nameof(float.IsPositiveInfinity),
     JsTemplate = "Object.is($0, Infinity)"
 )]
+
 [assembly: MapMethod(
     typeof(float),
     nameof(float.IsNegativeInfinity),
@@ -73,17 +81,21 @@ using Metano.Annotations;
 
 [assembly: MapProperty(typeof(float), nameof(float.NaN), JsTemplate = "NaN")]
 [assembly: MapProperty(typeof(float), nameof(float.PositiveInfinity), JsTemplate = "Infinity")]
+
 [assembly: MapProperty(
     typeof(float),
     nameof(float.NegativeInfinity),
     JsTemplate = "Number.NEGATIVE_INFINITY"
 )]
+
 [assembly: MapProperty(typeof(float), nameof(float.Epsilon), JsTemplate = "1.401298464324817e-45")]
+
 [assembly: MapProperty(
     typeof(float),
     nameof(float.MaxValue),
     JsTemplate = "3.4028234663852886e+38"
 )]
+
 [assembly: MapProperty(
     typeof(float),
     nameof(float.MinValue),
