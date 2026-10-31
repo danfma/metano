@@ -102,10 +102,13 @@ public static class DiagnosticCodes
     /// refuses to emit code that mentions the type so the contract
     /// stays explicit. Migrate the reference to use <c>[External]</c>
     /// (ambient TS shape) or remove the dependency from transpiled
-    /// code. Not raised for source-generator output, for an
-    /// <c>[Ignore]</c> interface listed directly in a base list (erased
-    /// from <c>implements</c>/<c>extends</c>), or for references inside
-    /// attribute applications (attributes are never emitted).</summary>
+    /// code. Not raised for source-generator output, for an interface
+    /// ignored for the emitting target and listed in a base list (erased
+    /// from <c>implements</c>/<c>extends</c> on that target, replaced by
+    /// its non-ignored base interfaces), or for references inside
+    /// attribute applications (never emitted) other than those the
+    /// compiler reads for emission, such as
+    /// <c>[JsonSerializable(typeof(T))]</c>.</summary>
     public const string IgnoreReferencedByTranspiledCode = "MS0013";
 
     /// <summary>MS0011 — <c>[Discriminator("FieldName")]</c> (from

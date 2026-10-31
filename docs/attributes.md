@@ -64,21 +64,33 @@ selected target, and transpilable code may not reference ignored types in
 signatures or bodies. If a generated surface mentions an ignored type, the
 compiler reports `MS0013`.
 
-Three positions are exempt, because nothing from them reaches the generated
-code:
+Three cases are exempt, because nothing from them reaches the generated code:
 
-- **Base-list interfaces.** An `[Ignore]` interface listed directly in a
+- **Base-list interfaces.** An interface ignored for the active target
+  (`[Ignore]`, or `[Ignore(TargetLanguage.X)]` when emitting X) and listed in a
   transpilable type's base list is erased from `implements` (classes, records,
-  structs) or `extends` (interfaces) in every target. Its members stay on the
-  type as ordinary members. Only the interface itself is erased: an `[Ignore]`
-  type used as a type argument of a transpilable base interface
-  (`IHolder<DotNetOnly>`) still reports `MS0013`.
-- **Attribute applications.** Attributes are never emitted, so `[Ignore]`
-  types referenced inside an attribute — typically
-  `[JsonConverter(typeof(MyConverter<T>))]` — are allowed on types, members, and
-  parameters. `typeof(IgnoredType)` in an ordinary expression still reports.
+  structs) or `extends` (interfaces) in every target it is ignored for; a
+  `[Ignore(TargetLanguage.Dart)]` interface stays in the TypeScript output. The
+  erased interface is replaced by its own base interfaces that are not ignored
+  (recursively, without duplicates), so `class Person : IDotNetOnly` with
+  `IDotNetOnly : IKept` still implements `IKept`. Its members stay on the type as
+  ordinary members. Only the interface itself is erased: an `[Ignore]` type used
+  as a type argument of a kept base interface (`IHolder<DotNetOnly>`) still
+  reports `MS0013`.
+- **Attribute applications.** Attributes are never emitted, so `[Ignore]` types
+  referenced inside an attribute — typically
+  `[JsonConverter(typeof(MyConverter<T>))]`, or an `[Ignore]` attribute class
+  itself — are allowed on types, members, and parameters. The exception is an
+  attribute the compiler reads to produce output: `[JsonSerializable(typeof(T))]`
+  makes the JSON serializer context emit a type spec for `T`, so an `[Ignore]` `T`
+  still reports `MS0013`. `typeof(IgnoredType)` in an ordinary expression still
+  reports too.
 - **Source-generator output.** Code produced by source generators (for example
   the System.Text.Json `*.g.cs` files) is not user-authored and is not scanned.
+  The list of generated files comes from the build workspace; a user file named
+  `*.g.cs` is still scanned. This only exempts the code from `MS0013`: it does
+  not stop emission, so a member or type a source generator adds to a
+  transpilable partial type may still be emitted.
 
 ```csharp
 [Ignore]

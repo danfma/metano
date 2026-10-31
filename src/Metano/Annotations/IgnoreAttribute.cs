@@ -9,12 +9,14 @@ namespace Metano.Annotations;
 /// stays explicit — predictable compile-time errors instead of runtime
 /// surprises in the generated output.
 /// <para>
-/// Exempt positions: an <c>[Ignore]</c> interface listed directly in a
+/// Exempt cases: an interface ignored for the emitting target and listed in a
 /// transpilable type's base list is erased from <c>implements</c> /
-/// <c>extends</c> in every target; references inside attribute applications
+/// <c>extends</c> in every target it is ignored for, replaced by its own
+/// non-ignored base interfaces; references inside attribute applications
 /// (e.g. <c>[JsonConverter(typeof(MyConverter&lt;T&gt;))]</c>) are allowed
-/// because attributes are never emitted; and source-generator output is not
-/// scanned.
+/// because attributes are never emitted — except attributes the compiler reads
+/// for emission, such as <c>[JsonSerializable(typeof(T))]</c>; and
+/// source-generator output is not scanned.
 /// </para>
 ///
 /// <code>

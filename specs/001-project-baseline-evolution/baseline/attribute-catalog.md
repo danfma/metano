@@ -17,7 +17,7 @@ project. Migrated from `old-spec/09-attribute-catalog.md` and **corrected agains
 | --- | --- | --- |
 | `[Transpile]` | Mark a single type for transpilation. | `Annotations/TranspileAttribute.cs` |
 | `[TranspileAssembly]` | Transpile all public types in the assembly (opt-out via `[Ignore]`). | `Annotations/TranspileAssemblyAttribute.cs` |
-| `[Ignore]` | Mark a type/member as .NET-only (all targets, or one via `[Ignore(TargetLanguage.X)]`). Ignored types do not emit and may not be referenced by transpilable code (→ MS0013), except that an `[Ignore]` interface in a transpilable type's base list is erased from `implements`/`extends` in every target, references inside attribute applications (e.g. `[JsonConverter(typeof(X))]`) are allowed because attributes are never emitted, and source-generator output is not scanned. Replaces former `[NoTranspile]`/`[NoEmit]`. | `Annotations/IgnoreAttribute.cs` |
+| `[Ignore]` | Mark a type/member as .NET-only (all targets, or one via `[Ignore(TargetLanguage.X)]`). Ignored types do not emit and may not be referenced by transpilable code (→ MS0013), except that an interface ignored for the active target in a transpilable type's base list is erased from `implements`/`extends` in every target it is ignored for (replaced by its non-ignored base interfaces), references inside attribute applications (e.g. `[JsonConverter(typeof(X))]`) are allowed because attributes are never emitted — `[JsonSerializable(typeof(X))]`, which drives emission, still raises — and source-generator output is not scanned. Replaces former `[NoTranspile]`/`[NoEmit]`. | `Annotations/IgnoreAttribute.cs` |
 
 ### Naming & emission shape
 
