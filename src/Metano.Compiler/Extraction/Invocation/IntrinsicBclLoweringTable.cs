@@ -7,7 +7,9 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// Escape-hatch table for BCL call sites whose shape the declarative
 /// <c>[MapMethod]</c> attribute can't express (today: <c>decimal</c>
 /// constructor wrapping, <c>System.Math</c> static helpers that lower
-/// to the receiver's instance method). Symbol-keyed via
+/// to the receiver's instance method, and overloads normalized to a
+/// canonical overload the registry can tell apart by argument count —
+/// see the <c>OverloadNormalization</c> partial). Symbol-keyed via
 /// <see cref="SymbolEqualityComparer.Default"/> so dispatch is O(1)
 /// per call site and adding the next BCL form is one entry, not one
 /// rewriter class.
@@ -18,8 +20,9 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// that CAN be expressed as <c>[MapMethod]</c> belongs there. This
 /// table is the escape hatch for shapes the attribute system can't
 /// model: shapes that need runtime construction
-/// (<c>decimal.Parse(s) → new Decimal(s)</c>) or receiver-relocation
-/// (<c>Math.Round(x) → x.round()</c>).
+/// (<c>decimal.Parse(s) → new Decimal(s)</c>), receiver-relocation
+/// (<c>Math.Floor(x) → x.floor()</c>) or overload selection the
+/// registry's argument-count filter cannot make on its own.
 /// </para>
 /// <para>
 /// Called <c>Table</c> rather than <c>Registry</c> because entries
@@ -30,12 +33,14 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// </para>
 /// </summary>
 /// <seealso cref="Metano.Compiler.Mappings.DeclarativeMappingRegistry"/>
-public sealed class IntrinsicBclLoweringTable : IInvocationRewriter
+public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
 {
     private readonly Dictionary<
         IMethodSymbol,
         Func<InvocationRewriteContext, IrExpression>
     > _entries;
+
+    private readonly InvocationLoweringHelpers _helpers;
 
     /// <summary>
     /// Builds the per-compilation table. The Roslyn semantic model
@@ -44,27 +49,36 @@ public sealed class IntrinsicBclLoweringTable : IInvocationRewriter
     /// but not across — the table is rebuilt per
     /// <see cref="IrExpressionExtractor"/> instance so the lookup
     /// keys always belong to the active compilation. The
-    /// <paramref name="helpers"/> façade is accepted for API
-    /// symmetry with other rewriters but currently unused — none of
-    /// the seeded entries need params-spread or origin building.
+    /// <paramref name="helpers"/> façade supplies origin building and
+    /// type mapping to the overload-normalizing entries.
     /// </summary>
     public IntrinsicBclLoweringTable(Compilation compilation, InvocationLoweringHelpers helpers)
     {
-        _ = helpers;
+        _helpers = helpers;
         _entries = new Dictionary<IMethodSymbol, Func<InvocationRewriteContext, IrExpression>>(
             SymbolEqualityComparer.Default
         );
         SeedDecimalParse(compilation);
         SeedMathDecimal(compilation);
+        SeedRounding(compilation);
+        SeedGetValueOrDefault(compilation);
+        SeedStringJoin(compilation);
     }
 
+    /// <summary>
+    /// Looks the call site up by its unreduced definition, so an
+    /// extension call written as <c>dict.GetValueOrDefault(key)</c>
+    /// matches the entry seeded for the static
+    /// <c>CollectionExtensions.GetValueOrDefault</c> definition.
+    /// </summary>
     public IrExpression? Rewrite(InvocationRewriteContext context)
     {
         if (context.Symbol is null)
             return null;
-        if (_entries.TryGetValue(context.Symbol.OriginalDefinition, out var lower))
-            return lower(context);
-        return null;
+
+        var definition = (context.Symbol.ReducedFrom ?? context.Symbol).OriginalDefinition;
+
+        return _entries.TryGetValue(definition, out var lower) ? lower(context) : null;
     }
 
     /// <summary>
@@ -94,8 +108,11 @@ public sealed class IntrinsicBclLoweringTable : IInvocationRewriter
     }
 
     /// <summary>
-    /// <c>Math.{Round,Floor,Ceiling,Abs}(decimal)</c> → receiver's
-    /// instance method (<c>x.round()</c> et al). Decimal.js exposes
+    /// <c>Math.{Floor,Ceiling,Truncate,Abs}(decimal)</c> → receiver's
+    /// instance method (<c>x.floor()</c> et al). <c>Math.Round(decimal)</c>
+    /// is normalized to <c>decimal.Round</c> by <see cref="SeedRounding"/>
+    /// instead, because decimal.js <c>round()</c> resolves a midpoint away
+    /// from zero rather than to even. Decimal.js exposes
     /// the rounding family per-instance because <c>Math</c> in
     /// JavaScript only consumes <c>number</c>; routing through the
     /// receiver keeps the lowered call type-safe at the JS layer.
@@ -136,9 +153,9 @@ public sealed class IntrinsicBclLoweringTable : IInvocationRewriter
 
     private static readonly (string CSharp, string Js)[] MathDecimalNames =
     {
-        ("Round", "round"),
         ("Floor", "floor"),
         ("Ceiling", "ceil"),
+        ("Truncate", "trunc"),
         ("Abs", "abs"),
     };
 }

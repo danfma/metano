@@ -90,13 +90,40 @@ public class InvocationRewriterCanaryTests
     }
 
     [Test]
-    public async Task MathDecimalRound_LowersToInstanceCall()
+    public async Task MathDecimalFloor_LowersToInstanceCall()
     {
-        // Pins the table's `Math.{Round,Floor,Ceiling,Abs}(decimal)`
+        // Pins the table's `Math.{Floor,Ceiling,Truncate,Abs}(decimal)`
         // dispatch. The table receives the Roslyn method symbol
         // (one per overload) and emits a receiver-instance call
         // because decimal.js exposes the rounding family on the
         // Decimal instance, not on a Math static.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public decimal Whole(decimal x) => System.Math.Floor(x);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+
+        await Assert.That(output).Contains("x.floor()");
+        // The pre-rewrite shape would have surfaced as `Math.Floor(x)`
+        // verbatim (PascalCase, no method translation). Pin the
+        // absence of that exact source form, not the generic
+        // "Math.floor" substring.
+        await Assert.That(output).DoesNotContain("Math.Floor(x)");
+    }
+
+    [Test]
+    public async Task MathDecimalRound_NormalizesToDecimalRound()
+    {
+        // Pins the table's `Math.Round(decimal…)` → `decimal.Round`
+        // normalization: decimal.js `round()` resolves a midpoint away
+        // from zero, so the call reaches the half-to-even runtime helper
+        // through the `decimal.Round` mapping instead.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -109,12 +136,8 @@ public class InvocationRewriterCanaryTests
 
         var output = result["calc.ts"];
 
-        await Assert.That(output).Contains("x.round()");
-        // The pre-rewrite shape would have surfaced as `Math.Round(x)`
-        // verbatim (PascalCase, no method translation). Pin the
-        // absence of that exact source form, not the generic
-        // "Math.round" substring.
-        await Assert.That(output).DoesNotContain("Math.Round(x)");
+        await Assert.That(output).Contains("return roundDecimal(x);");
+        await Assert.That(output).DoesNotContain("x.round()");
     }
 
     [Test]

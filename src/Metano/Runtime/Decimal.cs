@@ -43,3 +43,33 @@ using Metano.Annotations;
 // IComparable.CompareTo, so the rename is enough.
 
 [assembly: MapMethod(typeof(decimal), nameof(decimal.CompareTo), JsMethod = "cmp")]
+
+// ─── Rounding ───────────────────────────────────────────────
+// decimal.js `round()` rounds a midpoint away from zero by default, while C# rounds it
+// to the nearest even number. Every overload lowers to the runtime
+// `roundDecimal(value, digits?, mode?)` helper, which calls `toDecimalPlaces` with the
+// matching decimal.js rounding constant. The extractor rewrites the `Math.Round(decimal…)`
+// overloads to `decimal.Round` and normalizes `(value, mode)` to `(value, 0, mode)`, so
+// the argument count alone picks the template.
+
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.Round),
+    JsTemplate = "roundDecimal($0)",
+    RuntimeImports = "roundDecimal",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.Round),
+    JsTemplate = "roundDecimal($0, $1)",
+    RuntimeImports = "roundDecimal",
+    WhenArgCount = 2
+)]
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.Round),
+    JsTemplate = "roundDecimal($0, $1, $2)",
+    RuntimeImports = "roundDecimal",
+    WhenArgCount = 3
+)]
