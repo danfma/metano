@@ -262,8 +262,9 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   machinery), a base call declares `const` temporaries before `super`. It emits no declaration: user exceptions go through
   `IrToTsClassEmitter` and extend `Error`; BCL exception types map to `Error`
   in type positions. Known limitations: since every BCL exception type is
-  `Error` at runtime, `o is ArgumentException` lowers to `instanceof Error`
-  (true for any error) and typed `catch` clauses ignore their filter; the
+  `Error` at runtime, `IrRuntimeTypeTest` classifies it as `Instanceof`, so
+  `o is ArgumentException` and `o as ArgumentException` both test
+  `instanceof Error` (true for any error) and typed `catch` clauses ignore their filter; the
   `System.Exception` default message names the class that makes the call
   (formatted like .NET's `Type.ToString()`), not the runtime most-derived
   class; `AggregateException` inner-exception lists are not mapped.
