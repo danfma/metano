@@ -67,7 +67,6 @@ public static class IrBodyCoverageProbe
             IrTypeReference => true,
             IrThisExpression => true,
             IrBaseExpression => true,
-            IrExceptionBaseMessage => true,
             IrMemberAccess ma => IsCoveredExpression(ma.Target),
             IrElementAccess ea => IsCoveredExpression(ea.Target) && IsCoveredExpression(ea.Index),
             IrSliceExpression slice => IsCoveredExpression(slice.Target)

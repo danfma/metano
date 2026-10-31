@@ -36,11 +36,18 @@ namespace Metano.Compiler.IR;
 /// one of its transpilable bases) overrides <c>Exception.Message</c>; a
 /// backend must then leave the native message unset so the override is not
 /// shadowed.</param>
+/// <param name="RequiresArgumentTemporaries">Whether a role-ordered
+/// lowering (which reorders arguments and drops unmapped ones) would change
+/// when or whether a side-effecting argument is evaluated; the arguments must
+/// then be evaluated once, in source order, before the construction. The
+/// extractor already let-binds them for <c>new</c> (clearing the flag); a
+/// backend honours it for base-constructor calls.</param>
 public sealed record IrExceptionConstruction(
     IReadOnlyList<IrExceptionArgumentRole> ArgumentRoles,
     string? DefaultMessage = null,
     bool MessageMayBeNull = false,
-    bool IsMessageOverridden = false
+    bool IsMessageOverridden = false,
+    bool RequiresArgumentTemporaries = false
 )
 {
     /// <summary>
