@@ -30,10 +30,7 @@ public sealed partial class IrExpressionExtractor
     /// receiver, which extracts to the bound value. Returns <c>null</c> for
     /// any other member access.
     /// </summary>
-    private IrMemberAccess? TryExtractDictionaryCount(
-        QualifiedMemberSyntax member,
-        ISymbol? symbol
-    )
+    private IrMemberAccess? TryExtractDictionaryCount(QualifiedMemberSyntax member, ISymbol? symbol)
     {
         if (symbol is not IPropertySymbol { Name: "Count", IsStatic: false } count)
             return null;
