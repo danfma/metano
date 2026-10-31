@@ -39,6 +39,12 @@ package. Operators are lowered to method calls:
 | `decimal.Parse("1.5")` | `new Decimal("1.5")` |
 | `(decimal)42` | `new Decimal(42)` |
 | Decimal literal `1.5m` | `new Decimal("1.5")` |
+| `Math.Round(d)` / `decimal.Round(d, digits, mode)` | `roundDecimal(d)` / `roundDecimal(d, digits, mode)` (runtime) |
+| `Math.Floor(d)` / `Math.Ceiling(d)` / `Math.Truncate(d)` | `d.floor()` / `d.ceil()` / `d.trunc()` |
+
+`roundDecimal` calls `toDecimalPlaces` with the decimal.js rounding constant of the
+`MidpointRounding` mode, defaulting to half-to-even as C# does (decimal.js `round()`
+alone would round a midpoint away from zero).
 
 ### `Guid` specifics
 
@@ -140,6 +146,15 @@ preserving immutability semantics.
 | `dict[key]` (read) | `map.get(key)` |
 | `dict[key] = value` (write) | `map.set(key, value)` |
 | `dict.TryGetValue(k, out var v)` | Lowered via statement-level pattern to `const v = map.get(k); if (v !== undefined) { … }` |
+| `dict.GetValueOrDefault(k)` | `getValueOrDefault(map, k, <default(TValue)>)` (runtime) |
+| `dict.GetValueOrDefault(k, fallback)` | `getValueOrDefault(map, k, fallback)` (runtime) |
+
+`getValueOrDefault` tests membership with `has`, so a key stored with a `null` value
+returns `null` rather than the default, as in C#. For the single-argument overload the
+compiler passes `default(TValue)`: `0` for numeric types, `false`, `null` for reference
+and nullable types, `new Decimal("0")`, and the enum member whose value is `0`. Other
+structs (`char`, `Guid`, user structs) have no faithful JS default and receive
+`undefined`, as a `default` literal does.
 
 ### Sets
 
@@ -257,23 +272,37 @@ native array methods directly:
 | `s.Split(c)` | `s.split(c)` |
 | `s.Length` | `s.length` |
 | `string.IsNullOrEmpty(s)` | `(s == null \|\| s.length === 0)` |
-| `string.Join(sep, items)` | `items.join(sep)` |
+| `string.Join(sep, items)` (array, `List<T>`, `IReadOnlyList<T>`, …) | `items.join(sep)` |
+| `string.Join(sep, items)` (other `IEnumerable<T>`) | `[...items].join(sep)` |
+| `string.Join(sep, a, b, c)` (`params`) | `[a, b, c].join(sep)` |
 | `int.Parse(s)` | `Number.parseInt(s, 10)` |
 
 ## Math
 
-All `Math.X(...)` methods map directly to JavaScript `Math.x(...)`:
+Most `Math.X(...)` methods map directly to JavaScript `Math.x(...)`:
 
 | C# | TypeScript |
 |----|----|
 | `Math.Abs(x)` | `Math.abs(x)` |
 | `Math.Floor(x)` | `Math.floor(x)` |
 | `Math.Ceiling(x)` | `Math.ceil(x)` |
-| `Math.Round(x)` | `Math.round(x)` |
+| `Math.Truncate(x)` | `Math.trunc(x)` |
+| `Math.Round(x)` | `roundNumber(x)` (runtime) |
+| `Math.Round(x, digits)` | `roundNumber(x, digits)` (runtime) |
+| `Math.Round(x, mode)` | `roundNumber(x, 0, mode)` (runtime) |
+| `Math.Round(x, digits, mode)` | `roundNumber(x, digits, mode)` (runtime) |
 | `Math.Sqrt(x)` | `Math.sqrt(x)` |
 | `Math.Max(a, b)` | `Math.max(a, b)` |
 | `Math.Pow(a, b)` | `Math.pow(a, b)` |
 | `Math.PI` | `Math.PI` |
+
+`Math.Round` cannot map to JS `Math.round`, which takes no digit count and rounds a
+midpoint toward +Infinity (`Math.round(-2.5)` is `-2`), while C# rounds it to the
+nearest even number (`Math.Round(2.5)` is `2`). The runtime `roundNumber` reproduces
+.NET's algorithm (scale by `10^digits`, round, scale back), so its results match .NET
+bit for bit, including `Math.Round(2.675, 2)` (`2.68`, because the double product `2.675 * 100`
+rounds to `267.5`) and the sign of a zero result. `MidpointRounding` maps to
+the runtime `MidpointRounding` object, which keeps the .NET member names and values.
 
 ## Floating point (`double` / `float`)
 

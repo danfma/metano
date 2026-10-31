@@ -36,3 +36,17 @@ using Metano.Annotations;
 
 [assembly: MapMethod(typeof(string), nameof(string.Substring), JsMethod = "substring")]
 [assembly: MapMethod(typeof(string), nameof(string.Replace), JsMethod = "replace")]
+
+// ─── Join ───────────────────────────────────────────────────
+// `string.Join(separator, values)` → `values.join(separator)`. The extractor gathers the
+// values into one array argument first: expanded `params` arguments become an array
+// literal, and an enumerable that does not lower to a JS array is spread into one
+// (`[...values]`). JS `join` writes `null` / `undefined` elements as empty strings, as
+// C# does. The `(separator, value, startIndex, count)` overloads stay unmapped.
+
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.Join),
+    JsTemplate = "$1.join($0)",
+    WhenArgCount = 2
+)]

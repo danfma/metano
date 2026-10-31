@@ -82,3 +82,19 @@ using Metano.Annotations;
 // (which returns the value or undefined). Lowering it correctly needs a multi-statement
 // rewrite that the current declarative pipeline can't express. Stays unmapped — calls
 // fall through to the default invocation handler. Tracked as a follow-up.
+
+// ─── GetValueOrDefault → getValueOrDefault(map, key, default) ─
+// `GetValueOrDefault` is an extension on IReadOnlyDictionary<K,V> (CollectionExtensions),
+// and JS Map has no counterpart. The extractor normalizes the single-argument overload to
+// the `(key, defaultValue)` one, passing `default(TValue)` (`0`, `false`, `null`, …), so
+// only the two-argument shape reaches this entry. The runtime helper tests membership
+// with `has`, so a stored `null` is returned as is instead of being replaced by the
+// default.
+
+[assembly: MapMethod(
+    typeof(CollectionExtensions),
+    nameof(CollectionExtensions.GetValueOrDefault),
+    JsTemplate = "getValueOrDefault($this, $0, $1)",
+    RuntimeImports = "getValueOrDefault",
+    WhenArgCount = 2
+)]
