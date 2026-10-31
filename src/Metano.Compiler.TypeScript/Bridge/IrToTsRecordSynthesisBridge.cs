@@ -53,12 +53,29 @@ public static class IrToTsRecordSynthesisBridge
 
         TsMethodMember[] members =
         [
-            GenerateEquals(fields, overridesBase),
-            GenerateHashCode(fields, overridesBase),
+            .. SynthesizedEquality(ir, fields, overridesBase),
             GenerateWith(ir),
         ];
 
         return members.Select(m => m with { Override = overridesBase }).ToList();
+    }
+
+    /// <summary>
+    /// <c>equals</c> and <c>hashCode</c>, each unless the record declares its
+    /// own (<see cref="IrRecordEqualityOverrides"/>) — C# uses the declared one
+    /// instead of synthesizing it, and it is emitted under the same name.
+    /// </summary>
+    private static IEnumerable<TsMethodMember> SynthesizedEquality(
+        IrClassDeclaration ir,
+        IReadOnlyList<RecordField> fields,
+        bool overridesBase
+    )
+    {
+        if (!IrRecordEqualityOverrides.DeclaresEquals(ir))
+            yield return GenerateEquals(fields, overridesBase);
+
+        if (!IrRecordEqualityOverrides.DeclaresHashCode(ir))
+            yield return GenerateHashCode(fields, overridesBase);
     }
 
     /// <summary>
@@ -150,7 +167,7 @@ public static class IrToTsRecordSynthesisBridge
         };
 
         if (overridesBase)
-            body.Add(AddToHash(SuperCall("hashCode")));
+            body.Add(AddToHash(SuperCall(IrToTsNamingPolicy.HashCodeMethodName)));
 
         foreach (var field in fields)
             body.Add(AddToHash(new TsPropertyAccess(new TsIdentifier("this"), field.Name)));
@@ -161,7 +178,12 @@ public static class IrToTsRecordSynthesisBridge
             )
         );
 
-        return new TsMethodMember("hashCode", [], new TsNumberType(), body);
+        return new TsMethodMember(
+            IrToTsNamingPolicy.HashCodeMethodName,
+            [],
+            new TsNumberType(),
+            body
+        );
     }
 
     private static TsExpressionStatement AddToHash(TsExpression value) =>

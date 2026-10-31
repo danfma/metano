@@ -81,8 +81,8 @@ public sealed record IrBaseExpression() : IrExpression;
 /// </para>
 /// </summary>
 /// <param name="IsJsCallableInvoke">The call targets <c>Invoke</c> on a <c>[JsCallable]</c> interface; the receiver IS the JS function, so <c>recv.Invoke(args)</c> lowers to <c>recv(args)</c>.</param>
-/// <param name="IsJsTupleElement">The member access reads a positional element of a <c>[JsTuple]</c> value, lowering to array-index access <c>recv[i]</c>.</param>
-/// <param name="TupleIndex">The positional index (declaration order) when <see cref="IsJsTupleElement"/> is true; <c>-1</c> otherwise.</param>
+/// <param name="IsTupleElement">The member access reads a positional element: a <c>[JsTuple]</c> record's positional member, or a C# tuple element read by name or as <c>ItemN</c>. Each backend reads the element at <see cref="TupleIndex"/> its own way (TypeScript indexes the array, <c>recv[i]</c>; Dart reads the record field <c>recv.$N</c>).</param>
+/// <param name="TupleIndex">The zero-based element position when <see cref="IsTupleElement"/> is true; <c>-1</c> otherwise.</param>
 /// <param name="IsTranspiledDataMember">The member is a field or property (not an enum member or indexer) declared on a type whose declaration the toolchain emits — a type of the current compilation or of a transpiled package, neither <c>[External]</c> nor <c>[Import]</c>. A backend that renames data members at their declaration (TypeScript escapes reserved words: <c>Default</c> → <c>default_</c>) applies the same rename at the access; a foreign member keeps the name its real declaration has.</param>
 /// <param name="IsBrandedValueMember">The member access reads the single wrapped value member of a <c>[Branded]</c> struct (<c>id.Value</c>). The branded value IS the primitive at runtime, so backends that lower the wrapper to a branded primitive collapse the read to the receiver.</param>
 /// <param name="ParameterTypes">For a method or constructor, the stable full names of the bound overload's parameter types (open definitions), so a declarative mapping can tell same-arity overloads apart; <c>null</c> for other members.</param>
@@ -100,7 +100,7 @@ public sealed record IrMemberOrigin(
     bool IsDeclaringTypeExternal = false,
     bool IsDeclaringTypeNoContainer = false,
     bool IsJsCallableInvoke = false,
-    bool IsJsTupleElement = false,
+    bool IsTupleElement = false,
     int TupleIndex = -1,
     bool IsBrandedValueMember = false,
     bool IsTranspiledDataMember = false,
@@ -364,6 +364,19 @@ public enum IrBinaryOp
     /// this operator, so there is no matching compound member.
     /// </summary>
     IntegerDivide,
+
+    /// <summary>
+    /// C#'s value equality <c>==</c> over a record (class or struct): true when
+    /// both operands are null, or when the left operand's <c>Equals</c> accepts
+    /// the right one. <see cref="Equal"/> keeps reference and primitive
+    /// equality, and the user-defined operators of other types.
+    /// </summary>
+    ValueEqual,
+
+    /// <summary>
+    /// The negation of <see cref="ValueEqual"/>: C#'s <c>!=</c> over a record.
+    /// </summary>
+    ValueNotEqual,
 }
 
 /// <summary>
@@ -451,6 +464,19 @@ public sealed record IrLambdaExpression(
 /// Array/list literal: <c>[a, b, c]</c>.
 /// </summary>
 public sealed record IrArrayLiteral(IReadOnlyList<IrExpression> Elements) : IrExpression;
+
+/// <summary>
+/// A C# tuple literal, <c>(a, b)</c> or <c>(x: a, y: b)</c>: its elements in
+/// source order (evaluated left to right) and the tuple type it produces.
+/// Element names exist only at compile time; reads by name or as
+/// <c>ItemN</c> carry the element position
+/// (<see cref="IrMemberOrigin.IsTupleElement"/>). Each backend picks the
+/// runtime shape — TypeScript a positional array typed as its tuple type,
+/// Dart a record literal. <see cref="Type"/> is <c>null</c> when the literal
+/// has no tuple type (an element without a type, and no tuple to convert to).
+/// </summary>
+public sealed record IrTupleLiteral(IReadOnlyList<IrExpression> Elements, IrTupleTypeRef? Type)
+    : IrExpression;
 
 /// <summary>
 /// Object literal / anonymous object: <c>{ prop1 = a, prop2 = b }</c>.

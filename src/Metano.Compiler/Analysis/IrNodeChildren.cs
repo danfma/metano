@@ -41,6 +41,7 @@ public static class IrNodeChildren
             IrAwaitExpression awaited => [awaited.Expression],
             IrYieldExpression { Value: { } yielded } => [yielded],
             IrArrayLiteral array => array.Elements,
+            IrTupleLiteral tuple => tuple.Elements,
             IrObjectLiteral obj => obj.Properties.Select(p => p.Value),
             IrSpreadExpression spread => [spread.Expression],
             IrStringInterpolation interpolation => interpolation

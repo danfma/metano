@@ -38,7 +38,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
 {
     private readonly Dictionary<
         IMethodSymbol,
-        Func<InvocationRewriteContext, IrExpression>
+        Func<InvocationRewriteContext, IrExpression?>
     > _entries;
 
     private readonly InvocationLoweringHelpers _helpers;
@@ -57,7 +57,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
     {
         _helpers = helpers;
 
-        _entries = new Dictionary<IMethodSymbol, Func<InvocationRewriteContext, IrExpression>>(
+        _entries = new Dictionary<IMethodSymbol, Func<InvocationRewriteContext, IrExpression?>>(
             SymbolEqualityComparer.Default
         );
 
@@ -66,22 +66,41 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
         SeedRounding(compilation);
         SeedGetValueOrDefault(compilation);
         SeedStringJoin(compilation);
+        SeedHashCode(compilation);
     }
 
     /// <summary>
     /// Looks the call site up by its unreduced definition, so an
     /// extension call written as <c>dict.GetValueOrDefault(key)</c>
     /// matches the entry seeded for the static
-    /// <c>CollectionExtensions.GetValueOrDefault</c> definition.
+    /// <c>CollectionExtensions.GetValueOrDefault</c> definition, and an
+    /// override by the method it overrides at the root of its chain, so
+    /// <c>record.GetHashCode()</c> matches the entry seeded for
+    /// <c>object.GetHashCode</c>. An entry may still decline (return
+    /// <c>null</c>).
     /// </summary>
     public IrExpression? Rewrite(InvocationRewriteContext context)
     {
         if (context.Symbol is null)
             return null;
 
-        var definition = (context.Symbol.ReducedFrom ?? context.Symbol).OriginalDefinition;
+        var definition = RootDefinition(context.Symbol.ReducedFrom ?? context.Symbol);
 
         return _entries.TryGetValue(definition, out var lower) ? lower(context) : null;
+    }
+
+    /// <summary>
+    /// The open definition of the method <paramref name="method"/> overrides
+    /// at the root of its override chain (itself when it overrides nothing).
+    /// </summary>
+    private static IMethodSymbol RootDefinition(IMethodSymbol method)
+    {
+        var root = method.OriginalDefinition;
+
+        while (root.OverriddenMethod is { } overridden)
+            root = overridden.OriginalDefinition;
+
+        return root;
     }
 
     /// <summary>

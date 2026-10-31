@@ -99,7 +99,11 @@ public static class IrRuntimeRequirementScanner
             && !c.Semantics.IsJsxComponent
         )
         {
-            acc.Add(new IrRuntimeRequirement("HashCode", IrRuntimeCategory.Hashing));
+            // A record that declares its own GetHashCode / Equals gets no
+            // synthesized hashCode / equals, so nothing would use the helper.
+            if (!IrRecordEqualityOverrides.DeclaresHashCode(c))
+                acc.Add(new IrRuntimeRequirement("HashCode", IrRuntimeCategory.Hashing));
+
             acc.Add(new IrRuntimeRequirement("RecordCopy", IrRuntimeCategory.RecordCopy));
             // The synthesized `equals` falls back to `valueEquals` for
             // every equality member whose type is not strictly
@@ -108,7 +112,7 @@ public static class IrRuntimeRequirementScanner
             // their own `equals` contract instead of `===`. Mirror the
             // bridge's UseStrictEquality decision here so the import
             // line lands only when a non-strict field actually exists.
-            if (HasNonStrictEqualityMember(c))
+            if (!IrRecordEqualityOverrides.DeclaresEquals(c) && HasNonStrictEqualityMember(c))
                 acc.Add(new IrRuntimeRequirement("ValueEquals", IrRuntimeCategory.Equality));
         }
     }
