@@ -143,11 +143,24 @@ preserving immutability semantics.
 | `dict.ContainsKey(k)` | `map.has(k)` |
 | `dict.Remove(k)` | `map.delete(k)` |
 | `dict.Count` | `map.size` |
+| `dict.Keys` / `dict.Values` | `[...map.keys()]` / `[...map.values()]` |
+| `dict.Keys.Count` / `dict.Values.Count` | `map.size` |
+| `dict.Keys.Contains(k)` | `map.has(k)` |
 | `dict[key]` (read) | `map.get(key)` |
 | `dict[key] = value` (write) | `map.set(key, value)` |
 | `dict.TryGetValue(k, out var v)` | Lowered via statement-level pattern to `const v = map.get(k); if (v !== undefined) { … }` |
 | `dict.GetValueOrDefault(k)` | `getValueOrDefault(map, k, <default(TValue)>)` (runtime) |
 | `dict.GetValueOrDefault(k, fallback)` | `getValueOrDefault(map, k, fallback)` (runtime) |
+
+`Map.keys()` / `Map.values()` return one-shot iterators, while a C# view can be
+enumerated many times and `IDictionary<K,V>.Keys` is an `ICollection<K>` (a TS array).
+The views therefore lower to an array copy (typed `K[]` / `V[]` for
+`Dictionary<K,V>.KeyCollection` / `ValueCollection`), so `foreach`, LINQ, `ToList()` and
+`string.Join` over them work. Unlike the C# view, the copy does not follow later changes
+to the dictionary. `dict.Keys.Count`, `dict.Values.Count` and `dict.Keys.Contains(k)`
+never build the copy: they fold into `map.size` and `map.has(k)`. The `Count` of an
+`IDictionary<K,V>` or `IReadOnlyDictionary<K,V>` (which C# binds to the inherited
+`ICollection<KeyValuePair<K,V>>.Count`) maps to `map.size` as well.
 
 `getValueOrDefault` tests membership with `has`, so a key stored with a `null` value
 returns `null` rather than the default, as in C#. For the single-argument overload the
@@ -282,10 +295,13 @@ native array methods directly:
 | `string.Join(sep, items)` (array, `List<T>`, `IReadOnlyList<T>`, …) | `items.join(sep)` |
 | `string.Join(sep, items)` (other `IEnumerable<T>`) | `[...items].join(sep)` |
 | `string.Join(sep, a, b, c)` (`params`) | `[a, b, c].join(sep)` |
-
-`Dictionary.Keys` / `Dictionary.Values` have no mapping yet, so
-`string.Join(sep, dict.Keys)` spreads the `Map.keys` method instead of its iterator (#292).
 | `int.Parse(s)` | `Number.parseInt(s, 10)` |
+
+Each element is converted the way JS `Array.prototype.join` converts it, which is the
+same conversion string interpolation and `ToString()` use elsewhere in the generated
+code: `null` elements become empty strings, as in .NET, but `bool` values print as
+`true` / `false` (C# prints `True` / `False`) and numbers use the JS number format
+(`1e+21`, where C# prints `1E+21`).
 
 ## Math
 

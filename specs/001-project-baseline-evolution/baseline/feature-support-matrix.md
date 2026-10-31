@@ -82,6 +82,7 @@ constraints · **Planned** = not a current guarantee. Unless a row names a backe
 | --- | --- | --- | --- | --- | --- | --- |
 | Collections | `List<T>` / arrays | TS | Implemented | `Extraction/IrTypeRefMapper.cs`, `IR/IrTypeRef.cs` | `tests/Metano.Tests/ExpressionTranspileTests.cs` | — |
 | Collections | `Dictionary` / `Map` | TS | Implemented | `Extraction/IrTypeRefMapper.cs`, `IR/IrTypeRef.cs` | `tests/Metano.Tests/DictionaryIndexerTests.cs` | — |
+| Collections | Dictionary `Keys` / `Values` views and counts | TS | Implemented | `src/Metano/Runtime/Dictionaries.cs`, `Extraction/IrExpressionExtractor.DictionaryCount.cs`, `Extraction/Invocation/DictionaryKeysContainsRewriter.cs` | `tests/Metano.Tests/DictionaryViewMappingTests.cs` | Views lower to array copies; `Keys.Count` / `Values.Count` / `Keys.Contains` fold into `size` / `has`. |
 | Collections | `HashSet<T>` | TS | Implemented | `Extraction/IrTypeRefMapper.cs`, `IR/IrTypeRef.cs` | `tests/Metano.Tests/ExpressionTranspileTests.cs` | Requires runtime support. |
 | Collections | `Queue` / `Stack` | TS | Implemented | `Extraction/IrTypeRefMapper.cs`, `IR/IrTypeRef.cs` | `tests/Metano.Tests/QueueStackTests.cs` | — |
 | Collections | `ImmutableList` / `ImmutableArray` | TS | Implemented | `Extraction/IrTypeRefMapper.cs`, `Extraction/IrLinqMapping.cs` | `tests/Metano.Tests/DeclarativeMappingTests.cs` | Via immutable collection mappings. |

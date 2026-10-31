@@ -15,21 +15,94 @@
 using Metano.Annotations;
 
 // ─── Count → size ───────────────────────────────────────────
+// Roslyn binds `IDictionary<K,V>.Count` and `IReadOnlyDictionary<K,V>.Count` to the
+// inherited `ICollection<KeyValuePair<K,V>>.Count` / `IReadOnlyCollection<…>.Count`,
+// which lower to the array `length`. The extractor rebinds a `Count` read on one of the
+// three dictionary types to that dictionary type, and folds `dict.Keys.Count` /
+// `dict.Values.Count` into `dict.Count`, so these entries cover every count of a
+// dictionary.
 
 [assembly: MapProperty(
     typeof(Dictionary<,>),
     nameof(Dictionary<int, int>.Count),
-    JsProperty = "size"
+    JsProperty = "size",
+    DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IDictionary<,>),
     nameof(IDictionary<int, int>.Count),
-    JsProperty = "size"
+    JsProperty = "size",
+    DartProperty = "length"
 )]
 [assembly: MapProperty(
     typeof(IReadOnlyDictionary<,>),
     nameof(IReadOnlyDictionary<int, int>.Count),
-    JsProperty = "size"
+    JsProperty = "size",
+    DartProperty = "length"
+)]
+
+// ─── Keys / Values → array copies ───────────────────────────
+// JS `Map.keys()` / `Map.values()` return one-shot iterators, while the C# views can be
+// enumerated many times and `IDictionary<K,V>.Keys` is an `ICollection<K>` (a TS array).
+// Both views therefore lower to an array copy, matching the array type IrTypeRefMapper
+// gives `KeyCollection` / `ValueCollection`. The Dart backend does not render
+// `DartTemplate` yet, so in Dart a view stays the `Iterable` `map.keys` / `map.values`
+// while a view-typed position is a `List`. Unlike the C# views, the copy does not
+// follow later changes to the dictionary. `dict.Keys.Count` and `dict.Keys.Contains(k)`
+// never build the copy: the extractor folds them into `dict.Count` and
+// `dict.ContainsKey(k)`.
+
+[assembly: MapProperty(
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.Keys),
+    JsTemplate = "[...$this.keys()]"
+)]
+[assembly: MapProperty(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.Keys),
+    JsTemplate = "[...$this.keys()]"
+)]
+[assembly: MapProperty(
+    typeof(IReadOnlyDictionary<,>),
+    nameof(IReadOnlyDictionary<int, int>.Keys),
+    JsTemplate = "[...$this.keys()]"
+)]
+[assembly: MapProperty(
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.Values),
+    JsTemplate = "[...$this.values()]"
+)]
+[assembly: MapProperty(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.Values),
+    JsTemplate = "[...$this.values()]"
+)]
+[assembly: MapProperty(
+    typeof(IReadOnlyDictionary<,>),
+    nameof(IReadOnlyDictionary<int, int>.Values),
+    JsTemplate = "[...$this.values()]"
+)]
+
+// ─── KeyCollection / ValueCollection → array members ────────
+// A view held in a variable (`var keys = dict.Keys;`) is the array copy.
+
+[assembly: MapProperty(
+    typeof(Dictionary<,>.KeyCollection),
+    nameof(Dictionary<int, int>.KeyCollection.Count),
+    JsProperty = "length",
+    DartProperty = "length"
+)]
+[assembly: MapProperty(
+    typeof(Dictionary<,>.ValueCollection),
+    nameof(Dictionary<int, int>.ValueCollection.Count),
+    JsProperty = "length",
+    DartProperty = "length"
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>.KeyCollection),
+    nameof(Dictionary<int, int>.KeyCollection.Contains),
+    JsMethod = "includes",
+    DartMethod = "contains"
 )]
 
 // ─── ContainsKey → has ──────────────────────────────────────

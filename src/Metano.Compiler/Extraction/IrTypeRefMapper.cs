@@ -141,6 +141,13 @@ public static class IrTypeRefMapper
             if (fullName is "System.Object")
                 return new IrPrimitiveTypeRef(IrPrimitive.Object);
 
+            // Dictionary<K,V>.KeyCollection / ValueCollection → Array: a sized
+            // collection of the keys or values, like the ICollection<K> that
+            // IDictionary<K,V>.Keys returns. Checked before the dictionary
+            // case, whose display-name prefix also matches these nested types.
+            if (named.DictionaryViewElementType() is { } viewElement)
+                return new IrArrayTypeRef(Map(viewElement, originResolver, target));
+
             // Dictionary-like → Map
             if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)
                 return new IrMapTypeRef(

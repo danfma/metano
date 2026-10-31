@@ -35,6 +35,36 @@ public static class RoslynTypeQueries
             || fullName.StartsWith("System.Collections.Concurrent.ConcurrentDictionary");
     }
 
+    /// <summary>
+    /// True for <c>Dictionary&lt;K,V&gt;</c>, <c>IDictionary&lt;K,V&gt;</c> and
+    /// <c>IReadOnlyDictionary&lt;K,V&gt;</c> themselves (not their nested
+    /// <c>KeyCollection</c> / <c>ValueCollection</c> types, nor types that
+    /// derive from or implement them): the dictionary types the
+    /// declarative BCL mappings cover.
+    /// </summary>
+    public static bool IsBclDictionaryDefinition(this INamedTypeSymbol type) =>
+        type.ContainingType is null
+        && type.ContainingNamespace?.ToDisplayString() == "System.Collections.Generic"
+        && (type.MetadataName is "Dictionary`2" or "IDictionary`2" or "IReadOnlyDictionary`2");
+
+    /// <summary>
+    /// The element type of <c>Dictionary&lt;K,V&gt;.KeyCollection</c>
+    /// (<c>K</c>) or <c>Dictionary&lt;K,V&gt;.ValueCollection</c>
+    /// (<c>V</c>); <c>null</c> for any other type.
+    /// </summary>
+    public static ITypeSymbol? DictionaryViewElementType(this INamedTypeSymbol type)
+    {
+        if (type.ContainingType is not { } dictionary || !dictionary.IsBclDictionaryDefinition())
+            return null;
+
+        return type.Name switch
+        {
+            "KeyCollection" => dictionary.TypeArguments[0],
+            "ValueCollection" => dictionary.TypeArguments[1],
+            _ => null,
+        };
+    }
+
     public static bool IsSetLike(this INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
