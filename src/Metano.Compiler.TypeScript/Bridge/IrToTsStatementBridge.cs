@@ -167,8 +167,78 @@ public static class IrToTsStatementBridge
         return inner.TrimEnd(';');
     }
 
+    /// <summary>
+    /// A JS <c>switch</c> compares with <c>===</c>, so a <c>case double.NaN:</c>
+    /// label would never match. When a NaN label is present the switch is
+    /// rewritten to <c>switch (true)</c> with one boolean test per label. That
+    /// repeats the subject in every test, so it is only done for a subject that
+    /// is safe to re-read; any other subject gets a TODO label that fails to
+    /// compile instead of a case that silently never matches.
+    /// </summary>
+    private static TsSwitchStatement MapSwitch(
+        IrSwitchStatement sw,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var subject = IrToTsExpressionBridge.Map(sw.Expression, bclRegistry);
+
+        if (!HasNaNCaseLabel(sw))
+        {
+            return new TsSwitchStatement(
+                subject,
+                MapSwitchCases(
+                    sw,
+                    label => IrToTsExpressionBridge.Map(label, bclRegistry),
+                    bclRegistry
+                )
+            );
+        }
+
+        if (!IsSafeToReread(sw.Expression))
+        {
+            return new TsSwitchStatement(
+                subject,
+                MapSwitchCases(sw, LowerNaNLabelAsUnsupported, bclRegistry)
+            );
+        }
+
+        return new TsSwitchStatement(
+            new TsLiteral("true"),
+            MapSwitchCases(
+                sw,
+                label => IrToTsExpressionBridge.BuildCaseLabelTest(subject, label, bclRegistry),
+                bclRegistry
+            )
+        );
+
+        TsExpression LowerNaNLabelAsUnsupported(IrExpression label) =>
+            IrToTsExpressionBridge.IsNaNConstant(label)
+                ? new TsIdentifier(
+                    "/* TODO: NaN case label needs a local or field switch subject */"
+                )
+                : IrToTsExpressionBridge.Map(label, bclRegistry);
+    }
+
+    private static bool HasNaNCaseLabel(IrSwitchStatement sw) =>
+        sw.Cases.Any(c => c.Labels.Any(IrToTsExpressionBridge.IsNaNConstant));
+
+    private static bool IsSafeToReread(IrExpression subject) =>
+        subject switch
+        {
+            IrIdentifier or IrThisExpression => true,
+            IrMemberAccess access => IsSafeToReread(access.Target),
+            _ => false,
+        };
+
+    private static List<TsSwitchCase> MapSwitchCases(
+        IrSwitchStatement sw,
+        Func<IrExpression, TsExpression> lowerLabel,
+        DeclarativeMappingRegistry? bclRegistry
+    ) => sw.Cases.SelectMany(c => MapSwitchCase(c, lowerLabel, bclRegistry)).ToList();
+
     private static IEnumerable<TsSwitchCase> MapSwitchCase(
         IrSwitchCase c,
+        Func<IrExpression, TsExpression> lowerLabel,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -186,7 +256,7 @@ public static class IrToTsStatementBridge
         // attached to the last label so execution falls through to it.
         for (var i = 0; i < c.Labels.Count; i++)
         {
-            var test = IrToTsExpressionBridge.Map(c.Labels[i], bclRegistry);
+            var test = lowerLabel(c.Labels[i]);
             yield return new TsSwitchCase(
                 test,
                 i == c.Labels.Count - 1 ? body : Array.Empty<TsStatement>()
@@ -251,10 +321,7 @@ public static class IrToTsStatementBridge
             ),
             IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
             IrContinueStatement => new TsExpressionStatement(new TsIdentifier("continue")),
-            IrSwitchStatement sw => new TsSwitchStatement(
-                IrToTsExpressionBridge.Map(sw.Expression, bclRegistry),
-                sw.Cases.SelectMany(c => MapSwitchCase(c, bclRegistry)).ToList()
-            ),
+            IrSwitchStatement sw => MapSwitch(sw, bclRegistry),
             IrYieldBreakStatement => new TsYieldBreakStatement(),
             IrForEachStatement fe => MapForEach(fe, bclRegistry),
             IrForStatement fs => MapFor(fs, bclRegistry),

@@ -172,6 +172,87 @@ public class FloatingPointMappingTests
     }
 
     [Test]
+    public async Task NaNSwitchLabels_RewriteSwitchToBooleanTests()
+    {
+        // A JS switch compares with `===`, so `case NaN:` would never match.
+        var output = TranspileNumbers(
+            """
+            public static string Describe(double v)
+            {
+                switch (v)
+                {
+                    case double.NaN:
+                        return "missing";
+                    case 0:
+                    case double.PositiveInfinity:
+                        return "edge";
+                    default:
+                        return "value";
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("switch (true)");
+        await Assert.That(output).Contains("case Number.isNaN(v):");
+        await Assert.That(output).Contains("case v === 0:");
+        await Assert.That(output).Contains("case v === Infinity:");
+        await Assert.That(output).DoesNotContain("case NaN:");
+        await AssertNoBclNumericReceiverLeaks(output);
+    }
+
+    [Test]
+    public async Task NaNSwitchLabels_OnACallSubject_FailLoudly()
+    {
+        // Rewriting would evaluate the call once per label; emit a TODO that does not
+        // compile rather than a case that silently never matches.
+        var output = TranspileNumbers(
+            """
+            public static double Next() => 1;
+
+            public static string Describe()
+            {
+                switch (Next())
+                {
+                    case double.NaN:
+                        return "missing";
+                    default:
+                        return "value";
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("switch (Numbers.next())");
+        await Assert
+            .That(output)
+            .Contains("/* TODO: NaN case label needs a local or field switch subject */");
+        await Assert.That(output).DoesNotContain("case NaN:");
+    }
+
+    [Test]
+    public async Task SwitchWithoutNaNLabels_KeepsPlainSwitch()
+    {
+        var output = TranspileNumbers(
+            """
+            public static string Describe(double v)
+            {
+                switch (v)
+                {
+                    case double.PositiveInfinity:
+                        return "overflow";
+                    default:
+                        return "value";
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("switch (v)");
+        await Assert.That(output).Contains("case Infinity:");
+    }
+
+    [Test]
     public async Task NaNEquality_StaysStrictEquality()
     {
         // Unlike the constant pattern, `x == double.NaN` is false in .NET too.
