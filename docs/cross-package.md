@@ -222,15 +222,22 @@ If two types share `[EmitInFile("foo")]` but live in different C# namespaces,
 Metano rejects the setup because consumers can't resolve which file to import
 from. Move them into the same namespace or use different file names.
 
-### `MS0029` — Invalid or colliding `SubpathRoot`
+### `MS0029` — Invalid `SubpathRoot`
 
-Reported (error) when `[EmitPackage(SubpathRoot = …)]` is not a dotted C#
-namespace — the value is then ignored — or when stripping it makes two barrels
-claim the same `exports` key (for example the root namespace's barrel and the
-opt-in `--namespace-barrels` root barrel both claiming `.`, or
-`Acme.Shared.Finance` and a top-level `Finance` both claiming `./finance`). The
-barrel under the root keeps the key, the other is left out of `exports`, and
-the CLI exits non-zero.
+Reported (error, fails the producer's build) when `[EmitPackage(SubpathRoot = …)]`
+is not a dotted C# namespace. Consumers of such a package keep full-namespace
+subpaths.
+
+### `MS0030` — Two barrels claim one `exports` key
+
+Reported (error) when, under a `SubpathRoot`, two namespace barrels would be
+exported under the same key — for example `Acme.Shared.Finance` and a top-level
+`Finance` both claiming `./finance`. The run stops before any file is written.
+
+**`--namespace-barrels` + types in the root namespace always collide on `.`**:
+the opt-in root aggregation barrel and the root namespace's own barrel both
+claim the package root. Drop `--namespace-barrels`, narrow `SubpathRoot` to a
+deeper namespace, or move the root namespace's types into a child namespace.
 
 ## The `.metalib` future (NuGet packaging)
 

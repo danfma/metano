@@ -537,7 +537,9 @@ It is stripped from the `package.json#exports` keys and from consumers' imports
 ```
 
 Matching is by whole namespace segment (`VideoStudio.DomainEvents` keeps its full
-path). An invalid value or two barrels claiming the same key report `MS0029`. See
+path). An invalid value reports `MS0029`; two barrels claiming the same key (including the
+`--namespace-barrels` root barrel vs. types in the root namespace, both on `.`) report
+`MS0030`. See
 [Cross-Project References](cross-package.md#shortening-package-subpaths-with-subpathroot).
 
 ## Declarative BCL mappings

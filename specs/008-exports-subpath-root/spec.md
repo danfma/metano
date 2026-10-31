@@ -90,17 +90,26 @@ type uses the producer's mapping, so the import specifier always matches an expo
 **Acceptance Scenarios**:
 
 1. **Given** `SubpathRoot = "Video Studio..Domain"` (not a dotted C# namespace), **When** the
-   producer is transpiled, **Then** `MS0029` (error) is reported at the attribute and the root is
-   ignored (keys stay full-path) on both producer and consumer side.
+   producer is transpiled for TypeScript, **Then** `MS0029` (error) is reported at the attribute
+   and the producer build fails; a consumer of such a package treats it as having no root
+   (full-path specifiers).
 2. **Given** a root under which a stripped key equals another barrel's unstripped key (e.g. a
    root-namespace leaf barrel and the opt-in root aggregation barrel both claim `.`, or
-   `VideoStudio.Domain.Shared` and a top-level `Shared` both claim `./shared`), **When**
-   `package.json` is written, **Then** `MS0029` (error) names both barrels, the barrel under the
-   root keeps the key, the other is left out of `exports`, and the CLI exits non-zero.
+   `VideoStudio.Domain.Shared` and a top-level `Shared` both claim `./shared`), **When** the
+   producer is transformed, **Then** `MS0030` (error) names both barrels and the root, and the run
+   stops before any file or cache entry is written — also under `--skip-package-json` and
+   `--dry-run`.
+3. **Given** `--namespace-barrels` and at least one type in exactly the root namespace, **When**
+   the producer is transformed, **Then** `MS0030` reports the `.` collision between the root
+   aggregation barrel and the root namespace's leaf barrel. Resolve it by dropping
+   `--namespace-barrels`, narrowing `SubpathRoot` to a deeper namespace, or moving the root
+   namespace's types into a child namespace.
 
 ### Edge Cases
 
 - Root namespace has no emitted types and no sub-namespaces: nothing is stripped; no diagnostic.
+- `--namespace-barrels` with types in exactly the root namespace: both barrels claim `.` →
+  `MS0030` (see US3 scenario 3).
 - `--src-root` output prefix (e.g. output in `src/domain`): the prefix is still prepended after
   stripping (`./domain/episodes`), exactly as today; the producer/consumer prefix gap that
   already exists for prefixed outputs is unchanged by this feature.
@@ -117,8 +126,9 @@ type uses the producer's mapping, so the import specifier always matches an expo
   `EmitTarget`. Empty means "not set" and preserves 005 behavior exactly.
 - **FR-002**: A non-empty `SubpathRoot` MUST be a dotted C# namespace: one or more segments
   separated by `.`, each a valid C# identifier (no whitespace, no empty segment, no `global::`).
-  Otherwise the producer reports `MS0029` (`InvalidExportsSubpathRoot`, Error) and the value is
-  treated as not set by the producer and by every consumer.
+  Otherwise the TypeScript producer reports `MS0029` (`InvalidExportsSubpathRoot`, Error), which
+  fails its build; every consumer treats the package as having no root. The value is validated
+  once, into a core `PackageSubpathRoot` value object whose `None` state equals `default`.
 - **FR-003**: Matching MUST be by whole namespace segment, performed on the kebab-cased path
   (the same kebab mapping 005 FR-003 uses for folders). A barrel whose namespace path equals
   the root's path maps to the package root; a barrel whose path starts with the root's path
@@ -135,17 +145,24 @@ type uses the producer's mapping, so the import specifier always matches an expo
   `[EmitPackage]` for the active target and apply FR-003 to the referenced type's namespace, so
   the consumer specifier is `<package>/<stripped-path>`, or the bare `<package>` for a type in
   exactly the root namespace. This covers type imports and `[NoContainer]` function imports.
-- **FR-007**: When two barrels map to the same exports key, the writer MUST report `MS0029`
-  (Error) naming both, keep the key for the barrel under the root, and omit the other from
-  `exports`. The CLI MUST exit non-zero when `package.json` writing reports an Error.
+- **FR-007**: When two barrels map to the same exports key, the TypeScript transform MUST report
+  `MS0030` (`ExportsSubpathKeyCollision`, Error) naming both barrels and the declared root, so
+  the run stops before files, caches or `package.json` are written. Should `package.json` still
+  be written for the same file set, the barrel under the root keeps the key and the other is
+  omitted from `exports`. Executables (no `exports`) are not checked.
+- **FR-007a**: The per-group incremental cache MUST be invalidated when a referenced package's
+  identity or `SubpathRoot` changes, so consumer files never keep stale cross-package
+  specifiers.
 - **FR-008**: The root MUST be declared only on the attribute. No MSBuild property or CLI flag
   sets it, because consumers resolve imports from the referenced assembly's metadata; a
   build-only setting would make producer exports and consumer imports diverge (see
   research.md R1).
-- **FR-009**: The Dart target is out of scope; it ignores the root.
+- **FR-009**: The Dart target is out of scope; it ignores the root and never raises `MS0029`.
 - **FR-010**: Tests MUST cover: stripped key, root-namespace key `.`, outside-root key,
   segment-boundary non-match, unchanged `imports`/targets, no-root regression, cross-package
-  import with stripped and bare specifiers, invalid root diagnostic, and collision diagnostic.
+  import with stripped and bare specifiers (types, enums, `[NoContainer]` functions, JSX
+  components, merged import lines), invalid root diagnostic, collision diagnostic from the
+  transform, Dart ignoring the root, and per-group cache invalidation.
 
 ### Amendments to 005
 

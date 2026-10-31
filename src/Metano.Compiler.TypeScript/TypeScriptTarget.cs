@@ -39,10 +39,10 @@ public sealed class TypeScriptTarget : ITranspilerTarget
 
     /// <summary>
     /// The validated <c>[assembly: EmitPackage(SubpathRoot = …)]</c> of the compiled
-    /// assembly, or null. The CLI driver passes it to <see cref="PackageJsonWriter"/>
+    /// assembly (<see cref="PackageSubpathRoot.None"/> when absent). The CLI driver passes it to <see cref="PackageJsonWriter"/>
     /// so the <c>exports</c> keys drop that namespace prefix (spec 008).
     /// </summary>
-    public string? LastPackageSubpathRoot { get; private set; }
+    public PackageSubpathRoot LastPackageSubpathRoot { get; private set; }
 
     /// <summary>
     /// Cross-package dependencies inferred from the most recent <see cref="Transform"/>

@@ -39,14 +39,34 @@ FR-007 reports it rather than picking a surprising winner silently.
 
 ## R4 — Collisions are errors
 
-**Decision**: `MS0029` Error; the barrel under the root keeps the key; the CLI exits non-zero.
+**Decision**: `MS0030` Error raised by the TypeScript transform (not by the `package.json`
+writer); the barrel under the root keeps the key.
 
 **Rationale**: A collision means some consumer import would resolve to the wrong barrel. A
-warning would let that ship. The writer still writes a deterministic file so the regeneration
-is inspectable.
+warning would let that ship. Raising it in the transform puts it in the host's error count,
+which stops the run before generated files and caches are written; a writer-time error would
+come after both, be skipped by `--skip-package-json` / `--dry-run`, and be hidden by the next
+cache hit.
 
 ## R5 — Diagnostic code
 
-**Decision**: New `MS0029 InvalidExportsSubpathRoot`, covering both malformed values and
-key collisions (same pattern as `MS0027`/`MS0028`, one code per attribute misuse). `MS0007`
-stays reserved for package identity problems.
+**Decision**: Two codes: `MS0029 InvalidExportsSubpathRoot` (malformed value) and
+`MS0030 ExportsSubpathKeyCollision` (two barrels claim one key). They have different causes and
+fixes, and a collision can involve the root aggregation barrel, which is not stripped at all.
+`MS0007` stays reserved for package identity problems.
+
+## R6 — Per-group cache key
+
+**Decision**: The per-group cache fingerprint includes every referenced package's name and
+`SubpathRoot`.
+
+**Rationale**: Group closure hashes cover only the current assembly's types. Without the extra
+key, a producer that changes its root would leave consumer groups reused with the old
+specifiers. (The host-level full cache already keys on reference fingerprints.)
+
+## R7 — Value object in the core
+
+**Decision**: `Metano.Compiler.PackageSubpathRoot`, a `readonly record struct` validated once by
+`TryFrom`, with `None == default`. It flows through `EmitPackageInfo`, `IrCompilation` and
+`IrTypeOrigin`; the TypeScript target only owns the namespace-to-subpath mapping
+(`PackageExportSubpaths`).

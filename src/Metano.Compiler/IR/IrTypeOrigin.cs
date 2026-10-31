@@ -13,12 +13,12 @@ namespace Metano.Compiler.IR;
 /// <param name="VersionHint">Version specifier, if declared. Backends use this for
 /// dependency manifest generation (e.g., <c>package.json</c>).</param>
 /// <param name="PackageSubpathRoot">The producing package's validated
-/// <c>[EmitPackage(SubpathRoot = …)]</c>, or <c>null</c>. Backends that shorten their
+/// <c>[EmitPackage(SubpathRoot = …)]</c>; <see cref="Compiler.PackageSubpathRoot.None"/> (the default) when it declares none. Backends that shorten their
 /// package's public subpaths with it apply the same mapping to consumer imports.</param>
 public sealed record IrTypeOrigin(
     string PackageId,
     string? Namespace = null,
     string? AssemblyRootNamespace = null,
     string? VersionHint = null,
-    string? PackageSubpathRoot = null
+    PackageSubpathRoot PackageSubpathRoot = default
 );

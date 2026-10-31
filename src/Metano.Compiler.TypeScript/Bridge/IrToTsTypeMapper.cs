@@ -152,6 +152,7 @@ public static class IrToTsTypeMapper
             origin.PackageSubpathRoot,
             origin.Namespace ?? ""
         );
+
         return new TsTypeOrigin(origin.PackageId, subPath);
     }
 
