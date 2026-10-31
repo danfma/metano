@@ -46,11 +46,43 @@ public sealed class IndentedStringBuilder
         _lineStart = true;
     }
 
+    /// <summary>
+    /// Writes <paramref name="value"/> as a double-quoted JS string literal,
+    /// escaping the backslash, the quote and every control or line-terminator
+    /// character, so a C# value such as <c>"a\nb"</c> or <c>'\0'</c> prints as
+    /// a valid, visible escape instead of a raw character. Other control
+    /// characters (NUL included) print as <c>\uXXXX</c>, which stays valid
+    /// whatever character follows (<c>\0</c> followed by a digit would be a
+    /// legacy octal escape).
+    /// </summary>
     public void WriteQuoted(string value)
     {
         Write("\"");
-        Write(value.Replace("\\", "\\\\").Replace("\"", "\\\""));
+        Write(EscapeStringLiteral(value));
         Write("\"");
+    }
+
+    private static string EscapeStringLiteral(string value)
+    {
+        var escaped = new StringBuilder(value.Length);
+
+        foreach (var c in value)
+        {
+            escaped.Append(
+                c switch
+                {
+                    '\\' => "\\\\",
+                    '"' => "\\\"",
+                    '\n' => "\\n",
+                    '\r' => "\\r",
+                    '\t' => "\\t",
+                    _ when char.IsControl(c) || c is '\u2028' or '\u2029' => $"\\u{(int)c:x4}",
+                    _ => c.ToString(),
+                }
+            );
+        }
+
+        return escaped.ToString();
     }
 
     /// <summary>
