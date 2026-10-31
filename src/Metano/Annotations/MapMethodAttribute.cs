@@ -21,9 +21,17 @@ namespace Metano.Annotations;
 ///   </item>
 /// </list>
 ///
-/// When the C# method has overloads, the attribute matches all of them by name. Use
-/// <see cref="JsTemplate"/> if a specific overload needs different lowering — overload
-/// disambiguation by parameter type list will be added if/when needed.
+/// When the C# method has overloads, the attribute matches all of them by name. Narrow a
+/// declaration to specific overloads with <see cref="WhenArgCount"/> or
+/// <see cref="WhenParameterTypes"/>.
+///
+/// Constructors: pass <c>".ctor"</c> (<see cref="ConstructorName"/>) as the method name
+/// to map <c>new T(args…)</c> (TypeScript target only for now). Only
+/// <see cref="JsTemplate"/> applies, narrowed by <see cref="WhenArgCount"/> /
+/// <see cref="WhenParameterTypes"/>. A constructor template has no <c>$this</c>; <c>$T0</c>,
+/// <c>$T1</c>, … stand for the constructed type's type arguments
+/// (<c>new Dictionary&lt;string, int&gt;()</c> → <c>$T0</c> = <c>string</c>,
+/// <c>$T1</c> = <c>number</c>).
 ///
 /// Generic types: pass an open generic via <c>typeof(List&lt;&gt;)</c>; the transpiler
 /// compares against the symbol's <c>OriginalDefinition</c> so the mapping applies to all
@@ -49,6 +57,12 @@ namespace Metano.Annotations;
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
 public sealed class MapMethodAttribute(Type declaringType, string csharpMethod) : Attribute
 {
+    /// <summary>
+    /// The method name that addresses the instance constructors of
+    /// <see cref="DeclaringType"/> (the CLR's <c>.ctor</c>).
+    /// </summary>
+    public const string ConstructorName = ".ctor";
+
     /// <summary>The C# type that declares the method (use an open generic for generics).</summary>
     public Type DeclaringType { get; } = declaringType;
 
@@ -152,4 +166,19 @@ public sealed class MapMethodAttribute(Type declaringType, string csharpMethod) 
     /// CLR rejects <c>int?</c> as an attribute argument type (CS0655).
     /// </summary>
     public int WhenArgCount { get; init; } = -1;
+
+    /// <summary>
+    /// Optional overload filter by parameter types. When set, this declaration only
+    /// matches the overload whose parameters have these types, in order, compared by
+    /// their open (original) definition: <c>typeof(IEnumerable&lt;&gt;)</c> matches an
+    /// <c>IEnumerable&lt;T&gt;</c> or <c>IEnumerable&lt;KeyValuePair&lt;K, V&gt;&gt;</c>
+    /// parameter alike. Type arguments, the nullability of value types
+    /// (<c>Nullable&lt;T&gt;</c>) and <c>ref</c>/<c>out</c>/<c>in</c> are therefore not
+    /// distinguished, and the receiver of an extension method is not part of the list.
+    /// An empty array matches the parameterless overload. Used where
+    /// overloads share an arity but lower differently — e.g.
+    /// <c>new List&lt;T&gt;(int capacity)</c> (the capacity has no JS counterpart)
+    /// vs <c>new List&lt;T&gt;(IEnumerable&lt;T&gt; collection)</c> (a copy).
+    /// </summary>
+    public Type[]? WhenParameterTypes { get; init; }
 }

@@ -62,28 +62,64 @@ public sealed class IndentedStringBuilder
         Write("\"");
     }
 
+    /// <summary>
+    /// Writes <paramref name="value"/>, the cooked (runtime) text of one
+    /// template-literal quasi, escaped for a backtick template: the
+    /// backslash, the backtick, a <c>$</c> that would open a <c>${</c> hole
+    /// and every control or line-terminator character print as escapes, so
+    /// the quasi evaluates back to exactly <paramref name="value"/>. A raw
+    /// carriage return would otherwise be normalized to a line feed by the
+    /// template-literal grammar.
+    /// </summary>
+    public void WriteTemplateText(string value)
+    {
+        var escaped = new StringBuilder(value.Length);
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            escaped.Append(EscapeTemplateChar(value, index));
+        }
+
+        Write(escaped.ToString());
+    }
+
+    private static string EscapeTemplateChar(string value, int index) =>
+        value[index] switch
+        {
+            '`' => "\\`",
+            '$' when OpensTemplateHole(value, index) => "\\$",
+            var c => EscapeNonDelimiterChar(c),
+        };
+
+    private static bool OpensTemplateHole(string value, int index) =>
+        index + 1 < value.Length && value[index + 1] == '{';
+
     private static string EscapeStringLiteral(string value)
     {
         var escaped = new StringBuilder(value.Length);
 
         foreach (var c in value)
         {
-            escaped.Append(
-                c switch
-                {
-                    '\\' => "\\\\",
-                    '"' => "\\\"",
-                    '\n' => "\\n",
-                    '\r' => "\\r",
-                    '\t' => "\\t",
-                    _ when char.IsControl(c) || c is '\u2028' or '\u2029' => $"\\u{(int)c:x4}",
-                    _ => c.ToString(),
-                }
-            );
+            escaped.Append(c == '"' ? "\\\"" : EscapeNonDelimiterChar(c));
         }
 
         return escaped.ToString();
     }
+
+    /// <summary>
+    /// The escape every JS string form shares: the backslash and the control
+    /// or line-terminator characters. Each caller escapes its own delimiter.
+    /// </summary>
+    private static string EscapeNonDelimiterChar(char c) =>
+        c switch
+        {
+            '\\' => "\\\\",
+            '\n' => "\\n",
+            '\r' => "\\r",
+            '\t' => "\\t",
+            _ when char.IsControl(c) || c is '\u2028' or '\u2029' => $"\\u{(int)c:x4}",
+            _ => c.ToString(),
+        };
 
     /// <summary>
     /// Writes a comma-separated list using a callback for each item.

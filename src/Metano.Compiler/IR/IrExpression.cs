@@ -85,6 +85,7 @@ public sealed record IrBaseExpression() : IrExpression;
 /// <param name="TupleIndex">The positional index (declaration order) when <see cref="IsJsTupleElement"/> is true; <c>-1</c> otherwise.</param>
 /// <param name="IsTranspiledDataMember">The member is a field or property (not an enum member or indexer) declared on a type whose declaration the toolchain emits — a type of the current compilation or of a transpiled package, neither <c>[External]</c> nor <c>[Import]</c>. A backend that renames data members at their declaration (TypeScript escapes reserved words: <c>Default</c> → <c>default_</c>) applies the same rename at the access; a foreign member keeps the name its real declaration has.</param>
 /// <param name="IsBrandedValueMember">The member access reads the single wrapped value member of a <c>[Branded]</c> struct (<c>id.Value</c>). The branded value IS the primitive at runtime, so backends that lower the wrapper to a branded primitive collapse the read to the receiver.</param>
+/// <param name="ParameterTypes">For a method or constructor, the stable full names of the bound overload's parameter types (open definitions), so a declarative mapping can tell same-arity overloads apart; <c>null</c> for other members.</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
     string MemberName,
@@ -100,7 +101,8 @@ public sealed record IrMemberOrigin(
     bool IsJsTupleElement = false,
     int TupleIndex = -1,
     bool IsBrandedValueMember = false,
-    bool IsTranspiledDataMember = false
+    bool IsTranspiledDataMember = false,
+    IReadOnlyList<string>? ParameterTypes = null
 );
 
 /// <summary>
@@ -242,6 +244,16 @@ public sealed record IrArgument(IrExpression Value, string? Name = null, bool Is
 /// backend can lower the construction to its native error shape. Null for
 /// every other construction.
 /// </para>
+/// <para>
+/// <paramref name="Origin"/> identifies the bound constructor (member name
+/// <c>.ctor</c>, with its overload's parameter types) so a backend can apply a
+/// declarative constructor mapping (<c>[MapMethod(typeof(List&lt;&gt;), ".ctor")]</c>)
+/// to a type that has no emitted declaration; <paramref name="TypeArguments"/>
+/// are the constructed type's type arguments, which such a mapping can splice
+/// into its template. <paramref name="Origin"/> is null when the constructor
+/// did not resolve; <paramref name="TypeArguments"/> is null for a non-generic
+/// type. Constructor mappings are applied by the TypeScript backend only today.
+/// </para>
 /// </summary>
 public sealed record IrNewExpression(
     IrTypeRef Type,
@@ -252,7 +264,9 @@ public sealed record IrNewExpression(
     bool IsJsTuple = false,
     IReadOnlyList<IrMemberInit>? Initializers = null,
     IReadOnlyList<IrExternalImport>? ExternalImports = null,
-    IrExceptionConstruction? ExceptionConstruction = null
+    IrExceptionConstruction? ExceptionConstruction = null,
+    IrMemberOrigin? Origin = null,
+    IReadOnlyList<IrTypeRef>? TypeArguments = null
 ) : IrExpression;
 
 /// <summary>

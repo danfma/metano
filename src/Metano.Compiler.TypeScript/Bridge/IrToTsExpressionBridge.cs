@@ -5,6 +5,7 @@ using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Parenthesization.Templates;
 using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
@@ -1080,7 +1081,87 @@ public static partial class IrToTsExpressionBridge
                 );
         }
 
+        if (
+            bclRegistry is not null
+            && MapDeclarativeConstruction(ne, args, bclRegistry) is { } mapped
+        )
+            return mapped;
+
         return new TsNewExpression(MapNewTarget(ne.Type), args);
+    }
+
+    /// <summary>
+    /// Lowers <c>new T(args)</c> through a declarative constructor mapping
+    /// (<c>new List&lt;T&gt;(capacity)</c> → <c>[] as Array&lt;T&gt;</c>). A
+    /// template may drop an argument with no JS counterpart (a capacity
+    /// hint). When a dropped argument has side effects, every side-effecting
+    /// argument is bound, in source order, to a parameter of an immediately
+    /// invoked arrow and the template reads the parameters, so each argument
+    /// is still evaluated exactly once and in C# order.
+    /// </summary>
+    private static TsExpression? MapDeclarativeConstruction(
+        IrNewExpression ne,
+        IReadOnlyList<TsExpression> args,
+        DeclarativeMappingRegistry bclRegistry
+    )
+    {
+        var typeArguments = (ne.TypeArguments ?? [])
+            .Select(typeArgument => IrToTsTypeMapper.Map(typeArgument))
+            .ToList();
+        var template = IrToTsBclMapper.TryMapConstruction(ne, args, typeArguments, bclRegistry);
+
+        if (template is null)
+            return null;
+
+        var referencedArgumentIndices = TsTemplatePlaceholder.ReferencedArgumentIndices(
+            template.Template
+        );
+
+        return DropsASideEffect(ne.Arguments, referencedArgumentIndices)
+            ? BindSideEffectsInSourceOrder(template, ne.Arguments)
+            : template;
+    }
+
+    private static bool DropsASideEffect(
+        IReadOnlyList<IrArgument> arguments,
+        IReadOnlySet<int> referencedArgumentIndices
+    ) =>
+        arguments
+            .Where((_, index) => !referencedArgumentIndices.Contains(index))
+            .Any(argument => !IrEvaluationTraits.IsSideEffectFree(argument.Value));
+
+    /// <summary>
+    /// <c>(($arg0, $arg2) =&gt; template($arg0, pure1, $arg2))(effect0, effect2)</c>.
+    /// The parameter names contain a <c>$</c>, which no C# identifier can, so
+    /// they never shadow a user name. Side-effect-free arguments stay inline;
+    /// the arrow body then only reads parameters and pure values, so it needs
+    /// no <c>async</c> even when a bound argument awaits.
+    /// </summary>
+    private static TsExpression BindSideEffectsInSourceOrder(
+        TsTemplate template,
+        IReadOnlyList<IrArgument> arguments
+    )
+    {
+        var bindings = new List<TsImmediateBinding>();
+        var boundArguments = new List<TsExpression>(template.Arguments.Count);
+
+        for (var index = 0; index < template.Arguments.Count; index++)
+        {
+            if (IrEvaluationTraits.IsSideEffectFree(arguments[index].Value))
+            {
+                boundArguments.Add(template.Arguments[index]);
+
+                continue;
+            }
+
+            var binding = new TsImmediateBinding($"$arg{index}", template.Arguments[index]);
+            bindings.Add(binding);
+            boundArguments.Add(new TsIdentifier(binding.Name));
+        }
+
+        var body = template with { Arguments = boundArguments };
+
+        return TsImmediateInvocation.Of(bindings, [new TsReturnStatement(body)], isAsync: false);
     }
 
     private static TsExpression MapBclExceptionCreation(

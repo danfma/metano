@@ -2556,7 +2556,8 @@ public sealed partial class IrExpressionExtractor
             IsJsTupleElement: tupleIndex >= 0,
             TupleIndex: tupleIndex,
             IsBrandedValueMember: isBrandedValueMember,
-            IsTranspiledDataMember: IsTranspiledDataMember(symbol)
+            IsTranspiledDataMember: IsTranspiledDataMember(symbol),
+            ParameterTypes: OverloadParameterTypes(symbol)
         );
     }
 
@@ -2575,6 +2576,21 @@ public sealed partial class IrExpressionExtractor
         symbol
             is IPropertySymbol { IsIndexer: false }
                 or IFieldSymbol { ContainingType.TypeKind: not TypeKind.Enum };
+
+    /// <summary>
+    /// The stable full names of the parameter types of the overload
+    /// <paramref name="symbol"/> binds to, read from its original definition
+    /// so a generic parameter keeps its open shape (<c>IEnumerable&lt;T&gt;</c>);
+    /// <c>null</c> when the symbol is not a method.
+    /// </summary>
+    private static IReadOnlyList<string>? OverloadParameterTypes(ISymbol symbol) =>
+        symbol is IMethodSymbol method
+            ? method
+                .OriginalDefinition.Parameters.Select(parameter =>
+                    parameter.Type.GetStableFullName()
+                )
+                .ToList()
+            : null;
 
     private IrExpression ExtractElementAccess(ElementAccessExpressionSyntax elem)
     {
@@ -2753,7 +2769,7 @@ public sealed partial class IrExpressionExtractor
             switch (content)
             {
                 case InterpolatedStringTextSyntax text:
-                    parts.Add(new IrInterpolationText(text.TextToken.ValueText));
+                    parts.Add(new IrInterpolationText(CookedInterpolationText(text)));
                     break;
                 case InterpolationSyntax expr:
                     var formatSpec = expr.FormatClause?.FormatStringToken.ValueText;
@@ -2763,6 +2779,28 @@ public sealed partial class IrExpressionExtractor
         }
         return new IrStringInterpolation(parts);
     }
+
+    /// <summary>
+    /// The runtime value of an interpolated string's literal segment. The
+    /// token's <c>ValueText</c> decodes character escapes but keeps the
+    /// doubled-brace escapes (<c>{{</c> / <c>}}</c>) of a non-raw
+    /// interpolation, so the bound operation's constant is read instead: it
+    /// is exactly the text the segment contributes in the regular, verbatim
+    /// and raw forms. A string converted to an interpolated-string handler
+    /// binds the segment as the <c>AppendLiteral</c> argument (a literal
+    /// operation) instead of an interpolated-text operation; both carry the
+    /// cooked constant.
+    /// </summary>
+    private string CookedInterpolationText(InterpolatedStringTextSyntax text) =>
+        _semantic.GetOperation(text) switch
+        {
+            IInterpolatedStringTextOperation
+            {
+                Text.ConstantValue: { HasValue: true, Value: string cooked },
+            } => cooked,
+            ILiteralOperation { ConstantValue: { HasValue: true, Value: string cooked } } => cooked,
+            _ => text.TextToken.ValueText,
+        };
 
     // ── Object creation ──────────────────────────────────────────────────
 
@@ -3695,7 +3733,9 @@ public sealed partial class IrExpressionExtractor
             IsJsTuple: isJsTuple,
             Initializers: initializers,
             ExternalImports: BuildImportedRenderableImports(typeSymbol),
-            ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax)
+            ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax),
+            Origin: BuildOrigin(ctor),
+            TypeArguments: ConstructedTypeArguments(typeSymbol)
         );
 
         if (creation.ExceptionConstruction is not { RequiresArgumentTemporaries: true } exception)
@@ -3712,6 +3752,21 @@ public sealed partial class IrExpressionExtractor
                 }
         );
     }
+
+    /// <summary>
+    /// The type arguments of a constructed generic type
+    /// (<c>Dictionary&lt;string, int&gt;</c> → <c>[string, int]</c>), which a
+    /// declarative constructor mapping splices into its template; <c>null</c>
+    /// for a non-generic type.
+    /// </summary>
+    private IReadOnlyList<IrTypeRef>? ConstructedTypeArguments(ITypeSymbol? typeSymbol) =>
+        typeSymbol is INamedTypeSymbol { TypeArguments.Length: > 0 } generic
+            ? generic
+                .TypeArguments.Select(typeArgument =>
+                    IrTypeRefMapper.Map(typeArgument, _originResolver, _target)
+                )
+                .ToList()
+            : null;
 
     /// <summary>
     /// Evaluates the arguments of <paramref name="creation"/> once, in source

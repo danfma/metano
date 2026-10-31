@@ -58,6 +58,24 @@ internal readonly record struct TsTemplatePlaceholder(
     }
 
     /// <summary>
+    /// The indices of the <c>$N</c> argument placeholders that occur in
+    /// <paramref name="text"/>, so a caller can tell which arguments a
+    /// template drops.
+    /// </summary>
+    public static IReadOnlySet<int> ReferencedArgumentIndices(string text)
+    {
+        var referenced = new HashSet<int>();
+
+        for (var dollar = text.IndexOf('$'); dollar >= 0; dollar = text.IndexOf('$', dollar + 1))
+        {
+            if (Match(text, dollar) is { Kind: TsTemplatePlaceholderKind.Argument } argument)
+                referenced.Add(argument.Index);
+        }
+
+        return referenced;
+    }
+
+    /// <summary>
     /// The node the printer substitutes for a value placeholder, or
     /// <c>null</c> when the template does not supply one (the printer then
     /// writes nothing for <c>$this</c> and the raw text for <c>$N</c>).

@@ -2324,6 +2324,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         string? dartTemplate = null;
         string? dartRuntimeImports = null;
         int? whenArgCount = null;
+        IReadOnlyList<string>? whenParameterTypes = null;
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
@@ -2358,6 +2359,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     // for "no filter"; the IR mapping carries `int?`.
                     if (named.Value.Value is int count && count >= 0)
                         whenArgCount = count;
+                    break;
+                case "WhenParameterTypes":
+                    whenParameterTypes = ReadParameterTypes(named.Value);
                     break;
             }
         }
@@ -2396,8 +2400,26 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             dartName,
             dartTemplate,
             dartRuntimeImports,
-            whenArgCount
+            whenArgCount,
+            whenParameterTypes
         );
+    }
+
+    /// <summary>
+    /// Reads a <c>WhenParameterTypes</c> <c>Type[]</c> argument into the
+    /// stable full names the call-site origins carry. A malformed array
+    /// (an element that is not a type) yields <c>null</c>, i.e. no filter.
+    /// </summary>
+    private static IReadOnlyList<string>? ReadParameterTypes(TypedConstant value)
+    {
+        if (value.Kind != TypedConstantKind.Array || value.IsNull)
+            return null;
+
+        var types = value.Values.Select(element => element.Value).OfType<ITypeSymbol>().ToList();
+
+        return types.Count == value.Values.Length
+            ? types.Select(type => type.GetStableFullName()).ToList()
+            : null;
     }
 
     private static void ReportConflict(

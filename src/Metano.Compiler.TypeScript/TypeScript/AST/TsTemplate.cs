@@ -39,6 +39,20 @@ public sealed record TsTemplate(
 ) : TsExpression
 {
     public IReadOnlyList<string> TypeArgumentNames { get; init; } = [];
+
+    /// <summary>
+    /// Full TypeScript types for the <c>$T0</c>, <c>$T1</c>, … placeholders
+    /// in type positions: a constructor mapping splices the constructed
+    /// type's type arguments (<c>new Map&lt;$T0, $T1&gt;()</c>), which can be any
+    /// type — <c>string | null</c>, <c>IssueId[]</c> — not just a name. They
+    /// print through the type printer and are collected as type references,
+    /// so a referenced declaration gets a type-only import. By contrast,
+    /// <see cref="TypeArgumentNames"/> serve value positions (a method's
+    /// <c>Enum.Parse&lt;Status&gt;</c> → <c>Status[…]</c>) and are value-imported.
+    /// A producer sets one or the other; the printer takes an index from this
+    /// list when it has one and falls back to the names otherwise.
+    /// </summary>
+    public IReadOnlyList<TsType> TypeArguments { get; init; } = [];
     public IReadOnlyList<string> RuntimeImports { get; init; } = [];
     public IReadOnlyList<IrExternalImport> ExternalImports { get; init; } = [];
 }

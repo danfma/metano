@@ -453,7 +453,7 @@ public static class IrToTsExceptionConstructionBridge
             if (IsLoneHole())
                 return _holes[0];
 
-            return new TsTemplateLiteral(_texts.Select(EscapeTemplateText).ToList(), _holes);
+            return new TsTemplateLiteral(_texts, _holes);
         }
 
         /// <summary>The text of an inline string-literal operand, folded
@@ -473,12 +473,5 @@ public static class IrToTsExceptionConstructionBridge
 
         private static bool ContainsLineBreak(string text) =>
             text.Contains('\n') || text.Contains('\r');
-
-        private static string EscapeTemplateText(string text) =>
-            text.Replace("\\", "\\\\")
-                .Replace("`", "\\`")
-                .Replace("${", "\\${")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r");
     }
 }
