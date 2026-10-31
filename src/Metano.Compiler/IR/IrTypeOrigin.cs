@@ -12,9 +12,13 @@ namespace Metano.Compiler.IR;
 /// combine this with <see cref="Namespace"/> to compute a package-relative path for imports.</param>
 /// <param name="VersionHint">Version specifier, if declared. Backends use this for
 /// dependency manifest generation (e.g., <c>package.json</c>).</param>
+/// <param name="PackageSubpathRoot">The producing package's validated
+/// <c>[EmitPackage(SubpathRoot = …)]</c>, or <c>null</c>. Backends that shorten their
+/// package's public subpaths with it apply the same mapping to consumer imports.</param>
 public sealed record IrTypeOrigin(
     string PackageId,
     string? Namespace = null,
     string? AssemblyRootNamespace = null,
-    string? VersionHint = null
+    string? VersionHint = null,
+    string? PackageSubpathRoot = null
 );

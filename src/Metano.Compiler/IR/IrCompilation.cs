@@ -132,6 +132,9 @@ namespace Metano.Compiler.IR;
 /// <see cref="TranspilableTypeEntries"/> to route the containing type's
 /// emission through top-level-statement rendering instead of the
 /// regular class path.</param>
+/// <param name="PackageSubpathRoot">Validated <c>[EmitPackage(SubpathRoot = …)]</c>
+/// for the target, or <c>null</c> when omitted or invalid. Backends that publish
+/// package subpaths strip this namespace prefix from them (spec 008).</param>
 public sealed record IrCompilation(
     string AssemblyName,
     string? PackageName,
@@ -157,5 +160,6 @@ public sealed record IrCompilation(
     IReadOnlySet<string>? GuardableTypeKeys = null,
     IReadOnlyDictionary<string, IrTranspilableTypeRef>? TranspilableTypes = null,
     IReadOnlyList<IrTranspilableTypeEntry>? TranspilableTypeEntries = null,
-    IrEntryPointInfo? EntryPoint = null
+    IrEntryPointInfo? EntryPoint = null,
+    string? PackageSubpathRoot = null
 );

@@ -283,4 +283,11 @@ public static class DiagnosticCodes
     /// declaration to bind to. The fix is to move the extra members to a
     /// separate interface or drop <c>[JsCallable]</c>.</summary>
     public const string InvalidJsCallable = "MS0028";
+
+    /// <summary>MS0029 — <c>[EmitPackage(SubpathRoot = …)]</c> is not a dotted C#
+    /// namespace (the value is ignored), or stripping it makes two namespace barrels
+    /// claim the same <c>package.json#exports</c> key (the barrel under the root keeps
+    /// the key; the other is left out). Either way some consumer import would resolve
+    /// to the wrong place, so the code is an error. See spec 008.</summary>
+    public const string InvalidExportsSubpathRoot = "MS0029";
 }

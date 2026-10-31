@@ -161,6 +161,31 @@ A single **opt-in** root aggregation barrel (`--namespace-barrels` /
 `export namespace` blocks for consumers who prefer one entry point. It is opt-in
 because, unlike the per-namespace leaf barrels, it defeats tree-shaking.
 
+### Shortening package subpaths with `SubpathRoot`
+
+When the namespaces already carry the package identity, the full-namespace
+subpath repeats it (`@acme/shared/acme/shared/finance`). Declare the namespace
+prefix that the package name stands for, and Metano strips it from the
+`package.json#exports` keys **and** from every consumer's import:
+
+```csharp
+[assembly: EmitPackage("@acme/shared", SubpathRoot = "Acme.Shared")]
+```
+
+| Producer namespace | On-disk barrel (unchanged) | `exports` key | Consumer import |
+|---|---|---|---|
+| `Acme.Shared.Finance` | `src/acme/shared/finance/index.ts` | `./finance` | `from "@acme/shared/finance"` |
+| `Acme.Shared` | `src/acme/shared/index.ts` | `.` | `from "@acme/shared"` |
+| `Acme.SharedKernel` (no segment match) | `src/acme/shared-kernel/index.ts` | `./acme/shared-kernel` | `from "@acme/shared/acme/shared-kernel"` |
+
+Only the package-facing subpaths change: generated files stay under their
+full-namespace folders, the `#/*` alias and internal imports are untouched, and
+each entry's `source` / `types` / `import` targets still point at the real
+files. Matching is by whole namespace segment. The root lives on the attribute
+(not in MSBuild) because consumers read it from the referenced assembly, which
+keeps both sides in agreement. See spec
+[`008-exports-subpath-root`](../specs/008-exports-subpath-root/spec.md).
+
 ## Multiple packages, same type name
 
 If two referenced assemblies both declare a public type called `User`, Metano
@@ -196,6 +221,16 @@ that assembly.
 If two types share `[EmitInFile("foo")]` but live in different C# namespaces,
 Metano rejects the setup because consumers can't resolve which file to import
 from. Move them into the same namespace or use different file names.
+
+### `MS0029` — Invalid or colliding `SubpathRoot`
+
+Reported (error) when `[EmitPackage(SubpathRoot = …)]` is not a dotted C#
+namespace — the value is then ignored — or when stripping it makes two barrels
+claim the same `exports` key (for example the root namespace's barrel and the
+opt-in `--namespace-barrels` root barrel both claiming `.`, or
+`Acme.Shared.Finance` and a top-level `Finance` both claiming `./finance`). The
+barrel under the root keeps the key, the other is left out of `exports`, and
+the CLI exits non-zero.
 
 ## The `.metalib` future (NuGet packaging)
 

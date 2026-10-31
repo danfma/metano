@@ -526,6 +526,20 @@ resolve to `"name/subpath"` instead of `"#/...".
 The `Version` field is optional — if omitted, the consumer uses `workspace:*` for
 monorepo siblings or the assembly's `Identity.Version`.
 
+The optional `SubpathRoot` names the namespace prefix the package name stands for.
+It is stripped from the `package.json#exports` keys and from consumers' imports
+(on-disk layout and the `#/*` alias are unchanged):
+
+```csharp
+[assembly: EmitPackage("@video-studio/domain", SubpathRoot = "VideoStudio.Domain")]
+// VideoStudio.Domain.Episodes → import { Episode } from "@video-studio/domain/episodes"
+// VideoStudio.Domain          → import { Clock } from "@video-studio/domain"
+```
+
+Matching is by whole namespace segment (`VideoStudio.DomainEvents` keeps its full
+path). An invalid value or two barrels claiming the same key report `MS0029`. See
+[Cross-Project References](cross-package.md#shortening-package-subpaths-with-subpathroot).
+
 ## Declarative BCL mappings
 
 ### `[assembly: MapMethod(typeof(T), "MethodName", JsMethod = "jsName")]`

@@ -1,5 +1,6 @@
 using ConsoleAppFramework;
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Watch;
 
 namespace Metano;
@@ -105,7 +106,8 @@ public class Commands
                     crossPackageDependencies: target.LastCrossPackageDependencies,
                     isExecutable: target.LastIsExecutable,
                     srcRoot: srcRoot,
-                    importAlias: importAlias
+                    importAlias: importAlias,
+                    subpathRoot: target.LastPackageSubpathRoot
                 );
 
                 foreach (var d in pkgDiagnostics)
@@ -114,6 +116,15 @@ public class Commands
                 Console.WriteLine(
                     $"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}"
                 );
+
+                // An Error here (e.g. MS0029: two barrels claim one exports key)
+                // means some consumer import resolves to the wrong barrel.
+                var hasPackageJsonError = pkgDiagnostics.Any(d =>
+                    d.Severity == MetanoDiagnosticSeverity.Error
+                );
+
+                if (hasPackageJsonError && !watch)
+                    Environment.Exit(1);
             }
         }
 

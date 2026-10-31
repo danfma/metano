@@ -38,6 +38,13 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public string? LastEmitPackageName { get; private set; }
 
     /// <summary>
+    /// The validated <c>[assembly: EmitPackage(SubpathRoot = …)]</c> of the compiled
+    /// assembly, or null. The CLI driver passes it to <see cref="PackageJsonWriter"/>
+    /// so the <c>exports</c> keys drop that namespace prefix (spec 008).
+    /// </summary>
+    public string? LastPackageSubpathRoot { get; private set; }
+
+    /// <summary>
     /// Cross-package dependencies inferred from the most recent <see cref="Transform"/>
     /// call: each entry maps a referenced npm package name to its version specifier
     /// (e.g., <c>^1.2.3</c> or <c>workspace:*</c>). The CLI driver merges these into
@@ -155,6 +162,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
                 compilation.Assembly,
                 targetEnumValue: (int)EmitTarget.JavaScript
             );
+        LastPackageSubpathRoot = ir.PackageSubpathRoot;
         LastCrossPackageDependencies = transformer.CrossPackageDependencies;
         LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
 
