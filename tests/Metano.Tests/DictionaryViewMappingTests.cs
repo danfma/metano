@@ -65,6 +65,22 @@ public class DictionaryViewMappingTests
     }
 
     [Test]
+    public async Task NullConditionalInterfaceDictionaryCount_MapsToMapSize()
+    {
+        // The leading `?.Count` step goes through the regular member pipeline
+        // (#248), so the interface-count rebinding (#295) applies to it as well.
+        var output = TranspileViews(
+            """
+            public static int? Mutable(IDictionary<string, int> d) => d?.Count;
+            public static int? ReadOnly(IReadOnlyDictionary<string, int> d) => d?.Count;
+            """
+        );
+
+        await Assert.That(output).Contains("return d?.size;");
+        await Assert.That(output).DoesNotContain("d?.length");
+    }
+
+    [Test]
     public async Task KeysContains_FoldsIntoMapHas()
     {
         var output = TranspileViews(
