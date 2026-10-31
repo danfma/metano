@@ -24,7 +24,7 @@ constraints · **Planned** = not a current guarantee. Unless a row names a backe
 
 | Area | Feature | Backend | Status | Code area | Test | Constraints |
 | --- | --- | --- | --- | --- | --- | --- |
-| Selection | `[Transpile]`, `[TranspileAssembly]`, `[Ignore]` | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/TranspileAttribute.cs` | `tests/Metano.Tests/AttributeTranspileTests.cs` | `[Ignore]` is the .NET-only boundary — transpilable code may not reference ignored types (MS0013); `[Ignore]` interfaces in a base list are erased, attribute applications and source-generator output are exempt. |
+| Selection | `[Transpile]`, `[TranspileAssembly]`, `[Ignore]` | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/TranspileAttribute.cs` | `tests/Metano.Tests/AttributeTranspileTests.cs` | `[Ignore]` is the .NET-only boundary — transpilable code may not reference ignored types (MS0013); `[Ignore]` interfaces in a base list are erased (per target), attribute applications not read for emission and source-generator output are exempt. |
 
 ## Types
 
