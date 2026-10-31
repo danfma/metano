@@ -280,6 +280,7 @@ internal sealed class IgnoreReferenceValidator
 
                 if (SymbolHelper.HasIgnore(named, _target) && _reportedLocations.Add(location))
                     ReportType(named, location);
+
                 return;
         }
     }

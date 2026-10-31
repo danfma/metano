@@ -225,9 +225,11 @@ public class IgnoreReferenceExemptionTests
         );
 
         await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+
         await Assert
             .That(files["app/person.ts"])
             .Contains("export class Person implements IKept {");
+
         await Assert.That(files["app/robot.ts"]).Contains("export class Robot implements IKept {");
         await Assert.That(files["app/robot.ts"]).Contains("IKept }");
     }
@@ -254,6 +256,7 @@ public class IgnoreReferenceExemptionTests
         );
 
         await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+
         await Assert
             .That(files["app/person.ts"])
             .Contains("export class Person implements ITypeScriptOnly {");
