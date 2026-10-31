@@ -132,14 +132,14 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        // When the constructor has a `: base(...)` initializer, emit the
-        // matching super(...) call right after the parameter rebinds so the
-        // arguments resolve to the just-declared locals.
-        if (ctor.BaseArguments is { Count: > 0 } baseArgs)
+        // When the constructor has a `: base(...)` initializer (or calls a
+        // BCL exception base, even implicitly), emit the matching super(...)
+        // call right after the parameter rebinds so the arguments resolve to
+        // the just-declared locals.
+        var superArgs = BuildSuperArguments(ctor, bclRegistry);
+
+        if (superArgs is not null)
         {
-            var superArgs = baseArgs
-                .Select(a => IrToTsExpressionBridge.MapArgument(a, bclRegistry))
-                .ToList();
             branch.Add(
                 new TsExpressionStatement(
                     new TsCallExpression(new TsIdentifier("super"), superArgs)
@@ -159,5 +159,24 @@ public static class IrToTsConstructorDispatcherBridge
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
         return new TsIfStatement(condition, branch);
+    }
+
+    private static IReadOnlyList<TsExpression>? BuildSuperArguments(
+        IrConstructorDeclaration ctor,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        if (ctor.BaseExceptionConstruction is { } construction)
+        {
+            return IrToTsExceptionConstructionBridge.MapErrorArguments(
+                construction,
+                ctor.BaseArguments ?? [],
+                bclRegistry
+            );
+        }
+
+        return ctor.BaseArguments is { Count: > 0 } baseArgs
+            ? baseArgs.Select(a => IrToTsExpressionBridge.MapArgument(a, bclRegistry)).ToList()
+            : null;
     }
 }

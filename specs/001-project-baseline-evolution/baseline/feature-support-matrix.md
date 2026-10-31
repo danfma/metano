@@ -45,7 +45,7 @@ constraints · **Planned** = not a current guarantee. Unless a row names a backe
 | Enums | Numeric enums | TS | Implemented | `Extraction/IrEnumExtractor.cs`, `IR/IrEnumMember.cs` | `tests/Metano.Tests/EnumTranspileTests.cs` | — |
 | Enums | String enums (`[StringEnum]`) | TS | Implemented | `Extraction/IrEnumExtractor.cs`, `src/Metano/Annotations/StringEnumAttribute.cs` | `tests/Metano.Tests/FlagsEnumTests.cs` | — |
 | Async | `Task` / `ValueTask` → `Promise` | TS | Implemented | `Extraction/IrTypeRefMapper.cs`, `IR/IrTypeRef.cs` | `tests/Metano.Tests/AsyncTranspileTests.cs` | — |
-| Exceptions | Exception types + throw | TS | Partial | `IR/IrStatement.cs`, `Extraction/IrStatementExtractor.cs` | `tests/Metano.Tests/ExceptionTranspileTests.cs` | Within current transformation rules. |
+| Exceptions | Exception types + throw | TS | Partial | `IR/IrStatement.cs`, `IR/IrExceptionConstruction.cs`, `Extraction/IrExceptionConstructionExtractor.cs`, `Bridge/IrToTsExceptionConstructionBridge.cs` | `tests/Metano.Tests/ExceptionTranspileTests.cs`, `tests/Metano.Tests/BclExceptionConstructionTests.cs` | User exceptions extend `Error` with their full class body. BCL exception types map to `Error`; their constructor arguments map by parameter role (`message`, `innerException` → `{ cause }`, `paramName` / `actualValue` appended to the message like .NET, default messages for common types). Typed `catch` clauses do not dispatch on the exception type. |
 
 ## Expressions & pattern matching
 
