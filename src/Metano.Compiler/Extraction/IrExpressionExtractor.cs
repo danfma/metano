@@ -434,8 +434,10 @@ public sealed partial class IrExpressionExtractor
     {
         if (_target is not null && _target != Metano.Annotations.TargetLanguage.TypeScript)
             return null;
+
         if (!IrEvaluationTraits.IsReusableReceiver(receiver))
             return null;
+
         if (RebindAssignmentTarget(assign.Left, receiver) is not { } rebound)
             return null;
         // Reject event accessors — the dedicated `event += handler`
@@ -1969,6 +1971,7 @@ public sealed partial class IrExpressionExtractor
     private static IrExpression BuildBoundReference(IrMemberAccess instanceAccess)
     {
         var receiver = instanceAccess.Target;
+
         if (IrEvaluationTraits.IsReusableReceiver(receiver))
             return new IrCallExpression(
                 new IrMemberAccess(instanceAccess, "bind"),
@@ -2520,6 +2523,7 @@ public sealed partial class IrExpressionExtractor
             return indexOrRangeAccess;
 
         var target = Extract(receiverSyntax);
+
         // Treat the first argument as the index; multi-arg indexers are uncommon.
         var index =
             arguments.Arguments.Count > 0
@@ -2708,6 +2712,7 @@ public sealed partial class IrExpressionExtractor
     {
         if (QualifiedMemberSyntax.From(inv.Expression) is not { } extensionAccess)
             return null;
+
         if (
             TryResolveExtensionLowering(extensionCallee, extensionAccess.Receiver)
             is not { } extLowering
