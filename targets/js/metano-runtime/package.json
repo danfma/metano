@@ -20,7 +20,9 @@
     ".": "./dist/index.js",
     "./system/json": "./dist/system/json/index.js",
     "./system/linq": "./dist/system/linq/index.js",
-    "./*": "./dist/*"
+    "./package.json": "./package.json",
+    "./*.js": "./dist/*.js",
+    "./*": "./dist/*.js"
   },
   "imports": {
     "#/*": [

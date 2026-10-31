@@ -41,6 +41,13 @@ jobs:
       - name: Install npm dependencies
         run: bun install
 
+      # Gate the whole release on a consumable runtime package. Runs before
+      # semantic-release because that step tags, pushes and publishes to NuGet;
+      # a failure later would leave a half-published release (#249).
+      # Runs on dry runs too.
+      - name: Smoke-test packed metano-runtime
+        run: bash scripts/smoke-test-runtime-package.sh
+
       # Exchange the workflow's OIDC token for a short-lived NuGet API key
       # (NuGet Trusted Publishing) — replaces the long-lived NUGET_TOKEN secret.
       # Requires a trusted-publishing policy on nuget.org for user `danfma`
