@@ -29,7 +29,7 @@ No persistent data. The "entities" are packaging contracts.
 | `package.json` | `{ "private": true, "type": "module" }` |
 | dependencies | packed tarball; dev: `typescript@5.9.3` |
 | `tsconfig.json` | `module`/`moduleResolution: nodenext`, `target: es2022`, `lib: ["es2023"]`, `strict`, `noEmit`, `skipLibCheck: false`, `types: []` |
-| `check.ts` | imports root, `system/json`, `system/linq`; one `@ts-expect-error` mismatch proving non-`any` types |
+| `entry-points.ts` | imports root, `system/json`, `system/linq`, `system/uuid.js`, `system/uuid`; one `@ts-expect-error` mismatch per import proving non-`any` types |
 
 ### Lifecycle
 

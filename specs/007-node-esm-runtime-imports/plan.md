@@ -54,7 +54,7 @@ All four were prototyped in a scratch consumer during research (see research.md 
 
 | Principle / Gate | Status | Notes |
 |---|---|---|
-| I. Clean Code | ✅ | Script split into named functions (`pack_runtime`, `create_consumer`, `assert_node_imports`, `assert_no_extensionless_specifiers`, `assert_nodenext_types`); `set -euo pipefail`. |
+| I. Clean Code | ✅ | Script split into named functions (`pack_runtime`, `create_consumer`, `assert_node_imports`, `assert_directory_subpath_rejected`, `assert_no_extensionless_specifiers`, `assert_nodenext_types`, behind a `main`); `set -euo pipefail`. |
 | II. Expressive code | ✅ | Script and step named for intent (`smoke-test-runtime-package`). |
 | III. Screaming organization | ✅ | Lives next to `scripts/sync-npm-version.sh`, the other runtime-packaging script. |
 | IV. Ports & Adapters | ✅ N/A | No compiler code touched. |
