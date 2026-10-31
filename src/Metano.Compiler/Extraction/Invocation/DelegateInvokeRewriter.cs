@@ -38,6 +38,7 @@ public sealed class DelegateInvokeRewriter(InvocationLoweringHelpers helpers) : 
             return null;
         if (InvocationLoweringHelpers.HasThisParameter(invoke))
             return null;
+
         if (QualifiedMemberSyntax.From(context.Invocation.Expression) is not { } invokeMember)
             return null;
 

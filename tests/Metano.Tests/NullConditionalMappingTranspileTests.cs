@@ -63,6 +63,7 @@ public class NullConditionalMappingTranspileTests
         );
 
         await Assert.That(output).Contains("return order == null ? null : twice(order.items);");
+
         await Assert
             .That(output)
             .Contains("return order?.next == null ? null : twice((order?.next).items);");
@@ -83,6 +84,7 @@ public class NullConditionalMappingTranspileTests
             .Contains(
                 "return order == null ? null : linq(order.items, where((i: number) => i > 1), count());"
             );
+
         await Assert
             .That(output)
             .Contains(
@@ -102,9 +104,11 @@ public class NullConditionalMappingTranspileTests
         );
 
         await Assert.That(output).Contains("return order == null ? null : score(order);");
+
         await Assert
             .That(output)
             .Contains("return order == null ? null : score(order).toString();");
+
         await Assert.That(output).Contains("return items == null ? null : twice(items);");
     }
 
@@ -121,6 +125,7 @@ public class NullConditionalMappingTranspileTests
 
         await Assert.That(output).Contains("return order == null ? null : total$get(order);");
         await Assert.That(output).Contains("return order == null ? null : bonus(order);");
+
         await Assert
             .That(output)
             .Contains("return order?.next == null ? null : total$get(order?.next);");
@@ -137,9 +142,11 @@ public class NullConditionalMappingTranspileTests
         );
 
         await Assert.That(output).Contains("return order == null ? null : order.items.length;");
+
         await Assert
             .That(output)
             .Contains("return order == null ? null : order.items.length.toString();");
+
         await Assert.That(output).DoesNotContain("$0");
     }
 
@@ -175,16 +182,54 @@ public class NullConditionalMappingTranspileTests
         await Assert.That(output).Contains("return items?.[items.length - 1];");
         await Assert.That(output).Contains("return items?.slice(1);");
         await Assert.That(output).Contains("return order?.items[order.items.length - 1];");
+
         await Assert
             .That(output)
             .Contains(
                 "return value == null ? null : ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1])(value.substring(1));"
             );
+
         await Assert
             .That(output)
             .Contains(
                 "return value == null ? null : ((receiver$temp$0) => receiver$temp$0.slice(1, receiver$temp$0.length - 1))(value.substring(1));"
             );
+    }
+
+    [Test]
+    public async Task ImpureReceiverReadBeyondTheChainRoot_KeepsItsBinding()
+    {
+        var output = TranspileInHelperClass(
+            """
+            public static int[]? Find(int[]? items) => items;
+            public static int? Last(int[]? items) => Find(items)?[^1];
+            public static int[]? AllButLast(int[]? items) => Find(items)?[..^1];
+            public static int? LastItem(Order order) => order.GetNext()?.Items[^1];
+            public static int? Newest(Order order) => order.GetNext()?.Items.Newest();
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : receiver$temp$0[receiver$temp$0.length - 1])(find(items));"
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : receiver$temp$0.slice(0, receiver$temp$0.length - 1))(find(items));"
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : receiver$temp$0.items[receiver$temp$0.items.length - 1])(order.getNext());"
+            );
+
+        await Assert.That(output).DoesNotContain("?.[receiver$temp$");
+        await Assert.That(output).DoesNotContain("?.items[receiver$temp$");
+        await Assert.That(output).DoesNotContain("?.slice(0, receiver$temp$");
     }
 
     [Test]
@@ -247,11 +292,13 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains("if (order != null) {\n    order.items.length = 0;\n  }");
+
         await Assert
             .That(output)
             .Contains(
                 "const receiver$temp$0 = order.getNext();\n\n    if (receiver$temp$0 != null) {\n      listRemove(receiver$temp$0.items, await item);\n    }"
             );
+
         await Assert.That(output).DoesNotContain("? null :");
     }
 
@@ -284,6 +331,7 @@ public class NullConditionalMappingTranspileTests
             using System.Collections.Generic;
             using System.Linq;
             using System.Threading.Tasks;
+            using Metano.Annotations;
             using Metano.Annotations.TypeScript;
 
             [Transpile]
@@ -291,6 +339,9 @@ public class NullConditionalMappingTranspileTests
             {
                 public static int Twice(this List<int> items) => items.Count * 2;
                 public static int Score(this Order order) => order.Items.Count;
+
+                [Inline(InlineMode.Substitute)]
+                public static int Newest(this List<int> items) => items[items.Count - 1];
 
                 extension(Order order)
                 {

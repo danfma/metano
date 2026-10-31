@@ -87,13 +87,27 @@ public static partial class IrToTsExpressionBridge
 
         var whenNotNull = Map(access.WhenNotNull, bclRegistry);
 
+        var optionalChain = CanChainOptionally(access)
+            ? TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
+            : null;
+
         return new LoweredNullConditional(
             loweredReceiver,
             receiverName,
             whenNotNull,
-            TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
+            optionalChain
         );
     }
+
+    /// <summary>
+    /// Native <c>?.</c> replaces the receiver binding only at the chain's
+    /// root. A bound receiver read anywhere else too — an index-from-end
+    /// offset (<c>f()?[^1]</c>), a slice bound, an <c>[Inline]</c> body that
+    /// mentions it twice — needs the binding, so it keeps the guarded form.
+    /// </summary>
+    private static bool CanChainOptionally(IrNullConditionalAccess access) =>
+        !access.IsBound
+        || IrEvaluationTraits.CountIdentifierReads(access.WhenNotNull, access.ReceiverName) == 1;
 
     private static TsConditionalExpression GuardInline(
         TsExpression receiver,

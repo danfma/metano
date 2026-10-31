@@ -53,4 +53,19 @@ public static class IrEvaluationTraits
     public static bool ContainsAwait(IrExpression expression) =>
         expression is IrAwaitExpression
         || IrNodeChildren.ExpressionsOf(expression).Any(ContainsAwait);
+
+    /// <summary>
+    /// How many times <paramref name="expression"/> reads the identifier
+    /// <paramref name="name"/>, nested lambda bodies included.
+    /// </summary>
+    public static int CountIdentifierReads(IrExpression expression, string name) =>
+        (expression is IrIdentifier identifier && identifier.Name == name ? 1 : 0)
+        + IrNodeChildren.ExpressionsOf(expression).Sum(child => CountIdentifierReads(child, name))
+        + IrNodeChildren
+            .StatementsOf(expression)
+            .Sum(statement => CountIdentifierReads(statement, name));
+
+    private static int CountIdentifierReads(IrStatement statement, string name) =>
+        IrNodeChildren.ExpressionsOf(statement).Sum(child => CountIdentifierReads(child, name))
+        + IrNodeChildren.StatementsOf(statement).Sum(nested => CountIdentifierReads(nested, name));
 }
