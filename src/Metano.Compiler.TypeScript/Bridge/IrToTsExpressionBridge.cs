@@ -1131,11 +1131,17 @@ public static partial class IrToTsExpressionBridge
             .Any(argument => !IrEvaluationTraits.IsSideEffectFree(argument.Value));
 
     /// <summary>
-    /// <c>(($arg0, $arg2) =&gt; template($arg0, pure1, $arg2))(effect0, effect2)</c>.
-    /// The parameter names contain a <c>$</c>, which no C# identifier can, so
-    /// they never shadow a user name. Side-effect-free arguments stay inline;
-    /// the arrow body then only reads parameters and pure values, so it needs
-    /// no <c>async</c> even when a bound argument awaits.
+    /// <c>(($arg0, $arg1) =&gt; template($arg0, $arg1, pure2))(read0, effect1)</c>.
+    /// Every argument up to the last side-effecting one is bound, in source
+    /// order, unless it is a literal: a side-effect-free read (a field, a
+    /// local) placed before an effect must still observe the value from
+    /// before that effect. Arguments after the last effect stay inline, as
+    /// C# evaluates them after it too. The parameter names contain a
+    /// <c>$</c>, which no C# identifier can, so they never shadow a user name;
+    /// the arrow body only reads parameters and values evaluated after every
+    /// effect, so it needs no <c>async</c> even when a bound argument awaits.
+    /// The template arguments are the lowered <paramref name="arguments"/>,
+    /// index for index.
     /// </summary>
     private static TsExpression BindSideEffectsInSourceOrder(
         TsTemplate template,
@@ -1144,10 +1150,11 @@ public static partial class IrToTsExpressionBridge
     {
         var bindings = new List<TsImmediateBinding>();
         var boundArguments = new List<TsExpression>(template.Arguments.Count);
+        var lastEffectIndex = LastSideEffectIndex(arguments);
 
         for (var index = 0; index < template.Arguments.Count; index++)
         {
-            if (IrEvaluationTraits.IsSideEffectFree(arguments[index].Value))
+            if (index > lastEffectIndex || arguments[index].Value is IrLiteral)
             {
                 boundArguments.Add(template.Arguments[index]);
 
@@ -1162,6 +1169,17 @@ public static partial class IrToTsExpressionBridge
         var body = template with { Arguments = boundArguments };
 
         return TsImmediateInvocation.Of(bindings, [new TsReturnStatement(body)], isAsync: false);
+    }
+
+    private static int LastSideEffectIndex(IReadOnlyList<IrArgument> arguments)
+    {
+        for (var index = arguments.Count - 1; index >= 0; index--)
+        {
+            if (!IrEvaluationTraits.IsSideEffectFree(arguments[index].Value))
+                return index;
+        }
+
+        return -1;
     }
 
     private static TsExpression MapBclExceptionCreation(

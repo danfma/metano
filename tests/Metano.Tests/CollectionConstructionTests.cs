@@ -96,6 +96,41 @@ public class CollectionConstructionTests
     }
 
     [Test]
+    public async Task DroppedSideEffect_BindsAnEarlierReadBeforeTheEffect()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [assembly: MapMethod(
+                typeof(Widget),
+                MapMethodAttribute.ConstructorName,
+                JsTemplate = "makeWidget($0)"
+            )]
+
+            public class Widget
+            {
+                public Widget(int keep, int drop) { }
+            }
+
+            [Transpile]
+            public class Factory
+            {
+                private int _n;
+
+                private int Next() => ++_n;
+
+                public Widget Build() => new Widget(_n, Next());
+            }
+            """
+        );
+
+        await Assert
+            .That(result["factory.ts"])
+            .Contains("return (($arg0, $arg1) => makeWidget($arg0))(this._n, this.next());");
+    }
+
+    [Test]
     public async Task DroppedSideEffect_KeepsSourceOrderWithKeptArguments()
     {
         var result = TranspileHelper.Transpile(
