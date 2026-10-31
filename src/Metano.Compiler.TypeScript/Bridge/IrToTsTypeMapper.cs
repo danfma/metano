@@ -133,7 +133,12 @@ public static class IrToTsTypeMapper
         return new TsNamedType(name, args, origin, originalName);
     }
 
-    private static bool IsBclException(IrNamedTypeRef named) =>
+    /// <summary>
+    /// Whether <paramref name="named"/> is an exception type without a TS
+    /// declaration (<c>System.Exception</c> and its BCL / non-transpilable
+    /// subclasses), whose runtime values are JS <c>Error</c> instances.
+    /// </summary>
+    internal static bool IsBclException(IrNamedTypeRef named) =>
         named.Semantics is { Kind: IrNamedTypeKind.Exception, IsTranspilable: false };
 
     /// <summary>

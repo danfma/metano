@@ -3666,7 +3666,7 @@ public sealed partial class IrExpressionExtractor
             IsJsTuple: isJsTuple,
             Initializers: initializers,
             ExternalImports: BuildImportedRenderableImports(typeSymbol),
-            ExceptionConstruction: ExtractExceptionConstruction(ctor, args)
+            ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax)
         );
     }
 
@@ -3677,11 +3677,19 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExceptionConstruction? ExtractExceptionConstruction(
         IMethodSymbol? ctor,
-        IReadOnlyList<IrArgument> args
+        IReadOnlyList<IrArgument> args,
+        ExpressionSyntax creationSyntax
     ) =>
         ctor is null
             ? null
-            : IrExceptionConstructionExtractor.Extract(ctor, args, ctor.ContainingType, _target);
+            : IrExceptionConstructionExtractor.Extract(
+                ctor,
+                args,
+                ctor.ContainingType,
+                _target,
+                (creationSyntax as BaseObjectCreationExpressionSyntax)?.ArgumentList,
+                _semantic
+            );
 
     /// <summary>
     /// When the constructed type is an <em>imported</em> JSX renderable — it is

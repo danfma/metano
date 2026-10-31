@@ -121,10 +121,13 @@ public class ExceptionTranspileTests
         );
 
         var output = result["quota-exceeded-exception.ts"];
+
         await Assert.That(output).Contains("export class QuotaExceededException extends Error {");
+
         await Assert
             .That(output)
             .Contains("constructor(message: string, readonly limit: number) {");
+
         await Assert.That(output).Contains("super(message);");
         await Assert.That(output).Contains("describe(): string {");
         await Assert.That(output).Contains("`limit ${this.limit}: ${this.message}`");
@@ -152,9 +155,11 @@ public class ExceptionTranspileTests
         );
 
         var output = result["app/stale-state-exception.ts"];
+
         await Assert
             .That(output)
             .Contains("super(\"Operation is not valid due to the current state of the object.\");");
+
         await Assert.That(output).Contains("this.version = version;");
     }
 
@@ -181,11 +186,104 @@ public class ExceptionTranspileTests
         );
 
         var output = result["app/sync-exception.ts"];
+
         await Assert.That(output).Contains("export class SyncException extends Error {");
         await Assert.That(output).Contains("super(message, { cause: inner });");
         await Assert.That(output).Contains("super(message);");
+
         await Assert
             .That(output)
             .Contains("super(\"Exception of type 'App.SyncException' was thrown.\");");
+    }
+
+    [Test]
+    public async Task ExceptionWithTwoLevelThisChain_InlinesChainIntoSingleSuperCall()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile]
+                public sealed class ChainException : Exception
+                {
+                    public ChainException()
+                        : this("first") { }
+
+                    public ChainException(string message)
+                        : this(message, 7) { }
+
+                    public ChainException(string message, int code)
+                        : base(message)
+                    {
+                        Code = code;
+                    }
+
+                    public int Code { get; }
+                }
+            }
+            """
+        );
+
+        var output = result["app/chain-exception.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    if (args.length === 0) {
+                      const __chain0Arg0 = "first";
+
+                      {
+                        const message = __chain0Arg0;
+                        const __chain1Arg0 = message;
+                        const __chain1Arg1 = 7;
+
+                        {
+                          const message = __chain1Arg0;
+                          const code = __chain1Arg1;
+                          super(message);
+                          this.code = code;
+                        }
+                      }
+
+                      return;
+                    }
+                """
+            );
+    }
+
+    [Test]
+    public async Task ExceptionOverridingMessage_LeavesNativeMessageUnset()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class RetryException(int attempts, Exception inner)
+                : Exception("ignored", inner)
+            {
+                public override string Message => $"Failed after {attempts} attempts";
+            }
+            """
+        );
+
+        var output = result["retry-exception.ts"];
+
+        await Assert.That(output).Contains("super(undefined, { cause: inner });");
+        await Assert.That(output).Contains("get message(): string {");
+    }
+
+    [Test]
+    public async Task ExceptionWithoutConstructors_UsesDotNetDefaultMessage()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class NoConstructorException : Exception { }
+            """
+        );
+
+        await Assert
+            .That(result["no-constructor-exception.ts"])
+            .Contains("super(\"Exception of type 'NoConstructorException' was thrown.\");");
     }
 }

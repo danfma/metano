@@ -14,12 +14,27 @@ namespace Metano.Compiler.IR;
 /// with no emitted target declaration: the base arguments classified by
 /// constructor-parameter role, so a backend can build the native error
 /// <c>super(...)</c> call. Null otherwise.</param>
+/// <param name="ThisChain">Set when the constructor delegates to a sibling
+/// through <c>: this(...)</c>: the chained arguments and the target
+/// constructor, so a backend without constructor chaining can inline the
+/// target (and, transitively, its base call). Null otherwise.</param>
 public sealed record IrConstructorDeclaration(
     IReadOnlyList<IrConstructorParameter> Parameters,
     IReadOnlyList<IrStatement>? Body = null,
     IReadOnlyList<IrArgument>? BaseArguments = null,
     IReadOnlyList<IrConstructorDeclaration>? Overloads = null,
-    IrExceptionConstruction? BaseExceptionConstruction = null
+    IrExceptionConstruction? BaseExceptionConstruction = null,
+    IrConstructorChain? ThisChain = null
+);
+
+/// <summary>
+/// A <c>: this(...)</c> delegation: <paramref name="Arguments"/> as written at
+/// the call (positional or named) and the <paramref name="Target"/>
+/// constructor they bind to.
+/// </summary>
+public sealed record IrConstructorChain(
+    IReadOnlyList<IrArgument> Arguments,
+    IrConstructorDeclaration Target
 );
 
 /// <summary>

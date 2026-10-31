@@ -159,7 +159,8 @@ internal static partial class IrToTsClassBridge
     /// list (<see cref="BuildPrimaryCtorParams"/>) and the optional
     /// <c>super(...)</c> argument list. The body is composed in canonical order:
     /// <list type="number">
-    ///   <item><c>super(args)</c> when <paramref name="superArgs"/> is non-null;</item>
+    ///   <item><c>super(args)</c> (after any argument temporaries) when
+    ///     <paramref name="baseCall"/> is non-null;</item>
     ///   <item>one <c>this.&lt;capturedField&gt; = &lt;paramName&gt;</c>
     ///     assignment per captured parameter (resolved from
     ///     <see cref="IrConstructorParameter.CapturedFieldName"/>);</item>
@@ -171,25 +172,20 @@ internal static partial class IrToTsClassBridge
     public static TsConstructor BuildSimpleConstructor(
         IrConstructorDeclaration? ir,
         IReadOnlyList<TsConstructorParam> tsCtorParams,
-        IReadOnlyList<TsExpression>? superArgs,
+        TsBaseConstructorCall? baseCall,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
         var body = new List<TsStatement>();
-        // `superArgs is not null` signals that the class extends a
+        // `baseCall is not null` signals that the class extends a
         // base — TypeScript requires every derived constructor to
         // call `super(...)` before reading `this`, even when the
-        // base constructor takes no arguments. An empty list lowers
+        // base constructor takes no arguments. Empty arguments lower
         // to a bare `super()` call rather than skipping the
-        // statement.
-        if (superArgs is not null)
-        {
-            body.Add(
-                new TsExpressionStatement(
-                    new TsCallExpression(new TsIdentifier("super"), superArgs)
-                )
-            );
-        }
+        // statement; argument temporaries (source-order evaluation)
+        // precede it.
+        if (baseCall is not null)
+            body.AddRange(baseCall.ToStatements());
 
         if (ir is not null)
         {

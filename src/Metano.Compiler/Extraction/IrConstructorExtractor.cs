@@ -1,5 +1,6 @@
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -27,7 +28,7 @@ public static class IrConstructorExtractor
         var primary = FindPrimaryConstructor(type);
 
         if (primary is null)
-            return null;
+            return ImplicitExceptionConstructor(type, target);
 
         var primaryDecl = BuildFromMethod(primary, type, originResolver, compilation, target);
 
@@ -38,6 +39,29 @@ public static class IrConstructorExtractor
             .ToList();
 
         return overloads.Count > 0 ? primaryDecl with { Overloads = overloads } : primaryDecl;
+    }
+
+    /// <summary>
+    /// A type without explicit constructors still runs the implicit
+    /// parameterless one; when that chains into a BCL exception base, model it
+    /// so the backend can pass the base's default message (#246). Returns
+    /// <c>null</c> for every other type.
+    /// </summary>
+    private static IrConstructorDeclaration? ImplicitExceptionConstructor(
+        INamedTypeSymbol type,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        var construction = IrExceptionConstructionExtractor.Extract(
+            ImplicitBaseConstructor(type),
+            [],
+            type,
+            target
+        );
+
+        return construction is null
+            ? null
+            : new IrConstructorDeclaration([], BaseExceptionConstruction: construction);
     }
 
     /// <summary>
@@ -118,21 +142,22 @@ public static class IrConstructorExtractor
             })
             .ToList();
 
-        var body = compilation is not null
-            ? TryExtractBody(ctor, compilation, originResolver)
-            : null;
-        var baseArguments = compilation is not null
-            ? TryExtractBaseArguments(ctor, compilation, originResolver)
-            : null;
-        var baseExceptionConstruction = compilation is not null
-            ? TryExtractBaseExceptionConstruction(ctor, baseArguments ?? [], compilation, target)
-            : null;
+        if (compilation is null)
+            return new IrConstructorDeclaration(Parameters: parameters);
+
+        var baseArguments = TryExtractBaseArguments(ctor, compilation, originResolver);
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
-            Body: body,
+            Body: TryExtractBody(ctor, compilation, originResolver),
             BaseArguments: baseArguments,
-            BaseExceptionConstruction: baseExceptionConstruction
+            BaseExceptionConstruction: TryExtractBaseExceptionConstruction(
+                ctor,
+                baseArguments ?? [],
+                compilation,
+                target
+            ),
+            ThisChain: TryExtractThisChain(ctor, type, originResolver, compilation, target)
         );
     }
 
@@ -151,40 +176,98 @@ public static class IrConstructorExtractor
         Metano.Annotations.TargetLanguage? target
     )
     {
-        var baseConstructor = ResolveBaseConstructor(ctor, compilation);
+        if (FindThisCallSyntax(ctor) is not null)
+            return null;
+
+        if (FindBaseCallSyntax(ctor) is not { } baseCall)
+        {
+            return IrExceptionConstructionExtractor.Extract(
+                ImplicitBaseConstructor(ctor.ContainingType),
+                baseArguments,
+                ctor.ContainingType,
+                target
+            );
+        }
+
+        var model = compilation.GetSemanticModel(baseCall.SyntaxTree);
 
         return IrExceptionConstructionExtractor.Extract(
-            baseConstructor,
+            model.GetSymbolInfo(baseCall).Symbol as IMethodSymbol,
             baseArguments,
             ctor.ContainingType,
-            target
+            target,
+            ArgumentListOf(baseCall),
+            model
         );
     }
 
-    private static IMethodSymbol? ResolveBaseConstructor(
+    /// <summary>
+    /// Captures a <c>: this(...)</c> delegation with its target constructor
+    /// (built recursively — C# forbids cyclic chains), so backends without
+    /// constructor chaining can inline the target.
+    /// </summary>
+    private static IrConstructorChain? TryExtractThisChain(
         IMethodSymbol ctor,
-        Compilation compilation
+        INamedTypeSymbol type,
+        IrTypeOriginResolver? originResolver,
+        Compilation compilation,
+        Metano.Annotations.TargetLanguage? target
     )
     {
-        var declaringSyntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        var initializerSyntax = declaringSyntax switch
+        if (FindThisCallSyntax(ctor) is not { } thisCall)
+            return null;
+
+        var model = compilation.GetSemanticModel(thisCall.SyntaxTree);
+
+        if (model.GetSymbolInfo(thisCall).Symbol is not IMethodSymbol chainedCtor)
+            return null;
+
+        var arguments = MapArgumentList(
+            thisCall.ArgumentList,
+            thisCall.SyntaxTree,
+            compilation,
+            originResolver
+        );
+
+        var chainedDecl = BuildFromMethod(chainedCtor, type, originResolver, compilation, target);
+
+        return new IrConstructorChain(arguments, chainedDecl);
+    }
+
+    private static SyntaxNode? DeclaringSyntax(IMethodSymbol ctor) =>
+        ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+
+    private static ConstructorInitializerSyntax? FindThisCallSyntax(IMethodSymbol ctor) =>
+        DeclaringSyntax(ctor) is ConstructorDeclarationSyntax { Initializer: { } initializer }
+        && initializer.IsKind(SyntaxKind.ThisConstructorInitializer)
+            ? initializer
+            : null;
+
+    /// <summary>
+    /// The syntax of the explicit base-constructor call: a
+    /// <c>: base(...)</c> initializer, or the C# 12 primary-constructor base
+    /// (<c>class C(int x) : Base(x)</c>, whose synthesized constructor's
+    /// declaring syntax is the type itself). <c>null</c> when the base call is
+    /// implicit or the constructor chains through <c>: this(...)</c>.
+    /// </summary>
+    private static SyntaxNode? FindBaseCallSyntax(IMethodSymbol ctor) =>
+        DeclaringSyntax(ctor) switch
         {
-            ConstructorDeclarationSyntax { Initializer: { } initializer } =>
-                (SyntaxNode)initializer,
+            ConstructorDeclarationSyntax { Initializer: { } initializer }
+                when initializer.IsKind(SyntaxKind.BaseConstructorInitializer) => initializer,
             TypeDeclarationSyntax type => FindPrimaryBase(type.BaseList),
             _ => null,
         };
 
-        if (initializerSyntax is ConstructorInitializerSyntax { ThisOrBaseKeyword.Text: "this" })
-            return null;
-
-        if (initializerSyntax is null)
-            return ImplicitBaseConstructor(ctor.ContainingType);
-
-        var model = compilation.GetSemanticModel(initializerSyntax.SyntaxTree);
-
-        return model.GetSymbolInfo(initializerSyntax).Symbol as IMethodSymbol;
-    }
+    private static ArgumentListSyntax ArgumentListOf(SyntaxNode baseCall) =>
+        baseCall switch
+        {
+            ConstructorInitializerSyntax initializer => initializer.ArgumentList,
+            PrimaryConstructorBaseTypeSyntax primaryBase => primaryBase.ArgumentList,
+            _ => throw new InvalidOperationException(
+                $"Unexpected base-call syntax '{baseCall.Kind()}'."
+            ),
+        };
 
     private static IMethodSymbol? ImplicitBaseConstructor(INamedTypeSymbol type) =>
         type.BaseType?.InstanceConstructors.FirstOrDefault(baseCtor =>
@@ -209,54 +292,23 @@ public static class IrConstructorExtractor
     }
 
     /// <summary>
-    /// Captures the arguments of a <c>: base(...)</c> initializer, if any. The
-    /// constructor dispatcher bridge uses these to emit the matching
-    /// <c>super(...)</c> call at the top of each branch. <c>: this(...)</c>
-    /// initializers are chained constructor calls and have no runtime-visible
-    /// <c>super</c> — we leave them null so the bridge skips the super emission.
+    /// Captures the arguments of the explicit base-constructor call, if any
+    /// (see <see cref="FindBaseCallSyntax"/>). The class and dispatcher
+    /// bridges use these to emit the matching <c>super(...)</c> call.
     /// </summary>
     private static IReadOnlyList<IrArgument>? TryExtractBaseArguments(
         IMethodSymbol ctor,
         Compilation compilation,
         IrTypeOriginResolver? originResolver
-    )
-    {
-        var declaringSyntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-
-        // Explicit constructor with `: base(...)` initializer.
-        if (declaringSyntax is ConstructorDeclarationSyntax explicitCtor)
-        {
-            if (explicitCtor.Initializer is null)
-                return null;
-            if (explicitCtor.Initializer.ThisOrBaseKeyword.Text != "base")
-                return null;
-            return MapArgumentList(
-                explicitCtor.Initializer.ArgumentList,
-                explicitCtor.SyntaxTree,
+    ) =>
+        FindBaseCallSyntax(ctor) is { } baseCall
+            ? MapArgumentList(
+                ArgumentListOf(baseCall),
+                baseCall.SyntaxTree,
                 compilation,
                 originResolver
-            );
-        }
-
-        // C# 12 primary constructor with base call: the synthesized ctor's
-        // declaring syntax is the type itself, and the base arguments live on
-        // a `PrimaryConstructorBaseTypeSyntax` inside the type's BaseList.
-        var primaryBase = declaringSyntax switch
-        {
-            ClassDeclarationSyntax cls => FindPrimaryBase(cls.BaseList),
-            StructDeclarationSyntax st => FindPrimaryBase(st.BaseList),
-            RecordDeclarationSyntax rec => FindPrimaryBase(rec.BaseList),
-            _ => null,
-        };
-        return primaryBase is null
-            ? null
-            : MapArgumentList(
-                primaryBase.ArgumentList,
-                primaryBase.SyntaxTree,
-                compilation,
-                originResolver
-            );
-    }
+            )
+            : null;
 
     private static PrimaryConstructorBaseTypeSyntax? FindPrimaryBase(BaseListSyntax? baseList) =>
         baseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>().FirstOrDefault();

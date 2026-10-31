@@ -1012,11 +1012,10 @@ public static partial class IrToTsExpressionBridge
             // rebuilding its (message, { cause }) arguments from the
             // constructor-parameter roles. Transpilable exception subclasses
             // keep their generated identity.
-            if (s.Kind is IrNamedTypeKind.Exception && !s.IsTranspilable)
-                return new TsNewExpression(
-                    new TsIdentifier("Error"),
-                    MapErrorArguments(ne, args, bclRegistry)
-                );
+            if (IrToTsTypeMapper.IsBclException(named))
+            {
+                return MapBclExceptionCreation(ne, args, bclRegistry);
+            }
 
             // [Branded] structs compile to companion objects with a
             // `create` factory, not a runtime class. `new UserId(v)` therefore
@@ -1034,18 +1033,14 @@ public static partial class IrToTsExpressionBridge
         return new TsNewExpression(MapNewTarget(ne.Type), args);
     }
 
-    private static IReadOnlyList<TsExpression> MapErrorArguments(
+    private static TsExpression MapBclExceptionCreation(
         IrNewExpression ne,
         IReadOnlyList<TsExpression> positionalArgs,
         DeclarativeMappingRegistry? bclRegistry
     ) =>
         ne.ExceptionConstruction is { } construction
-            ? IrToTsExceptionConstructionBridge.MapErrorArguments(
-                construction,
-                ne.Arguments,
-                bclRegistry
-            )
-            : positionalArgs;
+            ? IrToTsExceptionConstructionBridge.MapNewError(ne, construction, bclRegistry)
+            : new TsNewExpression(new TsIdentifier("Error"), positionalArgs);
 
     private static TsExpression MapLiteral(IrLiteral lit) =>
         lit.Kind switch
