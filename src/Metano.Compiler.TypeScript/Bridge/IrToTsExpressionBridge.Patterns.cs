@@ -166,40 +166,39 @@ public static partial class IrToTsExpressionBridge
         test is null ? guard : new TsBinaryExpression(test, "&&", guard);
 
     /// <summary>
-    /// The runtime test a type pattern performs. A primitive tests the
-    /// <c>typeof</c> of the JS value it lowers to; an enum has no class value
-    /// to test with <c>instanceof</c> — it lowers to a number (numeric enum)
-    /// or string union (<c>[StringEnum]</c>) — so it tests the primitive kind;
-    /// an interface is erased, so it calls its generated <c>[GenerateGuard]</c>
-    /// guard; other named types test <c>instanceof</c>.
+    /// The runtime test a type pattern performs, as
+    /// <see cref="IrRuntimeTypeTest"/> classifies the type: <c>typeof</c> of the
+    /// JS primitive it lowers to (primitives, enums, branded wrappers), its
+    /// generated <c>[GenerateGuard]</c> guard (erased interfaces and
+    /// <c>[PlainObject]</c>s), or <c>instanceof</c> its class. Extraction
+    /// reports MS0001 for a type with no test, so none reaches this point.
     /// </summary>
     private static TsExpression BuildTypeTest(TsExpression value, IrTypeRef targetType) =>
-        targetType switch
+        IrRuntimeTypeTest.Of(targetType) switch
         {
-            IrPrimitiveTypeRef { Primitive: var primitive }
-                when IrTypeCheckBuilder.TypeofKind(primitive) is { } kind =>
-                IrTypeCheckBuilder.TypeofTest(value, kind),
-            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.NumericEnum } =>
-                IrTypeCheckBuilder.TypeofTest(value, "number"),
-            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.StringEnum } =>
-                IrTypeCheckBuilder.TypeofTest(value, "string"),
-            _ => IrToTsTypeMapper.Map(targetType) is TsNamedType named
-                ? BuildNamedTypeTest(value, targetType, named)
-                : new TsIdentifier("/* TODO: non-named type pattern */"),
+            IrRuntimeTypeTest.Typeof { Primitive: var primitive } => IrTypeCheckBuilder.TypeofTest(
+                value,
+                IrTypeCheckBuilder.TypeofKind(primitive)
+            ),
+            IrRuntimeTypeTest.Guard => new TsCallExpression(
+                new TsIdentifier($"is{RuntimeNamedType(targetType).Name}"),
+                [value]
+            ),
+            IrRuntimeTypeTest.Instanceof => InstanceofTest(value, RuntimeNamedType(targetType)),
+            _ => throw NoRuntimeTypeTest(targetType),
         };
 
-    private static TsExpression BuildNamedTypeTest(
-        TsExpression value,
-        IrTypeRef targetType,
-        TsNamedType named
-    ) =>
-        targetType is IrNamedTypeRef { Semantics.HasGeneratedGuard: true }
-            ? new TsCallExpression(new TsIdentifier($"is{named.Name}"), [value])
-            : new TsBinaryExpression(
-                value,
-                "instanceof",
-                TypeValueReference(named.Name, named.Origin)
-            );
+    private static TsExpression InstanceofTest(TsExpression value, TsNamedType type) =>
+        new TsBinaryExpression(value, "instanceof", TypeValueReference(type.Name, type.Origin));
+
+    private static TsNamedType RuntimeNamedType(IrTypeRef type) =>
+        IrToTsTypeMapper.Map(type) as TsNamedType ?? throw NoRuntimeTypeTest(type);
+
+    private static InvalidOperationException NoRuntimeTypeTest(IrTypeRef type) =>
+        new(
+            $"Type '{type}' has no TypeScript runtime type test; extraction must report "
+                + "MS0001 before a type pattern on it reaches the bridge."
+        );
 
     /// <summary>
     /// Lowers <c>[p0, p1, …]</c> to a length-gated conjunction of per-index

@@ -246,17 +246,23 @@ public sealed partial class IrExpressionExtractor
         string? message = null
     )
     {
-        ExtractionDiagnostics.Report(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.UnsupportedFeature,
-                message ?? $"Expression '{node}' ({kind}) is not supported by the transpiler.",
-                node.GetLocation()
-            )
+        ReportUnsupportedFeature(
+            node,
+            message ?? $"Expression '{node}' ({kind}) is not supported by the transpiler."
         );
 
         return new IrUnsupportedExpression(kind);
     }
+
+    private static void ReportUnsupportedFeature(SyntaxNode node, string message) =>
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                message,
+                node.GetLocation()
+            )
+        );
 
     /// <summary>
     /// Lowers a C# <c>with</c> expression (<c>source with { X = expr }</c>)
@@ -785,13 +791,17 @@ public sealed partial class IrExpressionExtractor
         pattern switch
         {
             ConstantPatternSyntax constant when NamedPatternType(constant.Expression) is { } type =>
-                new IrTypePattern(type),
+                ExtractTypePattern(constant, type),
             ConstantPatternSyntax constant => new IrConstantPattern(Extract(constant.Expression)),
-            DeclarationPatternSyntax decl => new IrTypePattern(
+            DeclarationPatternSyntax decl => ExtractTypePattern(
+                decl,
                 ResolvePatternType(decl.Type),
                 ResolveDesignatorName(decl.Designation)
             ),
-            TypePatternSyntax typeOnly => new IrTypePattern(ResolvePatternType(typeOnly.Type)),
+            TypePatternSyntax typeOnly => ExtractTypePattern(
+                typeOnly,
+                ResolvePatternType(typeOnly.Type)
+            ),
             VarPatternSyntax varPat when varPat.Designation is SingleVariableDesignationSyntax v =>
                 new IrVarPattern(v.Identifier.ValueText),
             DiscardPatternSyntax => new IrDiscardPattern(),
@@ -807,6 +817,28 @@ public sealed partial class IrExpressionExtractor
             ListPatternSyntax list => ExtractListPattern(list),
             _ => new IrUnsupportedPattern(pattern.Kind().ToString()),
         };
+
+    /// <summary>
+    /// A type test, or — when the target has no runtime test for
+    /// <paramref name="type"/> — an MS0001 report and an
+    /// <see cref="IrUnsupportedPattern"/>, so no backend lowers a test against
+    /// a type that does not exist at runtime.
+    /// </summary>
+    private IrPattern ExtractTypePattern(
+        PatternSyntax pattern,
+        IrTypeRef type,
+        string? designatorName = null
+    ) =>
+        HasRuntimeTypeTest(type)
+            ? new IrTypePattern(type, designatorName)
+            : ReportUnsupportedPattern(pattern);
+
+    private static IrUnsupportedPattern ReportUnsupportedPattern(PatternSyntax pattern)
+    {
+        ReportUnsupportedFeature(pattern, NoRuntimeTypeTestMessage("Pattern", pattern));
+
+        return new IrUnsupportedPattern(pattern.Kind().ToString());
+    }
 
     /// <summary>
     /// Lowers <c>[p1, p2, .., pN]</c>. Roslyn represents the slice (<c>..</c>)
@@ -874,6 +906,9 @@ public sealed partial class IrExpressionExtractor
             ? ResolvePatternType(recursive.Type)
             : (IrTypeRef?)null;
         var designator = ResolveDesignatorName(recursive.Designation);
+
+        if (type is not null && !HasRuntimeTypeTest(type))
+            return ReportUnsupportedPattern(recursive);
 
         // Positional pattern — `(x, y)` or `Point(x, y)` — decomposes a
         // tuple or calls Deconstruct on a record. Property patterns land on
@@ -1368,12 +1403,7 @@ public sealed partial class IrExpressionExtractor
         // BinaryExpressionSyntax of kind IsExpression, not as an IsPatternExpression.
         // Normalize to IrIsPatternExpression so backends see a single pattern shape.
         if (bin.Kind() == SyntaxKind.IsExpression && bin.Right is TypeSyntax typeRhs)
-        {
-            return new IrIsPatternExpression(
-                Extract(bin.Left),
-                new IrTypePattern(ResolvePatternType(typeRhs))
-            );
-        }
+            return ExtractIsTypeTest(bin, typeRhs);
 
         if (bin.Kind() == SyntaxKind.AsExpression && bin.Right is TypeSyntax asType)
             return ExtractAsCast(bin, asType);
@@ -1437,9 +1467,7 @@ public sealed partial class IrExpressionExtractor
             return ReportUnsupported(
                 asCast,
                 asCast.Kind().ToString(),
-                $"Expression '{asCast}' cannot be lowered: '{typeSyntax}' has no runtime "
-                    + "type test in the target (an interface needs [GenerateGuard]; a type "
-                    + "parameter is erased)."
+                NoRuntimeTypeTestMessage("Expression", asCast)
             );
 
         return BindValueOnce(
@@ -1453,20 +1481,36 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// TypeScript erases interfaces and type parameters, so a type test
-    /// against one exists only through a generated <c>[GenerateGuard]</c>
-    /// guard. Dart reifies both and tests any type natively.
+    /// <c>x is T</c> without a designator, normalized to the
+    /// <see cref="IrIsPatternExpression"/> shape a pattern takes.
+    /// </summary>
+    private IrExpression ExtractIsTypeTest(BinaryExpressionSyntax isTest, TypeSyntax typeSyntax)
+    {
+        var type = ResolvePatternType(typeSyntax);
+
+        if (!HasRuntimeTypeTest(type))
+            return ReportUnsupported(
+                isTest,
+                isTest.Kind().ToString(),
+                NoRuntimeTypeTestMessage("Expression", isTest)
+            );
+
+        return new IrIsPatternExpression(Extract(isTest.Left), new IrTypePattern(type));
+    }
+
+    private static string NoRuntimeTypeTestMessage(string construct, SyntaxNode node) =>
+        $"{construct} '{node}' cannot be lowered: its type has no runtime type test in the "
+        + "target (an interface or [PlainObject] needs [GenerateGuard]; type parameters and "
+        + "collections are erased).";
+
+    /// <summary>
+    /// TypeScript erases static types, so a type test exists only where
+    /// <see cref="IrRuntimeTypeTest"/> finds a runtime representation to test.
+    /// Dart reifies types and tests any type natively.
     /// </summary>
     private bool HasRuntimeTypeTest(IrTypeRef type) =>
         _target is not (null or Metano.Annotations.TargetLanguage.TypeScript)
-        || type switch
-        {
-            IrTypeParameterRef => false,
-            IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.Interface } named => named
-                .Semantics
-                .HasGeneratedGuard,
-            _ => true,
-        };
+        || IrRuntimeTypeTest.Of(type) is not IrRuntimeTypeTest.None;
 
     private IrExpression ExtractAssignment(AssignmentExpressionSyntax assign)
     {
