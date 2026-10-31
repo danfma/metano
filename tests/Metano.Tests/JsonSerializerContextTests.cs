@@ -564,6 +564,84 @@ public class JsonSerializerContextTests
         await Assert.That(ts).Contains("get clip(): TypeSpec<Clip>");
     }
 
+    // Under [assembly: TranspileAssembly] the base is emitted without
+    // [Transpile], so its spec must still be linked — otherwise the inherited
+    // property is neither written nor read and the factory reads an absent
+    // `p.seconds` (#253).
+    [Test]
+    public async Task AssemblyWideTranspile_LinksTheBaseSpec()
+    {
+        var ts = TranspileHelper.Transpile(
+            $$"""
+            using System.Text.Json.Serialization;
+
+            [assembly: TranspileAssembly]
+
+            namespace TestApp;
+
+            public abstract record Clip(double Seconds);
+
+            public sealed record ImageClip(string Path, double Seconds) : Clip(Seconds);
+
+            [JsonSerializable(typeof(ImageClip))]
+            {{ContextBoilerplate}}
+            """
+        )["test-app/json-context.ts"];
+
+        await Assert.That(ts).Contains("base: this.clip");
+        await Assert.That(ts).Contains("get clip(): TypeSpec<Clip>");
+        await Assert.That(ts).Contains("ts: \"seconds\"");
+        await Assert.That(ts).Contains("new ImageClip(p.path as string, p.seconds as number)");
+    }
+
+    // A base that emits no spec ([Ignore]) cannot be linked, so its
+    // properties are inlined into the derived spec, base-most first (#253).
+    [Test]
+    public async Task UnlinkedBase_InlinesInheritedProperties()
+    {
+        var ts = TranspileContext(
+            """
+            [Ignore]
+            public abstract record Media(string Id);
+
+            [Transpile]
+            public sealed record Photo(string Id, string Path) : Media(Id);
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        await Assert.That(ts).DoesNotContain("base: this.media");
+        await Assert.That(ts).DoesNotContain("get media()");
+
+        var idIndex = ts.IndexOf("ts: \"id\"", StringComparison.Ordinal);
+        var pathIndex = ts.IndexOf("ts: \"path\"", StringComparison.Ordinal);
+
+        await Assert.That(idIndex).IsGreaterThan(-1);
+        await Assert.That(pathIndex).IsGreaterThan(idIndex);
+    }
+
+    // The spec's `ts:` name and the factory read name the escaped property
+    // the record declares (#253).
+    [Test]
+    public async Task ReservedWordProperty_UsesEscapedTsName()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Choice(int Default);
+
+            [Transpile]
+            [JsonSerializable(typeof(Choice))]
+            """
+        );
+
+        await Assert.That(ts).Contains("ts: \"default_\"");
+        await Assert.That(ts).Contains("json: \"Default\"");
+        await Assert.That(ts).Contains("new Choice(p.default_ as number)");
+    }
+
     [Test]
     public async Task ExplicitRootAlsoReachable_IsNotDuplicated()
     {

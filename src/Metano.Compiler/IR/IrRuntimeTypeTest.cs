@@ -28,6 +28,14 @@ public abstract record IrRuntimeTypeTest
     public sealed record Guard : IrRuntimeTypeTest;
 
     /// <summary>
+    /// The type lowers to a fixed-length JS array (a <c>[JsTuple]</c>), so the
+    /// value is recognized by its array shape and <paramref name="Arity"/>.
+    /// The test is structural: any array of that length matches, and element
+    /// types are not checked.
+    /// </summary>
+    public sealed record ArrayTuple(int Arity) : IrRuntimeTypeTest;
+
+    /// <summary>
     /// No runtime test exists: an erased type without a guard, a type
     /// parameter, a collection or any other structural shape.
     /// </summary>
@@ -68,11 +76,19 @@ public abstract record IrRuntimeTypeTest
             { Kind: IrNamedTypeKind.NumericEnum } => new Typeof(IrPrimitive.Int32),
             { Kind: IrNamedTypeKind.StringEnum } => new Typeof(IrPrimitive.String),
             { Kind: IrNamedTypeKind.Branded } => OfBranded(semantics.BrandedUnderlyingPrimitive),
+            { IsJsTuple: true } => OfJsTuple(semantics.JsTupleArity),
             { Kind: IrNamedTypeKind.Interface } or { IsPlainObject: true } =>
                 semantics.HasGeneratedGuard ? new Guard() : new None(),
             { Kind: IrNamedTypeKind.Delegate or IrNamedTypeKind.Unknown } => new None(),
             _ => new Instanceof(),
         };
+
+    /// <summary>
+    /// A <c>[JsTuple]</c> has no class at runtime, so only its array shape is
+    /// testable — and only when its arity is known.
+    /// </summary>
+    private static IrRuntimeTypeTest OfJsTuple(int? arity) =>
+        arity is { } length ? new ArrayTuple(length) : new None();
 
     /// <summary>
     /// A branded wrapper has no class at runtime, so only a wrapper over a

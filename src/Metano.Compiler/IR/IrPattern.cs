@@ -50,10 +50,13 @@ public sealed record IrPropertyPattern(
 /// <param name="Pattern">The pattern the member's value must match.</param>
 /// <param name="EmittedName">Target-resolved <c>[Name]</c> override of the
 /// member, or <c>null</c> to apply the backend's naming policy.</param>
+/// <param name="IsTranspiledDataMember">The member is a data member the
+/// toolchain declares; see <see cref="IrMemberOrigin.IsTranspiledDataMember"/>.</param>
 public sealed record IrPropertySubpattern(
     string MemberName,
     IrPattern Pattern,
-    string? EmittedName = null
+    string? EmittedName = null,
+    bool IsTranspiledDataMember = false
 );
 
 /// <summary>
@@ -126,7 +129,13 @@ public sealed record IrPositionalPattern(
 /// <param name="Name">The C# property name.</param>
 /// <param name="EmittedName">Target-resolved <c>[Name]</c> override, or
 /// <c>null</c> to apply the backend's naming policy.</param>
-public sealed record IrPositionalElementMember(string Name, string? EmittedName);
+/// <param name="IsTranspiledDataMember">The member is a data member the
+/// toolchain declares; see <see cref="IrMemberOrigin.IsTranspiledDataMember"/>.</param>
+public sealed record IrPositionalElementMember(
+    string Name,
+    string? EmittedName,
+    bool IsTranspiledDataMember = false
+);
 
 /// <summary>Placeholder for patterns the extractor doesn't yet cover
 /// (parenthesized wrappers are unwrapped before reaching this fallback).

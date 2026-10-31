@@ -70,7 +70,7 @@ public static class IrToTsInterfaceBridge
 
     private static TsProperty ConvertProperty(IrPropertyDeclaration prop)
     {
-        var name = IrToTsNamingPolicy.ToInterfaceMemberName(prop.Name, prop.Attributes);
+        var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
         var type = IrToTsTypeMapper.Map(prop.Type);
         var isReadonly = prop.Accessors == IrPropertyAccessors.GetOnly;
         return new TsProperty(name, type, isReadonly, Optional: prop.IsOptional);
@@ -78,7 +78,7 @@ public static class IrToTsInterfaceBridge
 
     private static TsInterfaceMethod ConvertMethod(IrMethodDeclaration method)
     {
-        var name = IrToTsNamingPolicy.ToInterfaceMemberName(method.Name, method.Attributes);
+        var name = IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes);
         var returnType = IrToTsTypeMapper.Map(method.ReturnType);
         var parameters = method
             .Parameters.Select(p => new TsParameter(

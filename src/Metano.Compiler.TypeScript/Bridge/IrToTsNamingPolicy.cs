@@ -13,11 +13,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 public static class IrToTsNamingPolicy
 {
     /// <summary>
-    /// Resolves the emitted name for an interface property or method: honors
-    /// <c>[Name("x")]</c> overrides when present, otherwise applies camelCase with
-    /// reserved-word escaping.
+    /// Resolves the emitted name of a declared data member (an interface or
+    /// class property or field): honors <c>[Name("x")]</c> overrides when
+    /// present, otherwise applies camelCase with reserved-word escaping (see
+    /// <see cref="ToDataMemberName"/>). Methods use <see cref="ToMethodName"/>.
     /// </summary>
-    public static string ToInterfaceMemberName(
+    public static string ToDeclaredDataMemberName(
         string irName,
         IReadOnlyList<IrAttribute>? attributes
     ) => ToDataMemberName(irName, FindNameOverride(attributes));
@@ -28,9 +29,12 @@ public static class IrToTsNamingPolicy
     /// name with JS reserved words escaped — the policy the class emitter
     /// declares the member with (a promoted constructor parameter cannot be
     /// named <c>default</c>, so the property it declares is
-    /// <c>default_</c>). Every read of the member — record equality,
-    /// <c>with</c> keys, pattern member reads — goes through here so it
-    /// names what was declared.
+    /// <c>default_</c>), applied to every data member so the rule does not
+    /// depend on how the member is declared. Every read of the member —
+    /// ordinary and optional-chain member access, record equality,
+    /// <c>with</c> keys, pattern member reads, JSON specs — goes through here
+    /// so it names what was declared. Methods and events are never escaped
+    /// (see <see cref="ToMethodName"/>).
     /// </summary>
     public static string ToDataMemberName(string irName, string? emittedName) =>
         emittedName ?? TypeScriptNaming.ToCamelCase(irName);

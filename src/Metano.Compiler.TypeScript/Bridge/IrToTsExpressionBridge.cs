@@ -67,7 +67,7 @@ public static partial class IrToTsExpressionBridge
                 cast,
                 bclRegistry
             ),
-            IrCastExpression cast => Map(cast.Expression, bclRegistry), // JS has no runtime cast
+            IrCastExpression cast => MapCast(cast, bclRegistry),
             IrLambdaExpression lambda => MapLambda(lambda, bclRegistry),
             IrStringInterpolation interp => MapStringInterpolation(interp, bclRegistry),
             IrIsPatternExpression isPattern => MapIsPattern(isPattern, bclRegistry),
@@ -237,36 +237,9 @@ public static partial class IrToTsExpressionBridge
             if (mapped is not null)
                 return mapped;
         }
-        // Enum members preserve source-casing — the TS backend emits enums as
-        // `enum X { Backlog, Ready, … }` (numeric) or a string literal union
-        // keyed by the original PascalCase; camelCasing here would produce
-        // `X.backlog` that doesn't exist at runtime.
-        //
-        // `[Branded]` methods surface as namespace functions
-        // (`namespace UserId { export function new_() {} }`), and namespace
-        // function declarations DO require reserved-word escapes — so the
-        // call site has to match by using the escaping camelCase variant.
-        string memberName;
-        // String enum members: `[Name("medium")]` renames the runtime
-        // *value* (the string literal), not the property key. So
-        // `IssuePriority.Medium` stays `Medium` at the access site even
-        // when the enum field carries a [Name] override.
-        if (ma.Origin?.IsStringEnumMember == true)
-            memberName = ma.MemberName;
-        // Numeric enum members: `[Name("InProgress")]` renames the
-        // property key to the override (legacy behavior). Otherwise keep
-        // the source PascalCase — the TS enum object exposes members by
-        // their C# name verbatim.
-        else if (ma.Origin?.IsEnumMember == true)
-            memberName = ma.Origin.EmittedName ?? ma.MemberName;
-        // `[Name("x")]` (target-aware) wins over any casing policy for
-        // ordinary members — the emitted name comes through verbatim.
-        else if (ma.Origin?.EmittedName is { } overridden)
-            memberName = overridden;
-        else if (ma.Origin?.IsBrandedMember == true)
-            memberName = TypeScriptNaming.ToCamelCase(ma.MemberName);
-        else
-            memberName = TypeScriptNaming.ToCamelCaseMember(ma.MemberName);
+
+        var memberName = AccessedMemberName(ma);
+
         // `[External]` and `[NoContainer]` declaring types: the class
         // vanishes at the call site. `[External]` groups runtime
         // `[NoContainer]` marks a compile-time sugar container — its scope
@@ -285,6 +258,54 @@ public static partial class IrToTsExpressionBridge
             return new TsIdentifier(memberName);
         return new TsPropertyAccess(loweredTarget, memberName);
     }
+
+    /// <summary>
+    /// The TS name a member access reads, matching the name the member was
+    /// declared with:
+    /// <list type="bullet">
+    ///   <item>string enum members keep the C# name — <c>[Name]</c> renames
+    ///     the runtime string value, not the key;</item>
+    ///   <item>numeric enum members keep the C# name unless <c>[Name]</c>
+    ///     renames the key;</item>
+    ///   <item>data members of an emitted type follow
+    ///     <see cref="IrToTsNamingPolicy.ToDataMemberName"/>, so a reserved
+    ///     word reads the escaped property it was declared as
+    ///     (<c>r.Default</c> → <c>r.default_</c>);</item>
+    ///   <item>any other <c>[Name]</c> override comes through verbatim;</item>
+    ///   <item><c>[Branded]</c> methods are namespace functions, whose
+    ///     declarations require reserved-word escapes;</item>
+    ///   <item>everything else (methods, events, foreign members) is camelCased
+    ///     without escaping — JS accepts reserved words after a dot.</item>
+    /// </list>
+    /// </summary>
+    private static string AccessedMemberName(IrMemberAccess ma) =>
+        ma.Origin switch
+        {
+            { IsStringEnumMember: true } => ma.MemberName,
+            { IsEnumMember: true } origin => origin.EmittedName ?? ma.MemberName,
+            { IsTranspiledDataMember: true } origin => IrToTsNamingPolicy.ToDataMemberName(
+                ma.MemberName,
+                origin.EmittedName
+            ),
+            { EmittedName: { } overridden } => overridden,
+            { IsBrandedMember: true } => TypeScriptNaming.ToCamelCase(ma.MemberName),
+            _ => TypeScriptNaming.ToCamelCaseMember(ma.MemberName),
+        };
+
+    /// <summary>
+    /// The name a read of a data member uses: the declared, reserved-word
+    /// escaped name (<see cref="IrToTsNamingPolicy.ToDataMemberName"/>) for a
+    /// member the toolchain declares, otherwise the <c>[Name]</c> override or
+    /// the unescaped camelCase name the foreign declaration carries.
+    /// </summary>
+    private static string ReadDataMemberName(
+        string memberName,
+        string? emittedName,
+        bool isTranspiledDataMember
+    ) =>
+        isTranspiledDataMember
+            ? IrToTsNamingPolicy.ToDataMemberName(memberName, emittedName)
+            : emittedName ?? TypeScriptNaming.ToCamelCaseMember(memberName);
 
     /// <summary>
     /// Lowers a value-position type reference. A nested type arrives dotted

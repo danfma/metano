@@ -37,7 +37,7 @@ public static class IrToTsPlainObjectBridge
                 // [PlainObject] interface members use the promoted property's public name
                 // semantics. The IR carries the parameter name in its original C# casing;
                 // camelCase (with reserved-word escaping) matches the legacy output.
-                var propName = IrToTsNamingPolicy.ToInterfaceMemberName(
+                var propName = IrToTsNamingPolicy.ToDeclaredDataMemberName(
                     param.Name,
                     attributes: null
                 );
@@ -111,7 +111,7 @@ public static class IrToTsPlainObjectBridge
             return;
 
         // Member naming policy for fields stays on
-        // `ToInterfaceMemberName` (camelCase + reserved-word
+        // `ToDeclaredDataMemberName` (camelCase + reserved-word
         // escaping) so a static field on a `[PlainObject]` record
         // surfaces under the same identifier shape as the rest of
         // the module's members. Using `ToTypeName` here would
@@ -121,7 +121,7 @@ public static class IrToTsPlainObjectBridge
         // here because a top-level `const` / `let` cannot use a
         // reserved identifier (unlike class members, which can).
         var name = TypeScriptNaming.EscapeIfReserved(
-            IrToTsNamingPolicy.ToInterfaceMemberName(field.Name, field.Attributes)
+            IrToTsNamingPolicy.ToDeclaredDataMemberName(field.Name, field.Attributes)
         );
         var initializer = IrToTsExpressionBridge.Map(field.Initializer, bclRegistry);
         // `readonly` C# fields lower to a `const` declaration; the

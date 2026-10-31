@@ -83,6 +83,7 @@ public sealed record IrBaseExpression() : IrExpression;
 /// <param name="IsJsCallableInvoke">The call targets <c>Invoke</c> on a <c>[JsCallable]</c> interface; the receiver IS the JS function, so <c>recv.Invoke(args)</c> lowers to <c>recv(args)</c>.</param>
 /// <param name="IsJsTupleElement">The member access reads a positional element of a <c>[JsTuple]</c> value, lowering to array-index access <c>recv[i]</c>.</param>
 /// <param name="TupleIndex">The positional index (declaration order) when <see cref="IsJsTupleElement"/> is true; <c>-1</c> otherwise.</param>
+/// <param name="IsTranspiledDataMember">The member is a field or property (not an enum member or indexer) declared on a type whose declaration the toolchain emits — a type of the current compilation or of a transpiled package, neither <c>[External]</c> nor <c>[Import]</c>. A backend that renames data members at their declaration (TypeScript escapes reserved words: <c>Default</c> → <c>default_</c>) applies the same rename at the access; a foreign member keeps the name its real declaration has.</param>
 /// <param name="IsBrandedValueMember">The member access reads the single wrapped value member of a <c>[Branded]</c> struct (<c>id.Value</c>). The branded value IS the primitive at runtime, so backends that lower the wrapper to a branded primitive collapse the read to the receiver.</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
@@ -98,7 +99,8 @@ public sealed record IrMemberOrigin(
     bool IsJsCallableInvoke = false,
     bool IsJsTupleElement = false,
     int TupleIndex = -1,
-    bool IsBrandedValueMember = false
+    bool IsBrandedValueMember = false,
+    bool IsTranspiledDataMember = false
 );
 
 /// <summary>

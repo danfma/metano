@@ -224,7 +224,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             if (TranspilableBaseOf(current) is { } baseType)
                 Enqueue(baseType);
 
-            foreach (var property in CollectSerializableProperties(current, namingPolicy))
+            foreach (var property in CollectSpecProperties(current, namingPolicy))
             {
                 foreach (var reached in ReachableObjectTypes(property.Property.Type))
                     Enqueue(reached);
@@ -322,7 +322,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         Func<string, string>? namingPolicy
     )
     {
-        var properties = CollectSerializableProperties(targetType, namingPolicy);
+        var properties = CollectSpecProperties(targetType, namingPolicy);
         var propSpecs = new List<TsExpression>();
 
         foreach (var (prop, jsonName, tsName) in properties)
@@ -467,6 +467,51 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     private TsExpression CastProperty(string tsName, ITypeSymbol type) =>
         new TsCastExpression(new TsPropertyAccess(new TsIdentifier("p"), tsName), MapType(type));
+
+    /// <summary>
+    /// The properties a type's spec declares. A spec with a <c>base</c> link
+    /// declares only the type's own properties — the runtime reads the
+    /// inherited ones through the base spec. Without a link (the base emits
+    /// no spec), the inherited properties of every toolchain-declared ancestor
+    /// are inlined ahead of the own ones, base-most first like the runtime's
+    /// base walk, so they are still written, read and passed to the factory.
+    /// A property redeclared down the chain (an override) is declared once, at
+    /// its base-most position with its most-derived declaration, whose
+    /// <c>[JsonPropertyName]</c> wins as in System.Text.Json.
+    /// </summary>
+    private List<SerializableProperty> CollectSpecProperties(
+        INamedTypeSymbol type,
+        Func<string, string>? namingPolicy
+    )
+    {
+        if (TranspilableBaseOf(type) is not null)
+            return CollectSerializableProperties(type, namingPolicy);
+
+        return InlinedAncestorsOf(type)
+            .Reverse()
+            .Append(type)
+            .SelectMany(declaring => CollectSerializableProperties(declaring, namingPolicy))
+            .GroupBy(property => property.TsName, StringComparer.Ordinal)
+            .Select(redeclarations => redeclarations.Last())
+            .ToList();
+    }
+
+    /// <summary>
+    /// The ancestors whose properties an unlinked spec inlines, nearest first:
+    /// the base chain up to <c>object</c> or the first type the toolchain does
+    /// not declare (<see cref="SymbolHelper.IsToolchainDeclared"/>: a BCL,
+    /// foreign-package, <c>[External]</c> or <c>[Import]</c> base).
+    /// </summary>
+    private IEnumerable<INamedTypeSymbol> InlinedAncestorsOf(INamedTypeSymbol type)
+    {
+        for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+        {
+            if (!SymbolHelper.IsToolchainDeclared(ancestor, _context.CurrentAssembly))
+                yield break;
+
+            yield return ancestor;
+        }
+    }
 
     /// <summary>
     /// Collects public properties from the type, excluding [JsonIgnore], and computes
@@ -891,13 +936,24 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     /// <summary>
     /// The base type a spec links to through <c>base: this.x</c>, or
-    /// <c>null</c> when the type has no transpilable base.
+    /// <c>null</c> when the base emits no spec. Uses the emitter's
+    /// transpilability rule (including <c>[assembly: TranspileAssembly]</c>
+    /// opt-in), so a base whose class is emitted always gets its spec. A base
+    /// from a referenced package links only when it carries <c>[Transpile]</c>;
+    /// one included by that package's <c>[assembly: TranspileAssembly]</c> is
+    /// not opted in for this compilation, so its properties are inlined
+    /// instead (<see cref="CollectSpecProperties"/>) — both serialize the same
+    /// wire shape.
     /// </summary>
-    private static INamedTypeSymbol? TranspilableBaseOf(INamedTypeSymbol type) =>
+    private INamedTypeSymbol? TranspilableBaseOf(INamedTypeSymbol type) =>
         type.BaseType is { } baseType
         && baseType.SpecialType == SpecialType.None
         && !IsSystemObject(baseType)
-        && SymbolHelper.IsTranspilable(baseType)
+        && SymbolHelper.IsTranspilable(
+            baseType,
+            _context.AssemblyWideTranspile,
+            _context.CurrentAssembly
+        )
             ? baseType
             : null;
 

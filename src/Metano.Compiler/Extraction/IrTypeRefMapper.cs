@@ -405,6 +405,8 @@ public static class IrTypeRefMapper
         var jsxNativeTag = SymbolHelper.GetJsxNativeElementTag(named);
         var isJsxComponent = SymbolHelper.IsJsxComponent(named);
         var rendersAsJsx = SymbolHelper.IsJsxRenderable(named);
+        var isJsTuple = named.HasJsTuple();
+        var jsTupleArity = isJsTuple ? JsTupleArityOf(named) : null;
 
         if (named.IsRecord)
             return new IrNamedTypeSemantics(
@@ -414,6 +416,8 @@ public static class IrTypeRefMapper
                 IsExternal: SymbolHelper.HasExternal(named),
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
                 IsPlainObject: SymbolHelper.HasPlainObject(named),
+                IsJsTuple: isJsTuple,
+                JsTupleArity: jsTupleArity,
                 JsxNativeElementTag: jsxNativeTag,
                 IsJsxComponent: isJsxComponent,
                 RendersAsJsxElement: rendersAsJsx
@@ -426,7 +430,9 @@ public static class IrTypeRefMapper
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
-                IsPlainObject: SymbolHelper.HasPlainObject(named)
+                IsPlainObject: SymbolHelper.HasPlainObject(named),
+                IsJsTuple: isJsTuple,
+                JsTupleArity: jsTupleArity
             );
 
         if (named.TypeKind == TypeKind.Class)
@@ -437,6 +443,8 @@ public static class IrTypeRefMapper
                 IsExternal: SymbolHelper.HasExternal(named),
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
                 IsPlainObject: SymbolHelper.HasPlainObject(named),
+                IsJsTuple: isJsTuple,
+                JsTupleArity: jsTupleArity,
                 JsxNativeElementTag: jsxNativeTag,
                 IsJsxComponent: isJsxComponent,
                 RendersAsJsxElement: rendersAsJsx
@@ -510,6 +518,22 @@ public static class IrTypeRefMapper
         }
         return false;
     }
+
+    /// <summary>
+    /// The positional element count of a <c>[JsTuple]</c> type: its primary
+    /// constructor's parameters when the declaration is source, otherwise its
+    /// single <c>Deconstruct</c> (synthesized for every positional record and
+    /// visible in metadata, so a referenced-package tuple keeps its arity).
+    /// <c>null</c> when neither shape is available.
+    /// </summary>
+    private static int? JsTupleArityOf(INamedTypeSymbol named) =>
+        SymbolHelper.GetPositionalPrimaryConstructor(named)?.Parameters.Length
+        ?? SingleDeconstructArity(named);
+
+    private static int? SingleDeconstructArity(INamedTypeSymbol named) =>
+        named.GetMembers("Deconstruct").OfType<IMethodSymbol>().ToList() is [var deconstruct]
+            ? deconstruct.Parameters.Length
+            : null;
 
     /// <summary>
     /// Returns <c>true</c> when the type is transpilable — either it carries
