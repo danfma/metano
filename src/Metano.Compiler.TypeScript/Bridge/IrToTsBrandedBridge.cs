@@ -29,16 +29,15 @@ public static class IrToTsBrandedBridge
         DeclarativeMappingRegistry? bclRegistry = null
     )
     {
-        if (!ir.Semantics.IsBranded || ir.Semantics.BrandedUnderlyingType is null)
+        // The brand-type pattern only makes sense over a primitive — anything
+        // else can't be intersected with `{ readonly __brand: … }` and stay
+        // assignable. Bail to the regular class/record path in that case. The
+        // extractor gates the `id.Value` → `id` collapse on the same rule.
+        if (!ir.Semantics.IsBranded || !ir.Semantics.BrandedUnderlyingType.IsBrandablePrimitive())
             return false;
 
         var tsTypeName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var primitiveType = IrToTsTypeMapper.Map(ir.Semantics.BrandedUnderlyingType);
-        // The brand-type pattern only makes sense over a TS primitive — anything
-        // else can't be intersected with `{ readonly __brand: … }` and stay
-        // assignable. Bail to the regular class/record path in that case.
-        if (primitiveType is not (TsStringType or TsNumberType or TsBooleanType or TsBigIntType))
-            return false;
 
         // export type UserId = string & { readonly __brand: "UserId" };
         var brandType = new TsNamedType($"{{ readonly __brand: \"{tsTypeName}\" }}");
@@ -86,15 +85,20 @@ public static class IrToTsBrandedBridge
         // [Ignore] + [Emit] filtering already happened in the extractor; we
         // just emit each remaining static method (or overload group) as
         // exported functions in the companion namespace.
-        if (ir.Members is { Count: > 0 } members)
-        {
-            foreach (var member in members)
-            {
-                if (member is not IrMethodDeclaration { IsStatic: true } m)
-                    continue;
-                functions.AddRange(ConvertStaticMethodGroup(m, ir.Semantics, bclRegistry));
-            }
-        }
+        var staticMethods = (ir.Members ?? [])
+            .OfType<IrMethodDeclaration>()
+            .Where(method => method.IsStatic)
+            .ToList();
+
+        var takenNames = functions
+            .Select(function => function.Name)
+            .Concat(staticMethods.Select(FunctionName))
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var method in staticMethods)
+            functions.AddRange(
+                ConvertStaticMethodGroup(method, ir.Semantics, takenNames, bclRegistry)
+            );
 
         sink.Add(new TsNamespaceDeclaration(tsTypeName, functions));
         return true;
@@ -107,9 +111,15 @@ public static class IrToTsBrandedBridge
     /// dispatcher so no sibling is silently dropped. Identity unwrap
     /// conversions are filtered first (see <see cref="IsIdentityUnwrap"/>).
     /// </summary>
+    /// <param name="takenNames">
+    /// Every function name already claimed in the companion namespace; the
+    /// dispatcher's namespace-local fast paths are disambiguated against it
+    /// and added to it.
+    /// </param>
     private static IReadOnlyList<TsFunction> ConvertStaticMethodGroup(
         IrMethodDeclaration primary,
         IrTypeSemantics semantics,
+        ISet<string> takenNames,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -118,66 +128,56 @@ public static class IrToTsBrandedBridge
             .Where(method => !IsIdentityUnwrap(method, semantics))
             .ToList();
 
-        if (group.Count == 0)
-            return [];
-
-        if (group.Count == 1)
-            return [ConvertStaticMethod(group[0], bclRegistry)];
-
-        var dispatcherName = IrToTsNamingPolicy.ToFunctionName(group[0].Name, group[0].Attributes);
-
-        return IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(
-            group[0] with
-            {
-                Overloads = group.Skip(1).ToList(),
-            },
-            dispatcherName,
-            bclRegistry
-        );
+        return group.Count switch
+        {
+            0 => [],
+            1 => [ConvertStaticMethod(group[0], bclRegistry)],
+            _ => IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(
+                group,
+                FunctionName(group[0]),
+                takenNames,
+                bclRegistry
+            ),
+        };
     }
 
     /// <summary>
     /// A conversion operator from the wrapper to its underlying primitive
-    /// (<c>implicit operator string(UserId self) => self.Value</c>) is the
-    /// identity once the wrapper lowers to <c>primitive &amp; { __brand }</c>,
-    /// and call sites never invoke it — the companion skips it. Wrap-direction
-    /// conversions (<c>explicit operator UserId(string raw)</c>) return the
-    /// wrapper, not the primitive, so they are kept: they can carry
-    /// validation.
+    /// (<c>implicit operator string(UserId self) => self.Value</c>, or its
+    /// nullable-annotated <c>string?</c> form) is the identity once the
+    /// wrapper lowers to <c>primitive &amp; { __brand }</c>, and call sites
+    /// never invoke it — the companion skips it. Wrap-direction conversions
+    /// (<c>explicit operator UserId(string raw)</c>) return the wrapper, not
+    /// the primitive, so they are kept: they can carry validation.
     /// </summary>
     private static bool IsIdentityUnwrap(IrMethodDeclaration method, IrTypeSemantics semantics) =>
         method.Semantics is { IsOperator: true, OperatorKind: "Implicit" or "Explicit" }
-        && method.ReturnType.Equals(semantics.BrandedUnderlyingType);
+        && StripNullable(method.ReturnType).Equals(semantics.BrandedUnderlyingType);
+
+    private static IrTypeRef StripNullable(IrTypeRef type) =>
+        type is IrNullableTypeRef nullable ? nullable.Inner : type;
+
+    /// <summary>
+    /// Inline wrapper helpers lower to <c>export namespace TypeName { export
+    /// function methodName() { … } }</c>. Function declarations inside a TS
+    /// namespace can NOT use reserved words (<c>function new() {}</c> is
+    /// illegal even though <c>obj.new</c> is fine), so this stays on the
+    /// escaping naming policy. The call-site bridge detects [Branded]
+    /// receivers and matches the escape so the two halves stay in sync.
+    /// </summary>
+    private static string FunctionName(IrMethodDeclaration method) =>
+        IrToTsNamingPolicy.ToFunctionName(method.Name, method.Attributes);
 
     private static TsFunction ConvertStaticMethod(
         IrMethodDeclaration method,
         DeclarativeMappingRegistry? bclRegistry
-    )
-    {
-        var parameters = method
-            .Parameters.Select(p => new TsParameter(
-                TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type),
-                Rest: p.IsParams
-            ))
-            .ToList();
-        var body = IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry);
-
-        // Inline wrapper helpers lower to `export namespace TypeName { export
-        // function methodName() { … } }`. Function declarations inside a TS
-        // namespace can NOT use reserved words (`function new() {}` is illegal
-        // even though `obj.new` is fine), so this stays on the escaping
-        // ToCamelCase variant. The call-site bridge detects [Branded]
-        // receivers and matches the escape so the two halves stay in sync.
-        var name = IrToTsNamingPolicy.ToFunctionName(method.Name, method.Attributes);
-
-        return new TsFunction(
-            name,
-            parameters,
+    ) =>
+        new(
+            FunctionName(method),
+            IrToTsOverloadDispatcherBridge.MapParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
-            body,
+            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry),
             Exported: true,
             Async: method.Semantics.IsAsync
         );
-    }
 }

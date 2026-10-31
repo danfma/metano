@@ -1029,15 +1029,15 @@ public static class SymbolHelper
     /// getter-shaped (parameterless) property. Returns <c>null</c> when the
     /// type is not a branded struct, declares no such member, or declares
     /// more than one — the shape is then not a wrapper and falls back to the
-    /// regular class/record lowering.
+    /// regular class/record lowering. The <c>TypeKind.Struct</c> check only
+    /// restates <c>[Branded]</c>'s <c>AttributeUsage(Struct)</c>.
     /// <para>
-    /// This is the one rule both the type-level wrapper detection (the
-    /// underlying type) and the call-site value-read flag consult, so they
-    /// cannot disagree on which member is the wrapped value. A target that
-    /// still falls back to a class for an underlying type it cannot brand
-    /// (TS: anything that is not a string/number/boolean/bigint) sees the
-    /// flag too — the same assumption the <c>new T(v)</c> →
-    /// <c>T.create(v)</c> call-site rewrite already makes.
+    /// The rule is shape-only: it does not look at the member's type. Both
+    /// the type-level wrapper detection (the underlying type) and the
+    /// call-site value-read flag consult it, and each additionally requires
+    /// the wrapped type to be a brandable primitive
+    /// (<c>IrPrimitiveExtensions.IsBrandablePrimitive</c>), so a wrapper that
+    /// falls back to a class keeps its <c>.value</c> reads.
     /// </para>
     /// </summary>
     public static ISymbol? GetBrandedValueMember(INamedTypeSymbol type)
@@ -1074,6 +1074,19 @@ public static class SymbolHelper
             GetBrandedValueMember(containingType.OriginalDefinition),
             member.OriginalDefinition
         );
+
+    /// <summary>
+    /// The type of the wrapped value member resolved by
+    /// <see cref="GetBrandedValueMember"/>, or <c>null</c> when the type is
+    /// not a wrapper.
+    /// </summary>
+    public static ITypeSymbol? GetBrandedValueType(INamedTypeSymbol type) =>
+        GetBrandedValueMember(type) switch
+        {
+            IFieldSymbol field => field.Type,
+            IPropertySymbol property => property.Type,
+            _ => null,
+        };
 
     private static bool IsBrandedValueMemberCandidate(ISymbol member) =>
         !member.IsImplicitlyDeclared

@@ -217,4 +217,137 @@ public class BrandedValueObjectTests
         await Assert.That(output).Contains("return Seconds.create(a + b);");
         await Assert.That(output).Contains("return combineValue(args[0] as number);");
     }
+
+    [Test]
+    public async Task ValueRead_OnClassFallbackWrapper_IsKept()
+    {
+        // A wrapper over a non-primitive can't lower to a branded primitive:
+        // it falls back to a class, so `.value` is a real property there and
+        // the read must not collapse — neither at a consumer nor inside the
+        // wrapper's own members.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public record Inner(int X);
+
+            [Branded]
+            public readonly record struct Boxed(Inner Value)
+            {
+                public int Get() => Value.X;
+            }
+
+            public static class Uses
+            {
+                public static int Read(Boxed b) => b.Value.X;
+            }
+            """
+        );
+
+        await Assert.That(result["uses.ts"]).Contains("return b.value.x;");
+        await Assert.That(result["boxed.ts"]).Contains("return this.value.x;");
+    }
+
+    [Test]
+    public async Task Companion_SkipsNullableAnnotatedUnwrapConversion()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct Slug(string Value)
+            {
+                public static implicit operator string?(Slug s) => s.Value;
+            }
+            """
+        );
+
+        var output = result["slug.ts"];
+        await Assert.That(output).DoesNotContain("op_Implicit");
+    }
+
+    [Test]
+    public async Task Companion_FastPathNames_AvoidUserStaticNames()
+    {
+        // `From(string value)` would name its fast path `fromValue`, which the
+        // user static `FromValue(int)` already claims in the same namespace.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct Slug(string Value)
+            {
+                public static Slug From(string value) => new(value);
+
+                public static Slug From(int number) => new("n" + number);
+
+                public static Slug FromValue(int x) => new("v" + x);
+            }
+            """
+        );
+
+        var output = result["slug.ts"];
+        await Assert.That(output).Contains("function fromValue$(value: string): Slug");
+        await Assert.That(output).Contains("return fromValue$(args[0] as string);");
+        await Assert.That(output).Contains("export function fromValue(x: number): Slug");
+    }
+
+    [Test]
+    public async Task Companion_GenericStaticOverloads_DeclareTypeParametersPerSignature()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct Slug(string Value)
+            {
+                public static T Pick<T>(T a) => a;
+
+                public static T Pick<T>(T a, T b) => b;
+            }
+            """
+        );
+
+        var output = result["slug.ts"];
+        await Assert.That(output).Contains("export function pick<T>(a: T): T;");
+        await Assert.That(output).Contains("export function pick<T>(a: T, b: T): T;");
+        await Assert.That(output).Contains("export function pick(...args: unknown[]): any");
+        await Assert.That(output).Contains("return pickAB(args[0] as any, args[1] as any);");
+    }
+
+    [Test]
+    public async Task Companion_OverloadsIndistinguishableAfterBrandErasure_DispatchToFirstMatch()
+    {
+        // Known limitation: `Slug` erases to `string` at runtime, so the
+        // dispatcher can't tell `From(string)` from `From(Slug)` and the
+        // first sibling in declaration order wins. This pins the behavior.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Branded]
+            public readonly record struct Slug(string Value)
+            {
+                public static Slug From(string value) => new(value);
+
+                public static Slug From(Slug other) => new(other.Value + "!");
+            }
+            """
+        );
+
+        var output = result["slug.ts"];
+        var firstBranch = output.IndexOf("return fromValue(", StringComparison.Ordinal);
+        var secondBranch = output.IndexOf("return fromOther(", StringComparison.Ordinal);
+        await Assert.That(firstBranch).IsGreaterThan(-1);
+        await Assert.That(secondBranch).IsGreaterThan(firstBranch);
+    }
 }

@@ -460,15 +460,21 @@ public sealed class Printer(string indent = "  ")
             if (func.Exported)
                 _sb.Write("export ");
             _sb.Write("function ");
-            _sb.Write(func.Name);
-            PrintTypeParameters(func.TypeParameters);
-            _sb.Write("(");
-            PrintParameters(overload.Parameters);
-            _sb.Write("): ");
-            PrintType(overload.ReturnType);
-            _sb.Write(";");
-            _sb.WriteLn();
+            PrintOverloadSignature(func.Name, overload);
         }
+    }
+
+    /// <summary>Prints <c>name&lt;T&gt;(params): ReturnType;</c> — the caller writes the prefix.</summary>
+    private void PrintOverloadSignature(string name, TsMethodOverload overload)
+    {
+        _sb.Write(name);
+        PrintTypeParameters(overload.TypeParameters);
+        _sb.Write("(");
+        PrintParameters(overload.Parameters);
+        _sb.Write("): ");
+        PrintType(overload.ReturnType);
+        _sb.Write(";");
+        _sb.WriteLn();
     }
 
     private void PrintEnum(TsEnum tsEnum)
@@ -748,13 +754,7 @@ public sealed class Printer(string indent = "  ")
                         PrintAccessibility(method.Accessibility);
                         if (method.Static)
                             _sb.Write("static ");
-                        _sb.Write(method.Name);
-                        _sb.Write("(");
-                        PrintParameters(overload.Parameters);
-                        _sb.Write("): ");
-                        PrintType(overload.ReturnType);
-                        _sb.Write(";");
-                        _sb.WriteLn();
+                        PrintOverloadSignature(method.Name, overload);
                     }
                 }
 
