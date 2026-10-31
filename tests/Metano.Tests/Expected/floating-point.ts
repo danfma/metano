@@ -14,7 +14,7 @@ export class Numbers {
   }
 
   static scale(x: number): number {
-    return x * (3.4028234663852886e+38);
+    return x * 3.4028234663852886e+38;
   }
 
   static lowest(): number {

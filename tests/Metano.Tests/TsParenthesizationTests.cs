@@ -125,6 +125,20 @@ public class TsParenthesizationTests
         yield return () =>
             (Prop(Template("new Decimal($0)", null, A), "plus"), "new Decimal(a).plus");
 
+        // A number literal's exponent sign is part of the literal, not an
+        // additive operator (#272); a hex `e` is a digit, so `0x1e+5` is not.
+        yield return () => (Bin(A, "*", Template("1e+5", null)), "a * 1e+5");
+        yield return () => (Bin(A, "*", Template("1E-5", null)), "a * 1E-5");
+        yield return () => (Bin(A, "*", Template("2.5e10", null)), "a * 2.5e10");
+        yield return () => (Bin(A, "*", Template(".5e-3", null)), "a * .5e-3");
+        yield return () => (Neg(Template("1e+5", null)), "-1e+5");
+        yield return () => (Un("!", Template("1E-5", null)), "!1E-5");
+        yield return () => (Neg(Template("2.5e10", null)), "-2.5e10");
+        yield return () => (Bin(A, "*", Template("0x1e+5", null)), "a * (0x1e+5)");
+        yield return () => (Bin(A, "*", Template("0X1E+5", null)), "a * (0X1E+5)");
+        yield return () => (Bin(A, "*", Template("1e+$0", null, B)), "a * (1e+b)");
+        yield return () => (Bin(A, "*", Template("1_000n", null)), "a * 1_000n");
+
         // A plain member access on an optional chain closes the chain.
         yield return () => (Prop(Prop(A, "b", optional: true), "c"), "(a?.b).c");
         yield return () => (Prop(Prop(A, "b", optional: true), "c", optional: true), "a?.b?.c");
