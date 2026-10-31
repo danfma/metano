@@ -94,10 +94,18 @@ public sealed record IrForEachStatement(
 /// <summary>
 /// A <c>for</c> loop.
 /// </summary>
+/// <param name="Initializers">The header's initializer section, in source
+/// order: one <see cref="IrVariableDeclaration"/> per declarator of
+/// <c>for (int i = 0, j = n; …)</c>, or one <see cref="IrExpressionStatement"/>
+/// per expression of <c>for (i = 0, j = n; …)</c>. Empty when the section is.</param>
+/// <param name="Condition">The loop condition, or null when omitted.</param>
+/// <param name="Incrementors">The header's iterator expressions, in source
+/// order (<c>i++, j--</c>). Empty when the section is.</param>
+/// <param name="Body">The loop body.</param>
 public sealed record IrForStatement(
-    IrStatement? Initializer,
+    IReadOnlyList<IrStatement> Initializers,
     IrExpression? Condition,
-    IrExpression? Increment,
+    IReadOnlyList<IrExpression> Incrementors,
     IReadOnlyList<IrStatement> Body
 ) : IrStatement;
 

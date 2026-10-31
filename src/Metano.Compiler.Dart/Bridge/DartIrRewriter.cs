@@ -66,9 +66,9 @@ public sealed class DartIrRewriter
             },
             IrForStatement f => f with
             {
-                Initializer = f.Initializer is null ? null : RewriteStatement(f.Initializer),
+                Initializers = f.Initializers.Select(RewriteStatement).ToList(),
                 Condition = f.Condition is null ? null : RewriteExpression(f.Condition),
-                Increment = f.Increment is null ? null : RewriteExpression(f.Increment),
+                Incrementors = f.Incrementors.Select(RewriteExpression).ToList(),
                 Body = f.Body.Select(RewriteStatement).ToList(),
             },
             IrWhileStatement w => w with

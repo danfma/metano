@@ -73,6 +73,7 @@ public static class IrRuntimeRequirementToTsImport
             "HashCode" => ("metano-runtime", "HashCode", false),
             "ValueEquals" => ("metano-runtime", "valueEquals", false),
             "RecordCopy" => ("metano-runtime", "copyRecordWith", false),
+            "IntegerDivision" => ("metano-runtime", "intDiv", false),
             "Enumerable" => ("metano-runtime", "Enumerable", false),
             "HashSet" => ("metano-runtime", "HashSet", false),
             "UUID" => ("metano-runtime", "UUID", false),

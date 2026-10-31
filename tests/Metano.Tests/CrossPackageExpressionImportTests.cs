@@ -248,6 +248,33 @@ public class CrossPackageExpressionImportTests
         await Assert.That(output).DoesNotContain("@acme");
     }
 
+    [Test]
+    public async Task IntraProject_NamespaceQualifiedStaticCall_UsesTheImportedClass()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            namespace MyLib
+            {
+                [Transpile]
+                public static class Digits
+                {
+                    public static int[] Split(int n) => [n / 10, n % 10];
+                }
+
+                [Transpile]
+                public static class Usage
+                {
+                    public static int[] Parts() => MyLib.Digits.Split(42);
+                }
+            }
+            """
+        )["my-lib/usage.ts"];
+
+        await Assert.That(output).Contains("import { Digits } from \"./digits\"");
+        await Assert.That(output).Contains("return Digits.split(42);");
+        await Assert.That(output).DoesNotContain("myLib");
+    }
+
     private static int OccurrencesOf(string text, string fragment) =>
         text.Split(fragment).Length - 1;
 

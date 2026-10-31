@@ -261,20 +261,15 @@ internal sealed partial class OutArgumentCallLowering
     /// </summary>
     private IrStatement LowerFor(IrForStatement loop)
     {
-        var initializer = loop.Initializer is null ? [] : Lower(loop.Initializer);
+        var (header, ahead) = SplitLoweredInitializers(loop);
 
         var body = loop.Condition is null
             ? loop.Body
             : [.. ExitUnless(loop.Condition), .. loop.Body];
 
-        // Only a plain declaration fits the header; a binding moves ahead of it.
-        if (initializer is [] or [IrVariableDeclaration])
-            return new IrForStatement(initializer.FirstOrDefault(), null, loop.Increment, body);
+        var restructured = loop with { Initializers = header, Condition = null, Body = body };
 
-        return new IrBlockStatement([
-            .. initializer,
-            new IrForStatement(null, null, loop.Increment, body),
-        ]);
+        return ahead is [] ? restructured : new IrBlockStatement([.. ahead, restructured]);
     }
 
     /// <summary>
@@ -284,15 +279,33 @@ internal sealed partial class OutArgumentCallLowering
     /// </summary>
     private IrBlockStatement LowerForInPlace(IrForStatement loop)
     {
-        var initializer = loop.Initializer is null ? [] : Lower(loop.Initializer);
-        var header = initializer is [IrVariableDeclaration declaration] ? declaration : null;
-        var ahead = header is null ? initializer : [];
+        var (header, ahead) = SplitLoweredInitializers(loop);
 
         return new IrBlockStatement([
             .. ahead,
-            .. LowerInPlace(loop with { Initializer = header }),
+            .. LowerInPlace(loop with { Initializers = header }),
         ]);
     }
+
+    /// <summary>
+    /// Lowers the loop's initializers and splits them between the loop
+    /// header and the statements bound ahead of the loop: they stay in the
+    /// header only when each declarator lowered to a single plain
+    /// declaration. Anything else (a binding an initializer's call needs, an
+    /// initializer expression) moves ahead as a whole, keeping source order.
+    /// </summary>
+    private (List<IrStatement> Header, List<IrStatement> Ahead) SplitLoweredInitializers(
+        IrForStatement loop
+    )
+    {
+        var lowered = loop.Initializers.Select(initializer => Lower(initializer)).ToList();
+        var flattened = lowered.SelectMany(statements => statements).ToList();
+
+        return lowered.All(FitsInLoopHeader) ? (flattened, []) : ([], flattened);
+    }
+
+    private static bool FitsInLoopHeader(IReadOnlyList<IrStatement> lowered) =>
+        lowered is [IrVariableDeclaration];
 
     /// <summary>
     /// The statements that evaluate <paramref name="condition"/> inside a loop
@@ -315,18 +328,15 @@ internal sealed partial class OutArgumentCallLowering
     /// </summary>
     private static bool CanRestructureFor(IrForStatement loop)
     {
-        if (loop.Increment is not null && ContainsOutArgumentCall(loop.Increment))
+        if (loop.Incrementors.Any(ContainsOutArgumentCall))
             return false;
 
         if (loop.Condition is null || !ContainsOutArgumentCall(loop.Condition))
             return true;
 
-        if (loop.Increment is null)
-            return true;
-
         var declared = DeclaredLocals([loop.Condition]).ToHashSet(StringComparer.Ordinal);
 
-        return !IdentifiersIn(loop.Increment).Any(declared.Contains);
+        return !loop.Incrementors.SelectMany(IdentifiersIn).Any(declared.Contains);
     }
 
     /// <summary>
@@ -413,8 +423,7 @@ internal sealed partial class OutArgumentCallLowering
 
     private static bool MakesOutArgumentCalls(IrStatement statement) =>
         IrNodeChildren.ExpressionsOf(statement).Any(ContainsOutArgumentCall)
-        || statement is IrForStatement { Initializer: { } initializer }
-            && MakesOutArgumentCalls(initializer);
+        || statement is IrForStatement loop && loop.Initializers.Any(MakesOutArgumentCalls);
 
     private static bool ContainsOutArgumentCall(IrExpression expression) =>
         OutCallsIn(expression).Any();
