@@ -112,6 +112,23 @@ public sealed record IrElementAccess(
 ) : IrExpression;
 
 /// <summary>
+/// A copy of the half-open element range <c>[Start, End)</c> of a sequence
+/// (array, list or string): the lowering of a C# range access
+/// <c>target[start..end]</c>. Both bounds are plain zero-based offsets — the
+/// extractor already resolved any from-end bound (<c>^n</c>) to
+/// <c>length - n</c>. A <c>null</c> <see cref="Start"/> means the sequence
+/// start and a <c>null</c> <see cref="End"/> means the sequence end.
+/// <see cref="TargetType"/> is the receiver's type, so a backend can tell a
+/// string from a list when the two slice differently.
+/// </summary>
+public sealed record IrSliceExpression(
+    IrExpression Target,
+    IrExpression? Start,
+    IrExpression? End,
+    IrTypeRef? TargetType = null
+) : IrExpression;
+
+/// <summary>
 /// Optional chaining member access: <c>target?.memberName</c>.
 /// </summary>
 public sealed record IrOptionalChain(IrExpression Target, string MemberName) : IrExpression;

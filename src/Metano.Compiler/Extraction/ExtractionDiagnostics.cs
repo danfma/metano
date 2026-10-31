@@ -46,6 +46,13 @@ public static class ExtractionDiagnostics
         return new Scope(previous);
     }
 
+    /// <summary>
+    /// Discards every diagnostic reported until the scope is disposed — for IR that
+    /// is extracted for analysis only and never emitted, whose diagnostics would point
+    /// at code the output does not contain.
+    /// </summary>
+    public static IDisposable Suppress() => Open(static _ => { });
+
     public static void Report(MetanoDiagnostic diagnostic) => Sink.Value?.Invoke(diagnostic);
 
     private sealed class Scope(Action<MetanoDiagnostic>? previous) : IDisposable

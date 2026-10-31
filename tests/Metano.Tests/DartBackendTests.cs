@@ -841,6 +841,34 @@ public class DartBackendTests
         await Assert.That(files["outer.dart"]).DoesNotContain("HashCode");
     }
 
+    [Test]
+    public async Task BinaryOperands_KeepSourceGrouping()
+    {
+        // The IR keeps grouping only as tree shape; the printer must restore the
+        // parentheses Dart precedence would otherwise drop (#263: `x[^(n + 1)]`
+        // lowers to `x[x.length - (n + 1)]`).
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class Operands
+            {
+                public int Sub(int a, int b, int c) => a - (b + c);
+                public int Scale(int a, int b, int c) => (a + b) * c;
+                public int Chain(int a, int b, int c) => a - b - c;
+                public bool Both(bool a, bool b, bool c) => a && (b && c);
+                public bool Same(bool a, bool b, bool c) => (a == b) == c;
+            }
+            """
+        );
+
+        var dart = files["operands.dart"];
+        await Assert.That(dart).Contains("a - (b + c)");
+        await Assert.That(dart).Contains("(a + b) * c");
+        await Assert.That(dart).Contains("a - b - c");
+        await Assert.That(dart).Contains("a && b && c");
+        await Assert.That(dart).Contains("(a == b) == c");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (

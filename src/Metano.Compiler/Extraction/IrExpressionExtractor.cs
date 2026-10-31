@@ -199,8 +199,32 @@ public sealed partial class IrExpressionExtractor
             // member-access lookup that wraps the expression can route to the
             // correct declarative mapping (e.g. `System.String`).
             PredefinedTypeSyntax pred => ExtractPredefinedType(pred),
-            _ => new IrUnsupportedExpression(expression.Kind().ToString()),
+            _ => ReportUnsupported(expression, expression.Kind().ToString()),
         };
+
+    /// <summary>
+    /// Reports MS0001 (UnsupportedFeature) at <paramref name="node"/> and
+    /// returns the <see cref="IrUnsupportedExpression"/> placeholder the
+    /// backends render as a parseable expression that throws at runtime, so
+    /// one unsupported construct never aborts the whole build.
+    /// </summary>
+    private static IrUnsupportedExpression ReportUnsupported(
+        SyntaxNode node,
+        string kind,
+        string? message = null
+    )
+    {
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                message ?? $"Expression '{node}' ({kind}) is not supported by the transpiler.",
+                node.GetLocation()
+            )
+        );
+
+        return new IrUnsupportedExpression(kind);
+    }
 
     /// <summary>
     /// Lowers a C# <c>with</c> expression (<c>source with { X = expr }</c>)
@@ -285,7 +309,7 @@ public sealed partial class IrExpressionExtractor
                 return shortCircuit;
 
             default:
-                return new IrUnsupportedExpression($"ConditionalAccess({whenNotNull.Kind()})");
+                return ReportUnsupported(whenNotNull, $"ConditionalAccess({whenNotNull.Kind()})");
         }
     }
 
@@ -534,11 +558,12 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// True for IR shapes that can be referenced twice in the
     /// generated code without observable side effects: identifiers,
-    /// <c>this</c>, and chains of plain field-style member accesses
-    /// rooted at one of those. Property getters and method calls
-    /// are intentionally excluded — re-evaluating them under a
-    /// duplicated null-conditional receiver would diverge from the
-    /// C# semantics where the receiver is evaluated exactly once.
+    /// <c>this</c>, and member-access chains rooted at one of those
+    /// (fields and properties alike — the IR does not distinguish
+    /// them, so a property getter is assumed side-effect free).
+    /// Method calls, element accesses and every other shape are
+    /// excluded — re-evaluating them would diverge from the C#
+    /// semantics where the receiver is evaluated exactly once.
     /// </summary>
     private static bool IsSimpleReceiver(IrExpression expression) =>
         expression switch
@@ -550,6 +575,67 @@ public sealed partial class IrExpressionExtractor
             IrMemberAccess ma => IsSimpleReceiver(ma.Target),
             _ => false,
         };
+
+    /// <summary>
+    /// Evaluates <paramref name="receiver"/> once when <paramref name="build"/>
+    /// needs to reference it more than once: a simple receiver is reused
+    /// as-is, anything else is let-bound to a fresh temporary.
+    /// </summary>
+    private IrExpression BindReceiverOnce(
+        IrExpression receiver,
+        Func<IrExpression, IrExpression> build
+    ) => BindOnce(receiver, IsSimpleReceiver(receiver), build);
+
+    /// <summary>
+    /// Like <see cref="BindReceiverOnce"/> for a value that is not a receiver
+    /// (an index offset): reused as-is when it has no side effects, so the
+    /// common <c>x[^1]</c> stays flat, and let-bound otherwise.
+    /// </summary>
+    private IrExpression BindValueOnce(
+        IrExpression value,
+        Func<IrExpression, IrExpression> build
+    ) => BindOnce(value, IsSideEffectFree(value), build);
+
+    private IrExpression BindOnce(
+        IrExpression value,
+        bool isReusable,
+        Func<IrExpression, IrExpression> build
+    )
+    {
+        if (isReusable)
+            return build(value);
+
+        var tempName = NextReceiverTempName();
+
+        return new IrLetExpression(tempName, value, build(new IrIdentifier(tempName)));
+    }
+
+    /// <summary>
+    /// Shape-based: literals, <see cref="IsSimpleReceiver">simple
+    /// receivers</see>, and non-assigning operators over those. Property
+    /// getters are assumed side-effect free, as in <see cref="IsSimpleReceiver"/>.
+    /// </summary>
+    private static bool IsSideEffectFree(IrExpression expression) =>
+        expression switch
+        {
+            IrLiteral => true,
+            IrUnaryExpression
+            {
+                Operator: not (IrUnaryOp.Increment or IrUnaryOp.Decrement)
+            } unary => IsSideEffectFree(unary.Operand),
+            IrBinaryExpression binary when !binary.Operator.IsAssignment() => IsSideEffectFree(
+                binary.Left
+            ) && IsSideEffectFree(binary.Right),
+            _ => IsSimpleReceiver(expression),
+        };
+
+    /// <summary>
+    /// An unsupported (already reported) placeholder is not an assignable
+    /// location, so when it is the target of an assignment or an increment it
+    /// stands in for the whole write — <c>(...)() = v</c> would not parse.
+    /// </summary>
+    private static bool IsUnsupportedPlaceholder(IrExpression expression) =>
+        expression is IrUnsupportedExpression;
 
     private IrExpression ExtractCollectionExpression(CollectionExpressionSyntax coll)
     {
@@ -1250,7 +1336,9 @@ public sealed partial class IrExpressionExtractor
             return BuildTemporalCompareCall(bin, relOp, temporalTypeName);
         }
 
-        var op = MapBinaryOp(bin.Kind());
+        if (MapBinaryOp(bin.Kind()) is not { } op)
+            return ReportUnsupported(bin, bin.Kind().ToString());
+
         return new IrBinaryExpression(Extract(bin.Left), op, Extract(bin.Right));
     }
 
@@ -1318,6 +1406,10 @@ public sealed partial class IrExpressionExtractor
             if (opName is not null)
             {
                 var left = Extract(assign.Left);
+
+                if (IsUnsupportedPlaceholder(left))
+                    return left;
+
                 var right = Extract(assign.Right);
                 return new IrBinaryExpression(
                     left,
@@ -1353,8 +1445,14 @@ public sealed partial class IrExpressionExtractor
                 [new IrArgument(Extract(assign.Right))]
             );
         }
+
+        var target = Extract(assign.Left);
+
+        if (IsUnsupportedPlaceholder(target))
+            return target;
+
         return new IrBinaryExpression(
-            Extract(assign.Left),
+            target,
             MapAssignmentOp(assign.Kind()),
             Extract(assign.Right)
         );
@@ -1374,12 +1472,20 @@ public sealed partial class IrExpressionExtractor
         if (node is PrefixUnaryExpressionSyntax plus && plus.IsKind(SyntaxKind.UnaryPlusExpression))
             return Extract(plus.Operand);
 
-        var (op, operand) = node switch
+        var (mappedOp, operand) = node switch
         {
             PrefixUnaryExpressionSyntax pre => (MapUnaryOp(pre.Kind()), pre.Operand),
             PostfixUnaryExpressionSyntax post => (MapUnaryOp(post.Kind()), post.Operand),
             _ => throw new ArgumentException("Not a unary expression", nameof(node)),
         };
+
+        // `^n` outside an element access (`Index i = ^1;`), pointer `&x` /
+        // `*p`: no IR operator models them.
+        if (mappedOp is not { } op)
+            return ReportUnsupported(node, node.Kind().ToString());
+
+        var isIncrementOrDecrement = op is IrUnaryOp.Increment or IrUnaryOp.Decrement;
+
         // Decimal negation: `-x` on a decimal.js receiver isn't a JS unary op —
         // the value is a Decimal instance, so rewrite to `x.neg()`.
         if (op is IrUnaryOp.Negate && isPrefix)
@@ -1394,7 +1500,7 @@ public sealed partial class IrExpressionExtractor
         // covers the statement-position use, which doesn't observe the
         // pre/post value distinction.
         if (
-            (op is IrUnaryOp.Increment or IrUnaryOp.Decrement)
+            isIncrementOrDecrement
             && operand is MemberAccessExpressionSyntax incMember
             && _semantic.GetSymbolInfo(incMember).Symbol is IPropertySymbol incProp
             && TryResolveExtensionPropertyLowering(incProp, incMember) is { } incLowering
@@ -1407,7 +1513,7 @@ public sealed partial class IrExpressionExtractor
         // `item$set(r, i, item$get(r, i) + 1)`. Statement-position only;
         // the postfix value isn't observable in MVP scope.
         if (
-            (op is IrUnaryOp.Increment or IrUnaryOp.Decrement)
+            isIncrementOrDecrement
             && operand is ElementAccessExpressionSyntax incIndexer
             && _semantic.GetSymbolInfo(incIndexer).Symbol is IPropertySymbol incIndexerProp
             && incIndexerProp.IsIndexer
@@ -1422,10 +1528,16 @@ public sealed partial class IrExpressionExtractor
                 op
             );
         }
-        return new IrUnaryExpression(op, Extract(operand), isPrefix);
+
+        var extractedOperand = Extract(operand);
+
+        if (isIncrementOrDecrement && IsUnsupportedPlaceholder(extractedOperand))
+            return extractedOperand;
+
+        return new IrUnaryExpression(op, extractedOperand, isPrefix);
     }
 
-    private static IrBinaryOp MapBinaryOp(SyntaxKind kind) =>
+    private static IrBinaryOp? MapBinaryOp(SyntaxKind kind) =>
         kind switch
         {
             SyntaxKind.AddExpression => IrBinaryOp.Add,
@@ -1448,15 +1560,10 @@ public sealed partial class IrExpressionExtractor
             SyntaxKind.RightShiftExpression => IrBinaryOp.RightShift,
             SyntaxKind.UnsignedRightShiftExpression => IrBinaryOp.UnsignedRightShift,
             SyntaxKind.CoalesceExpression => IrBinaryOp.NullCoalescing,
-            // Unsupported binary kinds throw rather than silently
-            // miscompile as IrBinaryOp.Add. If a new Roslyn binary
-            // shape appears, the build fails loudly with the kind
-            // name so the mapping can be added explicitly.
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(kind),
-                kind,
-                $"Unsupported binary syntax kind '{kind}'."
-            ),
+            // Unmapped binary kinds (`x as T`) surface as null rather than
+            // silently miscompiling as IrBinaryOp.Add; the caller reports
+            // MS0001 at the expression.
+            _ => null,
         };
 
     private static IrBinaryOp MapAssignmentOp(SyntaxKind kind) =>
@@ -1476,6 +1583,8 @@ public sealed partial class IrExpressionExtractor
             SyntaxKind.UnsignedRightShiftAssignmentExpression =>
                 IrBinaryOp.UnsignedRightShiftAssign,
             SyntaxKind.CoalesceAssignmentExpression => IrBinaryOp.NullCoalescingAssign,
+            // Internal invariant: the arms above cover every assignment kind
+            // Roslyn parses, so this only fires if a new kind is introduced.
             _ => throw new ArgumentOutOfRangeException(
                 nameof(kind),
                 kind,
@@ -1483,7 +1592,7 @@ public sealed partial class IrExpressionExtractor
             ),
         };
 
-    private static IrUnaryOp MapUnaryOp(SyntaxKind kind) =>
+    private static IrUnaryOp? MapUnaryOp(SyntaxKind kind) =>
         kind switch
         {
             SyntaxKind.UnaryMinusExpression => IrUnaryOp.Negate,
@@ -1493,11 +1602,7 @@ public sealed partial class IrExpressionExtractor
                 IrUnaryOp.Increment,
             SyntaxKind.PreDecrementExpression or SyntaxKind.PostDecrementExpression =>
                 IrUnaryOp.Decrement,
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(kind),
-                kind,
-                $"Unsupported unary syntax kind '{kind}'."
-            ),
+            _ => null,
         };
 
     /// <summary>
@@ -2273,18 +2378,23 @@ public sealed partial class IrExpressionExtractor
             return BuildExtensionIndexerGetCall(elem, indexerProp, readLowering);
         }
 
+        if (TryExtractIndexOrRangeAccess(elem) is { } indexOrRangeAccess)
+            return indexOrRangeAccess;
+
         var target = Extract(elem.Expression);
         // Treat the first argument as the index; multi-arg indexers are uncommon.
         var index =
             elem.ArgumentList.Arguments.Count > 0
                 ? Extract(elem.ArgumentList.Arguments[0].Expression)
                 : new IrLiteral(0, IrLiteralKind.Int32);
-        var receiverType = _semantic.GetTypeInfo(elem.Expression).Type;
-        var mappedType = receiverType is not null
-            ? IrTypeRefMapper.Map(receiverType, _originResolver, _target)
-            : null;
-        return new IrElementAccess(target, index, mappedType);
+
+        return new IrElementAccess(target, index, MapExpressionType(elem.Expression));
     }
+
+    private IrTypeRef? MapExpressionType(ExpressionSyntax expression) =>
+        _semantic.GetTypeInfo(expression).Type is { } type
+            ? IrTypeRefMapper.Map(type, _originResolver, _target)
+            : null;
 
     // ── Lambdas ──────────────────────────────────────────────────────────
 

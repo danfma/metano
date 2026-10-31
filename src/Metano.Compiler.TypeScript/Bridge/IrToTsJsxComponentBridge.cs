@@ -1,3 +1,4 @@
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -373,6 +374,12 @@ public static class IrToTsJsxComponentBridge
                 Index = Rewrite(ea.Index, propNames, referenced),
             },
             IrOptionalChain oc => oc with { Target = Rewrite(oc.Target, propNames, referenced) },
+            IrSliceExpression slice => slice with
+            {
+                Target = Rewrite(slice.Target, propNames, referenced),
+                Start = slice.Start is null ? null : Rewrite(slice.Start, propNames, referenced),
+                End = slice.End is null ? null : Rewrite(slice.End, propNames, referenced),
+            },
             IrCallExpression call => call with
             {
                 Target = Rewrite(call.Target, propNames, referenced),
@@ -541,9 +548,14 @@ public static class IrToTsJsxComponentBridge
                     )
                     .ToList(),
             },
-            // True leaves — no nested expression to descend into.
-            IrLiteral or IrIdentifier or IrTypeReference or IrThisExpression or IrBaseExpression =>
-                expr,
+            // True leaves — no nested expression to descend into. An
+            // unsupported placeholder was already reported by the extractor.
+            IrLiteral
+            or IrIdentifier
+            or IrTypeReference
+            or IrThisExpression
+            or IrBaseExpression
+            or IrUnsupportedExpression => expr,
             // Fail loud instead of silently passing an unhandled node through: a
             // prop read nested inside an un-rewritten node would leak as a `this`
             // reference into the function component (no `this` at runtime). A new

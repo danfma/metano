@@ -5,8 +5,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Walks an IR body and returns <c>true</c> when every node it contains is within
-/// the currently-supported subset (no <see cref="IrUnsupportedExpression"/> and no
-/// <see cref="IrUnsupportedStatement"/>). Used by the TypeScript pipeline to decide
+/// the currently-supported subset (no <see cref="IrUnsupportedStatement"/> and no
+/// unknown node). An <see cref="IrUnsupportedExpression"/> counts as covered: the
+/// extractor already reported it as MS0001 at its source location, and the bridge
+/// renders it as a parseable placeholder that throws when reached, so one
+/// unsupported expression never drops a whole overload group or module. Used by the
+/// TypeScript pipeline to decide
 /// whether a method/constructor body can be lowered through the IR bridges or
 /// whether it must stay on the legacy <c>ExpressionTransformer</c> path to
 /// preserve BCL mapping, <c>[Emit]</c> inlining, operator dispatch, etc.
@@ -57,7 +61,7 @@ public static class IrBodyCoverageProbe
     private static bool IsCoveredExpression(IrExpression e) =>
         e switch
         {
-            IrUnsupportedExpression => false,
+            IrUnsupportedExpression => true,
             IrLiteral => true,
             IrIdentifier => true,
             IrTypeReference => true,
@@ -65,6 +69,10 @@ public static class IrBodyCoverageProbe
             IrBaseExpression => true,
             IrMemberAccess ma => IsCoveredExpression(ma.Target),
             IrElementAccess ea => IsCoveredExpression(ea.Target) && IsCoveredExpression(ea.Index),
+            IrSliceExpression slice => IsCoveredExpression(slice.Target)
+                && (slice.Start is null || IsCoveredExpression(slice.Start))
+                && (slice.End is null || IsCoveredExpression(slice.End)),
+            IrLetExpression let => IsCoveredExpression(let.Value) && IsCoveredExpression(let.Body),
             IrCallExpression call => IsCoveredExpression(call.Target)
                 && call.Arguments.All(a => IsCoveredExpression(a.Value)),
             IrNewExpression ne => ne.Arguments.All(a => IsCoveredExpression(a.Value)),

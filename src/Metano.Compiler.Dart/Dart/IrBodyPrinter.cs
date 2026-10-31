@@ -251,6 +251,20 @@ public static class IrBodyPrinter
                 PrintExpression(sb, ea.Index);
                 sb.Append(']');
                 break;
+            case IrSliceExpression slice:
+                PrintSlice(sb, slice);
+                break;
+            case IrLetExpression let:
+                // `((name) => body)(value)` — evaluates the value once and
+                // scopes the binding to the body, like the TypeScript IIFE.
+                sb.Append("((")
+                    .Append(IrToDartNamingPolicy.ToParameterName(let.Name))
+                    .Append(") => ");
+                PrintExpression(sb, let.Body);
+                sb.Append(")(");
+                PrintExpression(sb, let.Value);
+                sb.Append(')');
+                break;
             case IrCallExpression call:
                 PrintCallTarget(sb, call.Target);
                 if (call.IsOptional)
@@ -268,9 +282,9 @@ public static class IrBodyPrinter
                 sb.Append(')');
                 break;
             case IrBinaryExpression bin:
-                PrintExpression(sb, bin.Left);
+                PrintOperand(sb, bin.Left, DartBinaryOperandGrouping.NeedsLeftParentheses(bin));
                 sb.Append(' ').Append(FormatBinaryOp(bin.Operator)).Append(' ');
-                PrintExpression(sb, bin.Right);
+                PrintOperand(sb, bin.Right, DartBinaryOperandGrouping.NeedsRightParentheses(bin));
                 break;
             case IrUnaryExpression un:
                 if (un.IsPrefix)
@@ -353,7 +367,11 @@ public static class IrBodyPrinter
                     .Append("’ has no Dart mapping */ null");
                 break;
             case IrUnsupportedExpression u:
-                sb.Append("/* TODO: unsupported IR expression ").Append(u.Kind).Append(" */");
+                // Already reported as MS0001 by the extractor; `throw` is an
+                // expression in Dart, so the placeholder parses anywhere.
+                sb.Append("(throw UnsupportedError('Unsupported expression: ")
+                    .Append(u.Kind)
+                    .Append("'))");
                 break;
             default:
                 sb.Append("/* TODO: ").Append(expr.GetType().Name).Append(" */");
@@ -666,6 +684,44 @@ public static class IrBodyPrinter
                     .Append(" */");
                 break;
         }
+    }
+
+    private static void PrintOperand(StringBuilder sb, IrExpression operand, bool parenthesize)
+    {
+        if (parenthesize)
+            sb.Append('(');
+
+        PrintExpression(sb, operand);
+
+        if (parenthesize)
+            sb.Append(')');
+    }
+
+    /// <summary>
+    /// <c>s.substring(start, end)</c> for a string, <c>list.sublist(start, end)</c>
+    /// otherwise; an absent start is <c>0</c> and an absent end is omitted.
+    /// </summary>
+    private static void PrintSlice(StringBuilder sb, IrSliceExpression slice)
+    {
+        var method = slice.TargetType is IrPrimitiveTypeRef { Primitive: IrPrimitive.String }
+            ? "substring"
+            : "sublist";
+
+        PrintExpression(sb, slice.Target);
+        sb.Append('.').Append(method).Append('(');
+
+        if (slice.Start is null)
+            sb.Append('0');
+        else
+            PrintExpression(sb, slice.Start);
+
+        if (slice.End is not null)
+        {
+            sb.Append(", ");
+            PrintExpression(sb, slice.End);
+        }
+
+        sb.Append(')');
     }
 
     private static void PrintLambda(StringBuilder sb, IrLambdaExpression lambda)

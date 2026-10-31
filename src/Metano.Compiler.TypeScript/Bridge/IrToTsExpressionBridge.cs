@@ -44,6 +44,7 @@ public static partial class IrToTsExpressionBridge
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, bclRegistry),
             IrElementAccess ea => MapElementAccess(ea, bclRegistry),
+            IrSliceExpression slice => MapSlice(slice, bclRegistry),
             IrCallExpression call => MapCall(call, bclRegistry),
             IrNewExpression ne => MapNewExpression(ne, bclRegistry),
             IrBinaryExpression bin => MapBinary(bin, bclRegistry),
@@ -99,9 +100,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrLinqChain chain => MapLinqChain(chain, bclRegistry),
             IrLetExpression let => MapLetExpression(let, bclRegistry),
-            IrUnsupportedExpression u => new TsIdentifier(
-                $"/* TODO: unsupported IR expression {u.Kind} */"
-            ),
+            IrUnsupportedExpression u => MapUnsupported(u),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };
     }
@@ -148,6 +147,53 @@ public static partial class IrToTsExpressionBridge
             return new TsCallExpression(new TsPropertyAccess(target, "get"), [index]);
         return new TsElementAccess(target, index);
     }
+
+    /// <summary>
+    /// <c>target.slice(start, end)</c> — the same half-open copy for JS arrays
+    /// and strings. An absent start with a present end becomes <c>0</c>; an
+    /// absent end is omitted so the slice runs to the end.
+    /// </summary>
+    private static TsExpression MapSlice(
+        IrSliceExpression slice,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        new TsCallExpression(
+            new TsPropertyAccess(Map(slice.Target, bclRegistry), "slice"),
+            MapSliceBounds(slice, bclRegistry)
+        );
+
+    private static IReadOnlyList<TsExpression> MapSliceBounds(
+        IrSliceExpression slice,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        (slice.Start, slice.End) switch
+        {
+            (null, null) => [],
+            ({ } start, null) => [Map(start, bclRegistry)],
+            (null, { } end) => [new TsLiteral("0"), Map(end, bclRegistry)],
+            ({ } start, { } end) => [Map(start, bclRegistry), Map(end, bclRegistry)],
+        };
+
+    /// <summary>
+    /// Placeholder for a construct the extractor already reported as MS0001:
+    /// <c>(() =&gt; { throw new Error("…"); })()</c> parses in any expression
+    /// position, type-checks as <c>never</c>, and fails loudly if reached.
+    /// </summary>
+    private static TsExpression MapUnsupported(IrUnsupportedExpression unsupported) =>
+        new TsCallExpression(
+            new TsArrowFunction(
+                [],
+                [
+                    new TsThrowStatement(
+                        new TsNewExpression(
+                            new TsIdentifier("Error"),
+                            [new TsStringLiteral($"Unsupported expression: {unsupported.Kind}")]
+                        )
+                    ),
+                ]
+            ),
+            []
+        );
 
     private static TsExpression MapMemberAccess(
         IrMemberAccess ma,
