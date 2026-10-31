@@ -579,7 +579,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TryEmitEnum(type, sink, irCache)
             || TryEmitInterface(type, sink, irCache)
             || TryEmitDelegate(type, sink, irCache)
-            || TryEmitException(type, sink, irCache)
             || TryEmitJsonSerializerContext(type, sink)
             || TryEmitTopLevelEntryPoint(type, sink)
             || TryEmitStaticModule(type, sink)
@@ -655,19 +654,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
         var delegateIr = (IrDelegateDeclaration)GetOrExtractIr(type, irCache)!;
         IrToTsDelegateBridge.Convert(delegateIr, sink, Context.ResolveTsName(type));
-        return true;
-    }
-
-    private bool TryEmitException(
-        INamedTypeSymbol type,
-        List<TsTopLevel> sink,
-        IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
-    )
-    {
-        if (!IsExceptionType(type))
-            return false;
-        var exceptionIr = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
-        IrToTsExceptionBridge.Convert(exceptionIr, sink, Context.DeclarativeMappings);
         return true;
     }
 

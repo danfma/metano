@@ -737,6 +737,15 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         if (extendsType is null)
             return null;
 
+        if (ir.Constructor?.BaseExceptionConstruction is { } construction)
+        {
+            return IrToTsExceptionConstructionBridge.MapErrorArguments(
+                construction,
+                ir.Constructor.BaseArguments ?? [],
+                _context.DeclarativeMappings
+            );
+        }
+
         return (ir.Constructor?.BaseArguments ?? [])
             .Select(a => IrToTsExpressionBridge.MapArgument(a, _context.DeclarativeMappings))
             .ToList();

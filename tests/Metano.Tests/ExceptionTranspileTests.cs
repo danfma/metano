@@ -98,4 +98,94 @@ public class ExceptionTranspileTests
         await Assert.That(output).DoesNotContain("hashCode");
         await Assert.That(output).DoesNotContain("with(");
     }
+
+    [Test]
+    public async Task ExceptionWithMembers_KeepsPropertiesMethodsAndConstructorBody()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class QuotaExceededException : Exception
+            {
+                public QuotaExceededException(string message, int limit)
+                    : base(message)
+                {
+                    Limit = limit;
+                }
+
+                public int Limit { get; }
+
+                public string Describe() => $"limit {Limit}: {Message}";
+            }
+            """
+        );
+
+        var output = result["quota-exceeded-exception.ts"];
+        await Assert.That(output).Contains("export class QuotaExceededException extends Error {");
+        await Assert
+            .That(output)
+            .Contains("constructor(message: string, readonly limit: number) {");
+        await Assert.That(output).Contains("super(message);");
+        await Assert.That(output).Contains("describe(): string {");
+        await Assert.That(output).Contains("`limit ${this.limit}: ${this.message}`");
+    }
+
+    [Test]
+    public async Task ExceptionWithoutBaseInitializer_UsesDotNetDefaultMessage()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile]
+                public sealed class StaleStateException : InvalidOperationException
+                {
+                    public StaleStateException(int version)
+                    {
+                        Version = version;
+                    }
+
+                    public int Version { get; }
+                }
+            }
+            """
+        );
+
+        var output = result["app/stale-state-exception.ts"];
+        await Assert
+            .That(output)
+            .Contains("super(\"Operation is not valid due to the current state of the object.\");");
+        await Assert.That(output).Contains("this.version = version;");
+    }
+
+    [Test]
+    public async Task ExceptionWithConstructorOverloads_DispatchesSuperByRole()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile]
+                public class SyncException : Exception
+                {
+                    public SyncException() { }
+
+                    public SyncException(string message)
+                        : base(message) { }
+
+                    public SyncException(string message, Exception inner)
+                        : base(message, inner) { }
+                }
+            }
+            """
+        );
+
+        var output = result["app/sync-exception.ts"];
+        await Assert.That(output).Contains("export class SyncException extends Error {");
+        await Assert.That(output).Contains("super(message, { cause: inner });");
+        await Assert.That(output).Contains("super(message);");
+        await Assert
+            .That(output)
+            .Contains("super(\"Exception of type 'App.SyncException' was thrown.\");");
+    }
 }

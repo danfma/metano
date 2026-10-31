@@ -253,8 +253,11 @@ Each shape has a dedicated IR → TS lowering, named consistently:
 - **`IrToTsPlainObjectBridge`** — `[PlainObject]` records → TS interface
   without a class wrapper.
 - **`IrToTsBrandedBridge`** — `[Branded]` structs → branded primitive types.
-- **`IrToTsExceptionBridge`** — anything inheriting `System.Exception` →
-  `class extends Error`.
+- **`IrToTsExceptionConstructionBridge`** — BCL exception constructions
+  (`new ArgumentException(...)`, a user exception's base call) →
+  `Error(message, { cause })` arguments, composing the message from the
+  constructor-parameter roles like .NET. User exceptions themselves go
+  through `IrToTsClassEmitter` and extend `Error`.
 - **`IrToTsModuleBridge`** — `[NoContainer]` / legacy
   `[ExportedAsModule]` static classes + top-level statements → flat top-level
   functions.
