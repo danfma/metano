@@ -279,12 +279,12 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapTypeReference(IrTypeReference reference)
     {
         var segments = IrToTsTypeMapper.ResolveAliasedName(reference.Name).Split('.');
-        TsExpression lowered = new TsIdentifier(segments[0]);
-
-        foreach (var segment in segments.Skip(1))
-            lowered = new TsPropertyAccess(lowered, segment);
-
-        return lowered;
+        return segments
+            .Skip(1)
+            .Aggregate(
+                (TsExpression)new TsIdentifier(segments[0]),
+                (target, segment) => new TsPropertyAccess(target, segment)
+            );
     }
 
     private static TsExpression MapCall(

@@ -874,8 +874,9 @@ public class DartBackendTests
     {
         // #264 widened assembly-wide transpilability to nested types of any
         // accessibility. The Dart prototype keeps its own public-only nested
-        // filter; the shared IR extraction (qualified nested references) must not
-        // break it.
+        // filter (non-public nested types are a known Dart gap: `ShotEntry` is not
+        // declared); the shared IR extraction (qualified nested references) must
+        // not break it.
         var (files, _) = TranspileDart(
             """
             [assembly: TranspileAssembly]
@@ -884,7 +885,7 @@ public class DartBackendTests
             {
                 private sealed record ShotEntry(string Name, int Frames);
 
-                internal enum Kind { A, B }
+                public enum Kind { A, B }
 
                 public static int Total(string name)
                 {
@@ -900,6 +901,7 @@ public class DartBackendTests
         // Value-position type references print only the innermost segment: the Dart
         // prototype flattens nested types instead of emitting companion namespaces.
         await Assert.That(files["shot_schedule.dart"]).Contains("var kind = Kind.b;");
+        await Assert.That(files.Keys).Contains("kind.dart");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
