@@ -66,7 +66,10 @@ public static class IrToTsOverloadDispatcherBridge
                 members.Add(fastPath);
         }
 
-        var body = BuildDispatcherBody(sorted, fastPathNames, containingTypeName, isStatic);
+        var receiver = isStatic
+            ? (TsExpression)new TsIdentifier(containingTypeName)
+            : new TsIdentifier("this");
+        var body = BuildDispatcherBody(sorted, fastPathNames, receiver);
 
         members.Add(
             new TsMethodMember(
@@ -81,6 +84,59 @@ public static class IrToTsOverloadDispatcherBridge
             )
         );
         return members;
+    }
+
+    /// <summary>
+    /// Builds the dispatcher + fast paths for a group of static overloads
+    /// that lowers to free functions inside a TS namespace (the
+    /// <c>[Branded]</c> companion) instead of class members. The fast paths
+    /// are non-exported namespace-local functions called by bare name; the
+    /// exported dispatcher carries the overload signatures. Returns an empty
+    /// list when the group has fewer than two overloads.
+    /// </summary>
+    /// <param name="primary">The method that groups the overloads.</param>
+    /// <param name="functionName">
+    /// Emitted dispatcher name — already reserved-word escaped, since
+    /// namespace function declarations can't use reserved words.
+    /// </param>
+    /// <param name="bclRegistry">
+    /// Optional BCL mapping registry threaded through to the body bridge.
+    /// </param>
+    public static IReadOnlyList<TsFunction> BuildNamespaceFunctions(
+        IrMethodDeclaration primary,
+        string functionName,
+        DeclarativeMappingRegistry? bclRegistry = null
+    )
+    {
+        var overloads = CollectOverloads(primary);
+
+        if (overloads.Count < 2)
+            return [];
+
+        var sorted = overloads.OrderByDescending(m => m.Parameters.Count).ToList();
+        var isAsync = sorted.Any(m => m.Semantics.IsAsync);
+        var fastPathNames = ComputeFastPathNames(functionName, sorted);
+        var functions = new List<TsFunction>();
+
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            if (BuildFastPathFunction(sorted[i], fastPathNames[i], bclRegistry) is { } fastPath)
+                functions.Add(fastPath);
+        }
+
+        functions.Add(
+            new TsFunction(
+                functionName,
+                [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)],
+                ResolveCommonReturnType(sorted, isAsync),
+                BuildDispatcherBody(sorted, fastPathNames, receiver: null),
+                Exported: true,
+                Async: isAsync,
+                Overloads: sorted.Select(BuildOverloadSignature).ToList()
+            )
+        );
+
+        return functions;
     }
 
     // ── Phases ───────────────────────────────────────────────────────────
@@ -107,16 +163,7 @@ public static class IrToTsOverloadDispatcherBridge
     }
 
     private static TsMethodOverload BuildOverloadSignature(IrMethodDeclaration method) =>
-        new(
-            method
-                .Parameters.Select(p => new TsParameter(
-                    TypeScriptNaming.ToCamelCase(p.Name),
-                    IrToTsTypeMapper.Map(p.Type),
-                    Rest: p.IsParams
-                ))
-                .ToList(),
-            IrToTsTypeMapper.Map(method.ReturnType)
-        );
+        new(MapParameters(method), IrToTsTypeMapper.Map(method.ReturnType));
 
     private static TsMethodMember? BuildFastPathMember(
         IrMethodDeclaration method,
@@ -127,16 +174,9 @@ public static class IrToTsOverloadDispatcherBridge
     {
         if (method.Body is null)
             return null;
-        var parameters = method
-            .Parameters.Select(p => new TsParameter(
-                TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type),
-                Rest: p.IsParams
-            ))
-            .ToList();
         return new TsMethodMember(
             fastPathName,
-            parameters,
+            MapParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
             IrToTsStatementBridge.MapBody(method.Body, bclRegistry),
             Static: isStatic,
@@ -150,6 +190,33 @@ public static class IrToTsOverloadDispatcherBridge
         );
     }
 
+    private static TsFunction? BuildFastPathFunction(
+        IrMethodDeclaration method,
+        string fastPathName,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        method.Body is null
+            ? null
+            : new TsFunction(
+                fastPathName,
+                MapParameters(method),
+                IrToTsTypeMapper.Map(method.ReturnType),
+                IrToTsStatementBridge.MapBody(method.Body, bclRegistry),
+                // Namespace-local: the exported dispatcher is the public entry point.
+                Exported: false,
+                Async: method.Semantics.IsAsync,
+                TypeParameters: MapTypeParameters(method.TypeParameters)
+            );
+
+    private static List<TsParameter> MapParameters(IrMethodDeclaration method) =>
+        method
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                IrToTsTypeMapper.Map(p.Type),
+                Rest: p.IsParams
+            ))
+            .ToList();
+
     private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters
     ) => IrToTsTypeParameterMapper.Convert(typeParameters);
@@ -157,8 +224,7 @@ public static class IrToTsOverloadDispatcherBridge
     private static List<TsStatement> BuildDispatcherBody(
         IReadOnlyList<IrMethodDeclaration> sorted,
         IReadOnlyList<string> fastPathNames,
-        string containingTypeName,
-        bool isStatic
+        TsExpression? receiver
     )
     {
         var body = new List<TsStatement>();
@@ -193,13 +259,12 @@ public static class IrToTsOverloadDispatcherBridge
                 );
             }
 
-            var receiver = isStatic
-                ? (TsExpression)new TsIdentifier(containingTypeName)
-                : new TsIdentifier("this");
-            var delegateCall = new TsCallExpression(
-                new TsPropertyAccess(receiver, fastPathName),
-                callArgs
-            );
+            // A null receiver means the fast path is a namespace-local
+            // function reachable by bare name.
+            TsExpression callee = receiver is null
+                ? new TsIdentifier(fastPathName)
+                : new TsPropertyAccess(receiver, fastPathName);
+            var delegateCall = new TsCallExpression(callee, callArgs);
 
             var branchStatements = new List<TsStatement>();
             if (method.ReturnType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void })

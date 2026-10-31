@@ -230,49 +230,22 @@ public static class IrClassExtractor
         );
 
     /// <summary>
-    /// Extracts the underlying primitive of an <c>[Branded]</c> struct.
-    /// The wrapper shape requires exactly one public non-static value member
-    /// (a field or a getter-shaped property); anything else — multiple
-    /// members, parameterized properties, ignored members — disqualifies the
-    /// type and we return <c>null</c>, signalling to the consumer that the
-    /// type isn't a real wrapper and should fall through to the regular
-    /// class/record path.
+    /// Extracts the underlying primitive of an <c>[Branded]</c> struct: the
+    /// type of the single wrapped value member resolved by
+    /// <see cref="SymbolHelper.GetBrandedValueMember"/>. Returns <c>null</c>
+    /// when the type isn't a real wrapper, signalling to the consumer that it
+    /// should fall through to the regular class/record path.
     /// </summary>
     private static IrTypeRef? ExtractBrandedUnderlyingType(
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver
-    )
-    {
-        if (!SymbolHelper.HasBranded(type))
-            return null;
-
-        ITypeSymbol? wrapped = null;
-        foreach (var member in type.GetMembers())
+    ) =>
+        SymbolHelper.GetBrandedValueMember(type) switch
         {
-            if (member.IsImplicitlyDeclared || member.IsStatic)
-                continue;
-            if (member.DeclaredAccessibility != Accessibility.Public)
-                continue;
-            if (SymbolHelper.HasIgnore(member))
-                continue;
-
-            ITypeSymbol? candidate = member switch
-            {
-                IFieldSymbol f => f.Type,
-                IPropertySymbol p when p.GetMethod is not null && p.Parameters.Length == 0 =>
-                    p.Type,
-                _ => null,
-            };
-            if (candidate is null)
-                continue;
-
-            if (wrapped is not null)
-                return null; // more than one value member → not a wrapper
-            wrapped = candidate;
-        }
-
-        return wrapped is null ? null : IrTypeRefMapper.Map(wrapped, originResolver);
-    }
+            IFieldSymbol field => IrTypeRefMapper.Map(field.Type, originResolver),
+            IPropertySymbol property => IrTypeRefMapper.Map(property.Type, originResolver),
+            _ => null,
+        };
 
     private static bool IsException(INamedTypeSymbol type)
     {
