@@ -129,7 +129,7 @@ export class User {
 }
 ```
 
-Both entries are ordinary dependencies: they resolve only when the generated package
+Both `@acme/shared` and `metano-runtime` are ordinary dependencies: they resolve only when the generated package
 is installed as a workspace member (or the runtime is otherwise installed or aliased).
 See [How generated code resolves `metano-runtime`](getting-started.md#how-generated-code-resolves-metano-runtime).
 
