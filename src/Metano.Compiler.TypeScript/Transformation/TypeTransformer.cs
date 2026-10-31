@@ -181,15 +181,42 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 new TsNamespaceDeclaration(
                     Context.ResolveTsName(parent),
                     Functions: [],
+                    Exported: IsCompanionNamespaceExported(parent, nested),
                     Members: members
                 )
             );
         }
     }
 
+    /// <summary>
+    /// A companion namespace merged with an emitted class must share its
+    /// <c>export</c> modifier (TS2395), so it is always exported. A module-shaped
+    /// static class (<c>[NoContainer]</c>, <c>[ExportedAsModule]</c>, extension
+    /// holder) emits no declaration of its own: its companion namespace stands
+    /// alone and is exported only when some nested type is reachable outside the
+    /// container. Holding only <c>private</c> nested types, it stays module-local so
+    /// neither the module nor the barrel exposes them (#264).
+    /// </summary>
+    private static bool IsCompanionNamespaceExported(
+        INamedTypeSymbol parent,
+        IReadOnlyList<INamedTypeSymbol> nested
+    )
+    {
+        var parentEmitsNoDeclaration = parent.IsStatic && IsStaticModuleShape(parent);
+
+        return !parentEmitsNoDeclaration
+            || nested.Any(type => type.DeclaredAccessibility != Accessibility.Private);
+    }
+
+    /// <summary>
+    /// A nested type is emitted into its parent's companion namespace whenever it is
+    /// transpilable, whatever its C# accessibility: the parent's members (and, for
+    /// <c>internal</c>, other files) reference it as <c>Outer.Inner</c>, which only
+    /// resolves through an exported namespace member. The barrel re-exports only the
+    /// top-level parent, so a non-public nested type never gets its own barrel entry.
+    /// </summary>
     private bool IsExportableNestedType(INamedTypeSymbol type) =>
         !type.IsImplicitlyDeclared
-        && type.DeclaredAccessibility != Accessibility.Internal
         && SymbolHelper.IsTranspilable(
             type,
             Context.AssemblyWideTranspile,

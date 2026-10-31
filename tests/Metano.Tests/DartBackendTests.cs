@@ -869,6 +869,39 @@ public class DartBackendTests
         await Assert.That(dart).Contains("(a == b) == c");
     }
 
+    [Test]
+    public async Task StaticClassWithNonPublicNestedTypes_TranspilesWithoutCrashing()
+    {
+        // #264 widened assembly-wide transpilability to nested types of any
+        // accessibility. The Dart prototype keeps its own public-only nested
+        // filter; the shared IR extraction (qualified nested references) must not
+        // break it.
+        var (files, _) = TranspileDart(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class ShotSchedule
+            {
+                private sealed record ShotEntry(string Name, int Frames);
+
+                internal enum Kind { A, B }
+
+                public static int Total(string name)
+                {
+                    var entry = new ShotEntry(name, 3);
+                    var kind = Kind.B;
+                    return entry.Frames + (kind == Kind.B ? 1 : 0);
+                }
+            }
+            """
+        );
+
+        await Assert.That(files.ContainsKey("shot_schedule.dart")).IsTrue();
+        // Value-position type references print only the innermost segment: the Dart
+        // prototype flattens nested types instead of emitting companion namespaces.
+        await Assert.That(files["shot_schedule.dart"]).Contains("var kind = Kind.b;");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (
