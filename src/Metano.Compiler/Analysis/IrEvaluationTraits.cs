@@ -17,6 +17,7 @@ public static class IrEvaluationTraits
     /// other shape are excluded — re-evaluating them would diverge from the
     /// C# semantics where the receiver is evaluated exactly once.
     /// </summary>
+    /// <remarks>Property getters are assumed side-effect free.</remarks>
     public static bool IsReusableReceiver(IrExpression expression) =>
         expression switch
         {
@@ -50,21 +51,17 @@ public static class IrEvaluationTraits
         };
 
     /// <summary>
-    /// <see cref="IsReusableReceiver"/>, also accepting null-conditional
-    /// accesses over such shapes (<c>o?.Next</c>): a guard over them may
-    /// repeat the receiver instead of binding it
-    /// (<c>o?.next == null ? null : f(o?.next)</c>). Kept apart from
-    /// <see cref="IsReusableReceiver"/> because a write through a repeated
-    /// optional link is not a valid assignment target.
+    /// Whether a null-conditional guard may repeat this receiver textually
+    /// instead of binding it: a <see cref="IsReusableReceiver">reusable
+    /// receiver</see> that reads no <see cref="IrConditionalReceiver"/>.
+    /// A receiver that reads an enclosing access's placeholder
+    /// (<c>$receiver.next</c> inside another guard) or is itself a
+    /// null-conditional access is always bound, so the bound value is
+    /// computed as the guard's argument, in the enclosing scope, and never
+    /// re-read under a guard that rebinds the same parameter name.
     /// </summary>
     public static bool IsReusableNullConditionalReceiver(IrExpression expression) =>
-        expression switch
-        {
-            IrNullConditionalAccess access => IsReusableNullConditionalReceiver(access.Receiver)
-                && IsReusableNullConditionalReceiver(access.WhenNotNull),
-            IrMemberAccess access => IsReusableNullConditionalReceiver(access.Target),
-            _ => IsReusableReceiver(expression),
-        };
+        IsReusableReceiver(expression) && CountConditionalReceiverReads(expression) == 0;
 
     /// <summary>
     /// Whether the expression awaits outside any nested lambda — a lambda's

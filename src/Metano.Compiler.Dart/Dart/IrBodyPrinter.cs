@@ -703,8 +703,9 @@ public static class IrBodyPrinter
     /// null-conditional access whose steps read the receiver once, at the
     /// root of a member/element chain, prints natively
     /// (<c>order?.items.length</c>). Other shapes (a step lowered to a helper
-    /// that takes the receiver as an argument, a receiver read twice) emit
-    /// the unsupported placeholder, which throws if reached.
+    /// that takes the receiver as an argument, a receiver read twice) emit a
+    /// <c>/* TODO */</c> marker and the unsupported placeholder, which throws
+    /// if reached.
     /// </summary>
     private static void PrintNullConditionalAccess(StringBuilder sb, IrNullConditionalAccess access)
     {
@@ -713,7 +714,12 @@ public static class IrBodyPrinter
             || !ReadsConditionalReceiverAtChainRoot(access.WhenNotNull)
         )
         {
-            sb.Append("(throw UnsupportedError('Unsupported expression: NullConditionalAccess'))");
+            // Same marker as the printer's other unprinted shapes, ahead of a
+            // placeholder that still parses and throws if reached.
+            sb.Append("/* TODO: unsupported NullConditionalAccess shape */ ")
+                .Append(
+                    "(throw UnsupportedError('Unsupported expression: NullConditionalAccess'))"
+                );
             return;
         }
 

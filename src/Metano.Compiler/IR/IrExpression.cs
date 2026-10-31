@@ -161,6 +161,9 @@ public sealed record IrNullConditionalAccess(IrExpression Receiver, IrExpression
 /// <see cref="IrNullConditionalAccess.Receiver"/> still refers to the
 /// enclosing access; one inside a nested access's
 /// <see cref="IrNullConditionalAccess.WhenNotNull"/> refers to the nested one.
+/// A backend that binds receivers to a reused name must therefore evaluate a
+/// receiver that reads a placeholder in the enclosing scope (bind it, never
+/// repeat it inside the nested guard).
 /// </summary>
 public sealed record IrConditionalReceiver : IrExpression;
 

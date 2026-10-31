@@ -66,7 +66,9 @@ public class NullConditionalMappingTranspileTests
 
         await Assert
             .That(output)
-            .Contains("return order?.next == null ? null : twice((order?.next).items);");
+            .Contains(
+                "return (($receiver) => $receiver == null ? null : twice($receiver.items))(order?.next);"
+            );
     }
 
     [Test]
@@ -128,7 +130,9 @@ public class NullConditionalMappingTranspileTests
 
         await Assert
             .That(output)
-            .Contains("return order?.next == null ? null : total$get(order?.next);");
+            .Contains(
+                "return (($receiver) => $receiver == null ? null : total$get($receiver))(order?.next);"
+            );
     }
 
     [Test]
@@ -233,6 +237,20 @@ public class NullConditionalMappingTranspileTests
     }
 
     [Test]
+    public async Task InlineBodyWithNestedNullConditional_BindsEachReceiverInItsScope()
+    {
+        var output = TranspileInHelperClass(
+            "public static int? NextNewestOf(Order order) => order.GetNext()?.NextNewest();"
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return (($receiver) => $receiver == null ? null : (($receiver) => $receiver == null ? null : $receiver.items[$receiver.items.length - 1])($receiver.next))(order.getNext());"
+            );
+    }
+
+    [Test]
     public async Task PlainContinuation_StaysInsideOneOptionalChain()
     {
         var output = TranspileInHelperClass(
@@ -302,6 +320,10 @@ public class NullConditionalMappingTranspileTests
         await Assert.That(output).DoesNotContain("? null :");
     }
 
+    // Native optional chains (`value?.trim()`, `order?.self.self.items.length`)
+    // yield `undefined` for a null receiver, while the guarded forms yield
+    // `null`; a declared `T | null` result therefore fails `tsc --strict` on
+    // the native forms. Known deviation tracked by #256.
     [Test]
     public async Task NullConditionalGuards_MatchGolden()
     {
@@ -314,6 +336,8 @@ public class NullConditionalMappingTranspileTests
             public static int? Third(Order? order) => order?.Self.Self.Items.Count;
             public static int? ScoreOf(Order? order) => order?.Score();
             public static int? First(List<int>? items) => items?[0];
+            public static void ClearNextItems(Order? order) => order?.Next?.Items.Clear();
+            public static bool? RemoveFromNext(Order? order, int item) => order?.Next?.Items.Remove(item);
             public static async Task<bool?> RemoveLater(Order order, Task<int> item) =>
                 order.GetNext()?.Items.Remove(await item);
             """
@@ -342,6 +366,9 @@ public class NullConditionalMappingTranspileTests
 
                 [Inline(InlineMode.Substitute)]
                 public static int Newest(this List<int> items) => items[items.Count - 1];
+
+                [Inline(InlineMode.Substitute)]
+                public static int? NextNewest(this Order order) => order.Next?.Items[^1];
 
                 extension(Order order)
                 {

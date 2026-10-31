@@ -174,9 +174,8 @@ and the enum member whose value is `0`. Known gaps:
   temporal types) receive `undefined`, and an unconstrained generic `TValue` receives
   `null`. The emitted call runs, but `tsc --strict` rejects it because the default is
   not assignable to `TValue` (#291).
-- The null-conditional form `dict?.GetValueOrDefault(k)` does not go through this
-  lowering yet and still emits `dict?.getValueOrDefault(k)`, which does not exist on
-  `Map` (tracked with the optional-chain work in #248).
+- The null-conditional form `dict?.GetValueOrDefault(k)` goes through the same
+  lowering, guarded: `dict == null ? null : getValueOrDefault(dict, k, 0)`.
 
 ### `out` parameters and arguments
 
@@ -430,6 +429,28 @@ interface rather than to `double`/`float`.
 | `Enum.Parse<T>(s)` | `T[s as keyof typeof T]` |
 | `enumValue.HasFlag(flag)` | `(enumValue & flag) === flag` |
 | `[Flags] enum` | numeric TS `enum` with bitwise operators |
+
+## Null-conditional access
+
+Every mapping above also applies to a member read through `?.` or `?[…]`:
+the steps after the `?.` are lowered like any other member access, and the
+receiver is evaluated once.
+
+| C# | TypeScript |
+|----|----|
+| `value?.Trim() ?? string.Empty` | `value?.trim() ?? ""` |
+| `list?.Count` | `list?.length` |
+| `order?.Items.Remove(x)` | `order == null ? null : listRemove(order.items, x)` |
+| `Find()?.Items.Remove(x)` | `(($receiver) => $receiver == null ? null : listRemove($receiver.items, x))(find())` |
+| `order?.Items.Clear();` (statement) | `if (order != null) { order.items.length = 0; }` |
+
+Native optional chaining is kept when every step is a plain property, element
+access or call; a step mapped to a template or a helper that takes the
+receiver as an argument guards the receiver instead.
+
+**Known deviation:** a native optional chain yields `undefined` for a null
+receiver, where C# (and the guarded forms) yield `null`, so a declared
+`T | null` result fails `tsc --strict` on the native forms (#256).
 
 ## Adding your own mappings
 
