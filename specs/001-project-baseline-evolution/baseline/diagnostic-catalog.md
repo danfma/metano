@@ -47,6 +47,14 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0027` | `InvalidJsTuple` | `[JsTuple]` applied to a type with no positional shape (a record/class with no primary-constructor parameter list), or a `[JsTuple]` record that declares an instance member beyond its positional elements (it must be positional-only — the bare array tuple has no object to host extra members). |
 | `MS0028` | `InvalidJsCallable` | `[JsCallable]` applied to a non-interface, or a `[JsCallable]` interface exposing a member other than `Invoke` — declared or inherited from a base interface. |
 
+## Build integration (`Metano.Build`)
+
+Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` code space.
+
+| Code | Raised by | Meaning |
+| --- | --- | --- |
+| `METANOBUILD001` | `Metano.Build.targets` | The `metano-typescript` .NET tool is not available; the message lists the local-manifest / global install commands and `dotnet tool restore`. Opt out with `MetanoSkipToolCheck=true` (FR-035). |
+
 ## Related
 
 - `docs/adr/0010-metano-diagnostics.md`

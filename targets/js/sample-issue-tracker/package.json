@@ -5,11 +5,13 @@
   "sideEffects": false,
   "imports": {
     "#/*": {
+      "source": "./src/*.ts",
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./src/*.ts"
     },
     "#": {
+      "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./src/index.ts"
@@ -31,26 +33,32 @@
   },
   "exports": {
     "./sample-issue-tracker": {
+      "source": "./src/sample-issue-tracker/index.ts",
       "types": "./dist/sample-issue-tracker/index.d.ts",
       "import": "./dist/sample-issue-tracker/index.js"
     },
     "./sample-issue-tracker/issues/application": {
+      "source": "./src/sample-issue-tracker/issues/application/index.ts",
       "types": "./dist/sample-issue-tracker/issues/application/index.d.ts",
       "import": "./dist/sample-issue-tracker/issues/application/index.js"
     },
     "./sample-issue-tracker/issues/domain": {
+      "source": "./src/sample-issue-tracker/issues/domain/index.ts",
       "types": "./dist/sample-issue-tracker/issues/domain/index.d.ts",
       "import": "./dist/sample-issue-tracker/issues/domain/index.js"
     },
     "./sample-issue-tracker/planning/domain": {
+      "source": "./src/sample-issue-tracker/planning/domain/index.ts",
       "types": "./dist/sample-issue-tracker/planning/domain/index.d.ts",
       "import": "./dist/sample-issue-tracker/planning/domain/index.js"
     },
     "./sample-issue-tracker/shared-kernel": {
+      "source": "./src/sample-issue-tracker/shared-kernel/index.ts",
       "types": "./dist/sample-issue-tracker/shared-kernel/index.d.ts",
       "import": "./dist/sample-issue-tracker/shared-kernel/index.js"
     },
     ".": {
+      "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }

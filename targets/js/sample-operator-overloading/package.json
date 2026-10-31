@@ -6,6 +6,7 @@
   "sideEffects": false,
   "imports": {
     "#/*": {
+      "source": "./src/*.ts",
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./src/*.ts"

@@ -11,7 +11,7 @@ side of the project.
 
 ## Prerequisites
 
-- **.NET SDK 10.0** (preview) — [download](https://dotnet.microsoft.com/download/dotnet/10.0)
+- **.NET SDK 10.0 or later** — [download](https://dotnet.microsoft.com/download/dotnet/10.0)
 - **Bun 1.3+** — [install](https://bun.sh)
 - **Git**
 
@@ -83,8 +83,8 @@ Edit the generated `.csproj`:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Metano" Version="0.1.*" />
-    <PackageReference Include="Metano.Build" Version="0.1.*" />
+    <PackageReference Include="Metano" Version="2.6.*" />
+    <PackageReference Include="Metano.Build" Version="2.6.*" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -108,6 +108,29 @@ Edit the generated `.csproj`:
   `dotnet build` and runs the transpiler as a post-build step. No code of
   its own — just a `.targets` file that invokes the `metano-typescript` CLI
   automatically.
+
+**One .NET tool: `Metano.Compiler.TypeScript`**
+
+`Metano.Build` does not bundle the compiler (the target language is your
+choice), so install the TypeScript compiler as a .NET tool. A local tool
+manifest at the root of your repository pins the version for everyone who
+clones it:
+
+```bash
+cd ..                    # back to my-app/ (the repository root)
+dotnet new tool-manifest # once per repository; creates .config/dotnet-tools.json
+dotnet tool install Metano.Compiler.TypeScript
+cd my-domain
+```
+
+Prefer a machine-wide install? Use
+`dotnet tool install --global Metano.Compiler.TypeScript` instead. After
+cloning a repository that already has the manifest, run `dotnet tool restore`.
+
+If the tool is missing, `dotnet build` fails with `METANOBUILD001` and these
+same instructions instead of a generic "command not found" message. Set
+`<MetanoSkipToolCheck>true</MetanoSkipToolCheck>` to bypass the check (for
+example, when a wrapper script provides the tool another way).
 
 **Key property: `MetanoOutputDir`**
 
@@ -251,8 +274,9 @@ Metano: 3 file(s) generated in ../my-domain-ts/src
 ```
 
 Metano wrote the files into `my-domain-ts/src/` (the `MetanoOutputDir` you
-configured) **and** merged a `metano-runtime` + `decimal.js` dependency into
-`my-domain-ts/package.json`. Every subsequent `dotnet build` regenerates the
+configured) **and** merged the `decimal.js` dependency (required by the
+`decimal` mapping) into `my-domain-ts/package.json`, next to the
+`metano-runtime` dependency you added in Step 2. Every subsequent `dotnet build` regenerates the
 files; the `MetanoClean` flag wipes the output directory first so renamed or
 deleted C# types don't leave stale `.ts` files behind.
 
@@ -321,18 +345,40 @@ export class Product {
 }
 ```
 
-The transpiler also generated `package.json` with:
+The transpiler also updated `package.json` (abridged; `metano-runtime` is the
+dependency from Step 2):
 
 ```json
 {
   "name": "my-domain",
   "type": "module",
+  "imports": {
+    "#/*": {
+      "source": "./src/*.ts",
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "dependencies": {
-    "metano-runtime": "^0.1.0",
+    "metano-runtime": "^2.6.1",
     "decimal.js": "^10.6.0"
   }
 }
 ```
+
+Every `exports` / `imports` entry lists a `source` condition **first**,
+pointing at the generated `.ts` file. It is opt-in: default resolution
+(Node, Bun, bundlers without extra config) skips the unknown condition and
+keeps using `dist`. See [Reading the sources directly](#reading-the-sources-directly-the-source-condition)
+below.
 
 ## Step 6: Consume from your TypeScript package
 
@@ -380,6 +426,38 @@ If you're running `vite dev` or `bun --watch` in `my-domain-ts/`, you'll see
 the browser reload / test runner re-run as soon as the generator finishes.
 No extra plugin, no custom integration — the generated `.ts` files look like
 any other files on disk as far as the bundler and test runner are concerned.
+
+### Reading the sources directly (the `source` condition)
+
+Another package that depends on `my-domain` normally resolves it through
+`dist/`, so `my-domain-ts` must be built first. Tools that can read
+TypeScript directly can opt into the `source` condition instead and skip that
+step — no path aliases needed:
+
+```typescript
+// vite.config.ts of the consuming app
+import { defaultClientConditions, defineConfig } from "vite";
+
+export default defineConfig({
+  // Since Vite 6 a custom list replaces the defaults, so keep them.
+  resolve: { conditions: ["source", ...defaultClientConditions] },
+});
+```
+
+```jsonc
+// tsconfig.json of the consuming project
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "customConditions": ["source"]
+  }
+}
+```
+
+Because `source` is listed first, it wins whenever it is enabled; everything
+else keeps the `types` / `import` (dist) resolution. Regenerating an existing
+`package.json` adds the condition to the entries Metano manages and leaves
+conditions you added by hand where they are.
 
 ## Where to go next
 

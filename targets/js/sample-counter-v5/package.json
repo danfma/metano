@@ -31,10 +31,12 @@
   },
   "exports": {
     "./sample-counter-v5/models": {
+      "source": "./src/sample-counter-v5/models/index.ts",
       "types": "./dist/sample-counter-v5/models/index.d.ts",
       "import": "./dist/sample-counter-v5/models/index.js"
     },
     "./sample-counter-v5/stores": {
+      "source": "./src/sample-counter-v5/stores/index.ts",
       "types": "./dist/sample-counter-v5/stores/index.d.ts",
       "import": "./dist/sample-counter-v5/stores/index.js"
     }
