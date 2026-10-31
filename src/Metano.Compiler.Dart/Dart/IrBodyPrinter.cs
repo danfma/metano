@@ -192,19 +192,9 @@ public static class IrBodyPrinter
                 sb.AppendLine(") {");
                 foreach (var c in sw.Cases)
                 {
-                    if (c.Labels.Count == 0)
-                    {
-                        sb.Append(indent).Append("  default:").AppendLine();
-                    }
-                    else
-                    {
-                        foreach (var label in c.Labels)
-                        {
-                            sb.Append(indent).Append("  case ");
-                            PrintExpression(sb, label);
-                            sb.AppendLine(":");
-                        }
-                    }
+                    foreach (var label in c.Labels)
+                        PrintCaseLabel(sb, indent, label);
+
                     foreach (var s in c.Body)
                         PrintStatement(sb, s, indentLevel + 2);
                 }
@@ -429,14 +419,14 @@ public static class IrBodyPrinter
                 sb.Append(" == ");
                 PrintExpression(sb, constant.Value);
                 break;
-            case IrTypePattern typePat when typePat.DesignatorName is null:
+            case IrTypePattern { Designator: null } typePat:
                 PrintExpression(sb, node.Expression);
                 sb.Append(" is ").Append(FormatType(typePat.Type));
                 break;
             case IrDiscardPattern:
                 sb.Append("true");
                 break;
-            case IrPropertyPattern prop when prop.DesignatorName is null:
+            case IrPropertyPattern { Designator: null } prop:
                 // Dart lifts property patterns into the same `is X && a.b == …`
                 // conjunction the TS bridge emits, because `is` isn't itself
                 // pattern-aware in expression contexts — it's the `switch` arm
@@ -495,14 +485,14 @@ public static class IrBodyPrinter
                 sb.Append(" == ");
                 PrintExpression(sb, constant.Value);
                 break;
-            case IrTypePattern typePat when typePat.DesignatorName is null:
+            case IrTypePattern { Designator: null } typePat:
                 PrintExpression(sb, value);
                 sb.Append(" is ").Append(FormatType(typePat.Type));
                 break;
             case IrDiscardPattern or IrVarPattern:
                 sb.Append("true");
                 break;
-            case IrPropertyPattern prop when prop.DesignatorName is null:
+            case IrPropertyPattern { Designator: null } prop:
                 PrintPropertyPatternAsBooleanExpression(sb, value, prop);
                 break;
             case IrRelationalPattern rel:
@@ -546,6 +536,40 @@ public static class IrBodyPrinter
         };
 
     /// <summary>
+    /// One label of a switch statement. Dart 3 switch statements match
+    /// patterns natively, so a pattern label prints as
+    /// <c>case pattern when guard:</c>.
+    /// </summary>
+    private static void PrintCaseLabel(StringBuilder sb, string indent, IrCaseLabel label)
+    {
+        switch (label)
+        {
+            case IrConstantCaseLabel constant:
+                sb.Append(indent).Append("  case ");
+                PrintExpression(sb, constant.Value);
+                sb.AppendLine(":");
+                break;
+
+            case IrPatternCaseLabel pattern:
+                sb.Append(indent).Append("  case ");
+                PrintSwitchPattern(sb, pattern.Pattern);
+
+                if (pattern.WhenClause is not null)
+                {
+                    sb.Append(" when ");
+                    PrintExpression(sb, pattern.WhenClause);
+                }
+
+                sb.AppendLine(":");
+                break;
+
+            default:
+                sb.Append(indent).AppendLine("  default:");
+                break;
+        }
+    }
+
+    /// <summary>
     /// Dart 3 has native switch expressions with the same shape as C#'s. Each
     /// arm lowers to <c>pattern => result</c>, with an optional <c>when guard</c>
     /// after the pattern. The rendering mirrors C# semantics — there is no IIFE
@@ -586,7 +610,7 @@ public static class IrBodyPrinter
         if (slicePattern is null)
             return;
         if (slicePattern is IrVarPattern varPat)
-            sb.Append(varPat.Name);
+            sb.Append(varPat.Designator.Name);
         else
             PrintSwitchPattern(sb, slicePattern);
     }
@@ -600,11 +624,11 @@ public static class IrBodyPrinter
                 break;
             case IrTypePattern typePat:
                 sb.Append(FormatType(typePat.Type));
-                if (typePat.DesignatorName is not null)
-                    sb.Append(' ').Append(typePat.DesignatorName);
+                if (typePat.Designator is not null)
+                    sb.Append(' ').Append(typePat.Designator.Name);
                 break;
             case IrVarPattern varPat:
-                sb.Append("var ").Append(varPat.Name);
+                sb.Append("var ").Append(varPat.Designator.Name);
                 break;
             case IrDiscardPattern:
                 sb.Append('_');
@@ -623,8 +647,8 @@ public static class IrBodyPrinter
                     PrintSwitchPattern(sb, prop.Subpatterns[i].Pattern);
                 }
                 sb.Append(')');
-                if (prop.DesignatorName is not null)
-                    sb.Append(' ').Append(prop.DesignatorName);
+                if (prop.Designator is not null)
+                    sb.Append(' ').Append(prop.Designator.Name);
                 break;
             case IrRelationalPattern rel:
                 // Dart 3 relational patterns match C#'s shape syntactically:
@@ -680,8 +704,8 @@ public static class IrBodyPrinter
                     PrintSwitchPattern(sb, pos.Elements[i]);
                 }
                 sb.Append(')');
-                if (pos.DesignatorName is not null)
-                    sb.Append(' ').Append(pos.DesignatorName);
+                if (pos.Designator is not null)
+                    sb.Append(' ').Append(pos.Designator.Name);
                 break;
             default:
                 sb.Append("/* TODO: unsupported pattern ")

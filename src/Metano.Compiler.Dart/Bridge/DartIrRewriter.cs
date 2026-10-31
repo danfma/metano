@@ -104,7 +104,7 @@ public sealed class DartIrRewriter
     private IrSwitchCase RewriteSwitchCase(IrSwitchCase c) =>
         c with
         {
-            Labels = c.Labels.Select(RewriteExpression).ToList(),
+            Labels = c.Labels.Select(label => label.MapExpressions(RewriteExpression)).ToList(),
             Body = c.Body.Select(RewriteStatement).ToList(),
         };
 

@@ -97,7 +97,11 @@ public static class IrNodeChildren
             ],
             IrWhileStatement ws => [ws.Condition],
             IrDoWhileStatement dw => [dw.Condition],
-            IrSwitchStatement sw => [sw.Expression, .. sw.Cases.SelectMany(c => c.Labels)],
+            IrSwitchStatement sw =>
+            [
+                sw.Expression,
+                .. sw.Cases.SelectMany(c => c.Labels).SelectMany(ExpressionsOf),
+            ],
             _ => [],
         };
 
@@ -118,6 +122,18 @@ public static class IrNodeChildren
                 .. ts.Finally ?? [],
             ],
             IrSwitchStatement sw => sw.Cases.SelectMany(c => c.Body),
+            _ => [],
+        };
+
+    private static IEnumerable<IrExpression> ExpressionsOf(IrCaseLabel label) =>
+        label switch
+        {
+            IrConstantCaseLabel constant => [constant.Value],
+            IrPatternCaseLabel pattern =>
+            [
+                .. ExpressionsOf(pattern.Pattern),
+                .. pattern.WhenClause is null ? [] : new[] { pattern.WhenClause },
+            ],
             _ => [],
         };
 

@@ -325,20 +325,9 @@ public sealed class IrStatementExtractor(
 
     private IrSwitchCase ExtractSwitchSection(SwitchSectionSyntax section)
     {
-        var labels = new List<IrExpression>();
-        foreach (var label in section.Labels)
-        {
-            switch (label)
-            {
-                case CaseSwitchLabelSyntax cs:
-                    labels.Add(_expressions.Extract(cs.Value));
-                    break;
-                case DefaultSwitchLabelSyntax:
-                    // Empty label list signals "default" per the IR contract.
-                    break;
-            }
-        }
+        var labels = section.Labels.Select(_expressions.ExtractCaseLabel).ToList();
         var body = ExtractStatementSequence(section.Statements);
+
         return new IrSwitchCase(labels, body);
     }
 

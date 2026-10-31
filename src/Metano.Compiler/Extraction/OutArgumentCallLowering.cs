@@ -25,6 +25,14 @@ namespace Metano.Compiler.Extraction;
 ///   <c>out var</c> local it declares becomes an uninitialized, typed
 ///   <see cref="IrVariableDeclaration"/> before the statement, which the call
 ///   assigns when it runs.</item>
+///   <item><b>Pattern designators.</b> The locals an <c>is</c> pattern
+///   declares (<c>o is Circle c</c>) are expression variables with the same
+///   C# scope, so they are declared the same way as an <c>out var</c> local
+///   left in place, and the pattern test assigns them. A loop condition that
+///   declares one is restructured like one that makes a call, so each
+///   iteration gets a fresh local — except in a <c>for</c> loop whose
+///   increment reads the local and whose body has a <c>continue</c>, where it
+///   is declared once around the loop.</item>
 /// </list>
 /// A loop that gains declarations is wrapped in an
 /// <see cref="IrBlockStatement"/>, since C# scopes its header variables to
@@ -45,7 +53,7 @@ internal sealed partial class OutArgumentCallLowering
         IReadOnlyList<IrStatement>? following = null
     )
     {
-        if (!MakesOutArgumentCalls(statement))
+        if (!DeclaresExpressionVariables(statement))
             return [statement];
 
         return statement switch
@@ -54,6 +62,10 @@ internal sealed partial class OutArgumentCallLowering
             IrWhileStatement loop => [LowerWhile(loop)],
             IrDoWhileStatement loop when !ContinuesLoop(loop.Body) => [LowerDoWhile(loop)],
             IrForStatement loop when CanRestructureFor(loop) => [LowerFor(loop)],
+            IrForStatement loop when CanMoveIncrementIntoBody(loop) =>
+            [
+                LowerForWithIncrementInBody(loop),
+            ],
             IrForStatement loop => [LowerForInPlace(loop)],
             IrWhileStatement or IrDoWhileStatement or IrForEachStatement =>
             [
@@ -131,7 +143,28 @@ internal sealed partial class OutArgumentCallLowering
                 };
 
     private static IEnumerable<string> DeclaredLocals(IEnumerable<IrExpression> expressions) =>
-        OutLocalsDeclaredIn(expressions).Select(local => local.Name);
+        ExpressionVariablesDeclaredIn(expressions).Select(local => local.Name);
+
+    /// <summary>
+    /// The locals <paramref name="expressions"/> declare as they run: the
+    /// <c>out var</c> locals of their calls and the designators of their
+    /// <c>is</c> patterns, outside nested lambdas.
+    /// </summary>
+    private static IEnumerable<ExpressionVariable> ExpressionVariablesDeclaredIn(
+        IEnumerable<IrExpression> expressions
+    )
+    {
+        var materialized = expressions.ToList();
+
+        var outLocals = OutLocalsDeclaredIn(materialized)
+            .Select(local => new ExpressionVariable(local.Name, local.Type));
+
+        var designators = materialized
+            .SelectMany(IrPatternDesignators.DeclaredIn)
+            .Select(designator => new ExpressionVariable(designator.Name, designator.Type));
+
+        return outLocals.Concat(designators);
+    }
 
     /// <summary>
     /// The <c>out var</c> locals the calls in <paramref name="expressions"/>
@@ -184,7 +217,7 @@ internal sealed partial class OutArgumentCallLowering
         var rewritten = BindStatementHead(statement, prelude);
         var emitted = rewritten is null ? prelude : [.. prelude, rewritten];
 
-        return [.. DeclarationsForCallsLeftInPlace(emitted), .. emitted];
+        return [.. DeclarationsForExpressionVariablesLeftInPlace(emitted), .. emitted];
     }
 
     /// <summary>
@@ -273,7 +306,36 @@ internal sealed partial class OutArgumentCallLowering
     }
 
     /// <summary>
-    /// A <c>for</c> loop whose condition cannot move into the body: its
+    /// <c>for (init; c; inc) body</c> whose increment reads a local the
+    /// condition declares, and whose body has no <c>continue</c> (which would
+    /// skip a moved increment) →
+    /// <c>for (init; ; ) { bindings; if (!c) break; body; inc; }</c>: the
+    /// increment reads the iteration's own local, as in C#, where each
+    /// iteration gets a fresh one.
+    /// </summary>
+    private IrStatement LowerForWithIncrementInBody(IrForStatement loop)
+    {
+        var (header, ahead) = SplitLoweredInitializers(loop);
+        var exitUnlessCondition = loop.Condition is null ? [] : ExitUnless(loop.Condition);
+
+        var incrementStatements = loop.Incrementors.SelectMany(incrementor =>
+            Lower(new IrExpressionStatement(incrementor))
+        );
+
+        var restructured = loop with
+        {
+            Initializers = header,
+            Condition = null,
+            Incrementors = [],
+            Body = [.. exitUnlessCondition, .. loop.Body, .. incrementStatements],
+        };
+
+        return ahead is [] ? restructured : new IrBlockStatement([.. ahead, restructured]);
+    }
+
+    /// <summary>
+    /// A <c>for</c> loop whose condition cannot move into the body, and whose
+    /// increment cannot either (the body has a <c>continue</c>): its
     /// initializer is bound ahead as in <see cref="LowerFor"/>, and the
     /// condition and increment calls stay in place, all in one block.
     /// </summary>
@@ -328,25 +390,39 @@ internal sealed partial class OutArgumentCallLowering
     /// </summary>
     private static bool CanRestructureFor(IrForStatement loop)
     {
-        if (loop.Incrementors.Any(ContainsOutArgumentCall))
+        if (loop.Incrementors.Any(DeclaresExpressionVariables))
             return false;
 
-        if (loop.Condition is null || !ContainsOutArgumentCall(loop.Condition))
-            return true;
+        return !IncrementReadsConditionLocals(loop);
+    }
 
-        var declared = DeclaredLocals([loop.Condition]).ToHashSet(StringComparer.Ordinal);
+    /// <summary>
+    /// A <c>for</c> loop whose increment reads a local the condition declares
+    /// moves the increment to the end of the body, unless a <c>continue</c>
+    /// would skip it there.
+    /// </summary>
+    private static bool CanMoveIncrementIntoBody(IrForStatement loop) =>
+        IncrementReadsConditionLocals(loop) && !ContinuesLoop(loop.Body);
 
-        return !loop.Incrementors.SelectMany(IdentifiersIn).Any(declared.Contains);
+    /// <summary>Whether an incrementor reads a local the condition declares.</summary>
+    private static bool IncrementReadsConditionLocals(IrForStatement loop)
+    {
+        if (loop.Condition is not { } condition)
+            return false;
+
+        var declared = DeclaredLocals([condition]).ToHashSet(StringComparer.Ordinal);
+
+        return loop.Incrementors.SelectMany(IdentifiersIn).Any(declared.Contains);
     }
 
     /// <summary>
     /// Declares, ahead of the statement, every <c>out var</c> local of a call
-    /// that stays in place.
+    /// that stays in place and every <c>is</c>-pattern designator.
     /// </summary>
-    private static IEnumerable<IrStatement> DeclarationsForCallsLeftInPlace(
+    private static IEnumerable<IrStatement> DeclarationsForExpressionVariablesLeftInPlace(
         IEnumerable<IrStatement> statements
     ) =>
-        OutLocalsDeclaredIn(statements.SelectMany(IrNodeChildren.ExpressionsOf))
+        ExpressionVariablesDeclaredIn(statements.SelectMany(IrNodeChildren.ExpressionsOf))
             .Where(local => !statements.Any(s => BindsName(s, local.Name)))
             .DistinctBy(local => local.Name)
             .Select(local => new IrVariableDeclaration(local.Name, local.Type, Initializer: null));
@@ -421,9 +497,16 @@ internal sealed partial class OutArgumentCallLowering
 
     private string NextTemporary(string prefix) => $"{prefix}{_nextTemporary++}";
 
-    private static bool MakesOutArgumentCalls(IrStatement statement) =>
-        IrNodeChildren.ExpressionsOf(statement).Any(ContainsOutArgumentCall)
-        || statement is IrForStatement loop && loop.Initializers.Any(MakesOutArgumentCalls);
+    private static bool DeclaresExpressionVariables(IrStatement statement) =>
+        IrNodeChildren.ExpressionsOf(statement).Any(DeclaresExpressionVariables)
+        || statement is IrForStatement loop && loop.Initializers.Any(DeclaresExpressionVariables);
+
+    /// <summary>
+    /// Whether <paramref name="expression"/> makes an out-argument call or
+    /// declares an <c>is</c>-pattern designator, outside nested lambdas.
+    /// </summary>
+    private static bool DeclaresExpressionVariables(IrExpression expression) =>
+        ContainsOutArgumentCall(expression) || IrPatternDesignators.DeclaredIn(expression).Any();
 
     private static bool ContainsOutArgumentCall(IrExpression expression) =>
         OutCallsIn(expression).Any();
@@ -465,6 +548,12 @@ internal sealed partial class OutArgumentCallLowering
                 _ => ContinuesLoop(IrNodeChildren.StatementsOf(statement)),
             }
         );
+
+    /// <summary>
+    /// A local an expression declares as it runs — an <c>out var</c> local or
+    /// an <c>is</c>-pattern designator — with its C# type.
+    /// </summary>
+    private sealed record ExpressionVariable(string Name, IrTypeRef Type);
 
     /// <summary>What the binding does with the callee's return value.</summary>
     private abstract record ResultSlot

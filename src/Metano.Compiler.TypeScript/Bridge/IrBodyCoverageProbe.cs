@@ -53,7 +53,7 @@ public static class IrBodyCoverageProbe
                 && (ts.Catches is null || ts.Catches.All(c => IsFullyCovered(c.Body)))
                 && (ts.Finally is null || IsFullyCovered(ts.Finally)),
             IrSwitchStatement sw => IsCoveredExpression(sw.Expression)
-                && sw.Cases.All(c => c.Labels.All(IsCoveredExpression) && IsFullyCovered(c.Body)),
+                && sw.Cases.All(c => c.Labels.All(IsCoveredCaseLabel) && IsFullyCovered(c.Body)),
             IrBreakStatement or IrContinueStatement => true,
             _ => false,
         };
@@ -113,14 +113,23 @@ public static class IrBodyCoverageProbe
             _ => false,
         };
 
+    private static bool IsCoveredCaseLabel(IrCaseLabel label) =>
+        label switch
+        {
+            IrConstantCaseLabel constant => IsCoveredExpression(constant.Value),
+            IrPatternCaseLabel pattern => IsCoveredPattern(pattern.Pattern)
+                && (pattern.WhenClause is null || IsCoveredExpression(pattern.WhenClause)),
+            IrDefaultCaseLabel => true,
+            _ => false,
+        };
+
     private static bool IsCoveredPattern(IrPattern pattern) =>
         pattern switch
         {
             IrConstantPattern constant => IsCoveredExpression(constant.Value),
-            // Type/var/discard patterns are trivially covered at the shape level; the
-            // TS bridge emits a TODO comment for the designator-binding case but the
-            // probe treats them as covered because the failure mode is a visible
-            // comment, not invalid code.
+            // Type/var/discard patterns are covered with or without a designator:
+            // extraction declares designators ahead of the statement and the
+            // bridge assigns them in the test.
             IrTypePattern or IrVarPattern or IrDiscardPattern => true,
             IrPropertyPattern pp => pp.Subpatterns.All(s => IsCoveredPattern(s.Pattern)),
             // Relational / logical patterns are covered at the pattern level —
@@ -133,8 +142,7 @@ public static class IrBodyCoverageProbe
                 && (l.Right is null || IsCoveredPattern(l.Right)),
             IrListPattern list => list.Elements.All(IsCoveredPattern)
                 && (list.SlicePattern is null || IsCoveredPattern(list.SlicePattern)),
-            IrPositionalPattern pos => pos.DesignatorName is null
-                && pos.Elements.All(IsCoveredPattern),
+            IrPositionalPattern pos => pos.Elements.All(IsCoveredPattern),
             _ => false,
         };
 }
