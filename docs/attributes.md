@@ -62,9 +62,20 @@ public string OriginalCamelCase { get; set; }
 Marks a type or member as **.NET-only**. Ignored symbols do not emit for the
 selected target, and transpilable code may not reference ignored types in
 signatures or bodies. If a generated surface mentions an ignored type, the
-compiler reports `MS0013`.
+compiler reports `MS0013`. Every position a type can be spelled in raises:
+parameters, return types, fields, properties, events, generic constraints and
+type arguments, delegate signatures, plus anything inside the body of an emitted
+member, a field/property/event
+initializer, a parameter default, or a constructor-initializer argument — locals,
+`new`, casts, `is`/`as`, every kind of pattern (`o is IgnoredType x`,
+`IgnoredType { }`, switch arms, `case` labels), `catch` declarations, local
+functions, explicitly typed lambda parameters, `foreach` variables, `default(T)`,
+and `typeof`. A property's type is reported once, not again for its accessors.
+Reading or calling an `[Ignore]` member from transpilable code raises too.
+Bodies the compiler does not emit (static constructors, explicit interface
+implementations, custom event `add`/`remove` accessors) are not scanned.
 
-Three cases are exempt, because nothing from them reaches the generated code:
+Four cases are exempt, because nothing from them reaches the generated code:
 
 - **Base-list interfaces.** An interface ignored for the active target
   (`[Ignore]`, or `[Ignore(TargetLanguage.X)]` when emitting X) and listed in a
@@ -85,6 +96,8 @@ Three cases are exempt, because nothing from them reaches the generated code:
   makes the JSON serializer context emit a type spec for `T`, so an `[Ignore]` `T`
   still reports `MS0013`. `typeof(IgnoredType)` in an ordinary expression still
   reports too.
+- **`nameof`.** `nameof(IgnoredType)` and `nameof(IgnoredType.Member)` fold to a
+  string constant, so the type never reaches the output.
 - **Source-generator output.** Code produced by source generators (for example
   the System.Text.Json `*.g.cs` files) is not user-authored and is not scanned.
   The list of generated files comes from the build workspace; a user file named

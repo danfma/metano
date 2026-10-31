@@ -10,7 +10,8 @@ namespace Metano.Tests;
 /// raise <c>MS0013</c> (#247): source-generator output, an interface ignored for the
 /// active target in a transpilable type's base list (erased from
 /// <c>implements</c>/<c>extends</c>), and attribute applications the compiler does not
-/// read for emission. Every other position keeps raising — see
+/// read for emission (<c>nameof</c> is covered by
+/// <see cref="IgnoreReferencePositionTests"/>). Every other position keeps raising — see
 /// <see cref="IgnoreDotNetOnlyTests"/> plus the negative cases below.
 /// </summary>
 public class IgnoreReferenceExemptionTests
