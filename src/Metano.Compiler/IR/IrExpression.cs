@@ -87,6 +87,7 @@ public sealed record IrBaseExpression() : IrExpression;
 /// <param name="IsBrandedValueMember">The member access reads the single wrapped value member of a <c>[Branded]</c> struct (<c>id.Value</c>). The branded value IS the primitive at runtime, so backends that lower the wrapper to a branded primitive collapse the read to the receiver.</param>
 /// <param name="ParameterTypes">For a method or constructor, the stable full names of the bound overload's parameter types (open definitions), so a declarative mapping can tell same-arity overloads apart; <c>null</c> for other members.</param>
 /// <param name="IsInitOnly">The member is a property whose setter is an <c>init</c> accessor. C# writes such a property only from the declaring type's constructors and accessors (through <c>this</c> / <c>base</c>) and from object initializers, so a write through any other receiver is an object-initializer write; a backend that declares init-only properties read-only (TypeScript <c>readonly</c>) lowers that write to a form its type checker accepts.</param>
+/// <param name="CompanionOwner">For a <c>[PlainObject]</c> instance method (<see cref="IsPlainObjectInstanceMethod"/>), the declaring type as a value reference, with its cross-package origin: the method lowers to a standalone helper exported from that type's module, so a backend can import the helper from there. <c>null</c> for other members.</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
     string MemberName,
@@ -104,7 +105,8 @@ public sealed record IrMemberOrigin(
     bool IsBrandedValueMember = false,
     bool IsTranspiledDataMember = false,
     IReadOnlyList<string>? ParameterTypes = null,
-    bool IsInitOnly = false
+    bool IsInitOnly = false,
+    IrTypeReference? CompanionOwner = null
 );
 
 /// <summary>
@@ -427,6 +429,11 @@ public sealed record IrYieldExpression(IrExpression? Value) : IrExpression;
 /// through ordinary closure capture. Backends that do not have a
 /// JS-style <c>this</c> rebinding (Dart, Kotlin) ignore the flag
 /// and emit the positional parameters as written.
+/// <para>
+/// <see cref="ReturnType"/> is resolved only as <c>void</c>, for a lambda
+/// bound to a non-async <c>void</c> delegate (its expression body's value is
+/// discarded); <c>null</c> means not resolved, not "returns a value".
+/// </para>
 /// </summary>
 public sealed record IrLambdaExpression(
     IReadOnlyList<IrParameter> Parameters,

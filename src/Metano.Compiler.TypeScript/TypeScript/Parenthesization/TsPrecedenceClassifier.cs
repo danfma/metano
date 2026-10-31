@@ -19,6 +19,7 @@ internal static class TsPrecedenceClassifier
             TsLiteral literal => OfLiteral(literal),
             TsIdentifier
             or TsTypeReference
+            or TsCompanionFunctionReference
             or TsStringLiteral
             or TsTemplateLiteral
             or TsArrayLiteral

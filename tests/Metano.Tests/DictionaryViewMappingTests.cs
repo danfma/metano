@@ -76,7 +76,7 @@ public class DictionaryViewMappingTests
             """
         );
 
-        await Assert.That(output).Contains("return d?.size;");
+        await Assert.That(output).Contains("return d?.size ?? null;");
         await Assert.That(output).DoesNotContain("d?.length");
     }
 

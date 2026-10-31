@@ -21,6 +21,13 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
+    /// <summary>The <c>not null</c> pattern a nullable relational pattern implies.</summary>
+    private static readonly IrPattern NotNullPattern = new IrLogicalPattern(
+        IrLogicalOp.Not,
+        new IrConstantPattern(new IrLiteral(null, IrLiteralKind.Null)),
+        null
+    );
+
     private readonly SemanticModel _semantic;
     private readonly IrTypeOriginResolver? _originResolver;
     private readonly Metano.Annotations.TargetLanguage? _target;
@@ -868,7 +875,15 @@ public sealed partial class IrExpressionExtractor
         return new IrListPattern(elements, sliceIndex, slicePattern);
     }
 
-    private IrRelationalPattern ExtractRelationalPattern(RelationalPatternSyntax rel)
+    /// <summary>
+    /// <c>&lt;</c> / <c>&lt;=</c> / <c>&gt;</c> / <c>&gt;=</c> against a
+    /// constant. A relational pattern never matches <c>null</c>, so a pattern
+    /// whose input is a nullable value (<c>int? x; x is &lt;= 0</c>) carries
+    /// that implicit non-null test explicitly: <c>not null and &lt;= 0</c>. An
+    /// input already narrowed (the right side of <c>&gt; 0 and &lt; 10</c>)
+    /// needs none.
+    /// </summary>
+    private IrPattern ExtractRelationalPattern(RelationalPatternSyntax rel)
     {
         var op = rel.OperatorToken.Text switch
         {
@@ -878,8 +893,17 @@ public sealed partial class IrExpressionExtractor
             ">=" => IrRelationalOp.GreaterThanOrEqual,
             _ => IrRelationalOp.LessThan,
         };
-        return new IrRelationalPattern(op, Extract(rel.Expression));
+
+        var relational = new IrRelationalPattern(op, Extract(rel.Expression));
+
+        return MatchesNullableValue(rel)
+            ? new IrLogicalPattern(IrLogicalOp.And, NotNullPattern, relational)
+            : relational;
     }
+
+    private bool MatchesNullableValue(PatternSyntax pattern) =>
+        _semantic.GetOperation(pattern) is IPatternOperation { InputType: var input }
+        && input.IsNullableValueType();
 
     private IrLogicalPattern ExtractBinaryLogicalPattern(BinaryPatternSyntax bin)
     {
@@ -2602,7 +2626,10 @@ public sealed partial class IrExpressionExtractor
             IsBrandedValueMember: isBrandedValueMember,
             IsTranspiledDataMember: IsTranspiledDataMember(symbol),
             ParameterTypes: OverloadParameterTypes(symbol),
-            IsInitOnly: symbol is IPropertySymbol { SetMethod.IsInitOnly: true }
+            IsInitOnly: symbol is IPropertySymbol { SetMethod.IsInitOnly: true },
+            CompanionOwner: isPlainObjectInstanceMethod
+                ? TypeReferenceTo(symbol.ContainingType)
+                : null
         );
     }
 
@@ -2698,6 +2725,17 @@ public sealed partial class IrExpressionExtractor
 
     // ── Lambdas ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// <c>void</c> for a lambda bound to a <c>void</c> delegate, whose
+    /// expression body's value is discarded; <c>null</c> (not resolved)
+    /// otherwise.
+    /// </summary>
+    private IrTypeRef? VoidReturnTypeOf(LambdaExpressionSyntax lambda) =>
+        _semantic.GetSymbolInfo(lambda).Symbol
+            is IMethodSymbol { ReturnsVoid: true, IsAsync: false }
+            ? new IrPrimitiveTypeRef(IrPrimitive.Void)
+            : null;
+
     private IrParameter BuildLambdaParameter(ParameterSyntax parameter) =>
         new(
             parameter.Identifier.ValueText,
@@ -2712,7 +2750,7 @@ public sealed partial class IrExpressionExtractor
         var body = ExtractLambdaBody(lambda.Body);
         return new IrLambdaExpression(
             [parameter],
-            ReturnType: null,
+            ReturnType: VoidReturnTypeOf(lambda),
             Body: body,
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
             UsesThis: receiverType is not null,
@@ -2727,7 +2765,7 @@ public sealed partial class IrExpressionExtractor
         var body = ExtractLambdaBody(lambda.Body);
         return new IrLambdaExpression(
             parameters,
-            ReturnType: null,
+            ReturnType: VoidReturnTypeOf(lambda),
             Body: body,
             IsAsync: lambda.AsyncKeyword.ValueText == "async",
             UsesThis: receiverType is not null,

@@ -1,4 +1,5 @@
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
@@ -87,13 +88,17 @@ public sealed class ImportCollector(
         var crossPackageOrigins = new Dictionary<string, TsTypeOrigin>(); // name → cross-package origin
         var templateExternals = new List<IrExternalImport>();
         var linqPipeHelpers = new HashSet<string>(StringComparer.Ordinal);
+        var ownersByCompanionFunction = new Dictionary<string, SortedSet<string>>(
+            StringComparer.Ordinal
+        );
         var sink = new ImportCollectionSink(
             referencedTypes,
             valueTypes,
             runtimeHelpers,
             crossPackageOrigins,
             templateExternals,
-            linqPipeHelpers
+            linqPipeHelpers,
+            ownersByCompanionFunction
         );
         CollectReferencedTypeNames(statements, sink);
 
@@ -502,6 +507,14 @@ public sealed class ImportCollector(
             AddLocal(importPath, referencedRef.TsName, typeOnly);
         }
 
+        AddCompanionFunctionImports(
+            ownersByCompanionFunction,
+            currentNs,
+            currentFileName,
+            importedNames,
+            AddLocal
+        );
+
         // Emit one merged TsImport per bucketed local path. Three-case form:
         //   - all type-only → `import type { A, B } from "..."`       (whole statement)
         //   - all value     → `import { A, B } from "..."`            (plain)
@@ -558,6 +571,56 @@ public sealed class ImportCollector(
 
         return MergeImportsByPath(imports);
     }
+
+    /// <summary>
+    /// Imports each companion function (a <c>[PlainObject]</c> instance
+    /// method's helper) from its owner type's file. A file that calls the
+    /// same-named helper of two owners cannot bind both under one name, so
+    /// that reports MS0021 instead of silently calling one owner's helper for
+    /// the other; a <c>[Name]</c> override on either method resolves it.
+    /// </summary>
+    private void AddCompanionFunctionImports(
+        IReadOnlyDictionary<string, SortedSet<string>> ownersByCompanionFunction,
+        string currentNs,
+        string currentFileName,
+        HashSet<string> importedNames,
+        Action<string, string, bool> addLocal
+    )
+    {
+        foreach (var (functionName, owners) in ownersByCompanionFunction.OrderBy(kv => kv.Key))
+        {
+            if (owners.Count > 1)
+                ReportCompanionFunctionClash(functionName, owners);
+
+            if (!_context.TranspilableTypes.TryGetValue(owners.Min!, out var ownerRef))
+                continue;
+
+            var isCurrentFile =
+                ownerRef.Namespace == currentNs && ownerRef.FileName == currentFileName;
+
+            if (isCurrentFile || !importedNames.Add(functionName))
+                continue;
+
+            var ownerPath = _context.PathNaming.ComputeRelativeImportPath(
+                currentNs,
+                ownerRef.Namespace,
+                ownerRef.FileName
+            );
+
+            addLocal(ownerPath, functionName, false);
+        }
+    }
+
+    private void ReportCompanionFunctionClash(string functionName, IEnumerable<string> owners) =>
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.ExtensionHelperNameClash,
+                $"Helper '{functionName}' is called on {string.Join(" and ", owners)} in one file, "
+                    + "but each exports its own helper of that name. Add a [Name(\"...\")] "
+                    + "override on one of the methods so both can be imported."
+            )
+        );
 
     private static IReadOnlyDictionary<string, string>? BuildExternalImportAliases(
         IrExternalImport ext
@@ -1002,6 +1065,9 @@ public sealed class ImportCollector(
                 crossPackageOrigins[typeRefRoot] = typeRef.Origin;
                 valueNames.Add(typeRefRoot);
                 break;
+            case TsCompanionFunctionReference companion:
+                RecordCompanionFunction(sink.OwnersByCompanionFunction, companion);
+                break;
             case TsIdentifier bareId:
                 // Bare identifiers starting with uppercase may reference transpilable
                 // types used as values (e.g., enum objects passed to descriptor specs).
@@ -1282,6 +1348,20 @@ public sealed class ImportCollector(
     /// The importable binding of a possibly dotted type name: a nested type
     /// (<c>Outer.Inner</c>) is reached through its top-level container's import.
     /// </summary>
+    private static void RecordCompanionFunction(
+        Dictionary<string, SortedSet<string>> ownersByCompanionFunction,
+        TsCompanionFunctionReference companion
+    )
+    {
+        if (!ownersByCompanionFunction.TryGetValue(companion.Name, out var owners))
+        {
+            owners = new SortedSet<string>(StringComparer.Ordinal);
+            ownersByCompanionFunction[companion.Name] = owners;
+        }
+
+        owners.Add(companion.OwnerTypeName);
+    }
+
     private static string RootSegment(string typeName)
     {
         var dot = typeName.IndexOf('.');
@@ -1329,5 +1409,6 @@ internal sealed record ImportCollectionSink(
     HashSet<string> RuntimeHelpers,
     Dictionary<string, TsTypeOrigin> CrossPackageOrigins,
     List<IrExternalImport> TemplateExternals,
-    HashSet<string> LinqPipeHelpers
+    HashSet<string> LinqPipeHelpers,
+    Dictionary<string, SortedSet<string>> OwnersByCompanionFunction
 );

@@ -39,16 +39,28 @@ public static partial class IrToTsExpressionBridge
     /// receiver is guarded explicitly: <c>a == null ? null : step(a)</c>, or,
     /// for a receiver that must evaluate once,
     /// <c>((t) =&gt; t == null ? null : step(t))(a)</c>.
+    /// <para>
+    /// A native chain yields <c>undefined</c> for a null receiver where C#
+    /// yields <c>null</c>, so a chain read as a value (returned, stored,
+    /// passed) is normalized to <c>a?.b ?? null</c>, matching the declared
+    /// <c>T | null</c>. <see cref="MapNullTolerant"/> keeps the bare chain
+    /// where <c>undefined</c> and <c>null</c> read alike.
+    /// </para>
     /// </summary>
     private static TsExpression MapNullConditionalAccess(
         IrNullConditionalAccess access,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        bool toleratesUndefined = false
     )
     {
         var lowered = LowerNullConditional(access, bclRegistry);
 
         if (lowered.OptionalChain is { } chain)
-            return chain;
+        {
+            var normalizesUndefined = lowered.MayYieldUndefined && !toleratesUndefined;
+
+            return normalizesUndefined ? NormalizedToNull(chain) : chain;
+        }
 
         if (lowered.ReceiverName is not { } receiverName)
             return GuardInline(lowered.Receiver, lowered.WhenNotNull);
@@ -101,7 +113,7 @@ public static partial class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var loweredReceiver = Map(access.Receiver, bclRegistry);
+        var loweredReceiver = MapNullTolerant(access.Receiver, bclRegistry);
         var repeatsReceiver = IrEvaluationTraits.IsReusableNullConditionalReceiver(access.Receiver);
 
         var receiverReference = repeatsReceiver
@@ -114,11 +126,12 @@ public static partial class IrToTsExpressionBridge
             bclRegistry
         );
 
+        // A step that lowers to the receiver itself (a `[Branded]` value read,
+        // `slug?.Value`) needs no guard: a null receiver is null.
+        var isReceiverItself = whenNotNull.Equals(receiverReference);
+
         var optionalChain =
-            whenNotNull.Equals(receiverReference)
-                // A step that lowers to the receiver itself (a `[Branded]` value
-                // read, `slug?.Value`) needs no guard: a null receiver is null.
-                ? loweredReceiver
+            isReceiverItself ? loweredReceiver
             : CanChainOptionally(access, repeatsReceiver)
                 ? TryChainOptionally(whenNotNull, receiverReference, loweredReceiver)
             : null;
@@ -127,7 +140,8 @@ public static partial class IrToTsExpressionBridge
             loweredReceiver,
             repeatsReceiver ? null : ConditionalReceiverParameter,
             whenNotNull,
-            optionalChain
+            optionalChain,
+            MayYieldUndefined: !isReceiverItself || LowersToOptionalChain(access.Receiver)
         );
     }
 
@@ -251,10 +265,81 @@ public static partial class IrToTsExpressionBridge
     /// it must evaluate once, the non-null branch, and the native optional
     /// chain when every step allows one.
     /// </summary>
+    /// <param name="MayYieldUndefined">Whether <paramref name="OptionalChain"/>
+    /// can evaluate to <c>undefined</c>: a native chain does, and so does a
+    /// receiver passed through that is itself one.</param>
     private sealed record LoweredNullConditional(
         TsExpression Receiver,
         string? ReceiverName,
         TsExpression WhenNotNull,
-        TsExpression? OptionalChain
+        TsExpression? OptionalChain,
+        bool MayYieldUndefined
     );
+
+    /// <summary>
+    /// Maps <paramref name="expression"/> where an <c>undefined</c> result
+    /// reads exactly like <c>null</c>, keeping a native optional chain or
+    /// optional call bare instead of normalizing it to <c>?? null</c>:
+    /// <list type="bullet">
+    ///   <item>the left operand of <c>??</c> (and both operands of a
+    ///   <c>??</c> that is itself tolerated);</item>
+    ///   <item>an operand of an equality with a literal (<c>== null</c> is
+    ///   loose, and <c>=== 5</c> is false for both);</item>
+    ///   <item>a null-conditional receiver, and the target of a member,
+    ///   element, slice or call access (reading through <c>undefined</c>
+    ///   throws just as through <c>null</c>);</item>
+    ///   <item>a discarded value: an expression statement, or the
+    ///   expression body of a <c>void</c> lambda.</item>
+    /// </list>
+    /// </summary>
+    public static TsExpression MapNullTolerant(
+        IrExpression expression,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        expression switch
+        {
+            IrNullConditionalAccess access => MapNullConditionalAccess(
+                access,
+                bclRegistry,
+                toleratesUndefined: true
+            ),
+            IrCallExpression { IsOptional: true } call => MapCall(call, bclRegistry),
+            IrBinaryExpression { Operator: IrBinaryOp.NullCoalescing } coalesce =>
+                MapNullCoalescing(coalesce, rightToleratesUndefined: true, bclRegistry),
+            _ => Map(expression, bclRegistry),
+        };
+
+    /// <summary>
+    /// <c>left ?? right</c>. The left operand is only tested for nullish, so
+    /// it is null-tolerant; the right one is the value of the whole
+    /// expression, tolerated only when the expression itself is.
+    /// </summary>
+    private static TsBinaryExpression MapNullCoalescing(
+        IrBinaryExpression coalesce,
+        bool rightToleratesUndefined,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        new(
+            MapNullTolerant(coalesce.Left, bclRegistry),
+            "??",
+            MapOperand(coalesce.Right, rightToleratesUndefined, bclRegistry)
+        );
+
+    private static TsExpression MapOperand(
+        IrExpression operand,
+        bool toleratesUndefined,
+        DeclarativeMappingRegistry? bclRegistry
+    ) => toleratesUndefined ? MapNullTolerant(operand, bclRegistry) : Map(operand, bclRegistry);
+
+    /// <summary>
+    /// Whether <paramref name="expression"/> lowers to a native optional
+    /// chain or optional call, which can be <c>undefined</c> where C# has
+    /// <c>null</c>.
+    /// </summary>
+    private static bool LowersToOptionalChain(IrExpression expression) =>
+        expression is IrNullConditionalAccess or IrCallExpression { IsOptional: true };
+
+    /// <summary><c>value ?? null</c>: the C# <c>null</c> for an <c>undefined</c> result.</summary>
+    private static TsBinaryExpression NormalizedToNull(TsExpression value) =>
+        new(value, "??", NullLiteral);
 }

@@ -268,7 +268,7 @@ public static class IrToTsStatementBridge
             IrExpressionStatement { Expression: IrNullConditionalAccess access } =>
                 IrToTsExpressionBridge.MapNullConditionalStatement(access, bclRegistry),
             IrExpressionStatement es => new TsExpressionStatement(
-                IrToTsExpressionBridge.Map(es.Expression, bclRegistry)
+                IrToTsExpressionBridge.MapNullTolerant(es.Expression, bclRegistry)
             ),
             IrReturnStatement ret => new TsReturnStatement(
                 ret.Value is not null ? IrToTsExpressionBridge.Map(ret.Value, bclRegistry) : null

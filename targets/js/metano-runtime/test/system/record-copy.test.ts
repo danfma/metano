@@ -41,11 +41,32 @@ describe("copyRecordWith", () => {
     expect(copy.side).toBe(2);
   });
 
-  test("assigns null but keeps the copied value for undefined", () => {
-    const copy = copyRecordWith<Square>(new Square(2), { tag: null, side: undefined });
+  test("assigns null for a null override", () => {
+    const copy = copyRecordWith<Square>(new Square(2), { tag: null });
 
     expect(copy.tag).toBeNull();
     expect(copy.side).toBe(2);
+  });
+
+  test("assigns null for a present undefined override, as C# assigns null", () => {
+    const missingOptionalField: { tag?: string | null } = {};
+    const copy = copyRecordWith<Square>(new Square(2), { tag: missingOptionalField.tag });
+
+    expect(copy.tag).toBeNull();
+  });
+
+  test("assigns a falsy defined override as is", () => {
+    const copy = copyRecordWith<Square>(new Square(2), { side: 0, tag: "" });
+
+    expect(copy.side).toBe(0);
+    expect(copy.tag).toBe("");
+  });
+
+  test("keeps the copied value for an absent key", () => {
+    const copy = copyRecordWith<Square>(new Square(2), { side: 5 });
+
+    expect(copy.tag).toBe("default");
+    expect(copy.side).toBe(5);
   });
 
   test("leaves the source untouched", () => {

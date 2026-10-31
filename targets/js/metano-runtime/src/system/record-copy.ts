@@ -6,9 +6,14 @@
  * does not run the primary constructor) followed by the `init` assignments.
  * Mirroring that, the copy keeps the source's prototype and every own
  * enumerable field — including members the primary constructor does not take —
- * and then applies each override whose value is not `undefined`. `null` is a
- * real value, so an override may set a member to `null`; `undefined` (an absent
- * or optional key) keeps the copied value.
+ * and then applies every own key of `overrides`: the generated call passes
+ * exactly the members the `with` assigns. A key that is absent keeps the copied
+ * value. A key that is present is an assignment even when its value is
+ * `undefined` — an absent optional field of a `[PlainObject]` value, read as
+ * C# `null` — so it sets the member to `null`, never back to the copied value.
+ * A generated `with` only assigns `null` where C# can, so a non-nullable member
+ * never receives one; a hand-written caller passing `undefined` for such a
+ * member gets `null` too.
  *
  * An override is assigned on the copy, so a member declared with an accessor
  * pair runs its setter. An override naming a member the copy cannot be
@@ -24,17 +29,17 @@ export function copyRecordWith<T extends object>(source: T, overrides?: Partial<
   Object.assign(copy, source);
 
   if (overrides !== undefined) {
-    assignDefinedOverrides(copy, overrides);
+    assignOverrides(copy, overrides);
   }
 
   return copy;
 }
 
-function assignDefinedOverrides<T extends object>(target: T, overrides: Partial<T>): void {
+function assignOverrides<T extends object>(target: T, overrides: Partial<T>): void {
   for (const key of Object.keys(overrides) as (keyof T & string)[]) {
-    const value = overrides[key];
+    if (isAssignable(target, key)) {
+      const value = overrides[key] ?? null;
 
-    if (value !== undefined && isAssignable(target, key)) {
       target[key] = value as T[keyof T & string];
     }
   }

@@ -57,7 +57,7 @@ public class JsTupleTranspileTests
             """
         );
 
-        await Assert.That(result["reader.ts"]).Contains("return p?.[1];");
+        await Assert.That(result["reader.ts"]).Contains("return p?.[1] ?? null;");
     }
 
     // Contract T2 — positional member access → array index.

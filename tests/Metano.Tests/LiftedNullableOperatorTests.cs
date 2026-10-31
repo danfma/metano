@@ -135,7 +135,7 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : receiver$temp$0 + receiver$temp$1)(p?.qty))(o.nextQty());"
+                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : receiver$temp$0 + receiver$temp$1)(p?.qty ?? null))(o.nextQty());"
             );
     }
 
@@ -348,8 +348,8 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("return m?.value;");
-        await Assert.That(output).Contains("return m?.hasValue;");
+        await Assert.That(output).Contains("return m?.value ?? null;");
+        await Assert.That(output).Contains("return m?.hasValue ?? null;");
     }
 
     [Test]

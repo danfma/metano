@@ -1177,6 +1177,12 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(typeRef.Name);
                 break;
 
+            case TsCompanionFunctionReference companion:
+                // Likewise: the owner type only tells the import collector where
+                // the function is exported from.
+                _sb.Write(companion.Name);
+                break;
+
             case TsLiteral lit:
                 _sb.Write(lit.Raw);
                 break;
