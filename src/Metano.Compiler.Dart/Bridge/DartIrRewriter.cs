@@ -182,6 +182,7 @@ public sealed class DartIrRewriter
                     .ToList(),
             },
             IrThrowExpression t => t with { Expression = RewriteExpression(t.Expression) },
+            IrOutArgumentCall outCall => outCall.MapExpressions(RewriteExpression),
             IrRuntimeHelperCall rh => rh with
             {
                 Arguments = rh.Arguments.Select(RewriteExpression).ToList(),

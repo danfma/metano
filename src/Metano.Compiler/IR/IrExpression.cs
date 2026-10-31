@@ -502,6 +502,106 @@ public sealed record IrThrowExpression(IrExpression Expression) : IrExpression;
 public sealed record IrLetExpression(string Name, IrExpression Value, IrExpression Body)
     : IrExpression;
 
+// -- Calls with out arguments --
+
+/// <summary>
+/// A call that passes one or more arguments as C# <c>out</c>. Neither
+/// TypeScript nor Dart has by-reference arguments, so the call is modelled as
+/// a multi-value result: <see cref="Call"/> is the invocation without its
+/// <c>out</c> arguments, and evaluating it yields the ordered values
+/// <c>(result, out1, out2, …)</c> — the callee's return value (omitted when
+/// <see cref="ResultType"/> is <c>null</c>, a <c>void</c> callee) followed by
+/// one value per <see cref="OutArguments"/> entry, in the callee's parameter
+/// order. Each backend lowers the callee to return that shape and the call
+/// site to unpack it.
+/// <para>
+/// In statement position the extractor binds the values with an
+/// <see cref="IrTupleDeconstruction"/> whose initializer is this node (see
+/// <c>OutArgumentCallLowering</c>); anywhere else (a short-circuit operand, a
+/// conditional branch, a loop condition the extractor could not restructure)
+/// the node stays in place, its value is the callee's result, and the
+/// <c>out</c> values are stored into each target as a side effect.
+/// </para>
+/// </summary>
+/// <param name="Call">The invocation without its <c>out</c> arguments; its
+/// origin still names the C# method, so declarative mappings match it.</param>
+/// <param name="OutArguments">The <c>out</c> arguments, in the callee's
+/// parameter order.</param>
+/// <param name="ResultType">The callee's return type, or <c>null</c> when it
+/// returns <c>void</c>.</param>
+/// <param name="IsExternalCallee">Whether the callee is neither in this
+/// compilation nor in a transpiled assembly (a BCL or third-party method): no
+/// backend lowers its declaration, so only a declarative mapping can give the
+/// call its multi-value result.</param>
+public sealed record IrOutArgumentCall(
+    IrCallExpression Call,
+    IReadOnlyList<IrOutArgument> OutArguments,
+    IrTypeRef? ResultType,
+    bool IsExternalCallee = false
+) : IrExpression
+{
+    /// <summary>
+    /// The call with <paramref name="rewrite"/> applied to its invocation and
+    /// to each existing <c>out</c> destination, for IR rewriters. The
+    /// invocation is kept as is when the rewrite turns it into anything other
+    /// than a call.
+    /// </summary>
+    public IrOutArgumentCall MapExpressions(Func<IrExpression, IrExpression> rewrite) =>
+        this with
+        {
+            Call = rewrite(Call) as IrCallExpression ?? Call,
+            OutArguments = OutArguments
+                .Select(o =>
+                    o.Target is IrOutAssignment assignment
+                        ? o with
+                        {
+                            Target = new IrOutAssignment(rewrite(assignment.Destination)),
+                        }
+                        : o
+                )
+                .ToList(),
+        };
+}
+
+/// <summary>
+/// One <c>out</c> argument of an <see cref="IrOutArgumentCall"/>.
+/// </summary>
+/// <param name="ParameterOrdinal">The position of the bound parameter in the
+/// callee's parameter list as written at the call site (the receiver of a
+/// reduced extension call excluded), so a backend that keeps the argument
+/// slot — a declarative mapping of a BCL method — can put
+/// <see cref="DefaultValue"/> back in place.</param>
+/// <param name="ParameterName">The bound parameter's name.</param>
+/// <param name="Target">Where the callee's <c>out</c> value goes.</param>
+/// <param name="DefaultValue">C#'s <c>default(T)</c> for the parameter type
+/// (<see cref="IrLiteralKind.Default"/> when it has no literal).</param>
+public sealed record IrOutArgument(
+    int ParameterOrdinal,
+    string ParameterName,
+    IrOutTarget Target,
+    IrExpression DefaultValue
+);
+
+/// <summary>Where an <c>out</c> argument stores the callee's value.</summary>
+public abstract record IrOutTarget;
+
+/// <summary>
+/// <c>out var name</c> / <c>out T name</c>: declares a local. When the call
+/// stays in expression position, the extractor declares the local (uninitialized,
+/// typed <see cref="Type"/>) ahead of the enclosing statement and the call
+/// assigns it.
+/// </summary>
+/// <param name="Type">The local's type: the explicit <c>T</c>, or for
+/// <c>var</c> the bound parameter's type, widened to its nullable form when the
+/// parameter carries <c>[MaybeNullWhen]</c>.</param>
+public sealed record IrOutLocalDeclaration(string Name, IrTypeRef Type) : IrOutTarget;
+
+/// <summary><c>out x</c>, <c>out this.field</c>: an existing variable or member.</summary>
+public sealed record IrOutAssignment(IrExpression Destination) : IrOutTarget;
+
+/// <summary><c>out _</c> / <c>out var _</c>: the value is dropped.</summary>
+public sealed record IrOutDiscard : IrOutTarget;
+
 // -- Runtime helpers --
 
 /// <summary>

@@ -9,6 +9,18 @@ namespace Metano.Compiler.IR;
 public abstract record IrTypeRef;
 
 /// <summary>
+/// A type a backend composes from other types for its own lowering (for
+/// example the TypeScript result tuple of a method with <c>out</c>
+/// parameters). Core analyses that walk type references descend into
+/// <see cref="ComponentTypes"/> without knowing the concrete type.
+/// </summary>
+public interface IIrCompositeTypeRef
+{
+    /// <summary>The types the composite is built from.</summary>
+    IEnumerable<IrTypeRef> ComponentTypes { get; }
+}
+
+/// <summary>
 /// A well-known primitive type. See <see cref="IrPrimitive"/> for the semantic catalog.
 /// </summary>
 public sealed record IrPrimitiveTypeRef(IrPrimitive Primitive) : IrTypeRef;

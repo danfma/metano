@@ -2074,7 +2074,7 @@ public sealed partial class IrExpressionExtractor
         return null;
     }
 
-    private IrExpression ExtractInvocation(InvocationExpressionSyntax inv)
+    private IrExpression ExtractInvocationCore(InvocationExpressionSyntax inv)
     {
         if (TryExtractConstantInvocation(inv) is { } constant)
             return constant;
@@ -2565,7 +2565,7 @@ public sealed partial class IrExpressionExtractor
                 arrow: null,
                 isVoid: false
             ),
-            ExpressionSyntax expr => [new IrReturnStatement(Extract(expr))],
+            ExpressionSyntax expr => LowerOutArgumentCalls(new IrReturnStatement(Extract(expr))),
             _ => [new IrUnsupportedStatement(body.Kind().ToString())],
         };
 
@@ -2600,7 +2600,9 @@ public sealed partial class IrExpressionExtractor
     /// original intent.
     /// </summary>
     private IrArgument ExtractArgument(ArgumentSyntax argument) =>
-        new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText);
+        argument.RefOrOutKeyword.IsKind(SyntaxKind.None)
+            ? new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText)
+            : ExtractByReferenceArgument(argument);
 
     /// <summary>
     /// Lowers an extension-method call site (classic <c>(this T)</c>

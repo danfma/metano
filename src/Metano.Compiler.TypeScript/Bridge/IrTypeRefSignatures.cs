@@ -30,6 +30,8 @@ internal static class IrTypeRefSignatures
                 ? $"{n.Name}<{string.Join(",", args.Select(Describe))}>"
                 : n.Name,
             IrUnknownTypeRef => "unknown",
+            IIrCompositeTypeRef composite =>
+                $"composite<{string.Join(",", composite.ComponentTypes.Select(Describe))}>",
             _ => "?",
         };
 

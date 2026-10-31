@@ -213,7 +213,7 @@ public static class IrConstructorExtractor
         var expr = new IrExpressionExtractor(model, originResolver);
         return argumentList
             .Arguments.Select(a => new IrArgument(
-                expr.Extract(a.Expression),
+                expr.ExtractStandalone(a.Expression),
                 a.NameColon?.Name.Identifier.ValueText
             ))
             .ToList();

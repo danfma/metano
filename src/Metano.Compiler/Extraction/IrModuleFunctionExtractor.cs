@@ -337,10 +337,7 @@ public static class IrModuleFunctionExtractor
         IReadOnlyList<IrStatement>? body;
         if (syntax.ExpressionBody is not null)
         {
-            var expr = new IrExpressionExtractor(model, originResolver).Extract(
-                syntax.ExpressionBody.Expression
-            );
-            body = [new IrReturnStatement(expr)];
+            body = extractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false);
         }
         else if (getterSyntax is not null)
         {
@@ -438,14 +435,20 @@ public static class IrModuleFunctionExtractor
     {
         var parameters = new List<IrParameter> { receiver };
         parameters.AddRange(
-            method.Parameters.Select(p => new IrParameter(
-                p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver),
-                HasDefaultValue: p.HasExplicitDefaultValue,
-                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
-                IsParams: p.IsParams,
-                IsConstant: p.HasConstant()
-            ))
+            method.Parameters.Select(p =>
+                OutParameterFlow.Annotate(
+                    new IrParameter(
+                        p.Name,
+                        IrTypeRefMapper.Map(p.Type, originResolver),
+                        HasDefaultValue: p.HasExplicitDefaultValue,
+                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        IsParams: p.IsParams,
+                        IsConstant: p.HasConstant()
+                    ),
+                    p,
+                    originResolver
+                )
+            )
         );
 
         var hasYield = DetectYield(method);
@@ -500,10 +503,7 @@ public static class IrModuleFunctionExtractor
         IReadOnlyList<IrStatement>? body;
         if (syntax.ExpressionBody is not null)
         {
-            var expr = new IrExpressionExtractor(model, originResolver).Extract(
-                syntax.ExpressionBody.Expression
-            );
-            body = [new IrReturnStatement(expr)];
+            body = extractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false);
         }
         else if (
             syntax.AccessorList?.Accessors.FirstOrDefault(a =>
@@ -595,14 +595,20 @@ public static class IrModuleFunctionExtractor
     )
     {
         var parameters = method
-            .Parameters.Select(p => new IrParameter(
-                p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver),
-                HasDefaultValue: p.HasExplicitDefaultValue,
-                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
-                IsParams: p.IsParams,
-                IsConstant: p.HasConstant()
-            ))
+            .Parameters.Select(p =>
+                OutParameterFlow.Annotate(
+                    new IrParameter(
+                        p.Name,
+                        IrTypeRefMapper.Map(p.Type, originResolver),
+                        HasDefaultValue: p.HasExplicitDefaultValue,
+                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        IsParams: p.IsParams,
+                        IsConstant: p.HasConstant()
+                    ),
+                    p,
+                    originResolver
+                )
+            )
             .ToList();
 
         var hasYield = DetectYield(method);
@@ -662,10 +668,7 @@ public static class IrModuleFunctionExtractor
         IReadOnlyList<IrStatement>? body;
         if (syntax.ExpressionBody is not null)
         {
-            var expr = new IrExpressionExtractor(model, originResolver).Extract(
-                syntax.ExpressionBody.Expression
-            );
-            body = [new IrReturnStatement(expr)];
+            body = extractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false);
         }
         else if (
             syntax.AccessorList?.Accessors.FirstOrDefault(a =>
@@ -747,14 +750,20 @@ public static class IrModuleFunctionExtractor
     )
     {
         var parameters = method
-            .Parameters.Select(p => new IrParameter(
-                p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver),
-                HasDefaultValue: p.HasExplicitDefaultValue,
-                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
-                IsParams: p.IsParams,
-                IsConstant: p.HasConstant()
-            ))
+            .Parameters.Select(p =>
+                OutParameterFlow.Annotate(
+                    new IrParameter(
+                        p.Name,
+                        IrTypeRefMapper.Map(p.Type, originResolver),
+                        HasDefaultValue: p.HasExplicitDefaultValue,
+                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        IsParams: p.IsParams,
+                        IsConstant: p.HasConstant()
+                    ),
+                    p,
+                    originResolver
+                )
+            )
             .ToList();
 
         // `yield` in the body makes this a generator. Return type goes through

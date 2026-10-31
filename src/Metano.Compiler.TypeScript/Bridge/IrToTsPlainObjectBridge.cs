@@ -280,6 +280,9 @@ public static class IrToTsPlainObjectBridge
             {
                 Expression = RewriteThis(th.Expression, identifierName),
             },
+            IrOutArgumentCall outCall => outCall.MapExpressions(e =>
+                RewriteThis(e, identifierName)
+            ),
             IrArrayLiteral arr => arr with
             {
                 Elements = arr.Elements.Select(e => RewriteThis(e, identifierName)).ToList(),

@@ -21,20 +21,29 @@ public static class IrMethodExtractor
     {
         var hasYield = DetectYield(method);
 
+        OutParameterFlow.ReportOverloadCollision(method);
+
         var returnType = hasYield
             ? IrTypeRefMapper.MapForGeneratorReturn(method.ReturnType, originResolver, target)
             : IrTypeRefMapper.Map(method.ReturnType, originResolver, target);
 
         var parameters = method
-            .Parameters.Select(p => new IrParameter(
-                p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver, target),
-                HasDefaultValue: p.HasExplicitDefaultValue,
-                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
-                IsParams: p.IsParams,
-                IsOptional: p.HasOptional(),
-                IsConstant: p.HasConstant()
-            ))
+            .Parameters.Select(p =>
+                OutParameterFlow.Annotate(
+                    new IrParameter(
+                        p.Name,
+                        IrTypeRefMapper.Map(p.Type, originResolver, target),
+                        HasDefaultValue: p.HasExplicitDefaultValue,
+                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        IsParams: p.IsParams,
+                        IsOptional: p.HasOptional(),
+                        IsConstant: p.HasConstant()
+                    ),
+                    p,
+                    originResolver,
+                    target
+                )
+            )
             .ToList();
 
         var typeParameters =

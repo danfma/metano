@@ -100,3 +100,20 @@ describe("UUID — brand semantics", () => {
     expect(id.toUpperCase()).toBe(id.toUpperCase());
   });
 });
+
+describe("UUID.tryParse", () => {
+  const canonical = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+  test("parses the D, N, B and P formats into the lowercase D form", () => {
+    expect(UUID.tryParse("0F8FAD5B-D9CB-469F-A165-70867728950E")).toEqual([true, canonical as UUID]);
+    expect(UUID.tryParse("0f8fad5bd9cb469fa16570867728950e")).toEqual([true, canonical as UUID]);
+    expect(UUID.tryParse(`{${canonical}}`)).toEqual([true, canonical as UUID]);
+    expect(UUID.tryParse(` (${canonical}) `)).toEqual([true, canonical as UUID]);
+  });
+
+  test("reports UUID.empty for anything else", () => {
+    expect(UUID.tryParse("not-a-guid")).toEqual([false, UUID.empty]);
+    expect(UUID.tryParse(`{${canonical})`)).toEqual([false, UUID.empty]);
+    expect(UUID.tryParse(null)).toEqual([false, UUID.empty]);
+  });
+});

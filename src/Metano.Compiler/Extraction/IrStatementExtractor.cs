@@ -41,7 +41,8 @@ public sealed class IrStatementExtractor(
         if (arrow is not null)
         {
             var expr = _expressions.Extract(arrow.Expression);
-            return isVoid ? [new IrExpressionStatement(expr)] : [new IrReturnStatement(expr)];
+
+            return _expressions.LowerOutArgumentCalls(ArrowStatement(expr, isVoid));
         }
 
         if (block is null)
@@ -50,99 +51,48 @@ public sealed class IrStatementExtractor(
         return ExtractStatements(block.Statements);
     }
 
+    private static IrStatement ArrowStatement(IrExpression expr, bool isVoid) =>
+        isVoid ? new IrExpressionStatement(expr) : new IrReturnStatement(expr);
+
     /// <summary>
     /// Like <see cref="ExtractBody"/> but takes a flat list of statements
     /// directly — useful for sources that aren't wrapped in a block (e.g.,
     /// C# 9 top-level statements live as siblings on the
-    /// <see cref="CompilationUnitSyntax"/>). The same TryGetValue
-    /// expansion and effective-const promotion passes apply, since both
-    /// only need a contiguous statement sequence.
+    /// <see cref="CompilationUnitSyntax"/>). The same <c>out</c>-argument
+    /// lowering and effective-const promotion passes apply, since they only
+    /// need a contiguous statement sequence.
     /// </summary>
-    public IReadOnlyList<IrStatement> ExtractStatements(IReadOnlyList<StatementSyntax> source)
+    public IReadOnlyList<IrStatement> ExtractStatements(IReadOnlyList<StatementSyntax> source) =>
+        PromoteEffectiveConsts(ExtractStatementSequence(source));
+
+    /// <summary>
+    /// Extracts a statement list that forms one C# scope (a block, a switch
+    /// section, an embedded statement). Each statement goes through
+    /// <see cref="OutArgumentCallLowering"/>, which places the results of its
+    /// <c>out</c>-argument calls in this same list — the scope C# gives an
+    /// <c>out var</c> declared in an expression statement, a declaration, a
+    /// <c>return</c>, an <c>if</c> condition — or, for a loop, inside the loop.
+    /// </summary>
+    private List<IrStatement> ExtractStatementSequence(IEnumerable<StatementSyntax> source)
     {
-        var statements = new List<IrStatement>(source.Count);
-        foreach (var stmt in source)
-        {
-            if (TryExpandTryGetValue(stmt, statements))
-                continue;
-            statements.Add(ExtractStatement(stmt));
-        }
-        return PromoteEffectiveConsts(statements);
+        var extracted = source.Select(ExtractStatement).ToList();
+
+        return extracted
+            .SelectMany(
+                (stmt, index) => _expressions.OutArgumentCalls.Lower(stmt, extracted[(index + 1)..])
+            )
+            .ToList();
     }
 
     /// <summary>
-    /// Detects <c>if (dict.TryGetValue(key, out var x)) { … }</c> and expands
-    /// it into two IR statements:
-    /// <list type="number">
-    ///   <item><c>const x = dict.get(key);</c></item>
-    ///   <item><c>if (x !== undefined) { … } [else { … }]</c></item>
-    /// </list>
-    /// Matching C# semantics — `TryGetValue` returns true when the key is
-    /// present. At the TS level we rely on `Map.get` returning `undefined`
-    /// on a miss. Returns true when the expansion happened; callers skip
-    /// the ordinary statement extraction for that node.
+    /// The body of an <c>if</c> branch or a loop. A non-block embedded
+    /// statement is its own C# scope, so it extracts as a one-statement
+    /// sequence (binding any <c>out var</c> it declares inside the branch).
     /// </summary>
-    private bool TryExpandTryGetValue(StatementSyntax stmt, List<IrStatement> sink)
-    {
-        if (stmt is not IfStatementSyntax ifStmt)
-            return false;
-        if (ifStmt.Condition is not InvocationExpressionSyntax invocation)
-            return false;
-        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
-            return false;
-        var symbol = _semantic.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-        if (symbol is null || symbol.Name != "TryGetValue")
-            return false;
-        var receiverType = _semantic.GetTypeInfo(memberAccess.Expression).Type;
-        if (receiverType is not INamedTypeSymbol named || !IsDictionaryLikeReceiver(named))
-            return false;
-        if (invocation.ArgumentList.Arguments.Count != 2)
-            return false;
-        var outArg = invocation.ArgumentList.Arguments[1];
-        if (!outArg.RefOrOutKeyword.IsKind(SyntaxKind.OutKeyword))
-            return false;
-        if (outArg.Expression is not DeclarationExpressionSyntax declExpr)
-            return false;
-        if (declExpr.Designation is not SingleVariableDesignationSyntax designation)
-            return false;
-
-        var varName = designation.Identifier.ValueText;
-        var receiver = _expressions.Extract(memberAccess.Expression);
-        var key = _expressions.Extract(invocation.ArgumentList.Arguments[0].Expression);
-
-        sink.Add(
-            new IrVariableDeclaration(
-                varName,
-                Type: null,
-                Initializer: new IrCallExpression(
-                    new IrMemberAccess(receiver, "get"),
-                    [new IrArgument(key)]
-                ),
-                IsConst: true
-            )
-        );
-
-        var condition = new IrBinaryExpression(
-            new IrIdentifier(varName),
-            IrBinaryOp.NotEqual,
-            new IrIdentifier("undefined")
-        );
-        var thenBody = FlattenToBlock(ExtractStatement(ifStmt.Statement));
-        var elseBody = ifStmt.Else?.Statement is not null
-            ? FlattenToBlock(ExtractStatement(ifStmt.Else.Statement))
-            : null;
-        sink.Add(new IrIfStatement(condition, thenBody, elseBody));
-        return true;
-    }
-
-    private static bool IsDictionaryLikeReceiver(INamedTypeSymbol type)
-    {
-        var n = type.OriginalDefinition.ToDisplayString();
-        return n.StartsWith("System.Collections.Generic.Dictionary")
-            || n.StartsWith("System.Collections.Generic.IDictionary")
-            || n.StartsWith("System.Collections.Generic.IReadOnlyDictionary")
-            || n.StartsWith("System.Collections.Concurrent.ConcurrentDictionary");
-    }
+    private List<IrStatement> ExtractEmbedded(StatementSyntax statement) =>
+        statement is BlockSyntax block
+            ? ExtractStatementSequence(block.Statements)
+            : ExtractStatementSequence([statement]);
 
     /// <summary>
     /// Post-processing pass that promotes <see cref="IrVariableDeclaration"/>s
@@ -161,7 +111,7 @@ public sealed class IrStatementExtractor(
     /// and indexer writes do not count because they don't rebind a local.
     /// </para>
     /// </summary>
-    private static IReadOnlyList<IrStatement> PromoteEffectiveConsts(
+    internal static IReadOnlyList<IrStatement> PromoteEffectiveConsts(
         IReadOnlyList<IrStatement> statements
     )
     {
@@ -176,10 +126,12 @@ public sealed class IrStatementExtractor(
     ) =>
         stmt switch
         {
-            IrVariableDeclaration vd when !vd.IsConst && !reassigned.Contains(vd.Name) => vd with
-            {
-                IsConst = true,
-            },
+            IrVariableDeclaration vd
+                when !vd.IsConst && vd.Initializer is not null && !reassigned.Contains(vd.Name) =>
+                vd with
+                {
+                    IsConst = true,
+                },
             IrTupleDeconstruction td
                 when !td.IsConst
                     && !td.Elements.Any(e => e.Name is { } name && reassigned.Contains(name)) =>
@@ -205,6 +157,10 @@ public sealed class IrStatementExtractor(
             IrWhileStatement ws => ws with
             {
                 Body = ws.Body.Select(s => RewriteDeclarations(s, reassigned)).ToList(),
+            },
+            IrForStatement fs => fs with
+            {
+                Body = fs.Body.Select(s => RewriteDeclarations(s, reassigned)).ToList(),
             },
             IrDoWhileStatement dw => dw with
             {
@@ -240,9 +196,7 @@ public sealed class IrStatementExtractor(
     public IrStatement ExtractStatement(StatementSyntax statement) =>
         statement switch
         {
-            BlockSyntax block => new IrBlockStatement(
-                block.Statements.Select(ExtractStatement).ToList()
-            ),
+            BlockSyntax block => new IrBlockStatement(ExtractStatementSequence(block.Statements)),
             // `var (a, b) = expr;` parses as an ExpressionStatement wrapping a
             // SimpleAssignment whose Left is a DeclarationExpression with a
             // parenthesized variable designation. Intercept it BEFORE the generic
@@ -267,10 +221,10 @@ public sealed class IrStatementExtractor(
             ForStatementSyntax fs => ExtractFor(fs),
             WhileStatementSyntax wh => new IrWhileStatement(
                 _expressions.Extract(wh.Condition),
-                FlattenToBlock(ExtractStatement(wh.Statement))
+                ExtractEmbedded(wh.Statement)
             ),
             DoStatementSyntax ds => new IrDoWhileStatement(
-                FlattenToBlock(ExtractStatement(ds.Statement)),
+                ExtractEmbedded(ds.Statement),
                 _expressions.Extract(ds.Condition)
             ),
             TryStatementSyntax ts => ExtractTry(ts),
@@ -313,7 +267,7 @@ public sealed class IrStatementExtractor(
 
         var cond = fs.Condition is null ? null : _expressions.Extract(fs.Condition);
         var inc = fs.Incrementors.Count > 0 ? _expressions.Extract(fs.Incrementors[0]) : null;
-        var body = FlattenToBlock(ExtractStatement(fs.Statement));
+        var body = ExtractEmbedded(fs.Statement);
         return new IrForStatement(init, cond, inc, body);
     }
 
@@ -327,16 +281,16 @@ public sealed class IrStatementExtractor(
                 ? IrTypeRefMapper.Map(typeSymbol, _originResolver)
                 : null;
         var collection = _expressions.Extract(fe.Expression);
-        var body = FlattenToBlock(ExtractStatement(fe.Statement));
+        var body = ExtractEmbedded(fe.Statement);
         return new IrForEachStatement(variable, variableType, collection, body);
     }
 
     private IrStatement ExtractTry(TryStatementSyntax ts)
     {
-        var body = ts.Block.Statements.Select(ExtractStatement).ToList();
+        var body = ExtractStatementSequence(ts.Block.Statements);
         var catches = ts.Catches.Count > 0 ? ts.Catches.Select(ExtractCatch).ToList() : null;
         var finallyBody = ts.Finally is not null
-            ? ts.Finally.Block.Statements.Select(ExtractStatement).ToList()
+            ? ExtractStatementSequence(ts.Finally.Block.Statements)
             : null;
         return new IrTryStatement(body, catches, finallyBody);
     }
@@ -353,7 +307,7 @@ public sealed class IrStatementExtractor(
             if (cc.Declaration.Identifier.ValueText.Length > 0)
                 varName = cc.Declaration.Identifier.ValueText;
         }
-        var body = cc.Block.Statements.Select(ExtractStatement).ToList();
+        var body = ExtractStatementSequence(cc.Block.Statements);
         return new IrCatchClause(exType, varName, body);
     }
 
@@ -379,7 +333,7 @@ public sealed class IrStatementExtractor(
                     break;
             }
         }
-        var body = section.Statements.Select(ExtractStatement).ToList();
+        var body = ExtractStatementSequence(section.Statements);
         return new IrSwitchCase(labels, body);
     }
 
@@ -393,7 +347,12 @@ public sealed class IrStatementExtractor(
         IrTypeRef? type = null;
         if (local.Declaration.Type is not IdentifierNameSyntax { Identifier.ValueText: "var" })
         {
-            var typeSymbol = _semantic.GetTypeInfo(local.Declaration.Type).Type;
+            // The declared local's type keeps the `?` annotation of a nullable
+            // reference type, which the type syntax's TypeInfo drops.
+            var typeSymbol =
+                (_semantic.GetDeclaredSymbol(variable) as ILocalSymbol)?.Type
+                ?? _semantic.GetTypeInfo(local.Declaration.Type).Type;
+
             if (typeSymbol is not null)
                 type = IrTypeRefMapper.Map(typeSymbol, _originResolver);
         }
@@ -492,19 +451,10 @@ public sealed class IrStatementExtractor(
     private IrStatement ExtractIf(IfStatementSyntax ifs)
     {
         var condition = _expressions.Extract(ifs.Condition);
-        var then = FlattenToBlock(ExtractStatement(ifs.Statement));
-        var elseBranch = ifs.Else is not null
-            ? FlattenToBlock(ExtractStatement(ifs.Else.Statement))
-            : null;
+        var then = ExtractEmbedded(ifs.Statement);
+        var elseBranch = ifs.Else is not null ? ExtractEmbedded(ifs.Else.Statement) : null;
         return new IrIfStatement(condition, then, elseBranch);
     }
-
-    /// <summary>
-    /// Ensures a branch statement always surfaces as a list — if it's already a block
-    /// we unwrap it; otherwise we wrap the single statement.
-    /// </summary>
-    private static IReadOnlyList<IrStatement> FlattenToBlock(IrStatement statement) =>
-        statement is IrBlockStatement block ? block.Statements : [statement];
 }
 
 /// <summary>

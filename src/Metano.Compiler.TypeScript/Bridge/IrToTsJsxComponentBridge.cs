@@ -526,6 +526,9 @@ public static class IrToTsJsxComponentBridge
                 Value = Rewrite(le.Value, propNames, referenced),
                 Body = Rewrite(le.Body, propNames, referenced),
             },
+            IrOutArgumentCall outCall => outCall.MapExpressions(e =>
+                Rewrite(e, propNames, referenced)
+            ),
             IrRuntimeHelperCall rh => rh with
             {
                 Arguments = rh.Arguments.Select(a => Rewrite(a, propNames, referenced)).ToList(),

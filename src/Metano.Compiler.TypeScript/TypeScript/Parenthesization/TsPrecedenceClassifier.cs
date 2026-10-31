@@ -22,6 +22,7 @@ internal static class TsPrecedenceClassifier
             or TsStringLiteral
             or TsTemplateLiteral
             or TsArrayLiteral
+            or TsArrayHole
             or TsObjectLiteral
             or TsNamedFunctionExpression
             or TsJsxElement
@@ -56,6 +57,7 @@ internal static class TsPrecedenceClassifier
             "&&" => TsPrecedence.LogicalAnd,
             "||" or "??" => TsPrecedence.ShortCircuit,
             _ when IsAssignmentOperator(token) => TsPrecedence.Assignment,
+            "," => TsPrecedence.Comma,
             _ => TsPrecedence.Lowest,
         };
 

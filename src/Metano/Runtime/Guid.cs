@@ -30,6 +30,16 @@ using Metano.Annotations;
     RuntimeImports = "UUID"
 )]
 
+// Guid.TryParse(s, out g) → UUID.tryParse(s), which returns `[found, value]` (the `out`
+// slot `$1` holds `Guid.Empty` and is not needed: the helper reports `UUID.empty` itself).
+[assembly: MapMethod(
+    typeof(Guid),
+    nameof(Guid.TryParse),
+    JsTemplate = "UUID.tryParse($0)",
+    RuntimeImports = "UUID",
+    WhenArgCount = 2
+)]
+
 // Guid.Empty → UUID.empty
 [assembly: MapProperty(
     typeof(Guid),

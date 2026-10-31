@@ -47,6 +47,7 @@ public static class IrToTsTypeMapper
             IrTypeParameterRef tp => new TsNamedType(tp.Name),
             IrNamedTypeRef named => MapNamed(named, overrides),
             IrUnknownTypeRef => new TsAnyType(),
+            OutResultTypeRef outResult => MapOutResult(outResult, overrides),
             _ => new TsAnyType(),
         };
 
@@ -188,6 +189,40 @@ public static class IrToTsTypeMapper
             IrPrimitive.TimeSpan => new TsNamedType("Temporal.Duration"),
             _ => new TsAnyType(),
         };
+
+    /// <summary>
+    /// <c>readonly [result: R, value: T]</c>, or for a discriminated result
+    /// <c>readonly [found: true, value: V] | readonly [found: false, value: V | null]</c>.
+    /// </summary>
+    private static TsType MapOutResult(OutResultTypeRef outResult, IrToTsTypeOverrides? overrides)
+    {
+        var labels = outResult
+            .Outs.Select(o => o.Name)
+            .Prepend(outResult.Result is null ? null : outResult.ResultLabel)
+            .OfType<string>()
+            .Select(IrToTsNamingPolicy.ToParameterName)
+            .ToList();
+
+        TsTupleType Tuple(TsType? result, Func<IrParameter, IrTypeRef> typeOf)
+        {
+            var outs = outResult.Outs.Select(o => Map(typeOf(o), overrides));
+            var elements = result is null ? outs : outs.Prepend(result);
+
+            return new TsTupleType(elements.ToList(), labels, IsReadonly: true);
+        }
+
+        if (!outResult.IsDiscriminated)
+        {
+            var result = outResult.Result is null ? null : Map(outResult.Result, overrides);
+
+            return Tuple(result, o => o.Type);
+        }
+
+        return new TsUnionType([
+            Tuple(new TsBooleanLiteralType(true), o => o.OutTypesByResult?.WhenTrue ?? o.Type),
+            Tuple(new TsBooleanLiteralType(false), o => o.OutTypesByResult?.WhenFalse ?? o.Type),
+        ]);
+    }
 
     private static TsFunctionType MapFunctionType(
         IrFunctionTypeRef f,

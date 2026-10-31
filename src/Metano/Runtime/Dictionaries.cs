@@ -150,11 +150,37 @@ using Metano.Annotations;
     JsMethod = "clear"
 )]
 
-// ─── TryGetValue (intentionally not mapped) ─────────────────
-// TryGetValue uses an out-parameter idiom that doesn't translate cleanly to JS Map.get
-// (which returns the value or undefined). Lowering it correctly needs a multi-statement
-// rewrite that the current declarative pipeline can't express. Stays unmapped — calls
-// fall through to the default invocation handler. Tracked as a follow-up.
+// ─── TryGetValue → tryGetValue(map, key, default) ──────────
+// The compiler lowers a call with `out` arguments to a call returning `[result, out…]`
+// (see IrOutArgumentCall) and, for a declaratively mapped method, keeps one argument slot
+// per `out` parameter filled with C#'s `default(T)` for it — here `$1`, the value C#
+// stores in `value` on a miss (`0`, `false`, `null`, …). `const [found, value] = …`
+// then narrows `value` on `found`, mirroring `[MaybeNullWhen(false)]`.
+
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.TryGetValue),
+    JsTemplate = "tryGetValue($this, $0, $1)",
+    RuntimeImports = "tryGetValue"
+)]
+[assembly: MapMethod(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.TryGetValue),
+    JsTemplate = "tryGetValue($this, $0, $1)",
+    RuntimeImports = "tryGetValue"
+)]
+[assembly: MapMethod(
+    typeof(IReadOnlyDictionary<,>),
+    nameof(IReadOnlyDictionary<int, int>.TryGetValue),
+    JsTemplate = "tryGetValue($this, $0, $1)",
+    RuntimeImports = "tryGetValue"
+)]
+[assembly: MapMethod(
+    typeof(System.Collections.Concurrent.ConcurrentDictionary<,>),
+    nameof(System.Collections.Concurrent.ConcurrentDictionary<int, int>.TryGetValue),
+    JsTemplate = "tryGetValue($this, $0, $1)",
+    RuntimeImports = "tryGetValue"
+)]
 
 // ─── GetValueOrDefault → getValueOrDefault(map, key, default) ─
 // `GetValueOrDefault` is an extension on IReadOnlyDictionary<K,V> (CollectionExtensions),

@@ -279,6 +279,10 @@ public static class IrRuntimeRequirementScanner
                 foreach (var e in t.Elements)
                     ScanTypeRef(e, acc);
                 break;
+            case IIrCompositeTypeRef composite:
+                foreach (var component in composite.ComponentTypes)
+                    ScanTypeRef(component, acc);
+                break;
             case IrFunctionTypeRef f:
                 if (f.ThisType is { } thisType)
                     ScanTypeRef(thisType, acc);

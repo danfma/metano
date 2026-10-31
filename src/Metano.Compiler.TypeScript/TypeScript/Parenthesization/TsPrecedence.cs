@@ -6,13 +6,13 @@ namespace Metano.Compiler.TypeScript.Parenthesization;
 /// levels follow the ECMAScript grammar (MDN operator-precedence table);
 /// TS <c>as</c> rides the relational level. <see cref="Lowest"/> is the
 /// conservative answer for an unknown operator or node: it over-wraps
-/// rather than miscompiles. Level 1 is the comma (sequence) expression,
-/// which the AST has no node for; it is left unnamed so the numbering
-/// matches the reference table.
+/// rather than miscompiles. <see cref="Comma"/> is the sequence
+/// expression, a <c>TsBinaryExpression</c> with the <c>,</c> operator.
 /// </summary>
 internal enum TsPrecedence
 {
     Lowest = 0,
+    Comma = 1,
     Assignment = 2,
     Conditional = 3,
     ShortCircuit = 4,

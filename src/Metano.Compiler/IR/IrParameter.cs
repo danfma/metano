@@ -30,6 +30,15 @@ namespace Metano.Compiler.IR;
 /// <c>[Inline]</c> expansion) relies on the flag to guarantee the
 /// value is reducible to a literal without a separate analyzer
 /// pass.</param>
+/// <param name="IsOut">Whether this is a C# <c>out</c> parameter. Backends
+/// without by-reference parameters drop it from the parameter list and
+/// return its value alongside the method's result (see
+/// <see cref="IrOutArgumentCall"/>).</param>
+/// <param name="OutTypesByResult">For an <c>out</c> parameter of a
+/// <c>bool</c>-returning method annotated with <c>[NotNullWhen]</c> or
+/// <c>[MaybeNullWhen]</c>: the value's type when the method returns
+/// <c>true</c> and when it returns <c>false</c>, so a backend can let its type
+/// checker narrow the value on the result. <c>null</c> otherwise.</param>
 public sealed record IrParameter(
     string Name,
     IrTypeRef Type,
@@ -38,5 +47,17 @@ public sealed record IrParameter(
     bool IsParams = false,
     bool HasExplicitType = true,
     bool IsOptional = false,
-    bool IsConstant = false
+    bool IsConstant = false,
+    bool IsOut = false,
+    IrOutTypesByResult? OutTypesByResult = null
 );
+
+/// <summary>
+/// The type of an <c>out</c> value on each result of a <c>bool</c>-returning
+/// method, derived from the parameter's nullability attributes:
+/// <c>[NotNullWhen(true)] out T? x</c> is <c>T</c> on <c>true</c> and
+/// <c>T?</c> on <c>false</c>; <c>[MaybeNullWhen(false)] out T x</c> is
+/// <c>T</c> on <c>true</c> and <c>T?</c> on <c>false</c> (a value type keeps
+/// <c>T</c>, since its default is not <c>null</c>).
+/// </summary>
+public sealed record IrOutTypesByResult(IrTypeRef WhenTrue, IrTypeRef WhenFalse);

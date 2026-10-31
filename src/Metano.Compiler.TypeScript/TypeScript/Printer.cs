@@ -852,9 +852,11 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsTupleType tuple:
-                _sb.Write("[");
-                _sb.WriteList(tuple.Elements, PrintType);
-                _sb.Write("]");
+                PrintTupleType(tuple);
+                break;
+
+            case TsBooleanLiteralType booleanLiteral:
+                _sb.Write(booleanLiteral.Value ? "true" : "false");
                 break;
 
             case TsTypePredicateType predicate:
@@ -898,6 +900,31 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(" }");
                 break;
         }
+    }
+
+    /// <summary>
+    /// <c>[T1, T2]</c>, or <c>readonly [label: T1, …]</c> when the tuple is
+    /// readonly or labeled.
+    /// </summary>
+    private void PrintTupleType(TsTupleType tuple)
+    {
+        if (tuple.IsReadonly)
+            _sb.Write("readonly ");
+
+        _sb.Write("[");
+
+        for (var i = 0; i < tuple.Elements.Count; i++)
+        {
+            if (i > 0)
+                _sb.Write(", ");
+
+            if (tuple.Labels is { } labels)
+                _sb.Write($"{labels[i]}: ");
+
+            PrintType(tuple.Elements[i]);
+        }
+
+        _sb.Write("]");
     }
 
     /// <summary>
@@ -979,7 +1006,10 @@ public sealed class Printer(string indent = "  ")
                 {
                     if (i > 0)
                         _sb.WriteLn();
-                    _sb.Write(rawLines[i]);
+
+                    // A blank line stays empty instead of carrying the indent.
+                    if (rawLines[i].Length > 0)
+                        _sb.Write(rawLines[i]);
                 }
                 break;
 
@@ -988,8 +1018,19 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write("export ");
                 _sb.Write(varDecl.Const ? "const " : "let ");
                 _sb.Write(varDecl.Name);
-                _sb.Write(" = ");
-                PrintExpression(varDecl.Initializer);
+
+                if (varDecl.Type is not null)
+                {
+                    _sb.Write(": ");
+                    PrintType(varDecl.Type);
+                }
+
+                if (varDecl.Initializer is not null)
+                {
+                    _sb.Write(" = ");
+                    PrintExpression(varDecl.Initializer);
+                }
+
                 _sb.Write(";");
                 break;
 
@@ -1142,7 +1183,7 @@ public sealed class Printer(string indent = "  ")
 
             case TsBinaryExpression bin:
                 PrintOperand(bin.Left, TsOperandSlot.BinaryLeft(bin.Operator));
-                _sb.Write($" {bin.Operator} ");
+                _sb.Write(bin.Operator == "," ? ", " : $" {bin.Operator} ");
                 PrintOperand(bin.Right, TsOperandSlot.BinaryRight(bin.Operator));
                 break;
 
@@ -1187,6 +1228,9 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write("[");
                 PrintExpression(elemAccess.Index);
                 _sb.Write("]");
+                break;
+
+            case TsArrayHole:
                 break;
 
             case TsArrayLiteral arrayLit:
