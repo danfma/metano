@@ -30,7 +30,7 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0010` | `OptionalRequiresNullable` | `[Optional]` applied to a non-nullable parameter/property. |
 | `MS0011` | `InvalidDiscriminator` | `[Discriminator]` references a missing / non-`[StringEnum]` / nullable field. |
 | `MS0012` | `InvalidExternal` | `[External]` on a concrete non-static class, or combined with `[Transpile]`. |
-| `MS0013` | `IgnoreReferencedByTranspiledCode` | Transpilable code references a type marked `[Ignore]` for the active target. |
+| `MS0013` | `IgnoreReferencedByTranspiledCode` | Transpilable code references a type marked `[Ignore]` for the active target. Not raised for: (a) source-generator output (e.g. System.Text.Json `*.g.cs`) — only user-authored code is scanned; (b) an `[Ignore]` interface listed directly in a transpilable type's base list — it is erased from `implements`/`extends` in every target instead; (c) references inside an attribute application, e.g. `[JsonConverter(typeof(MyConverter<T>))]` — attributes are never emitted. Every other position (parameters, return types, fields, properties, locals, `new`, casts, `is`/`as`, `typeof` in expressions, generic constraints, type arguments — including an `[Ignore]` type argument of a base interface) still raises. |
 | `MS0014` | `InvalidConstant` | `[Constant]` argument/initializer is not a compile-time constant literal. |
 | `MS0015` | `InvalidErasable` | `[NoContainer]` on a non-static class, or combined with `[Transpile]`. |
 | `MS0016` | `InvalidInline` | `[Inline]` applied to an unsupported shape. |

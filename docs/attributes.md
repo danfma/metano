@@ -64,6 +64,43 @@ selected target, and transpilable code may not reference ignored types in
 signatures or bodies. If a generated surface mentions an ignored type, the
 compiler reports `MS0013`.
 
+Three positions are exempt, because nothing from them reaches the generated
+code:
+
+- **Base-list interfaces.** An `[Ignore]` interface listed directly in a
+  transpilable type's base list is erased from `implements` (classes, records,
+  structs) or `extends` (interfaces) in every target. Its members stay on the
+  type as ordinary members. Only the interface itself is erased: an `[Ignore]`
+  type used as a type argument of a transpilable base interface
+  (`IHolder<DotNetOnly>`) still reports `MS0013`.
+- **Attribute applications.** Attributes are never emitted, so `[Ignore]`
+  types referenced inside an attribute — typically
+  `[JsonConverter(typeof(MyConverter<T>))]` — are allowed on types, members, and
+  parameters. `typeof(IgnoredType)` in an ordinary expression still reports.
+- **Source-generator output.** Code produced by source generators (for example
+  the System.Text.Json `*.g.cs` files) is not user-authored and is not scanned.
+
+```csharp
+[Ignore]
+public interface IWorkspaceText<TSelf> where TSelf : IWorkspaceText<TSelf>
+{
+    static abstract TSelf From(string value);
+}
+
+[Ignore]
+public sealed class WorkspaceTextJsonConverter<T> : JsonConverter<T>
+    where T : IWorkspaceText<T> { /* … */ }
+
+// No MS0013: the interface is erased and the attribute is not emitted, so the
+// TypeScript output is the same as without either of them.
+[Branded]
+[JsonConverter(typeof(WorkspaceTextJsonConverter<WorkspaceText>))]
+public readonly record struct WorkspaceText(string Value) : IWorkspaceText<WorkspaceText>
+{
+    public static WorkspaceText From(string value) => new(value.Trim());
+}
+```
+
 Use `[Ignore]` for implementation-only C# types or members that should stay out
 of generated targets. For ambient JavaScript/runtime declarations, prefer the
 TypeScript-only `[External]` attribute or `[Import]`, depending on whether the

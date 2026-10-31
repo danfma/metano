@@ -8,6 +8,14 @@ namespace Metano.Annotations;
 /// transpilable type's surface area (signature or body) so the boundary
 /// stays explicit — predictable compile-time errors instead of runtime
 /// surprises in the generated output.
+/// <para>
+/// Exempt positions: an <c>[Ignore]</c> interface listed directly in a
+/// transpilable type's base list is erased from <c>implements</c> /
+/// <c>extends</c> in every target; references inside attribute applications
+/// (e.g. <c>[JsonConverter(typeof(MyConverter&lt;T&gt;))]</c>) are allowed
+/// because attributes are never emitted; and source-generator output is not
+/// scanned.
+/// </para>
 ///
 /// <code>
 /// [Ignore]
