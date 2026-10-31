@@ -489,6 +489,25 @@ public class BclExceptionConstructionTests
             );
     }
 
+    [Test]
+    public async Task BclExceptionTypeTests_ClassifyAsInstanceofError()
+    {
+        // A BCL exception type maps to `Error`, so the runtime type test (#279)
+        // classifies it as `instanceof` of that class for both `is` and `as`.
+        // Documented limitation: the test cannot tell BCL exception types apart.
+        var output = TranspileGuard(
+            """
+            public static bool IsArgument(object o) => o is ArgumentException;
+
+            public static ArgumentException? AsArgument(object o) => o as ArgumentException;
+            """
+        );
+
+        await Assert.That(output).Contains("return o instanceof Error;");
+        await Assert.That(output).Contains("instanceof Error ?");
+        await Assert.That(output).DoesNotContain("ArgumentException");
+    }
+
     private static string TranspileGuard(string members)
     {
         var result = TranspileHelper.Transpile(
