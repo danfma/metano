@@ -50,6 +50,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             diagnostics,
             ct
         );
+
         LoadedCompilation = compilation;
         LoadErrorCount = errorCount;
 
@@ -58,7 +59,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             fallbackAssemblyName: assemblyName,
             diagnostics: diagnostics,
             target: target,
-            generatedSources: new GeneratedSourceTrees(generatedFilePaths)
+            generatedSources: GeneratedSourceTrees.Reported(generatedFilePaths)
         );
     }
 
@@ -70,11 +71,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// production path: stores the compilation on
     /// <see cref="LoadedCompilation"/>, resets <see cref="LoadErrorCount"/>
     /// to <c>0</c>, and returns the populated record.
-    /// <paramref name="generatedTrees"/> lists the source-generator output inside
-    /// <paramref name="compilation"/> (what <c>GeneratorDriverRunResult.GeneratedTrees</c>
-    /// reports) so user-code validations skip it; when omitted, generated trees are
-    /// recognized by their <c>.g.cs</c> path or <c>&lt;auto-generated&gt;</c> header.
     /// </summary>
+    /// <param name="compilation">The compilation to extract.</param>
+    /// <param name="target">The language the IR is extracted for.</param>
+    /// <param name="generatedTrees">The source-generator output inside
+    /// <paramref name="compilation"/> (what <c>GeneratorDriverRunResult.GeneratedTrees</c>
+    /// reports), so user-code validations skip exactly those trees. When omitted,
+    /// generated trees are recognized by convention: a <c>.g.cs</c> path or an
+    /// <c>&lt;auto-generated&gt;</c> header.</param>
     public IrCompilation ExtractFromCompilation(
         Compilation compilation,
         TargetLanguage target = TargetLanguage.TypeScript,
@@ -83,14 +87,17 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         LoadedCompilation = compilation;
         LoadErrorCount = 0;
-        var generatedFilePaths = generatedTrees?.Select(tree => tree.FilePath) ?? [];
+
+        var generatedSources = generatedTrees is null
+            ? GeneratedSourceTrees.ByConvention()
+            : GeneratedSourceTrees.Reported(generatedTrees.Select(tree => tree.FilePath));
 
         return BuildIrCompilation(
             compilation,
             fallbackAssemblyName: compilation.AssemblyName ?? "",
             diagnostics: new List<MetanoDiagnostic>(),
             target: target,
-            generatedSources: new GeneratedSourceTrees(generatedFilePaths)
+            generatedSources: generatedSources
         );
     }
 
@@ -165,7 +172,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateThisAttribute(compilation, diagnostics);
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
             ValidateEmitAttribute(compilation, diagnostics);
-            ValidateIgnoreReferences(
+            IgnoreReferenceValidator.Validate(
                 compilation,
                 assemblyWideTranspile,
                 target,
@@ -537,295 +544,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     }
 
     /// <summary>
-    /// The <c>[Ignore]</c> attribute means ".NET-only" — any reference to
-    /// such a type from inside a transpilable type's signature OR body
-    /// raises <c>MS0013</c>. The walker scans every reference position the
-    /// IR/bridges traverse later: signatures (params, return, fields,
-    /// props, base, generic constraints), bodies (locals, <c>new</c>,
-    /// casts, <c>typeof</c>, generic args, member access, lambda inferred
-    /// types). Suppressed when the containing type or member is itself
-    /// <c>[Ignore]</c> — a non-emitted member referencing another
-    /// non-emitted type stays silent. Target-aware: a
-    /// <c>[Ignore(TargetLanguage.Dart)]</c> type does not light up under a
-    /// TS run.
-    /// <para>
-    /// Exempt positions (#247), since nothing from them reaches the output:
-    /// source-generator output (<paramref name="generatedSources"/>), an
-    /// <c>[Ignore]</c> interface listed directly in the base list (the
-    /// class/interface extractors erase it from <c>implements</c> /
-    /// <c>extends</c>), and attribute applications (never emitted).
-    /// </para>
-    /// </summary>
-    private static void ValidateIgnoreReferences(
-        Compilation compilation,
-        bool assemblyWideTranspile,
-        Metano.Annotations.TargetLanguage target,
-        GeneratedSourceTrees generatedSources,
-        List<MetanoDiagnostic> diagnostics
-    )
-    {
-        var currentAssembly = compilation.Assembly;
-        var seen = new HashSet<Location>();
-        CollectTopLevelTypes(
-            currentAssembly.GlobalNamespace,
-            type =>
-            {
-                if (
-                    !SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly)
-                    || SymbolHelper.HasIgnore(type, target)
-                    || generatedSources.DeclaresOnlyGeneratedCode(type)
-                )
-                    return;
-                ScanTypeReferences(type, target, compilation, generatedSources, diagnostics, seen);
-            }
-        );
-    }
-
-    private static void ScanTypeReferences(
-        INamedTypeSymbol containing,
-        Metano.Annotations.TargetLanguage target,
-        Compilation compilation,
-        GeneratedSourceTrees generatedSources,
-        List<MetanoDiagnostic> diagnostics,
-        HashSet<Location> seen
-    )
-    {
-        // Signature surface — base, interfaces, generic constraints. An
-        // [Ignore] interface is erased from the emitted heritage clause
-        // (SymbolHelper.EmittedInterfaces), so only the kept ones count.
-        if (containing.BaseType is { } baseType)
-            CheckType(baseType, containing.Locations.FirstOrDefault(), target, diagnostics, seen);
-        foreach (var iface in SymbolHelper.EmittedInterfaces(containing, target))
-            CheckType(iface, containing.Locations.FirstOrDefault(), target, diagnostics, seen);
-        foreach (var typeParam in containing.TypeParameters)
-        foreach (var constraint in typeParam.ConstraintTypes)
-            CheckType(constraint, typeParam.Locations.FirstOrDefault(), target, diagnostics, seen);
-
-        foreach (var member in containing.GetMembers())
-        {
-            // Members marked [Ignore] are not emitted, so references *from*
-            // their signature/body don't reach the target — skip them so
-            // an [Ignore] helper that takes an [Ignore] marker stays silent.
-            // Members a source generator added to a partial type are not
-            // user-authored, so they are not policed either.
-            if (
-                SymbolHelper.HasIgnore(member, target)
-                || generatedSources.DeclaresOnlyGeneratedCode(member)
-            )
-                continue;
-
-            switch (member)
-            {
-                case IFieldSymbol field when !field.IsImplicitlyDeclared:
-                    CheckType(
-                        field.Type,
-                        field.Locations.FirstOrDefault(),
-                        target,
-                        diagnostics,
-                        seen
-                    );
-                    break;
-                case IPropertySymbol prop when !prop.IsImplicitlyDeclared:
-                    CheckType(
-                        prop.Type,
-                        prop.Locations.FirstOrDefault(),
-                        target,
-                        diagnostics,
-                        seen
-                    );
-                    break;
-                case IMethodSymbol method
-                    when !method.IsImplicitlyDeclared
-                        && method.MethodKind
-                            is MethodKind.Ordinary
-                                or MethodKind.Constructor
-                                or MethodKind.PropertyGet
-                                or MethodKind.PropertySet:
-                    CheckType(
-                        method.ReturnType,
-                        method.Locations.FirstOrDefault(),
-                        target,
-                        diagnostics,
-                        seen
-                    );
-                    foreach (var p in method.Parameters)
-                        CheckType(p.Type, p.Locations.FirstOrDefault(), target, diagnostics, seen);
-                    foreach (var typeParam in method.TypeParameters)
-                    foreach (var constraint in typeParam.ConstraintTypes)
-                        CheckType(
-                            constraint,
-                            typeParam.Locations.FirstOrDefault(),
-                            target,
-                            diagnostics,
-                            seen
-                        );
-                    ScanMethodBody(
-                        method,
-                        target,
-                        compilation,
-                        generatedSources,
-                        diagnostics,
-                        seen
-                    );
-                    break;
-            }
-        }
-
-        foreach (var nested in containing.GetTypeMembers())
-            if (
-                SymbolHelper.IsTranspilable(
-                    nested,
-                    assemblyWideTranspile: false,
-                    currentAssembly: containing.ContainingAssembly
-                ) && !SymbolHelper.HasIgnore(nested, target)
-            )
-                ScanTypeReferences(
-                    nested,
-                    target,
-                    compilation,
-                    generatedSources,
-                    diagnostics,
-                    seen
-                );
-    }
-
-    private static void ScanMethodBody(
-        IMethodSymbol method,
-        Metano.Annotations.TargetLanguage target,
-        Compilation compilation,
-        GeneratedSourceTrees generatedSources,
-        List<MetanoDiagnostic> diagnostics,
-        HashSet<Location> seen
-    )
-    {
-        foreach (var reference in method.DeclaringSyntaxReferences)
-        {
-            if (generatedSources.Contains(reference.SyntaxTree))
-                continue;
-
-            var syntax = reference.GetSyntax();
-            var tree = syntax.SyntaxTree;
-            var semantic = compilation.GetSemanticModel(tree);
-            // Attribute applications are never emitted, so the walk does not
-            // descend into them: `[JsonConverter(typeof(IgnoredConverter))]`
-            // on the method, its parameters, or — through a record's primary
-            // constructor, whose syntax is the whole declaration — the type.
-            foreach (var node in syntax.DescendantNodesAndSelf(IsEmittedSyntax))
-            {
-                ITypeSymbol? referenced = null;
-                Location? location = node.GetLocation();
-                switch (node)
-                {
-                    case ObjectCreationExpressionSyntax oc:
-                        referenced = semantic.GetTypeInfo(oc).Type;
-                        break;
-                    case ImplicitObjectCreationExpressionSyntax ioc:
-                        referenced = semantic.GetTypeInfo(ioc).Type;
-                        break;
-                    case CastExpressionSyntax cast:
-                        referenced = semantic.GetTypeInfo(cast.Type).Type;
-                        break;
-                    case TypeOfExpressionSyntax t:
-                        referenced = semantic.GetTypeInfo(t.Type).Type;
-                        break;
-                    case BinaryExpressionSyntax be
-                        when be.IsKind(SyntaxKind.IsExpression)
-                            || be.IsKind(SyntaxKind.AsExpression):
-                        referenced = semantic.GetTypeInfo(be.Right).Type;
-                        break;
-                    case VariableDeclarationSyntax vd:
-                        referenced = semantic.GetTypeInfo(vd.Type).Type;
-                        break;
-                    case ParameterSyntax ps when ps.Type is { } pt:
-                        referenced = semantic.GetTypeInfo(pt).Type;
-                        break;
-                    case GenericNameSyntax g:
-                        foreach (var arg in g.TypeArgumentList.Arguments)
-                        {
-                            var argType = semantic.GetTypeInfo(arg).Type;
-                            CheckType(argType, arg.GetLocation(), target, diagnostics, seen);
-                        }
-                        continue;
-                    case MemberAccessExpressionSyntax ma:
-                        var info = semantic.GetSymbolInfo(ma).Symbol;
-                        if (info?.ContainingType is INamedTypeSymbol owner)
-                            CheckType(
-                                owner,
-                                ma.Expression.GetLocation(),
-                                target,
-                                diagnostics,
-                                seen
-                            );
-                        CheckMember(info, ma.Name.GetLocation(), target, diagnostics, seen);
-                        continue;
-                    case InvocationExpressionSyntax inv:
-                        var invokedSymbol = semantic.GetSymbolInfo(inv).Symbol;
-                        CheckMember(
-                            invokedSymbol,
-                            inv.Expression.GetLocation(),
-                            target,
-                            diagnostics,
-                            seen
-                        );
-                        continue;
-                }
-                if (referenced is not null)
-                    CheckType(referenced, location, target, diagnostics, seen);
-            }
-        }
-    }
-
-    private static bool IsEmittedSyntax(SyntaxNode node) => node is not AttributeListSyntax;
-
-    private static void CheckType(
-        ITypeSymbol? candidate,
-        Location? location,
-        Metano.Annotations.TargetLanguage target,
-        List<MetanoDiagnostic> diagnostics,
-        HashSet<Location> seen
-    )
-    {
-        if (candidate is null || location is null)
-            return;
-        // Walk into generic args / array elements so `List<IgnoredType>`
-        // and `IgnoredType[]` light up the same way bare references do.
-        switch (candidate)
-        {
-            case IArrayTypeSymbol arr:
-                CheckType(arr.ElementType, location, target, diagnostics, seen);
-                return;
-            case INamedTypeSymbol named when named.IsGenericType:
-                foreach (var arg in named.TypeArguments)
-                    CheckType(arg, location, target, diagnostics, seen);
-                if (SymbolHelper.HasIgnore(named, target) && seen.Add(location))
-                    Report(named, location, diagnostics);
-                return;
-            case INamedTypeSymbol named:
-                if (SymbolHelper.HasIgnore(named, target) && seen.Add(location))
-                    Report(named, location, diagnostics);
-                return;
-        }
-    }
-
-    private static void Report(
-        INamedTypeSymbol target,
-        Location location,
-        List<MetanoDiagnostic> diagnostics
-    )
-    {
-        diagnostics.Add(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.IgnoreReferencedByTranspiledCode,
-                $"Transpilable code references '{target.Name}', which is marked [Ignore] "
-                    + "(.NET-only). Migrate the type to [External] (ambient TS shape) "
-                    + "or remove the dependency from transpiled code.",
-                location
-            )
-        );
-    }
-
-    /// <summary>
     /// MS0026 — flags a <c>new T(...)</c> placed in a JSX-renderable position
     /// (a <c>Children</c> element, a <c>Render()</c> return, or the render-entry
     /// lambda body) whose constructed type cannot be classified as a component,
@@ -969,52 +687,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     + "[JsxNativeElement(\"tag\")], derive it from a [JsxComponentBuilder] base, "
                     + "or declare it as an imported renderable with [Import(...)] typed as "
                     + "JsxElement.",
-                location
-            )
-        );
-    }
-
-    private static void CheckMember(
-        ISymbol? candidate,
-        Location? location,
-        Metano.Annotations.TargetLanguage target,
-        List<MetanoDiagnostic> diagnostics,
-        HashSet<Location> seen
-    )
-    {
-        if (candidate is null || location is null)
-            return;
-        if (
-            candidate.Kind
-            is not (
-                SymbolKind.Method
-                or SymbolKind.Property
-                or SymbolKind.Field
-                or SymbolKind.Event
-            )
-        )
-            return;
-        if (!SymbolHelper.HasIgnore(candidate, target))
-            return;
-        if (!seen.Add(location))
-            return;
-        ReportMember(candidate, location, diagnostics);
-    }
-
-    private static void ReportMember(
-        ISymbol member,
-        Location location,
-        List<MetanoDiagnostic> diagnostics
-    )
-    {
-        var owner = member.ContainingType?.Name ?? "<global>";
-        diagnostics.Add(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.IgnoreReferencedByTranspiledCode,
-                $"Transpilable code references '{owner}.{member.Name}', which is marked [Ignore] "
-                    + "(.NET-only). The member is not emitted; remove the reference or drop "
-                    + "[Ignore] from the member.",
                 location
             )
         );
@@ -2987,7 +2659,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// <c>[Transpile]</c> types (local root-namespace computation) leave
     /// the visitor unfiltered.
     /// </summary>
-    private static void CollectTopLevelTypes(INamespaceSymbol ns, Action<INamedTypeSymbol> visit)
+    internal static void CollectTopLevelTypes(INamespaceSymbol ns, Action<INamedTypeSymbol> visit)
     {
         foreach (var member in ns.GetMembers())
         {

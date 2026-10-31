@@ -211,7 +211,9 @@ public sealed class IrTypeDependencyGraph
     {
         if (symbol.BaseType is { } baseType)
             AddIfTranspilable(baseType, acc, ownTypes, selfFqn);
-        foreach (var iface in symbol.Interfaces)
+        // Heritage as emitted: an erased [Ignore] interface contributes its kept
+        // base interfaces instead (target-agnostic, so only untargeted [Ignore]).
+        foreach (var iface in SymbolHelper.EmittedInterfaces(symbol, target: null))
             AddIfTranspilable(iface, acc, ownTypes, selfFqn);
 
         foreach (var member in symbol.GetMembers())

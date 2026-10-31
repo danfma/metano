@@ -245,16 +245,51 @@ public static class SymbolHelper
         HasTargetableFlag(symbol, "Ignore", target);
 
     /// <summary>
-    /// The interfaces <paramref name="type"/> lists directly that reach the emitted
-    /// heritage clause (<c>implements</c> for classes/records/structs, <c>extends</c>
-    /// for interfaces). An <c>[Ignore]</c> interface is .NET-only and erased in every
-    /// target instead of raising <c>MS0013</c> (#247); its members stay on the type
-    /// as ordinary members.
+    /// The interfaces that reach <paramref name="type"/>'s emitted heritage clause
+    /// (<c>implements</c> for classes/records/structs, <c>extends</c> for interfaces).
+    /// An interface ignored for <paramref name="target"/> is .NET-only, so it is
+    /// erased instead of raising <c>MS0013</c> (#247) — and replaced by its own kept
+    /// base interfaces (recursively), so erasing <c>IDotNetOnly : IKept</c> keeps
+    /// <c>IKept</c> on the type. Results keep declaration order without duplicates;
+    /// the erased interface's members stay on the type as ordinary members.
     /// </summary>
-    public static IEnumerable<INamedTypeSymbol> EmittedInterfaces(
+    public static IReadOnlyList<INamedTypeSymbol> EmittedInterfaces(
         INamedTypeSymbol type,
         TargetLanguage? target
-    ) => type.Interfaces.Where(iface => !HasIgnore(iface, target));
+    )
+    {
+        var emitted = new List<INamedTypeSymbol>();
+        var included = new HashSet<INamedTypeSymbol>(
+            type.Interfaces.Where(iface => !HasIgnore(iface, target)),
+            SymbolEqualityComparer.Default
+        );
+
+        foreach (var iface in type.Interfaces)
+        {
+            if (HasIgnore(iface, target))
+                AddKeptBaseInterfaces(iface, target, emitted, included);
+            else
+                emitted.Add(iface);
+        }
+
+        return emitted;
+    }
+
+    private static void AddKeptBaseInterfaces(
+        INamedTypeSymbol erased,
+        TargetLanguage? target,
+        List<INamedTypeSymbol> emitted,
+        HashSet<INamedTypeSymbol> included
+    )
+    {
+        foreach (var baseInterface in erased.Interfaces)
+        {
+            if (HasIgnore(baseInterface, target))
+                AddKeptBaseInterfaces(baseInterface, target, emitted, included);
+            else if (included.Add(baseInterface))
+                emitted.Add(baseInterface);
+        }
+    }
 
     /// <summary>
     /// Shared matcher for per-target "flag" attributes (e.g. <c>[Ignore]</c>)

@@ -26,7 +26,9 @@
   <!-- The MS0013 source-generator tests (#247) run the real System.Text.Json
        source generator over inline compilations. Its location is whatever
        analyzer the SDK hands this very project, so record that path as
-       assembly metadata instead of guessing the targeting-pack layout. -->
+       assembly metadata instead of guessing the targeting-pack layout. When no
+       analyzer matches, the metadata value is blank and the test helper
+       rejects it with an explicit error. -->
   <Target
     Name="EmbedJsonSourceGeneratorPath"
     BeforeTargets="GetAssemblyAttributes"
