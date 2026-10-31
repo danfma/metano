@@ -9,11 +9,17 @@ namespace Metano.Compiler.IR;
 /// <param name="BaseArguments">Arguments passed to the base constructor, if any.</param>
 /// <param name="Overloads">Additional constructor overloads, if the type has multiple
 /// public constructors.</param>
+/// <param name="BaseExceptionConstruction">Set when the base constructor called
+/// (explicitly via <c>: base(...)</c> or implicitly) belongs to an exception type
+/// with no emitted target declaration: the base arguments classified by
+/// constructor-parameter role, so a backend can build the native error
+/// <c>super(...)</c> call. Null otherwise.</param>
 public sealed record IrConstructorDeclaration(
     IReadOnlyList<IrConstructorParameter> Parameters,
     IReadOnlyList<IrStatement>? Body = null,
     IReadOnlyList<IrArgument>? BaseArguments = null,
-    IReadOnlyList<IrConstructorDeclaration>? Overloads = null
+    IReadOnlyList<IrConstructorDeclaration>? Overloads = null,
+    IrExceptionConstruction? BaseExceptionConstruction = null
 );
 
 /// <summary>

@@ -3665,9 +3665,23 @@ public sealed partial class IrExpressionExtractor
             parameterNames,
             IsJsTuple: isJsTuple,
             Initializers: initializers,
-            ExternalImports: BuildImportedRenderableImports(typeSymbol)
+            ExternalImports: BuildImportedRenderableImports(typeSymbol),
+            ExceptionConstruction: ExtractExceptionConstruction(ctor, args)
         );
     }
+
+    /// <summary>
+    /// Classifies the arguments of a <c>new</c> of a BCL exception by
+    /// constructor-parameter role (see <see cref="IrExceptionConstructionExtractor"/>).
+    /// Returns <c>null</c> for every other construction.
+    /// </summary>
+    private IrExceptionConstruction? ExtractExceptionConstruction(
+        IMethodSymbol? ctor,
+        IReadOnlyList<IrArgument> args
+    ) =>
+        ctor is null
+            ? null
+            : IrExceptionConstructionExtractor.Extract(ctor, args, ctor.ContainingType, _target);
 
     /// <summary>
     /// When the constructed type is an <em>imported</em> JSX renderable — it is

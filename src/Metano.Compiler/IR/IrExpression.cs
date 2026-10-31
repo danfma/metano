@@ -233,6 +233,13 @@ public sealed record IrArgument(IrExpression Value, string? Name = null, bool Is
 /// intra-project component file. Null for every other construction; the value
 /// import is otherwise resolved from the declaring type.
 /// </para>
+/// <para>
+/// <paramref name="ExceptionConstruction"/> is set when the constructed type is
+/// an exception with no emitted target declaration (a BCL exception): it
+/// classifies <paramref name="Arguments"/> by constructor-parameter role so a
+/// backend can lower the construction to its native error shape. Null for
+/// every other construction.
+/// </para>
 /// </summary>
 public sealed record IrNewExpression(
     IrTypeRef Type,
@@ -242,7 +249,8 @@ public sealed record IrNewExpression(
     bool IsObjectArgsCtor = false,
     bool IsJsTuple = false,
     IReadOnlyList<IrMemberInit>? Initializers = null,
-    IReadOnlyList<IrExternalImport>? ExternalImports = null
+    IReadOnlyList<IrExternalImport>? ExternalImports = null,
+    IrExceptionConstruction? ExceptionConstruction = null
 ) : IrExpression;
 
 /// <summary>

@@ -102,6 +102,12 @@ public static class IrToTsTypeMapper
 
     private static TsType MapNamed(IrNamedTypeRef named, IrToTsTypeOverrides? overrides)
     {
+        // BCL exceptions (System.Exception and its non-transpilable
+        // subclasses) have no TS declaration; their runtime values are
+        // `Error` instances, so the type position names the built-in too.
+        if (IsBclException(named))
+            return new TsNamedType("Error");
+
         var name = named.Name;
         if (NamedTypeRenames is { } renames && renames.TryGetValue(name, out var renamed))
             name = renamed;
@@ -126,6 +132,9 @@ public static class IrToTsTypeMapper
 
         return new TsNamedType(name, args, origin, originalName);
     }
+
+    private static bool IsBclException(IrNamedTypeRef named) =>
+        named.Semantics is { Kind: IrNamedTypeKind.Exception, IsTranspilable: false };
 
     /// <summary>
     /// Resolves the cross-package <see cref="TsTypeOrigin"/> for a type reference, or

@@ -495,7 +495,7 @@ public static class IrTypeRefMapper
         return null;
     }
 
-    private static bool IsExceptionType(INamedTypeSymbol type)
+    internal static bool IsExceptionType(INamedTypeSymbol type)
     {
         // Include `System.Exception` itself so `new Exception(msg)` lowers
         // to the TS `Error` fallback — not just subclasses.
