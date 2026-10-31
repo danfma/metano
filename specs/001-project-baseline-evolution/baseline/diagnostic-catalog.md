@@ -14,7 +14,7 @@ Metano's stable diagnostic contract. Source of truth: the diagnostic-code consta
 Each diagnostic carries: severity, stable code, message, optional source location. Stable codes are
 part of the transpiler contract (ADR-0010) and are searchable across docs, tests, issues, and ADRs.
 
-## Stable codes (`MS0001`–`MS0030`)
+## Stable codes (`MS0001`–`MS0031`)
 
 | Code | Symbolic name | Meaning |
 | --- | --- | --- |
@@ -48,6 +48,7 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0028` | `InvalidJsCallable` | `[JsCallable]` applied to a non-interface, or a `[JsCallable]` interface exposing a member other than `Invoke` — declared or inherited from a base interface. |
 | `MS0029` | `InvalidExportsSubpathRoot` | `[EmitPackage(SubpathRoot = …)]` is not a dotted C# namespace (TypeScript producer; the build fails, consumers treat the package as having no root). |
 | `MS0030` | `ExportsSubpathKeyCollision` | Under `[EmitPackage(SubpathRoot = …)]`, two namespace barrels claim one `package.json#exports` key (e.g. `--namespace-barrels` root barrel + types in the root namespace on `.`); raised by the transform before files are written. |
+| `MS0031` | `ExplicitImplementationConflict` | An explicit interface implementation (`string IPlain.Name`) cannot be declared under its interface member's name because another emitted member of the type or a base class (an implicit `Name`, or `IOther.Name`) with the same static-ness already claims it (case-insensitive, `[Name]`-aware). Only for interfaces of the transpiled contract (source, `[Transpile]`, or a `[TranspileAssembly]` package); a BCL bridge such as `IEnumerable.GetEnumerator` is dropped silently. The explicit member is dropped; rename one, implement implicitly, or mark the explicit member `[Ignore]` (#278). |
 
 ## Build integration (`Metano.Build`)
 

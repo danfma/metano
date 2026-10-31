@@ -183,6 +183,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
             ValidateJsTupleAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsCallableAttribute(compilation, assemblyWideTranspile, diagnostics);
+
+            ExplicitImplementationValidator.Validate(
+                compilation,
+                assemblyWideTranspile,
+                target,
+                generatedSources,
+                diagnostics
+            );
+
             ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
         }
 

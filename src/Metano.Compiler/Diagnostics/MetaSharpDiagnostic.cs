@@ -303,4 +303,15 @@ public static class DiagnosticCodes
     /// run because some consumer import would resolve to the wrong barrel. See spec
     /// 008.</summary>
     public const string ExportsSubpathKeyCollision = "MS0030";
+
+    /// <summary>MS0031 — an explicit interface implementation (<c>string IPlain.Name</c>)
+    /// cannot be lowered. The targets have no explicit implementations, so the member is
+    /// declared under the interface member's name (#278); here another emitted member of
+    /// the type or of a base class (an implicit <c>Name</c>, or <c>IOther.Name</c>)
+    /// already claims that name. The explicit member is dropped. Raised only for
+    /// interfaces of the transpiled contract; a BCL bridge such as
+    /// <c>IEnumerable.GetEnumerator</c> is dropped silently. Rename one of them,
+    /// implement the interface member implicitly, or mark the explicit member
+    /// <c>[Ignore]</c>.</summary>
+    public const string ExplicitImplementationConflict = "MS0031";
 }

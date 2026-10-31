@@ -85,7 +85,9 @@ Four cases are exempt, because nothing from them reaches the generated code:
   erased interface is replaced by its own base interfaces that are not ignored
   (recursively, without duplicates), so `class Person : IDotNetOnly` with
   `IDotNetOnly : IKept` still implements `IKept`. Its members stay on the type as
-  ordinary members. Only the interface itself is erased: an `[Ignore]` type used
+  ordinary members; its explicit implementations (`string IDotNetOnly.Tag`) are
+  dropped, since they are only reachable through the erased interface. Only the
+  interface itself is erased: an `[Ignore]` type used
   as a type argument of a kept base interface (`IHolder<DotNetOnly>`) still
   reports `MS0013`.
 - **Attribute applications.** Attributes are never emitted, so `[Ignore]` types

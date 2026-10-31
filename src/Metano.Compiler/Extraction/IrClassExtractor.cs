@@ -1,3 +1,4 @@
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -296,7 +297,11 @@ public static class IrClassExtractor
         {
             if (member.IsImplicitlyDeclared)
                 continue;
+
             if (SymbolHelper.HasIgnore(member, target))
+                continue;
+
+            if (IsDroppedExplicitImplementation(member, target))
                 continue;
 
             switch (member)
@@ -307,26 +312,20 @@ public static class IrClassExtractor
                     break;
 
                 case IPropertySymbol prop:
-                    result.Add(
-                        IrPropertyExtractor.Extract(prop, originResolver, compilation, target)
+                    var property = IrPropertyExtractor.Extract(
+                        prop,
+                        originResolver,
+                        compilation,
+                        target
                     );
+
+                    result.Add(DeclareUnderInterfaceName(property, prop));
                     break;
 
                 case IMethodSymbol method when IsUserMethod(method):
-                    // [Emit] methods are inline templates with no real body —
-                    // they exist only to be substituted at every call site
-                    // through the call-site extractor. They must not surface
-                    // as class members; including them would emit a stub
-                    // declaration whose generated body would never be called.
-                    // [Import] methods follow the same contract: every call
-                    // site is rewritten to the imported identifier, so the
-                    // declaration would be unreachable noise.
-                    if (
-                        SymbolHelper.HasEmit(method)
-                        || SymbolHelper.GetImport(method) is not null
-                        || SymbolHelper.IsInlineMember(method)
-                    )
+                    if (SymbolHelper.IsInlinedAtCallSite(method))
                         break;
+
                     var groupKey = OverloadGroupKey(method);
                     if (!methodGroups.TryGetValue(groupKey, out var list))
                     {
@@ -337,17 +336,7 @@ public static class IrClassExtractor
                     break;
 
                 case IEventSymbol evt:
-                    result.Add(
-                        new IrEventDeclaration(
-                            evt.Name,
-                            IrVisibilityMapper.Map(evt.DeclaredAccessibility),
-                            evt.IsStatic,
-                            IrTypeRefMapper.Map(evt.Type, originResolver)
-                        )
-                        {
-                            Attributes = IrAttributeExtractor.Extract(evt),
-                        }
-                    );
+                    result.Add(DeclareUnderInterfaceName(ExtractEvent(evt, originResolver), evt));
                     break;
             }
         }
@@ -358,20 +347,17 @@ public static class IrClassExtractor
             // convention (most specific arity first); siblings become the
             // Overloads payload.
             var ordered = group.OrderByDescending(m => m.Parameters.Length).ToList();
-            var primary = IrMethodExtractor.Extract(
-                ordered[0],
-                originResolver,
-                compilation,
-                target
-            );
+            var primary = ExtractMethod(ordered[0], originResolver, compilation, target);
+
             if (ordered.Count == 1)
             {
                 result.Add(primary);
                 continue;
             }
+
             var siblings = ordered
                 .Skip(1)
-                .Select(m => IrMethodExtractor.Extract(m, originResolver, compilation, target))
+                .Select(m => ExtractMethod(m, originResolver, compilation, target))
                 .ToList();
             result.Add(primary with { Overloads = siblings });
         }
@@ -383,10 +369,87 @@ public static class IrClassExtractor
         method.MethodKind
             is MethodKind.Ordinary
                 or MethodKind.UserDefinedOperator
-                or MethodKind.Conversion;
+                or MethodKind.Conversion
+                or MethodKind.ExplicitInterfaceImplementation;
 
-    private static string OverloadGroupKey(IMethodSymbol method) =>
-        method.IsOverride ? method.Name + "$override" : method.Name;
+    /// <summary>
+    /// Overloads share a group by C# name; an explicit implementation groups under
+    /// its interface member's name, the name it is declared with.
+    /// </summary>
+    private static string OverloadGroupKey(IMethodSymbol method)
+    {
+        var name =
+            ExplicitImplementationLowering.ImplementedInterfaceMember(method)?.Name ?? method.Name;
+
+        return method.IsOverride ? name + "$override" : name;
+    }
+
+    /// <summary>
+    /// An explicit interface implementation the target cannot declare: its interface
+    /// is erased, it implements an operator, or its interface member name is already
+    /// taken (the frontend reports <c>MS0031</c> for the latter unless the interface is
+    /// outside the transpiled contract, such as a BCL bridge). See
+    /// <see cref="ExplicitImplementationLowering"/>.
+    /// </summary>
+    private static bool IsDroppedExplicitImplementation(
+        ISymbol member,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        ExplicitImplementationLowering.Resolve(member, target)
+            is { Fate: not ExplicitImplementationFate.EmittedUnderInterfaceName };
+
+    private static IrEventDeclaration ExtractEvent(
+        IEventSymbol evt,
+        IrTypeOriginResolver? originResolver
+    ) =>
+        new(
+            evt.Name,
+            IrVisibilityMapper.Map(evt.DeclaredAccessibility),
+            evt.IsStatic,
+            IrTypeRefMapper.Map(evt.Type, originResolver)
+        )
+        {
+            Attributes = IrAttributeExtractor.Extract(evt),
+        };
+
+    private static IrMethodDeclaration ExtractMethod(
+        IMethodSymbol method,
+        IrTypeOriginResolver? originResolver,
+        Compilation? compilation,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        var declaration = IrMethodExtractor.Extract(method, originResolver, compilation, target);
+
+        return DeclareUnderInterfaceName(declaration, method);
+    }
+
+    /// <summary>
+    /// The targets have no explicit interface implementations, so an explicit member
+    /// (<c>string IPlain.Name</c>) is declared as a public member under the interface
+    /// member's name and attributes — exactly what every call site through the
+    /// interface type emits. The interface member's attributes replace the explicit
+    /// member's on purpose: call sites bind to the interface member, so its
+    /// <c>[Name]</c> and <c>[ObjectArgs]</c> decide the declared shape. Any other
+    /// member is returned unchanged.
+    /// </summary>
+    private static T DeclareUnderInterfaceName<T>(T declaration, ISymbol member)
+        where T : IrMemberDeclaration
+    {
+        if (
+            ExplicitImplementationLowering.ImplementedInterfaceMember(member) is not { } implemented
+        )
+            return declaration;
+
+        IrMemberDeclaration renamed = declaration with
+        {
+            Name = implemented.Name,
+            Visibility = IrVisibility.Public,
+            Attributes = IrAttributeExtractor.Extract(implemented),
+        };
+
+        return (T)renamed;
+    }
 
     private static IrFieldDeclaration? TryExtractField(
         IFieldSymbol field,
