@@ -193,6 +193,7 @@ Rules:
 ### Workflow
 
 - **Review before commit (dual agents).** Always pair `compiler-man` and `bob` on every code review BEFORE committing or declaring a feature complete. `compiler-man` owns semantic correctness, AST/IR shape, lowering, and pipeline coverage. `bob` owns Clean Code and design quality — naming, method size, condition complexity, blank-line discipline, and pattern application. Run them in parallel (single message, two `Agent` tool calls), then fix findings before committing.
+- **Rule reviewers.** Alongside `compiler-man` and `bob`, run `backend-reviewer` when `.cs`/`.csproj` files changed and `frontend-reviewer` when hand-written `.ts`/`.tsx` files changed (runtime, sample apps, tests). They check the coding rules in `.claude/rules/backend.md` and `.claude/rules/frontend.md`; a `REJECTED` verdict blocks completion. To avoid overlap, give each reviewer its focus: `compiler-man` semantics, `bob` design, the rule reviewers rulebook compliance.
 - **Worktree per issue.** Use `git worktree add ../Metano-issue-{N} -b <branch> main` for branch work. Never switch branches in the main working directory — other agents may be working there concurrently.
 - **Commit references.** When working on a GitHub issue, add `(#N)` at the end of the commit title and `Closes #N` (or `Part of #N` for partial work) in the commit body.
 - **No AI attribution in commits.** Never add Co-Authored-By or similar references unless explicitly allowed.
