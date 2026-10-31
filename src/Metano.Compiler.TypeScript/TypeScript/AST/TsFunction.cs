@@ -6,6 +6,9 @@ namespace Metano.Compiler.TypeScript.AST;
 /// lets TypeScript infer the return type. JSX function components use this so
 /// the emitted signature reads <c>function C(props: CProps) { … }</c> (the
 /// JSX return type is inferred), matching the lowering contract.
+/// <paramref name="Overloads"/> carries the overload signatures printed ahead
+/// of the implementation (<c>function f(a: string): T;</c>) when the function
+/// is the dispatcher of a C# overload group.
 /// </summary>
 public sealed record TsFunction(
     string Name,
@@ -15,5 +18,6 @@ public sealed record TsFunction(
     bool Exported = true,
     bool Async = false,
     bool Generator = false,
-    IReadOnlyList<TsTypeParameter>? TypeParameters = null
+    IReadOnlyList<TsTypeParameter>? TypeParameters = null,
+    IReadOnlyList<TsMethodOverload>? Overloads = null
 ) : TsTopLevel;

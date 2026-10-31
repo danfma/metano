@@ -76,6 +76,7 @@ public sealed record IrBaseExpression() : IrExpression;
 /// <param name="IsJsCallableInvoke">The call targets <c>Invoke</c> on a <c>[JsCallable]</c> interface; the receiver IS the JS function, so <c>recv.Invoke(args)</c> lowers to <c>recv(args)</c>.</param>
 /// <param name="IsJsTupleElement">The member access reads a positional element of a <c>[JsTuple]</c> value, lowering to array-index access <c>recv[i]</c>.</param>
 /// <param name="TupleIndex">The positional index (declaration order) when <see cref="IsJsTupleElement"/> is true; <c>-1</c> otherwise.</param>
+/// <param name="IsBrandedValueMember">The member access reads the single wrapped value member of a <c>[Branded]</c> struct (<c>id.Value</c>). The branded value IS the primitive at runtime, so backends that lower the wrapper to a branded primitive collapse the read to the receiver.</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
     string MemberName,
@@ -89,7 +90,8 @@ public sealed record IrMemberOrigin(
     bool IsDeclaringTypeNoContainer = false,
     bool IsJsCallableInvoke = false,
     bool IsJsTupleElement = false,
-    int TupleIndex = -1
+    int TupleIndex = -1,
+    bool IsBrandedValueMember = false
 );
 
 /// <summary>

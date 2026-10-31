@@ -84,21 +84,70 @@ public static class IrToTsBrandedBridge
 
         // User-declared static methods on the wrapper struct. Visibility +
         // [Ignore] + [Emit] filtering already happened in the extractor; we
-        // just emit each remaining static method as an exported function in
-        // the companion namespace.
+        // just emit each remaining static method (or overload group) as
+        // exported functions in the companion namespace.
         if (ir.Members is { Count: > 0 } members)
         {
             foreach (var member in members)
             {
-                if (member is not IrMethodDeclaration m || !m.IsStatic)
+                if (member is not IrMethodDeclaration { IsStatic: true } m)
                     continue;
-                functions.Add(ConvertStaticMethod(m, bclRegistry));
+                functions.AddRange(ConvertStaticMethodGroup(m, ir.Semantics, bclRegistry));
             }
         }
 
         sink.Add(new TsNamespaceDeclaration(tsTypeName, functions));
         return true;
     }
+
+    /// <summary>
+    /// Lowers a static method and the overload siblings folded onto
+    /// <see cref="IrMethodDeclaration.Overloads"/>. A single surviving method
+    /// becomes one function; two or more go through the shared overload
+    /// dispatcher so no sibling is silently dropped. Identity unwrap
+    /// conversions are filtered first (see <see cref="IsIdentityUnwrap"/>).
+    /// </summary>
+    private static IReadOnlyList<TsFunction> ConvertStaticMethodGroup(
+        IrMethodDeclaration primary,
+        IrTypeSemantics semantics,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var group = new[] { primary }
+            .Concat(primary.Overloads ?? [])
+            .Where(method => !IsIdentityUnwrap(method, semantics))
+            .ToList();
+
+        if (group.Count == 0)
+            return [];
+
+        if (group.Count == 1)
+            return [ConvertStaticMethod(group[0], bclRegistry)];
+
+        var dispatcherName = IrToTsNamingPolicy.ToFunctionName(group[0].Name, group[0].Attributes);
+
+        return IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions(
+            group[0] with
+            {
+                Overloads = group.Skip(1).ToList(),
+            },
+            dispatcherName,
+            bclRegistry
+        );
+    }
+
+    /// <summary>
+    /// A conversion operator from the wrapper to its underlying primitive
+    /// (<c>implicit operator string(UserId self) => self.Value</c>) is the
+    /// identity once the wrapper lowers to <c>primitive &amp; { __brand }</c>,
+    /// and call sites never invoke it — the companion skips it. Wrap-direction
+    /// conversions (<c>explicit operator UserId(string raw)</c>) return the
+    /// wrapper, not the primitive, so they are kept: they can carry
+    /// validation.
+    /// </summary>
+    private static bool IsIdentityUnwrap(IrMethodDeclaration method, IrTypeSemantics semantics) =>
+        method.Semantics is { IsOperator: true, OperatorKind: "Implicit" or "Explicit" }
+        && method.ReturnType.Equals(semantics.BrandedUnderlyingType);
 
     private static TsFunction ConvertStaticMethod(
         IrMethodDeclaration method,

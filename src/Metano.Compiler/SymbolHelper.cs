@@ -1024,6 +1024,65 @@ public static class SymbolHelper
     public static bool HasInlineWrapper(this ISymbol symbol) => HasBranded(symbol);
 
     /// <summary>
+    /// Resolves the single wrapped value member of a <c>[Branded]</c>
+    /// struct: the only public, non-static, non-<c>[Ignore]</c> field or
+    /// getter-shaped (parameterless) property. Returns <c>null</c> when the
+    /// type is not a branded struct, declares no such member, or declares
+    /// more than one — the shape is then not a wrapper and falls back to the
+    /// regular class/record lowering.
+    /// <para>
+    /// This is the one rule both the type-level wrapper detection (the
+    /// underlying type) and the call-site value-read flag consult, so they
+    /// cannot disagree on which member is the wrapped value. A target that
+    /// still falls back to a class for an underlying type it cannot brand
+    /// (TS: anything that is not a string/number/boolean/bigint) sees the
+    /// flag too — the same assumption the <c>new T(v)</c> →
+    /// <c>T.create(v)</c> call-site rewrite already makes.
+    /// </para>
+    /// </summary>
+    public static ISymbol? GetBrandedValueMember(INamedTypeSymbol type)
+    {
+        if (type.TypeKind != TypeKind.Struct || !HasBranded(type))
+            return null;
+
+        ISymbol? valueMember = null;
+
+        foreach (var member in type.GetMembers())
+        {
+            if (!IsBrandedValueMemberCandidate(member))
+                continue;
+
+            if (valueMember is not null)
+                return null;
+
+            valueMember = member;
+        }
+
+        return valueMember;
+    }
+
+    /// <summary>
+    /// True when <paramref name="member"/> is the wrapped value member of its
+    /// <c>[Branded]</c> declaring type, as resolved by
+    /// <see cref="GetBrandedValueMember"/>. Compared by symbol identity on the
+    /// original definition, never by name.
+    /// </summary>
+    public static bool IsBrandedValueMember(ISymbol member) =>
+        member is IFieldSymbol or IPropertySymbol
+        && member.ContainingType is { } containingType
+        && SymbolEqualityComparer.Default.Equals(
+            GetBrandedValueMember(containingType.OriginalDefinition),
+            member.OriginalDefinition
+        );
+
+    private static bool IsBrandedValueMemberCandidate(ISymbol member) =>
+        !member.IsImplicitlyDeclared
+        && !member.IsStatic
+        && member.DeclaredAccessibility == Accessibility.Public
+        && !HasIgnore(member)
+        && member is IFieldSymbol or IPropertySymbol { GetMethod: not null, Parameters.Length: 0 };
+
+    /// <summary>
     /// Determines if a type should be transpiled, considering:
     /// 1. [Ignore] → always excluded; type is paint-as-.NET-only and
     ///    references from transpiled code raise MS0013.

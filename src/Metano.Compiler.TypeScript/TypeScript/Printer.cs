@@ -421,6 +421,9 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintFunction(TsFunction func)
     {
+        if (func.Overloads is { Count: > 0 } overloads)
+            PrintFunctionOverloadSignatures(func, overloads);
+
         if (func.Exported)
             _sb.Write("export ");
         if (func.Async)
@@ -440,6 +443,32 @@ public sealed class Printer(string indent = "  ")
             _sb.Write(")");
         }
         PrintBody(func.Body);
+    }
+
+    /// <summary>
+    /// Prints <c>export function f(a: string): T;</c> per overload. Overload
+    /// signatures never carry <c>async</c> / <c>*</c> — those modifiers belong
+    /// to the implementation only.
+    /// </summary>
+    private void PrintFunctionOverloadSignatures(
+        TsFunction func,
+        IReadOnlyList<TsMethodOverload> overloads
+    )
+    {
+        foreach (var overload in overloads)
+        {
+            if (func.Exported)
+                _sb.Write("export ");
+            _sb.Write("function ");
+            _sb.Write(func.Name);
+            PrintTypeParameters(func.TypeParameters);
+            _sb.Write("(");
+            PrintParameters(overload.Parameters);
+            _sb.Write("): ");
+            PrintType(overload.ReturnType);
+            _sb.Write(";");
+            _sb.WriteLn();
+        }
     }
 
     private void PrintEnum(TsEnum tsEnum)

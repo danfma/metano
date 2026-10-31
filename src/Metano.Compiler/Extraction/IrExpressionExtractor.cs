@@ -2358,6 +2358,9 @@ public sealed partial class IrExpressionExtractor
         var isStringEnumMember = isEnumMember && SymbolHelper.HasStringEnum(symbol.ContainingType);
         var isBrandedMember =
             symbol is IMethodSymbol && SymbolHelper.HasBranded(symbol.ContainingType);
+        // Reading the wrapped value of a `[Branded]` receiver (`id.Value`) is
+        // the identity at runtime — the brand IS the primitive (ADR-0005).
+        var isBrandedValueMember = SymbolHelper.IsBrandedValueMember(symbol);
         var isPlainObjectInstanceMethod =
             symbol is IMethodSymbol { IsStatic: false, MethodKind: MethodKind.Ordinary }
             && SymbolHelper.HasPlainObject(symbol.ContainingType);
@@ -2394,7 +2397,8 @@ public sealed partial class IrExpressionExtractor
             IsDeclaringTypeNoContainer: isDeclaringTypeNoContainer,
             IsJsCallableInvoke: isJsCallableInvoke,
             IsJsTupleElement: tupleIndex >= 0,
-            TupleIndex: tupleIndex
+            TupleIndex: tupleIndex,
+            IsBrandedValueMember: isBrandedValueMember
         );
     }
 

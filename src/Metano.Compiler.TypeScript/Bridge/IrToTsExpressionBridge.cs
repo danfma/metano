@@ -202,6 +202,13 @@ public static partial class IrToTsExpressionBridge
     {
         var loweredTarget = Map(ma.Target, bclRegistry);
 
+        // `[Branded]` value read: the companion lowers the wrapper to
+        // `T = primitive & { __brand }`, so the receiver already IS the
+        // wrapped value — `id.Value` → `id`, `id.Value.Length` → `id.length`
+        // (ADR-0005).
+        if (ma.Origin is { IsBrandedValueMember: true })
+            return loweredTarget;
+
         // `[JsTuple]` positional member read: `value.First` / `value.Second`
         // lowers to array-index access `value[0]` / `value[1]`. The element
         // index is the member's positional declaration order, resolved by the
