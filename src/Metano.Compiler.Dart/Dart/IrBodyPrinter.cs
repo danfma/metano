@@ -233,7 +233,10 @@ public static class IrBodyPrinter
             case IrTypeReference tr:
                 // Type references keep their source casing — Dart classes and enums are
                 // PascalCase and should surface as written (e.g., `Counter.zero`).
-                sb.Append(tr.Name);
+                // Nested types arrive container-qualified (`Outer.Inner`), but the Dart
+                // prototype flattens them to top-level declarations, so only the
+                // innermost segment names the emitted type.
+                sb.Append(tr.Name[(tr.Name.LastIndexOf('.') + 1)..]);
                 break;
             case IrThisExpression:
                 sb.Append("this");

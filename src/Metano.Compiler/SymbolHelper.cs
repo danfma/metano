@@ -1032,7 +1032,8 @@ public static class SymbolHelper
     ///    reference it. No .ts file is generated and no import is added —
     ///    it's an ambient declaration over an external library shape.
     /// 3. [Transpile] → always included.
-    /// 4. assemblyWideTranspile + public → included.
+    /// 4. assemblyWideTranspile + public, or nested (any accessibility) in an
+    ///    opted-in container → included (see <see cref="IsAssemblyWideOptIn"/>).
     /// </summary>
     public static bool IsTranspilable(
         ISymbol symbol,
@@ -1067,23 +1068,42 @@ public static class SymbolHelper
             return false;
         if (HasTranspile(symbol))
             return true;
-        // Assembly-wide: only for types in the current compilation's assembly (not BCL/referenced assemblies)
-        if (
-            assemblyWideTranspile
-            && symbol.DeclaredAccessibility == Accessibility.Public
-            && (
-                currentAssembly is null
-                || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, currentAssembly)
-            )
-        )
+
+        return assemblyWideTranspile && IsAssemblyWideOptIn(symbol, currentAssembly);
+    }
+
+    /// <summary>
+    /// The <c>[assembly: TranspileAssembly]</c> inclusion rule: the type lives in the
+    /// current compilation's assembly (not BCL / referenced assemblies) and is either
+    /// public, or a named nested type whose container is itself opted in. A nested type
+    /// of any accessibility (<c>private</c>, <c>internal</c>, <c>protected</c>) is part
+    /// of its emitted container's surface — the container's members reference it as
+    /// <c>Outer.Inner</c>, so it must be emitted into the companion namespace (#264).
+    /// Unnamed nested types (C# 14 extension blocks) never qualify.
+    /// </summary>
+    private static bool IsAssemblyWideOptIn(ISymbol symbol, IAssemblySymbol? currentAssembly)
+    {
+        var inCurrentAssembly =
+            currentAssembly is null
+            || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, currentAssembly);
+
+        if (!inCurrentAssembly)
+            return false;
+
+        if (symbol.DeclaredAccessibility == Accessibility.Public)
             return true;
-        return false;
+
+        return symbol is INamedTypeSymbol { ContainingType: { } container } nested
+            && !string.IsNullOrEmpty(nested.Name)
+            && !nested.IsImplicitlyDeclared
+            && IsDeclaredTranspilable(container, assemblyWideTranspile: true, currentAssembly);
     }
 
     /// <summary>
     /// "Author opted this type into transpilation" — it carries
     /// <c>[Transpile]</c>, or the assembly is in <c>[assembly: TranspileAssembly]</c>
-    /// mode and the type is public (and not <c>[Ignore]</c>).
+    /// mode and the type is public or nested in an opted-in container (and not
+    /// <c>[Ignore]</c>).
     /// <para>
     /// Unlike <see cref="IsTranspilable(ISymbol, bool, IAssemblySymbol?)"/>, this
     /// does <b>not</b> short-circuit on the emission-scope markers
@@ -1105,12 +1125,8 @@ public static class SymbolHelper
             return false;
         if (HasTranspile(symbol))
             return true;
-        return assemblyWideTranspile
-            && symbol.DeclaredAccessibility == Accessibility.Public
-            && (
-                currentAssembly is null
-                || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, currentAssembly)
-            );
+
+        return assemblyWideTranspile && IsAssemblyWideOptIn(symbol, currentAssembly);
     }
 
     /// <summary>

@@ -1041,7 +1041,7 @@ public sealed partial class IrExpressionExtractor
     {
         var symbol = _semantic.GetSymbolInfo(generic).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
-            return new IrTypeReference(generic.Identifier.ValueText);
+            return TypeReferenceTo(symbol, generic.Identifier.ValueText);
 
         if (
             symbol
@@ -1068,7 +1068,7 @@ public sealed partial class IrExpressionExtractor
                 generic,
                 symbol,
                 new IrMemberAccess(
-                    new IrTypeReference(symbol.ContainingType.Name),
+                    TypeReferenceTo(symbol.ContainingType),
                     generic.Identifier.ValueText,
                     BuildOrigin(symbol)
                 )
@@ -1085,7 +1085,7 @@ public sealed partial class IrExpressionExtractor
     {
         var symbol = _semantic.GetSymbolInfo(id).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
-            return new IrTypeReference(id.Identifier.ValueText);
+            return TypeReferenceTo(symbol, id.Identifier.ValueText);
 
         // Inline method expansion: when the enclosing extractor is
         // lowering an `[Inline]` method body, each use of a method
@@ -1158,7 +1158,7 @@ public sealed partial class IrExpressionExtractor
         )
         {
             var staticAccess = new IrMemberAccess(
-                new IrTypeReference(symbol.ContainingType.Name),
+                TypeReferenceTo(symbol.ContainingType),
                 id.Identifier.ValueText,
                 BuildOrigin(symbol)
             );
@@ -1170,6 +1170,28 @@ public sealed partial class IrExpressionExtractor
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
         symbol is ILocalSymbol or IParameterSymbol or IRangeVariableSymbol;
+
+    /// <summary>
+    /// Builds the value-position reference to <paramref name="type"/>. A nested type
+    /// is qualified with its containers (<c>Outer.Inner</c>) — the same dotted shape
+    /// <see cref="IrNamedTypeRef"/> carries in type positions — because C# lets the
+    /// container's members name it unqualified while the emitted declaration lives in
+    /// the container's companion namespace (#264). Segments honor <c>[Name]</c> overrides
+    /// exactly like the type-position name. Top-level types keep their simple name.
+    /// </summary>
+    private IrTypeReference TypeReferenceTo(INamedTypeSymbol type) =>
+        new(QualifiedNestedName(type) ?? type.Name);
+
+    /// <summary>
+    /// Overload for identifier positions: a nested named type is qualified, anything
+    /// else (top-level type, type parameter, namespace) keeps the source
+    /// <paramref name="spelling"/>.
+    /// </summary>
+    private IrTypeReference TypeReferenceTo(ISymbol symbol, string spelling) =>
+        new(symbol is INamedTypeSymbol type ? QualifiedNestedName(type) ?? spelling : spelling);
+
+    private string? QualifiedNestedName(INamedTypeSymbol type) =>
+        type.ContainingType is null ? null : IrTypeRefMapper.BuildQualifiedName(type, _target);
 
     /// <summary>
     /// True when the identifier sits inside a field or property
@@ -1673,6 +1695,12 @@ public sealed partial class IrExpressionExtractor
                 typeArguments: null
             );
         }
+
+        // `Outer.Inner` naming a nested type (receiver of `Outer.Inner.Create()` or
+        // `Outer.Kind.A`) is a type reference, not a static member read — lowering it
+        // as a member access would camel-case the type segment (`Outer.inner`).
+        if (symbol is INamedTypeSymbol { ContainingType: not null } nestedType)
+            return TypeReferenceTo(nestedType);
 
         var target = Extract(member.Expression);
         var name = member.Name.Identifier.ValueText;
@@ -2191,7 +2219,7 @@ public sealed partial class IrExpressionExtractor
         return new List<IrArgument> { new(new IrObjectLiteral(properties)) };
     }
 
-    private static List<IrArgument> WrapInObjectArgsFromArgs(
+    private List<IrArgument> WrapInObjectArgsFromArgs(
         IReadOnlyList<IrArgument> args,
         IMethodSymbol symbol
     )
@@ -2200,7 +2228,7 @@ public sealed partial class IrExpressionExtractor
         return WrapInObjectArgs(normalized, symbol);
     }
 
-    private static IReadOnlyList<IrArgument> NormalizeForArgs(
+    private IReadOnlyList<IrArgument> NormalizeForArgs(
         IReadOnlyList<IrArgument> args,
         IMethodSymbol symbol
     )
@@ -3590,7 +3618,7 @@ public sealed partial class IrExpressionExtractor
         return result;
     }
 
-    private static IrExpression BuildDefaultArgument(IParameterSymbol parameter)
+    private IrExpression BuildDefaultArgument(IParameterSymbol parameter)
     {
         if (parameter.HasExplicitDefaultValue)
             return BuildLiteralForDefault(parameter.ExplicitDefaultValue, parameter.Type);
@@ -3601,7 +3629,7 @@ public sealed partial class IrExpressionExtractor
         return new IrLiteral(null, IrLiteralKind.Default);
     }
 
-    private static IrExpression BuildLiteralForDefault(object? value, ITypeSymbol type)
+    private IrExpression BuildLiteralForDefault(object? value, ITypeSymbol type)
     {
         if (value is null)
             return new IrLiteral(null, IrLiteralKind.Null);
@@ -3616,7 +3644,7 @@ public sealed partial class IrExpressionExtractor
                 .OfType<IFieldSymbol>()
                 .FirstOrDefault(f => f.HasConstantValue && Equals(f.ConstantValue, value));
             if (member is not null)
-                return new IrMemberAccess(new IrTypeReference(enumType.Name), member.Name);
+                return new IrMemberAccess(TypeReferenceTo(enumType), member.Name);
         }
         return value switch
         {

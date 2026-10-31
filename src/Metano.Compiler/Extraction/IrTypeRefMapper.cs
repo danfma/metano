@@ -594,7 +594,7 @@ public static class IrTypeRefMapper
     /// so a class `User` tagged `[Name("ApiUser")]` surfaces as `ApiUser`
     /// in the resulting IR reference.
     /// </summary>
-    private static string BuildQualifiedName(
+    internal static string BuildQualifiedName(
         INamedTypeSymbol type,
         Metano.Annotations.TargetLanguage? target = null
     )

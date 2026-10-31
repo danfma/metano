@@ -39,7 +39,7 @@ public static partial class IrToTsExpressionBridge
         {
             IrLiteral lit => MapLiteral(lit),
             IrIdentifier id => new TsIdentifier(TypeScriptNaming.ToCamelCase(id.Name)),
-            IrTypeReference tr => new TsIdentifier(IrToTsTypeMapper.ResolveAliasedName(tr.Name)),
+            IrTypeReference tr => MapTypeReference(tr),
             IrThisExpression => new TsIdentifier("this"),
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, bclRegistry),
@@ -267,6 +267,24 @@ public static partial class IrToTsExpressionBridge
         )
             return new TsIdentifier(memberName);
         return new TsPropertyAccess(loweredTarget, memberName);
+    }
+
+    /// <summary>
+    /// Lowers a value-position type reference. A nested type arrives dotted
+    /// (<c>Outer.Inner</c>) and lowers to a property-access chain rooted at the
+    /// top-level container, so it reads through the companion namespace and the import
+    /// collector sees the root identifier the file must import. Segments keep their
+    /// source casing — they name types, not members.
+    /// </summary>
+    private static TsExpression MapTypeReference(IrTypeReference reference)
+    {
+        var segments = IrToTsTypeMapper.ResolveAliasedName(reference.Name).Split('.');
+        TsExpression lowered = new TsIdentifier(segments[0]);
+
+        foreach (var segment in segments.Skip(1))
+            lowered = new TsPropertyAccess(lowered, segment);
+
+        return lowered;
     }
 
     private static TsExpression MapCall(
