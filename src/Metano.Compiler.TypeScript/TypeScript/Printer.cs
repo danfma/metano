@@ -1097,7 +1097,7 @@ public sealed class Printer(string indent = "  ")
 
             case TsPropertyAccess access:
                 PrintExpression(access.Object);
-                _sb.Write(".");
+                _sb.Write(access.Optional ? "?." : ".");
                 _sb.Write(access.Property);
                 break;
 

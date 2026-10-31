@@ -237,6 +237,35 @@ public class PlainObjectTests
     }
 
     [Test]
+    public async Task OptionalPlainObjectMethodCall_GuardsTheHelperCall()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            [Transpile, PlainObject]
+            public record TodoItem(string Title)
+            {
+                public string GetTitle() => Title;
+            }
+
+            [Transpile]
+            public class Service
+            {
+                public string? GetTitle(TodoItem? item) => item?.GetTitle();
+            }
+            """
+        );
+
+        var output = result["service.ts"];
+        await Assert
+            .That(output)
+            .Contains(
+                "$__metanoOptionalReceiver == null ? undefined : getTitle($__metanoOptionalReceiver)"
+            );
+        await Assert.That(output).DoesNotContain("item?.getTitle");
+    }
+
+    [Test]
     public async Task PlainObjectMethod_WithReservedName_StillEscaped()
     {
         // Top-level function declarations can NOT use reserved words even though

@@ -237,7 +237,19 @@ public sealed partial class IrExpressionExtractor
         switch (whenNotNull)
         {
             case MemberBindingExpressionSyntax mb:
-                return new IrOptionalChain(receiver, mb.Name.Identifier.ValueText);
+                return new IrOptionalChain(
+                    receiver,
+                    mb.Name.Identifier.ValueText,
+                    BuildOrigin(_semantic.GetSymbolInfo(mb).Symbol)
+                );
+
+            case MemberAccessExpressionSyntax ma:
+                var optionalTarget = LowerConditionalBinding(receiver, ma.Expression);
+                return new IrMemberAccess(
+                    optionalTarget,
+                    ma.Name.Identifier.ValueText,
+                    BuildOrigin(_semantic.GetSymbolInfo(ma).Symbol)
+                );
 
             case InvocationExpressionSyntax inv
                 when inv.Expression is MemberBindingExpressionSyntax mbCall:
@@ -270,9 +282,29 @@ public sealed partial class IrExpressionExtractor
                         IsOptional: true
                     );
 
-                var chainTarget = new IrOptionalChain(receiver, mbCall.Name.Identifier.ValueText);
+                var chainTarget = new IrOptionalChain(
+                    receiver,
+                    mbCall.Name.Identifier.ValueText,
+                    BuildOrigin(methodSymbol)
+                );
 
                 return new IrCallExpression(chainTarget, args, Origin: BuildOrigin(methodSymbol));
+
+            case InvocationExpressionSyntax inv
+                when inv.Expression is MemberAccessExpressionSyntax maCall:
+                var target = LowerConditionalBinding(receiver, maCall);
+                var chainedMethod = _semantic.GetSymbolInfo(inv).Symbol;
+                var chainedArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+                ApplyParamsSpread(
+                    chainedArgs,
+                    chainedMethod as IMethodSymbol,
+                    inv.ArgumentList.Arguments
+                );
+                return new IrCallExpression(
+                    target,
+                    chainedArgs,
+                    Origin: BuildOrigin(chainedMethod)
+                );
 
             case ConditionalAccessExpressionSyntax nested:
                 var head = LowerConditionalBinding(receiver, nested.Expression);

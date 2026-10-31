@@ -228,7 +228,8 @@ public static class IrToTsExpressionBridge
 
     private static TsExpression MapMemberAccess(
         IrMemberAccess ma,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        bool optionalReceiver = false
     )
     {
         var loweredTarget = Map(ma.Target, bclRegistry);
@@ -247,7 +248,12 @@ public static class IrToTsExpressionBridge
 
         if (bclRegistry is not null)
         {
-            var mapped = IrToTsBclMapper.TryMapMemberAccess(ma, loweredTarget, bclRegistry);
+            var mapped = IrToTsBclMapper.TryMapMemberAccess(
+                ma,
+                loweredTarget,
+                bclRegistry,
+                optionalReceiver
+            );
             if (mapped is not null)
                 return mapped;
         }
@@ -297,7 +303,7 @@ public static class IrToTsExpressionBridge
             && ma.Target is IrTypeReference
         )
             return new TsIdentifier(memberName);
-        return new TsPropertyAccess(loweredTarget, memberName);
+        return new TsPropertyAccess(loweredTarget, memberName, optionalReceiver);
     }
 
     private static TsExpression MapCall(
@@ -311,6 +317,11 @@ public static class IrToTsExpressionBridge
         // for call sites using `Name: value` is handled earlier (at the
         // dispatcher or object-literal pass).
         var loweredArgs = call.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
+        var hasMemberTarget = TryDeconstructMemberTarget(
+            call.Target,
+            out var memberReceiver,
+            out var optionalReceiver
+        );
 
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
         // the receiver `recv(args)`. After destructuring, the receiver IS the
@@ -318,31 +329,36 @@ public static class IrToTsExpressionBridge
         // (value / updater / arbitrary arity) all map identically; only the
         // argument list differs. Map the receiver (the member-access target),
         // never the `.Invoke` access itself.
-        if (
-            call.Origin is { IsJsCallableInvoke: true }
-            && call.Target is IrMemberAccess invokeAccess
-        )
+        if (call.Origin is { IsJsCallableInvoke: true } && hasMemberTarget)
         {
-            var receiver = Map(invokeAccess.Target, bclRegistry);
-            return new TsCallExpression(receiver, loweredArgs, call.IsOptional);
+            var receiver = Map(memberReceiver, bclRegistry);
+            return new TsCallExpression(
+                receiver,
+                loweredArgs,
+                Optional: optionalReceiver || call.IsOptional
+            );
         }
 
         // `[PlainObject]` instance method call: rewrite `obj.Method(args)` to
         // `methodName(obj, args)` — the plain-object shape has no class
         // prototype, so the method is emitted as a standalone helper that
         // takes the receiver as its first parameter.
-        if (
-            call.Origin is { IsPlainObjectInstanceMethod: true } pooMeta
-            && call.Target is IrMemberAccess pooAccess
-        )
+        if (call.Origin is { IsPlainObjectInstanceMethod: true } pooMeta && hasMemberTarget)
         {
-            var receiver = Map(pooAccess.Target, bclRegistry);
+            var receiver = Map(memberReceiver, bclRegistry);
             var helperName = pooMeta.EmittedName is { } ov
                 ? ov
                 : TypeScriptNaming.ToCamelCase(pooMeta.MemberName);
-            var helperArgs = new List<TsExpression> { receiver };
-            helperArgs.AddRange(loweredArgs);
-            return new TsCallExpression(new TsIdentifier(helperName), helperArgs);
+            TsExpression MapHelperCall(TsExpression helperReceiver)
+            {
+                var helperArgs = new List<TsExpression> { helperReceiver };
+                helperArgs.AddRange(loweredArgs);
+                return new TsCallExpression(new TsIdentifier(helperName), helperArgs);
+            }
+
+            return optionalReceiver
+                ? IrToTsBclMapper.GuardOptionalReceiver(receiver, MapHelperCall)
+                : MapHelperCall(receiver);
         }
 
         if (bclRegistry is not null && call.Origin is not null)
@@ -350,8 +366,8 @@ public static class IrToTsExpressionBridge
             // Lower the receiver separately so the BCL mapper sees it as the raw
             // value (no .methodName suffix applied yet). For unqualified calls the
             // target is an IrIdentifier — pass no receiver.
-            TsExpression? loweredReceiver = call.Target is IrMemberAccess memberTarget
-                ? Map(memberTarget.Target, bclRegistry)
+            TsExpression? loweredReceiver = hasMemberTarget
+                ? Map(memberReceiver, bclRegistry)
                 : null;
             var typeArgNames = call
                 .TypeArguments?.Select(TsTypeArgName)
@@ -363,7 +379,8 @@ public static class IrToTsExpressionBridge
                 loweredReceiver,
                 loweredArgs,
                 typeArgNames ?? [],
-                bclRegistry
+                bclRegistry,
+                optionalReceiver
             );
             if (mapped is not null)
                 return mapped;
@@ -382,32 +399,48 @@ public static class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// `value?.member` becomes the TS optional chaining `value?.member` —
-    /// the AST doesn't have a dedicated node, so we suffix the receiver
-    /// text with `?` and let the printer emit it verbatim. Mirrors the
-    /// legacy <see cref="Metano.Compiler.TypeScript.Transformation.OptionalChainingHandler"/>
-    /// shape so call-sites stay byte-for-byte identical.
+    /// `value?.member` preserves the symbol origin through mapping and emits
+    /// optional property access after any BCL member-name translation.
     /// </summary>
     private static TsExpression MapOptionalChain(
         IrOptionalChain chain,
         DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        MapMemberAccess(
+            new IrMemberAccess(chain.Target, chain.MemberName, chain.Origin),
+            bclRegistry,
+            optionalReceiver: true
+        );
+
+    /// <summary>
+    /// Decomposes ordinary and optional member targets into the same receiver
+    /// shape for BCL mapping, [PlainObject] helper calls, and [JsCallable]
+    /// invocations.
+    /// </summary>
+    private static bool TryDeconstructMemberTarget(
+        IrExpression target,
+        out IrExpression receiver,
+        out bool optional
     )
     {
-        var receiver = Map(chain.Target, bclRegistry);
-        var receiverText = OptionalChainReceiverText(receiver);
-        return new TsPropertyAccess(
-            new TsIdentifier(receiverText + "?"),
-            TypeScriptNaming.ToCamelCaseMember(chain.MemberName)
-        );
-    }
-
-    private static string OptionalChainReceiverText(TsExpression expr) =>
-        expr switch
+        switch (target)
         {
-            TsIdentifier id => id.Name,
-            TsPropertyAccess pa => OptionalChainReceiverText(pa.Object) + "." + pa.Property,
-            _ => "unknown",
-        };
+            case IrMemberAccess access:
+                receiver = access.Target;
+                optional = false;
+                return true;
+
+            case IrOptionalChain chain:
+                receiver = chain.Target;
+                optional = true;
+                return true;
+
+            default:
+                receiver = null!;
+                optional = false;
+                return false;
+        }
+    }
 
     private static TsType? LowerLambdaParameterType(IrParameter p)
     {
