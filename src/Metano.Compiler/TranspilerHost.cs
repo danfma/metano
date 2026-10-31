@@ -89,6 +89,8 @@ public static class TranspilerHost
                 )
             )
             {
+                target.AdoptCachedOutput(ir, compilation, cachedFiles);
+
                 // Refresh the MSBuild stamp so the next incremental
                 // build still sees a fresh Outputs timestamp even when
                 // the entire pipeline short-circuited via the cache.
