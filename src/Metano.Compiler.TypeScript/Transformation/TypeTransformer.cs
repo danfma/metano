@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Analysis;
@@ -119,13 +120,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
 
-    private readonly Dictionary<string, string> _crossPackageDependencies = new();
+    private readonly SortedDictionary<string, string> _crossPackageDependencies = new(
+        StringComparer.Ordinal
+    );
+
+    private string? _groupCacheFingerprint;
 
     /// <summary>
     /// Maps each cross-package npm name that was actually referenced during
     /// transformation to its npm version specifier (<c>^Major.Minor.Patch</c>, or
     /// <c>workspace:*</c> when the source assembly has no explicit version). Drained
-    /// from <see cref="TypeMappingContext.UsedCrossPackages"/> at the end of <c>TransformAll</c>
+    /// from <see cref="TypeMappingContext.CrossPackageDependencies"/> at the end of <c>TransformAll</c>
     /// and surfaced to the CLI driver so the package.json writer can merge the entries
     /// into <c>dependencies</c>.
     /// </summary>
@@ -278,9 +283,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             );
 
         // Build the explicit per-compilation context that replaces TypeMapper statics.
-        // Omit the optional sink so the context provisions concurrent defaults
-        // (ConcurrentHashSet for misses, a thread-safe ledger for used packages) —
-        // the per-group transform loop below fans out across worker threads.
+        // Omit the optional misses sink so the context provisions a ConcurrentHashSet;
+        // the context always owns its CrossPackageDependencyLedger. Both are thread-safe
+        // because the per-group transform loop below fans out across worker threads.
         var typeMappingContext = new TypeMappingContext(
             ir.BclExports,
             ir.CrossAssemblyOrigins,
@@ -355,7 +360,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // above), publishes its own per-group AsyncLocal slots for
             // UsingAliases, and only writes back into thread-safe sinks
             // (TypeMapping.CrossPackageMisses is a ConcurrentHashSet,
-            // UsedCrossPackages is a thread-safe ledger, and
+            // CrossPackageDependencies is a thread-safe ledger, and
             // _diagnostics is guarded by a lock). Parallel.For captures the
             // ambient ExecutionContext when each iteration starts so
             // AsyncLocal writes inside a worker stay isolated. The result
@@ -516,7 +521,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private void DrainCrossPackageDependencies(TypeMappingContext typeMappingContext)
     {
-        foreach (var (packageName, version) in typeMappingContext.UsedCrossPackages.All)
+        foreach (var (packageName, version) in typeMappingContext.CrossPackageDependencies.All)
         {
             _crossPackageDependencies[packageName] = version;
         }
@@ -770,11 +775,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     {
         var group = groups[index];
         var groupKey = GroupKey(group);
-        var dependencyLedger = Context.TypeMapping!.UsedCrossPackages;
+        var dependencyLedger = Context.TypeMapping!.CrossPackageDependencies;
 
         if (TryReuseFromCache(groupKey, cachedGroups, perGroupClosure, out var stub, out var entry))
         {
-            dependencyLedger.Restore(entry!.Dependencies);
+            dependencyLedger.Restore(entry.Dependencies);
             perGroupResults[index] = stub;
             perGroupEmissions[index] = new GroupEmission(entry.Files, entry.Dependencies);
 
@@ -801,7 +806,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         perGroupEmissions[index] = new GroupEmission(
             [FileMetadataExtractor.Extract(produced, printedContent)],
-            dependencies.Dependencies
+            dependencies.SnapshotDependencies()
         );
 
         return false;
@@ -1214,12 +1219,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     /// <summary>
     /// The configuration fingerprint plus the identity of every referenced package
-    /// (name and <c>SubpathRoot</c>). Group closure hashes cover only the current
-    /// assembly's types, so without this a producer that changes its
-    /// <c>SubpathRoot</c> would leave consumer groups reused with stale cross-package
-    /// specifiers (spec 008).
+    /// (name and <c>SubpathRoot</c>) and every dependency version a group can record.
+    /// Group closure hashes cover only the current assembly's types, so without this a
+    /// producer that changes its <c>SubpathRoot</c> would leave consumer groups reused
+    /// with stale cross-package specifiers (spec 008), and one that bumps its version
+    /// would leave them restoring the old version into <c>package.json</c> (#299).
     /// </summary>
-    private string GroupCacheFingerprint()
+    private string GroupCacheFingerprint() =>
+        _groupCacheFingerprint ??= BuildGroupCacheFingerprint();
+
+    private string BuildGroupCacheFingerprint()
     {
         var referencedPackages = ir
             .CrossAssemblyOrigins.Values.Select(origin =>
@@ -1229,15 +1238,64 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .Order(StringComparer.Ordinal);
 
         return $"{CacheConfigurationFingerprint ?? string.Empty};"
-            + $"referencedPackages={string.Join(",", referencedPackages)}";
+            + $"referencedPackages={string.Join(",", referencedPackages)};"
+            + $"dependencyVersions={string.Join(",", DependencyVersionCandidates())}";
+    }
+
+    /// <summary>
+    /// Every <c>package@version</c> the run-wide inputs let a group record: each
+    /// referenced <c>[EmitPackage]</c> assembly's resolved version (the explicit
+    /// <c>Version</c>, else the assembly identity version, as the type-origin resolver
+    /// stages it), each BCL export, and each type-level <c>[Import]</c>. Member-level
+    /// <c>[Import(Version)]</c> declarations outside the current assembly are not
+    /// covered; they are not part of the IR's run-wide maps.
+    /// </summary>
+    private IEnumerable<string> DependencyVersionCandidates()
+    {
+        var referencedPackageVersions = compilation
+            .References.Select(compilation.GetAssemblyOrModuleSymbol)
+            .OfType<IAssemblySymbol>()
+            .Where(asm => !SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
+            .Select(ReferencedPackageVersion)
+            .OfType<string>();
+
+        var bclExportVersions = ir.BclExports.Values.Select(export =>
+            $"{export.FromPackage}@{export.Version}"
+        );
+
+        var externalImportVersions = ir.ExternalImports.Values.Select(import =>
+            $"{import.From}@{import.Version}"
+        );
+
+        return referencedPackageVersions
+            .Concat(bclExportVersions)
+            .Concat(externalImportVersions)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>package@version</c> for a referenced assembly that declares a TypeScript
+    /// <c>[EmitPackage]</c>, or <c>null</c> when it declares none.
+    /// </summary>
+    private static string? ReferencedPackageVersion(IAssemblySymbol assembly)
+    {
+        var emitTargetValue = (int)TargetLanguage.TypeScript.ToEmitTarget();
+
+        if (SymbolHelper.GetEmitPackageInfo(assembly, emitTargetValue) is not { } package)
+            return null;
+
+        var version = package.Version ?? RoslynTypeQueries.FormatAssemblyVersion(assembly);
+
+        return $"{package.Name}@{version}";
     }
 
     private bool TryReuseFromCache(
         string groupKey,
         GroupCacheFile? cachedGroups,
         IReadOnlyDictionary<string, string> closures,
-        out TsSourceFile? stub,
-        out GroupCacheEntry? entry
+        [NotNullWhen(true)] out TsSourceFile? stub,
+        [NotNullWhen(true)] out GroupCacheEntry? entry
     )
     {
         stub = null;

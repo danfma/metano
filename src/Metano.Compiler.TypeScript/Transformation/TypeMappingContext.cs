@@ -42,7 +42,7 @@ internal sealed class ConcurrentHashSet<T>(IEqualityComparer<T>? comparer = null
 /// used as an implicit side-channel.
 ///
 /// <para>
-/// <see cref="CrossPackageMisses"/> and <see cref="UsedCrossPackages"/> are concurrent
+/// <see cref="CrossPackageMisses"/> and <see cref="CrossPackageDependencies"/> are concurrent
 /// because the file-group transformation loop fans out across worker threads
 /// (#21 — parallel TypeTransformer); resolver helpers in
 /// <c>IrTypeOriginResolverFactory</c> and <c>ImportCollector</c> populate both
@@ -101,7 +101,7 @@ public sealed class TypeMappingContext(
     /// the resolver helpers and import collector can populate it from parallel worker
     /// threads.
     /// </summary>
-    public CrossPackageDependencyLedger UsedCrossPackages { get; } = new();
+    public CrossPackageDependencyLedger CrossPackageDependencies { get; } = new();
 
     /// <summary>
     /// Version specifiers for cross-package origins the resolver has *seen* but
@@ -114,7 +114,7 @@ public sealed class TypeMappingContext(
     /// to <c>package.json#dependencies</c> would pin a workspace that the
     /// generated module never references (and may not even exist). The resolver
     /// records the version hint here; <see cref="ConfirmCrossPackageDependency"/>
-    /// promotes it to <see cref="UsedCrossPackages"/> only when the import
+    /// promotes it to <see cref="CrossPackageDependencies"/> only when the import
     /// collector actually emits an import line for that package.
     /// </summary>
     public IDictionary<string, string> CrossPackageVersionHints { get; } =
@@ -129,6 +129,6 @@ public sealed class TypeMappingContext(
     public void ConfirmCrossPackageDependency(string packageName)
     {
         if (CrossPackageVersionHints.TryGetValue(packageName, out var version))
-            UsedCrossPackages.Record(packageName, version);
+            CrossPackageDependencies.Record(packageName, version);
     }
 }

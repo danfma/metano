@@ -75,6 +75,21 @@ public class PackageJsonCacheReuseTests
         }
         """;
 
+    private const string EditedDecimalListsSource = """
+        namespace Acme.Todo.Lists
+        {
+            public class TodoList
+            {
+                public decimal Total() => 1m;
+            }
+        }
+        """;
+
+    private static readonly string BumpedSharedLibrarySource = SharedLibrarySource.Replace(
+        "Version = \"1.2.3\"",
+        "Version = \"2.0.0\""
+    );
+
     private static readonly string ItemsSourceWithSubpathRoot = ItemsSource.Replace(
         "[assembly: EmitPackage(\"@acme/todo\")]",
         "[assembly: EmitPackage(\"@acme/todo\", SubpathRoot = \"Acme.Todo\")]"
@@ -147,15 +162,13 @@ public class PackageJsonCacheReuseTests
             [TaggedItemsSource],
             library
         );
+
         var reused = await TranspileAndReconcile(package, [TaggedItemsSource], library);
         var reusedManifest = ReadManifest(package);
 
         await Assert.That(reused.ServedFromCache).IsTrue();
         await Assert.That(reusedManifest).IsEqualTo(coldManifest);
-
-        await Assert
-            .That(JsonNode.Parse(reusedManifest)!["dependencies"]?["@acme/shared"]?.ToString())
-            .IsEqualTo("1.2.3");
+        await Assert.That(DependencyVersion(reusedManifest, "@acme/shared")).IsEqualTo("1.2.3");
     }
 
     /// <summary>
@@ -168,8 +181,8 @@ public class PackageJsonCacheReuseTests
         var package = NewPackage();
         var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
         var sources = new[] { TaggedItemsSource, DecimalListsSource };
-
         var coldManifest = await TranspileColdAndReadManifest(package, sources, library);
+
         DeleteManifest(package);
         var reused = await TranspileAndReconcile(package, sources, library);
         var rebuiltManifest = ReadManifest(package);
@@ -191,23 +204,18 @@ public class PackageJsonCacheReuseTests
     {
         var package = NewPackage();
         var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
-        var editedLists = DecimalListsSource.Replace("Total() => 0m", "Total() => 1m");
+        var editedSources = new[] { TaggedItemsSource, EditedDecimalListsSource };
 
         await TranspileColdAndReadManifest(
             package,
             [TaggedItemsSource, DecimalListsSource],
             library
         );
-        var coldEditedManifest = await TranspileColdInFreshPackage(
-            [TaggedItemsSource, editedLists],
-            library
-        );
+
+        var coldEditedManifest = await TranspileColdInFreshPackage(editedSources, library);
+
         DeleteManifest(package);
-        var partial = await TranspileAndReconcile(
-            package,
-            [TaggedItemsSource, editedLists],
-            library
-        );
+        var partial = await TranspileAndReconcile(package, editedSources, library);
         var rebuiltManifest = ReadManifest(package);
 
         await Assert.That(partial.ServedFromCache).IsFalse();
@@ -227,28 +235,115 @@ public class PackageJsonCacheReuseTests
     {
         var package = NewPackage();
         var library = TranspileHelper.CompileLibrary(SharedLibrarySource);
-        var sources = new[] { TaggedItemsSource, DecimalListsSource };
         var listsWithoutDecimal = DecimalListsSource.Replace(
             "decimal Total() => 0m",
             "int Total() => 0"
         );
 
-        await TranspileColdAndReadManifest(package, sources, library);
-        var coldEditedManifest = await TranspileColdInFreshPackage(
-            [TaggedItemsSource, listsWithoutDecimal],
-            library
-        );
-        DeleteManifest(package);
-        var partial = await TranspileAndReconcile(
+        var editedSources = new[] { TaggedItemsSource, listsWithoutDecimal };
+        await TranspileColdAndReadManifest(
             package,
-            [TaggedItemsSource, listsWithoutDecimal],
+            [TaggedItemsSource, DecimalListsSource],
             library
         );
+        var coldEditedManifest = await TranspileColdInFreshPackage(editedSources, library);
+
+        DeleteManifest(package);
+        var partial = await TranspileAndReconcile(package, editedSources, library);
         var rebuiltManifest = ReadManifest(package);
 
         await Assert.That(partial.ServedFromCache).IsFalse();
         await Assert.That(rebuiltManifest).IsEqualTo(coldEditedManifest);
         await Assert.That(DependencyNames(rebuiltManifest)).IsEquivalentTo(["@acme/shared"]);
+    }
+
+    /// <summary>
+    /// A producer that bumps its <c>[EmitPackage(Version)]</c> must not leave a reused
+    /// group restoring the old version into a rebuilt package.json.
+    /// </summary>
+    [Test]
+    public async Task PartialCacheHit_RebuildsDeletedPackageJsonWithBumpedLibraryVersion()
+    {
+        var package = NewPackage();
+        var libraryV1 = TranspileHelper.CompileLibrary(SharedLibrarySource);
+        var libraryV2 = TranspileHelper.CompileLibrary(BumpedSharedLibrarySource);
+        var editedSources = new[] { TaggedItemsSource, EditedDecimalListsSource };
+
+        await TranspileColdAndReadManifest(
+            package,
+            [TaggedItemsSource, DecimalListsSource],
+            libraryV1
+        );
+
+        var coldBumpedManifest = await TranspileColdInFreshPackage(editedSources, libraryV2);
+
+        DeleteManifest(package);
+        var partial = await TranspileAndReconcile(package, editedSources, libraryV2);
+        var rebuiltManifest = ReadManifest(package);
+
+        await Assert.That(partial.ServedFromCache).IsFalse();
+        await Assert.That(rebuiltManifest).IsEqualTo(coldBumpedManifest);
+        await Assert.That(DependencyVersion(rebuiltManifest, "@acme/shared")).IsEqualTo("2.0.0");
+    }
+
+    /// <summary>
+    /// Several groups share the bumped package and only one is edited: every group must
+    /// agree on the new version, whichever worker thread records it first.
+    /// </summary>
+    [Test]
+    public async Task PartialCacheHit_UpdatesSharedDependencyVersionAfterLibraryBump()
+    {
+        var package = NewPackage();
+        var libraryV1 = TranspileHelper.CompileLibrary(SharedLibrarySource);
+        var libraryV2 = TranspileHelper.CompileLibrary(BumpedSharedLibrarySource);
+        var coldSources = TagUserSources(editedIndex: null);
+        var editedSources = TagUserSources(editedIndex: 3);
+
+        await TranspileColdAndReadManifest(package, coldSources, libraryV1);
+        var coldBumpedManifest = await TranspileColdInFreshPackage(editedSources, libraryV2);
+
+        var partial = await TranspileAndReconcile(package, editedSources, libraryV2);
+        var updatedManifest = ReadManifest(package);
+
+        await Assert.That(partial.ServedFromCache).IsFalse();
+        await Assert.That(updatedManifest).IsEqualTo(coldBumpedManifest);
+        await Assert.That(DependencyVersion(updatedManifest, "@acme/shared")).IsEqualTo("2.0.0");
+    }
+
+    /// <summary>
+    /// One file group per source, each referencing <c>Tag</c> from the shared library;
+    /// the source at <paramref name="editedIndex"/> gets a body change.
+    /// </summary>
+    private static IReadOnlyList<string> TagUserSources(int? editedIndex)
+    {
+        const int GroupCount = 7;
+
+        return Enumerable
+            .Range(0, GroupCount)
+            .Select(index =>
+            {
+                var label = index == editedIndex ? "edited" : "original";
+                var assemblyAttributes =
+                    index == 0
+                        ? "[assembly: TranspileAssembly]\n[assembly: EmitPackage(\"@acme/todo\")]"
+                        : "";
+
+                return $$"""
+                using Metano.Annotations;
+                using Acme.Shared;
+
+                {{assemblyAttributes}}
+
+                namespace Acme.Todo.Group{{index}}
+                {
+                    public record Item{{index}}(Tag Tag)
+                    {
+                        public string Describe() => "{{label}}";
+                    }
+                }
+                """;
+            })
+            .ToList();
     }
 
     /// <summary>
@@ -357,6 +452,9 @@ public class PackageJsonCacheReuseTests
 
     private static IReadOnlyList<string> DependencyNames(string manifest) =>
         JsonNode.Parse(manifest)!["dependencies"]!.AsObject().Select(entry => entry.Key).ToList();
+
+    private static string? DependencyVersion(string manifest, string packageName) =>
+        JsonNode.Parse(manifest)!["dependencies"]?[packageName]?.ToString();
 
     private static IReadOnlyList<string> ExportKeys(string manifest) =>
         JsonNode.Parse(manifest)!["exports"]!.AsObject().Select(entry => entry.Key).ToList();

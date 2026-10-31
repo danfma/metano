@@ -34,7 +34,7 @@ public interface IrToTsTypeOverrides
 /// </summary>
 public sealed class BclExportTypeOverrides(
     IReadOnlyDictionary<string, IrBclExport> map,
-    CrossPackageDependencyLedger usedCrossPackages
+    CrossPackageDependencyLedger dependencyLedger
 ) : IrToTsTypeOverrides
 {
     public TsType? TryResolve(IrTypeRef type)
@@ -47,7 +47,7 @@ public sealed class BclExportTypeOverrides(
         // Mirror TypeMapper.Map: every BCL hit records its package name and
         // version so the package.json writer surfaces the dependency.
         if (entry.FromPackage.Length > 0 && entry.Version is { Length: > 0 } version)
-            usedCrossPackages.Record(entry.FromPackage, version);
+            dependencyLedger.Record(entry.FromPackage, version);
         return new TsNamedType(entry.ExportedName);
     }
 
