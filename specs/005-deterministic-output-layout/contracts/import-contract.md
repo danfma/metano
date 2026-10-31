@@ -30,6 +30,7 @@ Guarantee: no generated-to-generated edge passes through an `index` barrel → n
 - `exports`: one entry per emitted **leaf barrel**, at its full-namespace subpath, e.g.
   `"./apis/web-server/contracts/vigiata/contracts/profiles"` → that barrel's `types`/`import`.
 - Entries are derived from the actually-emitted barrels, so they always mirror the real layout (FR-013).
+- *Amended by [008](../../008-exports-subpath-root/contracts/exports-subpath-root.md)*: an opt-in `[EmitPackage(SubpathRoot = …)]` strips that namespace prefix from the `exports` keys (and from cross-package consumer specifiers); on-disk paths and `imports` stay as above.
 
 ## Tree-shaking note
 
