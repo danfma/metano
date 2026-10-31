@@ -296,7 +296,18 @@ public class IndexAndRangeTests
             """
         );
 
-        await AssertSingleUnsupported(diagnostics, "Load()[^1]");
+        var unsupported = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .Select(d => d.Message)
+            .ToList();
+
+        // One for the index that cannot be bound once, one for the `ref` argument
+        // itself, which is passed by value (#265).
+        await Assert.That(unsupported).Count().IsEqualTo(2);
+        await Assert.That(unsupported).Contains(m => m.StartsWith("'ref' argument 'Load()[^1]'"));
+        await Assert
+            .That(unsupported)
+            .Contains(m => !m.StartsWith("'ref'") && m.Contains("Load()[^1]"));
     }
 
     [Test]

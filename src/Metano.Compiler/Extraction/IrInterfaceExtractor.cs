@@ -101,13 +101,20 @@ public static class IrInterfaceExtractor
     )
     {
         var parameters = method
-            .Parameters.Select(p => new IrParameter(
-                p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver, target),
-                IsParams: p.IsParams,
-                IsOptional: p.HasOptional(),
-                IsConstant: p.HasConstant()
-            ))
+            .Parameters.Select(p =>
+                OutParameterFlow.Annotate(
+                    new IrParameter(
+                        p.Name,
+                        IrTypeRefMapper.Map(p.Type, originResolver, target),
+                        IsParams: p.IsParams,
+                        IsOptional: p.HasOptional(),
+                        IsConstant: p.HasConstant()
+                    ),
+                    p,
+                    originResolver,
+                    target
+                )
+            )
             .ToList();
 
         var returnType = IrTypeRefMapper.Map(method.ReturnType, originResolver, target);

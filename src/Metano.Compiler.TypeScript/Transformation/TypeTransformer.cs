@@ -937,7 +937,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsReturnStatement { Expression: { } expr } => ContainsJsxInExpression(expr),
             TsExpressionStatement exprStmt => ContainsJsxInExpression(exprStmt.Expression),
             TsThrowStatement throwStmt => ContainsJsxInExpression(throwStmt.Expression),
-            TsVariableDeclaration varDecl => ContainsJsxInExpression(varDecl.Initializer),
+            TsVariableDeclaration { Initializer: { } initializer } => ContainsJsxInExpression(
+                initializer
+            ),
             TsIfStatement ifStmt => ContainsJsxInExpression(ifStmt.Condition)
                 || ContainsJsxInStatements(ifStmt.Then)
                 || (ifStmt.Else is { } @else && ContainsJsxInStatements(@else)),
@@ -1499,6 +1501,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var functions = IrModuleFunctionExtractor
             .Extract(type, Context.OriginResolver, Context.Compilation, TargetLanguage.TypeScript)
+            .Select(OutParameterLowering.Lower)
             // IrModuleFunctionExtractor emits every public method. Strip the
             // entry point — its body is unwrapped separately below.
             .Where(f =>
@@ -1640,7 +1643,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// synthetic entry point's declaring syntax is the
     /// <see cref="CompilationUnitSyntax"/> that hosts the
     /// <see cref="GlobalStatementSyntax"/> nodes; we walk those directly so
-    /// the <c>const x = …</c> promotion + <c>TryGetValue</c> expansion that
+    /// the <c>const x = …</c> promotion + <c>out</c>-argument lowering that
     /// <see cref="IrStatementExtractor.ExtractStatements(IReadOnlyList{StatementSyntax})"/>
     /// applies match the body-extraction path.
     /// </summary>
@@ -1813,6 +1816,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ),
             _ => null,
         };
+        if (ir is not null)
+            ir = OutParameterLowering.Lower(ir);
         if (ir is not null && irCache is not null)
             irCache[type] = ir;
         return ir;

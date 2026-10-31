@@ -48,10 +48,7 @@ public static class IrPropertyExtractor
             // Expression-bodied property: the whole `=> expr;` is the getter.
             if (syntax.ExpressionBody is not null)
             {
-                getterBody =
-                [
-                    new IrReturnStatement(exprExtractor.Extract(syntax.ExpressionBody.Expression)),
-                ];
+                getterBody = stmtExtractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false);
             }
             else if (syntax.AccessorList is not null)
             {
@@ -87,7 +84,7 @@ public static class IrPropertyExtractor
             }
 
             if (syntax.Initializer is not null)
-                initializer = exprExtractor.Extract(syntax.Initializer.Value);
+                initializer = exprExtractor.ExtractStandalone(syntax.Initializer.Value);
         }
 
         return new IrPropertyDeclaration(

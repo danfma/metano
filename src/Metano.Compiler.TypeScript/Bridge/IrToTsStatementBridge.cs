@@ -16,25 +16,15 @@ namespace Metano.Compiler.TypeScript.Bridge;
 public static class IrToTsStatementBridge
 {
     /// <summary>
-    /// Maps a list of IR statements to a flat list of TS statements, splicing out
-    /// <see cref="IrBlockStatement"/> since TS has no first-class nested-block node —
-    /// the statement list itself is the block.
+    /// Maps a list of IR statements to TS statements. A nested
+    /// <see cref="IrBlockStatement"/> stays a <c>{ … }</c> block so the
+    /// <c>let</c>/<c>const</c> bindings it declares keep their C# scope (a bare
+    /// C# block, or a loop wrapped with its hoisted <c>out var</c> locals).
     /// </summary>
     public static IReadOnlyList<TsStatement> MapBody(
         IReadOnlyList<IrStatement> body,
         DeclarativeMappingRegistry? bclRegistry = null
-    )
-    {
-        var result = new List<TsStatement>(body.Count);
-        foreach (var stmt in body)
-        {
-            if (stmt is IrBlockStatement block)
-                result.AddRange(MapBody(block.Statements, bclRegistry));
-            else
-                result.Add(Map(stmt, bclRegistry));
-        }
-        return result;
-    }
+    ) => body.Select(stmt => Map(stmt, bclRegistry)).ToList();
 
     private static TsStatement MapForEach(
         IrForEachStatement fe,
@@ -282,6 +272,16 @@ public static class IrToTsStatementBridge
             IrReturnStatement ret => new TsReturnStatement(
                 ret.Value is not null ? IrToTsExpressionBridge.Map(ret.Value, bclRegistry) : null
             ),
+            // Declared ahead of its first assignment (an `out var` local, or
+            // `T x;`): a typed, uninitialized `let x: T;` keeps TypeScript's
+            // definite-assignment analysis in charge instead of `undefined`.
+            IrVariableDeclaration { Initializer: null, Type: { } type } vd =>
+                new TsVariableDeclaration(
+                    vd.Name,
+                    Initializer: null,
+                    Const: false,
+                    Type: IrToTsTypeMapper.Map(type)
+                ),
             IrVariableDeclaration vd => new TsVariableDeclaration(
                 vd.Name,
                 vd.Initializer is not null
@@ -291,7 +291,9 @@ public static class IrToTsStatementBridge
             ),
             IrTupleDeconstruction td => new TsDestructuringDeclaration(
                 td.Elements.Select(e => e.Name).ToList(),
-                IrToTsExpressionBridge.Map(td.Initializer, bclRegistry),
+                td.Initializer is IrOutArgumentCall outCall
+                    ? IrToTsExpressionBridge.MapOutArgumentCallValue(outCall, bclRegistry)
+                    : IrToTsExpressionBridge.Map(td.Initializer, bclRegistry),
                 Const: td.IsConst
             ),
             IrIfStatement ifs => new TsIfStatement(
@@ -302,22 +304,7 @@ public static class IrToTsStatementBridge
             IrThrowStatement th => new TsThrowStatement(
                 IrToTsExpressionBridge.Map(th.Expression, bclRegistry)
             ),
-            IrBlockStatement block when block.Statements.Count == 1 =>
-            // Trivial block: a single statement wrapped for scope. Safe to
-            // unwrap in scalar position.
-            Map(block.Statements[0], bclRegistry),
-            IrBlockStatement block => new TsExpressionStatement(
-                // Callers that need to flatten a multi-statement block
-                // should route through MapBody. Reaching this arm means an
-                // IR producer handed us a block in scalar position we can't
-                // safely collapse — emit a visible TODO so the regression
-                // surfaces at build time instead of silently dropping
-                // statements.
-                new TsIdentifier(
-                    $"/* TODO: IrBlockStatement with {block.Statements.Count} statements "
-                        + "reached Map in scalar position; expected MapBody */"
-                )
-            ),
+            IrBlockStatement block => new TsBlockStatement(MapBody(block.Statements, bclRegistry)),
             IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
             IrContinueStatement => new TsExpressionStatement(new TsIdentifier("continue")),
             IrSwitchStatement sw => MapSwitch(sw, bclRegistry),

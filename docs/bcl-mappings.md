@@ -62,6 +62,7 @@ export namespace UUID {
   export function newCompact(): UUID;
   export const empty: UUID;
   export function isUuid(value: unknown): value is UUID;
+  export function tryParse(text: string | null | undefined): readonly [found: boolean, value: UUID];
 }
 ```
 
@@ -72,6 +73,7 @@ export namespace UUID {
 | `Guid.NewGuid()` | `UUID.newUuid()` |
 | `Guid.NewGuid().ToString("N")` | `UUID.newUuid().replace(/-/g, "")` (compact form) |
 | `Guid.Parse(s)` | `UUID.create(s)` |
+| `Guid.TryParse(s, out var g)` | `const [ok, g] = UUID.tryParse(s)` (`D`/`N`/`B`/`P` formats, normalized to lowercase `D`; `UUID.empty` on failure) |
 | `Guid.Empty` | `UUID.empty` |
 | `guid.ToString()` | `guid` (identity — already a string) |
 
@@ -148,7 +150,7 @@ preserving immutability semantics.
 | `dict.Keys.Contains(k)` | `map.has(k)` |
 | `dict[key]` (read) | `map.get(key)` |
 | `dict[key] = value` (write) | `map.set(key, value)` |
-| `dict.TryGetValue(k, out var v)` | Lowered via statement-level pattern to `const v = map.get(k); if (v !== undefined) { … }` |
+| `dict.TryGetValue(k, out var v)` | `const [found, v] = tryGetValue(map, k, <default(TValue)>)` (runtime; see [`out` parameters](#out-parameters-and-arguments)) |
 | `dict.GetValueOrDefault(k)` | `getValueOrDefault(map, k, <default(TValue)>)` (runtime) |
 | `dict.GetValueOrDefault(k, fallback)` | `getValueOrDefault(map, k, fallback)` (runtime) |
 
@@ -175,6 +177,50 @@ and the enum member whose value is `0`. Known gaps:
 - The null-conditional form `dict?.GetValueOrDefault(k)` does not go through this
   lowering yet and still emits `dict?.getValueOrDefault(k)`, which does not exist on
   `Map` (tracked with the optional-chain work in #248).
+
+### `out` parameters and arguments
+
+TypeScript has no by-reference arguments, so a method with `out` parameters returns
+them: the `out` parameters leave the parameter list and the method returns
+`[result, out1, out2, …]` in parameter order (a `void` method returns only the `out`
+values, as a tuple even for one). The return type is a labeled readonly tuple; for a
+`bool` method whose `out` parameters carry `[NotNullWhen]` / `[MaybeNullWhen]`, a union
+with one tuple per result, so destructuring with `const` narrows like C# flow analysis:
+
+```ts
+// bool TryFind(string key, [NotNullWhen(true)] out Item? item)
+tryFind(key: string): readonly [found: true, item: Item] | readonly [found: false, item: Item | null]
+```
+
+Call sites bind the tuple ahead of the statement when the call runs first
+(`if (x.TryFind(k, out var item))` → `const [$found0, item] = x.tryFind(k); if ($found0)`;
+`var ok = …` binds `ok` itself). A `while` / `for` condition moves into the loop body
+(`while (true) { const [$found0, v] = …; if (!$found0) break; … }`), so each iteration
+binds fresh locals as in C#. In `if (a && x.TryFind(k, out var v) && …)` without an
+`else`, the call is bound inside `if (a) { … }`. Anywhere else behind short-circuit or
+conditional evaluation, the call stays in place and assigns a hoisted `let`:
+`a && ([, v] = x.tryFind(k))[0]` — `v` then keeps its nullable type, without narrowing.
+An explicitly typed non-nullable target (`out string s` for a `[MaybeNullWhen(false)]`
+parameter) receives `string | null`, which `--strict` rejects where C# only warns. A
+`return` inside a `try` whose `finally` assigns an `out` parameter reports MS0001: the
+returned tuple holds the value before the `finally` runs. The Dart target does not lower
+`out` parameters yet.
+
+BCL methods with `out` parameters map through `[MapMethod]`; the template receives one
+argument per `out` parameter holding C#'s `default(T)` for it (`0`, `false`, `null`,
+`'\0'`, the zero enum member, `Guid.Empty`). A struct without a literal default
+(`DateTime`, user structs) reports MS0001. `ref` arguments, and `out` arguments of
+delegates, constructors and null-conditional calls, report MS0001 and pass by value.
+
+| C# | TypeScript |
+|----|----|
+| `int.TryParse(s, out var n)` | `tryParseInt32(s)` |
+| `long.TryParse(s, out var n)` | `tryParseInt64(s)` |
+| `double.TryParse` / `float.TryParse` | `tryParseFloat64(s)` |
+| `bool.TryParse(s, out var b)` | `tryParseBoolean(s)` |
+
+The parsers follow the invariant culture and only the `(string, out T)` overloads are
+mapped; `decimal.TryParse` is not mapped yet.
 
 ### Sets
 

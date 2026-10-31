@@ -47,11 +47,13 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         // helpers do all the filtering. Inherited primary-ctor params still
         // need a Roslyn round-trip (the IR constructor on the base type isn't
         // in scope here).
-        var ir = IrClassExtractor.Extract(
-            type,
-            originResolver: _context.OriginResolver,
-            compilation: _context.Compilation,
-            target: TargetLanguage.TypeScript
+        var ir = OutParameterLowering.Lower(
+            IrClassExtractor.Extract(
+                type,
+                originResolver: _context.OriginResolver,
+                compilation: _context.Compilation,
+                target: TargetLanguage.TypeScript
+            )
         );
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
@@ -563,6 +565,10 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             case IrTupleTypeRef tup:
                 foreach (var e in tup.Elements)
                     CollectTypeParamRefs(e, acc);
+                break;
+            case IIrCompositeTypeRef composite:
+                foreach (var component in composite.ComponentTypes)
+                    CollectTypeParamRefs(component, acc);
                 break;
             case IrFunctionTypeRef fn:
                 CollectTypeParamRefs(fn.ReturnType, acc);

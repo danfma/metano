@@ -5,7 +5,8 @@ namespace Metano.Compiler.Analysis;
 /// <summary>
 /// Collects the names of locals an IR fragment rebinds: every
 /// <see cref="IrIdentifier"/> that is the target of an assignment (simple or
-/// compound) or a prefix/postfix increment / decrement, including inside
+/// compound), a prefix/postfix increment / decrement or an <c>out</c> argument
+/// of an <see cref="IrOutArgumentCall"/>, including inside
 /// nested lambdas. <see cref="IrMemberAccess"/> and indexer writes do not
 /// count — they do not rebind a local. Backends use it to choose
 /// <c>const</c> over <c>let</c> (effectively-immutable <c>var</c> locals,
@@ -49,8 +50,7 @@ public static class IrLocalReassignmentCollector
 
     private static void VisitExpression(IrExpression expression, HashSet<string> reassigned)
     {
-        if (RebindsLocal(expression) is { } name)
-            reassigned.Add(name);
+        reassigned.UnionWith(RebindsLocals(expression));
 
         foreach (var child in IrNodeChildren.ExpressionsOf(expression))
             VisitExpression(child, reassigned);
@@ -59,7 +59,18 @@ public static class IrLocalReassignmentCollector
             VisitStatement(statement, reassigned);
     }
 
-    /// <summary>The local <paramref name="expression"/> rebinds, if any.</summary>
+    /// <summary>The locals <paramref name="expression"/> rebinds itself.</summary>
+    private static IEnumerable<string> RebindsLocals(IrExpression expression) =>
+        expression is IrOutArgumentCall outCall
+            ? outCall
+                .OutArguments.Select(o => o.Target)
+                .OfType<IrOutAssignment>()
+                .Select(o => o.Destination)
+                .OfType<IrIdentifier>()
+                .Select(target => target.Name)
+        : RebindsLocal(expression) is { } name ? [name]
+        : [];
+
     private static string? RebindsLocal(IrExpression expression) =>
         expression switch
         {

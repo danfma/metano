@@ -950,7 +950,12 @@ public sealed class ImportCollector(
 
                 break;
             case TsVariableDeclaration varDecl:
-                CollectFromExpression(varDecl.Initializer, sink);
+                if (varDecl.Type is not null)
+                    CollectFromType(varDecl.Type, names, crossPackageOrigins);
+
+                if (varDecl.Initializer is not null)
+                    CollectFromExpression(varDecl.Initializer, sink);
+
                 break;
             case TsDestructuringDeclaration destructuring:
                 // The destructured initializer can carry an [Import]-facade

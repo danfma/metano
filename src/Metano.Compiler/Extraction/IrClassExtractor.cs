@@ -496,6 +496,6 @@ public static class IrClassExtractor
 
         var model = compilation.GetSemanticModel(declarator.SyntaxTree);
         var expr = new IrExpressionExtractor(model, originResolver, target);
-        return expr.Extract(declarator.Initializer.Value);
+        return expr.ExtractStandalone(declarator.Initializer.Value);
     }
 }

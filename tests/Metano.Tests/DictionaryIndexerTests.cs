@@ -90,13 +90,13 @@ public class DictionaryIndexerTests
         await Assert.That(result["cache.ts"]).Contains("map.get(key)");
     }
 
-    // ─── TryGetValue pattern expansion ──────────────────────
+    // ─── TryGetValue (see OutArgumentTranspileTests) ─────────
 
     [Test]
-    public async Task TryGetValue_ExpandsToConstAndIf()
+    public async Task TryGetValue_BindsResultAndValueBeforeTheIf()
     {
-        // The canonical pattern: `if (dict.TryGetValue(key, out var value)) { use(value); }`
-        // expands to two TS statements at the body level.
+        // `if (dict.TryGetValue(key, out var value)) { use(value); }` binds the result
+        // and the value in one destructuring, then tests the result.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
@@ -118,13 +118,11 @@ public class DictionaryIndexerTests
         );
 
         var output = result["cache.ts"];
-        // const value = this._items.get(key);
-        await Assert.That(output).Contains("const value = this._items.get(key)");
-        // if (value !== undefined) {
-        await Assert.That(output).Contains("value !== undefined");
+        await Assert
+            .That(output)
+            .Contains("const [$found0, value] = tryGetValue(this._items, key, 0);");
+        await Assert.That(output).Contains("if ($found0) {");
         await Assert.That(output).Contains("return value;");
-        // No TryGetValue call in the output
-        await Assert.That(output).DoesNotContain("tryGetValue");
     }
 
     [Test]
@@ -150,8 +148,10 @@ public class DictionaryIndexerTests
         );
 
         var output = result["cache.ts"];
-        await Assert.That(output).Contains("const found = this._items.get(key)");
-        await Assert.That(output).Contains("found !== undefined");
+        await Assert
+            .That(output)
+            .Contains("const [$found0, found] = tryGetValue(this._items, key, null);");
+        await Assert.That(output).Contains("if ($found0) {");
         await Assert.That(output).Contains("return found;");
         await Assert.That(output).Contains("return \"default\";");
     }
@@ -159,10 +159,9 @@ public class DictionaryIndexerTests
     [Test]
     public async Task TryGetValue_NegatedCondition_NotExpanded()
     {
-        // `if (!dict.TryGetValue(...))` is a negated form that doesn't match the
-        // expansion pattern. It falls through as a regular invocation (the method
-        // isn't mapped, so it stays as-is / falls through to the default handler).
-        // We don't expand this case because the value isn't usable in the then-branch.
+        // Sanity check for the presence test the negated TryGetValue forms build
+        // on; `if (!dict.TryGetValue(...))` itself is covered by
+        // OutVariableTranspileTests.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;

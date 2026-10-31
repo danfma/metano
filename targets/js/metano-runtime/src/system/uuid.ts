@@ -59,4 +59,50 @@ export namespace UUID {
       value,
     );
   }
+
+  /**
+   * Parses a GUID string the way `Guid.TryParse(string, out Guid)` does: the `D`
+   * (`8-4-4-4-12`), `N` (32 digits), `B` (`{D}`) and `P` (`(D)`) formats, case-insensitive,
+   * with surrounding whitespace ignored. A match is normalized to the lowercase `D` form,
+   * the text C#'s `Guid.ToString()` produces; anything else yields `[false, UUID.empty]`.
+   * The `X` (hexadecimal braces) format is not supported.
+   */
+  export function tryParse(
+    text: string | null | undefined,
+  ): readonly [found: boolean, value: UUID] {
+    const digits = guidDigits(text?.trim() ?? "");
+
+    if (digits === null) {
+      return [false, empty];
+    }
+
+    const canonical = [
+      digits.slice(0, 8),
+      digits.slice(8, 12),
+      digits.slice(12, 16),
+      digits.slice(16, 20),
+      digits.slice(20),
+    ].join("-");
+
+    return [true, canonical.toLowerCase() as UUID];
+  }
+
+  const HEX_DIGITS = /^[0-9a-fA-F]{32}$/;
+
+  const HYPHENATED =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+  const ENCLOSURES: Record<string, string> = { "{": "}", "(": ")" };
+
+  /** The 32 hex digits of a `D`, `N`, `B` or `P` GUID string, or `null`. */
+  function guidDigits(text: string): string | null {
+    if (HEX_DIGITS.test(text)) {
+      return text;
+    }
+
+    const closing = ENCLOSURES[text.charAt(0)];
+    const inner = closing !== undefined && text.endsWith(closing) ? text.slice(1, -1) : text;
+
+    return HYPHENATED.test(inner) ? inner.replace(/-/g, "") : null;
+  }
 }

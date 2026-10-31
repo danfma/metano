@@ -55,6 +55,14 @@ public static class IrNodeChildren
             IrWithExpression with => [with.Source, .. with.Assignments.Select(a => a.Value)],
             IrThrowExpression thrown => [thrown.Expression],
             IrLetExpression let => [let.Value, let.Body],
+            IrOutArgumentCall outCall =>
+            [
+                outCall.Call,
+                .. outCall
+                    .OutArguments.Select(o => o.Target)
+                    .OfType<IrOutAssignment>()
+                    .Select(o => o.Destination),
+            ],
             IrRuntimeHelperCall helper => helper.Arguments,
             IrTemplateExpression template =>
             [

@@ -62,6 +62,10 @@ public static partial class IrToTsExpressionBridge
                 Map(cond.WhenFalse, bclRegistry)
             ),
             IrAwaitExpression aw => new TsAwaitExpression(Map(aw.Expression, bclRegistry)),
+            IrCastExpression { TargetType: OutResultTypeRef } cast => MapOutResultAssertion(
+                cast,
+                bclRegistry
+            ),
             IrCastExpression cast => Map(cast.Expression, bclRegistry), // JS has no runtime cast
             IrLambdaExpression lambda => MapLambda(lambda, bclRegistry),
             IrStringInterpolation interp => MapStringInterpolation(interp, bclRegistry),
@@ -100,6 +104,7 @@ public static partial class IrToTsExpressionBridge
             ),
             IrLinqChain chain => MapLinqChain(chain, bclRegistry),
             IrLetExpression let => MapLetExpression(let, bclRegistry),
+            IrOutArgumentCall outCall => MapOutArgumentCall(outCall, bclRegistry),
             IrUnsupportedExpression u => MapUnsupported(u),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
         };

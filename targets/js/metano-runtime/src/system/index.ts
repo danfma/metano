@@ -9,3 +9,4 @@ export * from "./uuid.ts";
 export * from "./delegates.ts";
 export * from "./bind-receiver.ts";
 export * from "./math.ts";
+export * from "./number-parsing.ts";

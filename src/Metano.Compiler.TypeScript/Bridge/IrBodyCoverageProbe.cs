@@ -84,6 +84,7 @@ public static class IrBodyCoverageProbe
                 && IsCoveredExpression(cond.WhenFalse),
             IrAwaitExpression aw => IsCoveredExpression(aw.Expression),
             IrThrowExpression th => IsCoveredExpression(th.Expression),
+            IrOutArgumentCall outCall => IsCoveredExpression(outCall.Call),
             IrCastExpression cast => IsCoveredExpression(cast.Expression),
             IrLambdaExpression lambda => IsFullyCovered(lambda.Body),
             IrStringInterpolation interp => interp.Parts.All(p =>
