@@ -137,10 +137,10 @@ public class CrossPackageImportTests
     }
 
     [Test]
-    public async Task UsedCrossPackages_TrackedForAutoDependencies()
+    public async Task CrossPackageDependencies_TrackedForAutoDependencies()
     {
         // After a successful cross-package import, the compiler exposes the package
-        // name + source assembly via TypeMapper.UsedCrossPackages. The TypeTransformer
+        // name + source assembly via TypeMapper.CrossPackageDependencies. The TypeTransformer
         // formats this into a CrossPackageDependencies dictionary that the CLI driver
         // hands to PackageJsonWriter for the auto-dep merge.
         var library = """
@@ -292,7 +292,7 @@ public class CrossPackageImportTests
         );
 
         // Use the helper that exposes the transformer's tracked dependencies. We
-        // re-compile here so we can read TypeMapper.UsedCrossPackages directly via the
+        // re-compile here so we can read TypeMapper.CrossPackageDependencies directly via the
         // CrossPackageDependencies property.
         var compilation = TranspileHelper.CompileLibrary(
             """

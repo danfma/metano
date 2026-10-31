@@ -63,7 +63,7 @@ public sealed record GroupCacheFile(
                 return null;
             if (cache.Groups is null || cache.ConfigurationFingerprint is null)
                 return null;
-            if (cache.Groups.Values.Any(entry => entry?.Dependencies is null))
+            if (!HasCompleteEntries(cache))
                 return null;
             return cache;
         }
@@ -72,6 +72,9 @@ public sealed record GroupCacheFile(
             return null;
         }
     }
+
+    private static bool HasCompleteEntries(GroupCacheFile cache) =>
+        cache.Groups.Values.All(entry => entry is { Files: not null, Dependencies: not null });
 
     public void Write(string outputDir)
     {

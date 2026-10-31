@@ -32,12 +32,18 @@ public sealed class CrossPackageDependencyLedger
 
     /// <summary>
     /// Adds the dependencies a reused group recorded on the run that produced it, so the
-    /// run-wide map matches what transforming that group would have recorded.
+    /// run-wide map matches what transforming that group would have recorded. A version
+    /// recorded by a group transformed in this run wins over a restored one, whichever
+    /// worker thread gets there first.
     /// </summary>
+    /// <remarks>
+    /// The restored versions are current because the per-group cache fingerprint covers
+    /// every dependency version the IR declares, so a version bump discards the cache.
+    /// </remarks>
     public void Restore(IReadOnlyDictionary<string, string> dependencies)
     {
         foreach (var (packageName, version) in dependencies)
-            _all[packageName] = version;
+            _all.TryAdd(packageName, version);
     }
 
     /// <summary>
@@ -70,7 +76,12 @@ public sealed class CrossPackageDependencyLedger
         internal ConcurrentDictionary<string, string> Entries { get; } =
             new(StringComparer.Ordinal);
 
-        public IReadOnlyDictionary<string, string> Dependencies => Entries;
+        /// <summary>
+        /// An ordinal-sorted copy of the dependencies recorded so far, so the per-group
+        /// cache serializes them independently of worker-thread scheduling.
+        /// </summary>
+        public IReadOnlyDictionary<string, string> SnapshotDependencies() =>
+            new SortedDictionary<string, string>(Entries, StringComparer.Ordinal);
 
         public void Dispose() => _ledger._currentGroup.Value = _enclosingGroup;
     }

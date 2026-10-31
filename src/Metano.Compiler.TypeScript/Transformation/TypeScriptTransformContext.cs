@@ -486,7 +486,7 @@ public sealed class TypeScriptTransformContext(
     /// Shared <see cref="IrToTsTypeOverrides"/> that applies <c>[ExportFromBcl]</c>
     /// mappings (decimal → Decimal from decimal.js, etc.) when lowering an
     /// <see cref="IrTypeRef"/> through <see cref="IrToTsTypeMapper"/>. Tracks
-    /// per-package usage in <see cref="TypeMappingContext.UsedCrossPackages"/>
+    /// per-package usage in <see cref="TypeMappingContext.CrossPackageDependencies"/>
     /// so the CLI driver emits the right <c>package.json#dependencies</c>.
     /// Created once per compilation and reused across every emitter / bridge /
     /// builder that lowers type refs.
@@ -494,7 +494,7 @@ public sealed class TypeScriptTransformContext(
     public BclExportTypeOverrides BclOverrides =>
         _bclOverrides ??= new BclExportTypeOverrides(
             TypeMapping!.BclExportMap,
-            TypeMapping.UsedCrossPackages
+            TypeMapping.CrossPackageDependencies
         );
 
     private IrTypeOriginResolver? _originResolver;

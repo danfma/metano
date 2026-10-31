@@ -54,16 +54,16 @@ public static class PackageJsonReconciler
 /// The outcome of <see cref="PackageJsonReconciler.Reconcile"/>: whether package.json was
 /// written, and the writer's diagnostics when it was.
 /// </summary>
-public sealed record PackageJsonReconciliation
+public sealed class PackageJsonReconciliation
 {
+    /// <summary>The stage did not run: nothing was produced and no package.json exists.</summary>
+    public static PackageJsonReconciliation Skipped { get; } = new(false, []);
+
     private PackageJsonReconciliation(bool wasWritten, IReadOnlyList<MetanoDiagnostic> diagnostics)
     {
         WasWritten = wasWritten;
         Diagnostics = diagnostics;
     }
-
-    /// <summary>The stage did not run: nothing was produced and no package.json exists.</summary>
-    public static PackageJsonReconciliation Skipped { get; } = new(false, []);
 
     public bool WasWritten { get; }
 
