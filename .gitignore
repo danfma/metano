@@ -22,6 +22,11 @@ Thumbs.db
 *.tsbuildinfo
 bun.lock
 
+# `tsgo -b` output (outDir "lib") of the Vite counter samples, rebuilt by
+# `bun run build`; tracking it let it drift from the generated sources.
+targets/js/sample-counter-v4/lib/
+targets/js/sample-counter-v5/lib/
+
 # Metano incremental cache — pinned next to generated outputs
 # (ADR-0021, ADR-0024). Per-machine, never committed.
 .metano-cache.json
