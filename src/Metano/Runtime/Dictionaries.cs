@@ -197,3 +197,56 @@ using Metano.Annotations;
     RuntimeImports = "getValueOrDefault",
     WhenArgCount = 2
 )]
+
+// ─── Constructors ───────────────────────────────────────────
+// new Dictionary<K,V>() / new Dictionary<K,V>(capacity) → new Map<K, V>() (the capacity
+// is a preallocation hint, dropped). The copy overloads — from an IDictionary<K,V>
+// (a Map at runtime) or an IEnumerable<KeyValuePair<K,V>> (an iterable of [key, value]
+// pairs) — both feed the Map constructor. The comparer overloads stay unmapped.
+
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "new Map<$T0, $T1>()",
+    WhenParameterTypes = new Type[0]
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "new Map<$T0, $T1>()",
+    WhenParameterTypes = new[] { typeof(int) }
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "new Map<$T0, $T1>($0)",
+    WhenParameterTypes = new[] { typeof(IDictionary<,>) }
+)]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "new Map<$T0, $T1>($0)",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>) }
+)]
+
+// ─── KeyValuePair<K,V> ──────────────────────────────────────
+// A KeyValuePair is a `[key, value]` tuple at runtime (the shape a Map iterates), so
+// construction builds the tuple and Key / Value read its positions. The struct's
+// implicit parameterless constructor (`default` key and value) stays unmapped.
+
+[assembly: MapMethod(
+    typeof(KeyValuePair<,>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "[$0, $1] as [$T0, $T1]",
+    WhenArgCount = 2
+)]
+[assembly: MapProperty(
+    typeof(KeyValuePair<,>),
+    nameof(KeyValuePair<int, int>.Key),
+    JsTemplate = "$this[0]"
+)]
+[assembly: MapProperty(
+    typeof(KeyValuePair<,>),
+    nameof(KeyValuePair<int, int>.Value),
+    JsTemplate = "$this[1]"
+)]

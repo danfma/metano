@@ -181,7 +181,12 @@ public sealed class ImportCollector(
 
         // Runtime helper imports collected from TsTemplate.RuntimeImports declarations
         // (e.g., dayNumber, listRemove, immutableInsert, immutableRemoveAt, immutableRemove).
-        // Bundled into a single import line from metano-runtime.
+        // Bundled into a single import line from metano-runtime. A helper the
+        // IR scanner already value-imported (`HashSet` used both in a signature
+        // and by a constructor-mapping template) must not be bound twice; a
+        // type-only import does not provide the value, so it is kept.
+        runtimeHelpers.ExceptWith(ValueImportedNames(imports));
+
         if (runtimeHelpers.Count > 0)
         {
             imports.Add(new TsImport(runtimeHelpers.OrderBy(n => n).ToArray(), "metano-runtime"));
@@ -1183,6 +1188,12 @@ public sealed class ImportCollector(
                     CollectFromExpression(template.Receiver, sink);
                 foreach (var arg in template.Arguments)
                     CollectFromExpression(arg, sink);
+
+                // Full `TsType` placeholders (a constructor mapping's type
+                // arguments) sit in type positions: walked as type references.
+                foreach (var typeArgument in template.TypeArguments)
+                    CollectFromType(typeArgument, names, crossPackageOrigins);
+
                 // `$T0`/`$T1` placeholders embed generic type-argument names
                 // verbatim into the template body — those names must be
                 // resolved as referenced identifiers so the import collector
@@ -1281,6 +1292,13 @@ public sealed class ImportCollector(
     /// <summary>
     /// Checks if a name is a runtime type check function from <c>metano-runtime</c>.
     /// </summary>
+    private static IEnumerable<string> ValueImportedNames(IEnumerable<TsImport> imports) =>
+        imports
+            .Where(import => !import.TypeOnly)
+            .SelectMany(import =>
+                import.Names.Where(name => import.TypeOnlyNames?.Contains(name) != true)
+            );
+
     private static bool IsRuntimeTypeCheck(string name) =>
         name
             is "isChar"

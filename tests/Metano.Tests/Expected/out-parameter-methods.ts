@@ -3,7 +3,7 @@ import type { ILookup } from "./i-lookup";
 import type { Item } from "./item";
 
 export class Catalog implements ILookup {
-  private readonly _items: Map<string, Item> = new Map();
+  private readonly _items: Map<string, Item> = new Map<string, Item>();
 
   constructor() { }
 

@@ -170,3 +170,30 @@ using Metano.Annotations;
     nameof(List<int>.Find),
     JsTemplate = "($this.find($0) ?? null)"
 )]
+
+// ─── Constructors ───────────────────────────────────────────
+// new List<T>() / new List<T>(capacity) → [] as Array<T>: the capacity is a
+// preallocation hint with no observable effect, so it is dropped (a side-effecting
+// capacity argument is still evaluated); `new Array(n)` would create n holes. The
+// assertion keeps the element type on an unannotated local (`var xs = new List<T>()`),
+// where a bare `[]` would be an evolving `any[]`.
+// new List<T>(collection) → [...collection]: a shallow copy, like the C# overload.
+
+[assembly: MapMethod(
+    typeof(List<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "[] as Array<$T0>",
+    WhenParameterTypes = new Type[0]
+)]
+[assembly: MapMethod(
+    typeof(List<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "[] as Array<$T0>",
+    WhenParameterTypes = new[] { typeof(int) }
+)]
+[assembly: MapMethod(
+    typeof(List<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "[...$0]",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>) }
+)]

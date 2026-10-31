@@ -23,6 +23,11 @@ namespace Metano.Compiler.Mappings;
 /// runtime-helper identifiers the lowered call site must import from the
 /// target's runtime package. The target forwards the list to its import
 /// collector since the template body is otherwise opaque text.
+///
+/// <see cref="WhenArgCount"/> and <see cref="WhenParameterTypes"/> narrow the
+/// entry to specific overloads (see <see cref="MatchesOverload"/>).
+/// <see cref="WhenParameterTypes"/> holds the stable full names
+/// (<c>SymbolHelper.GetStableFullName</c>) of the overload's parameter types.
 /// </summary>
 public sealed record DeclarativeMappingEntry(
     string? JsName,
@@ -33,9 +38,27 @@ public sealed record DeclarativeMappingEntry(
     string? DartName = null,
     string? DartTemplate = null,
     string? DartRuntimeImports = null,
-    int? WhenArgCount = null
+    int? WhenArgCount = null,
+    IReadOnlyList<string>? WhenParameterTypes = null
 )
 {
+    /// <summary>
+    /// True when the call site's overload shape satisfies the entry's
+    /// overload filters: the argument count when <see cref="WhenArgCount"/>
+    /// is set, and the bound overload's parameter types when
+    /// <see cref="WhenParameterTypes"/> is set (a call site whose parameter
+    /// types are unknown never matches a parameter-type filter).
+    /// </summary>
+    public bool MatchesOverload(int argumentCount, IReadOnlyList<string>? parameterTypes) =>
+        MatchesArgCount(argumentCount) && MatchesParameterTypes(parameterTypes);
+
+    private bool MatchesArgCount(int argumentCount) =>
+        WhenArgCount is null || WhenArgCount == argumentCount;
+
+    private bool MatchesParameterTypes(IReadOnlyList<string>? parameterTypes) =>
+        WhenParameterTypes is null
+        || (parameterTypes is not null && WhenParameterTypes.SequenceEqual(parameterTypes));
+
     public bool HasTemplate => JsTemplate is not null;
 
     public bool HasDartTemplate => DartTemplate is not null;
@@ -49,8 +72,6 @@ public sealed record DeclarativeMappingEntry(
     public bool HasDartMapping => DartName is not null || DartTemplate is not null;
 
     public bool HasArgFilter => WhenArg0StringEquals is not null;
-
-    public bool HasArgCountFilter => WhenArgCount is not null;
 
     public bool HasWrapReceiver => WrapReceiver is not null;
 

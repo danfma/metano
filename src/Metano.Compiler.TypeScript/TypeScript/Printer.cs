@@ -1172,7 +1172,7 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write("`");
                 for (var i = 0; i < tmpl.Quasis.Count; i++)
                 {
-                    _sb.Write(tmpl.Quasis[i]);
+                    _sb.WriteTemplateText(tmpl.Quasis[i]);
                     if (i < tmpl.Expressions.Count)
                     {
                         _sb.Write("${");
@@ -1500,6 +1500,12 @@ public sealed class Printer(string indent = "  ")
                     PrintTemplateValue(template.Receiver, shape.SlotsAt(dollar));
 
                 return dollar + receiver.Length;
+
+            case { Kind: TsTemplatePlaceholderKind.TypeArgument } typeArgument
+                when typeArgument.Index < template.TypeArguments.Count:
+                PrintType(template.TypeArguments[typeArgument.Index]);
+
+                return dollar + typeArgument.Length;
 
             case { Kind: TsTemplatePlaceholderKind.TypeArgument } typeArgument
                 when typeArgument.Index < template.TypeArgumentNames.Count:

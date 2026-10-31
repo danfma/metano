@@ -36,3 +36,31 @@ using Metano.Annotations;
 [assembly: MapMethod(typeof(HashSet<>), nameof(HashSet<int>.Clear), JsMethod = "clear")]
 [assembly: MapMethod(typeof(ISet<>), nameof(ISet<int>.Clear), JsMethod = "clear")]
 [assembly: MapMethod(typeof(SortedSet<>), nameof(SortedSet<int>.Clear), JsMethod = "clear")]
+
+// ─── Constructors ───────────────────────────────────────────
+// new HashSet<T>() / new HashSet<T>(capacity) → new HashSet<T>() (the capacity is a
+// preallocation hint, dropped); new HashSet<T>(collection) → new HashSet<T>(collection).
+// The comparer overloads stay unmapped: the runtime set compares through the
+// equals/hashCode contract and takes no comparer.
+
+[assembly: MapMethod(
+    typeof(HashSet<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "new HashSet<$T0>()",
+    RuntimeImports = "HashSet",
+    WhenParameterTypes = new Type[0]
+)]
+[assembly: MapMethod(
+    typeof(HashSet<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "new HashSet<$T0>()",
+    RuntimeImports = "HashSet",
+    WhenParameterTypes = new[] { typeof(int) }
+)]
+[assembly: MapMethod(
+    typeof(HashSet<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "new HashSet<$T0>($0)",
+    RuntimeImports = "HashSet",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>) }
+)]

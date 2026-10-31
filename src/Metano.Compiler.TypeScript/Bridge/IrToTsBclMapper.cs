@@ -1,6 +1,7 @@
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Parenthesization.Templates;
 using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
@@ -71,7 +72,7 @@ public static class IrToTsBclMapper
             // crash otherwise.
             if (!candidate.HasJsMapping)
                 continue;
-            if (candidate.HasArgCountFilter && candidate.WhenArgCount != loweredArgs.Count)
+            if (!candidate.MatchesOverload(loweredArgs.Count, call.Origin.ParameterTypes))
                 continue;
             if (DeclarativeMappingRendering.MatchesArgFilter(candidate, loweredArgs))
             {
@@ -93,6 +94,63 @@ public static class IrToTsBclMapper
 
         return ApplyMethodMapping(match, receiver, loweredArgs, typeArgumentNames);
     }
+
+    /// <summary>
+    /// Tries to map <c>new T(args)</c> through a declarative constructor
+    /// mapping (<c>[MapMethod(typeof(T), ".ctor", JsTemplate = …)]</c>),
+    /// selecting the overload by its argument count and parameter types.
+    /// <paramref name="typeArguments"/> feed the <c>$T0</c>, <c>$T1</c>, …
+    /// placeholders with the constructed type's type arguments. Only
+    /// <c>JsTemplate</c> entries apply (a constructor has no member to rename),
+    /// and an entry whose template reads an argument the call site does not
+    /// supply is skipped rather than printing a raw <c>$N</c>. Returns
+    /// <c>null</c> when no JS-side entry matches.
+    /// </summary>
+    public static TsTemplate? TryMapConstruction(
+        IrNewExpression creation,
+        IReadOnlyList<TsExpression> loweredArgs,
+        IReadOnlyList<TsType> typeArguments,
+        DeclarativeMappingRegistry registry
+    )
+    {
+        if (creation.Origin is not { } origin)
+            return null;
+
+        if (
+            !registry.TryGetMethodsByFullName(
+                origin.DeclaringTypeFullName,
+                origin.MemberName,
+                out var candidates
+            )
+        )
+            return null;
+
+        var match = candidates.FirstOrDefault(candidate =>
+            IsApplicableConstruction(candidate, loweredArgs.Count, origin.ParameterTypes)
+        );
+
+        return match is null
+            ? null
+            : new TsTemplate(match.JsTemplate!, Receiver: null, loweredArgs)
+            {
+                TypeArguments = typeArguments,
+                RuntimeImports = match.RuntimeImportsList,
+            };
+    }
+
+    private static bool IsApplicableConstruction(
+        DeclarativeMappingEntry candidate,
+        int argumentCount,
+        IReadOnlyList<string>? parameterTypes
+    ) =>
+        candidate.HasTemplate
+        && candidate.MatchesOverload(argumentCount, parameterTypes)
+        && ReadsOnlySuppliedArguments(candidate.JsTemplate!, argumentCount);
+
+    private static bool ReadsOnlySuppliedArguments(string template, int argumentCount) =>
+        TsTemplatePlaceholder
+            .ReferencedArgumentIndices(template)
+            .All(index => index < argumentCount);
 
     private static TsExpression ApplyPropertyMapping(
         DeclarativeMappingEntry mapping,
