@@ -47,4 +47,18 @@ public sealed class EmitPackageAttribute(string name, EmitTarget target = EmitTa
     /// linker. Setting this property explicitly resolves the ambiguity.
     /// </summary>
     public string Version { get; init; } = "";
+
+    /// <summary>
+    /// Optional C# namespace prefix stripped from the package's public subpaths
+    /// (e.g. <c>"VideoStudio.Domain"</c>). With it, the barrel of
+    /// <c>VideoStudio.Domain.Episodes</c> is exported as <c>./episodes</c> instead of
+    /// <c>./video-studio/domain/episodes</c>, the barrel of exactly
+    /// <c>VideoStudio.Domain</c> becomes the package root (<c>.</c>), and consumers
+    /// import <c>"&lt;package&gt;/episodes"</c>. Only the exported subpaths change:
+    /// generated files stay under their full-namespace folders and the internal
+    /// <c>#/*</c> alias is untouched. Matching is by whole namespace segment, so
+    /// <c>VideoStudio.DomainEvents</c> is not under <c>VideoStudio.Domain</c>.
+    /// Empty (the default) keeps the full-namespace subpaths.
+    /// </summary>
+    public string SubpathRoot { get; init; } = "";
 }

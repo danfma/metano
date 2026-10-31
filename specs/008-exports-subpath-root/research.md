@@ -22,7 +22,8 @@ attribute (duplicate-identity ambiguity, hidden source of truth).
 `/` segments.
 
 **Rationale**: The package writer only sees generated file names (kebab paths); the
-cross-package resolver already turns namespaces into kebab paths (`PathNaming.ComputeSubPath`).
+cross-package resolver turns namespaces into kebab paths (`PathNaming.ComputeExportedSubPath`,
+which replaces the now-unused `ComputeSubPath`).
 Applying one function to the kebab path on both sides guarantees they agree, including in the
 pathological case where two distinct namespaces kebab to the same folder.
 
@@ -31,8 +32,8 @@ pathological case where two distinct namespaces kebab to the same folder.
 **Decision**: A leaf barrel for exactly the root namespace is exported as `.`; the consumer
 imports the bare package name.
 
-**Rationale**: `ComputeSubPath` already returns `""` for a type whose namespace equals the
-assembly root, and `ImportCollector` already emits the bare package name for an empty subpath.
+**Rationale**: `ImportCollector` already emits the bare package name for an empty cross-package
+subpath, so mapping the root namespace to `""` needs no import-side change.
 `.` is where the opt-in root aggregation barrel sits today; when both exist they collide and
 FR-007 reports it rather than picking a surprising winner silently.
 

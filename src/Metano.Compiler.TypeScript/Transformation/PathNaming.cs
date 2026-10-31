@@ -112,37 +112,20 @@ public sealed class PathNaming(string rootNamespace, string? importAlias = null)
     }
 
     /// <summary>
-    /// Computes the package-relative namespace barrel subpath for a type whose source
-    /// assembly has the given <paramref name="assemblyRootNamespace"/>.
-    ///
-    /// Examples:
-    ///
-    /// - root ns match  → <c>""</c>                → import from <c>"pkg"</c>
-    /// - child namespace → <c>"domain"</c>         → import from <c>"pkg/domain"</c>
-    /// - nested namespace → <c>"issues/domain"</c> → import from <c>"pkg/issues/domain"</c>
-    ///
-    /// No <c>#/</c> prefix and no <c>.ts</c> suffix.
+    /// Computes the cross-package subpath a consumer imports for a type in
+    /// <paramref name="typeNamespace"/> of a package whose <c>[EmitPackage]</c>
+    /// declares <paramref name="packageSubpathRoot"/>: the full kebab namespace path
+    /// (D1) with the root stripped on whole segments (spec 008). Matches the key the
+    /// producing package writes to <c>package.json#exports</c>; <c>""</c> means the
+    /// bare package.
     /// </summary>
-    public static string ComputeSubPath(
-        string assemblyRootNamespace,
-        string typeNamespace,
-        string typeName
-    )
+    public static string ComputeExportedSubPath(string? packageSubpathRoot, string typeNamespace)
     {
-        var relative = typeNamespace;
-        if (assemblyRootNamespace.Length > 0)
-        {
-            if (typeNamespace == assemblyRootNamespace)
-                relative = "";
-            else if (typeNamespace.StartsWith(assemblyRootNamespace + "."))
-                relative = typeNamespace[(assemblyRootNamespace.Length + 1)..];
-        }
+        var fullPath =
+            typeNamespace.Length > 0
+                ? string.Join("/", typeNamespace.Split('.').Select(SymbolHelper.ToKebabCase))
+                : "";
 
-        var segments =
-            relative.Length > 0
-                ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
-                : [];
-
-        return segments.Length > 0 ? string.Join("/", segments) : "";
+        return ExportsSubpathRoot.From(packageSubpathRoot).Apply(fullPath);
     }
 }

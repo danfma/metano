@@ -184,16 +184,19 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateJsTupleAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsCallableAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
+            ValidateSubpathRoot(compilation, target, diagnostics);
         }
+
+        var packageInfo = compilation is null
+            ? null
+            : SymbolHelper.GetEmitPackageInfo(
+                compilation.Assembly,
+                targetEnumValue: (int)target.ToEmitTarget()
+            );
 
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
-            PackageName: compilation is null
-                ? null
-                : SymbolHelper.GetEmitPackage(
-                    compilation.Assembly,
-                    targetEnumValue: (int)target.ToEmitTarget()
-                ),
+            PackageName: packageInfo?.Name,
             AssemblyWideTranspile: assemblyWideTranspile,
             Modules: Array.Empty<IrModule>(),
             ReferencedModules: Array.Empty<IrModule>(),
@@ -217,7 +220,44 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             GuardableTypeKeys: guardableTypeKeys,
             TranspilableTypes: transpilableTypes,
             TranspilableTypeEntries: transpilableTypeEntries,
-            EntryPoint: entryPoint
+            EntryPoint: entryPoint,
+            PackageSubpathRoot: packageInfo?.SubpathRoot
+        );
+    }
+
+    /// <summary>
+    /// Reports <c>MS0029</c> when the assembly's <c>[EmitPackage]</c> for the active
+    /// target declares a <c>SubpathRoot</c> that is not a dotted C# namespace. The
+    /// value is then ignored (see <see cref="SymbolHelper.EmitPackageInfo.SubpathRoot"/>),
+    /// so the package keeps its full-namespace subpaths.
+    /// </summary>
+    private static void ValidateSubpathRoot(
+        Compilation compilation,
+        TargetLanguage target,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var attribute = SymbolHelper.FindEmitPackageAttribute(
+            compilation.Assembly,
+            (int)target.ToEmitTarget()
+        );
+        var declared = attribute?.NamedArguments.FirstOrDefault(a => a.Key == "SubpathRoot");
+
+        if (declared?.Value.Value is not string { Length: > 0 } root)
+            return;
+
+        if (SymbolHelper.IsValidSubpathRoot(root))
+            return;
+
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.InvalidExportsSubpathRoot,
+                $"[EmitPackage] SubpathRoot '{root}' is not a dotted C# namespace (one or "
+                    + "more '.'-separated identifiers, e.g. \"VideoStudio.Domain\"). The value "
+                    + "is ignored, so package subpaths keep their full namespace.",
+                attribute!.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+            )
         );
     }
 
@@ -2466,7 +2506,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         ? null
                         : type.ContainingNamespace.ToDisplayString(),
                     AssemblyRootNamespace: rootNamespace,
-                    VersionHint: packageInfo.Version
+                    VersionHint: packageInfo.Version,
+                    PackageSubpathRoot: packageInfo.SubpathRoot
                 );
             }
         }

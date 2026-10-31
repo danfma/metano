@@ -57,6 +57,11 @@ public static class PackageJsonWriter
     /// export subpaths so they mirror the build tool's directory structure.
     /// Default: inferred as the first path segment of the output directory relative to the
     /// package root.</param>
+    /// <param name="importAlias">Optional subpath-imports alias (see
+    /// <see cref="PathNaming.NormalizeImportAliasPrefix"/>).</param>
+    /// <param name="subpathRoot">Validated <c>[EmitPackage(SubpathRoot = …)]</c>: a
+    /// namespace prefix stripped from the <c>exports</c> keys only (spec 008). On-disk
+    /// targets and <c>imports</c> are unaffected.</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -67,7 +72,8 @@ public static class PackageJsonWriter
         IReadOnlyDictionary<string, string>? crossPackageDependencies = null,
         bool isExecutable = false,
         string? srcRoot = null,
-        string? importAlias = null
+        string? importAlias = null,
+        string? subpathRoot = null
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -81,7 +87,14 @@ public static class PackageJsonWriter
         // Build the imports/exports objects. Exports are only needed for libraries.
         var exports = isExecutable
             ? null
-            : BuildExports(files, srcRelative, distDirRelativeToPackageRoot, outputPrefix);
+            : BuildExports(
+                files,
+                srcRelative,
+                distDirRelativeToPackageRoot,
+                outputPrefix,
+                ExportsSubpathRoot.From(subpathRoot),
+                diagnostics
+            );
         // Check for a root barrel from the file list — executables skip exports
         // but may still need the "#" import alias for internal barrel imports.
         // When outputPrefix is set, the root barrel is at {prefix}/index.ts.
@@ -494,16 +507,21 @@ public static class PackageJsonWriter
     /// Builds the <c>exports</c> object listing the public subpaths the consumer can import.
     /// Only namespace barrel files (<c>index.ts</c>) become export entries — individual type
     /// files are accessed through their barrel, matching the namespace-first convention
-    /// from ADR-0006. When <paramref name="outputPrefix"/> is non-empty, it is prepended
-    /// to both the subpath key and the dist path. Each entry lists the opt-in
-    /// <c>source</c> condition first (the barrel's .ts file), so tools configured with
-    /// it read the sources directly while default resolution keeps using dist.
+    /// from ADR-0006. The key is the barrel's directory with the declared
+    /// <paramref name="subpathRoot"/> stripped (spec 008; the root's own barrel becomes the
+    /// package root), then prefixed with <paramref name="outputPrefix"/> when non-empty.
+    /// The entry targets always point at the real on-disk files. Each entry lists the
+    /// opt-in <c>source</c> condition first (the barrel's .ts file), so tools configured
+    /// with it read the sources directly while default resolution keeps using dist.
+    /// Two barrels claiming one key raise <c>MS0029</c>; the one under the root keeps it.
     /// </summary>
     private static JsonObject BuildExports(
         IReadOnlyList<TsSourceFile> files,
         string srcRelative,
         string distRelative,
-        string outputPrefix
+        string outputPrefix,
+        ExportsSubpathRoot subpathRoot,
+        List<MetanoDiagnostic> diagnostics
     )
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
@@ -511,6 +529,7 @@ public static class PackageJsonWriter
         var prefix = outputPrefix.TrimEnd('/');
         var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
         var exports = new JsonObject();
+        var barrelDirectoryByKey = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var barrels = files
             .Select(f => NormalizePath(f.FileName))
@@ -522,17 +541,18 @@ public static class PackageJsonWriter
             var withoutExt = name[..^3]; // Strip .ts
 
             // Barrel directory: "issues/domain/index" → "issues/domain", root "index" → ""
-            var parent = Path.GetDirectoryName(withoutExt)?.Replace('\\', '/') ?? "";
+            var directory = Path.GetDirectoryName(withoutExt)?.Replace('\\', '/') ?? "";
+            var subpath = ExportKey(prefix, subpathRoot.Apply(directory));
 
-            // Subpath: prepend outputPrefix when present.
-            // root index.ts with prefix "domain" → "./domain"
-            // users/index.ts with prefix "domain" → "./domain/users"
-            string subpath;
-            if (prefix.Length > 0)
-                subpath = parent.Length == 0 ? $"./{prefix}" : $"./{prefix}/{parent}";
-            else
-                subpath = parent.Length == 0 ? "." : $"./{parent}";
+            if (barrelDirectoryByKey.TryGetValue(subpath, out var claimant))
+            {
+                diagnostics.Add(ExportKeyCollision(subpath, claimant, directory));
 
+                if (!subpathRoot.Contains(directory))
+                    continue;
+            }
+
+            barrelDirectoryByKey[subpath] = directory;
             exports[subpath] = new JsonObject
             {
                 ["source"] = SourceTarget(src, $"{withoutExt}.ts"),
@@ -543,6 +563,40 @@ public static class PackageJsonWriter
 
         return exports;
     }
+
+    /// <summary>
+    /// Formats an exports key: <c>"" → "."</c>, <c>"users" → "./users"</c>, and with
+    /// an output prefix <c>"" → "./domain"</c>, <c>"users" → "./domain/users"</c>.
+    /// </summary>
+    private static string ExportKey(string prefix, string exportedDirectory)
+    {
+        var path = (prefix, exportedDirectory) switch
+        {
+            ("", var directory) => directory,
+            (var outputRoot, "") => outputRoot,
+            var (outputRoot, directory) => $"{outputRoot}/{directory}",
+        };
+
+        return path.Length == 0 ? "." : $"./{path}";
+    }
+
+    private static MetanoDiagnostic ExportKeyCollision(
+        string key,
+        string firstDirectory,
+        string secondDirectory
+    ) =>
+        new(
+            MetanoDiagnosticSeverity.Error,
+            DiagnosticCodes.InvalidExportsSubpathRoot,
+            $"package.json#exports key '{key}' is claimed by the barrels of "
+                + $"'{DisplayDirectory(firstDirectory)}' and '{DisplayDirectory(secondDirectory)}' "
+                + "after stripping [EmitPackage] SubpathRoot. The barrel under the root keeps "
+                + "the key and the other is left out of exports. Rename one namespace, narrow "
+                + "SubpathRoot, or disable --namespace-barrels."
+        );
+
+    private static string DisplayDirectory(string directory) =>
+        directory.Length == 0 ? "<output root>" : directory;
 
     /// <summary>
     /// Package-relative target for a generated .ts file. The source dir is

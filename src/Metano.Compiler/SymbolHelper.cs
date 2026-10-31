@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler;
@@ -944,7 +945,27 @@ public static class SymbolHelper
     /// </summary>
     /// <param name="targetEnumValue">Integer value of the EmitTarget enum (matches the
     /// underlying value the attribute was constructed with). Pass 0 for JavaScript.</param>
-    public static EmitPackageInfo? GetEmitPackageInfo(IAssemblySymbol assembly, int targetEnumValue)
+    public static EmitPackageInfo? GetEmitPackageInfo(
+        IAssemblySymbol assembly,
+        int targetEnumValue
+    ) =>
+        FindEmitPackageAttribute(assembly, targetEnumValue) is { } attr
+            ? new EmitPackageInfo(
+                (string)attr.ConstructorArguments[0].Value!,
+                ReadNonEmptyNamedString(attr, "Version"),
+                ReadNonEmptyNamedString(attr, "SubpathRoot")
+            )
+            : null;
+
+    /// <summary>
+    /// Finds the <c>[assembly: EmitPackage("name", target)]</c> instance declared for
+    /// <paramref name="targetEnumValue"/> — the first one with a non-empty name whose
+    /// <c>Target</c> matches — or <c>null</c> when there is none.
+    /// </summary>
+    public static AttributeData? FindEmitPackageAttribute(
+        IAssemblySymbol assembly,
+        int targetEnumValue
+    )
     {
         foreach (var attr in assembly.GetAttributes())
         {
@@ -954,26 +975,28 @@ public static class SymbolHelper
             // Constructor: (string name, EmitTarget target = JavaScript)
             if (attr.ConstructorArguments.Length == 0)
                 continue;
-            var name = attr.ConstructorArguments[0].Value as string;
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrEmpty(attr.ConstructorArguments[0].Value as string))
                 continue;
 
             // Target arg may be omitted (default = JavaScript = 0) or present.
             var target = 0;
             if (attr.ConstructorArguments.Length > 1 && attr.ConstructorArguments[1].Value is int t)
                 target = t;
-            if (target != targetEnumValue)
-                continue;
-
-            string? version = null;
-            foreach (var named in attr.NamedArguments)
-            {
-                if (named.Key == "Version" && named.Value.Value is string v && v.Length > 0)
-                    version = v;
-            }
-
-            return new EmitPackageInfo(name, version);
+            if (target == targetEnumValue)
+                return attr;
         }
+
+        return null;
+    }
+
+    private static string? ReadNonEmptyNamedString(AttributeData attr, string name)
+    {
+        foreach (var named in attr.NamedArguments)
+        {
+            if (named.Key == name && named.Value.Value is string { Length: > 0 } value)
+                return value;
+        }
+
         return null;
     }
 
@@ -984,7 +1007,37 @@ public static class SymbolHelper
     public static string? GetEmitPackage(IAssemblySymbol assembly, int targetEnumValue) =>
         GetEmitPackageInfo(assembly, targetEnumValue)?.Name;
 
-    public sealed record EmitPackageInfo(string Name, string? Version);
+    /// <summary>
+    /// True when <paramref name="subpathRoot"/> is a dotted C# namespace: one or more
+    /// <c>.</c>-separated segments, each a valid C# identifier (no whitespace, no empty
+    /// segment, no <c>global::</c>). Shared by the producer-side <c>MS0029</c> check and
+    /// <see cref="EmitPackageInfo.SubpathRoot"/>, so an invalid value is ignored the same
+    /// way by the producer and by every consumer.
+    /// </summary>
+    public static bool IsValidSubpathRoot(string subpathRoot) =>
+        subpathRoot.Split('.').All(SyntaxFacts.IsValidIdentifier);
+
+    /// <summary>
+    /// The resolved <c>[EmitPackage]</c> declaration for one target.
+    /// </summary>
+    /// <param name="Name">Package name in the target ecosystem.</param>
+    /// <param name="Version">Explicit version specifier, or <c>null</c>.</param>
+    /// <param name="DeclaredSubpathRoot">The raw <c>SubpathRoot</c> value as written, or
+    /// <c>null</c> when it was omitted or empty.</param>
+    public sealed record EmitPackageInfo(
+        string Name,
+        string? Version,
+        string? DeclaredSubpathRoot = null
+    )
+    {
+        /// <summary>
+        /// The declared exports subpath root when it is a valid dotted namespace;
+        /// <c>null</c> when omitted, empty, or invalid (an invalid value is reported
+        /// as <c>MS0029</c> on the producer and otherwise ignored).
+        /// </summary>
+        public string? SubpathRoot =>
+            DeclaredSubpathRoot is { } root && IsValidSubpathRoot(root) ? root : null;
+    }
 
     /// <summary>
     /// Returns <c>true</c> when the compilation declares
