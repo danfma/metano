@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import type { Decimal } from "decimal.js";
 
 export class Product {
@@ -14,7 +14,8 @@ export class Product {
 
   equals(other: any): boolean {
     return (
-      other instanceof Product &&
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.id === other.id &&
       this.name === other.name &&
       this.displayName === other.displayName &&
@@ -37,13 +38,6 @@ export class Product {
   }
 
   with(overrides?: Partial<Product>): Product {
-    return new Product(
-      overrides?.id ?? this.id,
-      overrides?.name ?? this.name,
-      overrides?.displayName ?? this.displayName,
-      overrides?.unitPrice ?? this.unitPrice,
-      overrides?.stockCount ?? this.stockCount,
-      overrides?.isActive ?? this.isActive,
-    );
+    return copyRecordWith<Product>(this, overrides);
   }
 }

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class PageRequest {
   constructor(
@@ -20,7 +20,12 @@ export class PageRequest {
   }
 
   equals(other: any): boolean {
-    return other instanceof PageRequest && this.number === other.number && this.size === other.size;
+    return (
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
+      this.number === other.number &&
+      this.size === other.size
+    );
   }
 
   hashCode(): number {
@@ -32,6 +37,6 @@ export class PageRequest {
   }
 
   with(overrides?: Partial<PageRequest>): PageRequest {
-    return new PageRequest(overrides?.number ?? this.number, overrides?.size ?? this.size);
+    return copyRecordWith<PageRequest>(this, overrides);
   }
 }

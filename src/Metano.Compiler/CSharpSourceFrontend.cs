@@ -91,7 +91,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // The queryable-extraction diagnostic sink (#205 / MS0024) is
         // opened by each target's transformer (TransformAll) — body
         // extraction, which spawns the walker, runs there rather than
-        // in this method. See <c>QueryableExtractionDiagnostics</c>.
+        // in this method. See <c>ExtractionDiagnostics</c>.
         // Fields beyond what's already populated stay empty during the
         // incremental migration. Downstream targets fall back to
         // `LoadedCompilation` for the rest until follow-up PRs wire them

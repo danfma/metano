@@ -23,19 +23,11 @@ public static class IrConstructorExtractor
         Metano.Annotations.TargetLanguage? target = null
     )
     {
-        var explicitCtors = type
-            .Constructors.Where(c =>
-                (!c.IsImplicitlyDeclared || c.Parameters.Length > 0) && !IsRecordCopyConstructor(c)
-            )
-            .ToList();
+        var explicitCtors = ExplicitConstructors(type);
+        var primary = FindPrimaryConstructor(type);
 
-        if (explicitCtors.Count == 0)
+        if (primary is null)
             return null;
-
-        // The primary constructor is the one with the most parameters — for records
-        // this is always the explicit positional ctor; for C# 12+ primary constructor
-        // classes it's the implicit one. Either way, promotions are keyed off it.
-        var primary = explicitCtors.OrderByDescending(c => c.Parameters.Length).First();
 
         var primaryDecl = BuildFromMethod(primary, type, originResolver, compilation, target);
 
@@ -47,6 +39,34 @@ public static class IrConstructorExtractor
 
         return overloads.Count > 0 ? primaryDecl with { Overloads = overloads } : primaryDecl;
     }
+
+    /// <summary>
+    /// The constructor whose parameters become the emitted primary
+    /// constructor: the one with the most parameters — for records always the
+    /// explicit positional ctor; for C# 12+ primary constructor classes the
+    /// implicit one. Promotions are keyed off it, and any target building
+    /// positional <c>new T(...)</c> calls must follow its parameter order.
+    /// Returns <c>null</c> when the type only has the implicit parameterless
+    /// constructor (or the record copy constructor).
+    /// </summary>
+    public static IMethodSymbol? FindPrimaryConstructor(INamedTypeSymbol type) =>
+        ExplicitConstructors(type).OrderByDescending(c => c.Parameters.Length).FirstOrDefault();
+
+    /// <summary>
+    /// The public constructors among those <see cref="Extract"/> models — the
+    /// ones a target exposes, which drive multi-constructor dispatch.
+    /// </summary>
+    public static List<IMethodSymbol> PublicExplicitConstructors(INamedTypeSymbol type) =>
+        ExplicitConstructors(type)
+            .Where(c => c.DeclaredAccessibility == Accessibility.Public)
+            .ToList();
+
+    private static List<IMethodSymbol> ExplicitConstructors(INamedTypeSymbol type) =>
+        type
+            .Constructors.Where(c =>
+                (!c.IsImplicitlyDeclared || c.Parameters.Length > 0) && !IsRecordCopyConstructor(c)
+            )
+            .ToList();
 
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
         ctor.IsImplicitlyDeclared

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import type { PageRequest } from "./page-request";
 
 export class PageResult<T> {
@@ -19,7 +19,8 @@ export class PageResult<T> {
 
   equals(other: any): boolean {
     return (
-      other instanceof PageResult &&
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
       this.items === other.items &&
       this.totalCount === other.totalCount &&
       valueEquals(this.page, other.page)
@@ -36,10 +37,6 @@ export class PageResult<T> {
   }
 
   with(overrides?: Partial<PageResult<T>>): PageResult<T> {
-    return new PageResult(
-      overrides?.items ?? this.items,
-      overrides?.totalCount ?? this.totalCount,
-      overrides?.page ?? this.page,
-    );
+    return copyRecordWith<PageResult<T>>(this, overrides);
   }
 }

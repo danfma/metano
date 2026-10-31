@@ -327,7 +327,7 @@ public class QueryableExpressionTreeTests
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
             .First();
         var model = compilation.GetSemanticModel(syntaxTree);
-        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics.Add))
+        using (Metano.Compiler.Extraction.ExtractionDiagnostics.Open(diagnostics.Add))
         {
             var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(
                 model,
@@ -581,7 +581,7 @@ public class QueryableExpressionTreeTests
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.LambdaExpressionSyntax>()
             .First();
         var model = compilation.GetSemanticModel(syntaxTree);
-        using (Metano.Compiler.Extraction.QueryableExtractionDiagnostics.Open(diagnostics.Add))
+        using (Metano.Compiler.Extraction.ExtractionDiagnostics.Open(diagnostics.Add))
         {
             var walker = new Metano.Compiler.Extraction.IrExpressionTreeExtractor(
                 model,

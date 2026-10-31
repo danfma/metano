@@ -50,6 +50,19 @@ public static class IrRuntimeRequirementToTsImport
     }
 
     /// <summary>
+    /// The name a runtime helper is imported under in the TS target (e.g.
+    /// <c>"RecordCopy"</c> → <c>copyRecordWith</c>), for the import walker's
+    /// bypass lists to stay in sync with this table.
+    /// </summary>
+    internal static string ImportedNameOf(string helperName) =>
+        Map(new IrRuntimeRequirement(helperName, default))?.Name
+        ?? throw new ArgumentOutOfRangeException(
+            nameof(helperName),
+            helperName,
+            "Unmapped helper."
+        );
+
+    /// <summary>
     /// Maps a semantic runtime helper to its concrete import site in the TypeScript
     /// target. Returning <c>null</c> means "no import needed" (e.g., `Temporal` is
     /// already imported elsewhere in the current implementation).
@@ -59,6 +72,7 @@ public static class IrRuntimeRequirementToTsImport
         {
             "HashCode" => ("metano-runtime", "HashCode", false),
             "ValueEquals" => ("metano-runtime", "valueEquals", false),
+            "RecordCopy" => ("metano-runtime", "copyRecordWith", false),
             "Enumerable" => ("metano-runtime", "Enumerable", false),
             "HashSet" => ("metano-runtime", "HashSet", false),
             "UUID" => ("metano-runtime", "UUID", false),

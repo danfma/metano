@@ -43,4 +43,8 @@ public enum IrRuntimeCategory
     /// <summary>Event subscription helpers (e.g., the <c>delegateAdd</c> /
     /// <c>delegateRemove</c> pair used for C# <c>event</c> accessors).</summary>
     EventHandling,
+
+    /// <summary>Non-destructive record copy helpers backing C#'s
+    /// <c>with</c> expression (copy, then apply the overrides).</summary>
+    RecordCopy,
 }

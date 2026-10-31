@@ -1,4 +1,4 @@
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Pair {
   constructor(readonly a: number, readonly b: number) { }
@@ -10,7 +10,7 @@ export class Pair {
   }
 
   equals(other: any): boolean {
-    return other instanceof Pair && this.a === other.a && this.b === other.b;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.a === other.a && this.b === other.b;
   }
 
   hashCode(): number {
@@ -22,6 +22,6 @@ export class Pair {
   }
 
   with(overrides?: Partial<Pair>): Pair {
-    return new Pair(overrides?.a ?? this.a, overrides?.b ?? this.b);
+    return copyRecordWith<Pair>(this, overrides);
   }
 }

@@ -1,10 +1,10 @@
-import { HashCode } from "metano-runtime";
+import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Shape {
   constructor(readonly x: number, readonly y: number) { }
 
   equals(other: any): boolean {
-    return other instanceof Shape && this.x === other.x && this.y === other.y;
+    return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x && this.y === other.y;
   }
 
   hashCode(): number {
@@ -16,6 +16,6 @@ export class Shape {
   }
 
   with(overrides?: Partial<Shape>): Shape {
-    return new Shape(overrides?.x ?? this.x, overrides?.y ?? this.y);
+    return copyRecordWith<Shape>(this, overrides);
   }
 }

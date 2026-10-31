@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -604,7 +605,15 @@ public sealed partial class IrExpressionExtractor
                 IdentifierNameSyntax id => id.Identifier.ValueText,
                 _ => assign.Left.ToString(),
             };
-            assignments.Add(new IrWithAssignment(memberName, Extract(assign.Right)));
+            ReportCustomInitAccessor(assign);
+
+            assignments.Add(
+                new IrWithAssignment(
+                    memberName,
+                    Extract(assign.Right),
+                    ResolveMemberNameOverride(assign.Left)
+                )
+            );
         }
         // Mark [PlainObject] sources so backends that emit object literals
         // (TypeScript's `{ ...source, k: v }` form) can pick the right shape.
@@ -615,6 +624,17 @@ public sealed partial class IrExpressionExtractor
             sourceType is INamedTypeSymbol named && SymbolHelper.HasPlainObject(named);
         return new IrWithExpression(Extract(withExpr.Expression), assignments, isPlainObject);
     }
+
+    /// <summary>
+    /// Folds an invocation the compiler evaluates at compile time — in C#
+    /// that is <c>nameof(x)</c>, whose value is the string <c>"x"</c> — into
+    /// a string literal, so no target ever emits a call to a function that
+    /// does not exist at runtime.
+    /// </summary>
+    private IrLiteral? TryExtractConstantInvocation(InvocationExpressionSyntax inv) =>
+        _semantic.GetConstantValue(inv) is { HasValue: true, Value: string value }
+            ? new IrLiteral(value, IrLiteralKind.String)
+            : null;
 
     /// <summary>
     /// Lowers a C# <c>switch</c> expression into <see cref="IrSwitchExpression"/>.
@@ -643,6 +663,8 @@ public sealed partial class IrExpressionExtractor
     private IrPattern ExtractPattern(PatternSyntax pattern) =>
         pattern switch
         {
+            ConstantPatternSyntax constant when NamedPatternType(constant.Expression) is { } type =>
+                new IrTypePattern(type),
             ConstantPatternSyntax constant => new IrConstantPattern(Extract(constant.Expression)),
             DeclarationPatternSyntax decl => new IrTypePattern(
                 ResolvePatternType(decl.Type),
@@ -740,14 +762,24 @@ public sealed partial class IrExpressionExtractor
             var elements = recursive
                 .PositionalPatternClause.Subpatterns.Select(s => ExtractPattern(s.Pattern))
                 .ToList();
-            return new IrPositionalPattern(type, elements, designator);
+
+            var operation = _semantic.GetOperation(recursive) as IRecursivePatternOperation;
+
+            return new IrPositionalPattern(
+                type,
+                elements,
+                designator,
+                ResolvePositionalElementMembers(recursive, operation),
+                InputMayBeNull(operation?.InputType)
+            );
         }
 
         var subs = recursive
             .PropertyPatternClause?.Subpatterns.Where(s => s.NameColon is not null)
             .Select(s => new IrPropertySubpattern(
                 s.NameColon!.Name.Identifier.ValueText,
-                ExtractPattern(s.Pattern)
+                ExtractPattern(s.Pattern),
+                ResolveMemberNameOverride(s.NameColon.Name)
             ))
             .ToList();
         return new IrPropertyPattern(
@@ -756,6 +788,136 @@ public sealed partial class IrExpressionExtractor
             designator
         );
     }
+
+    /// <summary>
+    /// The member each positional element reads, or <c>null</c> to read the
+    /// elements by position:
+    /// <list type="bullet">
+    ///   <item>A matched value that lowers to an array tuple — <c>ValueTuple</c>,
+    ///   <c>Tuple</c> (deconstructed by the <c>TupleExtensions</c> extension),
+    ///   <c>KeyValuePair</c>, a <c>[JsTuple]</c> record — is read by
+    ///   position.</item>
+    ///   <item>A record's compiler-synthesized <c>Deconstruct</c> returns its
+    ///   positional members, so each out parameter resolves to the property
+    ///   or field of the same name.</item>
+    ///   <item>A user-written <c>Deconstruct</c> may compute its outputs.</item>
+    /// </list>
+    /// Every element left unresolved (<c>null</c> entry) is reported as an
+    /// MS0001 warning, never dropped silently.
+    /// </summary>
+    private IReadOnlyList<IrPositionalElementMember?>? ResolvePositionalElementMembers(
+        RecursivePatternSyntax recursive,
+        IRecursivePatternOperation? operation
+    )
+    {
+        if (operation?.DeconstructSymbol is not IMethodSymbol deconstruct)
+            return null;
+
+        if (LowersToArrayTuple(operation.MatchedType ?? operation.InputType))
+            return null;
+
+        var outParameters = deconstruct.Parameters.Where(p => p.RefKind == RefKind.Out);
+
+        var members = outParameters
+            .Select(p =>
+                deconstruct.IsImplicitlyDeclared
+                    ? ToPositionalElementMember(deconstruct.ContainingType, p.Name)
+                    : null
+            )
+            .ToList();
+
+        if (members.Any(m => m is null))
+            ReportUnresolvedPositionalElements(recursive, deconstruct);
+
+        return members;
+    }
+
+    private bool LowersToArrayTuple(ITypeSymbol type) =>
+        SymbolHelper.HasJsTuple(type)
+        || IrTypeRefMapper.Map(type, _originResolver, _target)
+            is IrTupleTypeRef
+                or IrKeyValuePairTypeRef;
+
+    private static bool InputMayBeNull(ITypeSymbol? type) =>
+        type switch
+        {
+            null => false,
+            { IsReferenceType: true } => true,
+            { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } => true,
+            ITypeParameterSymbol parameter => !parameter.HasValueTypeConstraint,
+            _ => false,
+        };
+
+    private static void ReportUnresolvedPositionalElements(
+        RecursivePatternSyntax recursive,
+        IMethodSymbol deconstruct
+    ) =>
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Positional pattern over '{deconstruct.ContainingType.Name}.Deconstruct' is not "
+                    + "supported: some of its outputs cannot be mapped to members.",
+                recursive.GetLocation()
+            )
+        );
+
+    private IrPositionalElementMember? ToPositionalElementMember(ITypeSymbol record, string name) =>
+        SymbolHelper.FindInstanceDataMemberInHierarchy(record, name) is { } member
+            ? new IrPositionalElementMember(member.Name, member.GetNameOverride(_target))
+            : null;
+
+    /// <summary>
+    /// A custom <c>set { … }</c> body is transpiled (as a setter) and runs when
+    /// a <c>with</c> assigns the property, but a custom <c>init { … }</c> body
+    /// is not transpiled: the property has no setter in the output, so a
+    /// <c>with</c> that sets it neither runs the body nor applies the new
+    /// value. Reported as an MS0001 warning at the assignment.
+    /// </summary>
+    private void ReportCustomInitAccessor(AssignmentExpressionSyntax assignment)
+    {
+        if (_semantic.GetSymbolInfo(assignment.Left).Symbol is not IPropertySymbol property)
+            return;
+
+        if (property.SetMethod is not { IsInitOnly: true } init || !HasAccessorBody(init))
+            return;
+
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'with' sets '{property.Name}', whose custom init accessor is not transpiled: "
+                    + "the accessor body does not run and the new value is not applied.",
+                assignment.GetLocation()
+            )
+        );
+    }
+
+    private static bool HasAccessorBody(IMethodSymbol accessor) =>
+        accessor.DeclaringSyntaxReferences.Any(reference =>
+            reference.GetSyntax()
+                is AccessorDeclarationSyntax { Body: not null }
+                    or AccessorDeclarationSyntax { ExpressionBody: not null }
+        );
+
+    /// <summary>
+    /// The target's <c>[Name]</c> override of the member a property pattern
+    /// entry or a <c>with</c> assignment names, when the semantic model
+    /// resolves one.
+    /// </summary>
+    private string? ResolveMemberNameOverride(ExpressionSyntax memberReference) =>
+        _semantic.GetSymbolInfo(memberReference).Symbol?.GetNameOverride(_target);
+
+    /// <summary>
+    /// A bare type in pattern position without a designator (<c>ImageClip =&gt; …</c>,
+    /// <c>{ Head: ImageClip }</c>, <c>ImageClip or SilenceClip</c>) parses as a
+    /// constant pattern whose expression names a type; semantically it is a
+    /// type pattern.
+    /// </summary>
+    private IrTypeRef? NamedPatternType(ExpressionSyntax expression) =>
+        _semantic.GetSymbolInfo(expression).Symbol is ITypeSymbol type
+            ? IrTypeRefMapper.Map(type, _originResolver, _target)
+            : null;
 
     private IrTypeRef ResolvePatternType(TypeSyntax typeSyntax)
     {
@@ -1757,6 +1919,9 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ExtractInvocation(InvocationExpressionSyntax inv)
     {
+        if (TryExtractConstantInvocation(inv) is { } constant)
+            return constant;
+
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
 
         // LINQ chain detection (#20 pipe lowering). When this invocation

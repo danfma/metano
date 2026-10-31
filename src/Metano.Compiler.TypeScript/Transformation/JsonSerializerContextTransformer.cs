@@ -238,38 +238,12 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
         );
 
-        TsExpression factoryBody;
-        if (isPlainObject)
-        {
-            // [PlainObject] → object literal: { title: p.title as string, ... }
-            var objLiteralProps = properties
-                .Select(x => new TsObjectProperty(
-                    x.TsName,
-                    new TsCastExpression(
-                        new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
-                        MapType(x.Property.Type)
-                    )
-                ))
-                .ToList();
-            factoryBody = new TsObjectLiteral(objLiteralProps);
-        }
-        else
-        {
-            // Class → new TodoItem(p.title as string, ...)
-            var factoryArgs = properties
-                .Select(x =>
-                    new TsCastExpression(
-                        new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
-                        MapType(x.Property.Type)
-                    ) as TsExpression
-                )
-                .ToList();
-            factoryBody = new TsNewExpression(new TsIdentifier(tsTypeName), factoryArgs);
-        }
-
         var factoryProperty = new TsObjectProperty(
             "factory",
-            new TsArrowFunction([factoryParam], [new TsReturnStatement(factoryBody)])
+            new TsArrowFunction(
+                [factoryParam],
+                [BuildFactoryStatement(targetType, tsTypeName, isPlainObject, properties)]
+            )
         );
 
         // properties: [...]
@@ -287,16 +261,104 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
+    /// The single statement of the spec's <c>factory</c> arrow:
+    /// <list type="bullet">
+    ///   <item><c>[PlainObject]</c> → <c>return { title: p.title as string, ... }</c>;</item>
+    ///   <item>abstract class → <c>throw new Error(...)</c>: TypeScript rejects
+    ///     <c>new</c> on an abstract class, and choosing the concrete subtype
+    ///     needs polymorphic-JSON support (<c>[JsonPolymorphic]</c>), which is
+    ///     not modeled yet;</item>
+    ///   <item>class → <c>return new TodoItem(p.title as string, ...)</c>, with
+    ///     the arguments in the emitted constructor's positional order.</item>
+    /// </list>
+    /// </summary>
+    private TsStatement BuildFactoryStatement(
+        INamedTypeSymbol targetType,
+        string tsTypeName,
+        bool isPlainObject,
+        IReadOnlyList<SerializableProperty> properties
+    )
+    {
+        if (isPlainObject)
+            return new TsReturnStatement(BuildPlainObjectLiteral(properties));
+
+        if (targetType.IsAbstract)
+            return BuildAbstractFactoryThrow(tsTypeName);
+
+        return new TsReturnStatement(
+            new TsNewExpression(
+                new TsIdentifier(tsTypeName),
+                BuildConstructorArguments(targetType, properties)
+            )
+        );
+    }
+
+    private TsObjectLiteral BuildPlainObjectLiteral(
+        IReadOnlyList<SerializableProperty> properties
+    ) =>
+        new(
+            properties
+                .Select(x => new TsObjectProperty(
+                    x.TsName,
+                    CastProperty(x.TsName, x.Property.Type)
+                ))
+                .ToList()
+        );
+
+    /// <summary>
+    /// Builds the <c>new T(...)</c> arguments. When the type has a
+    /// constructor with parameters, each parameter (in declaration order —
+    /// the order the emitted TS constructor uses) reads the property it
+    /// initializes, searched across the inheritance chain so a parameter
+    /// forwarded to the base (<c>ImageClip(string Path, double Seconds) :
+    /// Clip(Seconds)</c>) reads the inherited <c>seconds</c>. Types without
+    /// a parameterized constructor keep passing their own properties.
+    /// </summary>
+    private List<TsExpression> BuildConstructorArguments(
+        INamedTypeSymbol targetType,
+        IReadOnlyList<SerializableProperty> properties
+    )
+    {
+        var parameters =
+            IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
+
+        if (parameters.Length == 0)
+            return properties.Select(x => CastProperty(x.TsName, x.Property.Type)).ToList();
+
+        return parameters.Select(BuildConstructorArgument).ToList();
+    }
+
+    private TsExpression BuildConstructorArgument(IParameterSymbol parameter)
+    {
+        var property = SymbolHelper.FindInstancePropertyInHierarchy(
+            parameter.ContainingType,
+            parameter.Name
+        );
+
+        if (property is null)
+            return CastProperty(TypeScriptNaming.ToCamelCase(parameter.Name), parameter.Type);
+
+        var tsName = IrToTsNamingPolicy.ToDataMemberName(
+            property.Name,
+            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
+        );
+
+        return CastProperty(tsName, property.Type);
+    }
+
+    private TsExpression CastProperty(string tsName, ITypeSymbol type) =>
+        new TsCastExpression(new TsPropertyAccess(new TsIdentifier("p"), tsName), MapType(type));
+
+    /// <summary>
     /// Collects public properties from the type, excluding [JsonIgnore], and computes
     /// both the TS field name and the JSON wire name.
     /// </summary>
-    private static List<(
-        IPropertySymbol Property,
-        string JsonName,
-        string TsName
-    )> CollectSerializableProperties(INamedTypeSymbol type, Func<string, string>? namingPolicy)
+    private static List<SerializableProperty> CollectSerializableProperties(
+        INamedTypeSymbol type,
+        Func<string, string>? namingPolicy
+    )
     {
-        var result = new List<(IPropertySymbol, string, string)>();
+        var result = new List<SerializableProperty>();
 
         foreach (var member in type.GetMembers())
         {
@@ -311,14 +373,15 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             if (prop.IsIndexer)
                 continue;
 
-            var tsName =
+            var tsName = IrToTsNamingPolicy.ToDataMemberName(
+                prop.Name,
                 SymbolHelper.GetNameOverride(prop, TargetLanguage.TypeScript)
-                ?? TypeScriptNaming.ToCamelCase(prop.Name);
+            );
 
             // JSON name: [JsonPropertyName] wins, otherwise apply naming policy
             var jsonName = GetJsonPropertyName(prop) ?? ApplyNamingPolicy(prop.Name, namingPolicy);
 
-            result.Add((prop, jsonName, tsName));
+            result.Add(new SerializableProperty(prop, jsonName, tsName));
         }
 
         return result;
@@ -681,4 +744,25 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     {
         return type.SpecialType == SpecialType.System_Object || type.ToDisplayString() == "object";
     }
+
+    private static TsThrowStatement BuildAbstractFactoryThrow(string tsTypeName) =>
+        new(
+            new TsNewExpression(
+                new TsIdentifier("Error"),
+                [
+                    new TsStringLiteral(
+                        $"Cannot deserialize abstract type '{tsTypeName}': "
+                            + "polymorphic JSON deserialization is not supported yet."
+                    ),
+                ]
+            )
+        );
+
+    /// <summary>A serializable property with its JSON wire name and TS member
+    /// name.</summary>
+    private sealed record SerializableProperty(
+        IPropertySymbol Property,
+        string JsonName,
+        string TsName
+    );
 }

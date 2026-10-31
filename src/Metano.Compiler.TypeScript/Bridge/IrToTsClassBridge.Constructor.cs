@@ -6,8 +6,9 @@ using Metano.Compiler.TypeScript.Transformation;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Constructor synthesis: promoted-parameter and DI-captured-parameter
-/// lists, default-value resolution (including the <c>[StringEnum]</c>
+/// Constructor synthesis: the ordered primary-constructor parameter list
+/// (promoted parameter properties + plain forwarded / DI-captured params),
+/// default-value resolution (including the <c>[StringEnum]</c>
 /// member-access shortcut), and the single-constructor body builder
 /// that wires <c>super(...)</c> + captured assignments + promoted-params
 /// copies + the IR statement body.
@@ -15,64 +16,117 @@ namespace Metano.Compiler.TypeScript.Bridge;
 internal static partial class IrToTsClassBridge
 {
     /// <summary>
-    /// Builds the TS constructor-parameter list for promoted parameters
-    /// (C# record positional parameters / C# 12 primary-constructor params
-    /// that map to public properties). Each emitted parameter carries the
-    /// promoted property's accessibility, the readonly flag (init-only or
-    /// get-only ⇒ readonly), the target-resolved <c>[Name]</c> override (or
-    /// camelCased parameter name as a fallback), and the parameter's
-    /// declared default value when present.
+    /// Builds the TS constructor-parameter list for the primary constructor,
+    /// one entry per C# parameter in declaration order so positional call
+    /// sites (<c>new T(a, b)</c>, the JSON factory) line up with the emitted
+    /// signature. Promoted parameters
+    /// become TS parameter properties (see
+    /// <see cref="BuildPromotedCtorParam"/>); every other parameter — those
+    /// forwarded to the base constructor (<c>record ImageClip(string Path,
+    /// double Seconds) : Clip(Seconds)</c>), DI-captured ones, or ones only
+    /// read by the body — stays a plain parameter with
+    /// <see cref="TsAccessibility.None"/> so it neither redeclares an
+    /// inherited property nor leaks a public member.
     /// <para>
-    /// <paramref name="resolveType"/> takes the IR type and yields the TS
-    /// type — the caller routes this through <see cref="TypeMapper"/> so
+    /// <paramref name="resolveType"/> takes the IR parameter and yields the
+    /// TS type — the caller routes this through <see cref="TypeMapper"/> so
     /// <c>[ExportFromBcl]</c> overrides (e.g., <c>decimal → Decimal</c>)
     /// still apply. The bridge stays target-agnostic about that resolution.
     /// </para>
     /// </summary>
-    public static IReadOnlyList<TsConstructorParam> BuildPromotedCtorParams(
+    public static IReadOnlyList<TsConstructorParam> BuildPrimaryCtorParams(
         IrConstructorDeclaration? ctor,
         Func<IrConstructorParameter, TsType> resolveType,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        if (ctor is null || ctor.Parameters.Count == 0)
+        if (ctor is null)
             return [];
-        var result = new List<TsConstructorParam>();
-        foreach (var p in ctor.Parameters)
+
+        return ctor
+            .Parameters.Select(p =>
+                IsPromoted(p)
+                    ? BuildPromotedCtorParam(p, resolveType, bclRegistry)
+                    : BuildPlainCtorParam(p, resolveType, bclRegistry)
+            )
+            .ToList();
+    }
+
+    /// <summary>
+    /// Emitted member names of the primary constructor's promoted
+    /// parameters — the properties the constructor signature already
+    /// declares, which the member walk must not emit a second time.
+    /// </summary>
+    public static IReadOnlySet<string> PromotedMemberNames(IrConstructorDeclaration? ctor) =>
+        (ctor?.Parameters ?? [])
+            .Where(IsPromoted)
+            .Select(PromotedName)
+            .ToHashSet(StringComparer.Ordinal);
+
+    private static bool IsPromoted(IrConstructorParameter p) =>
+        p.Promotion is not IrParameterPromotion.None;
+
+    private static string PromotedName(IrConstructorParameter p) =>
+        IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName);
+
+    /// <summary>
+    /// Lowers one promoted parameter: the promoted property's accessibility,
+    /// the readonly flag (init-only or get-only ⇒ readonly), the
+    /// target-resolved <c>[Name]</c> override (or camelCased parameter name
+    /// as a fallback), and the declared default value when present.
+    /// </summary>
+    private static TsConstructorParam BuildPromotedCtorParam(
+        IrConstructorParameter p,
+        Func<IrConstructorParameter, TsType> resolveType,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var name = PromotedName(p);
+        var tsType = resolveType(p);
+        var defaultValue = ResolveCtorParamDefault(p, bclRegistry);
+
+        // TypeScript forbids combining a parameter-property modifier
+        // (`readonly` / `public`) with the rest prefix (`...`). For a
+        // record positional `params T[]` slot, drop the modifiers and
+        // emit the rest form; the field declaration + body assignment
+        // are synthesized separately by the class emitter so the
+        // promoted shape is preserved at the surface. (#152)
+        if (p.Parameter.IsParams)
         {
-            if (p.Promotion is IrParameterPromotion.None)
-                continue;
-            var name = p.EmittedName ?? TypeScriptNaming.ToCamelCase(p.Parameter.Name);
-            var tsType = resolveType(p);
-            var defaultValue = ResolveCtorParamDefault(p, bclRegistry);
-            // TypeScript forbids combining a parameter-property modifier
-            // (`readonly` / `public`) with the rest prefix (`...`). For a
-            // record positional `params T[]` slot, drop the modifiers and
-            // emit the rest form; the field declaration + body assignment
-            // are synthesized separately by the class emitter so the
-            // promoted shape is preserved at the surface. (#152)
-            if (p.Parameter.IsParams)
-            {
-                result.Add(
-                    new TsConstructorParam(
-                        name,
-                        tsType,
-                        Readonly: false,
-                        Accessibility: TsAccessibility.None,
-                        DefaultValue: defaultValue,
-                        Rest: true
-                    )
-                );
-                continue;
-            }
-            var isReadonly = p.Promotion is IrParameterPromotion.ReadonlyProperty;
-            var accessibility = MapAccessibility(p.PromotedVisibility ?? IrVisibility.Public);
-            result.Add(
-                new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue)
+            return new TsConstructorParam(
+                name,
+                tsType,
+                Readonly: false,
+                Accessibility: TsAccessibility.None,
+                DefaultValue: defaultValue,
+                Rest: true
             );
         }
-        return result;
+
+        var isReadonly = p.Promotion is IrParameterPromotion.ReadonlyProperty;
+        var accessibility = MapAccessibility(p.PromotedVisibility ?? IrVisibility.Public);
+
+        return new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue);
     }
+
+    /// <summary>
+    /// Lowers one non-promoted parameter to a plain TS parameter (no
+    /// parameter-property modifier). Its name matches what
+    /// <see cref="BuildSimpleConstructor"/> reads for DI-captured
+    /// assignments and what the base-initializer arguments reference.
+    /// </summary>
+    private static TsConstructorParam BuildPlainCtorParam(
+        IrConstructorParameter p,
+        Func<IrConstructorParameter, TsType> resolveType,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        new(
+            TypeScriptNaming.ToCamelCase(p.Parameter.Name),
+            resolveType(p),
+            Accessibility: TsAccessibility.None,
+            DefaultValue: ResolveCtorParamDefault(p, bclRegistry),
+            Rest: p.Parameter.IsParams
+        );
 
     /// <summary>
     /// Lowers a constructor parameter's default value to TS. The general
@@ -84,7 +138,7 @@ internal static partial class IrToTsClassBridge
     /// literal form matches the legacy convention and avoids the property
     /// access at the call site.
     /// </summary>
-    public static TsExpression? ResolveCtorParamDefault(
+    private static TsExpression? ResolveCtorParamDefault(
         IrConstructorParameter p,
         DeclarativeMappingRegistry? bclRegistry
     )
@@ -100,51 +154,10 @@ internal static partial class IrToTsClassBridge
     }
 
     /// <summary>
-    /// Builds the TS constructor-parameter list for DI-captured parameters
-    /// (those whose <see cref="IrConstructorParameter.CapturedFieldName"/>
-    /// is set). Captured params are NOT promoted to properties — their
-    /// values land in private fields via the body assignment
-    /// <see cref="BuildSimpleConstructor"/> emits — so the constructor
-    /// signature uses <see cref="TsAccessibility.None"/>.
-    /// <paramref name="existingNames"/> filters out parameters that already
-    /// appear in a promoted-params list (the same param can be both
-    /// promoted and back the field for a different member; the promoted
-    /// entry wins).
-    /// </summary>
-    public static IReadOnlyList<TsConstructorParam> BuildCapturedCtorParams(
-        IrConstructorDeclaration? ctor,
-        Func<IrConstructorParameter, TsType> resolveType,
-        ISet<string> existingNames
-    )
-    {
-        if (ctor is null || ctor.Parameters.Count == 0)
-            return [];
-        var result = new List<TsConstructorParam>();
-        foreach (var p in ctor.Parameters)
-        {
-            if (p.CapturedFieldName is null)
-                continue;
-            var name = TypeScriptNaming.ToCamelCase(p.Parameter.Name);
-            if (existingNames.Contains(name))
-                continue;
-            result.Add(
-                new TsConstructorParam(
-                    name,
-                    resolveType(p),
-                    Accessibility: TsAccessibility.None,
-                    Rest: p.Parameter.IsParams
-                )
-            );
-        }
-        return result;
-    }
-
-    /// <summary>
     /// Lowers the single-constructor case (no overload dispatch) into a
     /// <see cref="TsConstructor"/>. The caller pre-resolves the parameter
-    /// list (own + DI-captured) and the optional <c>super(...)</c> argument
-    /// list because both still depend on Roslyn-side inheritance walks the
-    /// IR doesn't yet model. The body is composed in canonical order:
+    /// list (<see cref="BuildPrimaryCtorParams"/>) and the optional
+    /// <c>super(...)</c> argument list. The body is composed in canonical order:
     /// <list type="number">
     ///   <item><c>super(args)</c> when <paramref name="superArgs"/> is non-null;</item>
     ///   <item>one <c>this.&lt;capturedField&gt; = &lt;paramName&gt;</c>
@@ -205,7 +218,7 @@ internal static partial class IrToTsClassBridge
             {
                 if (!p.Parameter.IsParams || p.Promotion is IrParameterPromotion.None)
                     continue;
-                var paramName = p.EmittedName ?? TypeScriptNaming.ToCamelCase(p.Parameter.Name);
+                var paramName = PromotedName(p);
                 body.Add(
                     new TsExpressionStatement(
                         new TsBinaryExpression(

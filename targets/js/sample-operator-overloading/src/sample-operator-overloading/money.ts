@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, isBigInt } from "metano-runtime";
+import { HashCode, copyRecordWith, isBigInt } from "metano-runtime";
 import { Decimal } from "decimal.js";
 import type { Currency } from "./currency";
 import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception";
@@ -129,7 +129,12 @@ export class Money {
   }
 
   equals(other: any): boolean {
-    return other instanceof Money && this.cents === other.cents && this.currency === other.currency;
+    return (
+      other != null &&
+      Object.getPrototypeOf(other) === Object.getPrototypeOf(this) &&
+      this.cents === other.cents &&
+      this.currency === other.currency
+    );
   }
 
   hashCode(): number {
@@ -141,6 +146,6 @@ export class Money {
   }
 
   with(overrides?: Partial<Money>): Money {
-    return new Money(overrides?.cents ?? this.cents, overrides?.currency ?? this.currency);
+    return copyRecordWith<Money>(this, overrides);
   }
 }

@@ -11,7 +11,8 @@ public sealed record TsMethodMember(
     TsAccessibility Accessibility = TsAccessibility.Public,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null,
     IReadOnlyList<TsMethodOverload>? Overloads = null,
-    bool Abstract = false
+    bool Abstract = false,
+    bool Override = false
 ) : TsClassMember;
 
 /// <summary>

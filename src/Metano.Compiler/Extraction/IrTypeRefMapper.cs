@@ -515,7 +515,7 @@ public static class IrTypeRefMapper
     /// for TypeScript.
     /// </para>
     /// </summary>
-    private static bool IsTranspilableType(
+    internal static bool IsTranspilableType(
         INamedTypeSymbol named,
         Metano.Annotations.TargetLanguage? target
     )

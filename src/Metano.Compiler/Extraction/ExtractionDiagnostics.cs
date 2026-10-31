@@ -4,8 +4,9 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// AsyncLocal sink for diagnostics raised by the queryable-tree
-/// walker (<see cref="IrExpressionTreeExtractor"/>). Opened by the
+/// AsyncLocal sink for diagnostics raised during expression extraction —
+/// the queryable-tree walker (<see cref="IrExpressionTreeExtractor"/>) and
+/// the expression extractor's unsupported shapes (MS0001). Opened by the
 /// host (target transformer / orchestrator) for the duration of
 /// extraction so MS0024 reports from the walker can surface without
 /// threading a diagnostics list through every static extractor
@@ -34,7 +35,7 @@ namespace Metano.Compiler.Extraction;
 /// Public surface is a host-extension seam, not an application API.
 /// </remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class QueryableExtractionDiagnostics
+public static class ExtractionDiagnostics
 {
     private static readonly AsyncLocal<Action<MetanoDiagnostic>?> Sink = new();
 

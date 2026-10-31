@@ -147,4 +147,37 @@ public class ConstByDefaultTests
         await Assert.That(output).Contains("const seed = ");
         await Assert.That(output).Contains("let counter = ");
     }
+
+    [Test]
+    public async Task LocalReassignedInsideWithOrSwitchArm_LowersToLet()
+    {
+        // The reassignment walk reaches `with` values, collection elements and
+        // switch-expression arms, so these locals are not promoted to const.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record Point(int X);
+
+            [Transpile]
+            public class Sample
+            {
+                public int Compute(Point p, int k)
+                {
+                    var a = 0;
+                    var moved = p with { X = a++ };
+                    var b = 0;
+                    var items = new[] { b += 1 };
+                    var c = 0;
+                    var picked = k switch { 1 => c = 5, _ => 0 };
+                    return a + b + c + moved.X + items.Length + picked;
+                }
+            }
+            """
+        );
+
+        var output = result["sample.ts"];
+        await Assert.That(output).Contains("let a = ");
+        await Assert.That(output).Contains("let b = ");
+        await Assert.That(output).Contains("let c = ");
+    }
 }

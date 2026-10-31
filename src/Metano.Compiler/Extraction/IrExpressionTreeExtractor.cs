@@ -201,7 +201,7 @@ internal sealed class IrExpressionTreeExtractor
         _failed = true;
         if (!_isExplicitOptIn)
             return;
-        QueryableExtractionDiagnostics.Report(
+        ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.UnsupportedQueryableBody,

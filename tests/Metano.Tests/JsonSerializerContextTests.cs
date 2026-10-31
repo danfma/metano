@@ -178,8 +178,12 @@ public class JsonSerializerContextTests
         var ts = result["test-app/json-context.ts"];
 
         await Assert.That(ts).Contains("ts: \"name\"");
-        await Assert.That(ts).DoesNotContain("internalToken");
+        await Assert.That(ts).DoesNotContain("ts: \"internalToken\"");
         await Assert.That(ts).DoesNotContain("InternalToken");
+        // The factory still fills every constructor slot so the call
+        // matches the emitted constructor's arity; the ignored member is
+        // absent from the payload and arrives as undefined.
+        await Assert.That(ts).Contains("new Secret(p.name as string, p.internalToken as string)");
     }
 
     [Test]
@@ -382,5 +386,50 @@ public class JsonSerializerContextTests
 
         var ts = result["test-app/json-context.ts"];
         await Assert.That(ts).Contains("kind: \"array\"");
+    }
+
+    private const string ClipContextSource = """
+        using System.Text.Json.Serialization;
+
+        namespace TestApp;
+
+        [Transpile]
+        public abstract record Clip(double Seconds);
+
+        [Transpile]
+        public sealed record ImageClip(string Path, double Seconds) : Clip(Seconds);
+
+        [Transpile]
+        [JsonSourceGenerationOptions]
+        [JsonSerializable(typeof(Clip))]
+        [JsonSerializable(typeof(ImageClip))]
+        public partial class JsonContext : JsonSerializerContext
+        {
+            public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+            protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+            public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+        }
+        """;
+
+    [Test]
+    public async Task AbstractType_FactoryThrowsInsteadOfConstructing()
+    {
+        var ts = TranspileHelper.Transpile(ClipContextSource)["test-app/json-context.ts"];
+
+        await Assert.That(ts).DoesNotContain("new Clip(");
+        await Assert
+            .That(ts)
+            .Contains(
+                "throw new Error(\"Cannot deserialize abstract type 'Clip': polymorphic JSON deserialization is not supported yet.\");"
+            );
+    }
+
+    [Test]
+    public async Task DerivedType_FactoryPassesForwardedParamInConstructorOrder()
+    {
+        var ts = TranspileHelper.Transpile(ClipContextSource)["test-app/json-context.ts"];
+
+        // `Seconds` is inherited but still a constructor slot, after `Path`.
+        await Assert.That(ts).Contains("new ImageClip(p.path as string, p.seconds as number)");
     }
 }

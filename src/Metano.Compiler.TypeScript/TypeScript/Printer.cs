@@ -149,7 +149,7 @@ public sealed class Printer(string indent = "  ")
     /// if they're added in the future, extend this predicate.
     /// </summary>
     private static bool IsControlFlow(TsStatement stmt) =>
-        stmt is TsIfStatement or TsSwitchStatement;
+        stmt is TsIfStatement or TsSwitchStatement or TsBlockStatement;
 
     /// <summary>
     /// An expression is "complex" when it shouldn't appear inline inside an
@@ -735,6 +735,8 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write("abstract ");
                 if (method.Static)
                     _sb.Write("static ");
+                if (method.Override)
+                    _sb.Write("override ");
                 if (method.Async)
                     _sb.Write("async ");
                 if (method.Generator)
@@ -917,6 +919,15 @@ public sealed class Printer(string indent = "  ")
 
                 break;
 
+            case TsBlockStatement block:
+                _sb.Write("{");
+                _sb.WriteLn();
+                _sb.Indent();
+                PrintStatementList(block.Statements);
+                _sb.Dedent();
+                _sb.Write("}");
+                break;
+
             case TsThrowStatement throwStmt:
                 _sb.Write("throw ");
                 PrintExpression(throwStmt.Expression);
@@ -1019,33 +1030,35 @@ public sealed class Printer(string indent = "  ")
     // ─── Expressions ────────────────────────────────────────
 
     /// <summary>
-    /// Print a call/optional-call callee, wrapping it in parentheses
-    /// when its node kind has lower precedence than the call itself.
-    /// Required because the IR may surface low-precedence shapes as
-    /// the call target (e.g. <c>(a ?? b)?.Invoke()</c> lowers to a
-    /// call whose callee is a binary expression — printed bare it
-    /// would parse as <c>a ?? b()</c>).
+    /// Print the target of a call, member access, or element access, wrapping it in parentheses when its node kind has lower
+    /// precedence than the access itself. Required because the IR may
+    /// surface low-precedence shapes there (e.g. <c>(a ?? b)?.Invoke()</c>
+    /// lowers to a call whose callee is a binary expression — printed bare
+    /// it would parse as <c>a ?? b()</c>; <c>(c = next).radius</c> would
+    /// parse as <c>c = next.radius</c>).
     /// </summary>
-    private void PrintCallCallee(TsExpression callee)
+    private void PrintAccessTarget(TsExpression target)
     {
-        if (CalleeRequiresParens(callee))
+        if (AccessTargetRequiresParens(target))
         {
             _sb.Write("(");
-            PrintExpression(callee);
+            PrintExpression(target);
             _sb.Write(")");
         }
         else
         {
-            PrintExpression(callee);
+            PrintExpression(target);
         }
     }
 
-    private static bool CalleeRequiresParens(TsExpression expression) =>
+    private static bool AccessTargetRequiresParens(TsExpression expression) =>
         expression
             is TsBinaryExpression
                 or TsConditionalExpression
                 or TsAwaitExpression
-                or TsArrowFunction;
+                or TsArrowFunction
+                or TsUnaryExpression
+                or TsCastExpression;
 
     private void PrintExpression(TsExpression expr)
     {
@@ -1096,13 +1109,13 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsPropertyAccess access:
-                PrintExpression(access.Object);
+                PrintAccessTarget(access.Object);
                 _sb.Write(".");
                 _sb.Write(access.Property);
                 break;
 
             case TsCallExpression call:
-                PrintCallCallee(call.Callee);
+                PrintAccessTarget(call.Callee);
                 if (call.Optional)
                     _sb.Write("?.");
                 if (call.TypeArguments is { Count: > 0 } typeArgs)
@@ -1132,7 +1145,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsElementAccess elemAccess:
-                PrintExpression(elemAccess.Object);
+                PrintAccessTarget(elemAccess.Object);
                 _sb.Write("[");
                 PrintExpression(elemAccess.Index);
                 _sb.Write("]");
