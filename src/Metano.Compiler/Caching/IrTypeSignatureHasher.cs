@@ -23,7 +23,7 @@ namespace Metano.Compiler.Caching;
 ///   <item>Modifiers: <c>IsAbstract</c>, <c>IsSealed</c>,
 ///   <c>IsStatic</c>, <c>IsRecord</c>, <c>IsValueType</c>,
 ///   accessibility, <c>IsGenericType</c> + arity</item>
-///   <item>Base type FQN, every interface FQN (sorted)</item>
+///   <item>Base type FQN, every interface FQN — transitive, sorted</item>
 ///   <item>Every member's signature (sorted): name, kind, return
 ///   type, parameter types, accessibility, refness</item>
 ///   <item>The full normalized syntax text of every declaring node,
@@ -74,8 +74,12 @@ public static class IrTypeSignatureHasher
         if (symbol.BaseType is { } baseType)
             sb.Append("base=").Append(baseType.ToDisplayString(StableFormat)).Append('\0');
 
+        // Every interface, transitively: an erased [Ignore] interface hands its
+        // kept base interfaces to the emitted heritage clause (#247), so a change
+        // to its base list must invalidate this type even though the erased
+        // interface itself never joins the closure.
         foreach (
-            var iface in symbol.Interfaces.OrderBy(
+            var iface in symbol.AllInterfaces.OrderBy(
                 i => i.ToDisplayString(StableFormat),
                 StringComparer.Ordinal
             )

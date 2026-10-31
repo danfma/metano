@@ -8,6 +8,7 @@ using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
+using ReflectionAssembly = System.Reflection.Assembly;
 
 namespace Metano.Tests;
 
@@ -86,16 +87,20 @@ public static class TranspileHelper
             outputKind,
             extraReferences
         );
-        var errors = compilation
-            .GetDiagnostics()
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
+
+        ThrowOnErrors(compilation.GetDiagnostics(), $"C# compilation ({assemblyName})");
+
+        return compilation;
+    }
+
+    private static void ThrowOnErrors(IEnumerable<Diagnostic> diagnostics, string stage)
+    {
+        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+
         if (errors.Count > 0)
             throw new InvalidOperationException(
-                $"C# compilation ({assemblyName}) failed:\n"
-                    + string.Join("\n", errors.Select(e => e.ToString()))
+                $"{stage} failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
             );
-        return compilation;
     }
 
     private static CSharpCompilation CreateCompilation(
@@ -343,6 +348,7 @@ public static class TranspileHelper
             "TestAssembly",
             OutputKind.DynamicallyLinkedLibrary
         );
+
         var (updated, generatedTrees) = RunJsonSourceGenerator(compilation);
 
         return TranspileCore(updated, generatedTrees: generatedTrees);
@@ -353,14 +359,11 @@ public static class TranspileHelper
         IReadOnlyList<SyntaxTree> GeneratedTrees
     ) RunJsonSourceGenerator(CSharpCompilation compilation)
     {
-        var generators = new AnalyzerFileReference(
-            JsonSourceGeneratorPath(),
-            new GeneratorAssemblyLoader()
-        ).GetGenerators(LanguageNames.CSharp);
         var driver = CSharpGeneratorDriver.Create(
-            generators,
+            LoadJsonSourceGenerators(),
             parseOptions: (CSharpParseOptions)compilation.SyntaxTrees[0].Options
         );
+
         var runResult = driver
             .RunGeneratorsAndUpdateCompilation(
                 compilation,
@@ -368,17 +371,11 @@ public static class TranspileHelper
                 out var generatorDiagnostics
             )
             .GetRunResult();
-        var errors = updated
-            .GetDiagnostics()
-            .Concat(generatorDiagnostics)
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
 
-        if (errors.Count > 0)
-            throw new InvalidOperationException(
-                "C# compilation with generated sources failed:\n"
-                    + string.Join("\n", errors.Select(e => e.ToString()))
-            );
+        ThrowOnErrors(
+            updated.GetDiagnostics().Concat(generatorDiagnostics),
+            "C# compilation with generated sources"
+        );
 
         if (runResult.GeneratedTrees.IsEmpty)
             throw new InvalidOperationException("The JSON source generator produced no sources.");
@@ -386,9 +383,24 @@ public static class TranspileHelper
         return ((CSharpCompilation)updated, runResult.GeneratedTrees);
     }
 
+    private static IEnumerable<ISourceGenerator> LoadJsonSourceGenerators()
+    {
+        var reference = new AnalyzerFileReference(
+            JsonSourceGeneratorPath(),
+            new GeneratorAssemblyLoader()
+        );
+
+        return reference.GetGenerators(LanguageNames.CSharp);
+    }
+
+    /// <summary>
+    /// The analyzer path the test project records as assembly metadata. An SDK that
+    /// hands the project no System.Text.Json generator leaves the value blank, which
+    /// is rejected here rather than failing later with an unreadable path.
+    /// </summary>
     private static string JsonSourceGeneratorPath() =>
         typeof(TranspileHelper)
-            .Assembly.GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>()
+            .Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a =>
                 a.Key == "JsonSourceGeneratorPath" && !string.IsNullOrEmpty(a.Value)
             )
@@ -401,8 +413,8 @@ public static class TranspileHelper
     {
         public void AddDependencyLocation(string fullPath) { }
 
-        public System.Reflection.Assembly LoadFromPath(string fullPath) =>
-            System.Reflection.Assembly.LoadFrom(fullPath);
+        public ReflectionAssembly LoadFromPath(string fullPath) =>
+            ReflectionAssembly.LoadFrom(fullPath);
     }
 
     /// <summary>

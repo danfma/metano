@@ -1,13 +1,17 @@
+using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Metano.Tests;
 
 /// <summary>
-/// The positions where a reference to an <c>[Ignore]</c> (.NET-only) type does NOT
-/// raise <c>MS0013</c> (#247): source-generator output, an <c>[Ignore]</c> interface in
-/// a transpilable type's base list (erased from <c>implements</c>/<c>extends</c>), and
-/// attribute applications (attributes are never emitted). Every other position keeps
-/// raising — see <see cref="IgnoreDotNetOnlyTests"/> plus the negative cases below.
+/// The cases where a reference to an <c>[Ignore]</c> (.NET-only) type does NOT
+/// raise <c>MS0013</c> (#247): source-generator output, an interface ignored for the
+/// active target in a transpilable type's base list (erased from
+/// <c>implements</c>/<c>extends</c>), and attribute applications the compiler does not
+/// read for emission. Every other position keeps raising — see
+/// <see cref="IgnoreDotNetOnlyTests"/> plus the negative cases below.
 /// </summary>
 public class IgnoreReferenceExemptionTests
 {
@@ -61,41 +65,48 @@ public class IgnoreReferenceExemptionTests
         }
         """;
 
+    private const string DotNetOnlyNameInterface = """
+        [Ignore]
+        public interface IDotNetOnly
+        {
+            string Name { get; }
+        }
+        """;
+
+    private const string UpperCaseConverter = """
+        [Ignore]
+        public sealed class UpperCaseConverter : JsonConverter<string>
+        {
+            public override string Read(
+                ref Utf8JsonReader reader,
+                Type typeToConvert,
+                JsonSerializerOptions options
+            ) => reader.GetString()!.ToUpperInvariant();
+
+            public override void Write(
+                Utf8JsonWriter writer,
+                string value,
+                JsonSerializerOptions options
+            ) => writer.WriteStringValue(value);
+        }
+        """;
+
     [Test]
     public async Task BrandedValueObject_WithIgnoreInterfaceAndConverterAttribute_DoesNotRaiseMs0013()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            $"""
-            {JsonUsings}
-            [assembly: TranspileAssembly]
-            {WorkspaceTextContracts}
-            {AnnotatedWorkspaceText}
-            """
+            WorkspaceTextProgram(AnnotatedWorkspaceText)
         );
 
-        await Assert.That(Ms0013(diagnostics)).IsEmpty();
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
         await Assert.That(files).ContainsKey("studio/workspace-text.ts");
     }
 
     [Test]
     public async Task BrandedValueObject_WithIgnoreInterfaceAndConverterAttribute_EmitsUnchangedTypeScript()
     {
-        var annotated = TranspileHelper.Transpile(
-            $"""
-            {JsonUsings}
-            [assembly: TranspileAssembly]
-            {WorkspaceTextContracts}
-            {AnnotatedWorkspaceText}
-            """
-        );
-        var plain = TranspileHelper.Transpile(
-            $"""
-            {JsonUsings}
-            [assembly: TranspileAssembly]
-            {WorkspaceTextContracts}
-            {PlainWorkspaceText}
-            """
-        );
+        var annotated = TranspileHelper.Transpile(WorkspaceTextProgram(AnnotatedWorkspaceText));
+        var plain = TranspileHelper.Transpile(WorkspaceTextProgram(PlainWorkspaceText));
 
         await Assert
             .That(annotated["studio/workspace-text.ts"])
@@ -106,14 +117,10 @@ public class IgnoreReferenceExemptionTests
     public async Task IgnoreInterface_OnTranspilableClass_IsErasedFromImplements()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
+            $$"""
             namespace App;
 
-            [Ignore]
-            public interface IDotNetOnly
-            {
-                string Name { get; }
-            }
+            {{DotNetOnlyNameInterface}}
 
             [Transpile]
             public interface IShared
@@ -130,8 +137,9 @@ public class IgnoreReferenceExemptionTests
         );
 
         var ts = files["app/person.ts"];
-        await Assert.That(Ms0013(diagnostics)).IsEmpty();
-        await Assert.That(ts).Contains("implements IShared");
+
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+        await Assert.That(ts).Contains("export class Person implements IShared {");
         await Assert.That(ts).DoesNotContain("IDotNetOnly");
     }
 
@@ -139,14 +147,10 @@ public class IgnoreReferenceExemptionTests
     public async Task IgnoreInterface_AsOnlyBaseOfTranspilableClass_DropsImplementsClause()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
+            $$"""
             namespace App;
 
-            [Ignore]
-            public interface IDotNetOnly
-            {
-                string Name { get; }
-            }
+            {{DotNetOnlyNameInterface}}
 
             [Transpile]
             public class Person : IDotNetOnly
@@ -157,8 +161,9 @@ public class IgnoreReferenceExemptionTests
         );
 
         var ts = files["app/person.ts"];
-        await Assert.That(Ms0013(diagnostics)).IsEmpty();
-        await Assert.That(ts).DoesNotContain("implements");
+
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+        await Assert.That(ts).Contains("export class Person {");
         await Assert.That(ts).DoesNotContain("IDotNetOnly");
     }
 
@@ -166,14 +171,10 @@ public class IgnoreReferenceExemptionTests
     public async Task IgnoreInterface_InTranspilableInterfaceBaseList_IsErasedFromExtends()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
+            $$"""
             namespace App;
 
-            [Ignore]
-            public interface IDotNetOnly
-            {
-                string Name { get; }
-            }
+            {{DotNetOnlyNameInterface}}
 
             [Transpile]
             public interface IPerson : IDotNetOnly
@@ -184,23 +185,88 @@ public class IgnoreReferenceExemptionTests
         );
 
         var ts = files["app/i-person.ts"];
-        await Assert.That(Ms0013(diagnostics)).IsEmpty();
-        await Assert.That(ts).DoesNotContain("extends");
+
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+        await Assert.That(ts).Contains("export interface IPerson {");
         await Assert.That(ts).DoesNotContain("IDotNetOnly");
+    }
+
+    [Test]
+    public async Task IgnoreInterface_WithKeptBaseInterface_ImplementsTheKeptBase()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public interface IKept
+            {
+                string Name { get; }
+            }
+
+            [Ignore]
+            public interface IDotNetOnly : IKept {}
+
+            [Ignore]
+            public interface IDeeperDotNetOnly : IDotNetOnly {}
+
+            [Transpile]
+            public class Person : IDeeperDotNetOnly, IKept
+            {
+                public string Name { get; } = "";
+            }
+
+            [Transpile]
+            public class Robot : IDeeperDotNetOnly
+            {
+                public string Name { get; } = "";
+            }
+            """
+        );
+
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+        await Assert
+            .That(files["app/person.ts"])
+            .Contains("export class Person implements IKept {");
+        await Assert.That(files["app/robot.ts"]).Contains("export class Robot implements IKept {");
+        await Assert.That(files["app/robot.ts"]).Contains("IKept }");
+    }
+
+    [Test]
+    public async Task IgnoreInterface_ForDartOnly_StaysInTypeScriptImplements()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile, Ignore(TargetLanguage.Dart)]
+            public interface ITypeScriptOnly
+            {
+                string Name { get; }
+            }
+
+            [Transpile]
+            public class Person : ITypeScriptOnly
+            {
+                public string Name { get; } = "";
+            }
+            """
+        );
+
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+        await Assert
+            .That(files["app/person.ts"])
+            .Contains("export class Person implements ITypeScriptOnly {");
     }
 
     [Test]
     public async Task IgnoreInterface_OnTranspilableClass_IsErasedFromDartImplements()
     {
         var (files, _) = TranspileHelper.TranspileDart(
-            """
+            $$"""
             using Metano.Annotations;
 
-            [Ignore]
-            public interface IDotNetOnly
-            {
-                string Name { get; }
-            }
+            {{DotNetOnlyNameInterface}}
 
             [Transpile]
             public interface IShared
@@ -217,8 +283,36 @@ public class IgnoreReferenceExemptionTests
         );
 
         var dart = files["person.dart"];
-        await Assert.That(dart).Contains("implements IShared");
+
+        await Assert.That(dart).Contains("class Person implements IShared {");
         await Assert.That(dart).DoesNotContain("IDotNetOnly");
+    }
+
+    [Test]
+    public async Task IgnoreInterface_WithKeptBaseInterface_DartImplementsTheKeptBase()
+    {
+        var (files, _) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+
+            [Transpile]
+            public interface IKept
+            {
+                string Name { get; }
+            }
+
+            [Ignore]
+            public interface IDotNetOnly : IKept {}
+
+            [Transpile]
+            public class Person : IDotNetOnly
+            {
+                public string Name { get; } = "";
+            }
+            """
+        );
+
+        await Assert.That(files["person.dart"]).Contains("class Person implements IKept {");
     }
 
     [Test]
@@ -246,7 +340,59 @@ public class IgnoreReferenceExemptionTests
             """
         );
 
-        await Assert.That(Ms0013(diagnostics)).IsEmpty();
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task IgnoreAttributeClass_AppliedToTranspilableCode_DoesNotRaiseMs0013()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [assembly: TranspileAssembly]
+
+            [AttributeUsage(AttributeTargets.All)]
+            [Ignore]
+            public sealed class DotNetOnlyAttribute : Attribute {}
+
+            [DotNetOnly]
+            public record Consumer([property: DotNetOnly] int Value)
+            {
+                [DotNetOnly]
+                public int Run([DotNetOnly] int value) => value;
+            }
+            """
+        );
+
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task IgnoreType_InJsonSerializableAttribute_RaisesMs0013()
+    {
+        // [JsonSerializable(typeof(T))] is read by the JSON-context transformer,
+        // which emits a type spec for T — so the attribute is not exempt.
+        var (_, diagnostics) = TranspileHelper.TranspileWithJsonSourceGenerator(
+            $$"""
+            {{JsonUsings}}
+            [assembly: TranspileAssembly]
+
+            namespace Studio;
+
+            [Ignore]
+            public sealed class DotNetOnlyDocument
+            {
+                public string Title { get; set; } = "";
+            }
+
+            [JsonSerializable(typeof(DotNetOnlyDocument))]
+            public partial class StudioJsonContext : JsonSerializerContext;
+            """
+        );
+
+        var ms0013 = IgnoreReferenceDiagnostics(diagnostics);
+
+        await Assert.That(ms0013).IsNotEmpty();
+        await Assert.That(ms0013[0].Message).Contains("DotNetOnlyDocument");
     }
 
     [Test]
@@ -266,7 +412,7 @@ public class IgnoreReferenceExemptionTests
             """
         );
 
-        await Assert.That(Ms0013(diagnostics)).IsNotEmpty();
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsNotEmpty();
     }
 
     [Test]
@@ -286,7 +432,7 @@ public class IgnoreReferenceExemptionTests
             """
         );
 
-        await Assert.That(Ms0013(diagnostics)).IsNotEmpty();
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsNotEmpty();
     }
 
     [Test]
@@ -308,7 +454,7 @@ public class IgnoreReferenceExemptionTests
             """
         );
 
-        await Assert.That(Ms0013(diagnostics)).IsNotEmpty();
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsNotEmpty();
     }
 
     [Test]
@@ -328,7 +474,7 @@ public class IgnoreReferenceExemptionTests
             """
         );
 
-        await Assert.That(Ms0013(diagnostics)).IsNotEmpty();
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsNotEmpty();
     }
 
     [Test]
@@ -338,28 +484,13 @@ public class IgnoreReferenceExemptionTests
         // System.Text.Json generator emits `new UpperCaseConverter()` into the
         // context's generated partial — not user-authored, so not scanned.
         var (_, diagnostics) = TranspileHelper.TranspileWithJsonSourceGenerator(
-            """
-            using System.Text.Json;
-            using System.Text.Json.Serialization;
+            $$"""
+            {{JsonUsings}}
             [assembly: TranspileAssembly]
 
             namespace Studio;
 
-            [Ignore]
-            public sealed class UpperCaseConverter : JsonConverter<string>
-            {
-                public override string Read(
-                    ref Utf8JsonReader reader,
-                    Type typeToConvert,
-                    JsonSerializerOptions options
-                ) => reader.GetString()!.ToUpperInvariant();
-
-                public override void Write(
-                    Utf8JsonWriter writer,
-                    string value,
-                    JsonSerializerOptions options
-                ) => writer.WriteStringValue(value);
-            }
+            {{UpperCaseConverter}}
 
             public sealed class Document
             {
@@ -372,29 +503,72 @@ public class IgnoreReferenceExemptionTests
             """
         );
 
-        await Assert.That(Ms0013(diagnostics)).IsEmpty();
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
     }
 
     [Test]
     public async Task SourceGeneratedJsonContext_WithBrandedWorkspaceText_DoesNotRaiseMs0013()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithJsonSourceGenerator(
-            $"""
+            WorkspaceTextProgram(
+                $"""
+                {AnnotatedWorkspaceText}
+
+                public sealed record Document(WorkspaceText Title);
+
+                [JsonSerializable(typeof(Document))]
+                public partial class StudioJsonContext : JsonSerializerContext;
+                """
+            )
+        );
+
+        await Assert.That(IgnoreReferenceDiagnostics(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task UserFileNamedLikeGeneratedCode_WithReportedGeneratedTrees_RaisesMs0013()
+    {
+        // The generated trees were reported, so the `.g.cs` naming convention
+        // is not consulted: this file is still user code.
+        var tree = CSharpSyntaxTree.ParseText(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Ignore]
+            public class Marker {}
+
+            public class Consumer
+            {
+                public void Use(Marker marker) {}
+            }
+            """,
+            new CSharpParseOptions(LanguageVersion.Preview),
+            path: "src/Consumer.g.cs"
+        );
+
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            [tree],
+            TranspileHelper.BaseReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation, generatedTrees: []);
+
+        await Assert.That(IgnoreReferenceDiagnostics(ir.Diagnostics)).IsNotEmpty();
+    }
+
+    private static string WorkspaceTextProgram(string workspaceTextDeclarations) =>
+        $"""
             {JsonUsings}
             [assembly: TranspileAssembly]
             {WorkspaceTextContracts}
-            {AnnotatedWorkspaceText}
+            {workspaceTextDeclarations}
+            """;
 
-            public sealed record Document(WorkspaceText Title);
-
-            [JsonSerializable(typeof(Document))]
-            public partial class StudioJsonContext : JsonSerializerContext;
-            """
-        );
-
-        await Assert.That(Ms0013(diagnostics)).IsEmpty();
-    }
-
-    private static List<MetanoDiagnostic> Ms0013(IEnumerable<MetanoDiagnostic> diagnostics) =>
+    private static List<MetanoDiagnostic> IgnoreReferenceDiagnostics(
+        IEnumerable<MetanoDiagnostic> diagnostics
+    ) =>
         diagnostics.Where(d => d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode).ToList();
 }
