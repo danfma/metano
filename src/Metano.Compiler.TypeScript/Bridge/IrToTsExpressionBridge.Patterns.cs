@@ -29,10 +29,11 @@ public static partial class IrToTsExpressionBridge
         switch (node.Pattern)
         {
             case IrConstantPattern constant:
-                return new TsBinaryExpression(
+                return BuildConstantPatternTest(
                     lowered,
                     BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
-                    Map(constant.Value, bclRegistry)
+                    constant.Value,
+                    bclRegistry
                 );
             case IrTypePattern typePat when typePat.DesignatorName is null:
                 return BuildTypeTest(lowered, typePat.Type);
@@ -54,6 +55,55 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
+    /// Lowers a constant pattern to an equality test. A NaN constant is the one
+    /// exception: C# <c>x is double.NaN</c> matches NaN, but <c>x === NaN</c> is
+    /// always false in JavaScript, so it lowers to <c>Number.isNaN(x)</c>.
+    /// </summary>
+    private static TsExpression BuildConstantPatternTest(
+        TsExpression value,
+        string equalityOperator,
+        IrExpression constantValue,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        IsNaNConstant(constantValue)
+            ? new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Number"), "isNaN"),
+                [value]
+            )
+            : new TsBinaryExpression(value, equalityOperator, Map(constantValue, bclRegistry));
+
+    /// <summary>
+    /// Lowers one <c>case</c> label of a switch statement that was rewritten to
+    /// <c>switch (true)</c>: the label becomes a boolean test against the subject,
+    /// with the same NaN rule as constant patterns.
+    /// </summary>
+    internal static TsExpression BuildCaseLabelTest(
+        TsExpression subject,
+        IrExpression label,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        BuildConstantPatternTest(
+            subject,
+            BinaryOperatorToken(IrBinaryOp.Equal, right: label),
+            label,
+            bclRegistry
+        );
+
+    internal static bool IsNaNConstant(IrExpression constant) =>
+        constant switch
+        {
+            IrLiteral { Value: double literal } => double.IsNaN(literal),
+            IrLiteral { Value: float literal } => float.IsNaN(literal),
+            IrMemberAccess { Origin: { } origin } => IsFloatingPointNaNMember(origin),
+            _ => false,
+        };
+
+    // Stable full names use the C# keyword for special types ("double", "float").
+    private static bool IsFloatingPointNaNMember(IrMemberOrigin origin) =>
+        origin.MemberName == nameof(double.NaN)
+        && (origin.DeclaringTypeFullName is "double" or "float");
+
+    /// <summary>
     /// Lowers a pattern to a boolean test against <paramref name="value"/>.
     /// The test never binds; <see cref="BuildPatternBindings"/> declares the
     /// designators separately inside the matched branch.
@@ -65,10 +115,11 @@ public static partial class IrToTsExpressionBridge
     ) =>
         pattern switch
         {
-            IrConstantPattern constant => new TsBinaryExpression(
+            IrConstantPattern constant => BuildConstantPatternTest(
                 value,
                 BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
-                Map(constant.Value, bclRegistry)
+                constant.Value,
+                bclRegistry
             ),
             IrTypePattern typePat => BuildTypeTest(value, typePat.Type),
             IrDiscardPattern => new TsLiteral("true"),

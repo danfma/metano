@@ -167,8 +167,77 @@ public static class IrToTsStatementBridge
         return inner.TrimEnd(';');
     }
 
+    /// <summary>
+    /// A JS <c>switch</c> compares with <c>===</c>, so a <c>case double.NaN:</c>
+    /// label would never match. When a NaN label is present the switch is
+    /// rewritten to <c>switch (true)</c> with one boolean test per label. That
+    /// re-reads the subject in every test, so it is only done when the subject is
+    /// an identifier, <c>this</c>, or a member-access chain on one (a property
+    /// getter in that chain runs once per test); any other subject gets a TODO
+    /// label that fails to compile instead of a case that silently never matches.
+    /// </summary>
+    private static TsSwitchStatement MapSwitch(
+        IrSwitchStatement sw,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var loweredSubject = IrToTsExpressionBridge.Map(sw.Expression, bclRegistry);
+
+        if (!HasNaNCaseLabel(sw))
+        {
+            return new TsSwitchStatement(
+                loweredSubject,
+                MapSwitchCases(sw, LowerLabelAsConstant, bclRegistry)
+            );
+        }
+
+        if (!IsSafeToReread(sw.Expression))
+        {
+            return new TsSwitchStatement(
+                loweredSubject,
+                MapSwitchCases(sw, LowerNaNLabelAsUnsupported, bclRegistry)
+            );
+        }
+
+        return new TsSwitchStatement(
+            new TsLiteral("true"),
+            MapSwitchCases(sw, LowerLabelAsBooleanTest, bclRegistry)
+        );
+
+        TsExpression LowerLabelAsConstant(IrExpression label) =>
+            IrToTsExpressionBridge.Map(label, bclRegistry);
+
+        TsExpression LowerLabelAsBooleanTest(IrExpression label) =>
+            IrToTsExpressionBridge.BuildCaseLabelTest(loweredSubject, label, bclRegistry);
+
+        TsExpression LowerNaNLabelAsUnsupported(IrExpression label) =>
+            IrToTsExpressionBridge.IsNaNConstant(label)
+                ? new TsIdentifier(
+                    "/* TODO: NaN case label needs an identifier or member-access switch subject */"
+                )
+                : LowerLabelAsConstant(label);
+    }
+
+    private static bool HasNaNCaseLabel(IrSwitchStatement sw) =>
+        sw.Cases.Any(c => c.Labels.Any(IrToTsExpressionBridge.IsNaNConstant));
+
+    private static bool IsSafeToReread(IrExpression subject) =>
+        subject switch
+        {
+            IrIdentifier or IrThisExpression => true,
+            IrMemberAccess access => IsSafeToReread(access.Target),
+            _ => false,
+        };
+
+    private static List<TsSwitchCase> MapSwitchCases(
+        IrSwitchStatement sw,
+        Func<IrExpression, TsExpression> lowerLabel,
+        DeclarativeMappingRegistry? bclRegistry
+    ) => sw.Cases.SelectMany(c => MapSwitchCase(c, lowerLabel, bclRegistry)).ToList();
+
     private static IEnumerable<TsSwitchCase> MapSwitchCase(
         IrSwitchCase c,
+        Func<IrExpression, TsExpression> lowerLabel,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -186,7 +255,7 @@ public static class IrToTsStatementBridge
         // attached to the last label so execution falls through to it.
         for (var i = 0; i < c.Labels.Count; i++)
         {
-            var test = IrToTsExpressionBridge.Map(c.Labels[i], bclRegistry);
+            var test = lowerLabel(c.Labels[i]);
             yield return new TsSwitchCase(
                 test,
                 i == c.Labels.Count - 1 ? body : Array.Empty<TsStatement>()
@@ -251,10 +320,7 @@ public static class IrToTsStatementBridge
             ),
             IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
             IrContinueStatement => new TsExpressionStatement(new TsIdentifier("continue")),
-            IrSwitchStatement sw => new TsSwitchStatement(
-                IrToTsExpressionBridge.Map(sw.Expression, bclRegistry),
-                sw.Cases.SelectMany(c => MapSwitchCase(c, bclRegistry)).ToList()
-            ),
+            IrSwitchStatement sw => MapSwitch(sw, bclRegistry),
             IrYieldBreakStatement => new TsYieldBreakStatement(),
             IrForEachStatement fe => MapForEach(fe, bclRegistry),
             IrForStatement fs => MapFor(fs, bclRegistry),
