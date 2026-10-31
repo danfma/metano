@@ -157,9 +157,11 @@ actually installed where your tooling looks for it:
   specifier at an installed copy with a Vite `resolve.alias` or a tsconfig
   `compilerOptions.paths` entry.
 
-The runtime is an ESM-only package. From `2.6.2` on it loads directly in plain
-Node ESM, Vitest and NodeNext TypeScript projects. Versions up to `2.6.1` fail in
-Node with `ERR_UNSUPPORTED_DIR_IMPORT` and need Vitest's
+The runtime is an ESM-only package. From the first release after `2.6.1` (expected
+`2.6.2`) it loads directly in plain Node ESM, Vitest and TypeScript projects using
+`nodenext`, `node16` or `bundler` module resolution (the legacy `node10` resolution
+cannot see the `system/json` and `system/linq` subpaths). Versions up to `2.6.1`
+fail in Node with `ERR_UNSUPPORTED_DIR_IMPORT` and need Vitest's
 `server.deps.inline: ["metano-runtime"]`; drop that workaround after upgrading.
 
 That's it — this package is **your normal TypeScript project**. You can add

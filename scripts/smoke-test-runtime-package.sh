@@ -7,14 +7,15 @@ set -euo pipefail
 # `"type": "module"` project outside the Bun workspace, then:
 #   1. imports the public entry points (and file-level deep imports) from
 #      plain Node ESM, and checks directory subpaths are not exported;
-#   2. scans the packed JavaScript for extensionless relative specifiers;
+#   2. scans the packed JavaScript and declarations for extensionless
+#      relative specifiers;
 #   3. type-checks the entry points under NodeNext resolution with both the
 #      native-preview compiler (tsgo) and stable TypeScript.
 #
 # Exits non-zero on the first failing check. Used by CI and by the release
 # workflow (before anything is tagged or published).
 #
-# Requires: bun, node 24 (the version CI and release provision; >= 20 works),
+# Requires: bun, node 22+ (CI and release provision 24; verified on 22 and 24),
 # a prior `bun install` at the repo root, and registry access (the consumer
 # installs stable TypeScript and the runtime's own dependencies).
 #
@@ -51,6 +52,7 @@ assert_prerequisites() {
 
 pack_runtime() {
   step "Building and packing metano-runtime"
+
   (cd "$RUNTIME_DIR" && bun run build >/dev/null && bun pm pack --destination "$WORK_DIR" --quiet >/dev/null)
 
   TARBALL="$(find "$WORK_DIR" -maxdepth 1 -name 'metano-runtime-*.tgz' -print -quit)"
@@ -119,6 +121,7 @@ install_tarball_into_consumer() {
 
 create_consumer() {
   step "Installing the tarball into a throwaway ESM project"
+
   mkdir -p "$CONSUMER_DIR"
   write_consumer_manifest
   write_consumer_tsconfig
@@ -155,13 +158,10 @@ assert_directory_subpath_rejected() {
 
   (cd "$CONSUMER_DIR" && node --input-type=module) <<'JS'
 const directorySubpath = "metano-runtime/system/collections";
-let rejection;
-
-try {
-  await import(directorySubpath);
-} catch (error) {
-  rejection = error;
-}
+const rejection = await import(directorySubpath).then(
+  () => undefined,
+  (error) => error,
+);
 
 if (rejection === undefined) {
   throw new Error(`${directorySubpath} unexpectedly resolved`);
@@ -175,17 +175,30 @@ console.log(`ok   ${directorySubpath} rejected (${rejection.code})`);
 JS
 }
 
-assert_no_extensionless_specifiers() {
-  step "Scanning packed JavaScript for extensionless relative specifiers"
+# Prints every relative specifier in the packed files matching $1 whose target
+# does not end in one of the extensions in $2 (an ERE alternation, e.g. "js|ts").
+find_relative_specifiers_without_extension() {
+  local file_glob="$1"
+  local allowed_extensions="$2"
   local quote="[\"']"
   local relative_specifier="(from|import)[[:space:]]*\(?[[:space:]]*${quote}\.{1,2}/[^\"']*${quote}"
-  local offenders
 
-  offenders="$(grep -rnoE "$relative_specifier" "$PACKED_DIST" --include='*.js' | grep -vE "\.js${quote}$" || true)"
+  grep -rnoE "$relative_specifier" "$PACKED_DIST" --include="$file_glob" |
+    grep -vE "\.(${allowed_extensions})${quote}$" || true
+}
+
+# Emitted JavaScript must name .js files. Declarations keep the source's .ts
+# specifiers (tsgo's extension rewrite only touches JS emit) and TypeScript
+# resolves those, so .d.ts files may name .js or .ts — never a bare path.
+assert_no_extensionless_specifiers() {
+  step "Scanning packed JavaScript and declarations for extensionless relative specifiers"
+
+  local offenders
+  offenders="$(find_relative_specifiers_without_extension '*.js' 'js')$(find_relative_specifiers_without_extension '*.d.ts' 'js|ts')"
 
   if [ -n "$offenders" ]; then
     echo "$offenders" >&2
-    fail "relative specifiers must name a .js file"
+    fail "relative specifiers must name a file with its extension"
   fi
 
   echo "ok   no extensionless relative specifiers"
@@ -193,6 +206,7 @@ assert_no_extensionless_specifiers() {
 
 assert_nodenext_types() {
   step "Type-checking entry points under NodeNext resolution"
+
   (cd "$CONSUMER_DIR" && "$TSGO" -p .) || fail "tsgo type-check failed"
   echo "ok   tsgo ($("$TSGO" --version))"
 
