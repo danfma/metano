@@ -36,32 +36,129 @@ public static class IrToTsStatementBridge
         var collection = IrToTsExpressionBridge.Map(fe.Collection, bclRegistry);
         var body = MapBody(fe.Body, bclRegistry);
         var header = $"for (const {fe.Variable} of {PrintExpression(collection)}) {{";
-        return new TsRawStatement(WrapLoop(header, body));
+
+        return new TsRawStatement(WrapLoop(header, body))
+        {
+            EmbeddedStatements = body,
+            EmbeddedExpressions = [collection],
+        };
     }
 
     private static TsStatement MapFor(IrForStatement fs, DeclarativeMappingRegistry? bclRegistry)
     {
-        var init = fs.Initializer is null
-            ? string.Empty
-            : RenderFragmentStatement(fs.Initializer, bclRegistry);
-        var cond = fs.Condition is null
-            ? string.Empty
-            : PrintExpression(IrToTsExpressionBridge.Map(fs.Condition, bclRegistry));
-        var inc = fs.Increment is null
-            ? string.Empty
-            : PrintExpression(IrToTsExpressionBridge.Map(fs.Increment, bclRegistry));
+        var initializers = fs.Initializers.Select(i => MapForInitializer(i, bclRegistry)).ToList();
+
+        var condition = fs.Condition is null
+            ? null
+            : IrToTsExpressionBridge.Map(fs.Condition, bclRegistry);
+
+        var incrementors = fs
+            .Incrementors.Select(i => IrToTsExpressionBridge.Map(i, bclRegistry))
+            .ToList();
+
         var body = MapBody(fs.Body, bclRegistry);
-        var header = $"for ({init}; {cond}; {inc}) {{";
-        return new TsRawStatement(WrapLoop(header, body));
+        var conditionText = condition is null ? string.Empty : PrintExpression(condition);
+
+        var header =
+            $"for ({RenderForInitializers(initializers)}; {conditionText}; {RenderCommaList(incrementors)}) {{";
+
+        return new TsRawStatement(WrapLoop(header, body))
+        {
+            EmbeddedStatements = [.. initializers, .. body],
+            EmbeddedExpressions =
+            [
+                .. condition is null ? [] : new[] { condition },
+                .. incrementors,
+            ],
+        };
     }
+
+    /// <summary>
+    /// A declaration maps as a statement (keeping its type and initializer
+    /// for the import walk); an initializer expression maps as a plain
+    /// expression, since a header has no room for the statement forms some
+    /// expressions take (a null-conditional call lowers to an <c>if</c>). Only
+    /// plain declarations reach a header, and those always map to a
+    /// <see cref="TsVariableDeclaration"/>.
+    /// </summary>
+    private static TsStatement MapForInitializer(
+        IrStatement initializer,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        initializer is IrExpressionStatement expression
+            ? new TsExpressionStatement(
+                IrToTsExpressionBridge.Map(expression.Expression, bclRegistry)
+            )
+            : Map(initializer, bclRegistry);
+
+    /// <summary>
+    /// The initializer section of a <c>for</c> header: the declarators of
+    /// <c>int i = 0, j = n</c> share one <c>let</c> (<c>let i = 0, j = n</c>);
+    /// initializer expressions are comma-separated (<c>i = 0, j = n</c>).
+    /// The extractor yields either declarations only or expressions only.
+    /// </summary>
+    private static string RenderForInitializers(IReadOnlyList<TsStatement> initializers)
+    {
+        if (initializers.Count == 0)
+            return string.Empty;
+
+        if (initializers.All(s => s is TsVariableDeclaration))
+        {
+            var declarators = initializers.Cast<TsVariableDeclaration>().Select(RenderDeclarator);
+
+            return "let " + string.Join(", ", declarators);
+        }
+
+        return string.Join(", ", initializers.Select(RenderInitializerExpression));
+    }
+
+    /// <summary>
+    /// One declarator of a <c>let</c> list: <c>name = value</c>, or
+    /// <c>name: T</c> for a typed declaration without an initializer.
+    /// </summary>
+    private static string RenderDeclarator(TsVariableDeclaration declaration) =>
+        declaration switch
+        {
+            { Type: { } type, Initializer: null } =>
+                $"{declaration.Name}: {Printer.RenderType(type)}",
+            { Initializer: { } value } => $"{declaration.Name} = {PrintExpression(value)}",
+            _ => declaration.Name,
+        };
+
+    /// <summary>
+    /// An initializer expression of a <c>for</c> header. Any other statement
+    /// cannot reach a header: the extractor only produces declarations or
+    /// expression statements there, and never mixes them.
+    /// </summary>
+    private static string RenderInitializerExpression(TsStatement statement) =>
+        statement is TsExpressionStatement expression
+            ? PrintExpression(expression.Expression)
+            : throw new System.Diagnostics.UnreachableException(
+                $"A for header cannot hold a {statement.GetType().Name}."
+            );
+
+    /// <summary>
+    /// Comma-separated expressions (<c>i++, j--</c>). The comma operator binds
+    /// looser than every other JS operator, assignment and arrow functions
+    /// included, and the IR has no sequence expression that would print a
+    /// bare comma, so no operand needs parentheses.
+    /// </summary>
+    private static string RenderCommaList(IReadOnlyList<TsExpression> expressions) =>
+        string.Join(", ", expressions.Select(PrintExpression));
 
     private static TsStatement MapWhile(
         IrWhileStatement ws,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var cond = PrintExpression(IrToTsExpressionBridge.Map(ws.Condition, bclRegistry));
-        return new TsRawStatement(WrapLoop($"while ({cond}) {{", MapBody(ws.Body, bclRegistry)));
+        var condition = IrToTsExpressionBridge.Map(ws.Condition, bclRegistry);
+        var body = MapBody(ws.Body, bclRegistry);
+
+        return new TsRawStatement(WrapLoop($"while ({PrintExpression(condition)}) {{", body))
+        {
+            EmbeddedStatements = body,
+            EmbeddedExpressions = [condition],
+        };
     }
 
     private static TsStatement MapDoWhile(
@@ -69,47 +166,44 @@ public static class IrToTsStatementBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var cond = PrintExpression(IrToTsExpressionBridge.Map(dw.Condition, bclRegistry));
+        var condition = IrToTsExpressionBridge.Map(dw.Condition, bclRegistry);
         var body = MapBody(dw.Body, bclRegistry);
         var inner = RenderIndentedBody(body);
-        return new TsRawStatement($"do {{\n{inner}}} while ({cond});");
+
+        return new TsRawStatement($"do {{\n{inner}}} while ({PrintExpression(condition)});")
+        {
+            EmbeddedStatements = body,
+            EmbeddedExpressions = [condition],
+        };
     }
 
     private static TsStatement MapTry(IrTryStatement ts, DeclarativeMappingRegistry? bclRegistry)
     {
         var body = MapBody(ts.Body, bclRegistry);
-        var sb = new System.Text.StringBuilder();
-        sb.Append("try {\n").Append(RenderIndentedBody(body)).Append('}');
-        if (ts.Catches is not null)
-        {
-            foreach (var c in ts.Catches)
-            {
-                var varName = c.VariableName ?? "_err";
-                sb.Append(" catch (").Append(varName).Append(") {\n");
-                sb.Append(RenderIndentedBody(MapBody(c.Body, bclRegistry))).Append('}');
-            }
-        }
-        if (ts.Finally is not null)
-        {
-            sb.Append(" finally {\n");
-            sb.Append(RenderIndentedBody(MapBody(ts.Finally, bclRegistry))).Append('}');
-        }
-        return new TsRawStatement(sb.ToString());
-    }
 
-    private static string RenderFragmentStatement(
-        IrStatement stmt,
-        DeclarativeMappingRegistry? bclRegistry
-    ) =>
-        stmt switch
+        var catches = (ts.Catches ?? [])
+            .Select(c => (Variable: c.VariableName ?? "_err", Body: MapBody(c.Body, bclRegistry)))
+            .ToList();
+
+        var finallyBody = ts.Finally is null ? null : MapBody(ts.Finally, bclRegistry);
+        var catchText = catches.Select(c =>
+            $" catch ({c.Variable}) {{\n{RenderIndentedBody(c.Body)}}}"
+        );
+        var finallyText = finallyBody is null
+            ? ""
+            : $" finally {{\n{RenderIndentedBody(finallyBody)}}}";
+        var text = $"try {{\n{RenderIndentedBody(body)}}}{string.Concat(catchText)}{finallyText}";
+
+        return new TsRawStatement(text)
         {
-            IrVariableDeclaration vd when vd.Initializer is not null =>
-                $"let {vd.Name} = {PrintExpression(IrToTsExpressionBridge.Map(vd.Initializer, bclRegistry))}",
-            IrExpressionStatement es => PrintExpression(
-                IrToTsExpressionBridge.Map(es.Expression, bclRegistry)
-            ),
-            _ => "/* TODO: fragment */",
+            EmbeddedStatements =
+            [
+                .. body,
+                .. catches.SelectMany(c => c.Body),
+                .. finallyBody ?? [],
+            ],
         };
+    }
 
     private static string WrapLoop(string header, IReadOnlyList<TsStatement> body) =>
         header + "\n" + RenderIndentedBody(body) + "}";

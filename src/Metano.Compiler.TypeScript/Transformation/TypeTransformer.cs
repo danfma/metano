@@ -954,6 +954,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 || ContainsJsxInStatements(ifStmt.Then)
                 || (ifStmt.Else is { } @else && ContainsJsxInStatements(@else)),
             TsBlockStatement block => ContainsJsxInStatements(block.Statements),
+            TsRawStatement raw => ContainsJsxInStatements(raw.EmbeddedStatements)
+                || raw.EmbeddedExpressions.Any(ContainsJsxInExpression),
             TsSwitchStatement switchStmt => ContainsJsxInExpression(switchStmt.Discriminant)
                 || switchStmt.Cases.Any(c =>
                     (c.Test is { } test && ContainsJsxInExpression(test))

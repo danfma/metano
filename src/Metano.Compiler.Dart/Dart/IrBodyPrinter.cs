@@ -932,6 +932,7 @@ public static class IrBodyPrinter
             IrBinaryOp.Subtract => "-",
             IrBinaryOp.Multiply => "*",
             IrBinaryOp.Divide => "/",
+            IrBinaryOp.IntegerDivide => "~/",
             IrBinaryOp.Modulo => "%",
             IrBinaryOp.Equal => "==",
             IrBinaryOp.NotEqual => "!=",

@@ -336,6 +336,16 @@ public enum IrBinaryOp
     RightShiftAssign,
     UnsignedRightShiftAssign,
     NullCoalescingAssign,
+
+    /// <summary>
+    /// C#'s built-in <c>/</c> over integral operands (<c>int</c>, <c>long</c>,
+    /// <c>uint</c>, <c>short</c>, <c>byte</c>, <c>char</c>, …, and their lifted
+    /// nullable forms): the quotient truncated toward zero, throwing on a zero
+    /// divisor. <see cref="Divide"/> keeps the floating-point and decimal forms.
+    /// A compound <c>/=</c> over integral operands lowers to an assignment of
+    /// this operator, so there is no matching compound member.
+    /// </summary>
+    IntegerDivide,
 }
 
 /// <summary>

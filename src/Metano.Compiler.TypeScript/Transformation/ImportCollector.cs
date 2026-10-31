@@ -960,6 +960,15 @@ public sealed class ImportCollector(
                     CollectFromExpression(varDecl.Initializer, sink);
 
                 break;
+            case TsRawStatement raw:
+                // Loops and try blocks print as raw text; walk the nodes the
+                // text was rendered from so their references are imported.
+                CollectFromStatements(raw.EmbeddedStatements, sink);
+
+                foreach (var embedded in raw.EmbeddedExpressions)
+                    CollectFromExpression(embedded, sink);
+
+                break;
             case TsDestructuringDeclaration destructuring:
                 // The destructured initializer can carry an [Import]-facade
                 // template (e.g. `const [count, setCount] = createSignal(0)`),

@@ -1022,6 +1022,34 @@ public class DartBackendTests
         await Assert.That(files.Keys).Contains("kind.dart");
     }
 
+    [Test]
+    public async Task IntegerDivision_InTheDartTarget_UsesTheTruncatingOperator()
+    {
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public static class Quotients
+            {
+                public static int Average(int total, int count) => total / count;
+
+                public static double Real(double a, double b) => a / b;
+
+                public static int Shrink(int value)
+                {
+                    value /= 3;
+                    return value;
+                }
+            }
+            """
+        );
+
+        var dart = files["quotients.dart"];
+
+        await Assert.That(dart).Contains("total ~/ count");
+        await Assert.That(dart).Contains("value = value ~/ 3;");
+        await Assert.That(dart).Contains("a / b");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (

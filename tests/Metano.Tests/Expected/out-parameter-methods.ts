@@ -1,4 +1,4 @@
-import { tryGetValue } from "metano-runtime";
+import { intDiv, tryGetValue } from "metano-runtime";
 import type { ILookup } from "./i-lookup";
 import type { Item } from "./item";
 
@@ -41,14 +41,14 @@ export class Catalog implements ILookup {
       return [tens, units];
     }
 
-    tens = (value - units) / 10;
+    tens = intDiv(value - units, 10);
 
     return [tens, units];
   }
 
   static tryHalf(value: number): readonly [found: boolean, half: number] {
     let half: number;
-    half = value / 2;
+    half = intDiv(value, 2);
 
     return [value % 2 === 0, half];
   }
@@ -56,7 +56,7 @@ export class Catalog implements ILookup {
   static remainder(a: number, b: number): readonly [result: number, quotient: number] {
     let quotient: number;
 
-    return [a - (quotient = a / b) * b, quotient];
+    return [a - (quotient = intDiv(a, b)) * b, quotient];
   }
 
   use(key: string): string {

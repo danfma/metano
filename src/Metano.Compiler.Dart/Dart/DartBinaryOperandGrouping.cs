@@ -64,7 +64,10 @@ internal static class DartBinaryOperandGrouping
     private static int Precedence(IrBinaryOp op) =>
         op switch
         {
-            IrBinaryOp.Multiply or IrBinaryOp.Divide or IrBinaryOp.Modulo => 13,
+            IrBinaryOp.Multiply
+            or IrBinaryOp.Divide
+            or IrBinaryOp.IntegerDivide
+            or IrBinaryOp.Modulo => 13,
             IrBinaryOp.Add or IrBinaryOp.Subtract => 12,
             IrBinaryOp.LeftShift or IrBinaryOp.RightShift or IrBinaryOp.UnsignedRightShift => 11,
             IrBinaryOp.BitwiseAnd => 10,

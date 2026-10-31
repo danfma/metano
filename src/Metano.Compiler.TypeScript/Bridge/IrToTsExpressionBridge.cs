@@ -17,6 +17,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static partial class IrToTsExpressionBridge
 {
+    /// <summary>The <c>metano-runtime</c> helper backing C# integer division.</summary>
+    private static readonly string IntegerDivisionHelper =
+        IrRuntimeRequirementToTsImport.ImportedNameOf("IntegerDivision");
+
     /// <summary>
     /// Maps an IR expression to TS. When <paramref name="bclRegistry"/> is provided,
     /// member accesses and calls consult <see cref="IrToTsBclMapper"/> first and
@@ -136,12 +140,34 @@ public static partial class IrToTsExpressionBridge
             return new TsCallExpression(new TsPropertyAccess(target, "set"), [key, value]);
         }
 
+        if (bin.Operator is IrBinaryOp.IntegerDivide)
+            return MapIntegerDivision(bin, bclRegistry);
+
         return new TsBinaryExpression(
             Map(bin.Left, bclRegistry),
             BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
             Map(bin.Right, bclRegistry)
         );
     }
+
+    /// <summary>
+    /// JS has no integer division: <c>7 / 2</c> is <c>3.5</c>. The runtime
+    /// <c>intDiv</c> helper truncates toward zero like C# and throws on a zero
+    /// divisor, where a bare <c>Math.trunc(a / b)</c> would yield
+    /// <c>Infinity</c> or <c>NaN</c>.
+    /// </summary>
+    private static TsExpression MapIntegerDivision(
+        IrBinaryExpression bin,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        new TsTemplate(
+            $"{IntegerDivisionHelper}($0, $1)",
+            Receiver: null,
+            [Map(bin.Left, bclRegistry), Map(bin.Right, bclRegistry)]
+        )
+        {
+            RuntimeImports = [IntegerDivisionHelper],
+        };
 
     private static TsExpression MapElementAccess(
         IrElementAccess ea,
@@ -1155,6 +1181,9 @@ public static partial class IrToTsExpressionBridge
             IrBinaryOp.RightShiftAssign => ">>=",
             IrBinaryOp.UnsignedRightShiftAssign => ">>>=",
             IrBinaryOp.NullCoalescingAssign => "??=",
+            IrBinaryOp.IntegerDivide => throw new System.Diagnostics.UnreachableException(
+                "Integer division has no JS operator; it lowers through MapIntegerDivision."
+            ),
             _ => "?",
         };
 

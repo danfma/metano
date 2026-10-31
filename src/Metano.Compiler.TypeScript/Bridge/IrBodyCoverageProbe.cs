@@ -43,9 +43,9 @@ public static class IrBodyCoverageProbe
             IrBlockStatement block => IsFullyCovered(block.Statements),
             IrThrowStatement th => IsCoveredExpression(th.Expression),
             IrForEachStatement fe => IsCoveredExpression(fe.Collection) && IsFullyCovered(fe.Body),
-            IrForStatement fs => (fs.Initializer is null || IsCoveredStatement(fs.Initializer))
+            IrForStatement fs => fs.Initializers.All(IsCoveredStatement)
                 && (fs.Condition is null || IsCoveredExpression(fs.Condition))
-                && (fs.Increment is null || IsCoveredExpression(fs.Increment))
+                && fs.Incrementors.All(IsCoveredExpression)
                 && IsFullyCovered(fs.Body),
             IrWhileStatement ws => IsCoveredExpression(ws.Condition) && IsFullyCovered(ws.Body),
             IrDoWhileStatement dw => IsCoveredExpression(dw.Condition) && IsFullyCovered(dw.Body),

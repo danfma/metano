@@ -75,7 +75,7 @@ public sealed class IrStatementExtractor(
     /// </summary>
     private List<IrStatement> ExtractStatementSequence(IEnumerable<StatementSyntax> source)
     {
-        var extracted = source.Select(ExtractStatement).ToList();
+        var extracted = source.SelectMany(ExtractStatementInScope).ToList();
 
         return extracted
             .SelectMany(
@@ -193,7 +193,19 @@ public sealed class IrStatementExtractor(
             _ => stmt,
         };
 
-    public IrStatement ExtractStatement(StatementSyntax statement) =>
+    /// <summary>
+    /// The statements one C# statement of a scope extracts to: a local
+    /// declaration contributes one declaration per declarator
+    /// (<c>int a = 1, b = 2;</c>), every other statement exactly one. A
+    /// declaration statement only appears directly in a scope — C# rejects it
+    /// as an embedded statement — so it never needs a single-statement form.
+    /// </summary>
+    private IEnumerable<IrStatement> ExtractStatementInScope(StatementSyntax statement) =>
+        statement is LocalDeclarationStatementSyntax local
+            ? ExtractDeclarators(local.Declaration, local.IsConst)
+            : [ExtractStatement(statement)];
+
+    private IrStatement ExtractStatement(StatementSyntax statement) =>
         statement switch
         {
             BlockSyntax block => new IrBlockStatement(ExtractStatementSequence(block.Statements)),
@@ -210,7 +222,6 @@ public sealed class IrStatementExtractor(
             ReturnStatementSyntax ret => new IrReturnStatement(
                 ret.Expression is not null ? _expressions.Extract(ret.Expression) : null
             ),
-            LocalDeclarationStatementSyntax local => ExtractLocalDeclaration(local),
             IfStatementSyntax ifs => ExtractIf(ifs),
             ThrowStatementSyntax th => new IrThrowStatement(
                 th.Expression is not null
@@ -243,33 +254,27 @@ public sealed class IrStatementExtractor(
 
     /// <summary>
     /// Lowers a C# <c>for (init; cond; inc) { body }</c> to
-    /// <see cref="IrForStatement"/>. Multiple declarators in the initializer
-    /// (e.g. <c>int i = 0, j = 1</c>) surface as the first one only — the
-    /// legacy backend has the same limitation.
+    /// <see cref="IrForStatement"/>, keeping every declarator of the
+    /// initializer (<c>int i = 0, j = n</c>), every initializer expression
+    /// (<c>i = 0, j = n</c>) and every incrementor (<c>i++, j--</c>) in source
+    /// order.
     /// </summary>
     private IrStatement ExtractFor(ForStatementSyntax fs)
     {
-        IrStatement? init = null;
-        if (fs.Declaration is not null && fs.Declaration.Variables.Count > 0)
-        {
-            var v = fs.Declaration.Variables[0];
-            init = new IrVariableDeclaration(
-                v.Identifier.ValueText,
-                Type: null,
-                Initializer: v.Initializer?.Value is null
-                    ? null
-                    : _expressions.Extract(v.Initializer.Value),
-                IsConst: false
-            );
-        }
-        else if (fs.Initializers.Count > 0)
-            init = new IrExpressionStatement(_expressions.Extract(fs.Initializers[0]));
-
-        var cond = fs.Condition is null ? null : _expressions.Extract(fs.Condition);
-        var inc = fs.Incrementors.Count > 0 ? _expressions.Extract(fs.Incrementors[0]) : null;
+        var initializers = ExtractForInitializers(fs);
+        var condition = fs.Condition is null ? null : _expressions.Extract(fs.Condition);
+        var incrementors = fs.Incrementors.Select(_expressions.Extract).ToList();
         var body = ExtractEmbedded(fs.Statement);
-        return new IrForStatement(init, cond, inc, body);
+
+        return new IrForStatement(initializers, condition, incrementors, body);
     }
+
+    private IReadOnlyList<IrStatement> ExtractForInitializers(ForStatementSyntax fs) =>
+        fs.Declaration is { } declaration
+            ? ExtractDeclarators(declaration, isConst: false)
+            : fs
+                .Initializers.Select(i => new IrExpressionStatement(_expressions.Extract(i)))
+                .ToList();
 
     private IrStatement ExtractForEach(ForEachStatementSyntax fe)
     {
@@ -337,31 +342,58 @@ public sealed class IrStatementExtractor(
         return new IrSwitchCase(labels, body);
     }
 
-    private IrStatement ExtractLocalDeclaration(LocalDeclarationStatementSyntax local)
+    /// <summary>
+    /// One <see cref="IrVariableDeclaration"/> per declarator of
+    /// <paramref name="declaration"/>, in source order: <c>int a = 1, b;</c>
+    /// declares both <c>a</c> and <c>b</c>, each with the shared declared type
+    /// (none for <c>var</c>).
+    /// </summary>
+    private List<IrStatement> ExtractDeclarators(
+        VariableDeclarationSyntax declaration,
+        bool isConst
+    ) =>
+        declaration
+            .Variables.Select(variable =>
+                (IrStatement)ExtractDeclarator(declaration, variable, isConst)
+            )
+            .ToList();
+
+    private IrVariableDeclaration ExtractDeclarator(
+        VariableDeclarationSyntax declaration,
+        VariableDeclaratorSyntax variable,
+        bool isConst
+    )
     {
-        // Only the first variable — multi-declarator locals (`int a, b;`) are rare
-        // and not worth the complexity at this stage.
-        var variable = local.Declaration.Variables[0];
-        var name = variable.Identifier.ValueText;
-
-        IrTypeRef? type = null;
-        if (local.Declaration.Type is not IdentifierNameSyntax { Identifier.ValueText: "var" })
-        {
-            // The declared local's type keeps the `?` annotation of a nullable
-            // reference type, which the type syntax's TypeInfo drops.
-            var typeSymbol =
-                (_semantic.GetDeclaredSymbol(variable) as ILocalSymbol)?.Type
-                ?? _semantic.GetTypeInfo(local.Declaration.Type).Type;
-
-            if (typeSymbol is not null)
-                type = IrTypeRefMapper.Map(typeSymbol, _originResolver);
-        }
-
         var initializer = variable.Initializer is not null
             ? _expressions.Extract(variable.Initializer.Value)
             : null;
 
-        return new IrVariableDeclaration(name, type, initializer, IsConst: local.IsConst);
+        return new IrVariableDeclaration(
+            variable.Identifier.ValueText,
+            DeclaredLocalType(declaration, variable),
+            initializer,
+            IsConst: isConst
+        );
+    }
+
+    /// <summary>
+    /// The declared type of a local, or null for <c>var</c>. The declared
+    /// local's type keeps the <c>?</c> annotation of a nullable reference
+    /// type, which the type syntax's TypeInfo drops.
+    /// </summary>
+    private IrTypeRef? DeclaredLocalType(
+        VariableDeclarationSyntax declaration,
+        VariableDeclaratorSyntax variable
+    )
+    {
+        if (declaration.Type is IdentifierNameSyntax { Identifier.ValueText: "var" })
+            return null;
+
+        var typeSymbol =
+            (_semantic.GetDeclaredSymbol(variable) as ILocalSymbol)?.Type
+            ?? _semantic.GetTypeInfo(declaration.Type).Type;
+
+        return typeSymbol is null ? null : IrTypeRefMapper.Map(typeSymbol, _originResolver);
     }
 
     /// <summary>

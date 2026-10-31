@@ -447,11 +447,7 @@ public sealed partial class IrExpressionExtractor
         // surrounding null check stays exactly as the legacy form.
         var memberWrite =
             TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
-            ?? new IrBinaryExpression(
-                rebound,
-                MapAssignmentOp(assign.Kind()),
-                Extract(assign.Right)
-            );
+            ?? BuildAssignmentWithIntegerDivision(rebound, assign);
         return new IrBinaryExpression(
             new IrBinaryExpression(
                 receiver,
@@ -493,7 +489,7 @@ public sealed partial class IrExpressionExtractor
         var getterName = setterLowering.Value.HelperName;
         var emittedGetterName = setterLowering.Value.EmittedName;
         var rhs = Extract(assign.Right);
-        var compoundOp = TryMapCompoundAssignmentToBinary(assign.Kind());
+        var compoundOp = MapCompoundAssignmentOperator(assign);
 
         IrExpression newValue;
         if (compoundOp is null)
@@ -1452,7 +1448,11 @@ public sealed partial class IrExpressionExtractor
         if (MapBinaryOp(bin.Kind()) is not { } op)
             return ReportUnsupported(bin, bin.Kind().ToString());
 
-        return new IrBinaryExpression(Extract(bin.Left), op, Extract(bin.Right));
+        return new IrBinaryExpression(
+            Extract(bin.Left),
+            NarrowToIntegerDivision(op, bin),
+            Extract(bin.Right)
+        );
     }
 
     /// <summary>
@@ -1627,11 +1627,7 @@ public sealed partial class IrExpressionExtractor
         if (IsUnsupportedPlaceholder(target))
             return target;
 
-        return new IrBinaryExpression(
-            target,
-            MapAssignmentOp(assign.Kind()),
-            Extract(assign.Right)
-        );
+        return BuildAssignmentWithIntegerDivision(target, assign);
     }
 
     private IrExpression ExtractUnary(ExpressionSyntax node, bool isPrefix)
@@ -2907,7 +2903,7 @@ public sealed partial class IrExpressionExtractor
         var emittedGetterName = setterLowering.EmittedName;
 
         var rhs = Extract(assign.Right);
-        var compoundOp = TryMapCompoundAssignmentToBinary(assign.Kind());
+        var compoundOp = MapCompoundAssignmentOperator(assign);
 
         // Static extension property: no receiver to thread through — the
         // setter takes only the new value, and compound forms read via the
@@ -3110,7 +3106,7 @@ public sealed partial class IrExpressionExtractor
             .ArgumentList.Arguments.Select(a => Extract(a.Expression))
             .ToList();
         var rhs = Extract(assign.Right);
-        var compoundOp = TryMapCompoundAssignmentToBinary(assign.Kind());
+        var compoundOp = MapCompoundAssignmentOperator(assign);
 
         if (compoundOp is null)
         {
@@ -3342,6 +3338,16 @@ public sealed partial class IrExpressionExtractor
                 )
         );
     }
+
+    /// <summary>
+    /// <see cref="TryMapCompoundAssignmentToBinary"/> narrowed by
+    /// <see cref="NarrowToIntegerDivision"/>: an integer <c>/=</c> maps to
+    /// <see cref="IrBinaryOp.IntegerDivide"/>.
+    /// </summary>
+    private IrBinaryOp? MapCompoundAssignmentOperator(AssignmentExpressionSyntax assign) =>
+        TryMapCompoundAssignmentToBinary(assign.Kind()) is { } op
+            ? NarrowToIntegerDivision(op, assign)
+            : null;
 
     /// <summary>
     /// Maps the compound assignment kinds (<c>+=</c>, <c>-=</c>, …) to

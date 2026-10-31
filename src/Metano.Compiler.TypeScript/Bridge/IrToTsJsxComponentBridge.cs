@@ -284,15 +284,15 @@ public static class IrToTsJsxComponentBridge
             },
             IrForStatement fs => fs with
             {
-                Initializer = fs.Initializer is null
-                    ? null
-                    : RewriteStatement(fs.Initializer, propNames, referenced),
+                Initializers = fs
+                    .Initializers.Select(i => RewriteStatement(i, propNames, referenced))
+                    .ToList(),
                 Condition = fs.Condition is null
                     ? null
                     : Rewrite(fs.Condition, propNames, referenced),
-                Increment = fs.Increment is null
-                    ? null
-                    : Rewrite(fs.Increment, propNames, referenced),
+                Incrementors = fs
+                    .Incrementors.Select(i => Rewrite(i, propNames, referenced))
+                    .ToList(),
                 Body = RewriteList(fs.Body, propNames, referenced),
             },
             IrWhileStatement ws => new IrWhileStatement(

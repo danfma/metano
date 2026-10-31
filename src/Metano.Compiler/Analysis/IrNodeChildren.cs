@@ -90,7 +90,11 @@ public static class IrNodeChildren
             IrIfStatement ifs => [ifs.Condition],
             IrThrowStatement th => [th.Expression],
             IrForEachStatement fe => [fe.Collection],
-            IrForStatement fs => new[] { fs.Condition, fs.Increment }.OfType<IrExpression>(),
+            IrForStatement fs =>
+            [
+                .. fs.Condition is null ? [] : new[] { fs.Condition },
+                .. fs.Incrementors,
+            ],
             IrWhileStatement ws => [ws.Condition],
             IrDoWhileStatement dw => [dw.Condition],
             IrSwitchStatement sw => [sw.Expression, .. sw.Cases.SelectMany(c => c.Labels)],
@@ -104,11 +108,7 @@ public static class IrNodeChildren
             IrIfStatement ifs => [.. ifs.Then, .. ifs.Else ?? []],
             IrBlockStatement block => block.Statements,
             IrForEachStatement fe => fe.Body,
-            IrForStatement fs =>
-            [
-                .. fs.Initializer is null ? [] : new[] { fs.Initializer },
-                .. fs.Body,
-            ],
+            IrForStatement fs => [.. fs.Initializers, .. fs.Body],
             IrWhileStatement ws => ws.Body,
             IrDoWhileStatement dw => dw.Body,
             IrTryStatement ts =>
