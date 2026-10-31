@@ -125,11 +125,15 @@ When it sees a class that inherits from `JsonSerializerContext`:
    Roots come first, in declaration order, followed by the discovered types in
    breadth-first order; each type is emitted once, and cycles (`A → B → A`)
    terminate. Only non-generic classes and structs transpiled by the current
-   project are discovered — interfaces, generic types, and types from
-   referenced packages are not.
+   project (nested ones included) are discovered through properties —
+   interfaces, generic types, and types from referenced packages are not.
+   Base types
+   are included whenever the spec links to them through `base`.
+   `[JsonDerivedType]` targets are not walked yet; polymorphic JSON is tracked
+   in [#268](https://github.com/danfma/metano/issues/268).
 
 4. **For each serializable type `T`**, walks its public properties and:
-   - Excludes `[JsonIgnore]` properties
+   - Excludes `[JsonIgnore]` and static properties
    - Resolves the JSON name: `[JsonPropertyName]` override wins, otherwise
      applies the context's naming policy to the C# property name
    - Classifies the property type (primitive, temporal, decimal, array, map,

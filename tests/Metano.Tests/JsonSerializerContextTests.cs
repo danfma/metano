@@ -515,7 +515,7 @@ public class JsonSerializerContextTests
             .IsEqualTo(string.Join(",", positions.Order()));
 
         foreach (var getter in getters)
-            await Assert.That(ts.Split($"  get {getter}(): ").Length).IsEqualTo(2);
+            await Assert.That(CountGetters(ts, getter)).IsEqualTo(1);
     }
 
     [Test]
@@ -534,8 +534,8 @@ public class JsonSerializerContextTests
             """
         );
 
-        await Assert.That(ts.Split("  get node(): ").Length).IsEqualTo(2);
-        await Assert.That(ts.Split("  get edge(): ").Length).IsEqualTo(2);
+        await Assert.That(CountGetters(ts, "node")).IsEqualTo(1);
+        await Assert.That(CountGetters(ts, "edge")).IsEqualTo(1);
         await Assert.That(ts).Contains("spec: () => this.edge");
         await Assert.That(ts).Contains("spec: () => this.node");
     }
@@ -581,7 +581,116 @@ public class JsonSerializerContextTests
             """
         );
 
-        await Assert.That(ts.Split("  get leaf(): ").Length).IsEqualTo(2);
+        await Assert.That(CountGetters(ts, "leaf")).IsEqualTo(1);
         await Assert.That(ts.IndexOf("  get root(")).IsLessThan(ts.IndexOf("  get leaf("));
     }
+
+    [Test]
+    public async Task DictionaryKeyType_GetsItsOwnSpecGetter()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Keyed(int Id);
+
+            [Transpile]
+            public sealed record Root(Dictionary<Keyed, string> Names);
+
+            [Transpile]
+            [JsonSerializable(typeof(Root))]
+            """
+        );
+
+        await Assert.That(CountGetters(ts, "keyed")).IsEqualTo(1);
+        await Assert.That(ts).Contains("spec: () => this.keyed");
+    }
+
+    [Test]
+    public async Task StaticProperty_IsNeitherSerializedNorWalked()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Leaf(string Name);
+
+            [Transpile]
+            public sealed record Holder(int Z)
+            {
+                public static Leaf Shared { get; } = new("shared");
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Holder))]
+            """
+        );
+
+        await Assert.That(CountGetters(ts, "holder")).IsEqualTo(1);
+        await Assert.That(CountGetters(ts, "leaf")).IsEqualTo(0);
+        await Assert.That(ts).DoesNotContain("\"shared\"");
+        await Assert.That(ts).Contains("new Holder(p.z as number)");
+    }
+
+    [Test]
+    public async Task InterfaceOrGenericPropertyType_IsNotPulledIntoClosure()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public interface IShape { double Area { get; } }
+
+            [Transpile]
+            public sealed record Box<T>(T Value);
+
+            [Transpile]
+            public sealed record Root(IShape Shape, Box<int> Box);
+
+            [Transpile]
+            [JsonSerializable(typeof(Root))]
+            """
+        );
+
+        await Assert.That(CountGetters(ts, "root")).IsEqualTo(1);
+        await Assert.That(CountGetters(ts, "iShape")).IsEqualTo(0);
+        await Assert.That(CountGetters(ts, "box")).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task NestedType_GetsIdentifierSafeGetterAndQualifiedTypeReference()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public class Outer
+            {
+                [Transpile]
+                public sealed record Inner(int V);
+
+                [Transpile]
+                public sealed record Other(int W);
+            }
+
+            [Transpile]
+            public sealed record Timeline(Outer.Inner In, Outer.Other Ot);
+
+            [Transpile]
+            [JsonSerializable(typeof(Timeline))]
+            [JsonSerializable(typeof(Outer.Inner))]
+            """
+        );
+
+        // The explicit root and the refs agree on one plain-identifier getter
+        // per type; the qualified name appears only in type positions.
+        await Assert.That(CountGetters(ts, "inner")).IsEqualTo(1);
+        await Assert.That(CountGetters(ts, "other")).IsEqualTo(1);
+        await Assert.That(ts).Contains("spec: () => this.inner");
+        await Assert.That(ts).Contains("spec: () => this.other");
+        await Assert.That(ts).Contains("get inner(): TypeSpec<Outer.Inner>");
+        await Assert.That(ts).Contains("type: Outer.Inner,");
+        await Assert.That(ts).Contains("new Outer.Other(p.w as number)");
+        await Assert.That(ts).DoesNotContain("get outer.");
+        await Assert.That(ts).DoesNotContain("_outer.");
+    }
+
+    private static int CountGetters(string ts, string getterName) =>
+        ts.Split($"  get {getterName}(): ").Length - 1;
 }
