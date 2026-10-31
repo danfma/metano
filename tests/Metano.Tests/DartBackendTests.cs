@@ -730,6 +730,33 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task AsCast_LowersToNativeTypeTest()
+    {
+        // `x as T` lowers to `x is T ? (T)x : null` in the shared extractor.
+        // Dart reifies interfaces, so the guard-or-MS0001 rule TypeScript
+        // needs for an erased interface does not apply here.
+        var (files, diagnostics) = TranspileDart(
+            """
+            [Transpile] public interface IShape { double Area(); }
+            [Transpile] public class Square { }
+            [Transpile]
+            public class Caster
+            {
+                public Square? AsSquare(object o) => o as Square;
+                public IShape? AsShape(object o) => o as IShape;
+            }
+            """
+        );
+
+        var dart = files["caster.dart"];
+        await Assert.That(dart).Contains("o is Square ? o as Square : null");
+        await Assert.That(dart).Contains("o is IShape ? o as IShape : null");
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+    }
+
+    [Test]
     public async Task RecordType_EmitsMetanoRuntimeHashCodeImport()
     {
         // Records lower to a class with synthesized `==`/`hashCode`. The

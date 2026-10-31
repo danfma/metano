@@ -356,25 +356,6 @@ public class IndexAndRangeTests
     }
 
     [Test]
-    public async Task UnmappedBinaryOperator_ReportsUnsupportedInsteadOfCrashing()
-    {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
-            [Transpile]
-            public class Caster
-            {
-                public object? AsText(object value) => value as string;
-            }
-            """
-        );
-
-        await AssertSingleUnsupported(diagnostics, "value as string");
-        await Assert
-            .That(files["caster.ts"])
-            .Contains("throw new Error(\"Unsupported expression: AsExpression\");");
-    }
-
-    [Test]
     public async Task UnsupportedExpressionKind_ReportsUnsupportedWithPlaceholder()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
