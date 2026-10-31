@@ -43,8 +43,8 @@ jobs:
 
       # Gate the whole release on a consumable runtime package. Runs before
       # semantic-release because that step tags, pushes and publishes to NuGet;
-      # a failure later would leave a half-published release (#249).
-      # Runs on dry runs too.
+      # a failure later would leave a half-published release. It also runs on
+      # dry runs (#249).
       - name: Smoke-test packed metano-runtime
         run: bash scripts/smoke-test-runtime-package.sh
 
