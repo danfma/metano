@@ -373,10 +373,10 @@ public static partial class IrToTsExpressionBridge
             var mapped = IrToTsBclMapper.TryMapMemberAccess(ma, loweredTarget, bclRegistry);
             if (mapped is not null)
                 return mapped;
-        }
 
-        if (bclRegistry is not null && IsForeignStaticData(ma.Origin))
-            ReportUnmappedForeignStatic(ma.Origin, ForeignStaticUse.Read);
+            if (IsForeignStaticData(ma.Origin))
+                ReportUnmappedForeignStaticRead(ma.Origin);
+        }
 
         var memberName = AccessedMemberName(ma);
 
@@ -568,10 +568,10 @@ public static partial class IrToTsExpressionBridge
             );
             if (mapped is not null)
                 return mapped;
-        }
 
-        if (bclRegistry is not null && IsForeignStatic(call.Origin))
-            ReportUnmappedForeignStatic(call.Origin, ForeignStaticUse.Call);
+            if (IsForeignStatic(call.Origin))
+                ReportUnmappedForeignStaticCall(call.Origin);
+        }
 
         return new TsCallExpression(
             MapNullTolerant(call.Target, bclRegistry),
@@ -596,37 +596,28 @@ public static partial class IrToTsExpressionBridge
     private static bool IsForeignStaticData([NotNullWhen(true)] IrMemberOrigin? origin) =>
         IsForeignStatic(origin) && origin is { IsEnumMember: false, ParameterTypes: null };
 
+    private static void ReportUnmappedForeignStaticCall(IrMemberOrigin method) =>
+        ReportUnmappedForeignStatic(method, "call");
+
+    private static void ReportUnmappedForeignStaticRead(IrMemberOrigin member) =>
+        ReportUnmappedForeignStatic(member, "read");
+
     /// <summary>
-    /// A static member of a BCL or other untranspiled .NET type that the
-    /// declarative mappings in scope do not cover: the call or read is emitted by
-    /// name (<c>String.compareOrdinal(a, b)</c>, <c>Int32.maxValue</c>), and
-    /// nothing on the JavaScript side declares it.
+    /// Reports MS0001 for a static member of a BCL or other untranspiled .NET
+    /// type that no declarative mapping in scope covers: the call or read is
+    /// emitted by name (<c>String.compareOrdinal(a, b)</c>,
+    /// <c>Int32.maxValue</c>), and nothing on the JavaScript side declares it.
     /// </summary>
-    private static void ReportUnmappedForeignStatic(IrMemberOrigin member, ForeignStaticUse use) =>
+    private static void ReportUnmappedForeignStatic(IrMemberOrigin member, string useNoun) =>
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.UnsupportedFeature,
                 $"'{member.DeclaringTypeFullName}.{member.MemberName}' has no declarative "
-                    + $"mapping to TypeScript: the {UseNoun(use)} is emitted by name and has no "
+                    + $"mapping to TypeScript: the {useNoun} is emitted by name and has no "
                     + "JavaScript counterpart."
             )
         );
-
-    private static string UseNoun(ForeignStaticUse use) =>
-        use switch
-        {
-            ForeignStaticUse.Call => "call",
-            ForeignStaticUse.Read => "read",
-            _ => throw new UnreachableException(),
-        };
-
-    /// <summary>How an unmapped foreign static member is used at the reported site.</summary>
-    private enum ForeignStaticUse
-    {
-        Call,
-        Read,
-    }
 
     /// <summary>
     /// The arguments of a call to a rest parameter, without a trailing <c>params</c>
