@@ -314,4 +314,14 @@ public static class DiagnosticCodes
     /// implement the interface member implicitly, or mark the explicit member
     /// <c>[Ignore]</c>.</summary>
     public const string ExplicitImplementationConflict = "MS0031";
+
+    /// <summary>MS0044 — the TypeScript CLI could not choose a package root for
+    /// <c>package.json</c> without leaving the workspace. No <c>--package-root</c> was
+    /// given, no <c>package.json</c> lies between the output directory and the nearest
+    /// workspace boundary (the C# project directory, a <c>.git</c> repository root or a
+    /// solution directory), and the default root, the parent of the output directory,
+    /// lies above that boundary. An error: package.json is not written and the run
+    /// fails. Pass <c>--package-root</c> (MSBuild <c>MetanoPackageRoot</c>) or
+    /// <c>--skip-package-json</c>. See #334.</summary>
+    public const string PackageRootOutsideWorkspace = "MS0044";
 }

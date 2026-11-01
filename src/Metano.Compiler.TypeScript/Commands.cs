@@ -13,7 +13,7 @@ public class Commands
     /// <param name="output">-o, Output directory for generated TypeScript files</param>
     /// <param name="time">-t, Show compilation and transpilation timings</param>
     /// <param name="clean">-c, Clean output directory before generating</param>
-    /// <param name="packageRoot">Root directory of the consumer package (default: parent of --output)</param>
+    /// <param name="packageRoot">Root directory of the consumer package. Default: the nearest directory with a package.json, searching up from --output but never above the C# project directory, the repository root (.git) or the solution directory, whichever comes first; without one, the parent of --output. When that parent lies above the boundary, the run fails with MS0044 and this flag is required.</param>
     /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
     /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
     /// <param name="importAlias">Isolated Node.js subpath-imports alias for internal imports in the generated TypeScript (e.g. `contracts` → `#contracts/...`). When set, generated internal imports and the package.json `#&lt;alias&gt;`/`#&lt;alias&gt;/*` entries use this key instead of the default `#`, so generated code can live in a subfolder of a host project without colliding with that project's own `#` alias. A leading `#` is optional; use a simple identifier (letters, digits, `-`, `_`); blank means unset (default `#`). Does not affect cross-package imports, which use the referenced package's npm name.</param>
@@ -80,10 +80,24 @@ public class Commands
             if (!skipPackageJson && !dryRun)
             {
                 var outputDir = Path.GetFullPath(output);
+                var packageRootResolution = ResolvePackageRoot(packageRoot, project, outputDir);
 
-                var resolvedPackageRoot = packageRoot is not null
-                    ? Path.GetFullPath(packageRoot)
-                    : FindPackageRoot(outputDir);
+                // A refused resolution found no package.json, so it only matters when the
+                // run has files to expose (the reconciler skips an absent package.json
+                // otherwise).
+                if (packageRootResolution.IsRefused)
+                {
+                    if (target.LastPackageManifestInputs.SourceFiles.Count == 0)
+                        return;
+
+                    Console.WriteLine(packageRootResolution.Refusal.Format());
+
+                    if (!watch)
+                        Environment.Exit(1);
+                    return;
+                }
+
+                var resolvedPackageRoot = packageRootResolution.Root;
 
                 var reconciliation = PackageJsonReconciler.Reconcile(
                     target.LastPackageManifestInputs,
@@ -130,26 +144,20 @@ public class Commands
     }
 
     /// <summary>
-    /// Walks up from <paramref name="startDir"/> looking for the nearest directory
-    /// that contains a <c>package.json</c>. This mimics how npm/bun resolve the
-    /// package root and removes the fragile assumption that the output directory is
-    /// always a direct child of the package root (e.g., <c>&lt;root&gt;/src/</c>).
-    /// Falls back to the parent of <paramref name="startDir"/> when no
-    /// <c>package.json</c> is found (preserving the legacy behavior).
+    /// An explicit <c>--package-root</c> wins as given; otherwise the root is searched
+    /// from the output directory within its workspace (see <see cref="PackageRootResolver"/>).
     /// </summary>
-    private static string FindPackageRoot(string startDir)
+    private static PackageRootResolution ResolvePackageRoot(
+        string? packageRoot,
+        string project,
+        string outputDir
+    )
     {
-        var current = startDir;
-        while (current is not null)
-        {
-            if (File.Exists(Path.Combine(current, "package.json")))
-                return current;
-            var parent = Path.GetDirectoryName(current);
-            if (parent == current)
-                break; // filesystem root
-            current = parent;
-        }
-        // Fallback: parent of the output dir (legacy convention)
-        return Path.GetDirectoryName(startDir)!;
+        if (packageRoot is not null)
+            return PackageRootResolution.Resolved(Path.GetFullPath(packageRoot));
+
+        var projectDir = Path.GetDirectoryName(Path.GetFullPath(project))!;
+
+        return PackageRootResolver.Resolve(outputDir, projectDir);
     }
 }
