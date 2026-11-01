@@ -4,11 +4,14 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction.Invocation;
 
 /// <summary>
-/// Rewrites <c>handler.Invoke(args)</c> into <c>handler(args)</c> —
+/// Rewrites an explicit <c>handler.Invoke(args)</c> into <c>handler(args)</c> —
 /// the delegate's synthetic <c>Invoke</c> member has no runtime
 /// counterpart in JS/TS because the delegate IS the function. Drops
 /// the <c>.Invoke</c> indirection at the source level so consumers
-/// read dispatch as a plain function call.
+/// read dispatch as a plain function call. Only an explicit
+/// <c>.Invoke</c> qualifies: <c>holder.Get()</c> on a delegate-typed
+/// member also binds to <c>Invoke</c> but keeps its member access and
+/// falls through to the default call path.
 /// <para>
 /// <c>[This]</c>-bearing delegates fall through (return
 /// <see langword="null"/>) so the downstream
@@ -34,12 +37,17 @@ public sealed class DelegateInvokeRewriter(InvocationLoweringHelpers helpers) : 
     {
         if (context.Symbol is not { } invoke)
             return null;
-        if (!InvocationLoweringHelpers.IsDelegateInvoke(invoke))
+        if (QualifiedMemberSyntax.From(context.Invocation.Expression) is not { } invokeMember)
+            return null;
+        if (
+            !InvocationLoweringHelpers.IsExplicitDelegateInvoke(
+                invoke,
+                invokeMember.Node,
+                context.SemanticModel
+            )
+        )
             return null;
         if (InvocationLoweringHelpers.HasThisParameter(invoke))
-            return null;
-
-        if (QualifiedMemberSyntax.From(context.Invocation.Expression) is not { } invokeMember)
             return null;
 
         var receiver = context.Recurse(invokeMember.Receiver);

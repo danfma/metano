@@ -343,7 +343,9 @@ public sealed partial class IrExpressionExtractor
     /// <c>handler?.Invoke(args)</c> lowers to a delegate optional call. The
     /// <c>.Invoke</c> member binding has no runtime counterpart in JS/TS —
     /// the delegate is the function — so the IR drops the binding name and
-    /// marks the call as optional. The Dart bridge re-introduces the
+    /// marks the call as optional. Only an explicit <c>?.Invoke</c>
+    /// qualifies: <c>holder?.Get()</c> on a delegate-typed member keeps
+    /// the <c>.Get</c> binding (#337). The Dart bridge re-introduces the
     /// explicit <c>.call</c> segment because Dart's optional-call shape is
     /// <c>receiver?.call(...)</c>. <c>[This]</c>-bearing delegates fall
     /// through: the first parameter rebinds JS <c>this</c>, so the binding
@@ -357,7 +359,11 @@ public sealed partial class IrExpressionExtractor
     {
         if (
             _semantic.GetSymbolInfo(inv).Symbol is not IMethodSymbol method
-            || !IsDelegateInvoke(method)
+            || !Invocation.InvocationLoweringHelpers.IsExplicitDelegateInvoke(
+                method,
+                inv.Expression,
+                _semantic
+            )
             || HasThisParameter(method)
         )
             return null;
@@ -607,24 +613,6 @@ public sealed partial class IrExpressionExtractor
                 new IrElementAccess(inner, Extract(ea.ArgumentList.Arguments[0].Expression)),
             _ => null,
         };
-
-    /// <summary>
-    /// True when <paramref name="method"/> is a delegate's
-    /// synthesized <c>Invoke</c> method. C# manufactures this
-    /// member on every delegate type; it has no JS/TS counterpart
-    /// because the delegate IS the function. The extractor uses
-    /// the predicate at two sites:
-    /// <list type="bullet">
-    ///   <item><c>handler?.Invoke(args)</c> lowers to a
-    ///   delegate-typed optional call (<see cref="IrCallExpression"/>
-    ///   with <c>IsOptional = true</c>).</item>
-    ///   <item><c>handler.Invoke(args)</c> drops the <c>.Invoke</c>
-    ///   indirection and lowers to a plain call on the delegate
-    ///   receiver.</item>
-    /// </list>
-    /// </summary>
-    private static bool IsDelegateInvoke(IMethodSymbol method) =>
-        method.MethodKind == MethodKind.DelegateInvoke;
 
     /// <summary>
     /// True when the delegate's first parameter carries
