@@ -53,6 +53,8 @@ public sealed record IrPropertyDeclaration(
 /// the back-reference. Backends emit the <c>this._foo = foo</c> assignment
 /// in the constructor body and skip the field's initializer at the same
 /// time so the value is assigned exactly once.</param>
+/// <param name="IsRequired">Declared <c>required</c>: every object creation sets it
+/// through an object initializer (or a <c>[SetsRequiredMembers]</c> constructor).</param>
 public sealed record IrFieldDeclaration(
     string Name,
     IrVisibility Visibility,
@@ -61,7 +63,8 @@ public sealed record IrFieldDeclaration(
     bool IsReadonly,
     IrExpression? Initializer = null,
     bool IsCapturedByCtor = false,
-    bool IsConstant = false
+    bool IsConstant = false,
+    bool IsRequired = false
 ) : IrMemberDeclaration(Name, Visibility, IsStatic);
 
 /// <summary>

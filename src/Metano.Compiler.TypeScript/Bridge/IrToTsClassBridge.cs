@@ -96,6 +96,12 @@ internal static partial class IrToTsClassBridge
     ///   <item>enums → first member (numeric: smallest value; string: first
     ///     declared). String enums use the source-name key; numeric enums
     ///     honor a target <c>[Name]</c> override on the member.</item>
+    ///   <item>default-constructible transpiled structs → <c>new S()</c>, the
+    ///     zero-initialized instance C# stores. The construction runs the emitted
+    ///     field initializers and an explicit parameterless constructor, which
+    ///     C#'s zero value skips; a struct with a parameterized constructor gets
+    ///     no implicit initializer (see
+    ///     <see cref="IrNamedTypeSemantics.IsDefaultConstructible"/>).</item>
     ///   <item>everything else → no implicit initializer (TS leaves
     ///     reference fields <c>undefined</c>, matching nullable C#)</item>
     /// </list>
@@ -144,6 +150,9 @@ internal static partial class IrToTsClassBridge
                     : defaultMember.EmittedName ?? defaultMember.Name;
             return new TsPropertyAccess(new TsIdentifier(namedEnum.Name), memberName);
         }
+
+        if (type is IrNamedTypeRef { Semantics.IsDefaultConstructible: true })
+            return IrToTsExpressionBridge.Map(new IrNewExpression(type, []));
 
         return null;
     }

@@ -123,10 +123,24 @@ using Metano.Annotations;
     JsMethod = "has"
 )]
 
-// ─── Add(key, value) → set(key, value) ──────────────────────
+// ─── Add(key, value) → addEntry(map, key, value) ────────────
+// `Map.set` overwrites an existing key, where `Add` throws ArgumentException, so Add
+// lowers to a runtime helper that throws .NET's message on a duplicate (or null) key.
+// A `{ key, value }` collection-initializer element binds to this Add as well; the
+// `[key] = value` index initializer and the indexer setter keep overwriting via `set`.
 
-[assembly: MapMethod(typeof(Dictionary<,>), nameof(Dictionary<int, int>.Add), JsMethod = "set")]
-[assembly: MapMethod(typeof(IDictionary<,>), nameof(IDictionary<int, int>.Add), JsMethod = "set")]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.Add),
+    JsTemplate = "addEntry($this, $0, $1)",
+    RuntimeImports = "addEntry"
+)]
+[assembly: MapMethod(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.Add),
+    JsTemplate = "addEntry($this, $0, $1)",
+    RuntimeImports = "addEntry"
+)]
 
 // ─── Remove → delete ────────────────────────────────────────
 
