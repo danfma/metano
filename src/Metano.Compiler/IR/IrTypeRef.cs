@@ -87,6 +87,13 @@ public sealed record IrNamedTypeRef(
 /// <param name="JsTupleArity">The element count of a <c>[JsTuple]</c> type's
 /// positional shape; <c>null</c> when the type is not a <c>[JsTuple]</c> or
 /// its shape cannot be read.</param>
+/// <param name="IsDefaultConstructible">The referenced type is a transpiled struct
+/// whose emitted constructor takes no arguments (every constructor it declares is
+/// parameterless), so a backend can build the zero value C# gives an unassigned
+/// field of the type with a parameterless construction. <c>false</c> for a struct
+/// with a parameterized or primary constructor, a <c>[PlainObject]</c>,
+/// <c>[JsTuple]</c>, <c>[External]</c> or <c>[Import]</c> struct, a BCL struct, and
+/// every non-struct type.</param>
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,
     IReadOnlyList<string>? StringEnumValues = null,
@@ -101,7 +108,8 @@ public sealed record IrNamedTypeSemantics(
     bool HasGeneratedGuard = false,
     bool IsPlainObject = false,
     bool IsJsTuple = false,
-    int? JsTupleArity = null
+    int? JsTupleArity = null,
+    bool IsDefaultConstructible = false
 );
 
 /// <summary>

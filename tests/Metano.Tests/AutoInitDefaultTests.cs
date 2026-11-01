@@ -184,4 +184,111 @@ public class AutoInitDefaultTests
         await Assert.That(output).Contains("count: number = 0");
         await Assert.That(output).Contains("open: boolean = false");
     }
+
+    [Test]
+    public async Task StructTypedMembers_MatchTheGoldenOutput()
+    {
+        // C# zero-initializes a struct-typed field: a default-constructible
+        // transpiled struct gets a `new S()` initializer. A struct that declares a
+        // parameterized constructor has no parameterless TS construction, so its
+        // field keeps no initializer (#291 tracks a type-correct zero value).
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Point
+            {
+                public int X;
+                public int Y;
+            }
+
+            [Transpile]
+            public struct Box<T>
+            {
+                public T Value;
+            }
+
+            [Transpile]
+            public record struct Size
+            {
+                public int Width { get; init; }
+            }
+
+            [Transpile]
+            public struct Celsius
+            {
+                public Celsius(double degrees) => Degrees = degrees;
+
+                public double Degrees { get; }
+            }
+
+            [Transpile]
+            public struct Segment
+            {
+                public Point Start;
+                public Point? Origin;
+                public Box<int> Boxed;
+                public Size Extent { get; set; }
+                public Celsius Temperature;
+                public Point Fixed = new Point { X = 1 };
+
+                public Segment() { }
+            }
+            """
+        );
+
+        await Assert
+            .That(result["segment.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("struct-member-defaults.ts"));
+    }
+
+    [Test]
+    public async Task StructTypedStaticAndClassMembers_AutoInitToNewInstance()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Point
+            {
+                public int X;
+            }
+
+            [Transpile]
+            public class Shape
+            {
+                public Point Center { get; set; }
+                public static Point Zero;
+            }
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).Contains("center: Point = new Point();");
+        await Assert.That(output).Contains("static zero: Point = new Point();");
+        await Assert.That(output).Contains("import { Point } from \"./point\";");
+    }
+
+    [Test]
+    public async Task PlainObjectAndPrimaryConstructorStructMembers_GetNoInstanceDefault()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record struct Wire(int Code);
+
+            [Transpile]
+            public readonly record struct Money(int Cents);
+
+            [Transpile]
+            public class Holder
+            {
+                public Wire Payload { get; set; }
+                public Money Price { get; set; }
+            }
+            """
+        );
+
+        var output = result["holder.ts"];
+        await Assert.That(output).DoesNotContain("new Wire");
+        await Assert.That(output).DoesNotContain("new Money");
+    }
 }

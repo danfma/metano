@@ -1,6 +1,7 @@
 using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -518,7 +519,11 @@ public static partial class IrToTsExpressionBridge
         )
         {
             var receiver = Map(invokeAccess.Target, bclRegistry);
-            return new TsCallExpression(receiver, loweredArgs, call.IsOptional);
+            return new TsCallExpression(
+                receiver,
+                WithoutNullRestArray(call.Arguments, loweredArgs),
+                call.IsOptional
+            );
         }
 
         // `[PlainObject]` instance method call: rewrite `obj.Method(args)` to
@@ -529,7 +534,12 @@ public static partial class IrToTsExpressionBridge
             call.Origin is { IsPlainObjectInstanceMethod: true } pooMeta
             && call.Target is IrMemberAccess pooAccess
         )
-            return MapPlainObjectHelperCall(pooMeta, pooAccess.Target, loweredArgs, bclRegistry);
+            return MapPlainObjectHelperCall(
+                pooMeta,
+                pooAccess.Target,
+                WithoutNullRestArray(call.Arguments, loweredArgs),
+                bclRegistry
+            );
 
         if (bclRegistry is not null && call.Origin is not null)
         {
@@ -557,10 +567,44 @@ public static partial class IrToTsExpressionBridge
 
         return new TsCallExpression(
             MapNullTolerant(call.Target, bclRegistry),
-            loweredArgs,
+            WithoutNullRestArray(call.Arguments, loweredArgs),
             call.IsOptional
         );
     }
+
+    /// <summary>
+    /// The arguments of a call to a rest parameter, without a trailing <c>params</c>
+    /// array passed as a <c>null</c> literal (<c>f(null)</c>). Spreading <c>null</c>
+    /// throws and a rest parameter cannot hold it, so the argument is dropped and the
+    /// callee receives an empty array where C# passes <c>null</c>; the divergence is
+    /// reported as an MS0001 warning. A call lowered through a declarative BCL mapping
+    /// keeps the spread, since its template addresses arguments by position and most
+    /// BCL methods reject a <c>null</c> array anyway.
+    /// </summary>
+    private static IReadOnlyList<TsExpression> WithoutNullRestArray(
+        IReadOnlyList<IrArgument> arguments,
+        IReadOnlyList<TsExpression> loweredArguments
+    )
+    {
+        if (
+            arguments is not [.., { IsSpread: true, Value: IrLiteral { Kind: IrLiteralKind.Null } }]
+        )
+            return loweredArguments;
+
+        ReportNullRestArray();
+
+        return loweredArguments.Take(loweredArguments.Count - 1).ToList();
+    }
+
+    private static void ReportNullRestArray() =>
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                "A null array is passed to a params parameter: a rest parameter cannot hold "
+                    + "null, so the callee receives an empty array."
+            )
+        );
 
     private static TsCallExpression MapPlainObjectHelperCall(
         IrMemberOrigin method,
@@ -1378,7 +1422,7 @@ public static partial class IrToTsExpressionBridge
         )
             return mapped;
 
-        return new TsNewExpression(MapNewTarget(ne.Type), args);
+        return new TsNewExpression(MapNewTarget(ne.Type), WithoutNullRestArray(ne.Arguments, args));
     }
 
     /// <summary>

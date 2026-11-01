@@ -42,7 +42,8 @@ public static class IrFieldExtractor
             // A C# `const` is read-only too; Roslyn reports it through IsConst only.
             IsReadonly: field.IsReadOnly || field.IsConst,
             Initializer: initializer,
-            IsConstant: field.HasConstant()
+            IsConstant: field.HasConstant(),
+            IsRequired: field.IsRequired
         )
         {
             Attributes = IrAttributeExtractor.Extract(field),

@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 public class ParamsParameterTests
@@ -265,5 +267,80 @@ public class ParamsParameterTests
 
         var output = result["app/host.ts"];
         await Assert.That(output).Contains("(format: string, ...args: Object[]) => void");
+    }
+
+    [Test]
+    public async Task CallSite_NullParamsArray_DropsTheArgumentInsteadOfSpreadingIt()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Logger
+            {
+                public int Count(string label, params string[] items) => items.Length;
+
+                public int Demo() => Count("none", null!) + Count("default", default!);
+            }
+            """
+        );
+
+        var output = result["app/logger.ts"];
+        await Assert.That(output).Contains("this.count(\"none\") + this.count(\"default\")");
+        await Assert.That(output).DoesNotContain("...null");
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Severity == MetanoDiagnosticSeverity.Warning
+                    && d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("params parameter")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task NewExpression_NullParamsArray_DropsTheArgument()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Tagged
+            {
+                public Tagged(string label, params string[] tags) { }
+            }
+
+            [Transpile]
+            public sealed class Caller
+            {
+                public Tagged Make() => new Tagged("hi", null!);
+            }
+            """
+        );
+
+        await Assert.That(result["app/caller.ts"]).Contains("new Tagged(\"hi\")");
+    }
+
+    [Test]
+    public async Task CallSite_NullCastToElementType_StaysADiscreteElement()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Logger
+            {
+                public int Count(params string?[] items) => items.Length;
+
+                public int Demo() => Count((string?)null);
+            }
+            """
+        );
+
+        await Assert.That(result["app/logger.ts"]).Contains("this.count(null)");
     }
 }

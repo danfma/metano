@@ -130,7 +130,8 @@ public static class IrPropertyExtractor
             IsAbstract: prop.IsAbstract,
             IsVirtual: prop.IsVirtual,
             IsOverride: prop.IsOverride,
-            IsSealed: prop.IsSealed
+            IsSealed: prop.IsSealed,
+            IsRequired: prop.IsRequired
         );
     }
 

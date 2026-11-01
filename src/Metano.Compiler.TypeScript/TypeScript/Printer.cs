@@ -738,6 +738,8 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(field.Name);
                 if (field.Optional)
                     _sb.Write("?");
+                else if (field.DefinitelyAssigned && field.Initializer is null)
+                    _sb.Write("!");
                 _sb.Write(": ");
                 PrintType(field.Type);
                 if (field.Initializer is not null)

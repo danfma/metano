@@ -15,6 +15,8 @@ namespace Metano.Compiler.IR;
 /// <param name="IsVirtual">Declared <c>virtual</c>.</param>
 /// <param name="IsOverride">Declared <c>override</c>.</param>
 /// <param name="IsSealed">Declared <c>sealed override</c>.</param>
+/// <param name="IsRequired">Declared <c>required</c>: every object creation sets it
+/// through an object initializer (or a <c>[SetsRequiredMembers]</c> constructor).</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
     bool HasSetterBody = false,
@@ -22,5 +24,6 @@ public sealed record IrPropertySemantics(
     bool IsAbstract = false,
     bool IsVirtual = false,
     bool IsOverride = false,
-    bool IsSealed = false
+    bool IsSealed = false,
+    bool IsRequired = false
 );

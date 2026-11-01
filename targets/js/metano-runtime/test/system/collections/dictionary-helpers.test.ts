@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getValueOrDefault, tryGetValue } from "#/system/collections/dictionary-helpers.ts";
+import { addEntry, getValueOrDefault, tryGetValue } from "#/system/collections/dictionary-helpers.ts";
 
 describe("getValueOrDefault", () => {
   test("returns the stored value when the key is present", () => {
@@ -43,5 +43,37 @@ describe("tryGetValue", () => {
     const [found, value] = tryGetValue(new Map([["a", "x"]]), "a", null);
 
     expect(found ? value.length : -1).toBe(1);
+  });
+});
+
+describe("addEntry", () => {
+  test("stores a new entry", () => {
+    const map = new Map<string, number>();
+
+    addEntry(map, "a", 1);
+
+    expect([...map]).toEqual([["a", 1]]);
+  });
+
+  test("throws on a duplicate key without overwriting the stored value", () => {
+    const map = new Map([[1, "a"]]);
+
+    expect(() => addEntry(map, 1, "b")).toThrow(
+      "An item with the same key has already been added. Key: 1",
+    );
+    expect(map.get(1)).toBe("a");
+  });
+
+  test("treats a stored null value as present", () => {
+    const map = new Map<string, string | null>([["a", null]]);
+
+    expect(() => addEntry(map, "a", "b")).toThrow("Key: a");
+  });
+
+  test("throws on a null key", () => {
+    const map = new Map<string | null, number>();
+
+    expect(() => addEntry(map, null, 1)).toThrow("Value cannot be null. (Parameter 'key')");
+    expect(map.size).toBe(0);
   });
 });

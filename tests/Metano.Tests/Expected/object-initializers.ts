@@ -1,4 +1,4 @@
-import { HashSet } from "metano-runtime";
+import { addEntry, HashSet } from "metano-runtime";
 import { Bag } from "./bag";
 import { Point } from "./point";
 import { Tag } from "./tag";
@@ -54,7 +54,7 @@ export class Factory {
       return receiver$temp$5;
     })((new Map<string, number>()));
     const byAdd = ((receiver$temp$6) => {
-      receiver$temp$6.set("c", 3);
+      addEntry(receiver$temp$6, "c", 3);
 
       return receiver$temp$6;
     })((new Map<string, number>()));

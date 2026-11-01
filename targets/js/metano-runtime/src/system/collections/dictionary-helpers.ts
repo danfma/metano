@@ -35,3 +35,27 @@ export function tryGetValue<K, V, D>(
 ): readonly [found: true, value: V] | readonly [found: false, value: D] {
   return map.has(key) ? [true, map.get(key) as V] : [false, missingValue];
 }
+
+/**
+ * Adds `value` under `key`, mirroring `Dictionary<TKey, TValue>.Add(key, value)`: unlike
+ * `Map.set`, an existing entry is never overwritten. Collection initializers
+ * (`new Dictionary<K, V> { { k, v } }`) lower to this call too.
+ *
+ * The key is rendered with `String(key)`, which matches the .NET message for
+ * primitive keys and for keys whose class overrides `toString`.
+ *
+ * @throws Error when `key` is `null` or `undefined` (.NET throws
+ *   `ArgumentNullException`) or is already present (.NET throws `ArgumentException`),
+ *   with the message .NET reports.
+ */
+export function addEntry<K, V>(map: Map<K, V>, key: K, value: V): void {
+  if (key === null || key === undefined) {
+    throw new Error("Value cannot be null. (Parameter 'key')");
+  }
+
+  if (map.has(key)) {
+    throw new Error(`An item with the same key has already been added. Key: ${String(key)}`);
+  }
+
+  map.set(key, value);
+}

@@ -58,7 +58,8 @@ internal static partial class IrToTsClassBridge
                     initializer,
                     isReadonly,
                     Static: prop.IsStatic,
-                    Accessibility: MapAccessibility(prop.Visibility)
+                    Accessibility: MapAccessibility(prop.Visibility),
+                    DefinitelyAssigned: prop.Semantics?.IsRequired == true
                 ),
             ];
         }
@@ -203,7 +204,9 @@ internal static partial class IrToTsClassBridge
     /// runtime (<c>0</c>, <c>false</c>, <c>null</c>, …), so the bridge
     /// fills in the matching default to preserve semantics. Fields whose
     /// value comes from a captured ctor parameter skip the default —
-    /// the assignment lives in the ctor body to avoid a TDZ-like read.
+    /// the assignment lives in the ctor body to avoid a TDZ-like read. A
+    /// <c>required</c> field left without an initializer carries the
+    /// definite-assignment assertion (<c>name!: T</c>).
     /// Returns <c>null</c> for accessibility levels below TS-visible.
     /// </summary>
     public static TsFieldMember? BuildField(
@@ -233,7 +236,8 @@ internal static partial class IrToTsClassBridge
             initializer,
             field.IsReadonly,
             Static: field.IsStatic,
-            Accessibility: MapAccessibility(field.Visibility)
+            Accessibility: MapAccessibility(field.Visibility),
+            DefinitelyAssigned: field.IsRequired
         );
     }
 }

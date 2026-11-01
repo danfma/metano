@@ -420,7 +420,8 @@ public static class IrTypeRefMapper
                 JsTupleArity: jsTupleArity,
                 JsxNativeElementTag: jsxNativeTag,
                 IsJsxComponent: isJsxComponent,
-                RendersAsJsxElement: rendersAsJsx
+                RendersAsJsxElement: rendersAsJsx,
+                IsDefaultConstructible: IsDefaultConstructible(named, target)
             );
 
         if (named.TypeKind == TypeKind.Struct)
@@ -432,7 +433,8 @@ public static class IrTypeRefMapper
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
                 IsPlainObject: SymbolHelper.HasPlainObject(named),
                 IsJsTuple: isJsTuple,
-                JsTupleArity: jsTupleArity
+                JsTupleArity: jsTupleArity,
+                IsDefaultConstructible: IsDefaultConstructible(named, target)
             );
 
         if (named.TypeKind == TypeKind.Class)
@@ -452,6 +454,29 @@ public static class IrTypeRefMapper
 
         return null;
     }
+
+    /// <summary>
+    /// Whether the zero value of <paramref name="named"/> can be built with a
+    /// parameterless construction of its emitted class: a transpiled struct with a
+    /// runtime class (not <c>[PlainObject]</c>, <c>[JsTuple]</c>, <c>[External]</c> or
+    /// <c>[Import]</c>) whose declared constructors are all parameterless. The
+    /// implicit parameterless constructor every struct has does not count: a struct
+    /// that declares a parameterized or primary constructor emits that one, so a
+    /// parameterless construction would not type-check.
+    /// </summary>
+    private static bool IsDefaultConstructible(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        named.TypeKind == TypeKind.Struct
+        && IsTranspilableType(named, target)
+        && !SymbolHelper.HasPlainObject(named)
+        && !named.HasJsTuple()
+        && !SymbolHelper.HasExternal(named)
+        && !SymbolHelper.HasImport(named)
+        && named.InstanceConstructors.All(ctor =>
+            ctor.IsImplicitlyDeclared || ctor.Parameters.Length == 0
+        );
 
     /// <summary>
     /// Picks the member that <c>default(E)</c> resolves to. For numeric enums

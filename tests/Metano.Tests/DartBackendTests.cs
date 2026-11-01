@@ -1257,6 +1257,26 @@ public class DartBackendTests
         await Assert.That(dart).Contains("{\n    this.twice = cents * 2;\n  }");
     }
 
+    [Test]
+    public async Task DartTarget_NullParamsArray_KeepsTheNullArgument()
+    {
+        // Dart lowers a params parameter to a plain list parameter, which can hold
+        // null, so only the TypeScript rest-parameter lowering drops the argument.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public sealed class Logger
+            {
+                public int Count(params string[]? items) => items?.Length ?? -1;
+
+                public int Demo() => Count(null);
+            }
+            """
+        );
+
+        await Assert.That(files["logger.dart"]).Contains("count(null)");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (
