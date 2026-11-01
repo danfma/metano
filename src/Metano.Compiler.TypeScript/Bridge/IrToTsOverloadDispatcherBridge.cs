@@ -293,7 +293,7 @@ public static class IrToTsOverloadDispatcherBridge
         method
             .Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type),
+                IrToTsTypeMapper.MapParameterType(p),
                 Rest: p.IsParams
             ))
             .ToList();

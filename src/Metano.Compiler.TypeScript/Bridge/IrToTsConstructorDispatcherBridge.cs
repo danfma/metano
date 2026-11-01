@@ -59,7 +59,7 @@ public static class IrToTsConstructorDispatcherBridge
             .Select(c => new TsConstructorOverload(
                 c.Parameters.Select(p => new TsConstructorParam(
                         TypeScriptNaming.ToCamelCase(p.Parameter.Name),
-                        IrToTsTypeMapper.Map(p.Parameter.Type),
+                        IrToTsTypeMapper.MapParameterType(p.Parameter),
                         Accessibility: TsAccessibility.None,
                         Rest: p.Parameter.IsParams
                     ))

@@ -1,5 +1,7 @@
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -64,6 +66,24 @@ public static class IrToTsIterationProtocolBridge
     /// </summary>
     public static bool DeclaresConflictingNext(IrClassDeclaration ir) =>
         ir.Semantics.Enumerator is not null && DeclaresNext(ir);
+
+    /// <summary>
+    /// The MS0001 warning for a <paramref name="type"/> where
+    /// <see cref="DeclaresConflictingNext"/> holds, whether it lowers to a class or to
+    /// a <c>[PlainObject]</c> interface: it is emitted without the
+    /// <c>Iterator&lt;T&gt;</c> contract or a synthesized <c>next()</c>, so it does not
+    /// follow the JavaScript iterator protocol — <c>for…of</c>, spread and a
+    /// <c>GetEnumerator()</c> that returns it cannot consume it.
+    /// </summary>
+    public static MetanoDiagnostic ConflictingNextDiagnostic(INamedTypeSymbol type) =>
+        new(
+            MetanoDiagnosticSeverity.Warning,
+            DiagnosticCodes.UnsupportedFeature,
+            $"'{type.Name}' implements IEnumerator but declares a member emitted as "
+                + "'next', which the JavaScript iterator protocol reserves: it is not "
+                + "emitted as an Iterator, so it cannot be consumed as one.",
+            type.Locations.FirstOrDefault()
+        );
 
     /// <summary>
     /// The interfaces <paramref name="ir"/> is declared to implement: all of

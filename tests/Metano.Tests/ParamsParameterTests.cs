@@ -373,4 +373,126 @@ public class ParamsParameterTests
             .That(warnings.Select(d => d.Location!.SourceSpan).Distinct().Count())
             .IsEqualTo(2);
     }
+
+    [Test]
+    public async Task NullableParamsArray_EmitsANonNullableRestParameterAtEveryDeclarationSite()
+    {
+        // A rest parameter must have an array type (TS2370) and never holds null, so
+        // a `params T[]?` drops its nullability on every lowering that emits `...`:
+        // methods, module functions, interfaces, delegates, constructors, positional
+        // records and [PlainObject] helpers. The promoted record field keeps the
+        // declared nullability.
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile, EmitInFile("nullable-params")]
+            public static class Calc
+            {
+                public static int Sum(params int[]? xs) => xs?.Length ?? -1;
+
+                public static string Join(string label, params string?[]? parts) =>
+                    label + (parts?.Length ?? -1);
+            }
+
+            [Transpile, NoContainer, EmitInFile("nullable-params")]
+            public static class Fns
+            {
+                public static int Count<T>(params T[]? items) => items?.Length ?? -1;
+            }
+
+            [Transpile, EmitInFile("nullable-params")]
+            public interface ISummer
+            {
+                int SumAll(params int[]? xs);
+            }
+
+            [Transpile, EmitInFile("nullable-params")]
+            public delegate int Folder(params int[]? xs);
+
+            [Transpile, EmitInFile("nullable-params")]
+            public record Bag(params int[]? Items);
+
+            [Transpile, EmitInFile("nullable-params")]
+            public class Box
+            {
+                public int N { get; }
+
+                public Box(params int[]? xs)
+                {
+                    N = xs?.Length ?? -1;
+                }
+            }
+
+            [Transpile, PlainObject, EmitInFile("nullable-params")]
+            public record Point(int X)
+            {
+                public int Offset(params int[]? deltas) => X + (deltas?.Length ?? 0);
+            }
+            """
+        );
+
+        await Assert
+            .That(result["app/nullable-params.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("nullable-params-rest.ts"));
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task NullableParamsArray_OverloadSignaturesEmitNonNullableRestParameters()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public static class Calc
+            {
+                public static int Pick(int x) => x;
+
+                public static int Pick(string label, params int[]? xs) => xs?.Length ?? -1;
+            }
+            """
+        );
+
+        var output = result["app/calc.ts"];
+        await Assert.That(output).Contains("static pick(label: string, ...xs: number[]): number;");
+        await Assert
+            .That(output)
+            .Contains("private static pickLabelXs(label: string, ...xs: number[]): number {");
+        await Assert.That(output).DoesNotContain("...xs: number[] | null");
+    }
+
+    [Test]
+    public async Task NullableParamsArray_NullCallSiteIsStillReported()
+    {
+        // The callee's rest parameter drops `| null`; a call that passes a null array
+        // keeps the #320 handling: the argument is dropped and MS0001 is reported.
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Logger
+            {
+                public int Count(params string[]? items) => items?.Length ?? -1;
+
+                public int Demo() => Count(null);
+            }
+            """
+        );
+
+        var output = result["app/logger.ts"];
+        await Assert.That(output).Contains("count(...items: string[]): number {");
+        await Assert.That(output).Contains("return this.count();");
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Severity == MetanoDiagnosticSeverity.Warning
+                    && d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("params parameter")
+                )
+            )
+            .IsTrue();
+    }
 }

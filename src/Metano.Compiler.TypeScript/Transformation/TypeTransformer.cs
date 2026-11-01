@@ -1900,6 +1900,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
 
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
+
+        if (IrToTsIterationProtocolBridge.DeclaresConflictingNext(ir))
+            ReportDiagnostic(IrToTsIterationProtocolBridge.ConflictingNextDiagnostic(type));
+
         return IrToTsPlainObjectBridge.Convert(ir, sink, Context.DeclarativeMappings);
     }
 
