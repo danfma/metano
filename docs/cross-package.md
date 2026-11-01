@@ -61,17 +61,19 @@ them in its cross-assembly type map.
 The TypeScript CLI also finds the target package root by walking upward from
 `MetanoOutputDir` until it sees a `package.json`. The walk never goes past the
 workspace boundary, so a `package.json` that belongs to another project further
-up is left alone. The boundary is the nearest directory, starting at the output
-folder itself, that is a repository root (it holds `.git`) or a solution
-directory (it holds a `.sln` or `.slnx` file). Without either marker, it is the
-smallest directory that holds both the output folder and the C# project
-(unless that is the filesystem root); without any boundary, only the output
-folder and its parent are searched. If no package file is found, it falls back
-to the legacy convention: the parent directory of the output folder. When that
-parent lies above the boundary (the output folder is the boundary itself), the
-run fails with `MS0044` instead of writing there. Set `MetanoPackageRoot`
-(`--package-root`) when your generated files live somewhere unusual; an
-explicit root is used as given.
+up is left alone. Starting at the output folder itself, the boundary is the
+nearest repository root (it holds `.git`); without one, the nearest solution
+directory (it holds a `.sln` or `.slnx` file); without one, the smallest
+directory that holds both the output folder and the C# project (unless that is
+the filesystem root). Without any boundary, only the output folder and its
+parent are searched. If no package file is found, it falls back to the legacy
+convention: the parent directory of the output folder. When that parent lies
+outside the workspace (the output folder is the boundary itself), the run fails
+with `MS0044`: the `.ts` files are written, `package.json` is not. Set
+`MetanoPackageRoot` (`--package-root`) when your generated files live somewhere
+unusual; an explicit root is used as given. Note that a home directory kept
+under git (dotfiles) counts as a repository root, so the walk can reach a
+`~/package.json` there.
 
 ## What Metano generates
 
