@@ -1,8 +1,8 @@
 # Contract: TypeScript emission for unions
 
-**Normative for**: FR-009, FR-010, FR-017–FR-022, FR-032–FR-035; D1–D4.
+**Normative for**: FR-009, FR-010, FR-015, FR-017–FR-022, FR-032–FR-035, FR-039–FR-042; D1–D4, D10–D13.
 
-Primitive case tests are shown as `typeof`. The final rendering (`typeof` or an `is*` helper) is whatever PR #298 ships, and the goldens are finalized after it merges (FR-019). Union guards are the exception: they always validate integers with the `isInt32` family (FR-035).
+Primitive case tests are shown as `typeof`, which is what pattern lowering renders on `main` since PR #298 merged (FR-019). Union guards are the exception: they always validate integers with the `isInt32` family (FR-035).
 
 All examples assume the following C# source (namespace `Studio.Clips`, `[assembly: TranspileAssembly]`, `LangVersion preview`, net11.0):
 
@@ -114,8 +114,8 @@ export function show(id: Id): string {
 ```
 
 - `ImageClip` and `SilenceClip` are **value** imports in this file, because `instanceof` needs the class. `Clip` and `Id` are type imports.
-- `IrRuntimeTypeTest` (PR #298) chooses the primitive test (`typeof` or an `is*` helper). If it picks a helper, the scanner (FR-011) imports it from `metano-runtime`.
-- `default(Clip)` reaches the throw at runtime, mirroring C#'s `SwitchExpressionException`.
+- `IrRuntimeTypeTest` (PR #298) classifies the primitive case as `Typeof`, rendered as `typeof $s === "number"`. A case whose test needs a runtime helper (a guard) is imported through the scanner (FR-011).
+- `default(Clip)`, the erased `null` (D10), reaches the throw at runtime, mirroring C#'s `SwitchExpressionException`.
 
 ## Nullable scrutinee (FR-020 condition 4)
 
@@ -164,6 +164,8 @@ export function same(a: Clip, b: Clip): boolean {
 ```
 
 ## Switch statement with pattern labels (FR-021)
+
+> This section shows the labeled-block design of FR-021. `main` has lowered pattern labels to `switch (true)` since #239; OQ-3 decides which lowering the union goldens use. The union-specific content (each union case label tests its case, a union-typed label tests the OR of its cases) is the same under both.
 
 ```csharp
 switch (c)
@@ -349,6 +351,172 @@ export function isClip(value: unknown): value is Clip {
 
 Because the file emits a guard, the case classes are **value** imports here (FR-017). Without `[GenerateGuard]`, they stay `import type`. The runtime import specifier follows today's runtime-helper import rules.
 
+## Default values (FR-015, FR-039)
+
+```csharp
+public class Timeline
+{
+    public Clip Pending;                                    // no initializer, no ctor assigns it: holds default(Clip)
+    public string Peek() => Clips.Describe(Pending);
+    public Clip Reset() => default;                         // a return of Clip cannot be widened
+}
+
+public static string Draft()
+{
+    Clip c = default;
+    c = new SilenceClip(1);
+    return Clips.Describe(c);
+}
+```
+
+```ts
+export class Timeline {
+  pending: Clip | null = null;
+
+  peek(): string {
+    return describe(this.pending!);
+  }
+
+  reset(): Clip {
+    return null as unknown as Clip;   // MS0041 (warning) at the `default` expression
+  }
+}
+
+export function draft(): string {
+  let c: Clip | null = null;
+  c = new SilenceClip(1);
+  return describe(c!);
+}
+```
+
+- `pending` and `c` hold `default(Clip)` by declaration, so they are widened to `Clip | null` with no diagnostic.
+- Each read that C# converts to `Clip` carries `!`. The assertion is type-only: `new Timeline().peek()` passes `null` to `describe`, which throws `Non-exhaustive switch expression`, as C# throws `SwitchExpressionException`.
+- `reset()` returns `Clip`, a signature that is never widened, so the value is `null as unknown as Clip` and MS0041 is reported.
+- A `default` passed to a `Clip?` parameter emits plain `null` with no diagnostic.
+
+## Overlapping cases (FR-013, FR-040)
+
+```csharp
+public union N(int, double);                                  // MS0039 (warning): both erase to JS 'number'
+
+public static string Kind(N n) => n switch { int i => "int", double d => "double" };
+```
+
+```ts
+export type N = number | number;
+
+export function kind(n: N): string {
+  return (($s) => {
+    if (typeof $s === "number") {
+      const i = $s;
+      return "int";
+    }
+
+    if (typeof $s === "number") {
+      const d = $s;
+      return "double";
+    }
+
+    $s satisfies never;
+    throw new Error("Non-exhaustive switch expression");
+  })(n);
+}
+```
+
+The first arm wins: `kind(2.5)` returns `"int"`, where C# returns `"double"`. The second arm is dead code, which TypeScript accepts. The alias keeps one member per case, in declaration order, so the declaration stays a readable mirror of the C# source. A JSON write, a union guard and a dispatcher take the cases in the same order.
+
+## Synthesized structural guard (FR-041)
+
+```csharp
+[PlainObject] public record Note(string Text);              // no [GenerateGuard]
+public union Item(ImageClip, Note);                           // MS0039 (warning): structural next to a class
+```
+
+```ts
+// note.ts: the guard [GenerateGuard] would emit, exported under the same name
+export interface Note {
+  text: string;
+}
+
+export function isNote(value: unknown): value is Note { /* TypeGuardBuilder output */ }
+```
+
+A switch over `Item` tests `isNote($s)`, imported from `./note`. A second union over `Note` reuses the same guard. In this example `Item` also gets the MS0039 warning, because a structural guard can accept a class instance with the same members (FR-013 rule 4).
+
+## Companion namespace (FR-042)
+
+```csharp
+public interface IHasDuration { double Seconds { get; } }
+
+public union Clip(ImageClip, SilenceClip) : IHasDuration
+{
+    public double Seconds => this switch { ImageClip i => i.Seconds, SilenceClip s => s.Seconds };
+    public bool IsLongerThan(double limit) => Seconds > limit;
+    public static Clip Silence(double seconds) => new SilenceClip(seconds);
+    public static readonly Clip Empty = new SilenceClip(0);
+    public override string ToString() => $"clip {Seconds}s";
+}
+
+public static double Total(Clip c, Clip? next) =>
+    c.Seconds + (next?.Seconds ?? 0) + Clip.Silence(1).Seconds + Clip.Empty.Seconds;
+```
+
+```ts
+// clip.ts
+import { ImageClip } from "./image-clip";
+import { SilenceClip } from "./silence-clip";
+
+export type Clip = ImageClip | SilenceClip;
+
+export namespace Clip {
+  export function seconds(self: Clip): number {
+    return (($s) => {
+      if ($s instanceof ImageClip) {
+        const i = $s;
+        return i.seconds;
+      }
+
+      if ($s instanceof SilenceClip) {
+        const s = $s;
+        return s.seconds;
+      }
+
+      $s satisfies never;
+      throw new Error("Non-exhaustive switch expression");
+    })(self);
+  }
+
+  export function isLongerThan(self: Clip, limit: number): boolean {
+    return Clip.seconds(self) > limit;
+  }
+
+  export function silence(seconds: number): Clip {
+    return new SilenceClip(seconds);
+  }
+
+  export const empty: Clip = new SilenceClip(0);
+
+  export function toString(self: Clip): string {
+    return `clip ${Clip.seconds(self)}s`;
+  }
+}
+```
+
+```ts
+// caller
+import { Clip } from "./clip";
+
+export function total(c: Clip, next: Clip | null): number {
+  return Clip.seconds(c) + ((next === null ? null : Clip.seconds(next)) ?? 0) + Clip.seconds(Clip.silence(1)) + Clip.seconds(Clip.empty);
+}
+```
+
+- The case classes are value imports in `clip.ts`, because the companion bodies use `instanceof` and `new`.
+- The caller imports `Clip` once as a value; that import also covers the type (research R11).
+- `next?.Seconds` evaluates `next` once; a receiver that is not a simple identifier goes through `IrLetExpression` and is rendered as `TsImmediateInvocation`. The exact null-coalescing shape follows the existing lowering and is fixed by the `union-members` golden.
+- `IHasDuration` is not emitted as `implements`. `IHasDuration d = c;` is MS0038 in v1 (OQ-1).
+- A union without body members emits no namespace (FR-017).
+
 ## Cross-package (FR-022)
 
 ```ts
@@ -388,4 +556,4 @@ switch (c) {
 }
 ```
 
-`Equals` / `GetHashCode` over a union render the core node of FR-010.
+`Equals` / `GetHashCode` over a union render the core node of FR-010. Body members are skipped: the Dart target emits no companion (FR-027).
