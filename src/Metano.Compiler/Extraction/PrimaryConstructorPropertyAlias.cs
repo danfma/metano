@@ -64,10 +64,8 @@ internal static class PrimaryConstructorPropertyAlias
     /// Whether <paramref name="property"/> is emitted as a member a
     /// constructor parameter can be promoted to: declared in source, visible
     /// outside the assembly's internals, not <c>[Ignore]</c>d for
-    /// <paramref name="target"/>, and not an override (whose base declares
-    /// the storage) unless it is a record's positional property: C#
-    /// synthesizes that override only for an abstract base property, which
-    /// has no storage, so the parameter must initialize it. The constructor
+    /// <paramref name="target"/>, and owning its storage
+    /// (<see cref="OwnsItsStorage"/>). The constructor
     /// extraction and the capture scan share it, so a member-body read is
     /// never redirected to a property that is not emitted.
     /// </summary>
@@ -76,7 +74,16 @@ internal static class PrimaryConstructorPropertyAlias
         && property.DeclaredAccessibility
             is not (Accessibility.Internal or Accessibility.NotApplicable)
         && !SymbolHelper.HasIgnore(property, target)
-        && (!property.IsOverride || IsPositionalRecordProperty(property));
+        && OwnsItsStorage(property);
+
+    /// <summary>
+    /// An override's storage is declared by its base, except for a record's
+    /// positional property: C# synthesizes that override only for an
+    /// abstract base property, which has no storage, so the parameter must
+    /// initialize it.
+    /// </summary>
+    private static bool OwnsItsStorage(IPropertySymbol property) =>
+        !property.IsOverride || IsPositionalRecordProperty(property);
 
     /// <summary>
     /// True when <paramref name="property"/> is the positional property of a

@@ -201,13 +201,29 @@ public class InheritedPropertyTranspileTests
             """
         );
 
-        var hiding = diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
+        var hiding = HidingDiagnostics(diagnostics);
         await Assert.That(hiding.Count).IsEqualTo(1);
         await Assert.That(hiding[0].Message).Contains("'D.X' hides the inherited 'B.X'");
     }
 
     [Test]
-    public async Task OverridesAndUnrelatedMembers_ReportNoHiding()
+    public async Task FieldHidingInheritedField_ReportsSharedStorage()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class B { public int Count; }
+
+            [Transpile]
+            public class D : B { public new int Count; }
+            """
+        );
+
+        await Assert.That(HidingDiagnostics(diagnostics).Count).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task OverridesStaticsAndIgnoredMembers_ReportNoHiding()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -216,8 +232,8 @@ public class InheritedPropertyTranspileTests
             {
                 public abstract int X { get; }
                 public virtual int Y { get; } = 1;
-                private int _z;
                 public static int S { get; } = 0;
+                [Ignore] public int Hidden { get; } = 0;
             }
 
             [Transpile]
@@ -225,14 +241,22 @@ public class InheritedPropertyTranspileTests
             {
                 public override int X => 2;
                 public override int Y { get; } = 3;
-                private int _z;
-                public static int S { get; } = 4;
+                public static new int S { get; } = 4;
+                public new int Hidden { get; } = 5;
             }
             """
         );
 
-        await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
-            .IsFalse();
+        await Assert.That(HidingDiagnostics(diagnostics)).IsEmpty();
     }
+
+    private static List<MetanoDiagnostic> HidingDiagnostics(
+        IEnumerable<MetanoDiagnostic> diagnostics
+    ) =>
+        diagnostics
+            .Where(d =>
+                d.Code == DiagnosticCodes.UnsupportedFeature
+                && d.Message.Contains("hides the inherited")
+            )
+            .ToList();
 }
