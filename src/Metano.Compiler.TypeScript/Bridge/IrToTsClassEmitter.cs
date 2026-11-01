@@ -277,7 +277,29 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir));
 
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
+
+        if (IrToTsIterationProtocolBridge.DeclaresConflictingNext(ir))
+            ReportConflictingIteratorNext(type);
     }
+
+    /// <summary>
+    /// Reports MS0001 when an <c>IEnumerator&lt;T&gt;</c> implementation declares
+    /// its own member emitted as <c>next</c>: the class is emitted without
+    /// <c>implements Iterator&lt;T&gt;</c> or a synthesized <c>next()</c>, so it does
+    /// not follow the JavaScript iterator protocol — <c>for…of</c>, spread and a
+    /// <c>GetEnumerator()</c> that returns it cannot consume it.
+    /// </summary>
+    private void ReportConflictingIteratorNext(INamedTypeSymbol type) =>
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'{type.Name}' implements IEnumerator but declares a member emitted as "
+                    + "'next', which the JavaScript iterator protocol reserves: it is not "
+                    + "emitted as an Iterator, so it cannot be consumed as one.",
+                type.Locations.FirstOrDefault()
+            )
+        );
 
     /// <summary>
     /// When the type's single public constructor carries <c>[ObjectArgs]</c>,

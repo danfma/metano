@@ -26,8 +26,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///       return this.moveNext() ? { value: this.current, done: false } : { value: undefined, done: true };
 ///     }
 ///     </code>
-///     It is skipped when the type already declares a member emitted as
-///     <c>next</c>.</item>
+///     When the type already declares a member emitted as <c>next</c>, that member
+///     claims the name the protocol reserves: no <c>next()</c> is synthesized and the
+///     class is not declared <c>implements Iterator&lt;T&gt;</c>, since the declared
+///     member's signature need not match the protocol's
+///     (see <see cref="DeclaresConflictingNext"/>).</item>
 /// </list>
 /// </summary>
 public static class IrToTsIterationProtocolBridge
@@ -49,9 +52,29 @@ public static class IrToTsIterationProtocolBridge
         if (ir.Semantics.Enumerable is { } enumerable)
             yield return BuildIteratorMember(enumerable, overrides);
 
-        if (ir.Semantics.Enumerator is { } enumerator && !DeclaresNext(ir))
+        if (ir.Semantics.Enumerator is { } enumerator && !DeclaresConflictingNext(ir))
             yield return BuildNextMember(enumerator, overrides);
     }
+
+    /// <summary>
+    /// <paramref name="ir"/> takes on <c>IEnumerator</c> but declares its own member
+    /// emitted as <c>next</c>, so it cannot follow the JavaScript iterator protocol:
+    /// it is neither given a synthesized <c>next()</c> nor declared
+    /// <c>implements Iterator&lt;T&gt;</c>.
+    /// </summary>
+    public static bool DeclaresConflictingNext(IrClassDeclaration ir) =>
+        ir.Semantics.Enumerator is not null && DeclaresNext(ir);
+
+    /// <summary>
+    /// The interfaces <paramref name="ir"/> is declared to implement: all of
+    /// <see cref="IrClassDeclaration.Interfaces"/>, without the iterator contract
+    /// when <see cref="DeclaresConflictingNext"/> holds (the declared <c>next</c> would
+    /// fail the <c>Iterator&lt;T&gt;</c> check).
+    /// </summary>
+    public static IReadOnlyList<IrTypeRef>? ImplementedInterfaces(IrClassDeclaration ir) =>
+        DeclaresConflictingNext(ir)
+            ? ir.Interfaces?.Where(contract => contract is not IrIteratorTypeRef).ToList()
+            : ir.Interfaces;
 
     private static TsMethodMember BuildIteratorMember(
         IrEnumerableContract enumerable,
@@ -81,11 +104,13 @@ public static class IrToTsIterationProtocolBridge
                 enumerator.Current.Attributes
             )
         );
+
         var step = new TsConditionalExpression(
             new TsCallExpression(MethodOfThis(enumerator.MoveNext), []),
             IteratorResult(current, done: false),
             IteratorResult(new TsIdentifier("undefined"), done: true)
         );
+
         var resultType = new TsNamedType(
             "IteratorResult",
             [IrToTsTypeMapper.Map(enumerator.ElementType, overrides)]
