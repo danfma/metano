@@ -239,7 +239,7 @@ public static class TranspilerHost
     /// runs the <c>MetanoTranspile</c> target again. A target calls it when a post-emit
     /// stage it runs after <see cref="RunAsync(TranspileOptions, ITranspilerTarget)"/>
     /// fails, since the stamp of the successful transpile would otherwise let MSBuild
-    /// skip the failed stage. Best-effort, like <see cref="WriteStamp"/>.
+    /// skip the failed stage. Best-effort, like the stamp write after a successful run.
     /// </summary>
     public static void DeleteStamp(string outputDir) =>
         TryDelete(() => File.Delete(StampPath(outputDir)));

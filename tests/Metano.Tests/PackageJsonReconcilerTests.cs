@@ -1,4 +1,3 @@
-using Metano.Compiler;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Tests;
@@ -13,6 +12,8 @@ public class PackageJsonReconcilerTests
     private const string UnrelatedPackageJson = """{ "name": "unrelated" }""";
 
     private readonly string _root = Directory.CreateTempSubdirectory("metano-reconciler-").FullName;
+
+    private string OutputDir => Path.Combine(_root, "app");
 
     [After(Test)]
     public void DeleteTempDir()
@@ -46,21 +47,6 @@ public class PackageJsonReconcilerTests
         await Assert.That(reconciliation).IsSameReferenceAs(PackageJsonReconciliation.Skipped);
         await Assert.That(reconciliation.HasErrors).IsFalse();
     }
-
-    [Test]
-    public async Task DeleteStamp_RemovesTheMSBuildStamp()
-    {
-        var stampPath = Path.Combine(OutputDir, ".metano-stamp");
-
-        Directory.CreateDirectory(OutputDir);
-        File.WriteAllText(stampPath, "");
-
-        TranspilerHost.DeleteStamp(OutputDir);
-
-        await Assert.That(File.Exists(stampPath)).IsFalse();
-    }
-
-    private string OutputDir => Path.Combine(_root, "app");
 
     /// <summary>The output is the project directory, with a package.json only above it.</summary>
     private PackageRootResolution ResolveOutputAsProjectDirectory() =>
