@@ -389,11 +389,14 @@ public static partial class IrToTsExpressionBridge
             ma.Origin is { IsStatic: true, IsDeclaringTypeNoContainer: true } containerless
             && ma.Target is IrTypeReference container
         )
+        {
             // A field or property is a module variable of the container's file
             // (#314): carry the owner so another file imports it from there.
             return containerless.IsTranspiledDataMember
                 ? ModuleExportReference(memberName, container)
                 : new TsIdentifier(memberName);
+        }
+
         return new TsPropertyAccess(loweredTarget, memberName);
     }
 
@@ -582,22 +585,22 @@ public static partial class IrToTsExpressionBridge
     /// (<c>Outer.dbl</c>), so it is reached through the container, which is
     /// imported like any type reference.
     /// </summary>
-    private static TsExpression ModuleExportReference(string helperName, IrTypeReference? owner)
+    private static TsExpression ModuleExportReference(string exportName, IrTypeReference? owner)
     {
         if (owner is null)
-            return new TsIdentifier(helperName);
+            return new TsIdentifier(exportName);
 
         var containerLength = owner.Name.LastIndexOf('.');
 
         if (containerLength > 0)
             return new TsPropertyAccess(
                 MapTypeReference(owner with { Name = owner.Name[..containerLength] }),
-                helperName
+                exportName
             );
 
         return IrToTsTypeMapper.TryResolveOrigin(owner) is { } origin
-            ? new TsTypeReference(helperName, origin)
-            : new TsModuleExportReference(helperName, owner.Name);
+            ? new TsTypeReference(exportName, origin)
+            : new TsModuleExportReference(exportName, owner.Name);
     }
 
     private static string? TsTypeArgName(IrTypeRef type) =>

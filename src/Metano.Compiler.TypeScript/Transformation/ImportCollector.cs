@@ -98,8 +98,7 @@ public sealed class ImportCollector(
             crossPackageOrigins,
             templateExternals,
             linqPipeHelpers,
-            ownersByModuleExport,
-            new HashSet<string>(StringComparer.Ordinal)
+            ownersByModuleExport
         );
         CollectReferencedTypeNames(statements, sink);
 
@@ -510,7 +509,6 @@ public sealed class ImportCollector(
 
         AddModuleExportImports(
             ownersByModuleExport,
-            sink.WrittenModuleExports,
             currentNs,
             currentFileName,
             importedNames,
@@ -584,7 +582,6 @@ public sealed class ImportCollector(
     /// </summary>
     private void AddModuleExportImports(
         IReadOnlyDictionary<string, SortedSet<string>> ownersByModuleExport,
-        IReadOnlySet<string> writtenModuleExports,
         string currentNs,
         string currentFileName,
         HashSet<string> importedNames,
@@ -605,9 +602,6 @@ public sealed class ImportCollector(
             if (isCurrentFile || !importedNames.Add(exportName))
                 continue;
 
-            if (writtenModuleExports.Contains(exportName))
-                ReportImportedModuleVariableWrite(exportName, owners.Min!);
-
             var ownerPath = _context.PathNaming.ComputeRelativeImportPath(
                 currentNs,
                 ownerRef.Namespace,
@@ -617,25 +611,6 @@ public sealed class ImportCollector(
             addLocal(ownerPath, exportName, false);
         }
     }
-
-    /// <summary>
-    /// An ES module import is a read-only binding (TS2632), so a module variable
-    /// of a containerless static class can only be assigned inside its own file.
-    /// A write from any other file reports MS0001 rather than emitting code that
-    /// does not compile.
-    /// </summary>
-    private void ReportImportedModuleVariableWrite(string exportName, string owner) =>
-        _context.ReportDiagnostic(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.UnsupportedFeature,
-                $"Module variable '{exportName}' of '{owner}' is assigned outside the file "
-                    + "it is declared in. "
-                    + "A static field or property of a containerless static class becomes a "
-                    + "module variable, and an imported binding is read-only in TypeScript. "
-                    + "Assign it through a method of the declaring class instead."
-            )
-        );
 
     private void ReportModuleExportClash(string exportName, IEnumerable<string> owners) =>
         _context.ReportDiagnostic(
@@ -1208,7 +1183,6 @@ public sealed class ImportCollector(
                 }
                 break;
             case TsBinaryExpression bin:
-                RecordModuleExportWrite(bin.Left, IsAssignment(bin.Operator), sink);
                 CollectFromExpression(bin.Left, sink);
                 CollectFromExpression(bin.Right, sink);
                 // instanceof uses the type as a value
@@ -1238,11 +1212,9 @@ public sealed class ImportCollector(
                 CollectFromExpression(paren.Expression, sink);
                 break;
             case TsUnaryExpression unary:
-                RecordModuleExportWrite(unary.Operand, IsIncrement(unary.Operator), sink);
                 CollectFromExpression(unary.Operand, sink);
                 break;
             case TsPostfixUnaryExpression postfix:
-                RecordModuleExportWrite(postfix.Operand, IsIncrement(postfix.Operator), sink);
                 CollectFromExpression(postfix.Operand, sink);
                 break;
             case TsSpreadExpression spread:
@@ -1391,39 +1363,6 @@ public sealed class ImportCollector(
         owners.Add(exportReference.OwnerTypeName);
     }
 
-    /// <summary>
-    /// Remembers a module variable that is the target of an assignment, a compound
-    /// assignment or an increment, so its import can be rejected (see
-    /// <see cref="ReportImportedModuleVariableWrite"/>). A cross-package module
-    /// variable reads through a <see cref="TsTypeReference"/>; writing one is always
-    /// a write to an import.
-    /// </summary>
-    private void RecordModuleExportWrite(
-        TsExpression target,
-        bool isWrite,
-        ImportCollectionSink sink
-    )
-    {
-        if (!isWrite)
-            return;
-
-        switch (target)
-        {
-            case TsModuleExportReference exportReference:
-                sink.WrittenModuleExports.Add(exportReference.Name);
-                break;
-
-            case TsTypeReference { Origin: { } origin } crossPackage:
-                ReportImportedModuleVariableWrite(crossPackage.Name, origin.PackageName);
-                break;
-        }
-    }
-
-    private static bool IsAssignment(string op) =>
-        op.EndsWith('=') && op is not ("==" or "===" or "!=" or "!==" or "<=" or ">=");
-
-    private static bool IsIncrement(string op) => op is "++" or "--";
-
     private static string RootSegment(string typeName)
     {
         var dot = typeName.IndexOf('.');
@@ -1472,6 +1411,5 @@ internal sealed record ImportCollectionSink(
     Dictionary<string, TsTypeOrigin> CrossPackageOrigins,
     List<IrExternalImport> TemplateExternals,
     HashSet<string> LinqPipeHelpers,
-    Dictionary<string, SortedSet<string>> OwnersByModuleExport,
-    HashSet<string> WrittenModuleExports
+    Dictionary<string, SortedSet<string>> OwnersByModuleExport
 );

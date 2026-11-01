@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
@@ -83,11 +84,12 @@ public static class IrToTsModuleBridge
                     typeOverrides,
                     bclRegistry
                 ),
-                _ => null,
+                _ => throw new UnreachableException(
+                    $"Unexpected module variable {variable.GetType().Name}."
+                ),
             };
 
-            if (declaration is not null)
-                statements.Add(new TsTopLevelStatement(declaration));
+            statements.Add(new TsTopLevelStatement(declaration));
         }
     }
 

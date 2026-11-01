@@ -168,7 +168,7 @@ public sealed partial class IrExpressionExtractor
         if (index.ArgumentList.Arguments.Count != 1)
             return [ReportUnsupportedInitializerElement(index, "more than one index")];
 
-        if (indexer is not null && IsExtensionBlockMember(indexer))
+        if (indexer is not null && indexer.IsExtensionBlockMember())
             return [ReportUnsupportedInitializerElement(index, "an extension indexer")];
 
         var key = Extract(index.ArgumentList.Arguments[0].Expression);
@@ -310,10 +310,6 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private static bool IsInstanceAdd([NotNullWhen(true)] IMethodSymbol? add) =>
         add is { IsExtensionMethod: false, ReducedFrom: null } && !add.IsInlinedAtCallSite();
-
-    /// <summary>A member of a C# 14 <c>extension(R r) { … }</c> block.</summary>
-    private static bool IsExtensionBlockMember(ISymbol member) =>
-        member.ContainingType is { Name: "", ContainingType.IsStatic: true };
 
     private static ITypeSymbol? MemberType(ISymbol? member) =>
         member switch
