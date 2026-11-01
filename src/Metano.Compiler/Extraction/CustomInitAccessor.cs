@@ -15,34 +15,31 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class CustomInitAccessor
 {
-    /// <summary>The property's <c>init</c> accessor has a body.</summary>
-    public static bool HasBody(IPropertySymbol property) =>
-        property.SetMethod is { IsInitOnly: true } init && HasAccessorBody(init);
-
     /// <summary>
     /// The property's <c>init</c> accessor has a body that is transpiled as a setter.
     /// </summary>
-    public static bool IsTranspiled(IPropertySymbol property) =>
-        HasBody(property) && !HasSynthesizedBackingField(property);
+    public static bool HasTranspiledBody(IPropertySymbol property) =>
+        HasInitBody(property) && !HasSynthesizedBackingField(property);
 
     /// <summary>
     /// The property's <c>init</c> accessor has a body that is not transpiled: writing
     /// the property through an object initializer or <c>with</c> is unsupported.
     /// </summary>
-    public static bool IsUntranspiled(IPropertySymbol property) =>
-        HasBody(property) && HasSynthesizedBackingField(property);
+    public static bool HasUnsupportedBody(IPropertySymbol property) =>
+        HasInitBody(property) && HasSynthesizedBackingField(property);
 
     /// <summary>
     /// A transpiled <c>init</c> accessor of <paramref name="field"/>'s type assigns
-    /// it. C# lets an <c>init</c> accessor write a <c>readonly</c> field, but the
-    /// target setter it lowers to cannot, so such a field is not declared readonly.
+    /// it. C# lets an <c>init</c> accessor write a <c>readonly</c> field; a target
+    /// setter it lowers to may not, so the fact is recorded on the field
+    /// (<see cref="IR.IrFieldDeclaration.IsAssignedByInitAccessor"/>).
     /// Symbol-based: only assignments that bind to <paramref name="field"/> count.
     /// </summary>
     public static bool WritesField(IFieldSymbol field, Compilation compilation) =>
         field
             .ContainingType.GetMembers()
             .OfType<IPropertySymbol>()
-            .Where(IsTranspiled)
+            .Where(HasTranspiledBody)
             .SelectMany(property => property.SetMethod!.DeclaringSyntaxReferences)
             .Select(reference => reference.GetSyntax())
             .Any(accessor => AssignsField(accessor, field, compilation));
@@ -66,12 +63,8 @@ internal static class CustomInitAccessor
             );
     }
 
-    private static bool HasAccessorBody(IMethodSymbol accessor) =>
-        accessor.DeclaringSyntaxReferences.Any(reference =>
-            reference.GetSyntax()
-                is AccessorDeclarationSyntax { Body: not null }
-                    or AccessorDeclarationSyntax { ExpressionBody: not null }
-        );
+    private static bool HasInitBody(IPropertySymbol property) =>
+        property.SetMethod is { IsInitOnly: true } init && AccessorBodies.HasBody(init);
 
     private static bool HasSynthesizedBackingField(IPropertySymbol property) =>
         property

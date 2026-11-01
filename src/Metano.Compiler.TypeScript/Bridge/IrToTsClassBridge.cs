@@ -97,10 +97,9 @@ internal static partial class IrToTsClassBridge
     ///     declared). String enums use the source-name key; numeric enums
     ///     honor a target <c>[Name]</c> override on the member.</item>
     ///   <item>default-constructible transpiled structs → <c>new S()</c>, the
-    ///     zero-initialized instance C# stores. The construction runs the emitted
-    ///     field initializers and an explicit parameterless constructor, which
-    ///     C#'s zero value skips; a struct with a parameterized constructor gets
-    ///     no implicit initializer (see
+    ///     zero-initialized instance C# stores. Only a struct that declares no
+    ///     constructor qualifies, so no user constructor body runs; a struct
+    ///     that declares one gets no implicit initializer (see
     ///     <see cref="IrNamedTypeSemantics.IsDefaultConstructible"/>).</item>
     ///   <item>everything else → no implicit initializer (TS leaves
     ///     reference fields <c>undefined</c>, matching nullable C#)</item>

@@ -151,16 +151,15 @@ public static class IrPropertyExtractor
     private static AccessorDeclarationSyntax? SetterBodySyntax(
         IPropertySymbol prop,
         AccessorListSyntax? accessorList
-    ) =>
-        accessorList?.Accessors.FirstOrDefault(accessor =>
-            HasBody(accessor)
-            && (
-                accessor.IsKind(SyntaxKind.SetAccessorDeclaration)
-                || accessor.IsKind(SyntaxKind.InitAccessorDeclaration)
-                    && CustomInitAccessor.IsTranspiled(prop)
-            )
-        );
+    ) => accessorList?.Accessors.FirstOrDefault(accessor => LowersToSetter(accessor, prop));
 
-    private static bool HasBody(AccessorDeclarationSyntax accessor) =>
-        accessor.Body is not null || accessor.ExpressionBody is not null;
+    private static bool LowersToSetter(AccessorDeclarationSyntax accessor, IPropertySymbol prop)
+    {
+        if (!AccessorBodies.HasBody(accessor))
+            return false;
+
+        return accessor.IsKind(SyntaxKind.SetAccessorDeclaration)
+            || accessor.IsKind(SyntaxKind.InitAccessorDeclaration)
+                && CustomInitAccessor.HasTranspiledBody(prop);
+    }
 }

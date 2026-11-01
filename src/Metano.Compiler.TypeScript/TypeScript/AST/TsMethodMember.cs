@@ -1,5 +1,12 @@
 namespace Metano.Compiler.TypeScript.AST;
 
+/// <summary>
+/// A class method: <c>name(params): ReturnType { body }</c>.
+/// </summary>
+/// <param name="ComputedKey">When set, the method is declared under the computed
+/// property key <c>[expression]</c> (<c>[Symbol.iterator]()</c>) and
+/// <see cref="Name"/> only labels the member; a computed-key method has no overload
+/// signatures.</param>
 public sealed record TsMethodMember(
     string Name,
     IReadOnlyList<TsParameter> Parameters,
@@ -12,7 +19,8 @@ public sealed record TsMethodMember(
     IReadOnlyList<TsTypeParameter>? TypeParameters = null,
     IReadOnlyList<TsMethodOverload>? Overloads = null,
     bool Abstract = false,
-    bool Override = false
+    bool Override = false,
+    TsExpression? ComputedKey = null
 ) : TsClassMember;
 
 /// <summary>

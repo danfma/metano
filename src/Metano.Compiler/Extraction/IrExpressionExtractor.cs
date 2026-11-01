@@ -1065,7 +1065,7 @@ public sealed partial class IrExpressionExtractor
         if (_semantic.GetSymbolInfo(assignment.Left).Symbol is not IPropertySymbol property)
             return;
 
-        if (!CustomInitAccessor.IsUntranspiled(property))
+        if (!CustomInitAccessor.HasUnsupportedBody(property))
             return;
 
         ExtractionDiagnostics.Report(
@@ -1078,13 +1078,6 @@ public sealed partial class IrExpressionExtractor
             )
         );
     }
-
-    private static bool HasAccessorBody(IMethodSymbol accessor) =>
-        accessor.DeclaringSyntaxReferences.Any(reference =>
-            reference.GetSyntax()
-                is AccessorDeclarationSyntax { Body: not null }
-                    or AccessorDeclarationSyntax { ExpressionBody: not null }
-        );
 
     /// <summary>
     /// The target's <c>[Name]</c> override of the member a property pattern
@@ -3723,8 +3716,65 @@ public sealed partial class IrExpressionExtractor
             return;
         if (!SymbolEqualityComparer.Default.Equals(lastType, lastParam.Type))
             return;
-        args[^1] = args[^1] with { IsSpread = true };
+        args[^1] = NormalizeNullParamsArray(
+            args[^1] with
+            {
+                IsSpread = true,
+            },
+            lastSyntax.Expression,
+            symbol
+        );
     }
+
+    /// <summary>
+    /// A <c>params</c> array passed as a constant <c>null</c> (<c>f(null)</c>,
+    /// <c>f((T[]?)null)</c>, <c>f(default)</c>) becomes the plain null literal, so a
+    /// backend that spreads the array tells it apart from an array value without
+    /// unwrapping casts. A backend with rest parameters cannot pass <c>null</c> to
+    /// one (TypeScript drops the argument, so the callee receives an empty array), so
+    /// a call to a transpiled method is reported as an MS0001 warning at the
+    /// argument for such a target. Dart lowers <c>params</c> to a list parameter that
+    /// holds <c>null</c>, and a BCL callee keeps the argument through its mapping
+    /// (most BCL methods reject a <c>null</c> array anyway), so neither is reported.
+    /// </summary>
+    private IrArgument NormalizeNullParamsArray(
+        IrArgument argument,
+        ExpressionSyntax syntax,
+        IMethodSymbol callee
+    )
+    {
+        if (_semantic.GetConstantValue(syntax) is not { HasValue: true, Value: null })
+            return argument;
+
+        if (HasRestParameters && IsTranspiledCallee(callee))
+            ReportNullParamsArray(syntax);
+
+        return argument with
+        {
+            Value = new IrLiteral(null, IrLiteralKind.Null),
+        };
+    }
+
+    private bool HasRestParameters =>
+        _target is null or Metano.Annotations.TargetLanguage.TypeScript;
+
+    private bool IsTranspiledCallee(IMethodSymbol callee) =>
+        callee.ContainingAssembly is { } assembly
+        && (
+            SymbolEqualityComparer.Default.Equals(assembly, _semantic.Compilation.Assembly)
+            || HasAssemblyTranspileAttribute(assembly)
+        );
+
+    private static void ReportNullParamsArray(ExpressionSyntax argument) =>
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'{argument}' passes a null array to a params parameter: a rest parameter "
+                    + "cannot hold null, so the callee receives an empty array.",
+                argument.GetLocation()
+            )
+        );
 
     private IrExpression ExtractObjectCreation(ObjectCreationExpressionSyntax oc)
     {

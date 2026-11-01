@@ -478,10 +478,10 @@ public static class IrTypeRefMapper
     /// Whether the zero value of <paramref name="named"/> can be built with a
     /// parameterless construction of its emitted class: a transpiled struct with a
     /// runtime class (not <c>[PlainObject]</c>, <c>[JsTuple]</c>, <c>[External]</c> or
-    /// <c>[Import]</c>) whose declared constructors are all parameterless. The
-    /// implicit parameterless constructor every struct has does not count: a struct
-    /// that declares a parameterized or primary constructor emits that one, so a
-    /// parameterless construction would not type-check.
+    /// <c>[Import]</c>) that declares no constructor. A struct that declares a
+    /// parameterized or primary constructor emits that one, so a parameterless
+    /// construction would not type-check; one that declares a parameterless
+    /// constructor would run it, which C#'s zero value skips.
     /// </summary>
     private static bool IsDefaultConstructible(
         INamedTypeSymbol named,
@@ -493,9 +493,7 @@ public static class IrTypeRefMapper
         && !named.HasJsTuple()
         && !SymbolHelper.HasExternal(named)
         && !SymbolHelper.HasImport(named)
-        && named.InstanceConstructors.All(ctor =>
-            ctor.IsImplicitlyDeclared || ctor.Parameters.Length == 0
-        );
+        && named.InstanceConstructors.All(ctor => ctor.IsImplicitlyDeclared);
 
     /// <summary>
     /// Picks the member that <c>default(E)</c> resolves to. For numeric enums

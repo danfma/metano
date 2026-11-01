@@ -257,8 +257,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// <c>[ObjectArgs]</c> ctor, plus <c>equals</c> / <c>hashCode</c> /
     /// <c>with</c> for non-<c>[PlainObject]</c> records via
     /// <see cref="IrToTsRecordSynthesisBridge"/>, and the
-    /// <c>[Symbol.iterator]()</c> member of an <c>IEnumerable&lt;T&gt;</c>
-    /// implementation via <see cref="IrToTsIterationProtocolBridge"/>.
+    /// <c>[Symbol.iterator]()</c> / <c>next()</c> members of an
+    /// <c>IEnumerable&lt;T&gt;</c> / <c>IEnumerator&lt;T&gt;</c> implementation via
+    /// <see cref="IrToTsIterationProtocolBridge"/>.
     /// </summary>
     private void EmitSynthesizedMembers(
         INamedTypeSymbol type,
@@ -275,8 +276,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
             classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir));
 
-        if (IrToTsIterationProtocolBridge.BuildIteratorMember(ir, BclOverrides) is { } iterator)
-            classMembers.Add(iterator);
+        classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
     }
 
     /// <summary>
