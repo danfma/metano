@@ -456,10 +456,42 @@ public class ParamsParameterTests
         );
 
         var output = result["app/calc.ts"];
+
         await Assert.That(output).Contains("static pick(label: string, ...xs: number[]): number;");
         await Assert
             .That(output)
             .Contains("private static pickLabelXs(label: string, ...xs: number[]): number {");
+        await Assert.That(output).DoesNotContain("...xs: number[] | null");
+    }
+
+    [Test]
+    public async Task NullableParamsArray_ConstructorOverloadSignaturesEmitNonNullableRestParameters()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Box
+            {
+                public int N { get; }
+
+                public Box(int n)
+                {
+                    N = n;
+                }
+
+                public Box(string label, params int[]? xs)
+                {
+                    N = xs?.Length ?? -1;
+                }
+            }
+            """
+        );
+
+        var output = result["app/box.ts"];
+
+        await Assert.That(output).Contains("constructor(label: string, ...xs: number[]);");
         await Assert.That(output).DoesNotContain("...xs: number[] | null");
     }
 
@@ -483,6 +515,7 @@ public class ParamsParameterTests
         );
 
         var output = result["app/logger.ts"];
+
         await Assert.That(output).Contains("count(...items: string[]): number {");
         await Assert.That(output).Contains("return this.count();");
         await Assert
