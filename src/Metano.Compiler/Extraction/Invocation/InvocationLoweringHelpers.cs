@@ -71,6 +71,27 @@ public readonly record struct InvocationLoweringHelpers(
         method.MethodKind == MethodKind.DelegateInvoke;
 
     /// <summary>
+    /// True when <paramref name="member"/> — the member syntax an
+    /// invocation calls (<c>handler.Invoke</c> or <c>?.Invoke</c>) —
+    /// names the delegate's <c>Invoke</c> itself, so the member can be
+    /// dropped. An implicit invocation of a delegate-typed field or
+    /// property (<c>holder.Get()</c>) binds to the same
+    /// <paramref name="method"/>, but its member is the field or
+    /// property holding the delegate; dropping that member would call
+    /// the receiver instead (#337).
+    /// </summary>
+    public static bool IsExplicitDelegateInvoke(
+        IMethodSymbol method,
+        ExpressionSyntax member,
+        SemanticModel semanticModel
+    ) =>
+        IsDelegateInvoke(method)
+        && SymbolEqualityComparer.Default.Equals(
+            semanticModel.GetSymbolInfo(member).Symbol,
+            method
+        );
+
+    /// <summary>
     /// True when the delegate's first parameter carries
     /// <c>[This]</c> — the receiver is rebound as JS <c>this</c> at
     /// the call site, so the simple <c>handler(args)</c> shortcut

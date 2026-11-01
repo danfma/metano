@@ -1297,7 +1297,7 @@ public class DartBackendTests
 
     // ── helpers ──────────────────────────────────────────────────────────
 
-    private static (
+    internal static (
         Dictionary<string, string> Files,
         IReadOnlyList<MetanoDiagnostic> Diagnostics
     ) TranspileDart(string csharpSource)
