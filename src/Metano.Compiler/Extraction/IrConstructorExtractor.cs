@@ -112,24 +112,33 @@ public static class IrConstructorExtractor
             .ToList();
 
     /// <summary>
-    /// Whether the same-named <paramref name="property"/> exposes
-    /// <paramref name="parameter"/> unchanged, so promoting the parameter to
-    /// it loses nothing: a primary-constructor parameter only when the
-    /// property merely aliases it (<see cref="PrimaryConstructorPropertyAlias"/>),
-    /// not when it computes its value from it. An explicit constructor's
-    /// parameter keeps pairing by name, and so does any parameter without a
-    /// compilation (no syntax to inspect). Mirrors
-    /// <c>ImplicitCaptureDetector.IsPromotedToProperty</c>.
+    /// The property <paramref name="parameter"/> is promoted to. A
+    /// primary-constructor parameter follows the rule the capture scan shares
+    /// (<see cref="PrimaryConstructorPropertyAlias.PromotedPropertyOf"/>): the
+    /// property must merely alias it, not compute its value from it. An
+    /// explicit constructor's parameter keeps pairing by name, and so does
+    /// any parameter without a compilation (no syntax to inspect).
     /// </summary>
-    private static bool ExposesPrimaryParameterUnchanged(
-        IPropertySymbol property,
+    private static IPropertySymbol? PromotionTarget(
         IParameterSymbol parameter,
-        Compilation? compilation
-    ) =>
-        compilation is null
-        || parameter.ContainingSymbol is not IMethodSymbol constructor
-        || !IsPrimaryConstructor(constructor)
-        || PrimaryConstructorPropertyAlias.IsAliasOf(property, parameter, compilation);
+        Dictionary<string, IPropertySymbol> propertiesByName,
+        Compilation? compilation,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        if (
+            compilation is not null
+            && parameter.ContainingSymbol is IMethodSymbol constructor
+            && IsPrimaryConstructor(constructor)
+        )
+            return PrimaryConstructorPropertyAlias.PromotedPropertyOf(
+                parameter,
+                compilation,
+                target
+            );
+
+        return propertiesByName.GetValueOrDefault(parameter.Name);
+    }
 
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
         ctor.IsImplicitlyDeclared
@@ -408,10 +417,7 @@ public static class IrConstructorExtractor
         Metano.Annotations.TargetLanguage? target
     )
     {
-        if (!propertiesByName.TryGetValue(param.Name, out var prop))
-            return (IrParameterPromotion.None, null, null);
-
-        if (!ExposesPrimaryParameterUnchanged(prop, param, compilation))
+        if (PromotionTarget(param, propertiesByName, compilation, target) is not { } prop)
             return (IrParameterPromotion.None, null, null);
 
         var promotion =
