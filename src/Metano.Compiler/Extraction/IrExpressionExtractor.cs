@@ -1053,10 +1053,11 @@ public sealed partial class IrExpressionExtractor
             : null;
 
     /// <summary>
-    /// A custom <c>set { … }</c> body is transpiled (as a setter) and runs when
-    /// a <c>with</c> assigns the property, but a custom <c>init { … }</c> body
-    /// is not transpiled: the property has no setter in the output, so a
-    /// <c>with</c> that sets it neither runs the body nor applies the new
+    /// A custom <c>set { … }</c> or transpiled <c>init { … }</c> body lowers to a
+    /// setter, which runs when a <c>with</c> assigns the property. An
+    /// <c>init</c> body that is not transpiled (see
+    /// <see cref="CustomInitAccessor"/>) leaves the property without a setter,
+    /// so a <c>with</c> that sets it neither runs the body nor applies the new
     /// value. Reported as an MS0001 warning at the assignment.
     /// </summary>
     private void ReportCustomInitAccessor(AssignmentExpressionSyntax assignment)
@@ -1064,7 +1065,7 @@ public sealed partial class IrExpressionExtractor
         if (_semantic.GetSymbolInfo(assignment.Left).Symbol is not IPropertySymbol property)
             return;
 
-        if (property.SetMethod is not { IsInitOnly: true } init || !HasAccessorBody(init))
+        if (!CustomInitAccessor.IsUntranspiled(property))
             return;
 
         ExtractionDiagnostics.Report(

@@ -939,20 +939,18 @@ public class SwitchPatternTranspileTests
     }
 
     [Test]
-    public async Task WithOverCustomInitAccessor_ReportsWarning()
+    public async Task WithOverFieldKeywordInitAccessor_ReportsWarning()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             [Transpile, NoContainer]
             public record Slugged
             {
-                private readonly string _slug = "";
-
                 public string Slug
                 {
-                    get => _slug;
-                    init => _slug = value.Trim().ToLowerInvariant();
-                }
+                    get;
+                    init => field = value.Trim().ToLowerInvariant();
+                } = "";
 
                 public int Plain { get; init; }
             }
@@ -969,6 +967,34 @@ public class SwitchPatternTranspileTests
         await Assert.That(warnings.Count).IsEqualTo(1);
         await Assert.That(warnings[0].Message).Contains("'Slug'");
         await Assert.That(warnings[0].Message).Contains("custom init accessor is not transpiled");
+    }
+
+    [Test]
+    public async Task WithOverCustomInitAccessor_AssignsThroughTheSetter()
+    {
+        // A transpiled `init { … }` body is a TS setter, and copyRecordWith assigns
+        // through it, so the body runs; the readonly field it writes is declared
+        // mutable because a setter cannot assign a readonly field.
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record Slugged
+            {
+                private readonly string _slug = "";
+
+                public string Slug
+                {
+                    get => _slug;
+                    init => _slug = value.Trim().ToLowerInvariant();
+                }
+            }
+            """
+        );
+
+        var output = result["slugged.ts"];
+        await Assert.That(output).Contains("private _slug: string = \"\";");
+        await Assert.That(output).Contains("set slug(value: string) {");
+        await Assert.That(diagnostics.Where(d => d.Code == "MS0001")).IsEmpty();
     }
 
     [Test]

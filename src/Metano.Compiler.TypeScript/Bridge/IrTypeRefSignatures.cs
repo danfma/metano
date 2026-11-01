@@ -23,6 +23,7 @@ internal static class IrTypeRefSignatures
             IrPromiseTypeRef pr => $"promise<{Describe(pr.ResultType)}>",
             IrGeneratorTypeRef g => $"gen<{Describe(g.YieldType)}>",
             IrIterableTypeRef i => $"iter<{Describe(i.ElementType)}>",
+            IrIteratorTypeRef i => $"iterator<{Describe(i.ElementType)}>",
             IrKeyValuePairTypeRef kv => $"kv<{Describe(kv.KeyType)},{Describe(kv.ValueType)}>",
             IrGroupingTypeRef gr => $"grp<{Describe(gr.KeyType)},{Describe(gr.ElementType)}>",
             IrTypeParameterRef tp => $"tp:{tp.Name}",

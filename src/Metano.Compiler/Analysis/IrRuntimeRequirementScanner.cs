@@ -303,6 +303,9 @@ public static class IrRuntimeRequirementScanner
             case IrIterableTypeRef it:
                 ScanTypeRef(it.ElementType, acc);
                 break;
+            case IrIteratorTypeRef iterator:
+                ScanTypeRef(iterator.ElementType, acc);
+                break;
             case IrKeyValuePairTypeRef kv:
                 ScanTypeRef(kv.KeyType, acc);
                 ScanTypeRef(kv.ValueType, acc);

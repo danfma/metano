@@ -214,6 +214,17 @@ public static class IrTypeRefMapper
             )
                 return new IrIterableTypeRef(Map(named.TypeArguments[0], originResolver, target));
 
+            // IEnumerator<T> → Iterator: the cursor `GetEnumerator()` returns. The
+            // non-generic IEnumerator iterates `object`.
+            if (
+                named.OriginalDefinition.SpecialType
+                == SpecialType.System_Collections_Generic_IEnumerator_T
+            )
+                return new IrIteratorTypeRef(Map(named.TypeArguments[0], originResolver, target));
+
+            if (named.SpecialType == SpecialType.System_Collections_IEnumerator)
+                return new IrIteratorTypeRef(new IrPrimitiveTypeRef(IrPrimitive.Object));
+
             // Collection-like → Array
             if (named.IsCollectionLike() && named.TypeArguments.Length > 0)
                 return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver, target));
@@ -295,7 +306,8 @@ public static class IrTypeRefMapper
     }
 
     /// <summary>
-    /// Maps a return type for iterator methods (yield). IEnumerable/IEnumerator → Generator.
+    /// Maps a return type for iterator methods (yield). IEnumerable/IEnumerator → Generator;
+    /// the non-generic IEnumerable/IEnumerator yield <c>object</c>.
     /// </summary>
     public static IrTypeRef MapForGeneratorReturn(
         ITypeSymbol type,
@@ -316,6 +328,13 @@ public static class IrTypeRefMapper
             {
                 return new IrGeneratorTypeRef(Map(named.TypeArguments[0], originResolver, target));
             }
+
+            if (
+                named.SpecialType
+                is SpecialType.System_Collections_IEnumerable
+                    or SpecialType.System_Collections_IEnumerator
+            )
+                return new IrGeneratorTypeRef(new IrPrimitiveTypeRef(IrPrimitive.Object));
         }
 
         return Map(type, originResolver, target);

@@ -228,6 +228,15 @@ public sealed record IrGeneratorTypeRef(IrTypeRef YieldType) : IrTypeRef;
 public sealed record IrIterableTypeRef(IrTypeRef ElementType) : IrTypeRef;
 
 /// <summary>
+/// A one-shot cursor over a sequence (C# <c>IEnumerator&lt;T&gt;</c>, what
+/// <c>GetEnumerator()</c> returns). Each backend decides representation
+/// (TypeScript: <c>Iterator&lt;T&gt;</c>, Dart: <c>Iterator&lt;T&gt;</c>). An
+/// iterator method (<c>yield</c>) declared to return it maps to
+/// <see cref="IrGeneratorTypeRef"/> instead.
+/// </summary>
+public sealed record IrIteratorTypeRef(IrTypeRef ElementType) : IrTypeRef;
+
+/// <summary>
 /// A key-value pair type (C# <c>KeyValuePair&lt;K,V&gt;</c>).
 /// Each backend decides the representation (TypeScript: <c>[K, V]</c> tuple).
 /// </summary>

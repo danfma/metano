@@ -332,19 +332,50 @@ public class ObjectInitializerTests
     }
 
     [Test]
-    public async Task CustomInitAccessor_ReportsUnsupportedFeature()
+    public async Task CustomInitAccessor_IsWrittenThroughItsSetter()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             [Transpile]
             public class Doubled
             {
-                private int _value;
+                private readonly int _value;
 
                 public int Value
                 {
                     get => _value;
                     init => _value = value * 2;
+                }
+
+                public static Doubled Make() => new Doubled { Value = 3 };
+            }
+            """
+        );
+
+        var output = result["doubled.ts"];
+        await Assert.That(output).Contains("private _value: number = 0;");
+        await Assert.That(output).Contains("set value(value: number) {");
+        await Assert.That(output).Contains("this._value = value * 2;");
+        await Assert.That(output).Contains("Object.assign(receiver$temp$0, { value: 3 });");
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task FieldKeywordInitAccessor_ReportsUnsupportedFeature()
+    {
+        // The `field` keyword stores the value in a synthesized backing field the
+        // output does not declare, so the init body is not transpiled.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Doubled
+            {
+                public int Value
+                {
+                    get;
+                    init => field = value * 2;
                 }
 
                 public static Doubled Make() => new Doubled { Value = 3 };

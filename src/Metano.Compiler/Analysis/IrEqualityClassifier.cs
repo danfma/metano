@@ -50,6 +50,7 @@ public static class IrEqualityClassifier
             IrMapTypeRef => true,
             IrSetTypeRef => true,
             IrIterableTypeRef => true,
+            IrIteratorTypeRef => true,
             IrGeneratorTypeRef => true,
             IrPromiseTypeRef => true,
             IrFunctionTypeRef => true,

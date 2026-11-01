@@ -205,7 +205,23 @@ public static class ExplicitImplementationLowering
         string name,
         INamedTypeSymbol interfaceType,
         TargetLanguage? target
-    ) => ClaimsEmittedName(other, name, target) && !ImplementsSameInterface(other, interfaceType);
+    ) =>
+        ClaimsEmittedName(other, name, target)
+        && !ImplementsSameInterface(other, interfaceType)
+        && !BridgesBaseInterfaceOf(other, interfaceType);
+
+    /// <summary>
+    /// <paramref name="other"/> explicitly implements a member of an interface outside
+    /// the transpiled contract that <paramref name="interfaceType"/> extends — the
+    /// <c>IEnumerator IEnumerable.GetEnumerator()</c> bridge next to an explicit
+    /// <c>IEnumerator&lt;T&gt; IEnumerable&lt;T&gt;.GetEnumerator()</c>. The derived
+    /// interface's member keeps the name and the bridge is superseded by it, so the
+    /// bridge does not claim the name back.
+    /// </summary>
+    private static bool BridgesBaseInterfaceOf(ISymbol other, INamedTypeSymbol interfaceType) =>
+        ImplementedInterfaceMember(other) is { ContainingType: var otherInterface }
+        && !IsInTranspiledContract(otherInterface)
+        && interfaceType.AllInterfaces.Contains(otherInterface, SymbolEqualityComparer.Default);
 
     private static bool ClaimsEmittedName(ISymbol other, string name, TargetLanguage? target)
     {

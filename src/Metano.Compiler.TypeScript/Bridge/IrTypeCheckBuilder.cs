@@ -43,7 +43,7 @@ internal static class IrTypeCheckBuilder
             ),
             // Iterable (IReadOnlyCollection<T>) lowers to structural "any object" — legacy
             // emitted the same fallback because it couldn't produce a cheaper runtime test.
-            IrIterableTypeRef => TypeofObject(value),
+            IrIterableTypeRef or IrIteratorTypeRef => TypeofObject(value),
             IrPromiseTypeRef => new TsBinaryExpression(
                 value,
                 "instanceof",
