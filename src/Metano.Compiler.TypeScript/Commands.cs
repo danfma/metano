@@ -14,7 +14,7 @@ public class Commands
     /// <param name="output">-o, Output directory for generated TypeScript files</param>
     /// <param name="time">-t, Show compilation and transpilation timings</param>
     /// <param name="clean">-c, Clean output directory before generating</param>
-    /// <param name="packageRoot">Root directory of the consumer package. Default: the nearest directory with a package.json, searching up from --output but never above the nearest repository root (.git) or solution directory, or, without one, the directory that holds both --output and the C# project; without a match, the parent of --output. When that parent lies above the boundary, the run fails with MS0044 and this flag is required.</param>
+    /// <param name="packageRoot">Root directory of the consumer package. Default: the nearest directory with a package.json, searching up from --output but never past the workspace boundary (see docs/cross-package.md); without a match, the parent of --output. When that parent lies outside the workspace, the run fails with MS0044: pass this flag or --skip-package-json.</param>
     /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
     /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
     /// <param name="importAlias">Isolated Node.js subpath-imports alias for internal imports in the generated TypeScript (e.g. `contracts` → `#contracts/...`). When set, generated internal imports and the package.json `#&lt;alias&gt;`/`#&lt;alias&gt;/*` entries use this key instead of the default `#`, so generated code can live in a subfolder of a host project without colliding with that project's own `#` alias. A leading `#` is optional; use a simple identifier (letters, digits, `-`, `_`); blank means unset (default `#`). Does not affect cross-package imports, which use the referenced package's npm name.</param>
@@ -85,6 +85,7 @@ public class Commands
         void UpdatePackageJson()
         {
             var outputDir = Path.GetFullPath(output);
+
             var packageRootResolution = PackageRootResolver.Resolve(
                 outputDir,
                 project,
@@ -104,6 +105,9 @@ public class Commands
 
             if (reconciliation.HasErrors)
             {
+                // Without the stamp, the next incremental MSBuild build re-runs the
+                // target and reports the error again instead of skipping it.
+                TranspilerHost.DeleteStamp(outputDir);
                 FailRun();
 
                 return;

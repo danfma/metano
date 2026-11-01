@@ -222,7 +222,7 @@ public static class TranspilerHost
         {
             Directory.CreateDirectory(outputDir);
             File.WriteAllText(
-                Path.Combine(outputDir, ".metano-stamp"),
+                StampPath(outputDir),
                 DateTime.UtcNow.ToString("O") + Environment.NewLine
             );
         }
@@ -233,6 +233,18 @@ public static class TranspilerHost
             // underlying I/O error through the normal write path.
         }
     }
+
+    /// <summary>
+    /// Removes <c>&lt;outputDir&gt;/.metano-stamp</c> so the next incremental MSBuild build
+    /// runs the <c>MetanoTranspile</c> target again. A target calls it when a post-emit
+    /// stage it runs after <see cref="RunAsync(TranspileOptions, ITranspilerTarget)"/>
+    /// fails, since the stamp of the successful transpile would otherwise let MSBuild
+    /// skip the failed stage. Best-effort, like <see cref="WriteStamp"/>.
+    /// </summary>
+    public static void DeleteStamp(string outputDir) =>
+        TryDelete(() => File.Delete(StampPath(outputDir)));
+
+    private static string StampPath(string outputDir) => Path.Combine(outputDir, ".metano-stamp");
 
     private static bool ShouldAttemptCache(TranspileOptions options) =>
         !options.NoCache && !options.DryRun && !options.Clean;

@@ -315,13 +315,11 @@ public static class DiagnosticCodes
     /// <c>[Ignore]</c>.</summary>
     public const string ExplicitImplementationConflict = "MS0031";
 
-    /// <summary>MS0044 — the TypeScript CLI could not choose a package root for
-    /// <c>package.json</c> without leaving the workspace. No <c>--package-root</c> was
-    /// given, no <c>package.json</c> lies between the output directory and the nearest
-    /// workspace boundary (a <c>.git</c> repository root, a solution directory, or else
-    /// the directory that holds both the output and the C# project), and the default
-    /// root, the parent of the output directory, lies above that boundary. An error: package.json is not written and the run
-    /// fails. Pass <c>--package-root</c> (MSBuild <c>MetanoPackageRoot</c>) or
-    /// <c>--skip-package-json</c>. See #334.</summary>
+    /// <summary>MS0044 — without <c>--package-root</c>, the TypeScript CLI found no
+    /// <c>package.json</c> inside the output's workspace, and the default root (the
+    /// parent of the output directory) lies outside it. An error: the generated files
+    /// are written, package.json is not, and the run fails. Pass <c>--package-root</c>
+    /// (MSBuild <c>MetanoPackageRoot</c>) or <c>--skip-package-json</c>. The boundary
+    /// rules live on <c>PackageRootResolver</c> (#334).</summary>
     public const string PackageRootOutsideWorkspace = "MS0044";
 }

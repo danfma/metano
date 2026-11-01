@@ -40,7 +40,7 @@ public static class PackageJsonReconciler
                 : PackageJsonReconciliation.Skipped;
 
         var packageRoot = packageRootResolution.Root;
-        var packageJsonPath = Path.Combine(packageRoot, "package.json");
+        var packageJsonPath = Path.Combine(packageRoot, PackageRootResolver.PackageJsonFileName);
         var packageJsonExists = File.Exists(packageJsonPath);
 
         if (!hasFilesToExpose && !packageJsonExists)

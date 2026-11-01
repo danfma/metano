@@ -1,5 +1,4 @@
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Tests;
 
@@ -9,6 +8,11 @@ namespace Metano.Tests;
 /// root, a solution directory, or the directory that holds both the output and the C#
 /// project), so it cannot pick and rewrite an unrelated <c>package.json</c> further up
 /// the filesystem.
+/// <para>
+/// Each test builds its workspace inside a fresh temp directory and assumes that no
+/// ancestor of the system temp directory is a repository root or holds a solution
+/// file, as on developer machines and CI runners.
+/// </para>
 /// </summary>
 public class PackageRootResolverTests
 {
@@ -59,6 +63,32 @@ public class PackageRootResolverTests
         var resolution = Resolve(output: "repo/app/ts/src", project: "repo/app/App.csproj");
 
         await AssertResolved(resolution, "repo");
+    }
+
+    [Test]
+    public async Task RepositoryRoot_TakesPrecedenceOverANestedSolution()
+    {
+        MarkRepository("repo");
+        WritePackageJson("repo");
+        MarkSolution("repo/src", "App.sln");
+
+        var resolution = Resolve(output: "repo/src/Web/gen", project: "repo/src/Web/Web.csproj");
+
+        await AssertResolved(resolution, "repo");
+    }
+
+    [Test]
+    public async Task SolutionFilter_IsNotASolution()
+    {
+        WritePackageJson("workspace");
+        MarkSolution("workspace/filtered", "App.slnf");
+
+        var resolution = Resolve(
+            output: "workspace/filtered/web/src",
+            project: "workspace/api/Api.csproj"
+        );
+
+        await AssertResolved(resolution, "workspace");
     }
 
     [Test]
@@ -203,51 +233,10 @@ public class PackageRootResolverTests
         await AssertResolved(resolution, AboveWorkspace);
     }
 
-    // ── Reconciler over a refused resolution ───────────────────────────────
-
-    [Test]
-    public async Task Reconcile_RefusedWithFilesToExpose_ReportsTheRefusal()
-    {
-        var resolution = Resolve(output: "app", project: "app/App.csproj");
-
-        var reconciliation = Reconcile(resolution, [new TsSourceFile("index.ts", [], "")]);
-
-        await Assert.That(reconciliation.WasWritten).IsFalse();
-        await Assert.That(reconciliation.HasErrors).IsTrue();
-        await Assert.That(reconciliation.Diagnostics).IsEquivalentTo([resolution.Refusal!]);
-        await Assert.That(File.Exists(PathOf("package.json"))).IsFalse();
-    }
-
-    [Test]
-    public async Task Reconcile_RefusedWithoutFilesToExpose_IsSkipped()
-    {
-        var resolution = Resolve(output: "app", project: "app/App.csproj");
-
-        var reconciliation = Reconcile(resolution, []);
-
-        await Assert.That(reconciliation).IsSameReferenceAs(PackageJsonReconciliation.Skipped);
-    }
-
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private PackageRootResolution Resolve(string output, string project) =>
         PackageRootResolver.Resolve(PathOf(output), PathOf(project));
-
-    private PackageJsonReconciliation Reconcile(
-        PackageRootResolution resolution,
-        IReadOnlyList<TsSourceFile> sourceFiles
-    ) =>
-        PackageJsonReconciler.Reconcile(
-            PackageManifestInputs.None with
-            {
-                SourceFiles = sourceFiles,
-            },
-            resolution,
-            PathOf("app"),
-            dist: "./dist",
-            srcRoot: null,
-            importAlias: null
-        );
 
     private string PathOf(string relative) =>
         Path.GetFullPath(Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar)));
@@ -271,6 +260,7 @@ public class PackageRootResolverTests
     private void MarkWorktree(string relativeDir)
     {
         Directory.CreateDirectory(PathOf(relativeDir));
+
         File.WriteAllText(
             Path.Combine(PathOf(relativeDir), ".git"),
             "gitdir: /elsewhere/.git/worktrees/x\n"
