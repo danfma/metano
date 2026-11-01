@@ -224,16 +224,57 @@ public class PrimaryConstructorCaptureTests
 
                 public int Current() => count;
             }
+
+            [Transpile]
+            public sealed class WrittenByInitializer(int total)
+            {
+                public int Total { get; } = total;
+
+                public System.Action Clear { get; } = () => total = 0;
+
+                public int Current() => total;
+            }
             """
         );
+
+        var writtenByInitializer = result["written-by-initializer.ts"];
+        await Assert.That(writtenByInitializer).Contains("this._total = 0");
+        await Assert.That(writtenByInitializer).Contains("return this._total;");
+        await Assert.That(writtenByInitializer).Contains("private _total: number;");
 
         var settable = result["settable.ts"];
         await Assert.That(settable).Contains("this._limit = limit;");
         await Assert.That(settable).Contains("return this._limit;");
+        await Assert.That(settable).Contains("private readonly _limit: number;");
 
         var written = result["written.ts"];
         await Assert.That(written).Contains("this._count = count;");
         await Assert.That(written).Contains("return this._count;");
+        await Assert.That(written).Contains("private _count: number;");
+    }
+
+    [Test]
+    public async Task WrittenCapturedParam_GetsAMutableField()
+    {
+        // A member that writes a captured parameter writes its backing
+        // field, which therefore cannot be readonly (TS2540 otherwise); a
+        // parameter that is only read keeps the readonly field.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Tally(int count, int step)
+            {
+                public void Bump() => count += step;
+
+                public int Read() => count;
+            }
+            """
+        );
+
+        var output = result["tally.ts"];
+        await Assert.That(output).Contains("private _count: number;");
+        await Assert.That(output).Contains("private readonly _step: number;");
+        await Assert.That(output).Contains("this._count += this._step;");
     }
 
     [Test]

@@ -164,6 +164,8 @@ public class TupleLiteralTests
                 public static bool Literals(int a) => object.Equals((a, "x"), (a, "x"));
 
                 public static bool Locals((int, int) t, (int, int) u) => object.Equals(t, u);
+
+                public static bool Named((int, int) t, (int, int) u) => object.Equals(objB: t, objA: u);
             }
             """
         );
@@ -177,6 +179,7 @@ public class TupleLiteralTests
             );
 
         await Assert.That(output).Contains("return tupleEquals(t, u);");
+        await Assert.That(output).DoesNotContain("objectEquals");
     }
 
     /// <summary>

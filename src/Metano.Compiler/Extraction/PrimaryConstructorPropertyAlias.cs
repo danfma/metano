@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -14,6 +15,29 @@ namespace Metano.Compiler.Extraction;
 internal static class PrimaryConstructorPropertyAlias
 {
     /// <summary>
+    /// The property a primary-constructor <paramref name="parameter"/> is
+    /// promoted to, if any: the same-named property (ignoring case, so
+    /// <c>name</c> pairs with <c>Name</c>) of the parameter's type that is a
+    /// promotion candidate (<see cref="IsPromotionCandidate"/>) and only
+    /// exposes the parameter (<see cref="IsAliasOf"/>). The single pairing
+    /// rule of the constructor extraction and the capture scan, so a read is
+    /// never redirected to a property the constructor did not promote.
+    /// </summary>
+    public static IPropertySymbol? PromotedPropertyOf(
+        IParameterSymbol parameter,
+        Compilation compilation,
+        TargetLanguage? target
+    ) =>
+        parameter
+            .ContainingType.GetMembers()
+            .OfType<IPropertySymbol>()
+            .FirstOrDefault(property =>
+                string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)
+                && IsPromotionCandidate(property, target)
+                && IsAliasOf(property, parameter, compilation)
+            );
+
+    /// <summary>
     /// Whether <paramref name="property"/> is emitted as a member a
     /// constructor parameter can be promoted to: declared in source, visible
     /// outside the assembly's internals, not <c>[Ignore]</c>d for
@@ -22,10 +46,7 @@ internal static class PrimaryConstructorPropertyAlias
     /// it, so a member-body read is never redirected to a property that is
     /// not emitted.
     /// </summary>
-    public static bool IsPromotionCandidate(
-        IPropertySymbol property,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
+    public static bool IsPromotionCandidate(IPropertySymbol property, TargetLanguage? target) =>
         !property.IsImplicitlyDeclared
         && property.DeclaredAccessibility
             is not (Accessibility.Internal or Accessibility.NotApplicable)

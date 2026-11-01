@@ -20,7 +20,9 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// a class, or <c>object</c>, which may hold an array of equal elements), the
 /// element-wise comparison could answer <c>true</c> where C# answers
 /// <c>false</c>, so the call keeps the general lowering. A tuple statically
-/// typed <c>object</c> (boxed) therefore still compares by reference.
+/// typed <c>object</c> (boxed) therefore still compares by reference, and so
+/// does a nullable tuple (<c>(int, int)?</c>), which may be <c>null</c> and
+/// has no receiver to retarget to.
 /// </para>
 /// </summary>
 public sealed partial class IntrinsicBclLoweringTable
@@ -36,11 +38,17 @@ public sealed partial class IntrinsicBclLoweringTable
         _entries[staticEquals] = BuildTupleEqualsCall;
     }
 
+    /// <summary>
+    /// The receiver is the operand written first. Tuple equality is
+    /// symmetric, so this holds for named arguments in either order
+    /// (<c>Equals(objB: t, objA: u)</c>) and keeps the source evaluation
+    /// order.
+    /// </summary>
     private IrExpression? BuildTupleEqualsCall(InvocationRewriteContext ctx)
     {
         var arguments = ctx.Invocation.ArgumentList.Arguments;
 
-        if (!IsPositionalPair(arguments) || !IsTupleOperand(arguments[1].Expression, ctx))
+        if (arguments.Count != 2 || !IsTupleOperand(arguments[1].Expression, ctx))
             return null;
 
         if (TupleEqualsOf(arguments[0].Expression, ctx.SemanticModel) is not { } tupleEquals)
@@ -48,16 +56,10 @@ public sealed partial class IntrinsicBclLoweringTable
 
         return new IrCallExpression(
             new IrMemberAccess(ctx.Recurse(arguments[0].Expression), tupleEquals.Name),
-            [ctx.ExtractArgument(arguments[1])],
+            [new IrArgument(ctx.Recurse(arguments[1].Expression))],
             Origin: _helpers.BuildOrigin(tupleEquals)
         );
     }
-
-    /// <summary>
-    /// Two positional arguments: a named one may not follow the operand order.
-    /// </summary>
-    private static bool IsPositionalPair(SeparatedSyntaxList<ArgumentSyntax> arguments) =>
-        arguments.Count == 2 && arguments.All(a => a.NameColon is null);
 
     private static bool IsTupleOperand(ExpressionSyntax operand, InvocationRewriteContext ctx) =>
         TupleEqualsOf(operand, ctx.SemanticModel) is not null;
