@@ -21,10 +21,10 @@ namespace Metano.Compiler.Extraction;
 /// (<see cref="IsPromotable"/>).
 /// </para>
 /// <para>
-/// Known gap: a write inside the base-constructor arguments
-/// (<c>: B(a++)</c>) runs after the derived initializers in C#, which run
-/// before the base constructor; TypeScript must call <c>super(...)</c>
-/// first, so the order differs.
+/// Known gap (#332): C# runs the derived initializers before the
+/// base-constructor arguments, so a write there (<c>: B(a++)</c>) lands after
+/// them; TypeScript must call <c>super(...)</c> first, which reverses that
+/// order.
 /// </para>
 /// </summary>
 internal sealed class PrimaryConstructorPromotion
@@ -93,7 +93,7 @@ internal sealed class PrimaryConstructorPromotion
             if (
                 PrimaryConstructorPropertyAlias.AliasPropertyOf(parameter, compilation, target)
                     is { } property
-                && IsPromotable(property, written.Contains(parameter))
+                && IsPromotable(property, parameter, written)
             )
                 promoted[parameter] = property;
         }
@@ -102,15 +102,19 @@ internal sealed class PrimaryConstructorPromotion
     }
 
     /// <summary>
-    /// An alias property is promoted unless the parameter is written, so the
-    /// two may diverge. A record's positional property is promoted even then:
+    /// An alias property is promoted unless the parameter is written, since
+    /// the two could then diverge. A record's positional property is promoted even then:
     /// C# assigns it the original argument before any initializer runs (the
     /// parameter property does the same), and only an initializer can write
     /// the parameter, since a member body's <c>X</c> is the property. That
     /// initializer keeps the bare constructor parameter.
     /// </summary>
-    private static bool IsPromotable(IPropertySymbol aliasProperty, bool parameterWritten) =>
-        !parameterWritten
+    private static bool IsPromotable(
+        IPropertySymbol aliasProperty,
+        IParameterSymbol parameter,
+        IReadOnlySet<ISymbol> writtenParameters
+    ) =>
+        !writtenParameters.Contains(parameter)
         || PrimaryConstructorPropertyAlias.IsPositionalRecordProperty(aliasProperty);
 
     private static bool CannotDiverge(IPropertySymbol property) =>

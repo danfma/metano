@@ -248,7 +248,7 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
-    public async Task WrittenParam_IsNeverPromoted()
+    public async Task WrittenClassParam_IsNotPromoted()
     {
         // A member that writes the parameter makes it diverge from the
         // property, so the constructor does not fold the pair: the property
@@ -279,9 +279,10 @@ public class PrimaryConstructorCaptureTests
     public async Task PositionalRecordParam_WrittenByAnInitializer_StaysPromoted()
     {
         // C# assigns the positional property the original argument before any
-        // initializer runs, so `Y = X++` leaves X at 1 and Y at 1. The
-        // parameter property does the same; the initializer keeps the bare
-        // constructor parameter.
+        // initializer runs: with an argument of 1, `Y = X++` leaves the
+        // property X at 1 and Y at 1 (the parameter becomes 2). The parameter
+        // property does the same; the initializer keeps the bare constructor
+        // parameter.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -304,15 +305,40 @@ public class PrimaryConstructorCaptureTests
         await Assert.That(counted).Contains("constructor(readonly x: number)");
         await Assert.That(counted).Contains("this.y = x++;");
         await Assert.That(counted).Contains("return this.x;");
-        await Assert.That(counted).DoesNotContain("_x");
+        await Assert.That(counted).DoesNotContain("private _x");
 
+        // The record struct pins the same lowering with its mutable
+        // positional property (`public`).
         var countedValue = result["counted-value.ts"];
         await Assert.That(countedValue).Contains("constructor(public x: number)");
         await Assert.That(countedValue).Contains("this.y = x++;");
     }
 
     [Test]
-    public async Task WrittenParam_BehindAnExpressionBodiedAlias_IsNeverPromoted()
+    public async Task RecordParam_WithAnExplicitPropertyAndAWrite_IsNotPromoted()
+    {
+        // An explicitly declared `X { get; } = X` is an ordinary initializer
+        // that runs in declaration order, after `Y = X++`, so X ends at 2:
+        // the pair is not folded and the property reads the written value.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record Explicit(int X)
+            {
+                public int Y { get; } = X++;
+
+                public int X { get; } = X;
+            }
+            """
+        );
+
+        var output = result["explicit.ts"];
+        await Assert.That(output).Contains("constructor(x: number)");
+        await Assert.That(output).Contains("this.y = x++;\n    this.x = x;");
+    }
+
+    [Test]
+    public async Task WrittenClassParam_BehindAnExpressionBodiedAlias_IsNotPromoted()
     {
         // `A => a` reads the parameter live, so after `a++` it must see the
         // new value: the getter reads the mutable field instead of being

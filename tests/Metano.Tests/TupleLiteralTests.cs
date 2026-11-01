@@ -212,7 +212,7 @@ public class TupleLiteralTests
     /// is asserted here.
     /// </summary>
     [Test]
-    public async Task ObjectEqualsOverNestedTuples_LowersToTheFlatTupleComparison()
+    public async Task ObjectEqualsOverNestedTuples_LowersToTupleEquals()
     {
         var result = TranspileHelper.Transpile(
             """
