@@ -14,7 +14,7 @@ No persistent data. The entities are the C# inputs the core reads, the IR it bui
 | `IsPatternExpression`, `BinaryExpression(Is/As)`, `CastExpression` (explicit reference / unboxing / `dynamic` conversions), switch arms and labels, overload parameters, `catch` clauses (+ `CatchFilterClauseSyntax`), `GetType()` invocations, `TypeOfExpression`, `ObjectCreation` of `T` | the tested / target type, the tested expression's static type, the receiver's static type for `GetType()` | The *runtime questions* that drive reachability (FR-027) and reification (FR-024). |
 | Collection constructions (`ObjectCreation`, collection initializers in both forms, collection expressions, LINQ terminals) | the collection kind and whether a runtime question about that kind exists | FR-008: `$typeArguments$<Class>` passed only then. |
 | `[PlainObject]` types assignable to a tested static type | shape (required members with coarse kinds; 009 FR-019); derived plain objects of a receiver type | MS0047; the `GetType()` constant fold condition (FR-020). |
-| `[StrictUnionGuard]` bases and their variants (`TypeGuardBuilder.TryFindDiscriminatedVariants`) | variant guard names | a `variants` thunk table local to the base's guard function (FR-029). |
+| `[StrictUnionGuard]` bases and their variants (`TypeGuardBuilder.TryFindDiscriminatedVariants`) | variant guard names and modules | the strict guard is emitted in its own `<base>.guard.ts` module that imports base and variants; the base imports no variant (FR-029). |
 | `[Ignore(TargetLanguage)]` | per-target ignore | MS0051 suppression. |
 
 ## 2. Core IR (`Metano.Compiler`, target-agnostic)
@@ -157,10 +157,10 @@ Notes:
 | `Bridge/IrToTsCatchChainBridge` + `TypeScript/AST/TsTryStatement` | FR-015: a real AST node printed by `Printer`, replacing `MapTry`'s string rendering. |
 | `Bridge/IrToTsInlineCodeBridge` | FR-031 / FR-032. |
 | `Analysis/IrRuntimeRequirementScanner` | imports for `isType`, `asType`, `castTo`, `getType`, `tryFilter`, `withImplementers`, `fromEnd`, `isIterable`, `asArray`, `toException`, descriptors, factories, collection classes and per-class exception modules; nothing for an unreached type. |
-| `Transformation/TypeGuardBuilder` | plain-object guard synthesis shared with 009 / 010; `[StrictUnionGuard]` dispatch through a `variants` thunk table emitted next to `isBase` instead of `getUnionGuard` (FR-029). |
+| `Transformation/TypeGuardBuilder` | plain-object guard synthesis shared with 009 / 010; a `[StrictUnionGuard]` base's `isBase` is emitted into a separate `<base>.guard.ts` source file (a new `TsSourceFile` beside the base's) that imports the base and the variant guards and holds the `variants` table; `ImportCollector` resolves `isBase` references to the guard module (FR-029). |
 | `JsonSerializerContextTransformer` | `runtimeType` thunk on specs; `list` / `dictionary` / … descriptor kinds (FR-028). |
 | `Transformation/EnumTransformer` (existing enum path) | `export const E = {…} as const` + the closed-union alias, or `type E = number` for `[Flags]` (FR-044). |
-| `PackageJsonWriter` | `sideEffects: ["./dist/<entry>.js", …]` from the `[ModuleEntryPoint]` modules (FR-045, #368). |
+| `PackageJsonWriter` | `sideEffects: ["./src/<entry>.ts", "./dist/<entry>.js", …]` from the `[ModuleEntryPoint]` modules, both condition paths (FR-045, #368). |
 
 ## 4. Runtime shapes
 

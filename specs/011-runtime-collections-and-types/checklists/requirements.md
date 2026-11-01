@@ -1,7 +1,7 @@
 # Specification Quality Checklist: BCL collections as runtime types, runtime type descriptors
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-11-01 (revised after the first and second critic passes)
+**Created**: 2026-11-01 (revised after three critic passes)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -29,7 +29,7 @@
 - [x] Spec directory is `specs/011-runtime-collections-and-types/`
 - [x] Baseline feature-support matrix rows added (Planned)
 - [x] ADR-0027 added (own runtime collections + descriptors vs Array subclasses, wrappers with adapters, Deepkit-style transformer, symbol-keyed statics / namespaces, a guard registry, structural equality); `0026` stays reserved by spec 010
-- [x] Issue created: #335; follow-ups #361 (pre-existing namespace emissions) and #368 (flat `sideEffects: false`) filed, both on the 3.0.0 release gate
+- [x] Issue created: #335; follow-ups #361 (pre-existing namespace emissions) and #368 (flat `sideEffects: false`) filed, both on the 3.0.0 release gate; #369 filed for the `[Flags]` JSON converter (spec 009)
 - [ ] Open decisions resolved with the maintainer before `/speckit-tasks`
 - [ ] Benchmark (NFR-001) run and recorded before stage 011c merges
 - [ ] Tree-shaking suite (FR-043) green from stage 011a on, with its side-effect self-test proving the check is not vacuous

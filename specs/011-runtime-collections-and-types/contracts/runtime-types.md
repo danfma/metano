@@ -101,7 +101,7 @@ export class Circle extends Shape implements IHasArea {
   }
   …
 }
-// interface (reached): a separate exported literal in the interface's file; no annotation needed
+// interface (reached): a separate exported literal in the interface's file; no annotation needed; the ONE descriptor that imports a reflection function
 export interface IHasArea { readonly area: number; }
 export const IHasArea$runtimeType: InterfaceType<IHasArea> = {
   kind: "interface", name: "IHasArea", fullName: "Geometry.IHasArea", namespace: "Geometry", baseInterfaces: [], plainImplementers: [() => AreaDto$runtimeType],
@@ -118,9 +118,14 @@ export const Color$runtimeType: EnumType<Color> = { kind: "enum", name: "Color",
 // [Flags] numeric enum (FR-044)
 export const Perms = { Read: 1, Write: 2, Execute: 4 } as const;
 export type Perms = number;
-// [StrictUnionGuard] base (FR-029): the variant table lives in the GUARD function's module, not on the descriptor
-const shapeVariants = [() => isCircleDto, () => isSquareDto];          // thunks; only pulled by code that imports isShape
-export function isShape(value: unknown): value is Shape { … /* discriminator match, then shapeVariants[i]()(value) */ }
+// [StrictUnionGuard] base (FR-029): the strict guard lives in ITS OWN module, shape.guard.ts; shape.ts never imports a variant
+// shape.guard.ts
+import { Shape } from "./shape";
+import { isCircleDto } from "./circle-dto";   // variant modules run `class CircleDto extends Shape` at load
+import { isSquareDto } from "./square-dto";
+const variants = [() => isCircleDto, () => isSquareDto];
+export function isShape(value: unknown): value is Shape { … /* instanceof fast path, discriminator match, then variants[i]()(value) */ }
+// shape.ts: the base, its descriptor getter (no variant data) — importing it first, unbundled, must not throw
 // reified method
 export function isA<T>(o: unknown, T$type: RuntimeType<T>): boolean { return isType(o, T$type); }
 isA(x, Circle.$runtimeType); isA(5, Int32Type); isA(xs, listType(StringType));

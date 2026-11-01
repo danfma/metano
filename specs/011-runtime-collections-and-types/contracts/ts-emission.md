@@ -1,6 +1,6 @@
 # Contract: TypeScript emission (goldens)
 
-**Normative for**: FR-007, FR-009, FR-010, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044, FR-045. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 side-effect scan: no call in a top-level statement or initializer that is not immediately preceded by `/*#__PURE__*/`, no `export namespace` with runtime members, no `export enum`, no computed class key other than `[Symbol.iterator]`.
+**Normative for**: FR-007, FR-009, FR-010, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044, FR-045. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 golden bundle check: compiled with tsgo and bundled as a side-effect-only import with packages external, nothing but its external `import` statements remains.
 
 ## Collections (`collections-basic.ts`)
 
@@ -207,6 +207,25 @@ const t = UserDto$runtimeType;          // constant: no [PlainObject] derives fr
 const g = getType(o);                   // MS0048 warning
 ```
 
+## Strict union guard module (`strict-union-guard-module`, FR-029)
+
+```ts
+// shape.ts — the base; no import of any variant
+export abstract class Shape { … static get $runtimeType() { … } }
+// circle-dto.ts
+import { Shape } from "./shape";
+export class CircleDto extends Shape { … }
+export function isCircleDto(v: unknown): v is CircleDto { … }
+// shape.guard.ts — the strict guard, in its own module
+import { Shape } from "./shape";
+import { isCircleDto } from "./circle-dto";
+import { isSquareDto } from "./square-dto";
+const variants = [() => isCircleDto, () => isSquareDto];
+export function isShape(value: unknown): value is Shape { … }
+```
+
+A Bun test imports `./shape` first, unbundled, then `./shape.guard`, and calls `isShape` on a plain `{ kind: "circle", … }`: no `ReferenceError`, and the strict variant guard runs.
+
 ## Numeric enums (`numeric-enum-const.ts`, `numeric-enum-flags.ts`, FR-044)
 
 ```ts
@@ -220,12 +239,16 @@ var p = Perms.Read | Perms.Write; p |= Perms.Execute; bool canWrite = (p & Perms
 ```
 
 ```ts
-export const Perms = { Read: 1, Write: 2, Execute: 4 } as const;
-export type Perms = number;
-let p = Perms.Read | Perms.Write;
+export const Perms = { None: 0, Read: 1, Write: 2, Execute: 4 } as const;
+export type Perms = number & { readonly __enum?: "Perms" };
+let p: Perms = Perms.Read | Perms.Write;
 p |= Perms.Execute;
 const canWrite = (p & Perms.Write) !== 0;
+const zero: Perms = 0;              // default(Perms)
+const cast: Perms = 3 as Perms;     // (Perms)3
 ```
+
+The golden also contains `p &= ~Perms.Read`, `p ^ Perms.Write`, a `switch` over members and an array of `Perms`; `tsgo --strict` accepts all of them and rejects `Perms p = other` where `other` is a different branded enum (research R13).
 
 `[StringEnum]` output is unchanged (`Expected/string-enum.ts`: an `as const` object plus `type Color = typeof Color[keyof typeof Color]`).
 
@@ -234,8 +257,10 @@ const canWrite = (p & Perms.Write) !== 0;
 A package with `[ModuleEntryPoint]` `Program.Main` in `app/program.ts` and no other entry point:
 
 ```json
-{ "sideEffects": ["./dist/app/program.js"] }
+{ "sideEffects": ["./src/app/program.ts", "./dist/app/program.js"] }
 ```
+
+Both paths are listed because spec 008's `source` condition resolves the package to `.ts` for Vite / `customConditions` consumers and the `import` condition to `dist`.
 
 A package without entry points gets `"sideEffects": []`.
 
