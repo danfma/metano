@@ -19,8 +19,13 @@ public static class BclExportReader
         IReadOnlyDictionary<string, IrBclExport>
     > Cache = new();
 
+    private static readonly ConditionalWeakTable<
+        Compilation,
+        IReadOnlyDictionary<string, IrBclExport>
+    >.CreateValueCallback BuildCallback = Build;
+
     public static IReadOnlyDictionary<string, IrBclExport> Read(Compilation compilation) =>
-        Cache.GetValue(compilation, Build);
+        Cache.GetValue(compilation, BuildCallback);
 
     /// <summary>Whether an <c>[ExportFromBcl]</c> in scope binds <paramref name="type"/>.</summary>
     public static bool IsExported(INamedTypeSymbol type, Compilation compilation) =>
@@ -38,6 +43,7 @@ public static class BclExportReader
             )
                 CollectFromAssembly(asm, map);
         }
+
         CollectFromAssembly(compilation.Assembly, map);
 
         return map;
@@ -55,6 +61,7 @@ public static class BclExportReader
 
             if (attr.ConstructorArguments.Length == 0)
                 continue;
+
             if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol typeArg)
                 continue;
 
@@ -74,6 +81,7 @@ public static class BclExportReader
                         break;
                     case "Version":
                         var raw = namedArg.Value.Value?.ToString();
+
                         version = string.IsNullOrEmpty(raw) ? null : raw;
                         break;
                 }

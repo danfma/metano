@@ -374,7 +374,7 @@ public static partial class IrToTsExpressionBridge
         }
 
         if (IsUnmappedForeignStaticData(ma.Origin))
-            ReportUnmappedForeignStatic(ma.Origin!, "read");
+            ReportUnmappedForeignStatic(ma.Origin!, ForeignStaticUse.Read);
 
         var memberName = AccessedMemberName(ma);
 
@@ -569,7 +569,7 @@ public static partial class IrToTsExpressionBridge
         }
 
         if (call.Origin is { IsStatic: true, IsForeignMember: true } foreign)
-            ReportUnmappedForeignStatic(foreign, "call");
+            ReportUnmappedForeignStatic(foreign, ForeignStaticUse.Call);
 
         return new TsCallExpression(
             MapNullTolerant(call.Target, bclRegistry),
@@ -590,20 +590,34 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// A static member of a BCL or other untranspiled .NET type that no
-    /// declarative mapping covers: the <paramref name="use"/> is emitted by
+    /// declarative mapping covers: the call or read is emitted by
     /// name (<c>String.compareOrdinal(a, b)</c>, <c>Int32.maxValue</c>), and
     /// nothing on the JavaScript side declares it.
     /// </summary>
-    private static void ReportUnmappedForeignStatic(IrMemberOrigin member, string use) =>
+    private static void ReportUnmappedForeignStatic(IrMemberOrigin member, ForeignStaticUse use) =>
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.UnsupportedFeature,
                 $"'{member.DeclaringTypeFullName}.{member.MemberName}' has no declarative "
-                    + $"mapping to TypeScript: the {use} is emitted by name and has no "
+                    + $"mapping to TypeScript: the {UseNoun(use)} is emitted by name and has no "
                     + "JavaScript counterpart."
             )
         );
+
+    private static string UseNoun(ForeignStaticUse use) =>
+        use switch
+        {
+            ForeignStaticUse.Call => "call",
+            _ => "read",
+        };
+
+    /// <summary>How an unmapped foreign static member is used at the reported site.</summary>
+    private enum ForeignStaticUse
+    {
+        Call,
+        Read,
+    }
 
     /// <summary>
     /// The arguments of a call to a rest parameter, without a trailing <c>params</c>

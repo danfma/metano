@@ -70,6 +70,8 @@ export function stringReplace(
   oldValue: string,
   newValue: string | null | undefined,
 ): string {
+  // Generated code is not always type-checked against this signature (a C# `null!`
+  // argument reaches here), so the C# null check stays.
   if (oldValue == null) {
     throw new Error("Value cannot be null. (Parameter 'oldValue')");
   }
