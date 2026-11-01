@@ -168,6 +168,38 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
+    public async Task PromotedParam_ReadFromMemberBody_ReadsTheProperty()
+    {
+        // The promoted property (`constructor(readonly limit: number)`) is
+        // the parameter's only emitted storage, so a member body that reads
+        // the parameter reads the property; a bare `limit` would be out of
+        // scope there. A deferred initializer runs in the constructor body,
+        // where the bare parameter is in scope, so it keeps it.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Quota(int limit)
+            {
+                public int Limit { get; } = limit;
+
+                public int Twice { get; } = limit * 2;
+
+                public int Doubled => limit * 2;
+
+                public bool Allows(int amount) => amount <= limit;
+            }
+            """
+        );
+
+        var output = result["quota.ts"];
+        await Assert.That(output).Contains("constructor(readonly limit: number)");
+        await Assert.That(output).Contains("this.twice = limit * 2;");
+        await Assert.That(output).Contains("return this.limit * 2;");
+        await Assert.That(output).Contains("return amount <= this.limit;");
+        await Assert.That(output).DoesNotContain("_limit");
+    }
+
+    [Test]
     public async Task CapturedParam_ReadFromFieldInitializer_KeepsBareReference()
     {
         // Field initializers execute before the ctor body assigns the

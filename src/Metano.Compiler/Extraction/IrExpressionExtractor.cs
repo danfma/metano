@@ -1226,6 +1226,25 @@ public sealed partial class IrExpressionExtractor
         )
             return new IrMemberAccess(new IrThisExpression(), capturedFieldName);
 
+        // A parameter folded into the property that only exposes it
+        // (`A { get; } = a`) has no storage of its own: the property is the
+        // parameter property the backends emit. A member body reads it
+        // there. An initializer keeps the bare parameter, which is in scope
+        // when it runs in the constructor body.
+        if (
+            symbol is IParameterSymbol promotedParam
+            && PrimaryCtorScope is { } promotionScope
+            && promotionScope.PromotedParams.TryGetValue(promotedParam, out var promotedProperty)
+            && !IsInsideInitializer(id)
+        )
+        {
+            return new IrMemberAccess(
+                new IrThisExpression(),
+                promotedProperty.Name,
+                BuildOrigin(promotedProperty)
+            );
+        }
+
         // `[Inline]` member referenced without an explicit qualifier
         // (same-type static access, extension receiver, etc.). Expand
         // before synthesizing any member-access wrapper so the

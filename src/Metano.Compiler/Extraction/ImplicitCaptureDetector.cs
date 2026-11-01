@@ -34,14 +34,19 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class ImplicitCaptureDetector
 {
+    /// <param name="ParamFieldMap">Captured parameters keyed to their synthesized backing field.</param>
+    /// <param name="SynthesizedFields">The backing fields to append to the class's members.</param>
+    /// <param name="PromotedParams">Parameters folded into the property that only exposes them (<see cref="PrimaryConstructorPropertyAlias"/>), keyed to that property. That property is the only storage the backends emit for the parameter, so a member body that reads the parameter reads the property.</param>
     internal sealed record Result(
         IReadOnlyDictionary<ISymbol, string> ParamFieldMap,
-        IReadOnlyList<IrFieldDeclaration> SynthesizedFields
+        IReadOnlyList<IrFieldDeclaration> SynthesizedFields,
+        IReadOnlyDictionary<ISymbol, IPropertySymbol> PromotedParams
     );
 
     private static readonly Result Empty = new(
         new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default),
-        Array.Empty<IrFieldDeclaration>()
+        Array.Empty<IrFieldDeclaration>(),
+        new Dictionary<ISymbol, IPropertySymbol>(SymbolEqualityComparer.Default)
     );
 
     public static Result Scan(
@@ -61,6 +66,11 @@ internal static class ImplicitCaptureDetector
         var primaryParams = new Dictionary<ISymbol, IParameterSymbol>(
             SymbolEqualityComparer.Default
         );
+
+        var promotedParams = new Dictionary<ISymbol, IPropertySymbol>(
+            SymbolEqualityComparer.Default
+        );
+
         foreach (var param in primaryCtor.Parameters)
         {
             // Parameters that match a public property of the type are
@@ -68,14 +78,18 @@ internal static class ImplicitCaptureDetector
             // record / primary-ctor surface; the existing constructor
             // bridge handles them end-to-end. Synthesizing a private
             // backing field would duplicate state and surface as
-            // double-emitted fields in regenerated samples.
-            if (IsPromotedToProperty(param, type, compilation))
-                continue;
-            primaryParams[param] = param;
+            // double-emitted fields in regenerated samples, so a member
+            // body reads the property instead.
+            if (PromotedProperty(param, type, compilation) is { } property)
+                promotedParams[param] = property;
+            else
+                primaryParams[param] = param;
         }
 
+        var promotedOnly = Empty with { PromotedParams = promotedParams };
+
         if (primaryParams.Count == 0)
-            return Empty;
+            return promotedOnly;
 
         // Parameters captured by an explicit field initializer get their
         // synthesis suppressed early — the existing AnnotateCapturedParams
@@ -129,7 +143,7 @@ internal static class ImplicitCaptureDetector
         }
 
         if (captured.Count == 0)
-            return Empty;
+            return promotedOnly;
 
         var paramFieldMap = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
         var synthesized = new List<IrFieldDeclaration>(captured.Count);
@@ -167,7 +181,7 @@ internal static class ImplicitCaptureDetector
             );
         }
 
-        return new Result(paramFieldMap, synthesized);
+        return new Result(paramFieldMap, synthesized, promotedParams);
     }
 
     /// <summary>
@@ -225,7 +239,7 @@ internal static class ImplicitCaptureDetector
     }
 
     /// <summary>
-    /// True when a primary-ctor parameter is promoted to a public
+    /// The property a primary-ctor parameter is promoted to, if any: a
     /// property of the type — the C# 12 positional-record /
     /// primary-ctor rule that pairs <c>(string name)</c> with the
     /// type's <c>Name</c> property. Promoted params already have a
@@ -236,14 +250,14 @@ internal static class ImplicitCaptureDetector
     /// it — only a property that merely exposes the parameter
     /// (<see cref="PrimaryConstructorPropertyAlias"/>) counts.
     /// </summary>
-    private static bool IsPromotedToProperty(
+    private static IPropertySymbol? PromotedProperty(
         IParameterSymbol param,
         INamedTypeSymbol type,
         Compilation compilation
     ) =>
         type.GetMembers()
             .OfType<IPropertySymbol>()
-            .Any(property =>
+            .FirstOrDefault(property =>
                 string.Equals(property.Name, param.Name, StringComparison.OrdinalIgnoreCase)
                 && PrimaryConstructorPropertyAlias.IsAliasOf(property, param, compilation)
             );
