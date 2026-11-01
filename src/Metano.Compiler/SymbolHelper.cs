@@ -361,6 +361,8 @@ public static class SymbolHelper
 
     public static bool HasEmit(this ISymbol symbol) => HasAttribute(symbol, "Emit");
 
+    public static bool HasName(this ISymbol symbol) => HasAttribute(symbol, "Name");
+
     public static bool HasGenerateGuard(this ISymbol symbol) =>
         HasAttribute(symbol, "GenerateGuard");
 
@@ -1455,7 +1457,7 @@ public static class SymbolHelper
     public static bool IsForeignMember(ISymbol member, Compilation compilation) =>
         member.ContainingType is { } type
         && IsForeignType(type, compilation)
-        && !IsBindingMember(member);
+        && !HasHandWrittenBinding(member);
 
     private static bool IsForeignType(INamedTypeSymbol type, Compilation compilation) =>
         !HasExternal(type)
@@ -1465,8 +1467,8 @@ public static class SymbolHelper
         && !IsTranspiledPackageType(type)
         && !BclExportReader.IsExported(type, compilation);
 
-    private static bool IsBindingMember(ISymbol member) =>
-        HasExternal(member) || HasImport(member) || HasEmit(member) || HasAttribute(member, "Name");
+    private static bool HasHandWrittenBinding(ISymbol member) =>
+        HasExternal(member) || HasImport(member) || HasEmit(member) || HasName(member);
 
     private static bool IsDeclaredIn(INamedTypeSymbol type, IAssemblySymbol? assembly) =>
         SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, assembly);

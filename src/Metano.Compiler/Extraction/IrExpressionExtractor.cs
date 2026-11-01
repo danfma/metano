@@ -955,14 +955,15 @@ public sealed partial class IrExpressionExtractor
         }
 
         var subpatterns = recursive.PropertyPatternClause?.Subpatterns ?? [];
-        var subs = subpatterns.Select(ExtractPropertySubpattern).ToList();
+        var extractedSubpatterns = subpatterns.Select(ExtractPropertySubpattern).ToList();
 
-        if (subs.Contains(null))
+        // A null entry is a member path that is not a chain of simple names.
+        if (extractedSubpatterns.Any(sub => sub is null))
             return ReportUnsupportedPattern(recursive);
 
         return new IrPropertyPattern(
             type,
-            subs.OfType<IrPropertySubpattern>().ToList(),
+            extractedSubpatterns.OfType<IrPropertySubpattern>().ToList(),
             designator
         );
     }
@@ -978,25 +979,23 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrPropertySubpattern? ExtractPropertySubpattern(SubpatternSyntax subpattern)
     {
-        ExpressionSyntax? memberPath =
-            subpattern.NameColon?.Name ?? subpattern.ExpressionColon?.Expression;
+        var memberPath = subpattern.NameColon?.Name ?? subpattern.ExpressionColon?.Expression;
 
         var segments = memberPath is null ? null : MemberPathSegments(memberPath);
 
         if (segments is null)
             return null;
 
-        var pattern = ExtractPattern(subpattern.Pattern);
-        var innermost = PropertySubpattern(segments[^1], pattern);
+        var current = PropertySubpattern(segments[^1], ExtractPattern(subpattern.Pattern));
 
-        return segments
-            .Take(segments.Count - 1)
-            .Reverse()
-            .Aggregate(
-                innermost,
-                (inner, segment) =>
-                    PropertySubpattern(segment, new IrPropertyPattern(Type: null, [inner]))
+        // Wrap from the innermost member outward: `A.B.C: p` → `A: { B: { C: p } }`.
+        for (var index = segments.Count - 2; index >= 0; index--)
+            current = PropertySubpattern(
+                segments[index],
+                new IrPropertyPattern(Type: null, [current])
             );
+
+        return current;
     }
 
     private IrPropertySubpattern PropertySubpattern(SimpleNameSyntax member, IrPattern pattern) =>

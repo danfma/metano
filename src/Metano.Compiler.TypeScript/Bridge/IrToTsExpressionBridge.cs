@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
@@ -373,8 +375,8 @@ public static partial class IrToTsExpressionBridge
                 return mapped;
         }
 
-        if (IsUnmappedForeignStaticData(ma.Origin))
-            ReportUnmappedForeignStatic(ma.Origin!, ForeignStaticUse.Read);
+        if (bclRegistry is not null && IsForeignStaticData(ma.Origin))
+            ReportUnmappedForeignStatic(ma.Origin, ForeignStaticUse.Read);
 
         var memberName = AccessedMemberName(ma);
 
@@ -568,8 +570,8 @@ public static partial class IrToTsExpressionBridge
                 return mapped;
         }
 
-        if (call.Origin is { IsStatic: true, IsForeignMember: true } foreign)
-            ReportUnmappedForeignStatic(foreign, ForeignStaticUse.Call);
+        if (bclRegistry is not null && IsForeignStatic(call.Origin))
+            ReportUnmappedForeignStatic(call.Origin, ForeignStaticUse.Call);
 
         return new TsCallExpression(
             MapNullTolerant(call.Target, bclRegistry),
@@ -579,18 +581,24 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// A static field or property of a BCL or other untranspiled .NET type
-    /// (<see cref="IrMemberOrigin.IsForeignMember"/>). Methods carry
-    /// <see cref="IrMemberOrigin.ParameterTypes"/> and are reported by the call
-    /// that invokes them; enum members lower through the enum mappings.
+    /// A static member of a BCL or other untranspiled .NET type
+    /// (<see cref="IrMemberOrigin.IsForeignMember"/>).
     /// </summary>
-    private static bool IsUnmappedForeignStaticData(IrMemberOrigin? origin) =>
-        origin
-            is { IsStatic: true, IsForeignMember: true, IsEnumMember: false, ParameterTypes: null };
+    private static bool IsForeignStatic([NotNullWhen(true)] IrMemberOrigin? origin) =>
+        origin is { IsStatic: true, IsForeignMember: true };
 
     /// <summary>
-    /// A static member of a BCL or other untranspiled .NET type that no
-    /// declarative mapping covers: the call or read is emitted by
+    /// A static field or property of a BCL or other untranspiled .NET type.
+    /// Methods carry <see cref="IrMemberOrigin.ParameterTypes"/> and are
+    /// reported by the call that invokes them; enum members lower through
+    /// the enum mappings.
+    /// </summary>
+    private static bool IsForeignStaticData([NotNullWhen(true)] IrMemberOrigin? origin) =>
+        IsForeignStatic(origin) && origin is { IsEnumMember: false, ParameterTypes: null };
+
+    /// <summary>
+    /// A static member of a BCL or other untranspiled .NET type that the
+    /// declarative mappings in scope do not cover: the call or read is emitted by
     /// name (<c>String.compareOrdinal(a, b)</c>, <c>Int32.maxValue</c>), and
     /// nothing on the JavaScript side declares it.
     /// </summary>
@@ -609,7 +617,8 @@ public static partial class IrToTsExpressionBridge
         use switch
         {
             ForeignStaticUse.Call => "call",
-            _ => "read",
+            ForeignStaticUse.Read => "read",
+            _ => throw new UnreachableException(),
         };
 
     /// <summary>How an unmapped foreign static member is used at the reported site.</summary>
