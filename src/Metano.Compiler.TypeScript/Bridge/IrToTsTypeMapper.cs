@@ -267,13 +267,12 @@ public static class IrToTsTypeMapper
     public static TsType MapParameterType(
         IrParameter parameter,
         IrToTsTypeOverrides? overrides = null
-    ) =>
-        Map(
-            parameter is { IsParams: true, Type: IrNullableTypeRef nullable }
-                ? nullable.Inner
-                : parameter.Type,
-            overrides
-        );
+    ) => Map(RestSafeTypeOf(parameter), overrides);
+
+    private static IrTypeRef RestSafeTypeOf(IrParameter parameter) =>
+        parameter is { IsParams: true, Type: IrNullableTypeRef nullable }
+            ? nullable.Inner
+            : parameter.Type;
 
     private static TsType MakeNullable(TsType inner)
     {

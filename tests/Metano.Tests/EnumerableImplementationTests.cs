@@ -276,18 +276,11 @@ public class EnumerableImplementationTests
         );
 
         var output = result["stepper.ts"];
+
         await Assert.That(output).Contains("export class Stepper {");
         await Assert.That(output).Contains("next(): number {");
         await Assert.That(output).DoesNotContain("IteratorResult");
-        await Assert
-            .That(
-                diagnostics.Any(d =>
-                    d.Severity == MetanoDiagnosticSeverity.Warning
-                    && d.Code == DiagnosticCodes.UnsupportedFeature
-                    && d.Message.Contains("'Stepper' implements IEnumerator")
-                )
-            )
-            .IsTrue();
+        await Assert.That(diagnostics.Any(d => IsConflictingNextWarning(d, "Stepper"))).IsTrue();
     }
 
     [Test]
@@ -315,16 +308,14 @@ public class EnumerableImplementationTests
         );
 
         var output = result["stepper.ts"];
+
         await Assert.That(output).Contains("export interface Stepper {");
         await Assert.That(output).Contains("export function next(self: Stepper): number {");
         await Assert.That(output).DoesNotContain("Iterator<");
         await Assert
             .That(
                 diagnostics.Count(d =>
-                    d.Severity == MetanoDiagnosticSeverity.Warning
-                    && d.Code == DiagnosticCodes.UnsupportedFeature
-                    && d.Message.Contains("'Stepper' implements IEnumerator")
-                    && d.Location is not null
+                    IsConflictingNextWarning(d, "Stepper") && d.Location is not null
                 )
             )
             .IsEqualTo(1);
@@ -389,4 +380,9 @@ public class EnumerableImplementationTests
 
         await Assert.That(result["bag.ts"]).Contains("return this.cursor();");
     }
+
+    private static bool IsConflictingNextWarning(MetanoDiagnostic diagnostic, string typeName) =>
+        diagnostic.Severity == MetanoDiagnosticSeverity.Warning
+        && diagnostic.Code == DiagnosticCodes.UnsupportedFeature
+        && diagnostic.Message.Contains($"'{typeName}' implements IEnumerator");
 }

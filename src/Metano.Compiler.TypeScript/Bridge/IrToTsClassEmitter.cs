@@ -278,10 +278,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
 
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
 
-        if (IrToTsIterationProtocolBridge.DeclaresConflictingNext(ir))
-            _context.ReportDiagnostic(
-                IrToTsIterationProtocolBridge.ConflictingNextDiagnostic(type)
-            );
+        IteratorProtocolDiagnostics.ReportConflictingNext(type, ir, _context.ReportDiagnostic);
     }
 
     /// <summary>
@@ -349,7 +346,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     private TsFieldMember BuildPromotedParamsCompanionField(IrConstructorParameter p) =>
         new(
             IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),
-            ResolveCtorParamTsType(p.Parameter.Type),
+            // The field keeps the declared `T[] | null` (`with { Items = null }` is
+            // valid C#); only the rest parameter drops it (MapParameterType).
+            IrToTsTypeMapper.Map(p.Parameter.Type, BclOverrides),
             Initializer: null,
             Readonly: p.Promotion is IrParameterPromotion.ReadonlyProperty,
             Static: false,
@@ -747,17 +746,6 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     }
 
     // ─── Constructor helpers ────────────────────────────────────
-
-    /// <summary>
-    /// Maps a constructor parameter's IR type to TS, applying the
-    /// <c>[ExportFromBcl]</c> overrides (decimal → Decimal from
-    /// "decimal.js", etc.) via <see cref="BclExportTypeOverrides"/>. Used by
-    /// the companion field of a promoted <c>params</c> parameter, which keeps
-    /// the declared nullability (the rest parameter itself drops it, see
-    /// <see cref="IrToTsTypeMapper.MapParameterType"/>).
-    /// </summary>
-    private TsType ResolveCtorParamTsType(IrTypeRef irType) =>
-        IrToTsTypeMapper.Map(irType, BclOverrides);
 
     private BclExportTypeOverrides BclOverrides => _context.BclOverrides;
 
