@@ -359,12 +359,11 @@ public sealed partial class IrExpressionExtractor
     {
         if (
             _semantic.GetSymbolInfo(inv).Symbol is not IMethodSymbol method
-            || !Invocation.InvocationLoweringHelpers.IsExplicitDelegateInvoke(
+            || !Invocation.InvocationLoweringHelpers.IsDroppableDelegateInvoke(
                 method,
                 inv.Expression,
                 _semantic
             )
-            || HasThisParameter(method)
         )
             return null;
 
@@ -613,16 +612,6 @@ public sealed partial class IrExpressionExtractor
                 new IrElementAccess(inner, Extract(ea.ArgumentList.Arguments[0].Expression)),
             _ => null,
         };
-
-    /// <summary>
-    /// True when the delegate's first parameter carries
-    /// <c>[This]</c> — i.e. the receiver is rebound as JS
-    /// <c>this</c> at the call site. The Invoke shortcuts must
-    /// fall through for these so the existing
-    /// <c>delegate.call(receiver, ...)</c> rewrite still runs.
-    /// </summary>
-    private static bool HasThisParameter(IMethodSymbol method) =>
-        method.Parameters.Length > 0 && SymbolHelper.HasThis(method.Parameters[0]);
 
     /// <summary>
     /// Evaluates <paramref name="receiver"/> once when <paramref name="build"/>
@@ -2037,7 +2026,7 @@ public sealed partial class IrExpressionExtractor
         if (IsDartTarget)
             return reference;
 
-        var hasThisDelegate = HasThisParameter(invoke);
+        var hasThisDelegate = Invocation.InvocationLoweringHelpers.HasThisParameter(invoke);
 
         var boundReference = ShouldBindInstanceReceiver(method, reference, out var instanceAccess)
             ? BuildBoundReference(instanceAccess)

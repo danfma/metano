@@ -3,8 +3,9 @@ namespace Metano.Tests;
 /// <summary>
 /// Calling a delegate-typed member through an explicit receiver
 /// (<c>r.F()</c>, <c>r?.F()</c>, <c>Type.F()</c>) invokes the member's
-/// value, so the emitted call keeps the member access (<c>r.f()</c>).
-/// Only an explicit <c>.Invoke</c> is dropped (#337).
+/// value, so the emitted call keeps the member access (<c>r.f()</c>),
+/// including a member that is itself named <c>Invoke</c>. Only the
+/// delegate's own <c>.Invoke</c> is dropped (#337).
 /// </summary>
 public class DelegateMemberInvocationTests
 {
@@ -15,6 +16,9 @@ public class DelegateMemberInvocationTests
         public delegate int Doubler(int x);
 
         [Transpile]
+        public delegate void Listener([This] Holder self, int x);
+
+        [Transpile]
         public record Holder(int X)
         {
             public Func<int> Get { get; } = () => X;
@@ -22,6 +26,9 @@ public class DelegateMemberInvocationTests
             public static Func<int> StaticGet = () => 42;
             public Action<int> Log { get; } = _ => { };
             public Doubler Twice { get; } = x => x * 2;
+
+            public Func<int> Invoke { get; } = () => X;
+            public Listener OnPing { get; } = (self, x) => { };
 
             [Name("renamedGet")]
             public Func<int> Other { get; } = () => X;
@@ -42,7 +49,9 @@ public class DelegateMemberInvocationTests
                 var f = holder.Get.Invoke();
                 var g = holder.Other();
                 var h = maybe?.Get.Invoke() ?? -1;
-                return a + b + c + d + e + f + g + h;
+                var i = holder.Invoke();
+                holder.OnPing(holder, 3);
+                return a + b + c + d + e + f + g + h + i;
             }
         }
         """;
@@ -64,15 +73,17 @@ public class DelegateMemberInvocationTests
     [Test]
     public async Task DelegateMemberCalls_DartTarget_KeepTheMemberAccess()
     {
-        var (files, _) = DartBackendTests.TranspileDart(Source);
+        var (files, _) = DartTranspileHelper.Transpile(Source);
 
         var dart = files["calls.dart"];
+
         await Assert.That(dart).Contains("holder.get()");
         await Assert.That(dart).Contains("holder.addField(2)");
         await Assert.That(dart).Contains("Holder.staticGet()");
         await Assert.That(dart).Contains("holder.log(5)");
         await Assert.That(dart).Contains("holder.twice(4)");
         await Assert.That(dart).Contains("maybe?.get()");
+        await Assert.That(dart).Contains("holder.invoke()");
         await Assert.That(dart).DoesNotContain("holder()");
         await Assert.That(dart).DoesNotContain("maybe?.call()");
     }
