@@ -17,10 +17,11 @@ namespace Metano;
 /// <item>else the nearest solution directory (it holds a <c>.sln</c> or <c>.slnx</c>
 /// file);</item>
 /// <item>else the C# project directory, when it holds the output directory;</item>
-/// <item>else, below the smallest directory that holds both the output and the project
-/// directory (other than the filesystem root), the child of it on the output's path:
-/// that shared parent is often a generic folder such as a home or temp directory, so it
-/// is never taken (the output directory itself when it holds the project);</item>
+/// <item>else, when the output and the project directory share a directory other than
+/// the filesystem root, the directory one level below that shared directory on the
+/// output's path, or the output directory itself when it is the shared directory. The
+/// shared directory is often a generic folder such as a home or temp directory, so it is
+/// never taken;</item>
 /// <item>else (the output is unrelated to the project, which shares only the filesystem
 /// root with it) the output directory itself.</item>
 /// </list>
@@ -106,7 +107,7 @@ public static class PackageRootResolver
             return markedRoot;
 
         var sharedAncestor = candidates.FirstOrDefault(dir =>
-            IsSharedAncestorBoundary(dir, projectDirectory)
+            IsSharedWithProject(dir, projectDirectory)
         );
 
         // Unrelated to the project: only a package.json in the output directory itself.
@@ -157,7 +158,7 @@ public static class PackageRootResolver
     private static bool IsSolutionFile(string file) =>
         SolutionFileExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase);
 
-    private static bool IsSharedAncestorBoundary(string dir, string projectDirectory) =>
+    private static bool IsSharedWithProject(string dir, string projectDirectory) =>
         !IsFilesystemRoot(dir) && IsSameOrUnder(projectDirectory, dir);
 
     private static bool HasPackageJson(string dir) =>
@@ -203,8 +204,8 @@ public static class PackageRootResolver
             ? "the output directory is the filesystem root, so there is no default package root"
             : $"the default package root (the parent of the output directory, '{defaultPackageRoot}') "
                 + "lies outside the workspace: the output directory is already the topmost "
-                + "directory the search may use (a repository root, a solution directory, the "
-                + "C# project directory, or the child of the directory shared with the project)";
+                + "directory the search may use (see the package root rules in "
+                + "docs/cross-package.md)";
 
         return new MetanoDiagnostic(
             MetanoDiagnosticSeverity.Error,
