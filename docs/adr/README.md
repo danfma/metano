@@ -45,3 +45,5 @@ second-guess when they meet the code without the context that led to it.
 | [ADR-0022](0022-watch-mode.md)                                   | `--watch` mode: file-system watcher + debounce on top of the cache + parallel  |
 | [ADR-0023](0023-per-group-skip-foundation.md)                    | Per-group skip foundation: per-type + closure signature hashing (PR 3b setup)  |
 | [ADR-0024](0024-per-group-skip-integration.md)                   | Per-group skip integration: stub `TsSourceFile` + cache bypass for hit content |
+| [ADR-0025](0025-full-namespace-output-layout.md)                 | Full-namespace output layout with self-cleaning incremental builds             |
+| [ADR-0026](0026-runtime-collections-and-type-descriptors.md)     | Own runtime collections and runtime type descriptors (3.0.0)                   |
