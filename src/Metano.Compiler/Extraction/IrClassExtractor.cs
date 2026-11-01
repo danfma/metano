@@ -54,12 +54,17 @@ public static class IrClassExtractor
         // bodies see `this._field` instead of an out-of-scope param
         // binding. The map and its synthesized fields are scoped to
         // this type's extraction via an `AsyncLocal`.
+        // The promotion decision is made once and shared by the capture scan
+        // and the constructor extraction, so the constructor folds exactly
+        // the parameters whose reads the scan redirects to the property.
         var deferInitializers = PrimaryConstructorInitializerDeferral.AppliesTo(type);
+        var promotion = PrimaryConstructorPromotion.For(type, compilation, target);
+
         var captureScan = ImplicitCaptureDetector.Scan(
             type,
             compilation,
             originResolver,
-            target,
+            promotion,
             deferInitializers
         );
 
@@ -70,7 +75,13 @@ public static class IrClassExtractor
         );
         members.AddRange(captureScan.SynthesizedFields);
 
-        var constructor = IrConstructorExtractor.Extract(type, originResolver, compilation, target);
+        var constructor = IrConstructorExtractor.Extract(
+            type,
+            originResolver,
+            compilation,
+            target,
+            promotion
+        );
 
         // Mark constructor parameters that are captured by a field
         // initializer (DI-style: `private readonly IFoo _foo = foo;`). The

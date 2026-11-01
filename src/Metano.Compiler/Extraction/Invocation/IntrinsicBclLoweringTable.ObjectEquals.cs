@@ -5,24 +5,34 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction.Invocation;
 
 /// <summary>
-/// <c>object.Equals(a, b)</c> over two C# tuples → <c>a.Equals(b)</c>. The
-/// general lowering cannot tell a boxed tuple from any other object at
-/// runtime (in TypeScript both are arrays, and a C# array compares by
-/// reference), so it compares the tuples by reference. When both operands are
-/// statically (non-nullable) tuples, the call is retargeted to the first
-/// one's own <c>Equals(object)</c>, so the backend's <c>ValueTuple.Equals</c>
-/// mapping applies (TypeScript's element-wise <c>tupleEquals</c>; Dart maps
-/// neither call yet). The two calls agree: a tuple is never <c>null</c>, and
-/// <c>object.Equals(a, b)</c> is <c>a.Equals(b)</c> once <c>a</c> is not
-/// <c>null</c>. Operands keep their source order.
+/// <c>object.Equals(a, b)</c> over two C# tuples of the same type →
+/// <c>a.Equals(b)</c>. The general lowering cannot tell a boxed tuple from any
+/// other object at runtime (in TypeScript both are arrays, and a C# array
+/// compares by reference), so it compares the tuples by reference. When both
+/// operands are statically (non-nullable) tuples of the same
+/// <c>ValueTuple</c> instantiation (element names aside), the call is
+/// retargeted to the first one's own <c>Equals(object)</c>, so the backend's
+/// <c>ValueTuple.Equals</c> mapping applies (TypeScript's element-wise
+/// <c>tupleEquals</c>; Dart maps neither call yet). The two calls agree: a
+/// tuple is never <c>null</c>, and <c>object.Equals(a, b)</c> is
+/// <c>a.Equals(b)</c> once <c>a</c> is not <c>null</c>. Operands keep their
+/// source order.
 /// <para>
-/// Both must be tuples: against an operand of another static type (an array,
-/// a class, or <c>object</c>, which may hold an array of equal elements), the
-/// element-wise comparison could answer <c>true</c> where C# answers
-/// <c>false</c>, so the call keeps the general lowering. A tuple statically
-/// typed <c>object</c> (boxed) therefore still compares by reference, and so
-/// does a nullable tuple (<c>(int, int)?</c>), which may be <c>null</c> and
-/// has no receiver to retarget to.
+/// Any other pair keeps the general lowering, where the element-wise
+/// comparison could answer <c>true</c> while C# answers <c>false</c>: an
+/// operand of another static type (an array, a class, or <c>object</c>, which
+/// may hold an array of equal elements), or a tuple of another instantiation
+/// (<c>(int, int)</c> against <c>(int, long)</c>: a different type, never
+/// equal). So a boxed tuple (typed <c>object</c>) and a nullable tuple
+/// (<c>(int, int)?</c>, which may be <c>null</c> and has no receiver to
+/// retarget to) still compare by reference.
+/// </para>
+/// <para>
+/// Known gap: <c>tupleEquals</c> compares a nested tuple element by
+/// reference, so <c>object.Equals(((1, 2), 3), ((1, 2), 3))</c> is
+/// <c>false</c> in TypeScript and <c>true</c> in C#. At runtime a nested tuple
+/// and a C# array are both arrays, so a fix needs the element types from the
+/// compiler.
 /// </para>
 /// </summary>
 public sealed partial class IntrinsicBclLoweringTable
@@ -48,10 +58,16 @@ public sealed partial class IntrinsicBclLoweringTable
     {
         var arguments = ctx.Invocation.ArgumentList.Arguments;
 
-        if (arguments.Count != 2 || !IsTupleOperand(arguments[1].Expression, ctx))
+        if (arguments.Count != 2)
             return null;
 
-        if (TupleEqualsOf(arguments[0].Expression, ctx.SemanticModel) is not { } tupleEquals)
+        var first = TupleTypeOf(arguments[0].Expression, ctx.SemanticModel);
+        var second = TupleTypeOf(arguments[1].Expression, ctx.SemanticModel);
+
+        if (first is null || second is null || !IsSameTupleType(first, second))
+            return null;
+
+        if (InstanceEqualsOverObject(first) is not { } tupleEquals)
             return null;
 
         return new IrCallExpression(
@@ -61,18 +77,25 @@ public sealed partial class IntrinsicBclLoweringTable
         );
     }
 
-    private static bool IsTupleOperand(ExpressionSyntax operand, InvocationRewriteContext ctx) =>
-        TupleEqualsOf(operand, ctx.SemanticModel) is not null;
+    /// <summary>
+    /// <paramref name="operand"/>'s tuple type, before the conversion to
+    /// <c>object</c>; <c>null</c> when the operand is not a tuple, or is a
+    /// nullable one (which may be <c>null</c>).
+    /// </summary>
+    private static INamedTypeSymbol? TupleTypeOf(ExpressionSyntax operand, SemanticModel model) =>
+        model.GetTypeInfo(operand).Type is INamedTypeSymbol { IsTupleType: true } tuple
+            ? tuple
+            : null;
 
     /// <summary>
-    /// The <c>Equals(object)</c> of <paramref name="operand"/>'s tuple type,
-    /// before the conversion to <c>object</c>; <c>null</c> when the operand is
-    /// not a tuple, or is a nullable one (which may be <c>null</c>).
+    /// The same <c>ValueTuple</c> instantiation: element names are compile-time
+    /// only, so <c>(int x, int y)</c> and <c>(int p, int q)</c> are one type.
     /// </summary>
-    private static IMethodSymbol? TupleEqualsOf(ExpressionSyntax operand, SemanticModel model) =>
-        model.GetTypeInfo(operand).Type is INamedTypeSymbol { IsTupleType: true } tuple
-            ? InstanceEqualsOverObject(tuple)
-            : null;
+    private static bool IsSameTupleType(INamedTypeSymbol first, INamedTypeSymbol second) =>
+        SymbolEqualityComparer.Default.Equals(
+            first.TupleUnderlyingType ?? first,
+            second.TupleUnderlyingType ?? second
+        );
 
     private static IMethodSymbol? InstanceEqualsOverObject(INamedTypeSymbol type) =>
         type.GetMembers(nameof(object.Equals))

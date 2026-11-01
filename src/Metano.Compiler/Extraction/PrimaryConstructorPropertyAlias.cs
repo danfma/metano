@@ -15,15 +15,16 @@ namespace Metano.Compiler.Extraction;
 internal static class PrimaryConstructorPropertyAlias
 {
     /// <summary>
-    /// The property a primary-constructor <paramref name="parameter"/> is
-    /// promoted to, if any: the same-named property (ignoring case, so
-    /// <c>name</c> pairs with <c>Name</c>) of the parameter's type that is a
-    /// promotion candidate (<see cref="IsPromotionCandidate"/>) and only
-    /// exposes the parameter (<see cref="IsAliasOf"/>). The single pairing
-    /// rule of the constructor extraction and the capture scan, so a read is
-    /// never redirected to a property the constructor did not promote.
+    /// The property that only exposes a primary-constructor
+    /// <paramref name="parameter"/>, if any: a same-named property (ignoring
+    /// case, so <c>name</c> pairs with <c>Name</c>; an exact-case match wins
+    /// when two properties differ only by case) of the parameter's type that
+    /// is a promotion candidate (<see cref="IsPromotionCandidate"/>) and only
+    /// exposes the parameter (<see cref="IsAliasOf"/>). Whether the parameter
+    /// is then promoted to it is <see cref="PrimaryConstructorPromotion"/>'s
+    /// decision.
     /// </summary>
-    public static IPropertySymbol? PromotedPropertyOf(
+    public static IPropertySymbol? AliasPropertyOf(
         IParameterSymbol parameter,
         Compilation compilation,
         TargetLanguage? target
@@ -31,11 +32,13 @@ internal static class PrimaryConstructorPropertyAlias
         parameter
             .ContainingType.GetMembers()
             .OfType<IPropertySymbol>()
-            .FirstOrDefault(property =>
+            .Where(property =>
                 string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)
                 && IsPromotionCandidate(property, target)
                 && IsAliasOf(property, parameter, compilation)
-            );
+            )
+            .OrderBy(property => property.Name == parameter.Name ? 0 : 1)
+            .FirstOrDefault();
 
     /// <summary>
     /// Whether <paramref name="property"/> is emitted as a member a
