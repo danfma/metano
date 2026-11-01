@@ -37,6 +37,83 @@ public static class IrToTsModuleBridge
             statements.Add(ConvertFunction(fn, bclRegistry));
     }
 
+    /// <summary>
+    /// Appends one top-level variable per module field or auto-property of a
+    /// containerless static class (see <see cref="Metano.Compiler.Extraction.IrModuleVariableExtractor"/>):
+    /// <c>export const max: number = 10;</c>. Call sites read these members as
+    /// bare identifiers, so the declaration uses the same data-member name.
+    /// <list type="bullet">
+    ///   <item>A <c>readonly</c> / <c>const</c> field or a get-only / init-only
+    ///     property is a <c>const</c>; anything writable is a <c>let</c>.</item>
+    ///   <item>A member without an initializer starts at the type's C# default
+    ///     (<c>0</c>, <c>false</c>, <c>null</c>, …); a reference type with no
+    ///     literal default is a bare <c>let</c>.</item>
+    ///   <item>A <c>private</c> member stays module-local; any other visibility
+    ///     is exported, since another file of the assembly may read it.</item>
+    /// </list>
+    /// Computed properties are not variables; the caller reports them before
+    /// calling this.
+    /// </summary>
+    public static void ConvertVariables(
+        IReadOnlyList<IrMemberDeclaration> variables,
+        List<TsTopLevel> statements,
+        IrToTsTypeOverrides? typeOverrides = null,
+        DeclarativeMappingRegistry? bclRegistry = null
+    )
+    {
+        foreach (var variable in variables)
+        {
+            var declaration = variable switch
+            {
+                IrFieldDeclaration field => ConvertVariable(
+                    field,
+                    field.Type,
+                    field.Initializer,
+                    field.IsReadonly,
+                    typeOverrides,
+                    bclRegistry
+                ),
+                IrPropertyDeclaration property => ConvertVariable(
+                    property,
+                    property.Type,
+                    property.Initializer,
+                    property.Accessors
+                        is IrPropertyAccessors.GetOnly
+                            or IrPropertyAccessors.GetInit,
+                    typeOverrides,
+                    bclRegistry
+                ),
+                _ => null,
+            };
+
+            if (declaration is not null)
+                statements.Add(new TsTopLevelStatement(declaration));
+        }
+    }
+
+    private static TsVariableDeclaration ConvertVariable(
+        IrMemberDeclaration member,
+        IrTypeRef type,
+        IrExpression? initializer,
+        bool isReadonly,
+        IrToTsTypeOverrides? typeOverrides,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var value = initializer is not null
+            ? IrToTsExpressionBridge.Map(initializer, bclRegistry)
+            : IrToTsClassBridge.ComputeDefaultInitializer(type);
+
+        return new TsVariableDeclaration(
+            IrToTsNamingPolicy.ToDeclaredDataMemberName(member.Name, member.Attributes),
+            value,
+            // A `const` needs an initializer; a member with no literal default is a `let`.
+            Const: isReadonly && value is not null,
+            Exported: member.Visibility is not IrVisibility.Private,
+            Type: IrToTsTypeMapper.Map(type, typeOverrides)
+        );
+    }
+
     private static TsFunction ConvertFunction(
         IrModuleFunction fn,
         DeclarativeMappingRegistry? bclRegistry

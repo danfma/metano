@@ -6,5 +6,6 @@ namespace Metano.Compiler.TypeScript.AST;
 public sealed record TsSetterMember(
     string Name,
     TsParameter ValueParam,
-    IReadOnlyList<TsStatement> Body
+    IReadOnlyList<TsStatement> Body,
+    bool Static = false
 ) : TsClassMember;

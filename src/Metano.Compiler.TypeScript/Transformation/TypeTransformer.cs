@@ -1618,7 +1618,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // No work to do: when a diagnostic was already raised, swallow the
         // type so the caller's `sink.Count == startCount` check skips file
         // emission without falling back to a now-deleted legacy path.
-        if (functions.Count == 0 && entryBody is null)
+        var variables = ExtractModuleVariables(type);
+
+        if (functions.Count == 0 && entryBody is null && variables.Count == 0)
             return diagnosed;
         foreach (var fn in functions)
         {
@@ -1632,6 +1634,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 return true;
             }
         }
+
+        // Module state first: C# runs static initializers before any member of
+        // the class is used, and the functions below may read it.
+        IrToTsModuleBridge.ConvertVariables(
+            variables,
+            sink,
+            Context.BclOverrides,
+            Context.DeclarativeMappings
+        );
 
         IrToTsModuleBridge.Convert(functions, sink, Context.DeclarativeMappings);
 
@@ -1689,6 +1700,61 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
         return true;
     }
+
+    /// <summary>
+    /// The static fields and auto-properties a containerless static class declares
+    /// as module variables: call sites read them as bare identifiers, so the module
+    /// must declare them (#314). A computed static property has no variable form,
+    /// so it is reported as unsupported and left out. Extension holders keep no
+    /// module state, because only containerless classes flatten member access at
+    /// call sites.
+    /// </summary>
+    private IReadOnlyList<IrMemberDeclaration> ExtractModuleVariables(INamedTypeSymbol type)
+    {
+        if (!type.IsContainerless())
+            return [];
+
+        var members = IrModuleVariableExtractor.Extract(
+            type,
+            Context.OriginResolver,
+            Context.Compilation,
+            TargetLanguage.TypeScript
+        );
+
+        var variables = new List<IrMemberDeclaration>(members.Count);
+
+        foreach (var member in members)
+        {
+            if (IsComputedProperty(member))
+            {
+                ReportComputedModuleProperty(type, member.Name);
+                continue;
+            }
+
+            variables.Add(member);
+        }
+
+        return variables;
+    }
+
+    private static bool IsComputedProperty(IrMemberDeclaration member) =>
+        member
+            is IrPropertyDeclaration
+            {
+                Semantics: { HasGetterBody: true } or { HasSetterBody: true },
+            };
+
+    private void ReportComputedModuleProperty(INamedTypeSymbol type, string propertyName) =>
+        Context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Static property '{type.Name}.{propertyName}' has a getter or setter body, "
+                    + "which a containerless static class cannot declare: its call sites read "
+                    + "a module variable. Use a field, an auto-property or a method instead.",
+                type.GetMembers(propertyName).FirstOrDefault()?.Locations.FirstOrDefault()
+            )
+        );
 
     private void ReportInvalidEntryPoint(IMethodSymbol method, string message) =>
         Context.ReportDiagnostic(

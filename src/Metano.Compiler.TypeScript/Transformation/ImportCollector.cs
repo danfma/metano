@@ -88,7 +88,7 @@ public sealed class ImportCollector(
         var crossPackageOrigins = new Dictionary<string, TsTypeOrigin>(); // name → cross-package origin
         var templateExternals = new List<IrExternalImport>();
         var linqPipeHelpers = new HashSet<string>(StringComparer.Ordinal);
-        var ownersByCompanionFunction = new Dictionary<string, SortedSet<string>>(
+        var ownersByModuleExport = new Dictionary<string, SortedSet<string>>(
             StringComparer.Ordinal
         );
         var sink = new ImportCollectionSink(
@@ -98,7 +98,8 @@ public sealed class ImportCollector(
             crossPackageOrigins,
             templateExternals,
             linqPipeHelpers,
-            ownersByCompanionFunction
+            ownersByModuleExport,
+            new HashSet<string>(StringComparer.Ordinal)
         );
         CollectReferencedTypeNames(statements, sink);
 
@@ -507,8 +508,9 @@ public sealed class ImportCollector(
             AddLocal(importPath, referencedRef.TsName, typeOnly);
         }
 
-        AddCompanionFunctionImports(
-            ownersByCompanionFunction,
+        AddModuleExportImports(
+            ownersByModuleExport,
+            sink.WrittenModuleExports,
             currentNs,
             currentFileName,
             importedNames,
@@ -573,24 +575,26 @@ public sealed class ImportCollector(
     }
 
     /// <summary>
-    /// Imports each companion function (a <c>[PlainObject]</c> instance
-    /// method's helper) from its owner type's file. A file that calls the
-    /// same-named helper of two owners cannot bind both under one name, so
-    /// that reports MS0021 instead of silently calling one owner's helper for
-    /// the other; a <c>[Name]</c> override on either method resolves it.
+    /// Imports each module export reference (a <c>[PlainObject]</c> instance
+    /// method's helper, or a containerless static class's module variable)
+    /// from its owner type's file. A file that reads the same name from two
+    /// owners cannot bind both under one name, so that reports MS0021 instead
+    /// of silently reading one owner's export for the other; a <c>[Name]</c>
+    /// override on either member resolves it.
     /// </summary>
-    private void AddCompanionFunctionImports(
-        IReadOnlyDictionary<string, SortedSet<string>> ownersByCompanionFunction,
+    private void AddModuleExportImports(
+        IReadOnlyDictionary<string, SortedSet<string>> ownersByModuleExport,
+        IReadOnlySet<string> writtenModuleExports,
         string currentNs,
         string currentFileName,
         HashSet<string> importedNames,
         Action<string, string, bool> addLocal
     )
     {
-        foreach (var (functionName, owners) in ownersByCompanionFunction.OrderBy(kv => kv.Key))
+        foreach (var (exportName, owners) in ownersByModuleExport.OrderBy(kv => kv.Key))
         {
             if (owners.Count > 1)
-                ReportCompanionFunctionClash(functionName, owners);
+                ReportModuleExportClash(exportName, owners);
 
             if (!_context.TranspilableTypes.TryGetValue(owners.Min!, out var ownerRef))
                 continue;
@@ -598,8 +602,11 @@ public sealed class ImportCollector(
             var isCurrentFile =
                 ownerRef.Namespace == currentNs && ownerRef.FileName == currentFileName;
 
-            if (isCurrentFile || !importedNames.Add(functionName))
+            if (isCurrentFile || !importedNames.Add(exportName))
                 continue;
+
+            if (writtenModuleExports.Contains(exportName))
+                ReportImportedModuleVariableWrite(exportName, owners.Min!);
 
             var ownerPath = _context.PathNaming.ComputeRelativeImportPath(
                 currentNs,
@@ -607,18 +614,37 @@ public sealed class ImportCollector(
                 ownerRef.FileName
             );
 
-            addLocal(ownerPath, functionName, false);
+            addLocal(ownerPath, exportName, false);
         }
     }
 
-    private void ReportCompanionFunctionClash(string functionName, IEnumerable<string> owners) =>
+    /// <summary>
+    /// An ES module import is a read-only binding (TS2632), so a module variable
+    /// of a containerless static class can only be assigned inside its own file.
+    /// A write from any other file reports MS0001 rather than emitting code that
+    /// does not compile.
+    /// </summary>
+    private void ReportImportedModuleVariableWrite(string exportName, string owner) =>
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Module variable '{exportName}' of '{owner}' is assigned outside the file "
+                    + "it is declared in. "
+                    + "A static field or property of a containerless static class becomes a "
+                    + "module variable, and an imported binding is read-only in TypeScript. "
+                    + "Assign it through a method of the declaring class instead."
+            )
+        );
+
+    private void ReportModuleExportClash(string exportName, IEnumerable<string> owners) =>
         _context.ReportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.ExtensionHelperNameClash,
-                $"Helper '{functionName}' is called on {string.Join(" and ", owners)} in one file, "
-                    + "but each exports its own helper of that name. Add a [Name(\"...\")] "
-                    + "override on one of the methods so both can be imported."
+                $"'{exportName}' is read from {string.Join(" and ", owners)} in one file, "
+                    + "but each exports its own member of that name. Add a [Name(\"...\")] "
+                    + "override on one of the members so both can be imported."
             )
         );
 
@@ -1065,8 +1091,8 @@ public sealed class ImportCollector(
                 crossPackageOrigins[typeRefRoot] = typeRef.Origin;
                 valueNames.Add(typeRefRoot);
                 break;
-            case TsCompanionFunctionReference companion:
-                RecordCompanionFunction(sink.OwnersByCompanionFunction, companion);
+            case TsModuleExportReference exportReference:
+                RecordModuleExport(sink.OwnersByModuleExport, exportReference);
                 break;
             case TsIdentifier bareId:
                 // Bare identifiers starting with uppercase may reference transpilable
@@ -1182,6 +1208,7 @@ public sealed class ImportCollector(
                 }
                 break;
             case TsBinaryExpression bin:
+                RecordModuleExportWrite(bin.Left, IsAssignment(bin.Operator), sink);
                 CollectFromExpression(bin.Left, sink);
                 CollectFromExpression(bin.Right, sink);
                 // instanceof uses the type as a value
@@ -1211,9 +1238,11 @@ public sealed class ImportCollector(
                 CollectFromExpression(paren.Expression, sink);
                 break;
             case TsUnaryExpression unary:
+                RecordModuleExportWrite(unary.Operand, IsIncrement(unary.Operator), sink);
                 CollectFromExpression(unary.Operand, sink);
                 break;
             case TsPostfixUnaryExpression postfix:
+                RecordModuleExportWrite(postfix.Operand, IsIncrement(postfix.Operator), sink);
                 CollectFromExpression(postfix.Operand, sink);
                 break;
             case TsSpreadExpression spread:
@@ -1348,19 +1377,52 @@ public sealed class ImportCollector(
     /// The importable binding of a possibly dotted type name: a nested type
     /// (<c>Outer.Inner</c>) is reached through its top-level container's import.
     /// </summary>
-    private static void RecordCompanionFunction(
-        Dictionary<string, SortedSet<string>> ownersByCompanionFunction,
-        TsCompanionFunctionReference companion
+    private static void RecordModuleExport(
+        Dictionary<string, SortedSet<string>> ownersByModuleExport,
+        TsModuleExportReference exportReference
     )
     {
-        if (!ownersByCompanionFunction.TryGetValue(companion.Name, out var owners))
+        if (!ownersByModuleExport.TryGetValue(exportReference.Name, out var owners))
         {
             owners = new SortedSet<string>(StringComparer.Ordinal);
-            ownersByCompanionFunction[companion.Name] = owners;
+            ownersByModuleExport[exportReference.Name] = owners;
         }
 
-        owners.Add(companion.OwnerTypeName);
+        owners.Add(exportReference.OwnerTypeName);
     }
+
+    /// <summary>
+    /// Remembers a module variable that is the target of an assignment, a compound
+    /// assignment or an increment, so its import can be rejected (see
+    /// <see cref="ReportImportedModuleVariableWrite"/>). A cross-package module
+    /// variable reads through a <see cref="TsTypeReference"/>; writing one is always
+    /// a write to an import.
+    /// </summary>
+    private void RecordModuleExportWrite(
+        TsExpression target,
+        bool isWrite,
+        ImportCollectionSink sink
+    )
+    {
+        if (!isWrite)
+            return;
+
+        switch (target)
+        {
+            case TsModuleExportReference exportReference:
+                sink.WrittenModuleExports.Add(exportReference.Name);
+                break;
+
+            case TsTypeReference { Origin: { } origin } crossPackage:
+                ReportImportedModuleVariableWrite(crossPackage.Name, origin.PackageName);
+                break;
+        }
+    }
+
+    private static bool IsAssignment(string op) =>
+        op.EndsWith('=') && op is not ("==" or "===" or "!=" or "!==" or "<=" or ">=");
+
+    private static bool IsIncrement(string op) => op is "++" or "--";
 
     private static string RootSegment(string typeName)
     {
@@ -1410,5 +1472,6 @@ internal sealed record ImportCollectionSink(
     Dictionary<string, TsTypeOrigin> CrossPackageOrigins,
     List<IrExternalImport> TemplateExternals,
     HashSet<string> LinqPipeHelpers,
-    Dictionary<string, SortedSet<string>> OwnersByCompanionFunction
+    Dictionary<string, SortedSet<string>> OwnersByModuleExport,
+    HashSet<string> WrittenModuleExports
 );

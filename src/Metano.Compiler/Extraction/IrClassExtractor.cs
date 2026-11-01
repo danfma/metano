@@ -336,7 +336,8 @@ public static class IrClassExtractor
             switch (member)
             {
                 case IFieldSymbol field
-                    when TryExtractField(field, originResolver, compilation, target) is { } f:
+                    when IrFieldExtractor.TryExtract(field, originResolver, compilation, target)
+                        is { } f:
                     result.Add(f);
                     break;
 
@@ -478,53 +479,5 @@ public static class IrClassExtractor
         };
 
         return (T)renamed;
-    }
-
-    private static IrFieldDeclaration? TryExtractField(
-        IFieldSymbol field,
-        IrTypeOriginResolver? originResolver,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
-    )
-    {
-        if (field.AssociatedSymbol is IPropertySymbol)
-            return null;
-        if (field.ContainingType.TypeKind == TypeKind.Enum)
-            return null;
-
-        var initializer = compilation is not null
-            ? TryExtractFieldInitializer(field, compilation, originResolver, target)
-            : null;
-
-        return new IrFieldDeclaration(
-            field.Name,
-            IrVisibilityMapper.Map(field.DeclaredAccessibility),
-            field.IsStatic,
-            IrTypeRefMapper.Map(field.Type, originResolver, target),
-            IsReadonly: field.IsReadOnly,
-            Initializer: initializer,
-            IsConstant: field.HasConstant()
-        )
-        {
-            Attributes = IrAttributeExtractor.Extract(field),
-        };
-    }
-
-    private static IrExpression? TryExtractFieldInitializer(
-        IFieldSymbol field,
-        Compilation compilation,
-        IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target
-    )
-    {
-        var declarator =
-            field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-            as Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax;
-        if (declarator?.Initializer is null)
-            return null;
-
-        var model = compilation.GetSemanticModel(declarator.SyntaxTree);
-        var expr = new IrExpressionExtractor(model, originResolver, target);
-        return expr.ExtractStandalone(declarator.Initializer.Value);
     }
 }

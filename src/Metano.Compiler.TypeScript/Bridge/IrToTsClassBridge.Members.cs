@@ -20,6 +20,8 @@ internal static partial class IrToTsClassBridge
     ///   <item>Auto-property (no getter / setter body) → <see cref="TsFieldMember"/>
     ///     with the initializer or a computed default. <c>get;</c> /
     ///     <c>get; init;</c> map to <c>readonly</c>; <c>get; set;</c> to mutable.</item>
+    ///   <item>A static property keeps <c>static</c> on every emitted member
+    ///     (field, getter and setter), so <c>Type.Prop</c> reads the class.</item>
     ///   <item>Computed getter → <see cref="TsGetterMember"/>.</item>
     ///   <item>Custom setter body → <see cref="TsSetterMember"/> (in addition
     ///     to the getter when both are present).</item>
@@ -55,6 +57,7 @@ internal static partial class IrToTsClassBridge
                     tsType,
                     initializer,
                     isReadonly,
+                    Static: prop.IsStatic,
                     Accessibility: MapAccessibility(prop.Visibility)
                 ),
             ];
@@ -73,7 +76,14 @@ internal static partial class IrToTsClassBridge
             var body = prop.SetterBody is null
                 ? new List<TsStatement>()
                 : IrToTsStatementBridge.MapBody(prop.SetterBody, bclRegistry).ToList();
-            members.Add(new TsSetterMember(name, new TsParameter("value", tsType), body));
+            members.Add(
+                new TsSetterMember(
+                    name,
+                    new TsParameter("value", tsType),
+                    body,
+                    Static: prop.IsStatic
+                )
+            );
         }
         return members;
     }

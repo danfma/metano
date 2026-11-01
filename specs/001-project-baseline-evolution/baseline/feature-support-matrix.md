@@ -66,7 +66,7 @@ constraints · **Planned** = not a current guarantee. Unless a row names a backe
 
 | Area | Feature | Backend | Status | Code area | Test | Constraints |
 | --- | --- | --- | --- | --- | --- | --- |
-| Modules | `[NoContainer]` (`[ExportedAsModule]` legacy) | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/NoContainerAttribute.cs` | `tests/Metano.Tests/NoContainerAttributeTranspileTests.cs` | `[ExportedAsModule]` deprecated. |
+| Modules | `[NoContainer]` (`[ExportedAsModule]` legacy) | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/NoContainerAttribute.cs`, `Extraction/IrModuleVariableExtractor.cs`, `Bridge/IrToTsModuleBridge.cs` | `tests/Metano.Tests/NoContainerAttributeTranspileTests.cs`, `tests/Metano.Tests/NoContainerModuleStateTests.cs` | `[ExportedAsModule]` deprecated. Static fields and auto-properties become module variables (`export const` when read-only, `export let` otherwise; `private` ones stay module-local), imported by other files through the flattened access (#314). Assigning one from another file, or declaring a computed static property, reports `MS0001` (an ES import binding is read-only). Dart: module variables not emitted yet. |
 | Modules | `[ModuleEntryPoint]` | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/ModuleEntryPointAttribute.cs` | `tests/Metano.Tests/ModuleEntryPointTests.cs` | Misuse → MS0006. |
 | Modules | C# top-level statements | TS | Implemented | `CSharpSourceFrontend.cs`, `Extraction/IrModuleFunctionExtractor.cs` | `tests/Metano.Tests/ModuleEntryPointTests.cs` | — |
 
