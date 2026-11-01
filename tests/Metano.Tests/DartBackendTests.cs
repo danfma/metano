@@ -21,7 +21,7 @@ public class DartBackendTests
         // Admin.User and Billing.User share the simple name "User". TransformAll
         // previously crashed on Dictionary key collision; now it should complete
         // with a MetanoDiagnostic surfaced for the ambiguity.
-        var (files, diagnostics) = TranspileDart(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             namespace Admin {
                 [Transpile]
@@ -46,7 +46,7 @@ public class DartBackendTests
         // The ctor's parameters are auto-promoted to `this.name`/`this.age` because
         // the properties share their names (Dart's field-initializer shorthand),
         // and the default expression lands inside the [...] optional block.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class UserDto
@@ -71,7 +71,7 @@ public class DartBackendTests
     {
         // Non-promoted parameter — no matching property — keeps its type and
         // renders inside the optional block with the default expression.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Scaler
@@ -94,7 +94,7 @@ public class DartBackendTests
     {
         // A C# `operator +` on a Money record should become `Money operator +(Money other)`
         // in Dart rather than a method named `op_Addition` or similar.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Money(int Amount)
@@ -111,7 +111,7 @@ public class DartBackendTests
     [Test]
     public async Task RecordType_SynthesizesEqualsHashCodeAndCopyWith()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Money(int Amount);
@@ -146,7 +146,7 @@ public class DartBackendTests
         // `combine4` for narrow records; anything wider must switch to the
         // builder API so every field still feeds into the hash.
         var fields = string.Join(", ", Enumerable.Range(1, 5).Select(i => $"int F{i}"));
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             $$"""
             [Transpile]
             public record Wide({{fields}});
@@ -169,7 +169,7 @@ public class DartBackendTests
         // hand-written Dart classes. No implicit Metano base class so users can
         // mix generated records with native Dart types without a
         // `MetanoObject`-vs-anything-else split in their hierarchies.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Money(int Amount);
@@ -184,7 +184,7 @@ public class DartBackendTests
     [Test]
     public async Task PlainClass_DoesNotInjectImplicitBaseClass()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Plain
@@ -206,7 +206,7 @@ public class DartBackendTests
         // The core models the implicit constructor of a BCL-derived exception
         // (its base call is observable on the TS side); Dart renders it as an
         // empty constructor, equivalent to the implicit one.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class NoConstructorException : System.Exception { }
@@ -225,7 +225,7 @@ public class DartBackendTests
         // C# delegates lower to Dart typedefs aliasing a function signature.
         // Asserting the diagnostic CODE (not just the legacy message) catches
         // any future regression that re-introduces a different fallback warning.
-        var (files, diagnostics) = TranspileDart(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public delegate void ClickHandler(int x, int y);
@@ -246,7 +246,7 @@ public class DartBackendTests
         // constraint that references a cross-package type still pulls in the
         // matching import. Local user-defined constraints round-trip through
         // the typedef header.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public abstract class Comparable<T> {}
@@ -263,7 +263,7 @@ public class DartBackendTests
     [Test]
     public async Task GenericDelegate_PreservesTypeParameters()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public delegate T Factory<T>();
@@ -281,7 +281,7 @@ public class DartBackendTests
         // receiver flows through as a regular positional parameter at index 0.
         // Mirrors the existing widget-delegate behavior the class bridge already
         // documents.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public abstract class Element {}
@@ -301,7 +301,7 @@ public class DartBackendTests
         // `[MapMethod(..., DartMethod = "...")]` on a static C# member rewrites
         // the call site to a bare Dart function call (the qualifier is dropped
         // because Dart static functions live at top level).
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Greeter
@@ -322,7 +322,7 @@ public class DartBackendTests
         // The Console.WriteLine → print mapping is gated to single-arg
         // overloads (WhenArgCount = 1). A format-string call site stays
         // unmapped because Dart's `print` only accepts one argument.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class FormattedLogger
@@ -343,7 +343,7 @@ public class DartBackendTests
         // — the Dart bridge consults DartName / DartTemplate, not JsName /
         // JsTemplate. The positive assertion guards against the rewriter ever
         // wiring up the JS-side template by mistake.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Greeter
@@ -363,7 +363,7 @@ public class DartBackendTests
     {
         // A record with an explicit C# base class keeps that base on the Dart
         // side untouched — the bridge only respects what the source declares.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public abstract record Animal(string Name);
@@ -383,7 +383,7 @@ public class DartBackendTests
         // A static class tagged [NoContainer] should emit top-level Dart
         // functions rather than a Dart class of static methods — the idiomatic
         // utility-module shape on the Dart side.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile, NoContainer]
             public static class MathUtils
@@ -404,7 +404,7 @@ public class DartBackendTests
         // Multiple [Name] attributes coexist on the same symbol: the Dart-
         // specific one wins for the Dart target, the untargeted one would
         // have applied if no per-target override matched.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             [Name("Counter")]
@@ -429,7 +429,7 @@ public class DartBackendTests
         // Only an untargeted [Name] — applies to every target that lacks a
         // per-target override, so Dart picks it up even though the attribute
         // isn't Dart-specific.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             [Name("MyCounter")]
@@ -451,7 +451,7 @@ public class DartBackendTests
         // A type marked [Ignore(TargetLanguage.Dart)] must not leak into
         // another Dart file's import list — the target file is never written,
         // so an `import 'shape.dart'` reference would fail to resolve.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile, Ignore(TargetLanguage.Dart)]
             public interface IShape
@@ -478,7 +478,7 @@ public class DartBackendTests
         // Top-level DartFunctions emitted for [NoContainer] must still
         // contribute imports for any transpiled types they reference —
         // otherwise a cross-module API call fails to analyze.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Order { public int Id { get; } public Order(int id) { Id = id; } }
@@ -503,7 +503,7 @@ public class DartBackendTests
         // extractor must fold them into one primary with Overloads populated
         // so DartTransformer emits a single method declaration and the Dart
         // "no overloading" diagnostic fires.
-        var (files, diagnostics) = TranspileDart(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Widget
@@ -531,7 +531,7 @@ public class DartBackendTests
         // A C# auto-property with `= initializer` must carry the initializer
         // through to the Dart field; without it the field would either change
         // runtime meaning or need an unjustified `late` modifier.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Counter
@@ -551,7 +551,7 @@ public class DartBackendTests
     {
         // [Ignore(TargetLanguage.Dart)] on a method should remove it from the
         // Dart output. The TS target (tested separately) must still emit it.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Widget
@@ -575,7 +575,7 @@ public class DartBackendTests
         // [Ignore(TargetLanguage.Dart)] should skip the Dart file emission
         // while the type remains discoverable for the (hypothetical) other
         // target. In this Dart-only test we just verify the file is absent.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile, Ignore(TargetLanguage.Dart)]
             public class AmbientShape
@@ -599,7 +599,7 @@ public class DartBackendTests
         // A [NoContainer] function with a defaulted parameter must keep
         // the Dart optional-positional shape (`[int x = 1]`) rather than
         // dropping the default and making the parameter required.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile, NoContainer]
             public static class Calc
@@ -620,7 +620,7 @@ public class DartBackendTests
         // should render it as `Widget(width: 2, height: 3)` — keeping the
         // named-arg intent the source expressed rather than collapsing to
         // positional order.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Widget(int Width, int Height)
@@ -640,7 +640,7 @@ public class DartBackendTests
         // C#'s `record with { X = e }` has no Dart equivalent — the bridge
         // reuses the synthesized copyWith method, keeping named parameters
         // so the call reads naturally on the Dart side.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Point(int X, int Y)
@@ -660,7 +660,7 @@ public class DartBackendTests
         // Dart 3 has native switch expressions with the same first-match shape as
         // C#. Each arm lowers to `pattern => result`, keeping the scrutinee in a
         // single bound form instead of the TS-side IIFE workaround.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Classifier
@@ -680,7 +680,7 @@ public class DartBackendTests
     [Test]
     public async Task UninitializedStaticNonNullableField_EmitsLate()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public static class Counters
@@ -703,7 +703,7 @@ public class DartBackendTests
         // positional parameter at index 0. Guards that the TS-
         // specific rewrite does not silently drop the receiver from
         // the Dart signature.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public abstract class Element {}
@@ -732,7 +732,7 @@ public class DartBackendTests
         // the Dart target — Dart's native `DateTime` supports the raw
         // relational operators, so the generated Dart should emit
         // `a >= b` as-is and never reference the `Temporal` runtime.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Scheduler
@@ -754,7 +754,7 @@ public class DartBackendTests
         // `x as T` lowers to `x is T ? (T)x : null` in the shared extractor.
         // Dart reifies interfaces, so the guard-or-MS0001 rule TypeScript
         // needs for an erased interface does not apply here.
-        var (files, diagnostics) = TranspileDart(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile] public interface IShape { double Area(); }
             [Transpile] public class Square { }
@@ -782,7 +782,7 @@ public class DartBackendTests
         // IrRuntimeRequirementScanner reports a `HashCode` requirement for
         // every non-PlainObject record, and the Dart import collector turns
         // that into a `show HashCode` import from `metano_runtime`.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Money(int Amount);
@@ -801,7 +801,7 @@ public class DartBackendTests
         // Non-record classes don't synthesize value equality, so the scanner
         // must not surface a HashCode requirement and the file should stay
         // free of any metano_runtime import.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Plain
@@ -824,7 +824,7 @@ public class DartBackendTests
         // references. The record's HashCode requirement belongs to the record's
         // OWN file, not to consumers — so the Treasury module must stay free of
         // the `metano_runtime` import even though it returns a `Money` record.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Money(int Amount);
@@ -853,7 +853,7 @@ public class DartBackendTests
     {
         // [PlainObject] records emit as data carriers without value-equality
         // synthesis, so the scanner must skip the HashCode requirement.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile, PlainObject]
             public record Dto(int Id, string Name);
@@ -872,7 +872,7 @@ public class DartBackendTests
         // child's file, never the parent's. An earlier TypeScript fix that populated the
         // shared core IR's NestedTypes folded the child's requirement into the parent and
         // regressed exactly this — the collection must stay a per-target, per-file concern.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
 
@@ -893,7 +893,7 @@ public class DartBackendTests
         // The IR keeps grouping only as tree shape; the printer must restore the
         // parentheses Dart precedence would otherwise drop (#263: `x[^(n + 1)]`
         // lowers to `x[x.length - (n + 1)]`).
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Operands
@@ -920,7 +920,7 @@ public class DartBackendTests
     {
         // #295 rebinds interface dictionary counts and folds view counts into the
         // dictionary's own Count, so the dictionary entries carry the Dart `length`.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             using System.Collections.Generic;
 
@@ -956,7 +956,7 @@ public class DartBackendTests
         // The lifted-operator lowering is target-agnostic IR (#287): Dart
         // rejects `int? + int` and `null < 1` alike, so the guard is
         // required there too.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             #nullable enable
 
@@ -1040,7 +1040,7 @@ public class DartBackendTests
     [Test]
     public async Task NullConditionalAccess_PrintsNativeNullShorting()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             #nullable enable
             using System.Collections.Generic;
@@ -1084,7 +1084,7 @@ public class DartBackendTests
         // filter (non-public nested types are a known Dart gap: `ShotEntry` is not
         // declared); the shared IR extraction (qualified nested references) must
         // not break it.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
 
@@ -1114,7 +1114,7 @@ public class DartBackendTests
     [Test]
     public async Task IntegerDivision_InTheDartTarget_UsesTheTruncatingOperator()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public static class Quotients
@@ -1145,7 +1145,7 @@ public class DartBackendTests
         // Record `==` is value equality in Dart too (the emitted class defines
         // `operator ==`), so it keeps the native operator, and a tuple literal
         // is a Dart record literal.
-        var (files, diagnostics) = TranspileDart(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public record Point(int X, int Y);
@@ -1184,7 +1184,7 @@ public class DartBackendTests
         // A `GetHashCode` override is Dart's `hashCode` getter, the member
         // every `x.GetHashCode()` call reads; an `Equals(object)` override
         // stays a method and gains an `operator ==` that delegates to it.
-        var (files, diagnostics) = TranspileDart(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             #nullable enable
 
@@ -1214,7 +1214,7 @@ public class DartBackendTests
     [Test]
     public async Task RecordDeclaringItsOwnEquality_InTheDartTarget_KeepsTheUserMembers()
     {
-        var (files, diagnostics) = TranspileDart(
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             #nullable enable
 
@@ -1241,7 +1241,7 @@ public class DartBackendTests
     {
         // Dart rejects an arrow body on a generative constructor
         // (`return_in_generative_constructor`).
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Money(int cents)
@@ -1262,7 +1262,7 @@ public class DartBackendTests
     {
         // Dart lowers a params parameter to a plain list parameter, which can hold
         // null, so only the TypeScript rest-parameter lowering drops the argument.
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public sealed class Logger
@@ -1280,7 +1280,7 @@ public class DartBackendTests
     [Test]
     public async Task EnumeratorType_MapsToDartIterator()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             using System.Collections.Generic;
 
@@ -1293,53 +1293,5 @@ public class DartBackendTests
         );
 
         await Assert.That(files["cursor.dart"]).Contains("Iterator<int>?");
-    }
-
-    // ── helpers ──────────────────────────────────────────────────────────
-
-    internal static (
-        Dictionary<string, string> Files,
-        IReadOnlyList<MetanoDiagnostic> Diagnostics
-    ) TranspileDart(string csharpSource)
-    {
-        var source = $"""
-            using System;
-            using Metano.Annotations;
-            {csharpSource}
-            """;
-        var syntaxTree = CSharpSyntaxTree.ParseText(
-            source,
-            new CSharpParseOptions(LanguageVersion.Preview)
-        );
-        // Share the same cached metadata references that TranspileHelper uses —
-        // rebuilding the ~200-entry list per test would add hundreds of MB of
-        // churn across the suite.
-        var compilation = CSharpCompilation.Create(
-            "DartTestAssembly",
-            [syntaxTree],
-            TranspileHelper.BaseReferences,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-        );
-
-        var errors = compilation
-            .GetDiagnostics()
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-        if (errors.Count > 0)
-            throw new InvalidOperationException(
-                "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
-            );
-
-        var ir = new CSharpSourceFrontend().ExtractFromCompilation(
-            compilation,
-            TargetLanguage.Dart
-        );
-        var transformer = new DartTransformer(ir, compilation);
-        var files = transformer.TransformAll();
-        var printer = new Metano.Compiler.Dart.Printer();
-        var result = new Dictionary<string, string>();
-        foreach (var file in files)
-            result[file.FileName] = printer.Print(file);
-        return (result, transformer.Diagnostics);
     }
 }

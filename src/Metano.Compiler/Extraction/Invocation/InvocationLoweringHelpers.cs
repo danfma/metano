@@ -71,25 +71,40 @@ public readonly record struct InvocationLoweringHelpers(
         method.MethodKind == MethodKind.DelegateInvoke;
 
     /// <summary>
-    /// True when <paramref name="member"/> — the member syntax an
-    /// invocation calls (<c>handler.Invoke</c> or <c>?.Invoke</c>) —
-    /// names the delegate's <c>Invoke</c> itself, so the member can be
-    /// dropped. An implicit invocation of a delegate-typed field or
-    /// property (<c>holder.Get()</c>) binds to the same
-    /// <paramref name="method"/>, but its member is the field or
-    /// property holding the delegate; dropping that member would call
+    /// True when <paramref name="invokedMemberSyntax"/> — the member
+    /// syntax an invocation calls (<c>handler.Invoke</c> or
+    /// <c>?.Invoke</c>) — names the delegate's <c>Invoke</c> itself, so
+    /// the member can be dropped. An implicit invocation of a
+    /// delegate-typed field or property (<c>holder.Get()</c>) binds to
+    /// the same <paramref name="method"/>, but its member is the field
+    /// or property holding the delegate; dropping that member would call
     /// the receiver instead (#337).
     /// </summary>
     public static bool IsExplicitDelegateInvoke(
         IMethodSymbol method,
-        ExpressionSyntax member,
+        ExpressionSyntax invokedMemberSyntax,
         SemanticModel semanticModel
     ) =>
         IsDelegateInvoke(method)
         && SymbolEqualityComparer.Default.Equals(
-            semanticModel.GetSymbolInfo(member).Symbol,
+            semanticModel.GetSymbolInfo(invokedMemberSyntax).Symbol,
             method
         );
+
+    /// <summary>
+    /// True when the <c>.Invoke</c> / <c>?.Invoke</c> member of a call
+    /// can be dropped so the delegate is called directly: the member is
+    /// the delegate's own <c>Invoke</c>
+    /// (<see cref="IsExplicitDelegateInvoke"/>) and the delegate does
+    /// not rebind <c>this</c> (<see cref="HasThisParameter"/>).
+    /// </summary>
+    public static bool IsDroppableDelegateInvoke(
+        IMethodSymbol method,
+        ExpressionSyntax invokedMemberSyntax,
+        SemanticModel semanticModel
+    ) =>
+        IsExplicitDelegateInvoke(method, invokedMemberSyntax, semanticModel)
+        && !HasThisParameter(method);
 
     /// <summary>
     /// True when the delegate's first parameter carries

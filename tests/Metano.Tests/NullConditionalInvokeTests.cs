@@ -334,7 +334,7 @@ public class NullConditionalInvokeTests
     [Test]
     public async Task NullConditionalInvoke_DartTarget_LowersToOptionalCallMethod()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Widget
@@ -357,7 +357,7 @@ public class NullConditionalInvokeTests
     [Test]
     public async Task DirectInvoke_DartTarget_DropsInvokeIndirection()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Widget
@@ -380,50 +380,5 @@ public class NullConditionalInvokeTests
         var dart = files["widget.dart"];
         await Assert.That(dart).Contains("onTick(7)");
         await Assert.That(dart).DoesNotContain(".Invoke(");
-    }
-
-    // ── helpers ──────────────────────────────────────────────────────────
-
-    private static (
-        Dictionary<string, string> Files,
-        IReadOnlyList<MetanoDiagnostic> Diagnostics
-    ) TranspileDart(string csharpSource)
-    {
-        var source = $"""
-            using System;
-            using Metano.Annotations;
-            {csharpSource}
-            """;
-        var syntaxTree = CSharpSyntaxTree.ParseText(
-            source,
-            new CSharpParseOptions(LanguageVersion.Preview)
-        );
-        var compilation = CSharpCompilation.Create(
-            "DartTestAssembly",
-            [syntaxTree],
-            TranspileHelper.BaseReferences,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-        );
-
-        var errors = compilation
-            .GetDiagnostics()
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-        if (errors.Count > 0)
-            throw new InvalidOperationException(
-                "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
-            );
-
-        var ir = new CSharpSourceFrontend().ExtractFromCompilation(
-            compilation,
-            TargetLanguage.Dart
-        );
-        var transformer = new DartTransformer(ir, compilation);
-        var files = transformer.TransformAll();
-        var printer = new Metano.Compiler.Dart.Printer();
-        var result = new Dictionary<string, string>();
-        foreach (var file in files)
-            result[file.FileName] = printer.Print(file);
-        return (result, transformer.Diagnostics);
     }
 }

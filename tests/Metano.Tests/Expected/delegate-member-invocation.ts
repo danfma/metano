@@ -14,7 +14,9 @@ export class Calls {
     const f = holder.get();
     const g = holder.renamedGet();
     const h = maybe?.get() ?? -1;
+    const i = holder.invoke();
+    holder.onPing.call(holder, 3);
 
-    return a + b + c + d + e + f + g + h;
+    return a + b + c + d + e + f + g + h + i;
   }
 }

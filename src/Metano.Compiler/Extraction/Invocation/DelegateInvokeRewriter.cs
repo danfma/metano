@@ -39,15 +39,14 @@ public sealed class DelegateInvokeRewriter(InvocationLoweringHelpers helpers) : 
             return null;
         if (QualifiedMemberSyntax.From(context.Invocation.Expression) is not { } invokeMember)
             return null;
+
         if (
-            !InvocationLoweringHelpers.IsExplicitDelegateInvoke(
+            !InvocationLoweringHelpers.IsDroppableDelegateInvoke(
                 invoke,
                 invokeMember.Node,
                 context.SemanticModel
             )
         )
-            return null;
-        if (InvocationLoweringHelpers.HasThisParameter(invoke))
             return null;
 
         var receiver = context.Recurse(invokeMember.Receiver);
