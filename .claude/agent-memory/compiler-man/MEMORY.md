@@ -7,3 +7,4 @@
 - [Dart operand grouping gap](dart_operand_grouping_gap.md) — Dart printer misgroups conditional/throw operands; always dart-analyze probes for core lowerings.
 - [Synthesized calls bypass rewriters](synthesized_calls_bypass_rewriters.md) — symbol-built IR skips [Emit], params spread, extension $set; probe these.
 - [NoContainer module state](nocontainer_module_state.md) — module fields lower via TsModuleExportReference; cross-file writes are MS0001.
+- [Target-specific lowering placement](target_specific_lowering_placement.md) — Dart ignores params/spread/setters; TS-shaped fixes go in the TS bridge, facts in core.
