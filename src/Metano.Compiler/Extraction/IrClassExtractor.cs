@@ -123,7 +123,7 @@ public static class IrClassExtractor
         Func<T> extract
     )
     {
-        if (captureScan.ParamFieldMap.Count == 0 && captureScan.PromotedParams.Count == 0)
+        if (captureScan.HasNoRewrites)
             return extract();
 
         var previous = IrExpressionExtractor.PrimaryCtorScope;

@@ -151,9 +151,8 @@ public class TupleLiteralTests
     /// <c>object.Equals</c> with an operand that is statically a tuple
     /// compares element by element through the tuple's own <c>Equals</c>
     /// (<c>tupleEquals</c>), never by reference as the general
-    /// <c>objectEquals</c> lowering does for an array. When only the second
-    /// operand is a tuple the operands swap, which a side-effecting first
-    /// operand forbids, so that call keeps <c>objectEquals</c>.
+    /// <c>objectEquals</c> lowering does for an array. A tuple on the right
+    /// becomes the receiver.
     /// </summary>
     [Test]
     public async Task ObjectEqualsOverATuple_ComparesElementWise()
@@ -163,13 +162,9 @@ public class TupleLiteralTests
             [Transpile]
             public static class Comparisons
             {
-                public static object Boxed() => (1, 2);
-
                 public static bool BothTuples(int a) => object.Equals((a, "x"), (a, "x"));
 
                 public static bool TupleOnTheRight(object o) => object.Equals(o, (1, 2));
-
-                public static bool SideEffectOnTheLeft() => object.Equals(Boxed(), (1, 2));
 
                 public static bool NoTuple(object a, object b) => object.Equals(a, b);
             }
@@ -183,10 +178,41 @@ public class TupleLiteralTests
             .Contains(
                 "return tupleEquals([a, \"x\"] as [number, string], [a, \"x\"] as [number, string]);"
             );
+
         await Assert.That(output).Contains("return tupleEquals([1, 2] as [number, number], o);");
+        await Assert.That(output).Contains("return objectEquals(a, b);");
+    }
+
+    /// <summary>
+    /// Swapping the operands would run a side-effecting first operand after
+    /// the tuple, and a nullable tuple may be <c>null</c> (no receiver), so
+    /// both calls keep the general <c>objectEquals</c>.
+    /// </summary>
+    [Test]
+    public async Task ObjectEqualsWithoutASafeTupleReceiver_KeepsObjectEquals()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static object Boxed() => (1, 2);
+
+                public static bool SideEffectOnTheLeft() => object.Equals(Boxed(), (1, 2));
+
+                public static bool NullableTuple((int, int)? t, object o) => object.Equals(t, o);
+            }
+            """
+        );
+
+        var output = result["comparisons.ts"];
+
         await Assert
             .That(output)
             .Contains("return objectEquals(Comparisons.boxed(), [1, 2] as [number, number]);");
-        await Assert.That(output).Contains("return objectEquals(a, b);");
+
+        await Assert.That(output).Contains("return objectEquals(t, o);");
     }
 }
