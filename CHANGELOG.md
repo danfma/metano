@@ -4,6 +4,84 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.7.0
+
+_2026-11-01_
+
+
+### ✨ Features
+
+* add an opt-in exports subpath root to EmitPackage ([#267](https://github.com/danfma/metano/issues/267)) ([c5b8583](https://github.com/danfma/metano/commit/c5b8583351dc5d8befd81456b18da7bcbbde7d92)), closes [package.json#exports](https://github.com/danfma/package.json/issues/exports)
+
+### 🐛 Bug Fixes
+
+* apply BCL mappings through optional chains ([#248](https://github.com/danfma/metano/issues/248)) ([40472d4](https://github.com/danfma/metano/commit/40472d4d8b9c891eae69a43654586f2dab8434a4))
+* bind a null-conditional receiver that reads an enclosing placeholder ([#248](https://github.com/danfma/metano/issues/248)) ([648ade9](https://github.com/danfma/metano/commit/648ade9e0c5452f32f7b2bfdafd87ebb4d10a525)), closes [#256](https://github.com/danfma/metano/issues/256)
+* bind arguments read before a dropped side effect in constructor mappings ([#254](https://github.com/danfma/metano/issues/254)) ([bd252df](https://github.com/danfma/metano/commit/bd252dfe4c01ad72b325655377917ad309ed01c1))
+* build every TypeScript IIFE through one async-aware helper ([#248](https://github.com/danfma/metano/issues/248)) ([95e8dc9](https://github.com/danfma/metano/commit/95e8dc9a8fffa3e9b564462c2efd779f7f73c731))
+* classify runtime type tests once for is and as ([#279](https://github.com/danfma/metano/issues/279)) ([8a3eac7](https://github.com/danfma/metano/commit/8a3eac7ba3196da44100f92192253f2b787b9848))
+* close remaining MS0013 gaps for patterns and member initializers ([#277](https://github.com/danfma/metano/issues/277)) ([7ff7544](https://github.com/danfma/metano/commit/7ff7544ac8198edb46b1a9acd1a96cfd66c0248b)), closes [#247](https://github.com/danfma/metano/issues/247)
+* collapse branded value reads and keep static overloads in branded companions ([#245](https://github.com/danfma/metano/issues/245)) ([87d414d](https://github.com/danfma/metano/commit/87d414dd4ce9264e9d97f4221a4666decc5367c6))
+* correct JsTuple type tests, reserved-word member access and inherited JSON properties ([#253](https://github.com/danfma/metano/issues/253)) ([4c1fd32](https://github.com/danfma/metano/commit/4c1fd32bd315b55b019e1df88a81ab523a53bb58))
+* derive SerializerContext getter names from one helper ([#250](https://github.com/danfma/metano/issues/250)) ([864e1ad](https://github.com/danfma/metano/commit/864e1ad270318e69401fe9aaae62fcab49427588))
+* detect missing compiler tool and add source export condition ([#241](https://github.com/danfma/metano/issues/241)) ([fdfc258](https://github.com/danfma/metano/commit/fdfc258ee955d11e5d73815406f0017afcef774b))
+* drop the unresolvable compiler peer dependency from metano-runtime ([#249](https://github.com/danfma/metano/issues/249)) ([d5b5701](https://github.com/danfma/metano/commit/d5b5701a57a05c226df181507f3c0a5d2b684910))
+* emit nested types of every accessibility in companion namespaces ([#264](https://github.com/danfma/metano/issues/264)) ([0de7f9a](https://github.com/danfma/metano/commit/0de7f9a601c8290997df9ba9f94b171b3a3c17bb))
+* emit user exception classes with their full body ([#246](https://github.com/danfma/metano/issues/246)) ([d94e79b](https://github.com/danfma/metano/commit/d94e79be1fa7721ae05254fec9db20e8260ef724))
+* escape control characters in printed TypeScript string literals ([#266](https://github.com/danfma/metano/issues/266)) ([dcbcadc](https://github.com/danfma/metano/commit/dcbcadc38a652931130a334bba938c700415f4fa)), closes [#254](https://github.com/danfma/metano/issues/254)
+* escape interpolated strings and map BCL collection constructors ([#254](https://github.com/danfma/metano/issues/254)) ([0d121a8](https://github.com/danfma/metano/commit/0d121a85168783d8e19d12fc422e3e476e753f13))
+* exempt generated code, erased interfaces and attributes from MS0013 ([#247](https://github.com/danfma/metano/issues/247)) ([f652e76](https://github.com/danfma/metano/commit/f652e76406143b6d8b112983de931c06f016e4b4))
+* extend the runtime smoke test to declaration specifiers ([#249](https://github.com/danfma/metano/issues/249)) ([9b95ac1](https://github.com/danfma/metano/commit/9b95ac15eedbc97828356606265973c25ebc9fde))
+* gate branded value reads on primitive-backed wrappers ([#245](https://github.com/danfma/metano/issues/245)) ([3d47c7c](https://github.com/danfma/metano/commit/3d47c7cfd4918d0edb0f618ffe7718204adf70dc))
+* harden exception lowering for chains, overrides and side effects ([#246](https://github.com/danfma/metano/issues/246)) ([7e4f8eb](https://github.com/danfma/metano/commit/7e4f8eb465708859d66aeb1e4161626b5dd18cbf))
+* import cross-package types referenced only in expression bodies ([#286](https://github.com/danfma/metano/issues/286)) ([2339fff](https://github.com/danfma/metano/commit/2339fff56b94c15096960aeb93837d0b04ba9eae)), closes [#267](https://github.com/danfma/metano/issues/267)
+* include reachable types in the generated SerializerContext ([#250](https://github.com/danfma/metano/issues/250)) ([a1f4e2c](https://github.com/danfma/metano/commit/a1f4e2c99c386652eeb83c7687879f3871d4f127)), closes [#268](https://github.com/danfma/metano/issues/268) [#270](https://github.com/danfma/metano/issues/270)
+* invalidate the group cache when a dependency version changes ([#299](https://github.com/danfma/metano/issues/299)) ([990a9d0](https://github.com/danfma/metano/commit/990a9d099398a3a1163b477ae7e9446e3f1f0054))
+* keep base message for Message overrides and treat cast nulls as absent ([#246](https://github.com/danfma/metano/issues/246)) ([442e33b](https://github.com/danfma/metano/commit/442e33b5c519142e51d4d91e8112bd5f98bc314c)), closes [#baseMessage](https://github.com/danfma/metano/issues/baseMessage)
+* keep C# null for optional-chain results and nullable patterns ([#256](https://github.com/danfma/metano/issues/256)) ([cd14e75](https://github.com/danfma/metano/commit/cd14e754c286e3ad916c8af7b14a5816a475931e)), closes [#265](https://github.com/danfma/metano/issues/265)
+* keep erased interfaces' bases and police emitting attributes in MS0013 ([#247](https://github.com/danfma/metano/issues/247)) ([73cd358](https://github.com/danfma/metano/commit/73cd358e65d20c4139b0a26f600d87bfb40f651c))
+* keep JsTuple element reads optional through null-conditional access ([#248](https://github.com/danfma/metano/issues/248)) ([3859092](https://github.com/danfma/metano/commit/385909273fa242acb0d2c80c784453c2bc125896))
+* keep Message overrides visible across exception ancestors ([#246](https://github.com/danfma/metano/issues/246)) ([f8b5ddb](https://github.com/danfma/metano/commit/f8b5ddbc0f1770325b9d66e683f32f37776bfc73)), closes [#baseMessage](https://github.com/danfma/metano/issues/baseMessage)
+* keep package.json exports when the transpilation cache is fully reused ([#273](https://github.com/danfma/metano/issues/273)) ([be31b84](https://github.com/danfma/metano/commit/be31b84409c03a28fe5e61ca86d612c3b676db91))
+* keep the null short-circuit through mapped continuation steps ([#248](https://github.com/danfma/metano/issues/248)) ([b76bb1b](https://github.com/danfma/metano/commit/b76bb1bc94c8ab5861b8449cb9261a9aca78ad56))
+* keep the receiver binding when a bound receiver is read past the chain root ([#248](https://github.com/danfma/metano/issues/248)) ([1175a0d](https://github.com/danfma/metano/commit/1175a0d27cf52f1644e10359323451e2dfeecd78))
+* lift nullable operators and map Nullable<T> members ([#287](https://github.com/danfma/metano/issues/287)) ([8373fb5](https://github.com/danfma/metano/commit/8373fb5268e41f45ce90d81023049a8bfcecd2a6))
+* lower as casts through the type-pattern test ([#279](https://github.com/danfma/metano/issues/279)) ([ac5573f](https://github.com/danfma/metano/commit/ac5573fd6d5a5bd1f9756d3dde5c41235616abbd)), closes [#263](https://github.com/danfma/metano/issues/263) [#263](https://github.com/danfma/metano/issues/263)
+* lower derived records and switch-expression patterns correctly ([#238](https://github.com/danfma/metano/issues/238)) ([e9a4cb9](https://github.com/danfma/metano/commit/e9a4cb9046abad8aec24f06a09c02d275510d139))
+* lower every null-conditional step through the regular pipeline ([#248](https://github.com/danfma/metano/issues/248)) ([675263d](https://github.com/danfma/metano/commit/675263d7c3b2c8e8a31599a562513996e083edf7))
+* lower explicit interface implementations instead of emitting invalid names ([#278](https://github.com/danfma/metano/issues/278)) ([d96909c](https://github.com/danfma/metano/commit/d96909ca06142689e788cf46908433be80ec7d28)), closes [#247](https://github.com/danfma/metano/issues/247)
+* lower object and collection initializers instead of dropping them ([#254](https://github.com/danfma/metano/issues/254)) ([02b7779](https://github.com/danfma/metano/commit/02b7779e40ec893646bab9ad87e7b35019673fd3))
+* lower out parameters to tuple returns and destructuring call sites ([#265](https://github.com/danfma/metano/issues/265)) ([bf735c9](https://github.com/danfma/metano/commit/bf735c998bc52a42e18bf94d3ebafb46a8a34862))
+* lower switch-statement pattern labels and is-pattern designators ([#239](https://github.com/danfma/metano/issues/239)) ([9b7223c](https://github.com/danfma/metano/commit/9b7223cab37b4af7a313f6ab4e664a3b73b0bc86)), closes [#271](https://github.com/danfma/metano/issues/271)
+* make metano-runtime importable from Node ESM ([#249](https://github.com/danfma/metano/issues/249)) ([d65b6f3](https://github.com/danfma/metano/commit/d65b6f35880982d74c6d88a71f1fcd3fd663f55c))
+* make the runtime smoke test's directory-subpath check fail when it should ([#249](https://github.com/danfma/metano/issues/249)) ([5c58d6c](https://github.com/danfma/metano/commit/5c58d6cca9b1cfa313132e91dd4481723c2e7044))
+* map BCL exception constructor arguments by parameter role ([#246](https://github.com/danfma/metano/issues/246)) ([b79424e](https://github.com/danfma/metano/commit/b79424edd29c2f256bfc7b1a2bd59f7e4d478c26))
+* map dictionary Keys/Values views and interface dictionary counts ([#295](https://github.com/danfma/metano/issues/295)) ([0fa9f4c](https://github.com/danfma/metano/commit/0fa9f4c7e54ba5227e0b95f6bbcc4f4f7d227652)), closes [#266](https://github.com/danfma/metano/issues/266) [#292](https://github.com/danfma/metano/issues/292)
+* map double and float static helpers and special values ([#260](https://github.com/danfma/metano/issues/260)) ([927e1b7](https://github.com/danfma/metano/commit/927e1b7c41d5f63ff803dc697006dfb1c2b1d01f)), closes [#271](https://github.com/danfma/metano/issues/271) [#172](https://github.com/danfma/metano/issues/172) [#255](https://github.com/danfma/metano/issues/255) [#259](https://github.com/danfma/metano/issues/259) [#272](https://github.com/danfma/metano/issues/272)
+* map GetValueOrDefault, Math.Round overloads, and string.Join ([#266](https://github.com/danfma/metano/issues/266)) ([e255868](https://github.com/danfma/metano/commit/e25586822794251eb7fc8ce0be50010186481ebf))
+* print TypeScript expressions with operator precedence ([#244](https://github.com/danfma/metano/issues/244)) ([6efe8e1](https://github.com/danfma/metano/commit/6efe8e133f82143c41e3091ab23b2e084ddbfa23))
+* report exports key collisions at transform time and refine subpath root ([#267](https://github.com/danfma/metano/issues/267)) ([e64b034](https://github.com/danfma/metano/commit/e64b034bfdbf7a69a29dce8ec20135e130c009b4))
+* restore cross-package dependencies when package.json is rebuilt from the cache ([#299](https://github.com/danfma/metano/issues/299)) ([408db63](https://github.com/danfma/metano/commit/408db633c2404e884cb12a75360aa49740020d8d))
+* support index-from-end and ranges and stop crashing on unsupported expressions ([#263](https://github.com/danfma/metano/issues/263)) ([6538935](https://github.com/danfma/metano/commit/6538935177ae76447d3d493bbe9ee27ed9e85373))
+* treat the exponent sign as part of a template number literal ([#272](https://github.com/danfma/metano/issues/272)) ([02209c6](https://github.com/danfma/metano/commit/02209c6b6c083e7422a22b1ddf84aa092e21fd66))
+* truncate integer division and keep every for-loop clause ([#307](https://github.com/danfma/metano/issues/307)) ([e344668](https://github.com/danfma/metano/commit/e344668c5e72ff1de636c5e22af2dccc05c1fc9b)), closes [#286](https://github.com/danfma/metano/issues/286)
+
+### ♻️ Refactor
+
+* address review findings on nested-type emission ([#264](https://github.com/danfma/metano/issues/264)) ([3488c71](https://github.com/danfma/metano/commit/3488c71a00640feb4f4749959b2062d2254a7092))
+* model null-conditional access on Roslyn's conditional access operation ([#248](https://github.com/danfma/metano/issues/248)) ([3c784d5](https://github.com/danfma/metano/commit/3c784d5ff174d4f0a317923db58565747b3c3540))
+* reuse generic IR and evaluate-once binding for exception lowering ([#246](https://github.com/danfma/metano/issues/246)) ([18ff972](https://github.com/danfma/metano/commit/18ff972f96d324022ad11832e5cd66d9b1969d85)), closes [#baseMessage](https://github.com/danfma/metano/issues/baseMessage)
+* route every evaluate-once lowering through one binding helper ([#248](https://github.com/danfma/metano/issues/248)) ([47ef676](https://github.com/danfma/metano/commit/47ef6768df8efc82be9d5c706a0e2aca490a38a6))
+* split BCL call reshaping by family and type default(TValue) ([#266](https://github.com/danfma/metano/issues/266)) ([20bcf70](https://github.com/danfma/metano/commit/20bcf707477f7d4a186c14e34c9235780388e438))
+
+### 📝 Documentation
+
+* add spec and plan for Node ESM runtime imports ([#249](https://github.com/danfma/metano/issues/249)) ([d188214](https://github.com/danfma/metano/commit/d1882140b42fa954626cbd9d58b4c979c5a4150a))
+* align the smoke-test contract with the implemented script ([#249](https://github.com/danfma/metano/issues/249)) ([3cc8407](https://github.com/danfma/metano/commit/3cc840795c510a9c495adc5f519d2775a17c71fd))
+* amend MS0013 rule with base-list, attribute and generated-code exemptions ([#247](https://github.com/danfma/metano/issues/247)) ([c2936dc](https://github.com/danfma/metano/commit/c2936dcd129823f22eb251642b313baeae7ef1c7))
+* refine MS0013 exemptions for per-target erasure and emitting attributes ([#247](https://github.com/danfma/metano/issues/247)) ([bfa2110](https://github.com/danfma/metano/commit/bfa21108fd687c2ca879c7781c3c7798171136e3))
+* specify an opt-in exports subpath root for EmitPackage ([#267](https://github.com/danfma/metano/issues/267)) ([6d76a32](https://github.com/danfma/metano/commit/6d76a326a8ac79d00340172636c738bdabf0f053))
+
 ## 2.6.1
 
 _2026-06-29_
