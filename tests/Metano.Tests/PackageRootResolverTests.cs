@@ -1,15 +1,20 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Tests;
 
 /// <summary>
 /// #334: without <c>--package-root</c>, the package root search walks up from the
-/// output directory but never past the workspace boundary (the C# project directory, a
-/// <c>.git</c> repository root or a solution directory), so it cannot pick and rewrite
-/// an unrelated <c>package.json</c> further up the filesystem.
+/// output directory but never past the workspace boundary (a <c>.git</c> repository
+/// root, a solution directory, or the directory that holds both the output and the C#
+/// project), so it cannot pick and rewrite an unrelated <c>package.json</c> further up
+/// the filesystem.
 /// </summary>
 public class PackageRootResolverTests
 {
+    /// <summary>The temp directory itself: above every workspace a test builds in it.</summary>
+    private const string AboveWorkspace = "";
+
     private readonly string _root = Directory
         .CreateTempSubdirectory("metano-package-root-")
         .FullName;
@@ -21,13 +26,15 @@ public class PackageRootResolverTests
             Directory.Delete(_root, recursive: true);
     }
 
+    // ── Search inside the workspace ────────────────────────────────────────
+
     [Test]
     public async Task PackageJsonBetweenOutputAndBoundary_IsTheRoot()
     {
         MarkRepository("repo");
         WritePackageJson("repo/web");
 
-        var resolution = Resolve(output: "repo/web/src/generated", project: "repo/api");
+        var resolution = Resolve(output: "repo/web/src/generated", project: "repo/api/Api.csproj");
 
         await AssertResolved(resolution, "repo/web");
     }
@@ -38,40 +45,67 @@ public class PackageRootResolverTests
         MarkRepository("repo");
         WritePackageJson("repo");
 
-        var resolution = Resolve(output: "repo/web/src", project: "repo/api");
+        var resolution = Resolve(output: "repo/web/src", project: "repo/api/Api.csproj");
 
         await AssertResolved(resolution, "repo");
     }
 
     [Test]
-    public async Task PackageJsonAboveProjectDirectory_IsIgnored()
+    public async Task RepositoryRoot_TakesPrecedenceOverTheProjectDirectory()
     {
-        WritePackageJson("");
+        MarkRepository("repo");
+        WritePackageJson("repo");
 
-        var resolution = Resolve(output: "app/ts/src", project: "app");
+        var resolution = Resolve(output: "repo/app/ts/src", project: "repo/app/App.csproj");
+
+        await AssertResolved(resolution, "repo");
+    }
+
+    [Test]
+    public async Task WithoutMarkers_PackageJsonOfASiblingFrontend_IsTheRoot()
+    {
+        // The spec 004 layout: a contracts project next to the frontend that hosts its output.
+        WritePackageJson("workspace/frontend");
+
+        var resolution = Resolve(
+            output: "workspace/frontend/src/abc/contracts",
+            project: "workspace/Abc.Contracts/Abc.Contracts.csproj"
+        );
+
+        await AssertResolved(resolution, "workspace/frontend");
+    }
+
+    // ── Package roots above the workspace are ignored ──────────────────────
+
+    [Test]
+    public async Task PackageJsonAboveTheProjectDirectory_IsIgnored()
+    {
+        // The #334 repro: no marker, output inside the project, a stray package.json above.
+        WritePackageJson(AboveWorkspace);
+
+        var resolution = Resolve(output: "app/ts/src", project: "app/App.csproj");
 
         await AssertResolved(resolution, "app/ts");
     }
 
     [Test]
-    public async Task PackageJsonAboveRepositoryRoot_IsIgnored()
+    public async Task PackageJsonAboveTheRepositoryRoot_IsIgnored()
     {
-        WritePackageJson("");
+        WritePackageJson(AboveWorkspace);
         MarkRepository("repo");
 
-        var resolution = Resolve(output: "repo/web/src", project: "repo/api");
+        var resolution = Resolve(output: "repo/web/src", project: "repo/api/Api.csproj");
 
         await AssertResolved(resolution, "repo/web");
     }
 
     [Test]
-    public async Task GitFile_MarksAWorktreeRoot()
+    public async Task PackageJsonAboveAWorktreeRoot_IsIgnored()
     {
-        WritePackageJson("");
-        Directory.CreateDirectory(PathOf("worktree"));
-        File.WriteAllText(PathOf("worktree/.git"), "gitdir: /elsewhere/.git/worktrees/x\n");
+        WritePackageJson(AboveWorkspace);
+        MarkWorktree("worktree");
 
-        var resolution = Resolve(output: "worktree/web/src", project: "worktree/api");
+        var resolution = Resolve(output: "worktree/web/src", project: "worktree/api/Api.csproj");
 
         await AssertResolved(resolution, "worktree/web");
     }
@@ -79,16 +113,37 @@ public class PackageRootResolverTests
     [Test]
     [Arguments("App.sln")]
     [Arguments("App.slnx")]
-    public async Task PackageJsonAboveSolutionDirectory_IsIgnored(string solutionFile)
+    public async Task PackageJsonAboveTheSolutionDirectory_IsIgnored(string solutionFile)
     {
-        WritePackageJson("");
-        Directory.CreateDirectory(PathOf("solution"));
-        File.WriteAllText(PathOf($"solution/{solutionFile}"), "");
+        WritePackageJson(AboveWorkspace);
+        MarkSolution("solution", solutionFile);
 
-        var resolution = Resolve(output: "solution/web/src", project: "solution/api");
+        var resolution = Resolve(output: "solution/web/src", project: "solution/api/Api.csproj");
 
         await AssertResolved(resolution, "solution/web");
     }
+
+    [Test]
+    public async Task WithoutAnyBoundary_PackageJsonAboveTheParent_IsIgnored()
+    {
+        WritePackageJson(AboveWorkspace);
+
+        var resolution = Resolve(output: "a/b/c", project: ProjectOutsideTempRoot());
+
+        await AssertResolved(resolution, "a/b");
+    }
+
+    [Test]
+    public async Task WithoutAnyBoundary_PackageJsonInTheParent_IsTheRoot()
+    {
+        WritePackageJson("a/b");
+
+        var resolution = Resolve(output: "a/b/c", project: ProjectOutsideTempRoot());
+
+        await AssertResolved(resolution, "a/b");
+    }
+
+    // ── Fallback and refusal ───────────────────────────────────────────────
 
     [Test]
     public async Task TrailingSeparatorOnOutput_FallsBackToItsParent()
@@ -97,7 +152,7 @@ public class PackageRootResolverTests
 
         var resolution = PackageRootResolver.Resolve(
             PathOf("repo/web/src") + Path.DirectorySeparatorChar,
-            PathOf("repo/api")
+            PathOf("repo/api/Api.csproj")
         );
 
         await AssertResolved(resolution, "repo/web");
@@ -106,9 +161,9 @@ public class PackageRootResolverTests
     [Test]
     public async Task OutputIsTheProjectDirectory_WithoutPackageJson_IsRefused()
     {
-        WritePackageJson("");
+        WritePackageJson(AboveWorkspace);
 
-        var resolution = Resolve(output: "app", project: "app");
+        var resolution = Resolve(output: "app", project: "app/App.csproj");
 
         await AssertRefused(resolution, outputDir: "app");
     }
@@ -116,10 +171,10 @@ public class PackageRootResolverTests
     [Test]
     public async Task OutputIsTheRepositoryRoot_WithoutPackageJson_IsRefused()
     {
-        WritePackageJson("");
+        WritePackageJson(AboveWorkspace);
         MarkRepository("repo");
 
-        var resolution = Resolve(output: "repo", project: "repo/api");
+        var resolution = Resolve(output: "repo", project: "repo/api/Api.csproj");
 
         await AssertRefused(resolution, outputDir: "repo");
     }
@@ -129,16 +184,80 @@ public class PackageRootResolverTests
     {
         WritePackageJson("app");
 
-        var resolution = Resolve(output: "app", project: "app");
+        var resolution = Resolve(output: "app", project: "app/App.csproj");
 
         await AssertResolved(resolution, "app");
     }
 
+    [Test]
+    public async Task ExplicitPackageRoot_IsUsedAsGiven()
+    {
+        WritePackageJson(AboveWorkspace);
+
+        var resolution = PackageRootResolver.Resolve(
+            PathOf("app"),
+            PathOf("app/App.csproj"),
+            explicitPackageRoot: PathOf(AboveWorkspace)
+        );
+
+        await AssertResolved(resolution, AboveWorkspace);
+    }
+
+    // ── Reconciler over a refused resolution ───────────────────────────────
+
+    [Test]
+    public async Task Reconcile_RefusedWithFilesToExpose_ReportsTheRefusal()
+    {
+        var resolution = Resolve(output: "app", project: "app/App.csproj");
+
+        var reconciliation = Reconcile(resolution, [new TsSourceFile("index.ts", [], "")]);
+
+        await Assert.That(reconciliation.WasWritten).IsFalse();
+        await Assert.That(reconciliation.HasErrors).IsTrue();
+        await Assert.That(reconciliation.Diagnostics).IsEquivalentTo([resolution.Refusal!]);
+        await Assert.That(File.Exists(PathOf("package.json"))).IsFalse();
+    }
+
+    [Test]
+    public async Task Reconcile_RefusedWithoutFilesToExpose_IsSkipped()
+    {
+        var resolution = Resolve(output: "app", project: "app/App.csproj");
+
+        var reconciliation = Reconcile(resolution, []);
+
+        await Assert.That(reconciliation).IsSameReferenceAs(PackageJsonReconciliation.Skipped);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
     private PackageRootResolution Resolve(string output, string project) =>
         PackageRootResolver.Resolve(PathOf(output), PathOf(project));
 
+    private PackageJsonReconciliation Reconcile(
+        PackageRootResolution resolution,
+        IReadOnlyList<TsSourceFile> sourceFiles
+    ) =>
+        PackageJsonReconciler.Reconcile(
+            PackageManifestInputs.None with
+            {
+                SourceFiles = sourceFiles,
+            },
+            resolution,
+            PathOf("app"),
+            dist: "./dist",
+            srcRoot: null,
+            importAlias: null
+        );
+
     private string PathOf(string relative) =>
         Path.GetFullPath(Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar)));
+
+    /// <summary>
+    /// A project path whose only common ancestor with the temp root is the filesystem
+    /// root, so no project-based boundary exists.
+    /// </summary>
+    private string ProjectOutsideTempRoot() =>
+        Path.Combine(Path.GetPathRoot(_root)!, "metano-334-elsewhere", "App.csproj");
 
     private void WritePackageJson(string relativeDir)
     {
@@ -148,6 +267,21 @@ public class PackageRootResolverTests
 
     private void MarkRepository(string relativeDir) =>
         Directory.CreateDirectory(Path.Combine(PathOf(relativeDir), ".git"));
+
+    private void MarkWorktree(string relativeDir)
+    {
+        Directory.CreateDirectory(PathOf(relativeDir));
+        File.WriteAllText(
+            Path.Combine(PathOf(relativeDir), ".git"),
+            "gitdir: /elsewhere/.git/worktrees/x\n"
+        );
+    }
+
+    private void MarkSolution(string relativeDir, string solutionFile)
+    {
+        Directory.CreateDirectory(PathOf(relativeDir));
+        File.WriteAllText(Path.Combine(PathOf(relativeDir), solutionFile), "");
+    }
 
     private async Task AssertResolved(PackageRootResolution resolution, string expectedRoot)
     {
@@ -159,10 +293,11 @@ public class PackageRootResolverTests
     {
         await Assert.That(resolution.IsRefused).IsTrue();
         await Assert.That(resolution.Root).IsNull();
-        await Assert
-            .That(resolution.Refusal!.Code)
-            .IsEqualTo(DiagnosticCodes.PackageRootOutsideWorkspace);
-        await Assert.That(resolution.Refusal.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
-        await Assert.That(resolution.Refusal.Message).Contains($"'{PathOf(outputDir)}'");
+
+        var refusal = resolution.Refusal!;
+
+        await Assert.That(refusal.Code).IsEqualTo(DiagnosticCodes.PackageRootOutsideWorkspace);
+        await Assert.That(refusal.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(refusal.Message).Contains($"'{PathOf(outputDir)}'");
     }
 }

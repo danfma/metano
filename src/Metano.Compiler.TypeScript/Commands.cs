@@ -1,5 +1,6 @@
 using ConsoleAppFramework;
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Watch;
 
 namespace Metano;
@@ -13,7 +14,7 @@ public class Commands
     /// <param name="output">-o, Output directory for generated TypeScript files</param>
     /// <param name="time">-t, Show compilation and transpilation timings</param>
     /// <param name="clean">-c, Clean output directory before generating</param>
-    /// <param name="packageRoot">Root directory of the consumer package. Default: the nearest directory with a package.json, searching up from --output but never above the C# project directory, the repository root (.git) or the solution directory, whichever comes first; without one, the parent of --output. When that parent lies above the boundary, the run fails with MS0044 and this flag is required.</param>
+    /// <param name="packageRoot">Root directory of the consumer package. Default: the nearest directory with a package.json, searching up from --output but never above the nearest repository root (.git) or solution directory, or, without one, the directory that holds both --output and the C# project; without a match, the parent of --output. When that parent lies above the boundary, the run fails with MS0044 and this flag is required.</param>
     /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
     /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
     /// <param name="importAlias">Isolated Node.js subpath-imports alias for internal imports in the generated TypeScript (e.g. `contracts` → `#contracts/...`). When set, generated internal imports and the package.json `#&lt;alias&gt;`/`#&lt;alias&gt;/*` entries use this key instead of the default `#`, so generated code can live in a subfolder of a host project without colliding with that project's own `#` alias. A leading `#` is optional; use a simple identifier (letters, digits, `-`, `_`); blank means unset (default `#`). Does not affect cross-package imports, which use the referenced package's npm name.</param>
@@ -69,8 +70,8 @@ public class Commands
 
             if (!result.Success)
             {
-                if (!watch)
-                    Environment.Exit(1);
+                FailRun();
+
                 return;
             }
 
@@ -78,46 +79,45 @@ public class Commands
             // generated barrels are exposed via subpath imports/exports.
             // Dry-run skips the disk write to keep "no files modified" honest.
             if (!skipPackageJson && !dryRun)
+                UpdatePackageJson();
+        }
+
+        void UpdatePackageJson()
+        {
+            var outputDir = Path.GetFullPath(output);
+            var packageRootResolution = PackageRootResolver.Resolve(
+                outputDir,
+                project,
+                packageRoot
+            );
+
+            var reconciliation = PackageJsonReconciler.Reconcile(
+                target.LastPackageManifestInputs,
+                packageRootResolution,
+                outputDir,
+                dist,
+                srcRoot,
+                importAlias
+            );
+
+            ReportDiagnostics(reconciliation.Diagnostics);
+
+            if (reconciliation.HasErrors)
             {
-                var outputDir = Path.GetFullPath(output);
-                var packageRootResolution = ResolvePackageRoot(packageRoot, project, outputDir);
+                FailRun();
 
-                // A refused resolution found no package.json, so it only matters when the
-                // run has files to expose (the reconciler skips an absent package.json
-                // otherwise).
-                if (packageRootResolution.IsRefused)
-                {
-                    if (target.LastPackageManifestInputs.SourceFiles.Count == 0)
-                        return;
-
-                    Console.WriteLine(packageRootResolution.Refusal.Format());
-
-                    if (!watch)
-                        Environment.Exit(1);
-                    return;
-                }
-
-                var resolvedPackageRoot = packageRootResolution.Root;
-
-                var reconciliation = PackageJsonReconciler.Reconcile(
-                    target.LastPackageManifestInputs,
-                    resolvedPackageRoot,
-                    outputDir,
-                    dist,
-                    srcRoot,
-                    importAlias
-                );
-
-                if (!reconciliation.WasWritten)
-                    return;
-
-                foreach (var d in reconciliation.Diagnostics)
-                    Console.WriteLine(d.Format());
-
-                Console.WriteLine(
-                    $"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}"
-                );
+                return;
             }
+
+            if (reconciliation.WasWritten)
+                Console.WriteLine($"  Updated: {reconciliation.PackageJsonPath}");
+        }
+
+        // Watch mode keeps running after a failed pass; a one-shot run exits non-zero.
+        void FailRun()
+        {
+            if (!watch)
+                Environment.Exit(1);
         }
 
         if (watch)
@@ -143,21 +143,14 @@ public class Commands
         await RunOnce();
     }
 
-    /// <summary>
-    /// An explicit <c>--package-root</c> wins as given; otherwise the root is searched
-    /// from the output directory within its workspace (see <see cref="PackageRootResolver"/>).
-    /// </summary>
-    private static PackageRootResolution ResolvePackageRoot(
-        string? packageRoot,
-        string project,
-        string outputDir
-    )
+    private static void ReportDiagnostics(IEnumerable<MetanoDiagnostic> diagnostics)
     {
-        if (packageRoot is not null)
-            return PackageRootResolution.Resolved(Path.GetFullPath(packageRoot));
+        foreach (var diagnostic in diagnostics)
+        {
+            var writer =
+                diagnostic.Severity == MetanoDiagnosticSeverity.Error ? Console.Error : Console.Out;
 
-        var projectDir = Path.GetDirectoryName(Path.GetFullPath(project))!;
-
-        return PackageRootResolver.Resolve(outputDir, projectDir);
+            writer.WriteLine(diagnostic.Format());
+        }
     }
 }
