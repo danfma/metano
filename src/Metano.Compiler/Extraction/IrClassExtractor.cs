@@ -63,7 +63,7 @@ public static class IrClassExtractor
         );
 
         var members = ExtractWithCaptureContext(
-            captureScan.ParamFieldMap,
+            captureScan,
             deferInitializers,
             () => ExtractMembers(type, originResolver, compilation, target)
         );
@@ -118,17 +118,19 @@ public static class IrClassExtractor
     }
 
     private static T ExtractWithCaptureContext<T>(
-        IReadOnlyDictionary<ISymbol, string>? captureMap,
+        ImplicitCaptureDetector.Result captureScan,
         bool initializersRunInConstructor,
         Func<T> extract
     )
     {
-        if (captureMap is null || captureMap.Count == 0)
+        if (captureScan.ParamFieldMap.Count == 0 && captureScan.PromotedParams.Count == 0)
             return extract();
 
         var previous = IrExpressionExtractor.PrimaryCtorScope;
+
         IrExpressionExtractor.PrimaryCtorScope = new PrimaryCtorExtractionScope(
-            captureMap,
+            captureScan.ParamFieldMap,
+            captureScan.PromotedParams,
             initializersRunInConstructor
         );
 

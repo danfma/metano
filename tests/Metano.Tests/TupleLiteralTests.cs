@@ -146,4 +146,47 @@ public class TupleLiteralTests
             .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsEqualTo(1);
     }
+
+    /// <summary>
+    /// <c>object.Equals</c> with an operand that is statically a tuple
+    /// compares element by element through the tuple's own <c>Equals</c>
+    /// (<c>tupleEquals</c>), never by reference as the general
+    /// <c>objectEquals</c> lowering does for an array. When only the second
+    /// operand is a tuple the operands swap, which a side-effecting first
+    /// operand forbids, so that call keeps <c>objectEquals</c>.
+    /// </summary>
+    [Test]
+    public async Task ObjectEqualsOverATuple_ComparesElementWise()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Comparisons
+            {
+                public static object Boxed() => (1, 2);
+
+                public static bool BothTuples(int a) => object.Equals((a, "x"), (a, "x"));
+
+                public static bool TupleOnTheRight(object o) => object.Equals(o, (1, 2));
+
+                public static bool SideEffectOnTheLeft() => object.Equals(Boxed(), (1, 2));
+
+                public static bool NoTuple(object a, object b) => object.Equals(a, b);
+            }
+            """
+        );
+
+        var output = result["comparisons.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return tupleEquals([a, \"x\"] as [number, string], [a, \"x\"] as [number, string]);"
+            );
+        await Assert.That(output).Contains("return tupleEquals([1, 2] as [number, number], o);");
+        await Assert
+            .That(output)
+            .Contains("return objectEquals(Comparisons.boxed(), [1, 2] as [number, number]);");
+        await Assert.That(output).Contains("return objectEquals(a, b);");
+    }
 }
