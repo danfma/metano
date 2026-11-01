@@ -1,8 +1,8 @@
 # Research: BCL collections as runtime types, runtime type descriptors
 
-Evidence tags: **[V]** = verified by reading the cited file on `main` at `5012eb57` (2026-11-01) or by fetching the cited external source on 2026-11-01; **[I]** = inferred from code or docs, not executed; **[M]** = maintainer decision, recorded in the issue or the brief.
+Evidence tags: **[V]** = verified by reading the cited file on `main` at `5012eb57` (2026-11-01), by fetching the cited external source on 2026-11-01, or by the critic's bundler measurements (R13); **[I]** = inferred from code or docs, not executed; **[M]** = maintainer decision, recorded in the issue, the brief or the first critic pass.
 
-Sources: the repository at `5012eb57`; the Deepkit documentation and source (R10); the maintainer brief for issue [#335](https://github.com/danfma/metano/issues/335), including its three amendments (`dynamic` support, the inline target-code function, and the `UnsafeCast` / `AsDynamic` escape hatches).
+Sources: the repository at `5012eb57`; the Deepkit documentation and source (R10); the maintainer brief for issue [#335](https://github.com/danfma/metano/issues/335), including its three amendments (`dynamic` support, the inline target-code function, and the `UnsafeCast` / `AsDynamic` escape hatches); the first critic review of PR #349 (tree-shaking measurements, R13; equality, R14).
 
 ## R1 — How collections are mapped today
 
@@ -131,8 +131,44 @@ Facts verified on 2026-11-01:
 
 ## R11 — Kotlin/JS precedents for the amendments
 
-[V] from kotlinlang.org "JavaScript interop" and "Dynamic type" (fetched 2026-11-01): the parameter of `js()` "is parsed at compile time and translated to JavaScript code 'as-is', it must be a string constant", and `js()` "returns a result of `dynamic` type, which doesn't provide type safety at compile time"; "the `dynamic` type basically turns off Kotlin's type checker" and `dyn.whatever(1)` "will be compiled 'as is'", operators included; `unsafeCast<T>()` does "no type checking … at all during runtime"; `external` declarations tell the compiler the implementation "is provided externally" and generate no code. [I] `asDynamic()` is documented in the stdlib API reference as an inline cast to `dynamic`; the two pages above do not describe it. Metano's `[Import]` / `[External]` are the counterpart of `external`; `Js.Code`, `AsDynamic()` and `UnsafeCast<T>()` are the counterparts of `js()`, `asDynamic()` and `unsafeCast()` (FR-030 to FR-034, FR-040).
+[V] from kotlinlang.org "JavaScript interop" and "Dynamic type" (fetched 2026-11-01): the parameter of `js()` "is parsed at compile time and translated to JavaScript code 'as-is', it must be a string constant", and `js()` "returns a result of `dynamic` type, which doesn't provide type safety at compile time"; "the `dynamic` type basically turns off Kotlin's type checker" and `dyn.whatever(1)` "will be compiled 'as is'", operators included; `unsafeCast<T>()` does "no type checking … at all during runtime"; `external` declarations tell the compiler the implementation "is provided externally" and generate no code. [I] `asDynamic()` is documented in the stdlib API reference as an inline cast to `dynamic`; the two pages above do not describe it. Metano's `[Import]` / `[External]` are the counterpart of `external`; `Js.Code`, `AsDynamic()` and `UnsafeCast<T>()` are the counterparts of `js()`, `asDynamic()` and `unsafeCast()` (FR-030 to FR-036).
 
 ## R12 — Diagnostic allocation
 
-[V] `MS0031` is the highest code in `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs` (L316); `MS0032`–`MS0037` are reserved by spec 009 and `MS0038`–`MS0043` by spec 010; the catalog states the next free code is `MS0044` (`diagnostic-catalog.md` L55). This spec reserves **`MS0044`–`MS0054`** (contracts/diagnostics.md).
+[V] `MS0031` is the highest code in `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs` (L316); `MS0032`–`MS0037` are reserved by spec 009 and `MS0038`–`MS0043` by spec 010; the catalog stated the next free code was `MS0044` (`diagnostic-catalog.md` L55). [M] Bug-fix PR #355 (#334, package root discovery) takes `MS0044` for an implemented diagnostic and merges before this spec, so this spec reserves **`MS0045`–`MS0055`** (contracts/diagnostics.md) and the next free code is `MS0056`.
+
+## R13 — Tree-shaking: what bundlers keep (critic measurements)
+
+Measured on 2026-11-01 by the first critic pass of PR #349 with a tiny consumer per shape and `bun build --minify`, esbuild 0.24 / 0.28 (`--bundle --minify`), Rollup 4 + `@rollup/plugin-node-resolve` + terser, and webpack 5 (production). Probe sources and the `bundle.sh` script lived in the review scratchpad; the facts are recorded in the critic's memory note and reproduced here. All [V] unless noted.
+
+| Shape | bun | esbuild | Rollup | webpack | Consequence |
+|---|---|---|---|---|---|
+| `import "metano-runtime"` on today's 2.x runtime | 16 B | 16 B | 16 B | — | The root barrel is already shakable; the new modules must keep it so (NFR-008 row 1). |
+| `HashSet` alone (2.x) | 1.33 KB gz | ≈ | ≈ | — | Baseline for the collection budgets. |
+| A full `List` surface as a class with string-keyed fields (critic's `list.js` probe) | 1.67 KB gz | ≈ | ≈ | — | Classes are fine; the ≤ 2.5 KB budget has headroom. |
+| `linq` `where` + `toArray` (2.x) | 0.36 KB gz | ≈ | ≈ | — | Standalone operator functions shake independently; keep them standalone. |
+| `system/json` (2.x) | 2.3 KB gz | ≈ | ≈ | — | — |
+| `@js-temporal/polyfill` alone | 43–47 KB gz | ≈ | ≈ | — | Runtime code must never `instanceof Temporal.*`; test by `Symbol.toStringTag`. |
+| `export namespace X { export function f() {} }` unused | kept | kept | kept | kept | A TS namespace with members is an IIFE; once one member is used, every member is kept. Affects branded companions, nested types, 010 D13 union companions, runtime `UUID` / `ImmutableCollection` (#361). |
+| `export enum E { … }` unused | kept | kept | kept | kept | Same IIFE shape; FR-044 emits `const … as const`. |
+| `class X { static $t = factory({...}) }` unused (eager static, no annotation) | kept (whole class) | kept | kept | kept | Eager descriptors are out. |
+| `class X { static $t = /*#__PURE__*/ factory({...}) }` unused (string key) | dropped | dropped | dropped | dropped | Acceptable, but still an eager call when the class *is* used. |
+| `class X { static [sym] = /*#__PURE__*/ factory({...}) }` unused (computed symbol key) | dropped | **kept** | dropped | dropped | esbuild keeps any class with a computed-symbol static, PURE or not; the same for `static get [sym]()` and an instance field `[sym] = null`. `[Symbol.iterator]` is special-cased and fine. The first draft's symbol-keyed static is therefore rejected. |
+| `class X { static get $t() { return (m ??= factory({...})); } }` unused (string-keyed lazy getter) | dropped | dropped | dropped | dropped | **The chosen class shape** (FR-018): zero cost until read, dropped with the class. |
+| `export const X$t = /*#__PURE__*/ factory({...})` unused | dropped | dropped | dropped | dropped | **The chosen shape for interfaces, plain objects, enums, unions** (FR-019, FR-020, FR-029, FR-044). Without the annotation: kept by Rollup / webpack. |
+| Primitive descriptors as plain object literals (`export const Int32Type = { … }`) unused | dropped | dropped | dropped | dropped | Literals need no annotation; one primitive with `isInt32` ≈ 0.2 KB gz. |
+| One exception class per module, lazy getter (critic's `exceptions-strkey-pure` probe, one class used) | ≈ 0.4 KB gz | ≈ | ≈ | — | Budget ≤ 0.5 KB per class; unused classes 0 bytes when each is its own module. |
+| `registerX(…)` at module scope with package `sideEffects: false`, imported for side effect only | **dropped** | **dropped** | **dropped** | **dropped** | Today's `[StrictUnionGuard]` `registerUnionGuard` silently disappears in bundles (pre-existing defect, tracked separately); any registry design is out (FR-029, NFR-006). |
+| `export namespace X { export const $type = {...} as const }` merged with an `as const` object | TS2451 | — | — | — | TS cannot merge a namespace with a `const` object; `X.$type` was impossible for `[StringEnum]` output anyway. |
+
+Two more facts the critic recorded [V]: `system/equality.equals` falls back to a structural compare for any object without `equals()` (class instances, lists), so it is not `EqualityComparer<T>.Default` (R14); and `copyRecordWith` uses `Object.assign`, which copies enumerable own properties only, so a non-enumerable hidden field is dropped by `with` unless copied explicitly (FR-008, FR-024).
+
+Also [V] on `main`: `targets/js/metano-runtime/package.json` `exports` carry no `source` / `types` conditions (only `.`, `./system/json`, `./system/linq`, `./package.json`, `./*.js`, `./*` as plain paths), and `scripts/smoke-test-runtime-package.sh` has no bundler step; FR-011 adds both.
+
+**Conclusion**: tree-shaking is not a property of "small modules"; it is a property of *shapes*. Every emission shape of this spec is one of the dropped rows above, and FR-043 re-measures them on every PR.
+
+## R14 — Equality semantics for collections
+
+[V] `targets/js/metano-runtime/src/system/equality.ts` `equals` (L35) checks a custom `equals`, then arrays element-wise, `Map`, `Set`, `Date`, and finally compares **any** two objects structurally by their own enumerable properties. Two distinct instances of a class without `equals()` with equal fields are therefore `equals`-equal, which .NET's `EqualityComparer<T>.Default` (reference equality unless `Equals` is overridden) does not do. [V] `hash-set.ts` `_areEqual` (L146-157) and `_getHash` (L134-144) implement the .NET rule: `===`, then duck-typed `equals()` / `hashCode()`, else reference / `HashCode.combine`. [V] .NET: `List<T>.Contains`, `IndexOf`, `Remove`, `Dictionary<K,V>` and `HashSet<T>` use `EqualityComparer<T>.Default`; a record overrides `Equals` / `GetHashCode` (value semantics over its members, with reference semantics for a member that does not override them, so a `List<T>` member compares by reference). SameValueZero: `NaN` equals `NaN` for `double` in `EqualityComparer<double>.Default` (.NET `Double.Equals` returns `true` for two `NaN`s).
+
+**Conclusion**: the collections key through a new `defaultEquals` / `defaultHashCode` pair modelled on today's `HashSet` (D18, FR-006), and `system/equality.equals` is not taught about collections (a record with a collection field compares it by reference, as .NET does).

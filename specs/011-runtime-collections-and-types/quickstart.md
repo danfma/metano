@@ -9,7 +9,7 @@ git fetch origin
 ```
 
 ```bash
-git worktree add ../Metano-issue-335-a -b feat/335-runtime-exceptions origin/main
+git worktree add ../Metano-issue-335-a -b feat/335-tree-shaking-and-exceptions origin/main
 ```
 
 ```bash
@@ -41,6 +41,20 @@ dotnet run --project src/Metano.Compiler.TypeScript/ -- -p ../scratch/Scratch.cs
 
 Inspect `../scratch/out` and the MS0001 lines in the console.
 
+## Reproduce the tree-shaking facts (research R13)
+
+In a scratch folder outside the repo, with `bun add -d esbuild rollup @rollup/plugin-node-resolve @rollup/plugin-terser`:
+
+```bash
+printf 'import "metano-runtime";\n' > root-only.js && bun build root-only.js --minify --format=esm --outfile out.js && wc -c out.js
+```
+
+```bash
+printf 'export namespace X { export function f() { return 1; } }\n' > ns.ts && bun build ns.ts --minify --format=esm --outfile ns.js && cat ns.js
+```
+
+The first prints a few bytes (today's runtime is shakable at the root); the second shows the namespace IIFE that survives even though nothing imports `X`.
+
 ## Run the suites that this feature touches
 
 ```bash
@@ -52,18 +66,22 @@ cd targets/js/metano-runtime && bun run build && bun test
 ```
 
 ```bash
-for s in sample-todo sample-issue-tracker sample-todo-service; do (cd targets/js/$s && bun run build && bun test) || exit 1; done
+cd targets/js/metano-runtime && bun test test/tree-shaking
 ```
 
-## Benchmark (stage 011b, review artifact)
+```bash
+for s in sample-todo sample-issue-tracker sample-todo-service sample-runtime-types; do (cd targets/js/$s && bun run build && bun test) || exit 1; done
+```
+
+## Benchmark (stage 011c, review artifact)
 
 ```bash
 cd targets/js/metano-runtime && bun run bench
 ```
 
-Record the table in `docs/runtime-types.md`; every NFR-001 budget must hold before 011b merges.
+Record the table in `docs/runtime-types.md`; every NFR-001 budget must hold before 011c merges.
 
-## Verify the zero-cost invariant (stages 011c / 011d)
+## Verify the zero-cost invariant (stages 011b / 011d)
 
 ```bash
 dotnet run --project src/Metano.Compiler.TypeScript/ -- -p samples/SampleTodo/SampleTodo.csproj -o /tmp/before --clean
@@ -73,7 +91,7 @@ dotnet run --project src/Metano.Compiler.TypeScript/ -- -p samples/SampleTodo/Sa
 git checkout <011d-commit> && dotnet run --project src/Metano.Compiler.TypeScript/ -- -p samples/SampleTodo/SampleTodo.csproj -o /tmp/after --clean && diff -r /tmp/before /tmp/after
 ```
 
-An empty diff is the NFR-002 gate (SampleTodo asks no runtime-type question).
+An empty diff is the NFR-002 gate (SampleTodo asks no runtime-type question). Then bundle `/tmp/after`'s entry with `bun build --minify` and `grep -c reflection` the output: 0 is the NFR-010 gate.
 
 ## Before pushing
 
