@@ -4,6 +4,43 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.7.1
+
+_2026-11-01_
+
+
+### 🐛 Bug Fixes
+
+* decide primary-ctor promotion once per type and never promote a written parameter ([#254](https://github.com/danfma/metano/issues/254)) ([f60a70b](https://github.com/danfma/metano/commit/f60a70b51617a4aa00aa3ee3938e65df2cbe714c))
+* emit static properties and containerless module fields ([#314](https://github.com/danfma/metano/issues/314)) ([a1e9314](https://github.com/danfma/metano/commit/a1e931461998a9dd699f939db5321f9923337c1c))
+* give written and divergent primary-ctor parameters their own mutable storage ([#254](https://github.com/danfma/metano/issues/254)) ([d9efbcd](https://github.com/danfma/metano/commit/d9efbcde0c43c9c40c4d3e262f7c09a94934f2d6))
+* iterate IEnumerable implementations and transpile custom init accessors ([#320](https://github.com/danfma/metano/issues/320)) ([b6e33ed](https://github.com/danfma/metano/commit/b6e33edcc00de221cc83ea5e3cf871940d2ec536))
+* keep a written positional record parameter promoted ([#254](https://github.com/danfma/metano/issues/254)) ([ac91e47](https://github.com/danfma/metano/commit/ac91e47f36b2d3a5a3815b65e4e41cd61387ca7a))
+* keep C# reference equality and tuple semantics in equality lowering ([#254](https://github.com/danfma/metano/issues/254)) ([a72dfb1](https://github.com/danfma/metano/commit/a72dfb1d2242c97a64ee4bc3bd1c9fc67e171f07))
+* keep tuple and promoted-parameter lowering sound against divergent operands ([#254](https://github.com/danfma/metano/issues/254)) ([3547daa](https://github.com/danfma/metano/commit/3547daa9f7fb79b7dc22f651e0e67cbbafe30c25))
+* lower record and tuple value equality, hash codes and primary-ctor initializers ([#254](https://github.com/danfma/metano/issues/254)) ([335a6c6](https://github.com/danfma/metano/commit/335a6c629eb6ab93183ef6becd9dde8006bc52bd)), closes [#314](https://github.com/danfma/metano/issues/314)
+* read promoted primary-ctor parameters and compare tuples in object.Equals ([#254](https://github.com/danfma/metano/issues/254)) ([45f1f5d](https://github.com/danfma/metano/commit/45f1f5d0d2150b455527f29ebe09f5c733b6cd3e))
+* reject module-variable uses that ES modules cannot keep ([#314](https://github.com/danfma/metano/issues/314)) ([23ce3a9](https://github.com/danfma/metano/commit/23ce3a94dad9d011908eedbc138e4885aab3b792))
+* resolve enumeration contracts through Roslyn and bridge hand-written enumerators ([#320](https://github.com/danfma/metano/issues/320)) ([b952cb7](https://github.com/danfma/metano/commit/b952cb72bc0c7af12b938d574207350ef3df2aaf))
+* stop declaring an enumerator with its own next as an Iterator ([#320](https://github.com/danfma/metano/issues/320)) ([3996e67](https://github.com/danfma/metano/commit/3996e67bd341aca5708dd9f88ff4c6888eed1525))
+* throw on duplicate Dictionary.Add keys and initialize required and struct members ([#320](https://github.com/danfma/metano/issues/320)) ([4ac3859](https://github.com/danfma/metano/commit/4ac38590568e489e2d8e0e5200858964097bce5b)), closes [#291](https://github.com/danfma/metano/issues/291)
+
+### ♻️ Refactor
+
+* name the record promotion tests after their behavior ([#254](https://github.com/danfma/metano/issues/254)) ([e14e7e1](https://github.com/danfma/metano/commit/e14e7e16d5b2059e6fe01d20afba733922e040e0)), closes [#332](https://github.com/danfma/metano/issues/332)
+* share the promotion candidate lookup and tighten the promotion tests ([#254](https://github.com/danfma/metano/issues/254)) ([1fc1763](https://github.com/danfma/metano/commit/1fc176329d57f61613834e41ac42786bebcbb597)), closes [#331](https://github.com/danfma/metano/issues/331)
+* tidy the promoted-parameter read and the tuple object.Equals entry ([#254](https://github.com/danfma/metano/issues/254)) ([c8da097](https://github.com/danfma/metano/commit/c8da0973410d031e97fd43525a39d51b3f547634))
+
+### 📝 Documentation
+
+* apply maintainer decisions to the C# unions specification ([#304](https://github.com/danfma/metano/issues/304)) ([5012eb5](https://github.com/danfma/metano/commit/5012eb579ee9b38f1e2041d3df23e46ef4f17906)), closes [#298](https://github.com/danfma/metano/issues/298) [#239](https://github.com/danfma/metano/issues/239)
+* apply maintainer decisions to the polymorphic json specification ([#268](https://github.com/danfma/metano/issues/268), [#269](https://github.com/danfma/metano/issues/269), [#270](https://github.com/danfma/metano/issues/270)) ([2df3b26](https://github.com/danfma/metano/commit/2df3b266ef2a89f490ca8b43485e8b28ca2556ee))
+* close critic gaps in the polymorphic json specification ([#268](https://github.com/danfma/metano/issues/268), [#269](https://github.com/danfma/metano/issues/269), [#270](https://github.com/danfma/metano/issues/270)) ([4a0e087](https://github.com/danfma/metano/commit/4a0e087f0a1a4944423ff082773aa3b96059adfe))
+* close review gaps in the C# unions specification ([#304](https://github.com/danfma/metano/issues/304)) ([49ef112](https://github.com/danfma/metano/commit/49ef11294a92f16d1022b8df44a9f970ee214632)), closes [#278](https://github.com/danfma/metano/issues/278)
+* record where TS-shaped lowerings belong ([#320](https://github.com/danfma/metano/issues/320)) ([16d6d5a](https://github.com/danfma/metano/commit/16d6d5ab8d6ff43bce8b804812cfef025fabbb47))
+* specify C# 15 union declarations ([#304](https://github.com/danfma/metano/issues/304)) ([6f27a4c](https://github.com/danfma/metano/commit/6f27a4c261f643a7f8ac169ffbcf81b686d283dc))
+* specify STJ-faithful polymorphic JSON, branded factories and value roots ([#268](https://github.com/danfma/metano/issues/268), [#269](https://github.com/danfma/metano/issues/269), [#270](https://github.com/danfma/metano/issues/270)) ([98ec36e](https://github.com/danfma/metano/commit/98ec36e850a57ee2ac2f7d82b4cbb8c48be8e8e6)), closes [#278](https://github.com/danfma/metano/issues/278)
+
 ## 2.7.0
 
 _2026-11-01_
