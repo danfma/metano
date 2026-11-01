@@ -38,7 +38,8 @@ internal static class PrimaryConstructorPropertyAlias
     /// before any member initializer runs.
     /// </summary>
     public static bool IsPositionalRecordProperty(IPropertySymbol property) =>
-        property.DeclaringSyntaxReferences.Any(reference =>
+        property.ContainingType.IsRecord
+        && property.DeclaringSyntaxReferences.Any(reference =>
             reference.GetSyntax() is ParameterSyntax
         );
 
