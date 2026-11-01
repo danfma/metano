@@ -21,7 +21,8 @@ namespace Metano;
 /// directory (other than the filesystem root), the child of it on the output's path:
 /// that shared parent is often a generic folder such as a home or temp directory, so it
 /// is never taken (the output directory itself when it holds the project);</item>
-/// <item>else (no boundary) the parent of the output directory.</item>
+/// <item>else (the output is unrelated to the project, which shares only the filesystem
+/// root with it) the output directory itself.</item>
 /// </list>
 /// </para>
 /// <para>
@@ -32,7 +33,8 @@ namespace Metano;
 /// </para>
 /// <para>
 /// Known trade-offs: a repository root takes precedence, so a home directory kept
-/// under git (dotfiles) widens the workspace to the home directory. Paths are compared
+/// under git (dotfiles) widens the workspace to the home directory, and a monorepo's
+/// root <c>package.json</c> wins when the generated package has none of its own. Paths are compared
 /// as given after <see cref="Path.GetFullPath(string)"/>: symbolic links are not
 /// resolved, so the boundaries follow the paths as written, and the comparison ignores
 /// case on Windows and macOS.
@@ -66,7 +68,7 @@ public static class PackageRootResolver
         var outputDirectory = NormalizeDirectory(outputDir);
         var projectDirectory = ProjectDirectoryOf(projectPath);
         var topmostDirectory = FindTopmostDirectory(outputDirectory, projectDirectory);
-        var legacyRoot = Path.GetDirectoryName(outputDirectory);
+        var defaultPackageRoot = Path.GetDirectoryName(outputDirectory);
 
         var nearestPackageJsonDirectory = SelfAndAncestorsUpTo(outputDirectory, topmostDirectory)
             .FirstOrDefault(HasPackageJson);
@@ -74,12 +76,12 @@ public static class PackageRootResolver
         if (nearestPackageJsonDirectory is not null)
             return PackageRootResolution.Resolved(nearestPackageJsonDirectory);
 
-        if (FallbackLeavesWorkspace(outputDirectory, topmostDirectory, legacyRoot))
+        if (FallbackLeavesWorkspace(outputDirectory, topmostDirectory, defaultPackageRoot))
             return PackageRootResolution.Refused(
-                CreateOutsideWorkspaceDiagnostic(outputDirectory, legacyRoot)
+                CreateOutsideWorkspaceDiagnostic(outputDirectory, defaultPackageRoot)
             );
 
-        return PackageRootResolution.Resolved(legacyRoot);
+        return PackageRootResolution.Resolved(defaultPackageRoot);
     }
 
     private static string NormalizeDirectory(string path) =>
@@ -103,31 +105,32 @@ public static class PackageRootResolver
         if (markedRoot is not null)
             return markedRoot;
 
-        var sharedAncestorIndex = candidates.FindIndex(dir =>
+        var sharedAncestor = candidates.FirstOrDefault(dir =>
             IsSharedAncestorBoundary(dir, projectDirectory)
         );
 
-        if (sharedAncestorIndex < 0)
-            return Path.GetDirectoryName(outputDirectory) ?? outputDirectory;
+        // Unrelated to the project: only a package.json in the output directory itself.
+        if (sharedAncestor is null)
+            return outputDirectory;
 
-        var sharedAncestor = candidates[sharedAncestorIndex];
-
-        if (IsSamePath(sharedAncestor, projectDirectory) || sharedAncestorIndex == 0)
+        if (IsSamePath(sharedAncestor, projectDirectory))
             return sharedAncestor;
 
-        return candidates[sharedAncestorIndex - 1];
+        // The shared directory is often generic (a home or temp folder): stop below it.
+        return candidates.TakeWhile(dir => !IsSamePath(dir, sharedAncestor)).LastOrDefault()
+            ?? outputDirectory;
     }
 
     /// <summary>
-    /// The legacy fallback, the parent of the output directory, leaves the workspace
+    /// The default package root, the parent of the output directory, leaves the workspace
     /// when there is no parent or when the output directory is already the topmost
     /// directory.
     /// </summary>
     private static bool FallbackLeavesWorkspace(
         string outputDirectory,
         string topmostDirectory,
-        [NotNullWhen(false)] string? legacyRoot
-    ) => legacyRoot is null || IsSamePath(outputDirectory, topmostDirectory);
+        [NotNullWhen(false)] string? defaultPackageRoot
+    ) => defaultPackageRoot is null || IsSamePath(outputDirectory, topmostDirectory);
 
     private static bool IsRepositoryRoot(string dir)
     {
@@ -193,12 +196,12 @@ public static class PackageRootResolver
 
     private static MetanoDiagnostic CreateOutsideWorkspaceDiagnostic(
         string outputDirectory,
-        string? legacyRoot
+        string? defaultPackageRoot
     )
     {
-        var cause = legacyRoot is null
+        var cause = defaultPackageRoot is null
             ? "the output directory is the filesystem root, so there is no default package root"
-            : $"the default package root (the parent of the output directory, '{legacyRoot}') "
+            : $"the default package root (the parent of the output directory, '{defaultPackageRoot}') "
                 + "lies outside the workspace: the output directory is already the topmost "
                 + "directory the search may use (a repository root, a solution directory, the "
                 + "C# project directory, or the child of the directory shared with the project)";
