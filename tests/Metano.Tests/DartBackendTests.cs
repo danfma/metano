@@ -111,7 +111,7 @@ public class DartBackendTests
     [Test]
     public async Task PositionalRecordProperty_OverridingAbstractProperty_IsAssignedByTheConstructor()
     {
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public abstract record Entry { public abstract int Id { get; init; } }
@@ -939,7 +939,7 @@ public class DartBackendTests
     {
         // A receiver that binds looser than a selector must keep its parentheses:
         // `(value ?? "").Trim()` printed bare is `value ?? ''.trim()` (#324).
-        var (files, _) = TranspileDart(
+        var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
             public class Receivers
