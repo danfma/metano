@@ -276,6 +276,42 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
+    public async Task PositionalRecordParam_WrittenByAnInitializer_StaysPromoted()
+    {
+        // C# assigns the positional property the original argument before any
+        // initializer runs, so `Y = X++` leaves X at 1 and Y at 1. The
+        // parameter property does the same; the initializer keeps the bare
+        // constructor parameter.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record Counted(int X)
+            {
+                public int Y { get; } = X++;
+
+                public int GetX() => X;
+            }
+
+            [Transpile]
+            public record struct CountedValue(int X)
+            {
+                public int Y { get; } = X++;
+            }
+            """
+        );
+
+        var counted = result["counted.ts"];
+        await Assert.That(counted).Contains("constructor(readonly x: number)");
+        await Assert.That(counted).Contains("this.y = x++;");
+        await Assert.That(counted).Contains("return this.x;");
+        await Assert.That(counted).DoesNotContain("_x");
+
+        var countedValue = result["counted-value.ts"];
+        await Assert.That(countedValue).Contains("constructor(public x: number)");
+        await Assert.That(countedValue).Contains("this.y = x++;");
+    }
+
+    [Test]
     public async Task WrittenParam_BehindAnExpressionBodiedAlias_IsNeverPromoted()
     {
         // `A => a` reads the parameter live, so after `a++` it must see the
