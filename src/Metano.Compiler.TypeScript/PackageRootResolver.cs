@@ -4,17 +4,18 @@ using Metano.Compiler.Diagnostics;
 namespace Metano;
 
 /// <summary>
-/// Finds the consumer package root (the directory whose <c>package.json</c> the
-/// TypeScript run updates) when <c>--package-root</c> is not given.
+/// Chooses the consumer package root: the directory whose <c>package.json</c> the
+/// TypeScript run updates. An explicit <c>--package-root</c> is used as given.
 /// <para>
-/// The search walks up from the output directory and takes the first directory that
-/// holds a <c>package.json</c>, as npm and Bun do. Unlike their walk, it stops at the
-/// workspace boundary: the nearest directory, starting at the output directory itself,
-/// that is the C# project directory, a repository root (it holds <c>.git</c>) or a
-/// solution directory (it holds a <c>.sln</c> or <c>.slnx</c> file). A
-/// <c>package.json</c> above the boundary belongs to another project and is never
-/// picked (#334). Without any boundary, the search covers only the output directory
-/// and its parent.
+/// Otherwise the search walks up from the output directory and takes the first
+/// directory that holds a <c>package.json</c>, as npm and Bun do. Unlike their walk, it
+/// stops at the workspace boundary, so a <c>package.json</c> that belongs to another
+/// project further up is never picked (#334). The boundary is the nearest directory,
+/// starting at the output directory itself, that is a repository root (it holds
+/// <c>.git</c>) or a solution directory (it holds a <c>.sln</c> or <c>.slnx</c> file).
+/// Without such a marker, it is the smallest directory that holds both the output
+/// directory and the C# project directory, unless that is the filesystem root. Without
+/// any boundary, the search covers only the output directory and its parent.
 /// </para>
 /// <para>
 /// When the search finds nothing, the root falls back to the legacy default, the
@@ -23,6 +24,10 @@ namespace Metano;
 /// <see cref="DiagnosticCodes.PackageRootOutsideWorkspace"/>: the caller must pass
 /// <c>--package-root</c>.
 /// </para>
+/// <para>
+/// Paths are compared as given after <see cref="Path.GetFullPath(string)"/>: symbolic
+/// links are not resolved, and the comparison ignores case on Windows and macOS.
+/// </para>
 /// </summary>
 public static class PackageRootResolver
 {
@@ -30,27 +35,47 @@ public static class PackageRootResolver
 
     private static readonly string[] SolutionFilePatterns = ["*.sln", "*.slnx"];
 
+    private static readonly StringComparison PathComparison =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
     /// <summary>
-    /// Resolves the package root for <paramref name="outputDir"/>, bounded by the
-    /// workspace that holds it. <paramref name="projectDir"/> is the directory of the
-    /// C# project file.
+    /// Resolves the package root for the files generated into
+    /// <paramref name="outputDir"/> from the C# project at <paramref name="projectPath"/>.
+    /// A non-null <paramref name="explicitPackageRoot"/> wins without any search.
     /// </summary>
-    public static PackageRootResolution Resolve(string outputDir, string projectDir)
+    public static PackageRootResolution Resolve(
+        string outputDir,
+        string projectPath,
+        string? explicitPackageRoot = null
+    )
     {
-        var output = NormalizeDirectory(outputDir);
-        var project = NormalizeDirectory(projectDir);
-        var legacyRoot = Path.GetDirectoryName(output);
-        var boundary = SelfAndAncestors(output).FirstOrDefault(dir => IsBoundary(dir, project));
-        var searchLimit = boundary ?? legacyRoot ?? output;
+        if (explicitPackageRoot is not null)
+            return PackageRootResolution.Resolved(Path.GetFullPath(explicitPackageRoot));
 
-        var withPackageJson = SelfAndAncestorsUpTo(output, searchLimit)
-            .FirstOrDefault(dir => File.Exists(Path.Combine(dir, PackageJsonFileName)));
+        var outputDirectory = NormalizeDirectory(outputDir);
+        var projectDirectory = NormalizeDirectory(
+            Path.GetDirectoryName(Path.GetFullPath(projectPath))!
+        );
+        var boundary = FindWorkspaceBoundary(outputDirectory, projectDirectory);
+        var legacyRoot = Path.GetDirectoryName(outputDirectory);
 
-        if (withPackageJson is not null)
-            return PackageRootResolution.Resolved(withPackageJson);
+        var nearestPackageJsonDirectory = SelfAndAncestorsUpTo(
+                outputDirectory,
+                SearchLimit(outputDirectory, boundary, legacyRoot)
+            )
+            .FirstOrDefault(HasPackageJson);
 
-        if (legacyRoot is null || boundary == output)
-            return PackageRootResolution.Refused(OutsideWorkspace(output, legacyRoot));
+        if (nearestPackageJsonDirectory is not null)
+            return PackageRootResolution.Resolved(nearestPackageJsonDirectory);
+
+        // The legacy fallback must not leave the workspace: refuse when the output
+        // directory is the boundary itself (or the filesystem root).
+        if (legacyRoot is null || IsSamePath(outputDirectory, boundary))
+            return PackageRootResolution.Refused(
+                CreateOutsideWorkspaceDiagnostic(outputDirectory, legacyRoot)
+            );
 
         return PackageRootResolution.Resolved(legacyRoot);
     }
@@ -58,10 +83,28 @@ public static class PackageRootResolver
     private static string NormalizeDirectory(string path) =>
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 
-    private static bool IsBoundary(string dir, string projectDir) =>
-        string.Equals(dir, projectDir, StringComparison.Ordinal)
-        || IsRepositoryRoot(dir)
-        || IsSolutionDirectory(dir);
+    private static string? FindWorkspaceBoundary(string outputDirectory, string projectDirectory)
+    {
+        var candidates = SelfAndAncestors(outputDirectory).ToList();
+
+        return candidates.FirstOrDefault(IsMarkedWorkspaceRoot)
+            ?? candidates.FirstOrDefault(dir =>
+                !IsFilesystemRoot(dir) && IsSameOrUnder(projectDirectory, dir)
+            );
+    }
+
+    /// <summary>
+    /// Without a boundary, only the output directory and its parent (the legacy root)
+    /// are searched.
+    /// </summary>
+    private static string SearchLimit(
+        string outputDirectory,
+        string? boundary,
+        string? legacyRoot
+    ) => boundary ?? legacyRoot ?? outputDirectory;
+
+    private static bool IsMarkedWorkspaceRoot(string dir) =>
+        IsRepositoryRoot(dir) || IsSolutionDirectory(dir);
 
     private static bool IsRepositoryRoot(string dir)
     {
@@ -71,9 +114,37 @@ public static class PackageRootResolver
         return Directory.Exists(gitPath) || File.Exists(gitPath);
     }
 
-    private static bool IsSolutionDirectory(string dir) =>
-        Directory.Exists(dir)
-        && SolutionFilePatterns.Any(pattern => Directory.EnumerateFiles(dir, pattern).Any());
+    private static bool IsSolutionDirectory(string dir)
+    {
+        try
+        {
+            return SolutionFilePatterns.Any(pattern =>
+                Directory.EnumerateFiles(dir, pattern).Any()
+            );
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A missing (not yet created) or unreadable directory holds no solution.
+            return false;
+        }
+    }
+
+    private static bool HasPackageJson(string dir) =>
+        File.Exists(Path.Combine(dir, PackageJsonFileName));
+
+    private static bool IsFilesystemRoot(string dir) => Path.GetDirectoryName(dir) is null;
+
+    private static bool IsSamePath(string path, string? other) =>
+        string.Equals(path, other, PathComparison);
+
+    private static bool IsSameOrUnder(string path, string ancestor)
+    {
+        var ancestorPrefix = Path.EndsInDirectorySeparator(ancestor)
+            ? ancestor
+            : ancestor + Path.DirectorySeparatorChar;
+
+        return IsSamePath(path, ancestor) || path.StartsWith(ancestorPrefix, PathComparison);
+    }
 
     private static IEnumerable<string> SelfAndAncestors(string dir)
     {
@@ -87,21 +158,25 @@ public static class PackageRootResolver
         {
             yield return current;
 
-            if (string.Equals(current, limit, StringComparison.Ordinal))
+            if (IsSamePath(current, limit))
                 yield break;
         }
     }
 
-    private static MetanoDiagnostic OutsideWorkspace(string outputDir, string? legacyRoot) =>
+    private static MetanoDiagnostic CreateOutsideWorkspaceDiagnostic(
+        string outputDirectory,
+        string? legacyRoot
+    ) =>
         new(
             MetanoDiagnosticSeverity.Error,
             DiagnosticCodes.PackageRootOutsideWorkspace,
-            $"No package.json was found for the output directory '{outputDir}' inside its "
-                + "workspace, and the default package root (the parent of the output "
-                + $"directory, '{legacyRoot ?? "<none>"}') lies outside the C# project, "
-                + "repository or solution that holds it. package.json was not written. "
-                + "Pass --package-root (MSBuild: MetanoPackageRoot) to choose the package "
-                + "root, or --skip-package-json (MetanoSkipPackageJson) to skip the update."
+            $"No package.json was found for the output directory '{outputDirectory}' inside "
+                + "its workspace, and the default package root (the parent of the output "
+                + $"directory, '{legacyRoot ?? "<none>"}') lies outside it: the output "
+                + "directory is itself a repository root, a solution directory or the "
+                + "directory that holds the C# project. package.json was not written. Pass "
+                + "--package-root (MSBuild: MetanoPackageRoot) to choose the package root, or "
+                + "--skip-package-json (MetanoSkipPackageJson) to skip the update."
         );
 }
 

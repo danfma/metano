@@ -397,7 +397,7 @@ public class PackageJsonCacheReuseTests
 
         var reconciliation = PackageJsonReconciler.Reconcile(
             target.LastPackageManifestInputs,
-            package.Root,
+            PackageRootResolution.Resolved(package.Root),
             package.OutputDir,
             dist: "./dist",
             srcRoot: null,
