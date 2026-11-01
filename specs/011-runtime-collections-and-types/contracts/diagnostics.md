@@ -1,6 +1,6 @@
-# Contract: Diagnostics `MS0045`–`MS0055`
+# Contract: Diagnostics `MS0045`–`MS0056`
 
-**Normative for**: FR-004, FR-014, FR-020, FR-021, FR-024–FR-026, FR-030, FR-031, FR-033, FR-035. This spec PR reserves the codes in [diagnostic-catalog.md](../../001-project-baseline-evolution/baseline/diagnostic-catalog.md); `MS0032`–`MS0037` belong to spec 009, `MS0038`–`MS0043` to spec 010 and `MS0044` to #334 / PR #355; the next free code after this block is `MS0056`. Symbolic names become constants in `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs` when implemented. Each reason needs one test asserting code, severity and location; a warning test also asserts that the output is emitted.
+**Normative for**: FR-004, FR-014, FR-020, FR-021, FR-024–FR-026, FR-030, FR-031, FR-033, FR-035. This spec PR reserves the codes in [diagnostic-catalog.md](../../001-project-baseline-evolution/baseline/diagnostic-catalog.md); `MS0032`–`MS0037` belong to spec 009, `MS0038`–`MS0043` to spec 010 and `MS0044` to #334 / PR #355; the next free code after this block is `MS0057` (which OD-22 would take if accepted). Symbolic names become constants in `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs` when implemented. Each reason needs one test asserting code, severity and location; a warning test also asserts that the output is emitted.
 
 | Code | Name | Severity | Location |
 |---|---|---|---|
@@ -11,10 +11,11 @@
 | `MS0049` | `UnsupportedReflection` | Error | the member access or `typeof` |
 | `MS0050` | `ReifiedParameterOnInteropSurface` | Warning | the member declaration (once) |
 | `MS0051` | `TargetSpecificInterop` | Error | the reference |
-| `MS0052` | `InvalidInlineCode` | Error / Warning | the argument or the hole |
+| `MS0052` | `InvalidInlineCode` | Error | the argument or the hole |
 | `MS0053` | `UnsupportedDynamicOperation` | Error | the operation |
 | `MS0054` | `UnreifiableTypeParameter` | Error | the runtime question (`is T`, `typeof(T)`, …) |
 | `MS0055` | `UncheckedCast` | Warning (OD-21 below) | the cast |
+| `MS0056` | `InlineCodeHoleInStringLiteral` | Warning | the hole |
 
 ## Reasons
 
@@ -30,7 +31,7 @@ Example: `'o is Action<int>' cannot be lowered: delegates have no runtime type t
 **MS0046 — ErasedTypeArgumentTest** (Warning). The output is `asArray(v) !== null` (arrays) or the `instanceof` + wildcard test (collections).
 
 1. `is` / `as` / pattern / cast against `T[]` or `JsArray<T>` where `T` is not `object`.
-2. `is List<X>` (or another runtime collection) where the tested expression's static type cannot guarantee that the collection carries `$typeArguments` and `X` is not `object` (an absent field or `UnknownType` matches).
+2. `is List<X>` (or another runtime collection) where the tested expression's static type cannot guarantee that the collection carries `$typeArguments$<Class>` and `X` is not `object` (an absent field or `UnknownType` matches).
 
 **MS0047 — PlainObjectShapeOverlap** (Warning).
 
@@ -61,11 +62,10 @@ Example: `'o is UserDto' is structural: 'NamedDto' { Name, Age } also satisfies 
 
 The containing member or type carrying `[Ignore(<that target>)]` suppresses the reason (the member is not emitted there).
 
-**MS0052 — InvalidInlineCode** (Error, except reason 3).
+**MS0052 — InvalidInlineCode** (Error).
 
 1. The `code` argument is not a constant string expression or an interpolated string with constant literal parts.
 2. A hole contains a `ref` / `out` argument, a `dynamic`-bound operation that MS0053 rejects, or an `await`.
-3. **Warning.** A hole falls inside a JS string literal of the text (`'…{x}…'`, `"…{x}…"`, `` `…{x}…` `` with no `${`): the hole is spliced as code, not as a quoted value. Tested with a single-quoted, a double-quoted and a template-literal case.
 
 **MS0053 — UnsupportedDynamicOperation** (Error).
 
@@ -86,5 +86,9 @@ The containing member or type carrying `[Ignore(<that target>)]` suppresses the 
 3. `(T)x` where `T` is an open, non-reified type parameter at a site that MS0054 does not reject (an unconstrained `T` in a non-reified body: the cast is a no-op).
 
 Implicit conversions from `dynamic` are **not** a reason (FR-030: they emit nothing and are not diagnosed). The message ends with: `Use x.UnsafeCast<T>() to state that the cast is intentionally unchecked.`
+
+**MS0056 — InlineCodeHoleInStringLiteral** (Warning).
+
+1. A `Js.Code` hole falls inside a JS string literal of the text (`'…{x}…'`, `"…{x}…"`, `` `…{x}…` `` with no `${`): the hole is spliced as code, not as a quoted value. Tested with a single-quoted, a double-quoted and a template-literal case. The output is emitted.
 
 **OD-21 — `MS0055` severity** (recorded here because it belongs with the code). (a) Warning; (b) Info; (c) Warning only outside `[EmitPackage]` libraries. **Recommend (a)**: an unchecked cast is a semantic gap the author should acknowledge once by writing `UnsafeCast`, and `TreatWarningsAsErrors` consumers get the strictness they asked for.

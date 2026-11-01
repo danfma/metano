@@ -102,7 +102,7 @@ return (($receiver) => $receiver == null ? null : listRemove($receiver.items, it
 
 ## R8 — Why not `Array` subclasses, wrappers with adapters, or a transformer
 
-Evaluated for ADR-0026:
+Evaluated for ADR-0027:
 
 - **`class List<T> extends Array<T>`.** Species semantics (`map` / `filter` return a `List` through `Symbol.species`), `length` is a magic property that cannot be bounds-checked, `list[i]` cannot throw, `Array.isArray(list)` is `true` so every array test misclassifies, V8 de-optimises subclassed arrays with extra own properties, and JSON / spread / `Array.from` already work for any iterable, so the subclass buys nothing that `Iterable<T>` does not. Rejected [I, well documented in V8 and TC39 discussions; no probe].
 - **JS wrappers with interop adapters (DllImport / JSImport style).** Every boundary crossing needs an adapter that copies or proxies. `Proxy` costs an order of magnitude per access and defeats inlining; copying hides O(n) at call sites. Rejected [I].
@@ -135,7 +135,7 @@ Facts verified on 2026-11-01:
 
 ## R12 — Diagnostic allocation
 
-[V] `MS0031` is the highest code in `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs` (L316); `MS0032`–`MS0037` are reserved by spec 009 and `MS0038`–`MS0043` by spec 010; the catalog stated the next free code was `MS0044` (`diagnostic-catalog.md` L55). [M] Bug-fix PR #355 (#334, package root discovery) takes `MS0044` for an implemented diagnostic and merges before this spec, so this spec reserves **`MS0045`–`MS0055`** (contracts/diagnostics.md) and the next free code is `MS0056`.
+[V] `MS0031` is the highest code in `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs` (L316); `MS0032`–`MS0037` are reserved by spec 009 and `MS0038`–`MS0043` by spec 010; the catalog stated the next free code was `MS0044` (`diagnostic-catalog.md` L55). [M] Bug-fix PR #355 (#334, package root discovery) takes `MS0044` for an implemented diagnostic and merges before this spec, so this spec reserves **`MS0045`–`MS0056`** (contracts/diagnostics.md) and the next free code is `MS0057`.
 
 ## R13 — Tree-shaking: what bundlers keep (critic measurements)
 
@@ -154,14 +154,18 @@ Measured on 2026-11-01 by the first critic pass of PR #349 with a tiny consumer 
 | `class X { static $t = factory({...}) }` unused (eager static, no annotation) | kept (whole class) | kept | kept | kept | Eager descriptors are out. |
 | `class X { static $t = /*#__PURE__*/ factory({...}) }` unused (string key) | dropped | dropped | dropped | dropped | Acceptable, but still an eager call when the class *is* used. |
 | `class X { static [sym] = /*#__PURE__*/ factory({...}) }` unused (computed symbol key) | dropped | **kept** | dropped | dropped | esbuild keeps any class with a computed-symbol static, PURE or not; the same for `static get [sym]()` and an instance field `[sym] = null`. `[Symbol.iterator]` is special-cased and fine. The first draft's symbol-keyed static is therefore rejected. |
-| `class X { static get $t() { return (m ??= factory({...})); } }` unused (string-keyed lazy getter) | dropped | dropped | dropped | dropped | **The chosen class shape** (FR-018): zero cost until read, dropped with the class. |
+| `class X { static get $t() { return (m ??= factory({...})); } }` unused (string-keyed lazy getter) | dropped | dropped | dropped | dropped | Dropped when unused, **but a used class keeps its getter body**, so a factory call there pulls `reflection` into every program that uses the class: one thrown exception measured 0.58 KB gz with a realistic `classType` versus 0.35 KB with a literal (second critic pass). |
+| `class X { static get $t() { return (m ??= { kind: "class", …, test: v => v instanceof X }); } }` (string-keyed lazy getter returning a **data literal**) | dropped | dropped | dropped | dropped | **The chosen class shape** (FR-018): zero cost until read, dropped with the class, no runtime import when used. |
 | `export const X$t = /*#__PURE__*/ factory({...})` unused | dropped | dropped | dropped | dropped | **The chosen shape for interfaces, plain objects, enums, unions** (FR-019, FR-020, FR-029, FR-044). Without the annotation: kept by Rollup / webpack. |
 | Primitive descriptors as plain object literals (`export const Int32Type = { … }`) unused | dropped | dropped | dropped | dropped | Literals need no annotation; one primitive with `isInt32` ≈ 0.2 KB gz. |
 | One exception class per module, lazy getter (critic's `exceptions-strkey-pure` probe, one class used) | ≈ 0.4 KB gz | ≈ | ≈ | — | Budget ≤ 0.5 KB per class; unused classes 0 bytes when each is its own module. |
-| `registerX(…)` at module scope with package `sideEffects: false`, imported for side effect only | **dropped** | **dropped** | **dropped** | **dropped** | Today's `[StrictUnionGuard]` `registerUnionGuard` silently disappears in bundles (pre-existing defect, tracked separately); any registry design is out (FR-029, NFR-006). |
+| `registerX(…)` at module scope with package `sideEffects: false`, imported for side effect only | **dropped** | **dropped** | **dropped** | **dropped** | Today's `[StrictUnionGuard]` `registerUnionGuard` silently disappears in bundles (pre-existing defect, #368); any registry design is out (FR-029, NFR-006). |
+| The same, bundled with Rollup `treeshake.moduleSideEffects: true` + `@rollup/plugin-node-resolve` | — | — | **1 B** | — | node-resolve still trusts the package's `sideEffects: false`, so a "side-effect-only import" check that resolves through the package is vacuous (second critic pass). FR-043 bundles a copy outside any package, or forces `moduleSideEffects: true` in a `resolveId` hook. |
+| `Object.defineProperty(this, "$typeArguments", { value })` in a base ctor and again in a derived ctor | TypeError | TypeError | TypeError | TypeError | A non-configurable property cannot be redefined, and one slot cannot hold both `T` and `U`; FR-024 uses one slot per declaring class. |
+| `export const E = {…} as const` + `type E = (typeof E)[keyof typeof E]` for a `[Flags]` enum | TS2322 | — | — | — | `E.A \| E.B` is `number`; FR-044 types a `[Flags]` enum as `number`. |
 | `export namespace X { export const $type = {...} as const }` merged with an `as const` object | TS2451 | — | — | — | TS cannot merge a namespace with a `const` object; `X.$type` was impossible for `[StringEnum]` output anyway. |
 
-Two more facts the critic recorded [V]: `system/equality.equals` falls back to a structural compare for any object without `equals()` (class instances, lists), so it is not `EqualityComparer<T>.Default` (R14); and `copyRecordWith` uses `Object.assign`, which copies enumerable own properties only, so a non-enumerable hidden field is dropped by `with` unless copied explicitly (FR-008, FR-024).
+Three more facts the critic recorded [V]: `[ModuleEntryPoint]` goldens contain legitimate top-level calls and the branded / nested-type goldens contain namespaces (#361), so a "no side effects" scan needs the exemption and the allowlist of FR-043; `system/equality.equals` falls back to a structural compare for any object without `equals()` (class instances, lists), so it is not `EqualityComparer<T>.Default` (R14); and `copyRecordWith` uses `Object.assign`, which copies enumerable own properties only, so a non-enumerable hidden field is dropped by `with` unless copied explicitly (FR-008, FR-024).
 
 Also [V] on `main`: `targets/js/metano-runtime/package.json` `exports` carry no `source` / `types` conditions (only `.`, `./system/json`, `./system/linq`, `./package.json`, `./*.js`, `./*` as plain paths), and `scripts/smoke-test-runtime-package.sh` has no bundler step; FR-011 adds both.
 

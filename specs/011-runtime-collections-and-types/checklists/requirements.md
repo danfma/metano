@@ -1,7 +1,7 @@
 # Specification Quality Checklist: BCL collections as runtime types, runtime type descriptors
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-11-01 (revised after the first critic pass)
+**Created**: 2026-11-01 (revised after the first and second critic passes)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -12,7 +12,7 @@
 
 ## Requirement Completeness
 
-- [ ] Open decisions resolved. **OD-1–OD-21** are open with a recommendation each, except **OD-10**, which the maintainer resolved in the first critic pass (implicit `dynamic` conversions unchecked, explicit casts checked when answerable).
+- [ ] Open decisions resolved. **OD-1–OD-22** are open with a recommendation each, except **OD-10**, which the maintainer resolved in the first critic pass (implicit `dynamic` conversions unchecked, explicit casts checked when answerable).
 - [x] Every FR is grounded in today's code (research R1–R6 cite the file and line of the behaviour it changes) or in a measurement (R13 for every emission shape, R14 for equality)
 - [x] Requirements are testable and unambiguous (each FR maps to a golden, a diagnostic test, a runtime test, a benchmark budget, a bundle budget or a documentation file)
 - [x] Success criteria are measurable (SC-001–SC-008)
@@ -25,11 +25,12 @@
 
 ## Feature Readiness
 
-- [x] Diagnostic codes reserved (`MS0045`–`MS0055`) in the baseline catalog; `MS0044` left to #334 / PR #355; next free code `MS0056`
+- [x] Diagnostic codes reserved (`MS0045`–`MS0056`) in the baseline catalog; `MS0044` left to #334 / PR #355; next free code `MS0057`
 - [x] Spec directory is `specs/011-runtime-collections-and-types/`
 - [x] Baseline feature-support matrix rows added (Planned)
 - [x] ADR-0027 added (own runtime collections + descriptors vs Array subclasses, wrappers with adapters, Deepkit-style transformer, symbol-keyed statics / namespaces, a guard registry, structural equality); `0026` stays reserved by spec 010
-- [x] Issue created: #335; follow-up #361 filed for the pre-existing namespace emissions
+- [x] Issue created: #335; follow-ups #361 (pre-existing namespace emissions) and #368 (flat `sideEffects: false`) filed, both on the 3.0.0 release gate
 - [ ] Open decisions resolved with the maintainer before `/speckit-tasks`
 - [ ] Benchmark (NFR-001) run and recorded before stage 011c merges
-- [ ] Tree-shaking suite (FR-043) green from stage 011a on
+- [ ] Tree-shaking suite (FR-043) green from stage 011a on, with its side-effect self-test proving the check is not vacuous
+- [ ] FR-043 allowlist empty before 3.0.0 ships (#361 landed)

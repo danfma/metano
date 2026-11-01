@@ -81,7 +81,7 @@ export interface ISet<T> extends ICollection<T>, IReadOnlySet<T> {
 
 ## Classes
 
-Every class: `implements Iterable<T>`; does not extend `Array`; `Array.isArray(x) === false`; exposes `count`; declares **no `#private` fields** (proxies used by Solid / Vue / MobX cannot see through them); keeps its storage in **non-enumerable string-keyed fields** defined in the constructor through `Object.defineProperty` (`_items`, `_version`, `_comparer`, and `$typeArguments` when passed; FR-002), so that `Object.keys`, spread, `JSON.stringify` and the structural `equals` of `system/equality` see nothing; implements `toJSON()`; keeps a `_version` counter for the enumeration-invalidation rule (spec Edge Cases); carries the lazy `$runtimeType` getter of FR-018 (a collection is reachable through `is List<T>` only via `instanceof`, so the getter is read only by `getType`).
+Every class: `implements Iterable<T>`; does not extend `Array`; `Array.isArray(x) === false`; exposes `count`; declares **no `#private` fields** (proxies used by Solid / Vue / MobX cannot see through them); keeps its storage in **non-enumerable string-keyed fields** defined in the constructor through `Object.defineProperty` (`_items`, `_version`, `_comparer`, and the per-class slot `$typeArguments$List` / `$typeArguments$Dictionary` / … when passed; FR-002, FR-008), so that `Object.keys`, spread, `JSON.stringify` and the structural `equals` of `system/equality` see nothing; implements `toJSON()`; keeps a `_version` counter for the enumeration-invalidation rule (spec Edge Cases); carries the lazy `$runtimeType` getter of FR-018, which returns a data literal (a collection is reachable through `is List<T>` only via `instanceof`, so the getter is read only by `getType`, which specializes it from the most-derived `$typeArguments$<Class>` slot).
 
 ### Common signatures
 
@@ -195,7 +195,7 @@ export function asArray(value: unknown): unknown[] | null;               // nati
 
 ## Type-argument descriptors (FR-008)
 
-Passed only when the compilation asks a runtime question about that collection kind; `UnknownType` for a non-reified `T`; a class argument's descriptor only when the class is reached. Runtime-built collections (`slice`, `getRange`, `findAll`, `convertAll`, `toList`) copy the source's field when present. The test rule: identity for invariant classes, assignability for covariant interfaces, wildcard for an absent field or `UnknownType`.
+Passed only when the compilation asks a runtime question about that collection kind; `UnknownType` for a non-reified `T`; a class argument's descriptor only when the class is reached. Stored in the per-class slot (`$typeArguments$List`, …), defined once by the runtime class's constructor; a C# subclass that closes the arguments (`class IntList : List<int>`) passes them to `super` and defines no slot. Runtime-built collections (`slice`, `getRange`, `findAll`, `convertAll`, `toList`) copy the source's slot when present. The test rule: identity for invariant classes, assignability for covariant interfaces, wildcard for an absent field or `UnknownType`.
 
 ## LINQ terminals
 

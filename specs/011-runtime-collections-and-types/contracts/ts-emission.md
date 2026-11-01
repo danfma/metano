@@ -1,6 +1,6 @@
 # Contract: TypeScript emission (goldens)
 
-**Normative for**: FR-007, FR-009, FR-010, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 side-effect scan: no top-level call, no `export namespace` with members, no `export enum`, no computed class key other than `[Symbol.iterator]`.
+**Normative for**: FR-007, FR-009, FR-010, FR-014, FR-015, FR-018–FR-026, FR-030–FR-036, FR-044, FR-045. Each block is a golden under `tests/Metano.Tests/Expected/`; import lines are shown only where they are the point. Every golden passes the FR-043 side-effect scan: no call in a top-level statement or initializer that is not immediately preceded by `/*#__PURE__*/`, no `export namespace` with runtime members, no `export enum`, no computed class key other than `[Symbol.iterator]`.
 
 ## Collections (`collections-basic.ts`)
 
@@ -121,26 +121,26 @@ var k = s switch { Circle c1 => 1, Square s1 => 2, _ => 0 };
 ```
 
 ```ts
-import { classType, getType, isType, castTo, type ClassType } from "metano-runtime/system/reflection";
+import { getType, isType, castTo, type ClassType } from "metano-runtime/system/reflection";
 import { IHasArea$runtimeType } from "./i-has-area";
 
 let Shape$rt: ClassType<Shape> | undefined;
 export abstract class Shape {
   static get $runtimeType(): ClassType<Shape> {
-    return (Shape$rt ??= classType({ name: "Shape", fullName: "Geometry.Shape", namespace: "Geometry", ctor: Shape, interfaces: [], isAbstract: true, isValueType: false }));
+    return (Shape$rt ??= { kind: "class", name: "Shape", fullName: "Geometry.Shape", namespace: "Geometry", ctor: Shape, interfaces: [], typeParameters: [], isAbstract: true, isValueType: false, test: (v: unknown): v is Shape => v instanceof Shape });
   }
   static create(k: string): Shape { return k === "c" ? new Circle() : new Square(); }
 }
 let Circle$rt: ClassType<Circle> | undefined;
 export class Circle extends Shape implements IHasArea {
   static get $runtimeType(): ClassType<Circle> {
-    return (Circle$rt ??= classType({ …, base: () => Shape.$runtimeType, interfaces: [() => IHasArea$runtimeType], create: () => new Circle() }));
+    return (Circle$rt ??= { kind: "class", …, base: () => Shape.$runtimeType, interfaces: [() => IHasArea$runtimeType], create: () => new Circle(), test: (v: unknown): v is Circle => v instanceof Circle });
   }
 }
 let Square$rt: ClassType<Square> | undefined;
 export class Square extends Shape {
   static get $runtimeType(): ClassType<Square> {
-    return (Square$rt ??= classType({ …, base: () => Shape.$runtimeType, interfaces: [] }));   // reached: GetType() on a Shape receiver reaches every derived class (FR-027)
+    return (Square$rt ??= { kind: "class", …, base: () => Shape.$runtimeType, interfaces: [], test: (v: unknown): v is Square => v instanceof Square });   // reached: GetType() on a Shape receiver reaches every derived class (FR-027)
   }
 }
 export class Blob { … }   // no getter: nothing reaches Blob (US3-7)
@@ -156,10 +156,12 @@ const k = (($s) => { if ($s instanceof Circle) { return 1; } if ($s instanceof S
 `i-has-area.ts`:
 
 ```ts
-import { interfaceType, type InterfaceType } from "metano-runtime/system/reflection";
+import { implementsInterface, type InterfaceType } from "metano-runtime/system/reflection";
 export interface IHasArea { readonly area: number; }
-export const IHasArea$runtimeType: InterfaceType<IHasArea> = /*#__PURE__*/ interfaceType({ name: "IHasArea", fullName: "Geometry.IHasArea", namespace: "Geometry", baseInterfaces: [], plainImplementers: [] });
+export const IHasArea$runtimeType: InterfaceType<IHasArea> = { kind: "interface", name: "IHasArea", fullName: "Geometry.IHasArea", namespace: "Geometry", baseInterfaces: [], plainImplementers: [], test: (v: unknown): v is IHasArea => implementsInterface(v, IHasArea$runtimeType) };
 ```
+
+A bundle of a program that uses `Circle` but never asks a runtime question contains none of `getType` / `isType` / `castTo`; the class getter is a literal (FR-018).
 
 The companion `get-type-receivers.ts` pins the receiver rules of FR-027: `object o; o.GetType()` reaches nothing (plus `MS0048` when a `[PlainObject]` exists), `Exception e; e.GetType()` reaches nothing (exception classes carry their getter anyway), `IHasArea h; h.GetType()` reaches `Circle` (a transpiled implementer) and not `Blob`, `T t; t.GetType()` under `where T : Shape` reaches `Shape` and its derived classes.
 
@@ -205,12 +207,37 @@ const t = UserDto$runtimeType;          // constant: no [PlainObject] derives fr
 const g = getType(o);                   // MS0048 warning
 ```
 
-## Numeric enums (`numeric-enum-const.ts`, FR-044)
+## Numeric enums (`numeric-enum-const.ts`, `numeric-enum-flags.ts`, FR-044)
 
 ```ts
 export const Color = { Red: 0, Green: 1 } as const;
 export type Color = (typeof Color)[keyof typeof Color];
 ```
+
+```csharp
+[Flags] public enum Perms { Read = 1, Write = 2, Execute = 4 }
+var p = Perms.Read | Perms.Write; p |= Perms.Execute; bool canWrite = (p & Perms.Write) != 0;
+```
+
+```ts
+export const Perms = { Read: 1, Write: 2, Execute: 4 } as const;
+export type Perms = number;
+let p = Perms.Read | Perms.Write;
+p |= Perms.Execute;
+const canWrite = (p & Perms.Write) !== 0;
+```
+
+`[StringEnum]` output is unchanged (`Expected/string-enum.ts`: an `as const` object plus `type Color = typeof Color[keyof typeof Color]`).
+
+## `package.json` (`package-json-side-effects.json`, FR-045)
+
+A package with `[ModuleEntryPoint]` `Program.Main` in `app/program.ts` and no other entry point:
+
+```json
+{ "sideEffects": ["./dist/app/program.js"] }
+```
+
+A package without entry points gets `"sideEffects": []`.
 
 ## `dynamic`, inline code, escape hatches (`dynamic-and-interop.ts`)
 

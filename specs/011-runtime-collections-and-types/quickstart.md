@@ -53,7 +53,7 @@ printf 'import "metano-runtime";\n' > root-only.js && bun build root-only.js --m
 printf 'export namespace X { export function f() { return 1; } }\n' > ns.ts && bun build ns.ts --minify --format=esm --outfile ns.js && cat ns.js
 ```
 
-The first prints a few bytes (today's runtime is shakable at the root); the second shows the namespace IIFE that survives even though nothing imports `X`.
+The first prints a few bytes (today's runtime is shakable at the root); the second shows the namespace IIFE that survives even though nothing imports `X`. To see why the side-effect check must not trust `sideEffects`, put `register();` in a module of a package with `"sideEffects": false`, import it for side effects only, and bundle with Rollup + node-resolve under `treeshake.moduleSideEffects: true`: the output is 1 B. Copy the module next to the entry (no `package.json`) and bundle again: the call is kept.
 
 ## Run the suites that this feature touches
 
@@ -91,7 +91,7 @@ dotnet run --project src/Metano.Compiler.TypeScript/ -- -p samples/SampleTodo/Sa
 git checkout <011d-commit> && dotnet run --project src/Metano.Compiler.TypeScript/ -- -p samples/SampleTodo/SampleTodo.csproj -o /tmp/after --clean && diff -r /tmp/before /tmp/after
 ```
 
-An empty diff is the NFR-002 gate (SampleTodo asks no runtime-type question). Then bundle `/tmp/after`'s entry with `bun build --minify` and `grep -c reflection` the output: 0 is the NFR-010 gate.
+For the pinned fixture `tests/Metano.Tests/Fixtures/NoRuntimeQuestions/` the diff must be empty; for `SampleTodo` every hunk must be one of the NFR-010 allowed shapes (collection members, exception modules, enum shape, `sideEffects`). Then bundle each `/tmp/after` entry with `bun build --minify` and `grep -c reflection` the output: 0 is the NFR-010 gate.
 
 ## Before pushing
 
