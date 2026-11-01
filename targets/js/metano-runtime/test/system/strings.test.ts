@@ -42,7 +42,7 @@ describe("isNullOrWhiteSpace", () => {
 
   test("diverges from trim() where .NET does: U+0085 is white space, U+FEFF is not", () => {
     expect(isNullOrWhiteSpace("\u0085")).toBe(true);
-    expect(isNullOrWhiteSpace("﻿")).toBe(false);
+    expect(isNullOrWhiteSpace("\uFEFF")).toBe(false);
   });
 
   test("is false as soon as one character is not white space", () => {
@@ -60,6 +60,7 @@ const dotnetReplacements: [string, string, string | null, string][] = [
   ["abab", "ab", "", ""],
   ["xaxbx", "x", null, "ab"],
   ["", "x", "y", ""],
+  ["a\uD83D\uDE00b\uD83D\uDE00", "\uD83D\uDE00", "-", "a-b-"],
 ];
 
 describe("stringReplace", () => {

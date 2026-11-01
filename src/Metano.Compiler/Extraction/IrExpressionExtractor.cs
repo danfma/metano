@@ -957,6 +957,7 @@ public sealed partial class IrExpressionExtractor
     {
         ExpressionSyntax? memberPath =
             subpattern.NameColon?.Name ?? subpattern.ExpressionColon?.Expression;
+
         var segments = memberPath is null ? null : MemberPathSegments(memberPath);
 
         if (segments is null)
