@@ -117,7 +117,7 @@ export type Color = (typeof Color)[keyof typeof Color];
 export const Color$runtimeType: EnumType<Color> = { kind: "enum", name: "Color", fullName: "Geometry.Color", namespace: "Geometry", values: [0, 1], test: (v): v is Color => v === 0 || v === 1 };
 // [Flags] numeric enum (FR-044)
 export const Perms = { Read: 1, Write: 2, Execute: 4 } as const;
-export type Perms = number;
+export type Perms = number & { readonly __enum?: "Perms" };   // FR-044 brand: bitwise ops type-check, cross-enum assignment is rejected
 // [StrictUnionGuard] base (FR-029): the strict guard lives in ITS OWN module, shape.guard.ts; shape.ts never imports a variant
 // shape.guard.ts
 import { Shape } from "./shape";
