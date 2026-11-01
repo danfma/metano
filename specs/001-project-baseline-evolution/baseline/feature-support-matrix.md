@@ -128,15 +128,16 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 
 ## C# 15 unions
 
-Planned. A C# 15 `union` declaration is erased to a TS type union, case tests are typed, exhaustive switches end with a `never` check, and JSON matches .NET 11 STJ. Spec: [specs/009-csharp-unions/](../../009-csharp-unions/spec.md) (issue #304). Diagnostics `MS0032`–`MS0037` are reserved.
+Planned. A C# 15 `union` declaration is erased to a TS type union, case tests are typed, exhaustive switches end with a `never` check, and JSON matches .NET 11 STJ. Spec: [specs/010-csharp-unions/](../../010-csharp-unions/spec.md) (issue #304). Diagnostics `MS0038`–`MS0043` are reserved.
 
 | Area | Feature | Backend | Status | Code area | Test | Constraints |
 | --- | --- | --- | --- | --- | --- | --- |
-| Toolchain | Roslyn 5.9.0, SDK 11 RC `global.json`, `RollForward=Major` tools | core | Planned | `Directory.Packages.props`, `global.json`, tool csproj files, `.github/workflows/` | — | 009 FR-001–FR-004. The tools stay `net10.0`. |
-| Types | `union U(A, B)` → `export type U = A \| B` | TS | Planned | — | — | 009 FR-005–FR-018. Erased; `.Value` / `new U(x)` / conversions are identity; unfaithful shapes → MS0032–MS0035. |
-| Pattern matching | Union case tests + `satisfies never` tail; `case T x:` statement labels | TS | Planned | — | — | 009 FR-019–FR-021. Depends on PR #298 (`IrRuntimeTypeTest`). |
-| Serialization | Union bare-payload JSON, token-kind classification | TS | Planned | — | — | 009 FR-023–FR-026. Ambiguous cases → MS0036; roots and `[JsonPolymorphic]` cases deferred. |
-| Dart | `typedef U = Object` | Dart | Planned | — | — | 009 FR-027. Shape only. |
+| Toolchain | Roslyn 5.9.0, SDK 11 RC `global.json`, `RollForward=Major` tools | core | Planned | `Directory.Packages.props`, `global.json`, tool csproj files, `.github/workflows/` | — | 010 FR-001–FR-004. The tools stay `net10.0`. |
+| Types | `union U(A, B)` → `export type U = A \| B` | TS | Planned | — | — | 010 FR-005–FR-018, FR-039. Erased; `.Value` / `new U(x)` / conversions are identity; `default(U)` → `null` with widened slots (MS0041 warning only where `null` cannot fit); unsupported shapes → MS0038 / MS0040; overlapping cases → MS0039 warning, first wins. |
+| Pattern matching | Union case tests + `satisfies never` tail; synthesized structural guards | TS | Planned | — | — | 010 FR-019–FR-021, FR-040, FR-041. Builds on `IrRuntimeTypeTest` (PR #298, merged); statement labels follow OQ-3 (#239). |
+| Types | Union body members and extra interfaces → companion `namespace U` | TS | Planned | — | — | 010 FR-042. Call sites become `U.member(u, …)`; conversion to an extra interface → MS0038. |
+| Serialization | Union bare-payload JSON, token-kind classification | TS | Planned | — | — | 010 FR-023–FR-026. Ambiguous cases → MS0042; roots and `[JsonPolymorphic]` cases deferred. |
+| Dart | `typedef U = Object` | Dart | Planned | — | — | 010 FR-027. Shape only; body members skipped. |
 
 ## UI components (JSX/TSX)
 
