@@ -70,7 +70,7 @@ public class Commands
 
             if (!result.Success)
             {
-                FailRun();
+                ExitUnlessWatching();
 
                 return;
             }
@@ -108,7 +108,7 @@ public class Commands
                 // Without the stamp, the next incremental MSBuild build re-runs the
                 // target and reports the error again instead of skipping it.
                 TranspilerHost.DeleteStamp(outputDir);
-                FailRun();
+                ExitUnlessWatching();
 
                 return;
             }
@@ -117,8 +117,7 @@ public class Commands
                 Console.WriteLine($"  Updated: {reconciliation.PackageJsonPath}");
         }
 
-        // Watch mode keeps running after a failed pass; a one-shot run exits non-zero.
-        void FailRun()
+        void ExitUnlessWatching()
         {
             if (!watch)
                 Environment.Exit(1);

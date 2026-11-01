@@ -71,7 +71,8 @@ topmost directory is:
    share, on the output's side (the shared directory itself is often a generic
    folder such as `~` or `/tmp`, so it is never used; the filesystem root does
    not count as shared);
-5. else the parent of the output folder.
+5. else (the output shares only the filesystem root with the project) the
+   output folder itself.
 
 If no package file is found, it falls back to the legacy convention: the parent
 directory of the output folder. When that parent lies above the topmost
@@ -80,7 +81,8 @@ with `MS0044`: the `.ts` files are written, `package.json` is not. Set
 `MetanoPackageRoot` (`--package-root`) when your generated files live somewhere
 unusual; an explicit root is used as given. Note that a home directory kept
 under git (dotfiles) counts as a repository root, so the walk can reach a
-`~/package.json` there.
+`~/package.json` there, and that a monorepo's root `package.json` is used when
+the generated package has none of its own.
 
 ## What Metano generates
 

@@ -163,23 +163,36 @@ public class PackageRootResolverTests
     }
 
     [Test]
-    public async Task WithoutAnyBoundary_PackageJsonAboveTheParent_IsIgnored()
+    public async Task OutputUnrelatedToTheProject_PackageJsonInItsParent_IsIgnored()
     {
-        WritePackageJson(AboveWorkspace);
+        // `-p ~/proj/P.csproj -o /tmp/out`: the trees share only the filesystem root.
+        WritePackageJson("tmp");
 
-        var resolution = Resolve(output: "a/b/c", project: ProjectOutsideTempRoot());
+        var resolution = Resolve(output: "tmp/out", project: ProjectOutsideTempRoot());
 
-        await AssertResolved(resolution, "a/b");
+        await AssertRefused(resolution, outputDir: "tmp/out");
     }
 
     [Test]
-    public async Task WithoutAnyBoundary_PackageJsonInTheParent_IsTheRoot()
+    public async Task OutputUnrelatedToTheProject_PackageJsonInTheOutput_IsTheRoot()
     {
-        WritePackageJson("a/b");
+        WritePackageJson("tmp/out");
 
-        var resolution = Resolve(output: "a/b/c", project: ProjectOutsideTempRoot());
+        var resolution = Resolve(output: "tmp/out", project: ProjectOutsideTempRoot());
 
-        await AssertResolved(resolution, "a/b");
+        await AssertResolved(resolution, "tmp/out");
+    }
+
+    [Test]
+    public async Task SolutionWithoutRepository_PackageJsonBelowIt_IsTheRoot()
+    {
+        WritePackageJson(AboveWorkspace);
+        MarkSolution("solution", "App.slnx");
+        WritePackageJson("solution/web");
+
+        var resolution = Resolve(output: "solution/web/src", project: "elsewhere/Api.csproj");
+
+        await AssertResolved(resolution, "solution/web");
     }
 
     // ── Fallback and refusal ───────────────────────────────────────────────
@@ -215,6 +228,16 @@ public class PackageRootResolverTests
         var resolution = Resolve(output: "tmp/out", project: "tmp/app/App.csproj");
 
         await AssertRefused(resolution, outputDir: "tmp/out");
+    }
+
+    [Test]
+    public async Task OutputHoldsTheProject_WithoutPackageJson_IsRefused()
+    {
+        WritePackageJson(AboveWorkspace);
+
+        var resolution = Resolve(output: "out", project: "out/app/App.csproj");
+
+        await AssertRefused(resolution, outputDir: "out");
     }
 
     [Test]
@@ -262,7 +285,7 @@ public class PackageRootResolverTests
 
     /// <summary>
     /// A project path whose only common ancestor with the temp root is the filesystem
-    /// root, so no project-based boundary exists.
+    /// root: the output is unrelated to the project.
     /// </summary>
     private string ProjectOutsideTempRoot() =>
         Path.Combine(Path.GetPathRoot(_root)!, "metano-334-elsewhere", "App.csproj");

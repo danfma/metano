@@ -70,7 +70,7 @@ public static class PackageJsonReconciler
 /// </summary>
 public sealed class PackageJsonReconciliation
 {
-    /// <summary>The stage did not run: nothing was produced and no package.json exists.</summary>
+    /// <summary>The stage did not run: nothing was produced and no package.json exists at the resolved root, or the root was refused.</summary>
     public static PackageJsonReconciliation Skipped { get; } = new(null, []);
 
     private PackageJsonReconciliation(

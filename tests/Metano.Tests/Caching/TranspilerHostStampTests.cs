@@ -30,10 +30,12 @@ public class TranspilerHostStampTests
     }
 
     [Test]
-    public async Task DeleteStamp_WithoutAStamp_DoesNothing()
+    public async Task DeleteStamp_InAMissingDirectory_DoesNotThrow()
     {
-        TranspilerHost.DeleteStamp(Path.Combine(_outputDir, "missing"));
+        var missingDir = Path.Combine(_outputDir, "missing");
 
-        await Assert.That(File.Exists(StampPath)).IsFalse();
+        TranspilerHost.DeleteStamp(missingDir);
+
+        await Assert.That(Directory.Exists(missingDir)).IsFalse();
     }
 }
