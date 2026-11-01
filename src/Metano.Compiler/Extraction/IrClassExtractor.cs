@@ -258,7 +258,40 @@ public static class IrClassExtractor
             IsJsTuple: SymbolHelper.HasJsTuple(type),
             IsJsxComponent: SymbolHelper.IsJsxComponent(type),
             JsxNativeElementTag: SymbolHelper.GetJsxNativeElementTag(type),
-            RendersAsJsxElement: SymbolHelper.IsJsxRenderable(type)
+            RendersAsJsxElement: SymbolHelper.IsJsxRenderable(type),
+            EnumeratedElementType: ExtractEnumeratedElementType(type, originResolver)
+        );
+
+    /// <summary>
+    /// The element type of the <c>IEnumerable&lt;T&gt;</c> (or non-generic
+    /// <c>IEnumerable</c>, as <c>object</c>) contract <paramref name="type"/>
+    /// implements, or <c>null</c> when it implements neither or its base type already
+    /// does — the base then carries the contract, and an overriding
+    /// <c>GetEnumerator</c> is reached through it. Interfaces declare the contract
+    /// without implementing it, so they report <c>null</c> too.
+    /// </summary>
+    private static IrTypeRef? ExtractEnumeratedElementType(
+        INamedTypeSymbol type,
+        IrTypeOriginResolver? originResolver
+    )
+    {
+        if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+            return null;
+
+        if (!IsEnumerable(type) || type.BaseType is { } baseType && IsEnumerable(baseType))
+            return null;
+
+        return GenericEnumerableOf(type) is { } generic
+            ? IrTypeRefMapper.Map(generic.TypeArguments[0], originResolver)
+            : new IrPrimitiveTypeRef(IrPrimitive.Object);
+    }
+
+    private static bool IsEnumerable(INamedTypeSymbol type) =>
+        type.AllInterfaces.Any(i => i.SpecialType == SpecialType.System_Collections_IEnumerable);
+
+    private static INamedTypeSymbol? GenericEnumerableOf(INamedTypeSymbol type) =>
+        type.AllInterfaces.FirstOrDefault(i =>
+            i.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
         );
 
     /// <summary>

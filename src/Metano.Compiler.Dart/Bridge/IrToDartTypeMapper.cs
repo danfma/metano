@@ -38,6 +38,7 @@ public static class IrToDartTypeMapper
             IrPromiseTypeRef pr => new DartNamedType("Future", [Map(pr.ResultType)]),
             IrGeneratorTypeRef g => new DartNamedType("Iterable", [Map(g.YieldType)]),
             IrIterableTypeRef i => new DartNamedType("Iterable", [Map(i.ElementType)]),
+            IrIteratorTypeRef i => new DartNamedType("Iterator", [Map(i.ElementType)]),
             IrGroupingTypeRef gr => new DartNamedType(
                 "MapEntry",
                 [Map(gr.KeyType), new DartNamedType("List", [Map(gr.ElementType)])]

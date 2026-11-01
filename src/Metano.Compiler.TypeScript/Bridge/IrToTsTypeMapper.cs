@@ -36,6 +36,7 @@ public static class IrToTsTypeMapper
             IrPromiseTypeRef pr => new TsPromiseType(Map(pr.ResultType, overrides)),
             IrGeneratorTypeRef g => new TsNamedType("Generator", [Map(g.YieldType, overrides)]),
             IrIterableTypeRef i => new TsNamedType("Iterable", [Map(i.ElementType, overrides)]),
+            IrIteratorTypeRef i => new TsNamedType("Iterator", [Map(i.ElementType, overrides)]),
             IrKeyValuePairTypeRef kv => new TsTupleType([
                 Map(kv.KeyType, overrides),
                 Map(kv.ValueType, overrides),

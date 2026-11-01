@@ -1277,6 +1277,24 @@ public class DartBackendTests
         await Assert.That(files["logger.dart"]).Contains("count(null)");
     }
 
+    [Test]
+    public async Task EnumeratorType_MapsToDartIterator()
+    {
+        var (files, _) = TranspileDart(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Cursor
+            {
+                public IEnumerator<int>? Current { get; set; }
+            }
+            """
+        );
+
+        await Assert.That(files["cursor.dart"]).Contains("Iterator<int>?");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (

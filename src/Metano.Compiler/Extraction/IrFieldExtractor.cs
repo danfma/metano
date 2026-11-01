@@ -40,7 +40,9 @@ public static class IrFieldExtractor
             field.IsStatic,
             IrTypeRefMapper.Map(field.Type, originResolver, target),
             // A C# `const` is read-only too; Roslyn reports it through IsConst only.
-            IsReadonly: field.IsReadOnly || field.IsConst,
+            IsReadonly: field.IsConst
+                || field.IsReadOnly
+                    && (compilation is null || !CustomInitAccessor.WritesField(field, compilation)),
             Initializer: initializer,
             IsConstant: field.HasConstant(),
             IsRequired: field.IsRequired

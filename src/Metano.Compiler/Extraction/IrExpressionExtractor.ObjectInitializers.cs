@@ -94,9 +94,10 @@ public sealed partial class IrExpressionExtractor
     /// <c>X = value</c> assigns the member; <c>X = { … }</c> applies the nested
     /// initializer to the member's current value without replacing it. A C# 14
     /// extension property is written through its <c>$set</c> helper. A
-    /// custom <c>init</c> accessor body is not transpiled (the property has no
-    /// setter in the output), so writing it is reported as unsupported, as is
-    /// a nested initializer on an extension property.
+    /// custom <c>init</c> accessor body is written through the setter it lowers
+    /// to; one that is not transpiled (see <see cref="CustomInitAccessor"/>)
+    /// leaves the property without a setter, so writing it is reported as
+    /// unsupported, as is a nested initializer on an extension property.
     /// </summary>
     private IEnumerable<IrExpression> MemberInitializerEffects(
         IrExpression receiver,
@@ -107,8 +108,8 @@ public sealed partial class IrExpressionExtractor
         var symbol = _semantic.GetSymbolInfo(member).Symbol;
 
         if (
-            symbol is IPropertySymbol { SetMethod: { IsInitOnly: true } init }
-            && HasAccessorBody(init)
+            symbol is IPropertySymbol initProperty
+            && CustomInitAccessor.IsUntranspiled(initProperty)
         )
             return
             [

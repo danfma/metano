@@ -256,7 +256,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// declare: the <c>create({...})</c> factory paired with an
     /// <c>[ObjectArgs]</c> ctor, plus <c>equals</c> / <c>hashCode</c> /
     /// <c>with</c> for non-<c>[PlainObject]</c> records via
-    /// <see cref="IrToTsRecordSynthesisBridge"/>.
+    /// <see cref="IrToTsRecordSynthesisBridge"/>, and the
+    /// <c>[Symbol.iterator]()</c> member of an <c>IEnumerable&lt;T&gt;</c>
+    /// implementation via <see cref="IrToTsIterationProtocolBridge"/>.
     /// </summary>
     private void EmitSynthesizedMembers(
         INamedTypeSymbol type,
@@ -272,6 +274,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
 
         if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
             classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir));
+
+        if (IrToTsIterationProtocolBridge.BuildIteratorMember(ir, BclOverrides) is { } iterator)
+            classMembers.Add(iterator);
     }
 
     /// <summary>
@@ -625,6 +630,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 break;
             case IrIterableTypeRef it:
                 CollectTypeParamRefs(it.ElementType, acc);
+                break;
+            case IrIteratorTypeRef iterator:
+                CollectTypeParamRefs(iterator.ElementType, acc);
                 break;
             case IrKeyValuePairTypeRef kvp:
                 CollectTypeParamRefs(kvp.KeyType, acc);

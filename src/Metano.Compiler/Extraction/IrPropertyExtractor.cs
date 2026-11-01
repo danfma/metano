@@ -55,9 +55,7 @@ public static class IrPropertyExtractor
                 var getter = syntax.AccessorList.Accessors.FirstOrDefault(a =>
                     a.IsKind(SyntaxKind.GetAccessorDeclaration)
                 );
-                var setter = syntax.AccessorList.Accessors.FirstOrDefault(a =>
-                    a.IsKind(SyntaxKind.SetAccessorDeclaration)
-                );
+                var setter = SetterBodySyntax(prop, syntax.AccessorList);
 
                 if (
                     getter is not null
@@ -70,10 +68,7 @@ public static class IrPropertyExtractor
                         isVoid: false
                     );
                 }
-                if (
-                    setter is not null
-                    && (setter.Body is not null || setter.ExpressionBody is not null)
-                )
+                if (setter is not null)
                 {
                     setterBody = stmtExtractor.ExtractBody(
                         setter.Body,
@@ -120,7 +115,7 @@ public static class IrPropertyExtractor
     )
     {
         var hasGetterBody = DetectGetterBody(syntax);
-        var hasSetterBody = DetectSetterBody(syntax);
+        var hasSetterBody = SetterBodySyntax(prop, syntax?.AccessorList) is not null;
         var hasInitializer = syntax?.Initializer is not null;
 
         return new IrPropertySemantics(
@@ -148,14 +143,24 @@ public static class IrPropertyExtractor
             ?? false;
     }
 
-    private static bool DetectSetterBody(PropertyDeclarationSyntax? syntax)
-    {
-        if (syntax is null)
-            return false;
-        return syntax.AccessorList?.Accessors.Any(a =>
-                a.IsKind(SyntaxKind.SetAccessorDeclaration)
-                && (a.Body is not null || a.ExpressionBody is not null)
+    /// <summary>
+    /// The accessor whose body lowers to the target's setter: a <c>set</c> with a
+    /// body, or an <c>init</c> with a body that <see cref="CustomInitAccessor"/>
+    /// transpiles. Null for auto accessors and get-only properties.
+    /// </summary>
+    private static AccessorDeclarationSyntax? SetterBodySyntax(
+        IPropertySymbol prop,
+        AccessorListSyntax? accessorList
+    ) =>
+        accessorList?.Accessors.FirstOrDefault(accessor =>
+            HasBody(accessor)
+            && (
+                accessor.IsKind(SyntaxKind.SetAccessorDeclaration)
+                || accessor.IsKind(SyntaxKind.InitAccessorDeclaration)
+                    && CustomInitAccessor.IsTranspiled(prop)
             )
-            ?? false;
-    }
+        );
+
+    private static bool HasBody(AccessorDeclarationSyntax accessor) =>
+        accessor.Body is not null || accessor.ExpressionBody is not null;
 }

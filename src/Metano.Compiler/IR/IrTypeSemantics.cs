@@ -19,6 +19,7 @@ namespace Metano.Compiler.IR;
 /// <param name="IsJsxComponent">Derives from a <c>[JsxComponentBuilder]</c> base — a backend that supports JSX emits it as a function component.</param>
 /// <param name="JsxNativeElementTag">The tag from <c>[JsxNativeElement("tag")]</c> — a <c>new T { … }</c> of such a type lowers to an intrinsic <c>&lt;tag&gt;</c> element. Null when absent.</param>
 /// <param name="RendersAsJsxElement">The type is JSX-renderable in a value position (a component, a native element, or an imported renderable typed as the marked element).</param>
+/// <param name="EnumeratedElementType">The element type of the enumeration contract (<c>IEnumerable&lt;T&gt;</c>; <c>object</c> for the non-generic <c>IEnumerable</c>) the type takes on itself — directly or through an interface — rather than inheriting it from its base type. A backend whose iteration protocol differs from <c>GetEnumerator()</c> bridges it here. Null for every other type.</param>
 public sealed record IrTypeSemantics(
     bool IsRecord = false,
     bool IsValueType = false,
@@ -32,5 +33,6 @@ public sealed record IrTypeSemantics(
     bool IsJsTuple = false,
     bool IsJsxComponent = false,
     string? JsxNativeElementTag = null,
-    bool RendersAsJsxElement = false
+    bool RendersAsJsxElement = false,
+    IrTypeRef? EnumeratedElementType = null
 );
