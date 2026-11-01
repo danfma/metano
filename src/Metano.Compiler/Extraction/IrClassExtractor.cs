@@ -365,13 +365,14 @@ public static class IrClassExtractor
                     break;
 
                 case IPropertySymbol prop:
-                    InheritedDataMemberHiding.ReportIfHiding(prop, target);
                     var property = IrPropertyExtractor.Extract(
                         prop,
                         originResolver,
                         compilation,
                         target
                     );
+
+                    InheritedDataMemberHiding.ReportIfHiding(prop, target);
 
                     result.Add(DeclareUnderInterfaceName(property, prop));
                     break;

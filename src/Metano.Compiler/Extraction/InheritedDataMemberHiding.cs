@@ -11,7 +11,9 @@ namespace Metano.Compiler.Extraction;
 /// type sees the base value. A TypeScript or Dart class has a single member
 /// per name, so both declarations share one storage and that read sees the
 /// hiding member's value instead. The output is still produced; MS0001 makes
-/// the divergence visible.
+/// the divergence visible. Known gaps (#343): members are matched by C# name,
+/// and a private base member that shares the name is not reported although
+/// a TypeScript <c>private</c> member still shares the storage.
 /// </summary>
 internal static class InheritedDataMemberHiding
 {
@@ -20,25 +22,37 @@ internal static class InheritedDataMemberHiding
         if (HiddenDataMemberOf(member, target) is not { } hidden)
             return;
 
+        var hiddenOwner = hidden.ContainingType.Name;
+
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.UnsupportedFeature,
                 $"'{member.ContainingType.Name}.{member.Name}' hides the inherited "
-                    + $"'{hidden.ContainingType.Name}.{hidden.Name}'. The generated class has "
-                    + "one member per name, so both share one storage and a read through "
-                    + $"'{hidden.ContainingType.Name}' sees the hiding member's value.",
+                    + $"'{hiddenOwner}.{hidden.Name}'. The generated class has one member per "
+                    + $"name, so both share one storage and a read through '{hiddenOwner}' sees "
+                    + "the hiding member's value.",
                 member.Locations.FirstOrDefault()
             )
         );
     }
 
-    private static ISymbol? HiddenDataMemberOf(ISymbol member, TargetLanguage? target) =>
-        IsInstanceDataMember(member) && member is not IPropertySymbol { IsOverride: true }
-            ? BaseTypesOf(member.ContainingType)
-                .SelectMany(type => type.GetMembers(member.Name))
-                .FirstOrDefault(inherited => IsHideableBy(inherited, target))
-            : null;
+    /// <summary>
+    /// The inherited member <paramref name="member"/> hides, matched by C#
+    /// name (a <c>[Name]</c> rename is not considered).
+    /// </summary>
+    private static ISymbol? HiddenDataMemberOf(ISymbol member, TargetLanguage? target)
+    {
+        if (!CanHide(member))
+            return null;
+
+        return BaseTypesOf(member.ContainingType)
+            .SelectMany(type => type.GetMembers(member.Name))
+            .FirstOrDefault(inherited => IsHideableBy(inherited, target));
+    }
+
+    private static bool CanHide(ISymbol member) =>
+        IsInstanceDataMember(member) && member is not IPropertySymbol { IsOverride: true };
 
     private static bool IsHideableBy(ISymbol inherited, TargetLanguage? target) =>
         IsInstanceDataMember(inherited)
@@ -46,7 +60,7 @@ internal static class InheritedDataMemberHiding
         && !SymbolHelper.HasIgnore(inherited, target);
 
     private static bool IsInstanceDataMember(ISymbol member) =>
-        member is IFieldSymbol or IPropertySymbol { IsIndexer: false } && !member.IsStatic;
+        member is (IFieldSymbol or IPropertySymbol { IsIndexer: false }) && !member.IsStatic;
 
     private static IEnumerable<INamedTypeSymbol> BaseTypesOf(INamedTypeSymbol type)
     {

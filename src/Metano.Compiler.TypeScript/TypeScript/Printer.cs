@@ -731,8 +731,10 @@ public sealed class Printer(string indent = "  ")
 
             case TsFieldMember field:
                 PrintAccessibility(field.Accessibility);
+
                 if (field.Abstract)
                     _sb.Write("abstract ");
+
                 if (field.Static)
                     _sb.Write("static ");
                 if (field.Readonly)
