@@ -208,7 +208,8 @@ public class TupleLiteralTests
     /// <summary>
     /// Pins a known gap: <c>tupleEquals</c> compares a nested tuple element
     /// by reference, so equal nested tuples compare unequal in TypeScript.
-    /// The call is still the tuple comparison, whose flat elements are right.
+    /// The call is still the tuple comparison, whose flat elements are right
+    /// (#331).
     /// </summary>
     [Test]
     public async Task ObjectEqualsOverNestedTuples_ComparesTheNestedElementByReference()

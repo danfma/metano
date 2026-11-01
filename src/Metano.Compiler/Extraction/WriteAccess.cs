@@ -6,9 +6,9 @@ namespace Metano.Compiler.Extraction;
 
 /// <summary>
 /// Whether an expression is a location the code writes, decided on Roslyn's
-/// bound operations rather than on syntax, so parentheses (<c>(a) = 9</c>)
-/// and the null-forgiving operator (<c>a! = x</c>), which bind to no
-/// operation, never hide a write. A write is:
+/// bound operations rather than on syntax. Parentheses (<c>(a) = 9</c>) and
+/// the null-forgiving operator (<c>a! = x</c>) add no operation of their own,
+/// so the write is seen on the inner operand. A write is:
 /// <list type="bullet">
 ///   <item>the target of an assignment: simple, compound, or <c>??=</c>;</item>
 ///   <item>the operand of an increment or decrement;</item>

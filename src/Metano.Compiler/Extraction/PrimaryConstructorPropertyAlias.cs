@@ -29,16 +29,25 @@ internal static class PrimaryConstructorPropertyAlias
         Compilation compilation,
         TargetLanguage? target
     ) =>
-        parameter
-            .ContainingType.GetMembers()
+        CandidatesNamed(parameter.ContainingType, parameter.Name, target)
+            .FirstOrDefault(property => IsAliasOf(property, parameter, compilation));
+
+    /// <summary>
+    /// The promotion candidates of <paramref name="type"/> named
+    /// <paramref name="name"/>, ignoring case, the exact-case match first.
+    /// </summary>
+    public static IEnumerable<IPropertySymbol> CandidatesNamed(
+        INamedTypeSymbol type,
+        string name,
+        TargetLanguage? target
+    ) =>
+        type.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(property =>
-                string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)
+                string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
                 && IsPromotionCandidate(property, target)
-                && IsAliasOf(property, parameter, compilation)
             )
-            .OrderBy(property => property.Name == parameter.Name ? 0 : 1)
-            .FirstOrDefault();
+            .OrderBy(property => property.Name == name ? 0 : 1);
 
     /// <summary>
     /// Whether <paramref name="property"/> is emitted as a member a

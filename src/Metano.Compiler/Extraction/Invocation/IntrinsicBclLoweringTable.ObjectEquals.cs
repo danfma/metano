@@ -32,7 +32,7 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// reference, so <c>object.Equals(((1, 2), 3), ((1, 2), 3))</c> is
 /// <c>false</c> in TypeScript and <c>true</c> in C#. At runtime a nested tuple
 /// and a C# array are both arrays, so a fix needs the element types from the
-/// compiler.
+/// compiler (#331).
 /// </para>
 /// </summary>
 public sealed partial class IntrinsicBclLoweringTable
@@ -64,10 +64,10 @@ public sealed partial class IntrinsicBclLoweringTable
         var first = TupleTypeOf(arguments[0].Expression, ctx.SemanticModel);
         var second = TupleTypeOf(arguments[1].Expression, ctx.SemanticModel);
 
-        if (first is null || second is null || !IsSameTupleType(first, second))
+        if (!AreSameTupleType(first, second))
             return null;
 
-        if (InstanceEqualsOverObject(first) is not { } tupleEquals)
+        if (InstanceEqualsOverObject(first!) is not { } tupleEquals)
             return null;
 
         return new IrCallExpression(
@@ -88,11 +88,14 @@ public sealed partial class IntrinsicBclLoweringTable
             : null;
 
     /// <summary>
-    /// The same <c>ValueTuple</c> instantiation: element names are compile-time
-    /// only, so <c>(int x, int y)</c> and <c>(int p, int q)</c> are one type.
+    /// Two tuples (neither <c>null</c>) of the same <c>ValueTuple</c>
+    /// instantiation: element names are compile-time only, so
+    /// <c>(int x, int y)</c> and <c>(int p, int q)</c> are one type.
     /// </summary>
-    private static bool IsSameTupleType(INamedTypeSymbol first, INamedTypeSymbol second) =>
-        SymbolEqualityComparer.Default.Equals(
+    private static bool AreSameTupleType(INamedTypeSymbol? first, INamedTypeSymbol? second) =>
+        first is not null
+        && second is not null
+        && SymbolEqualityComparer.Default.Equals(
             first.TupleUnderlyingType ?? first,
             second.TupleUnderlyingType ?? second
         );
