@@ -29,7 +29,7 @@ namespace Metano.Compiler.Extraction;
 /// Reads of a captured parameter's backing field count too: the backend
 /// assigns it in the constructor body, and inside initializers the extractor
 /// reads a captured parameter through that field
-/// (<see cref="IrExpressionExtractor.InitializersRunInConstructor"/>), so a
+/// (<see cref="PrimaryCtorExtractionScope.InitializersRunInConstructor"/>), so a
 /// lambda shares the storage member bodies mutate.
 /// </para>
 /// <para>
@@ -61,11 +61,12 @@ internal static class PrimaryConstructorInitializerDeferral
         && IrConstructorExtractor.ExplicitConstructorCount(type) == 1;
 
     /// <summary>
-    /// Runs the move. <paramref name="constructor"/> must already carry the
-    /// captured-parameter field names (<see cref="IrConstructorParameter.CapturedFieldName"/>),
-    /// since reads of those fields trigger it too. Returns the inputs
-    /// unchanged when the type is not handled or no initializer reads a
-    /// parameter.
+    /// Runs the move on a type <see cref="AppliesTo"/> accepts (the caller
+    /// checks it once per type). <paramref name="constructor"/> must already
+    /// carry the captured-parameter field names
+    /// (<see cref="IrConstructorParameter.CapturedFieldName"/>), since reads of
+    /// those fields trigger it too. Returns the inputs unchanged when no
+    /// initializer reads a parameter.
     /// </summary>
     public static Result Apply(
         INamedTypeSymbol type,
@@ -76,7 +77,7 @@ internal static class PrimaryConstructorInitializerDeferral
     {
         var unchanged = new Result([.. members], constructor);
 
-        if (constructor is null || !AppliesTo(type))
+        if (constructor is null)
             return unchanged;
 
         var movableIndices = MovableInitializerIndices(members, constructor);
@@ -140,7 +141,10 @@ internal static class PrimaryConstructorInitializerDeferral
         IReadOnlyList<IrMemberDeclaration> members,
         IReadOnlyList<int> indices,
         HashSet<string> names
-    ) => indices.Any(i => ReadsAny(InitializerOf(members[i])!, names));
+    ) =>
+        indices.Any(i =>
+            IrReferencedNames.AnyReadOrThisMemberIn(InitializerOf(members[i])!, names)
+        );
 
     private static IrExpression? InitializerOf(IrMemberDeclaration member) =>
         member switch
@@ -154,19 +158,6 @@ internal static class PrimaryConstructorInitializerDeferral
             IrPropertyDeclaration { IsStatic: false } property => property.Initializer,
             _ => null,
         };
-
-    private static bool ReadsAny(IrExpression expression, HashSet<string> names) =>
-        expression switch
-        {
-            IrIdentifier identifier => names.Contains(identifier.Name),
-            IrMemberAccess { Target: IrThisExpression } access => names.Contains(access.MemberName),
-            _ => IrNodeChildren.ExpressionsOf(expression).Any(e => ReadsAny(e, names))
-                || IrNodeChildren.StatementsOf(expression).Any(s => ReadsAny(s, names)),
-        };
-
-    private static bool ReadsAny(IrStatement statement, HashSet<string> names) =>
-        IrNodeChildren.ExpressionsOf(statement).Any(e => ReadsAny(e, names))
-        || IrNodeChildren.StatementsOf(statement).Any(s => ReadsAny(s, names));
 
     /// <summary>
     /// <c>this.member = initializer</c>, the access carrying the member's

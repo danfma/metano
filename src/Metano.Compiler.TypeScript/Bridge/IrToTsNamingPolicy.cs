@@ -22,12 +22,6 @@ public static class IrToTsNamingPolicy
     public const string HashCodeMethodName = "hashCode";
 
     /// <summary>
-    /// <c>System.Object</c>'s stable full name as member origins carry it
-    /// (<see cref="SymbolHelper.GetStableFullName"/> spells it as the keyword).
-    /// </summary>
-    private const string ObjectStableFullName = "object";
-
-    /// <summary>
     /// Resolves the emitted name of a declared data member (an interface or
     /// class property or field): honors <c>[Name("x")]</c> overrides when
     /// present, otherwise applies camelCase with reserved-word escaping (see
@@ -113,29 +107,9 @@ public static class IrToTsNamingPolicy
     /// <see cref="ToMethodName(string, IReadOnlyList{IrAttribute})"/> otherwise.
     /// </summary>
     public static string ToMethodName(IrMethodDeclaration method) =>
-        IrRecordEqualityOverrides.IsHashCodeOverride(method)
+        IrObjectContract.IsHashCodeOverride(method)
             ? HashCodeMethodName
             : ToMethodName(method.Name, method.Attributes);
-
-    /// <summary>
-    /// A call to <c>GetHashCode()</c> the extraction left bound to an emitted
-    /// override (a <c>base.GetHashCode()</c> whose base overrides it), which
-    /// reads the name <see cref="IrRecordEqualityOverrides.IsHashCodeOverride">the override</see> is
-    /// declared with. Every other <c>GetHashCode()</c> call carries
-    /// <c>object.GetHashCode</c>'s origin (<see cref="IsObjectHashCode"/>).
-    /// </summary>
-    public static bool IsHashCodeOverrideAccess(IrMemberOrigin origin) =>
-        origin
-            is { MemberName: nameof(object.GetHashCode), IsStatic: false, ParameterTypes.Count: 0 }
-        && !IsObjectHashCode(origin);
-
-    /// <summary><c>object.GetHashCode</c> itself.</summary>
-    public static bool IsObjectHashCode(IrMemberOrigin origin) =>
-        origin
-            is {
-                DeclaringTypeFullName: ObjectStableFullName,
-                MemberName: nameof(object.GetHashCode)
-            };
 
     /// <summary>
     /// Reads the <c>[Name]</c> override, preferring the TypeScript-specific

@@ -427,7 +427,7 @@ public static partial class IrToTsExpressionBridge
             ),
             { EmittedName: { } overridden } => overridden,
             { IsBrandedMember: true } => TypeScriptNaming.ToCamelCase(ma.MemberName),
-            { } origin when IrToTsNamingPolicy.IsHashCodeOverrideAccess(origin) =>
+            { } origin when IrObjectContract.IsHashCodeOverrideAccess(origin) =>
                 IrToTsNamingPolicy.HashCodeMethodName,
             _ => TypeScriptNaming.ToCamelCaseMember(ma.MemberName),
         };
@@ -482,7 +482,7 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static bool IsBaseIdentityHash(IrCallExpression call) =>
         call is { Target: IrMemberAccess { Target: IrBaseExpression }, Origin: { } origin }
-        && IrToTsNamingPolicy.IsObjectHashCode(origin);
+        && IrObjectContract.IsObjectGetHashCode(origin);
 
     private static TsExpression MapCall(
         IrCallExpression call,

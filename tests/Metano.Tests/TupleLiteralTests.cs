@@ -36,13 +36,6 @@ public class TupleLiteralTests
                     return named.x + named.Item2 + positional.Item1 + positional.Item2.Length
                         + local.first + local.second.Length;
                 }
-
-                public void Writes()
-                {
-                    var t = (a: 1, b: 2);
-                    t.a = 5;
-                    t.Item2 += 1;
-                }
             }
             """
         );
@@ -50,6 +43,68 @@ public class TupleLiteralTests
         await Assert
             .That(result["pairs.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("tuple-literals.ts"));
+    }
+
+    /// <summary>
+    /// A C# tuple is copied on assignment, a TS array is shared and a Dart
+    /// record is immutable, so an element write is rejected on every target.
+    /// </summary>
+    [Test]
+    public async Task TupleElementWrites_ReportUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public static class Writes
+            {
+                public static int Write()
+                {
+                    var t = (a: 1, b: 2);
+                    t.a = 5;
+                    t.Item2 += 1;
+                    t.b++;
+                    return t.a;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEqualTo(3);
+    }
+
+    /// <summary>
+    /// A tuple element or key of a collection lookup compares by value in C#
+    /// and by reference once lowered to an array, so each such use warns; the
+    /// lowering itself still emits.
+    /// </summary>
+    [Test]
+    public async Task TupleKeyedCollectionLookups_ReportUnsupported()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public static class Lookups
+            {
+                public static bool Find(List<(int, string)> list, List<string> names)
+                {
+                    var keys = new Dictionary<(int, int), string>();
+                    HashSet<(int, int)> seen = new();
+                    var byName = new Dictionary<string, (int, int)>();
+                    return list.Contains((1, "a")) && list.IndexOf((2, "b")) >= 0
+                        && names.Contains("c") && byName.ContainsKey("d") && keys.Count == seen.Count;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEqualTo(4);
+        await Assert.That(result["lookups.ts"]).Contains("list.includes([1, \"a\"]");
     }
 
     [Test]

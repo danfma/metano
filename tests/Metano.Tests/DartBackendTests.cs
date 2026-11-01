@@ -1178,6 +1178,85 @@ public class DartBackendTests
         await Assert.That(dart).Contains("a.hashCode");
     }
 
+    [Test]
+    public async Task ObjectContractOverrides_InTheDartTarget_BecomeHashCodeGetterAndEqualityOperator()
+    {
+        // A `GetHashCode` override is Dart's `hashCode` getter, the member
+        // every `x.GetHashCode()` call reads; an `Equals(object)` override
+        // stays a method and gains an `operator ==` that delegates to it.
+        var (files, diagnostics) = TranspileDart(
+            """
+            #nullable enable
+
+            [Transpile]
+            public class Money
+            {
+                public int Cents;
+
+                public override bool Equals(object? other) => other is Money m && m.Cents == Cents;
+
+                public override int GetHashCode() => Cents;
+
+                public int Hash(Money m) => m.GetHashCode();
+            }
+            """
+        );
+
+        var dart = files["money.dart"];
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(dart).Contains("@override\n  int get hashCode => this.cents;");
+        await Assert.That(dart).DoesNotContain("getHashCode");
+        await Assert.That(dart).Contains("bool operator ==(Object other) => this.equals(other);");
+        await Assert.That(dart).Contains("m.hashCode");
+    }
+
+    [Test]
+    public async Task RecordDeclaringItsOwnEquality_InTheDartTarget_KeepsTheUserMembers()
+    {
+        var (files, diagnostics) = TranspileDart(
+            """
+            #nullable enable
+
+            [Transpile]
+            public record Point(int X, int Y)
+            {
+                public virtual bool Equals(Point? other) => other is not null && other.X == X;
+
+                public override int GetHashCode() => X;
+            }
+            """
+        );
+
+        var dart = files["point.dart"];
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(dart).Contains("int get hashCode => this.x;");
+        await Assert.That(dart).DoesNotContain("HashCode.combine");
+        await Assert.That(dart).Contains("other is Point && this.equals(other)");
+    }
+
+    [Test]
+    public async Task ConstructorWithOneDeferredInitializer_InTheDartTarget_PrintsABracedBody()
+    {
+        // Dart rejects an arrow body on a generative constructor
+        // (`return_in_generative_constructor`).
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class Money(int cents)
+            {
+                public int Twice { get; } = cents * 2;
+            }
+            """
+        );
+
+        var dart = files["money.dart"];
+
+        await Assert.That(dart).DoesNotContain(") =>");
+        await Assert.That(dart).Contains("{\n    this.twice = cents * 2;\n  }");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (

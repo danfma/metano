@@ -264,8 +264,8 @@ public sealed class Printer
 
     /// <summary>
     /// When a constructor has no body, Dart expects <c>;</c>. When it has one, the
-    /// <see cref="IrBodyPrinter"/> emits the braced block (or arrow for a single
-    /// statement). Separator formatting mirrors the method printer.
+    /// <see cref="IrBodyPrinter"/> emits the braced block, even for a single
+    /// statement: a generative constructor cannot have an arrow body.
     /// </summary>
     private static void EmitCtorBodyOrSemicolon(
         StringBuilder sb,
@@ -275,7 +275,7 @@ public sealed class Printer
         if (body is null || body.Count == 0)
             sb.AppendLine(";");
         else
-            IrBodyPrinter.PrintBody(sb, body, indentLevel: 1);
+            IrBodyPrinter.PrintBody(sb, body, indentLevel: 1, allowArrow: false);
     }
 
     private static void PrintClassMember(StringBuilder sb, DartClassMember member)

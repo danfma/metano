@@ -1,4 +1,4 @@
-import { valueEquals } from "metano-runtime";
+import { tupleEquals, valueEquals } from "metano-runtime";
 import { Decimal } from "decimal.js";
 import type { Counter } from "./counter";
 import type { Dto } from "./dto";
@@ -67,6 +67,10 @@ export class Comparisons {
   }
 
   tupleEqualsMethod(a: [number, number], b: [number, number]): boolean {
-    return valueEquals(a, b);
+    return tupleEquals(a, b);
+  }
+
+  againstDefault(t: [number, string | null], u: [boolean, [Decimal, Point]]): boolean {
+    return t[0] === 0 && t[1] == null || t[0] !== 0 || t[1] != null || u[0] === false && u[1][0].eq(new Decimal("0")) && u[1][1] == null || t[0] === 0 && t[1] == null;
   }
 }

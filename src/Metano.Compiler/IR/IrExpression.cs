@@ -81,7 +81,7 @@ public sealed record IrBaseExpression() : IrExpression;
 /// </para>
 /// </summary>
 /// <param name="IsJsCallableInvoke">The call targets <c>Invoke</c> on a <c>[JsCallable]</c> interface; the receiver IS the JS function, so <c>recv.Invoke(args)</c> lowers to <c>recv(args)</c>.</param>
-/// <param name="IsTupleElement">The member access reads a positional element: a <c>[JsTuple]</c> record's positional member, or a C# tuple element read by name or as <c>ItemN</c>. Each backend reads the element at <see cref="TupleIndex"/> its own way (TypeScript indexes the array, <c>recv[i]</c>; Dart reads the record field <c>recv.$N</c>).</param>
+/// <param name="TupleElement">The kind of positional element the member access reads: a <c>[JsTuple]</c> record's positional member, or a C# tuple element read by name or as <c>ItemN</c>. Each backend reads the element at <see cref="TupleIndex"/> its own way (TypeScript indexes the array, <c>recv[i]</c>; Dart reads a C# tuple element as the record field <c>recv.$N</c> and a <c>[JsTuple]</c> member by name).</param>
 /// <param name="TupleIndex">The zero-based element position when <see cref="IsTupleElement"/> is true; <c>-1</c> otherwise.</param>
 /// <param name="IsTranspiledDataMember">The member is a field or property (not an enum member or indexer) declared on a type whose declaration the toolchain emits — a type of the current compilation or of a transpiled package, neither <c>[External]</c> nor <c>[Import]</c>. A backend that renames data members at their declaration (TypeScript escapes reserved words: <c>Default</c> → <c>default_</c>) applies the same rename at the access; a foreign member keeps the name its real declaration has.</param>
 /// <param name="IsBrandedValueMember">The member access reads the single wrapped value member of a <c>[Branded]</c> struct (<c>id.Value</c>). The branded value IS the primitive at runtime, so backends that lower the wrapper to a branded primitive collapse the read to the receiver.</param>
@@ -100,14 +100,37 @@ public sealed record IrMemberOrigin(
     bool IsDeclaringTypeExternal = false,
     bool IsDeclaringTypeNoContainer = false,
     bool IsJsCallableInvoke = false,
-    bool IsTupleElement = false,
+    IrTupleElementKind TupleElement = IrTupleElementKind.None,
     int TupleIndex = -1,
     bool IsBrandedValueMember = false,
     bool IsTranspiledDataMember = false,
     IReadOnlyList<string>? ParameterTypes = null,
     bool IsInitOnly = false,
     IrTypeReference? CompanionOwner = null
-);
+)
+{
+    /// <summary>The access reads a positional element (<see cref="TupleElement"/> is set).</summary>
+    public bool IsTupleElement => TupleElement is not IrTupleElementKind.None;
+}
+
+/// <summary>
+/// Which kind of positional element a member access reads
+/// (<see cref="IrMemberOrigin.TupleElement"/>). Both read the element at
+/// <see cref="IrMemberOrigin.TupleIndex"/>, but a backend may model the two
+/// differently (Dart keeps a <c>[JsTuple]</c> record's member as a named field
+/// and reads a C# tuple element as the record field <c>$N</c>).
+/// </summary>
+public enum IrTupleElementKind
+{
+    /// <summary>Not a positional element.</summary>
+    None,
+
+    /// <summary>A positional member of a <c>[JsTuple]</c> record.</summary>
+    JsTuple,
+
+    /// <summary>A C# value-tuple element, read by name or as <c>ItemN</c>.</summary>
+    ValueTuple,
+}
 
 /// <summary>
 /// Member access: <c>target.memberName</c>. <see cref="Origin"/> is null for

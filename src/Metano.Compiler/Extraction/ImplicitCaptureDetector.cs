@@ -47,7 +47,8 @@ internal static class ImplicitCaptureDetector
     public static Result Scan(
         INamedTypeSymbol type,
         Compilation? compilation,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        bool initializersRunInConstructor
     )
     {
         if (compilation is null)
@@ -97,7 +98,6 @@ internal static class ImplicitCaptureDetector
             .Select(m => m.Name)
             .ToHashSet(StringComparer.Ordinal);
         var captured = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-        var initializersRunInConstructor = PrimaryConstructorInitializerDeferral.AppliesTo(type);
 
         // Walk only the members of THIS type (skip nested types); C# 12
         // primary-ctor parameters are not in scope for a nested type,
@@ -338,15 +338,7 @@ internal static class ImplicitCaptureDetector
     /// construction).
     /// </summary>
     private static bool IsInsideMemberInitializer(SyntaxNode identifier) =>
-        identifier.Ancestors().OfType<EqualsValueClauseSyntax>().Any(IsMemberInitializerClause);
-
-    private static bool IsMemberInitializerClause(EqualsValueClauseSyntax clause) =>
-        clause.Parent
-            is PropertyDeclarationSyntax
-                or VariableDeclaratorSyntax
-                {
-                    Parent: VariableDeclarationSyntax { Parent: FieldDeclarationSyntax },
-                };
+        MemberInitializerSyntax.Contains(identifier, stopAtExecutableBodies: false);
 
     /// <summary>
     /// Picks the synthesized field name from a primary-ctor param's

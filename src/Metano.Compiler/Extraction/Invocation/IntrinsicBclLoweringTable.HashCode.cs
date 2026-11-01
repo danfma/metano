@@ -17,7 +17,7 @@ public sealed partial class IntrinsicBclLoweringTable
     {
         var getHashCode = compilation
             .GetSpecialType(SpecialType.System_Object)
-            .GetMembers(nameof(GetHashCode))
+            .GetMembers(nameof(object.GetHashCode))
             .OfType<IMethodSymbol>()
             .Single(m => m.Parameters.IsEmpty);
 
@@ -44,10 +44,11 @@ public sealed partial class IntrinsicBclLoweringTable
         if (SymbolHelper.HasEmit(symbol) || SymbolHelper.GetImport(symbol) is not null)
             return null;
 
+        var objectGetHashCode = RootDefinition(symbol);
+
         var receiver = receiverSyntax is null
             ? new IrThisExpression()
             : ctx.Recurse(receiverSyntax);
-        var objectGetHashCode = RootDefinition(symbol);
 
         return new IrCallExpression(
             new IrMemberAccess(receiver, objectGetHashCode.Name),
