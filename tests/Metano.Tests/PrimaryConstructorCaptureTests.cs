@@ -200,11 +200,11 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
-    public async Task PromotedParam_ThatCanDivergeFromItsProperty_KeepsItsOwnField()
+    public async Task PromotedParam_WithASettableProperty_KeepsItsOwnField()
     {
-        // A settable property, or a member that writes the parameter, can
-        // make the two differ, so C# keeps separate storage for the
-        // parameter (CS9124) and the read must not go through the property.
+        // `m.Limit = 5` changes the property but not the parameter, so C#
+        // keeps separate storage for it (CS9124): the constructor still folds
+        // the property, and the member body reads its own readonly field.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -214,7 +214,47 @@ public class PrimaryConstructorCaptureTests
 
                 public int Original() => limit;
             }
+            """
+        );
 
+        var output = result["settable.ts"];
+        await Assert.That(output).Contains("constructor(public limit: number)");
+        await Assert.That(output).Contains("this._limit = limit;");
+        await Assert.That(output).Contains("return this._limit;");
+        await Assert.That(output).Contains("private readonly _limit: number;");
+    }
+
+    [Test]
+    public async Task PromotedParam_WithAnInitAccessor_KeepsItsOwnField()
+    {
+        // An object initializer (`new Sized(1) { Size = 6 }`) changes an
+        // init-only property after construction, but not the parameter.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Sized(int size)
+            {
+                public int Size { get; init; } = size;
+
+                public int Original() => size;
+            }
+            """
+        );
+
+        var output = result["sized.ts"];
+        await Assert.That(output).Contains("constructor(readonly size: number)");
+        await Assert.That(output).Contains("return this._size;");
+        await Assert.That(output).Contains("private readonly _size: number;");
+    }
+
+    [Test]
+    public async Task WrittenParam_IsNeverPromoted()
+    {
+        // A member that writes the parameter makes it diverge from the
+        // property, so the constructor does not fold the pair: the property
+        // keeps its own declaration and the parameter a mutable field.
+        var result = TranspileHelper.Transpile(
+            """
             [Transpile]
             public sealed class Written(int count)
             {
@@ -224,9 +264,78 @@ public class PrimaryConstructorCaptureTests
 
                 public int Current() => count;
             }
+            """
+        );
 
+        var output = result["written.ts"];
+        await Assert.That(output).Contains("constructor(count: number)");
+        await Assert.That(output).Contains("private _count: number;");
+        await Assert.That(output).Contains("this.count = this._count;");
+        await Assert.That(output).Contains("this._count = 0;");
+        await Assert.That(output).Contains("return this._count;");
+    }
+
+    [Test]
+    public async Task WrittenParam_BehindAnExpressionBodiedAlias_IsNeverPromoted()
+    {
+        // `A => a` reads the parameter live, so after `a++` it must see the
+        // new value: the getter reads the mutable field instead of being
+        // folded into a readonly parameter property.
+        var result = TranspileHelper.Transpile(
+            """
             [Transpile]
-            public sealed class WrittenByInitializer(int total)
+            public sealed class Live(int a)
+            {
+                public int A => a;
+
+                public void Inc() => a++;
+            }
+            """
+        );
+
+        var output = result["live.ts"];
+        await Assert.That(output).Contains("constructor(a: number)");
+        await Assert.That(output).Contains("private _a: number;");
+        await Assert.That(output).Contains("get a(): number {\n    return this._a;");
+        await Assert.That(output).Contains("this._a++;");
+    }
+
+    [Test]
+    public async Task WrittenParam_InAnInitializer_RunsInDeclarationOrder()
+    {
+        // `B = a++` runs before `A = a`, so A sees the incremented value and
+        // so does a later member read: all three share the mutable field.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Ordered(int a)
+            {
+                public int B { get; } = a++;
+
+                public int A { get; } = a;
+
+                public int Read() => a;
+            }
+            """
+        );
+
+        var output = result["ordered.ts"];
+        await Assert.That(output).Contains("constructor(a: number)");
+
+        await Assert
+            .That(output)
+            .Contains("this._a = a;\n    this.b = this._a++;\n    this.a = this._a;");
+
+        await Assert.That(output).Contains("return this._a;");
+    }
+
+    [Test]
+    public async Task WrittenParam_ByAnInitializerLambda_GetsAMutableField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Clearable(int total)
             {
                 public int Total { get; } = total;
 
@@ -237,20 +346,54 @@ public class PrimaryConstructorCaptureTests
             """
         );
 
-        var writtenByInitializer = result["written-by-initializer.ts"];
-        await Assert.That(writtenByInitializer).Contains("this._total = 0");
-        await Assert.That(writtenByInitializer).Contains("return this._total;");
-        await Assert.That(writtenByInitializer).Contains("private _total: number;");
+        var output = result["clearable.ts"];
+        await Assert.That(output).Contains("private _total: number;");
+        await Assert.That(output).Contains("this._total = 0");
+        await Assert.That(output).Contains("return this._total;");
+    }
 
-        var settable = result["settable.ts"];
-        await Assert.That(settable).Contains("this._limit = limit;");
-        await Assert.That(settable).Contains("return this._limit;");
-        await Assert.That(settable).Contains("private readonly _limit: number;");
+    [Test]
+    public async Task ParenthesizedAndDeconstructionWrites_AreWrites()
+    {
+        // Parentheses and deconstruction targets bind to no syntax-level
+        // assignment of the identifier itself; the bound operations still
+        // see the write, so neither parameter is promoted.
+        var (result, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class Parenthesized(int a)
+            {
+                public int A { get; } = a;
 
-        var written = result["written.ts"];
-        await Assert.That(written).Contains("this._count = count;");
-        await Assert.That(written).Contains("return this._count;");
-        await Assert.That(written).Contains("private _count: number;");
+                public int Run()
+                {
+                    (a) = 9;
+                    return a;
+                }
+            }
+
+            [Transpile]
+            public sealed class Deconstructed(int a, int b)
+            {
+                public int A { get; } = a;
+
+                public int Swap()
+                {
+                    (a, b) = (b, a);
+                    return a;
+                }
+            }
+            """
+        );
+
+        var parenthesized = result["parenthesized.ts"];
+        await Assert.That(parenthesized).Contains("constructor(a: number)");
+        await Assert.That(parenthesized).Contains("private _a: number;");
+        await Assert.That(parenthesized).Contains("this._a = 9;");
+
+        var deconstructed = result["deconstructed.ts"];
+        await Assert.That(deconstructed).Contains("constructor(a: number, b: number)");
+        await Assert.That(deconstructed).Contains("private _a: number;");
     }
 
     [Test]
@@ -278,6 +421,28 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
+    public async Task PromotedParam_ToAVirtualProperty_KeepsItsOwnField()
+    {
+        // An override can replace the getter, so the read cannot go
+        // through the property.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Overridable(int limit)
+            {
+                public virtual int Limit { get; } = limit;
+
+                public int Original() => limit;
+            }
+            """
+        );
+
+        var output = result["overridable.ts"];
+        await Assert.That(output).Contains("return this._limit;");
+        await Assert.That(output).Contains("private readonly _limit: number;");
+    }
+
+    [Test]
     public async Task PromotedParam_ToAnIgnoredProperty_IsCaptured()
     {
         // An [Ignore]d property is not emitted, so nothing is promoted: the
@@ -296,7 +461,28 @@ public class PrimaryConstructorCaptureTests
         );
 
         var output = result["hidden.ts"];
+        await Assert.That(output).Contains("private readonly _limit: number;");
         await Assert.That(output).Contains("return this._limit * 2;");
+    }
+
+    [Test]
+    public async Task PropertiesDifferingOnlyByCase_PairWithTheExactCaseMatch()
+    {
+        // Two properties whose names differ only by case used to crash the
+        // name-keyed lookup; the exact-case one is the parameter's alias.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Cased(int value)
+            {
+                public int value { get; } = value;
+
+                public int Value => 42;
+            }
+            """
+        );
+
+        await Assert.That(result).ContainsKey("cased.ts");
     }
 
     [Test]
@@ -331,16 +517,13 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
-    public async Task FieldNameCollision_SkipsSynthesisAndPreservesUserField()
+    public async Task FieldNameCollision_SynthesizesTheNextFreeName()
     {
-        // The user already declares `_view` for an unrelated
-        // purpose AND has a `view` primary-ctor param the detector
-        // would otherwise capture into `_view`. The synthesizer
-        // cannot pick a non-conflicting name without surprising
-        // downstream consumers, so it skips the synthesis. The
-        // user's existing field stays intact; the bare `view`
-        // reference inside member bodies stays unrewritten and the
-        // consumer's TS compiler surfaces the missing identifier.
+        // The user already declares `_view` for an unrelated purpose AND has
+        // a `view` primary-ctor param the detector captures. The synthesized
+        // field takes the next free name, so the user's field stays intact
+        // and the member body still reads the parameter's storage (a bare
+        // `view` would be out of scope).
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -360,10 +543,9 @@ public class PrimaryConstructorCaptureTests
         );
 
         var output = result["presenter.ts"];
-        // User's hand-written field survives untouched.
         await Assert.That(output).Contains("private _view: number = 0");
-        // No synthesized ICounterView field — the collision suppressed it.
-        await Assert.That(output).DoesNotContain("private readonly _view: ICounterView");
+        await Assert.That(output).Contains("private readonly _view2: ICounterView");
+        await Assert.That(output).Contains("this._view2.showCounter(this._view)");
     }
 
     [Test]

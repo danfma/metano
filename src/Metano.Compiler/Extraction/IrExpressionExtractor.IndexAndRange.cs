@@ -316,28 +316,10 @@ public sealed partial class IrExpressionExtractor
             : null;
 
     /// <summary>
-    /// True when <paramref name="elem"/> is the location being written:
-    /// an assignment target, an increment/decrement operand, or a
-    /// <c>ref</c>/<c>out</c> argument.
+    /// True when <paramref name="elem"/> is the location being written
+    /// (<see cref="WriteAccess"/>).
     /// </summary>
-    private static bool IsWriteTarget(ExpressionSyntax elem) =>
-        elem.Parent switch
-        {
-            AssignmentExpressionSyntax assignment => assignment.Left == elem,
-            PrefixUnaryExpressionSyntax prefix => IsIncrementOrDecrement(prefix),
-            PostfixUnaryExpressionSyntax postfix => IsIncrementOrDecrement(postfix),
-            ArgumentSyntax argument => argument.RefKindKeyword.Kind()
-                is SyntaxKind.RefKeyword
-                    or SyntaxKind.OutKeyword,
-            _ => false,
-        };
-
-    private static bool IsIncrementOrDecrement(ExpressionSyntax unary) =>
-        unary.Kind()
-            is SyntaxKind.PreIncrementExpression
-                or SyntaxKind.PreDecrementExpression
-                or SyntaxKind.PostIncrementExpression
-                or SyntaxKind.PostDecrementExpression;
+    private bool IsWriteTarget(ExpressionSyntax elem) => WriteAccess.IsWriteTarget(elem, _semantic);
 
     private static ExpressionSyntax Unparenthesize(ExpressionSyntax expression) =>
         expression is ParenthesizedExpressionSyntax parenthesized

@@ -22,6 +22,26 @@ public static class IrConstructorExtractor
         IrTypeOriginResolver? originResolver = null,
         Compilation? compilation = null,
         Metano.Annotations.TargetLanguage? target = null
+    ) =>
+        Extract(
+            type,
+            originResolver,
+            compilation,
+            target,
+            PrimaryConstructorPromotion.For(type, compilation, target)
+        );
+
+    /// <summary>
+    /// <see cref="Extract(INamedTypeSymbol, IrTypeOriginResolver?, Compilation?, Metano.Annotations.TargetLanguage?)"/>
+    /// with the type's primary-constructor <paramref name="promotion"/>
+    /// already decided, so a caller that also scans captures shares it.
+    /// </summary>
+    internal static IrConstructorDeclaration? Extract(
+        INamedTypeSymbol type,
+        IrTypeOriginResolver? originResolver,
+        Compilation? compilation,
+        Metano.Annotations.TargetLanguage? target,
+        PrimaryConstructorPromotion promotion
     )
     {
         var explicitCtors = ExplicitConstructors(type);
@@ -30,12 +50,13 @@ public static class IrConstructorExtractor
         if (primary is null)
             return ImplicitConstructorWithObservableBaseCall(type, target);
 
-        var primaryDecl = BuildFromMethod(primary, type, originResolver, compilation, target);
+        var context = new PromotionContext(type, compilation, target, promotion);
+        var primaryDecl = BuildFromMethod(primary, originResolver, context);
 
         // Other constructors become overloads (without nested Overloads of their own).
         var overloads = explicitCtors
             .Where(c => !SymbolEqualityComparer.Default.Equals(c, primary))
-            .Select(c => BuildFromMethod(c, type, originResolver, compilation, target))
+            .Select(c => BuildFromMethod(c, originResolver, context))
             .ToList();
 
         return overloads.Count > 0 ? primaryDecl with { Overloads = overloads } : primaryDecl;
@@ -112,32 +133,41 @@ public static class IrConstructorExtractor
             .ToList();
 
     /// <summary>
-    /// The property <paramref name="parameter"/> is promoted to. A
-    /// primary-constructor parameter follows the rule the capture scan shares
-    /// (<see cref="PrimaryConstructorPropertyAlias.PromotedPropertyOf"/>): the
-    /// property must merely alias it, not compute its value from it. An
-    /// explicit constructor's parameter keeps pairing by name, and so does
-    /// any parameter without a compilation (no syntax to inspect).
+    /// What deciding a parameter's promotion needs: the type, the active
+    /// compilation and target, and the type's primary-constructor decision.
     /// </summary>
-    private static IPropertySymbol? PromotionTarget(
-        IParameterSymbol parameter,
-        Dictionary<string, IPropertySymbol> propertiesByName,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
+    private sealed record PromotionContext(
+        INamedTypeSymbol Type,
+        Compilation? Compilation,
+        Metano.Annotations.TargetLanguage? Target,
+        PrimaryConstructorPromotion Promotion
     )
     {
-        if (
-            compilation is not null
+        /// <summary>
+        /// The property <paramref name="parameter"/> is promoted to. A
+        /// primary-constructor parameter follows the decision the capture scan
+        /// shares (<see cref="PrimaryConstructorPromotion"/>). An explicit
+        /// constructor's parameter, or any parameter without a compilation (no
+        /// syntax to inspect), pairs by name with a promotion candidate,
+        /// preferring an exact-case match when two properties differ only by
+        /// case.
+        /// </summary>
+        public IPropertySymbol? PromotionTarget(IParameterSymbol parameter) =>
+            Compilation is not null
             && parameter.ContainingSymbol is IMethodSymbol constructor
             && IsPrimaryConstructor(constructor)
-        )
-            return PrimaryConstructorPropertyAlias.PromotedPropertyOf(
-                parameter,
-                compilation,
-                target
-            );
+                ? Promotion.PromotedPropertyOf(parameter)
+                : NamedCandidate(parameter.Name);
 
-        return propertiesByName.GetValueOrDefault(parameter.Name);
+        private IPropertySymbol? NamedCandidate(string name) =>
+            Type.GetMembers()
+                .OfType<IPropertySymbol>()
+                .Where(property =>
+                    string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
+                    && PrimaryConstructorPropertyAlias.IsPromotionCandidate(property, Target)
+                )
+                .OrderBy(property => property.Name == name ? 0 : 1)
+                .FirstOrDefault();
     }
 
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
@@ -148,26 +178,18 @@ public static class IrConstructorExtractor
 
     private static IrConstructorDeclaration BuildFromMethod(
         IMethodSymbol ctor,
-        INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
+        PromotionContext context
     )
     {
-        var propertiesByName = type.GetMembers()
-            .OfType<IPropertySymbol>()
-            .Where(p => PrimaryConstructorPropertyAlias.IsPromotionCandidate(p, target))
-            .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+        var type = context.Type;
+        var compilation = context.Compilation;
+        var target = context.Target;
 
         var parameters = ctor
             .Parameters.Select(p =>
             {
-                var (promotion, promotedVisibility, emittedName) = ResolvePromotionInfo(
-                    p,
-                    propertiesByName,
-                    compilation,
-                    target
-                );
+                var (promotion, promotedVisibility, emittedName) = ResolvePromotionInfo(p, context);
                 return new IrConstructorParameter(
                     new IrParameter(
                         p.Name,
@@ -200,7 +222,7 @@ public static class IrConstructorExtractor
                 compilation,
                 target
             ),
-            ThisChain: TryExtractThisChain(ctor, type, originResolver, compilation, target)
+            ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context)
         );
     }
 
@@ -251,10 +273,9 @@ public static class IrConstructorExtractor
     /// </summary>
     private static IrConstructorChain? TryExtractThisChain(
         IMethodSymbol ctor,
-        INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver,
         Compilation compilation,
-        Metano.Annotations.TargetLanguage? target
+        PromotionContext context
     )
     {
         if (FindThisCallSyntax(ctor) is not { } thisCall)
@@ -272,7 +293,7 @@ public static class IrConstructorExtractor
             originResolver
         );
 
-        var chainedDecl = BuildFromMethod(chainedCtor, type, originResolver, compilation, target);
+        var chainedDecl = BuildFromMethod(chainedCtor, originResolver, context);
 
         return new IrConstructorChain(arguments, chainedDecl);
     }
@@ -403,21 +424,16 @@ public static class IrConstructorExtractor
     /// target-scoped <c>[Name]</c> override so backends don't need to walk
     /// Roslyn again to render the shorthand declaration. A primary-constructor
     /// parameter is promoted only when the matching property merely exposes
-    /// it (<see cref="PrimaryConstructorPropertyAlias"/>); a property computed
-    /// from it keeps its own declaration.
+    /// it and nothing writes it (<see cref="PrimaryConstructorPromotion"/>); a
+    /// property computed from it keeps its own declaration.
     /// </summary>
     private static (
         IrParameterPromotion Promotion,
         IrVisibility? Visibility,
         string? EmittedName
-    ) ResolvePromotionInfo(
-        IParameterSymbol param,
-        Dictionary<string, IPropertySymbol> propertiesByName,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
-    )
+    ) ResolvePromotionInfo(IParameterSymbol param, PromotionContext context)
     {
-        if (PromotionTarget(param, propertiesByName, compilation, target) is not { } prop)
+        if (context.PromotionTarget(param) is not { } prop)
             return (IrParameterPromotion.None, null, null);
 
         var promotion =
@@ -427,7 +443,7 @@ public static class IrConstructorExtractor
         return (
             promotion,
             IrVisibilityMapper.Map(prop.DeclaredAccessibility),
-            SymbolHelper.GetNameOverride(prop, target)
+            SymbolHelper.GetNameOverride(prop, context.Target)
         );
     }
 }

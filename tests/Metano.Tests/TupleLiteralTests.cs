@@ -165,7 +165,8 @@ public class TupleLiteralTests
 
                 public static bool Locals((int, int) t, (int, int) u) => object.Equals(t, u);
 
-                public static bool Named((int, int) t, (int, int) u) => object.Equals(objB: t, objA: u);
+                public static bool Named((int, int) first, (int x, int y) second) =>
+                    object.Equals(objB: first, objA: second);
             }
             """
         );
@@ -179,7 +180,51 @@ public class TupleLiteralTests
             );
 
         await Assert.That(output).Contains("return tupleEquals(t, u);");
+        await Assert.That(output).Contains("return tupleEquals(first, second);");
         await Assert.That(output).DoesNotContain("objectEquals");
+    }
+
+    /// <summary>
+    /// Tuples of different <c>ValueTuple</c> instantiations are different
+    /// types, never equal in C#, while their arrays could compare equal
+    /// element by element, so they keep <c>objectEquals</c>.
+    /// </summary>
+    [Test]
+    public async Task ObjectEqualsOverMismatchedTupleTypes_KeepsObjectEquals()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool Widened((int, int) t, (int, long) u) => object.Equals(t, u);
+            }
+            """
+        );
+
+        await Assert.That(result["comparisons.ts"]).Contains("return objectEquals(t, u);");
+    }
+
+    /// <summary>
+    /// Pins a known gap: <c>tupleEquals</c> compares a nested tuple element
+    /// by reference, so equal nested tuples compare unequal in TypeScript.
+    /// The call is still the tuple comparison, whose flat elements are right.
+    /// </summary>
+    [Test]
+    public async Task ObjectEqualsOverNestedTuples_ComparesTheNestedElementByReference()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool Nested(((int, int), int) t, ((int, int), int) u) =>
+                    object.Equals(t, u);
+            }
+            """
+        );
+
+        await Assert.That(result["comparisons.ts"]).Contains("return tupleEquals(t, u);");
     }
 
     /// <summary>
