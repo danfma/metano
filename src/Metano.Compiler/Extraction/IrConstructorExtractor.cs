@@ -147,13 +147,7 @@ public static class IrConstructorExtractor
     {
         var propertiesByName = type.GetMembers()
             .OfType<IPropertySymbol>()
-            .Where(p =>
-                !p.IsImplicitlyDeclared
-                && p.DeclaredAccessibility
-                    is not (Accessibility.Internal or Accessibility.NotApplicable)
-                && !SymbolHelper.HasIgnore(p, target)
-                && !p.IsOverride
-            )
+            .Where(p => PrimaryConstructorPropertyAlias.IsPromotionCandidate(p, target))
             .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
 
         var parameters = ctor

@@ -1,5 +1,7 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -57,6 +59,7 @@ internal static class ImplicitCaptureDetector
         INamedTypeSymbol type,
         Compilation? compilation,
         IrTypeOriginResolver? originResolver,
+        TargetLanguage? target,
         bool initializersRunInConstructor
     )
     {
@@ -71,7 +74,7 @@ internal static class ImplicitCaptureDetector
             SymbolEqualityComparer.Default
         );
 
-        var promotedParams = new Dictionary<ISymbol, IPropertySymbol>(
+        var promotionCandidates = new Dictionary<ISymbol, IPropertySymbol>(
             SymbolEqualityComparer.Default
         );
 
@@ -83,17 +86,13 @@ internal static class ImplicitCaptureDetector
             // bridge handles them end-to-end. Synthesizing a private
             // backing field would duplicate state and surface as
             // double-emitted fields in regenerated samples, so a member
-            // body reads the property instead.
-            if (FindPromotedProperty(param, type, compilation) is { } property)
-                promotedParams[param] = property;
+            // body reads the property instead — when the two can never
+            // diverge (see PromotedReads).
+            if (FindPromotedProperty(param, type, compilation, target) is { } property)
+                promotionCandidates[param] = property;
             else
                 primaryParams[param] = param;
         }
-
-        var promotedOnly = Empty with { PromotedParams = promotedParams };
-
-        if (primaryParams.Count == 0)
-            return promotedOnly;
 
         // Parameters captured by an explicit field initializer get their
         // synthesis suppressed early — the existing AnnotateCapturedParams
@@ -116,6 +115,7 @@ internal static class ImplicitCaptureDetector
             .Select(m => m.Name)
             .ToHashSet(StringComparer.Ordinal);
         var captured = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        var promotedReads = new PromotedReads(promotionCandidates);
 
         // Walk only the members of THIS type (skip nested types); C# 12
         // primary-ctor parameters are not in scope for a nested type,
@@ -131,10 +131,16 @@ internal static class ImplicitCaptureDetector
                 if (IsInsidePrimaryCtor(identifier, primaryCtorSyntaxNodes))
                     continue;
 
-                if (initializersRunInConstructor && IsInsideMemberInitializer(identifier))
+                var insideInitializer = IsInsideMemberInitializer(identifier);
+
+                if (initializersRunInConstructor && insideInitializer)
                     continue;
 
                 var resolved = model.GetSymbolInfo(identifier).Symbol;
+
+                if (!insideInitializer)
+                    promotedReads.Record(resolved, identifier);
+
                 if (
                     resolved is IParameterSymbol paramSymbol
                     && primaryParams.ContainsKey(paramSymbol)
@@ -146,8 +152,15 @@ internal static class ImplicitCaptureDetector
             }
         }
 
+        // A promoted parameter whose property can diverge from it (the
+        // property has a setter, or a member writes the parameter) keeps its
+        // own storage, as C# does: it is captured like any other parameter.
+        captured.UnionWith(promotedReads.Diverging);
+
+        var promotedParams = promotedReads.Aliased();
+
         if (captured.Count == 0)
-            return promotedOnly;
+            return Empty with { PromotedParams = promotedParams };
 
         var paramFieldMap = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
         var synthesized = new List<IrFieldDeclaration>(captured.Count);
@@ -251,20 +264,81 @@ internal static class ImplicitCaptureDetector
     /// would duplicate state. Match is case-insensitive to mirror
     /// <c>IrConstructorExtractor.ResolvePromotionInfo</c>, which
     /// also pairs camelCase params with PascalCase properties, and — like
-    /// it — only a property that merely exposes the parameter
-    /// (<see cref="PrimaryConstructorPropertyAlias"/>) counts.
+    /// it — only an emitted property
+    /// (<see cref="PrimaryConstructorPropertyAlias.IsPromotionCandidate"/>)
+    /// that merely exposes the parameter
+    /// (<see cref="PrimaryConstructorPropertyAlias.IsAliasOf"/>) counts.
     /// </summary>
     private static IPropertySymbol? FindPromotedProperty(
         IParameterSymbol param,
         INamedTypeSymbol type,
-        Compilation compilation
+        Compilation compilation,
+        TargetLanguage? target
     ) =>
         type.GetMembers()
             .OfType<IPropertySymbol>()
             .FirstOrDefault(property =>
                 string.Equals(property.Name, param.Name, StringComparison.OrdinalIgnoreCase)
+                && PrimaryConstructorPropertyAlias.IsPromotionCandidate(property, target)
                 && PrimaryConstructorPropertyAlias.IsAliasOf(property, param, compilation)
             );
+
+    /// <summary>
+    /// The member-body references (outside initializers) to the promoted
+    /// parameters, sorted by whether a read may go through the promoted
+    /// property. It may when the two can never diverge: the property has no
+    /// setter (an <c>init</c> one counts, since an object initializer changes
+    /// the property but not the parameter) and no member writes the
+    /// parameter. Otherwise C# keeps separate storage for the parameter
+    /// (warning CS9124), and so must the emitted code.
+    /// </summary>
+    private sealed class PromotedReads(IReadOnlyDictionary<ISymbol, IPropertySymbol> candidates)
+    {
+        private readonly HashSet<ISymbol> _read = new(SymbolEqualityComparer.Default);
+        private readonly HashSet<ISymbol> _written = new(SymbolEqualityComparer.Default);
+
+        /// <summary>The referenced parameters that need their own storage.</summary>
+        public IEnumerable<ISymbol> Diverging => _read.Where(param => !CanReadProperty(param));
+
+        public void Record(ISymbol? resolved, IdentifierNameSyntax identifier)
+        {
+            if (resolved is not IParameterSymbol param || !candidates.ContainsKey(param))
+                return;
+
+            _read.Add(param);
+
+            if (IsWriteTarget(identifier))
+                _written.Add(param);
+        }
+
+        /// <summary>The parameters whose reads go through the promoted property.</summary>
+        public IReadOnlyDictionary<ISymbol, IPropertySymbol> Aliased() =>
+            candidates
+                .Where(entry => _read.Contains(entry.Key) && CanReadProperty(entry.Key))
+                .ToDictionary(
+                    entry => entry.Key,
+                    entry => entry.Value,
+                    (IEqualityComparer<ISymbol>)SymbolEqualityComparer.Default
+                );
+
+        private bool CanReadProperty(ISymbol param) =>
+            candidates[param].SetMethod is null && !_written.Contains(param);
+
+        private static bool IsWriteTarget(IdentifierNameSyntax identifier) =>
+            identifier.Parent switch
+            {
+                AssignmentExpressionSyntax assignment => assignment.Left == identifier,
+                PrefixUnaryExpressionSyntax prefix => prefix.IsKind(
+                    SyntaxKind.PreIncrementExpression
+                ) || prefix.IsKind(SyntaxKind.PreDecrementExpression),
+                PostfixUnaryExpressionSyntax postfix => postfix.IsKind(
+                    SyntaxKind.PostIncrementExpression
+                ) || postfix.IsKind(SyntaxKind.PostDecrementExpression),
+                ArgumentSyntax argument => !argument.RefKindKeyword.IsKind(SyntaxKind.None)
+                    && !argument.RefKindKeyword.IsKind(SyntaxKind.InKeyword),
+                _ => false,
+            };
+    }
 
     /// <summary>
     /// Returns the syntax nodes of every direct member of the type
