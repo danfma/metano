@@ -77,7 +77,10 @@ topmost directory is:
 If no package file is found, it falls back to the legacy convention: the parent
 directory of the output folder. When that parent lies above the topmost
 directory (the output folder is the topmost directory itself), the run fails
-with `MS0044`: the `.ts` files are written, `package.json` is not. Set
+with `MS0044` when files were generated: the `.ts` files are written,
+`package.json` is not (a run that generated nothing skips `package.json`
+silently). Layouts without `.git` or a solution file whose `package.json` sits
+in the directory shared with the C# project now need `MetanoPackageRoot`. Set
 `MetanoPackageRoot` (`--package-root`) when your generated files live somewhere
 unusual; an explicit root is used as given. Note that a home directory kept
 under git (dotfiles) counts as a repository root, so the walk can reach a

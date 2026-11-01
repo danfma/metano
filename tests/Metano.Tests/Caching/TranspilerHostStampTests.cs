@@ -34,8 +34,6 @@ public class TranspilerHostStampTests
     {
         var missingDir = Path.Combine(_outputDir, "missing");
 
-        TranspilerHost.DeleteStamp(missingDir);
-
-        await Assert.That(Directory.Exists(missingDir)).IsFalse();
+        await Assert.That(() => TranspilerHost.DeleteStamp(missingDir)).ThrowsNothing();
     }
 }

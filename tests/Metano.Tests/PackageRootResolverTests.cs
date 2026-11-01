@@ -6,8 +6,9 @@ namespace Metano.Tests;
 /// #334: without <c>--package-root</c>, the package root search walks up from the
 /// output directory but never above the topmost directory of its workspace (a
 /// <c>.git</c> repository root, a solution directory, the C# project directory, or the
-/// child of the directory shared with the project), so it cannot pick and rewrite an
-/// unrelated <c>package.json</c> further up the filesystem.
+/// child of the directory shared with the project, or the output directory itself when
+/// it is unrelated to the project), so it cannot pick and rewrite an unrelated
+/// <c>package.json</c> further up the filesystem.
 /// <para>
 /// Each test builds its workspace inside a fresh temp directory and assumes that no
 /// ancestor of the system temp directory is a repository root or holds a solution
