@@ -4,10 +4,10 @@ namespace Metano.Tests;
 
 /// <summary>
 /// #334: without <c>--package-root</c>, the package root search walks up from the
-/// output directory but never past the workspace boundary (a <c>.git</c> repository
-/// root, a solution directory, or the directory that holds both the output and the C#
-/// project), so it cannot pick and rewrite an unrelated <c>package.json</c> further up
-/// the filesystem.
+/// output directory but never above the topmost directory of its workspace (a
+/// <c>.git</c> repository root, a solution directory, the C# project directory, or the
+/// child of the directory shared with the project), so it cannot pick and rewrite an
+/// unrelated <c>package.json</c> further up the filesystem.
 /// <para>
 /// Each test builds its workspace inside a fresh temp directory and assumes that no
 /// ancestor of the system temp directory is a repository root or holds a solution
@@ -80,15 +80,13 @@ public class PackageRootResolverTests
     [Test]
     public async Task SolutionFilter_IsNotASolution()
     {
-        WritePackageJson("workspace");
-        MarkSolution("workspace/filtered", "App.slnf");
+        // A real solution in `app/web` would stop the search below `app/package.json`.
+        WritePackageJson("app");
+        MarkSolution("app/web", "App.slnf");
 
-        var resolution = Resolve(
-            output: "workspace/filtered/web/src",
-            project: "workspace/api/Api.csproj"
-        );
+        var resolution = Resolve(output: "app/web/src", project: "app/App.csproj");
 
-        await AssertResolved(resolution, "workspace");
+        await AssertResolved(resolution, "app");
     }
 
     [Test]
@@ -154,6 +152,17 @@ public class PackageRootResolverTests
     }
 
     [Test]
+    public async Task WithoutMarkers_PackageJsonInTheDirectorySharedWithTheProject_IsIgnored()
+    {
+        // `~/code/Api` + `~/web/src/gen`: the shared `~` is a generic folder, never a root.
+        WritePackageJson("home");
+
+        var resolution = Resolve(output: "home/web/src/gen", project: "home/code/Api/Api.csproj");
+
+        await AssertResolved(resolution, "home/web/src");
+    }
+
+    [Test]
     public async Task WithoutAnyBoundary_PackageJsonAboveTheParent_IsIgnored()
     {
         WritePackageJson(AboveWorkspace);
@@ -196,6 +205,16 @@ public class PackageRootResolverTests
         var resolution = Resolve(output: "app", project: "app/App.csproj");
 
         await AssertRefused(resolution, outputDir: "app");
+    }
+
+    [Test]
+    public async Task OutputDirectlyInTheDirectorySharedWithTheProject_IsRefused()
+    {
+        WritePackageJson("tmp");
+
+        var resolution = Resolve(output: "tmp/out", project: "tmp/app/App.csproj");
+
+        await AssertRefused(resolution, outputDir: "tmp/out");
     }
 
     [Test]

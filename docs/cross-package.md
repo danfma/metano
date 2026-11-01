@@ -59,16 +59,23 @@ during compilation, walks the referenced assembly's public types, and registers
 them in its cross-assembly type map.
 
 The TypeScript CLI also finds the target package root by walking upward from
-`MetanoOutputDir` until it sees a `package.json`. The walk never goes past the
-workspace boundary, so a `package.json` that belongs to another project further
-up is left alone. Starting at the output folder itself, the boundary is the
-nearest repository root (it holds `.git`); without one, the nearest solution
-directory (it holds a `.sln` or `.slnx` file); without one, the smallest
-directory that holds both the output folder and the C# project (unless that is
-the filesystem root). Without any boundary, only the output folder and its
-parent are searched. If no package file is found, it falls back to the legacy
-convention: the parent directory of the output folder. When that parent lies
-outside the workspace (the output folder is the boundary itself), the run fails
+`MetanoOutputDir` until it sees a `package.json`. The walk never goes above the
+topmost directory of the workspace, so a `package.json` that belongs to another
+project further up is left alone. Starting at the output folder itself, that
+topmost directory is:
+
+1. the nearest repository root (it holds `.git`);
+2. else the nearest solution directory (it holds a `.sln` or `.slnx` file);
+3. else the C# project directory, when it holds the output folder;
+4. else the folder just below the directory that the output and the project
+   share, on the output's side (the shared directory itself is often a generic
+   folder such as `~` or `/tmp`, so it is never used; the filesystem root does
+   not count as shared);
+5. else the parent of the output folder.
+
+If no package file is found, it falls back to the legacy convention: the parent
+directory of the output folder. When that parent lies above the topmost
+directory (the output folder is the topmost directory itself), the run fails
 with `MS0044`: the `.ts` files are written, `package.json` is not. Set
 `MetanoPackageRoot` (`--package-root`) when your generated files live somewhere
 unusual; an explicit root is used as given. Note that a home directory kept

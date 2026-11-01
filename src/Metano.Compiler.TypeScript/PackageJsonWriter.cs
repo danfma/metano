@@ -78,7 +78,7 @@ public static class PackageJsonWriter
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
-        var packageJsonPath = Path.Combine(packageRoot, "package.json");
+        var packageJsonPath = Path.Combine(packageRoot, PackageRootResolver.PackageJsonFileName);
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
         var (outputPrefix, prefixDiagnostic) = OutputPrefix.Resolve(srcRoot, srcRelative);
