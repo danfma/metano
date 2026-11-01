@@ -1,8 +1,10 @@
 # Contract: diagnostics
 
-Codes are reserved by this spec (OPEN-2) and added to
-`src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs` and
-`specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md` with the implementation.
+Codes `MS0032`–`MS0037` are reserved by this spec (DECIDED-2); the C# unions specification
+(PR #310) owns `MS0038`–`MS0043`. The reservation is listed under "Reserved codes" in
+`specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md`. Each code moves to the
+stable table, and into `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs`, with the slice
+that implements it.
 All are raised by the TypeScript target while transforming a `JsonSerializerContext` (or, for
 `MS0034`, while transforming the branded type), located at the offending attribute, member or
 method.
@@ -21,7 +23,10 @@ compilations only and never placed in `samples/SampleJsonContracts`, which build
 | Abstract derived type without `FallBackToNearestAncestor` | `[JsonDerivedType(typeof(AMid))]`, `AMid` abstract | `'AMid' is abstract; abstract derived types require UnknownDerivedTypeHandling = FallBackToNearestAncestor on 'ABase' (as in System.Text.Json).` |
 | Duplicate derived type | two entries for `ImageClip` | `'ImageClip' is registered twice on 'Clip'.` |
 | Duplicate tag | `"image"` used twice | `Type discriminator 'image' is registered twice on 'Clip'.` |
-| Interface or `[PlainObject]` base or variant | `[JsonDerivedType]` on `IShape` | `Polymorphic JSON needs a class base and class variants; '…' is an interface/[PlainObject].` |
+| *(not an error)* an interface or `[PlainObject]` base, `[PlainObject]` variants | `[JsonDerivedType]` on `IShape` | — (FR-018, FR-019) |
+| Interface-typed derived entry (OPEN-18) | `[JsonDerivedType(typeof(IRound))]` on `IShape`, `IRound : IShape` | `'IRound' registered on 'IShape' is an interface; interface-typed derived types are not supported by the TypeScript context.` |
+| Two `[PlainObject]` variants cannot be told apart on write (FR-019) | `A(string Name)` and `B(string Name)` on one base | `[PlainObject] variants 'A' and 'B' of 'Base' have the same required members (name: string), so serialization cannot tell them apart. Add a distinguishing required member or use class-backed records.` |
+| Cycle in the `[PlainObject]` specificity order (FR-019) | three variants whose guards cover each other pairwise in a cycle | `[PlainObject] variants 'A', 'B' and 'C' of 'Base' have no consistent test order.` |
 | Generic derived type | `typeof(Box<int>)` | `Generic derived type 'Box<int>' is not supported.` |
 | Registration invalid for a constructed base reached by the closure (FR-015) | `GDer : GBase<int>` reached through `GBase<string>` | `'GDer' registered on 'GBase<T>' is not assignable to 'GBase<string>', which this context reaches.` |
 | Property name equals discriminator | `KA(string Kind)` under camelCase, tag `kind` | `'KA.Kind' serializes as 'kind', which conflicts with the discriminator of 'KBase'.` |
@@ -66,13 +71,18 @@ When `MS0034` is raised the descriptor keeps `create: <TsType>.create`.
 | Rule | Severity | Message shape |
 |---|---|---|
 | Two distinct types map to one member name; the loser is the target of a `ref`, `base` or derived link | Error | `'Anchor.Image' and 'Clip.Image' both map to context member 'image'; 'Anchor.Image' is referenced by 'Anchor.Overlay', so it cannot be dropped. Use TypeInfoPropertyName to resolve the collision.` |
-| A member name equals a `SerializerContext` member (`options`, `converters`, `createSpec`, `resolve`, `_registry`, `constructor`) | Error | `'Registry' maps to context field '_registry', which SerializerContext already declares. Use TypeInfoPropertyName.` |
+| A member name equals a `SerializerContext` member (`options`, `converters`, `createSpec`, `createValueSpec`, `readOptions`, `resolve`, `_registry`, `constructor`) | Error | `'Registry' maps to context field '_registry', which SerializerContext already declares. Use TypeInfoPropertyName.` |
 | Two distinct roots map to one member name; the loser is not referenced | Warning | `'N2.Dup' and 'N1.Dup' both map to context member 'dup'; 'N1.Dup' was kept. Use TypeInfoPropertyName to resolve the collision.` |
 
 ## `MS0037` `UnmirroredJsonOption` — Warning
 
 | Rule | Location | Message shape |
 |---|---|---|
-| Context sets a wire-affecting option that is not mirrored (FR-046 list) | `[JsonSourceGenerationOptions]` | `'DefaultIgnoreCondition' changes the JSON wire format, but the generated TypeScript context does not mirror it.` |
+| Context sets a wire-affecting option that is not mirrored (FR-046 list; `NumberHandling` only for flags other than `AllowReadingFromString`) | `[JsonSourceGenerationOptions]` | `'DefaultIgnoreCondition' changes the JSON wire format, but the generated TypeScript context does not mirror it.` |
+| `[JsonPropertyOrder]` on a contract member (DECIDED-3) | member | `'Ord.A' has [JsonPropertyOrder]: System.Text.Json reorders the properties, the TypeScript context keeps declaration order.` |
 | `[JsonInclude]` field or non-public property | member | `'Episode._secret' is included by System.Text.Json but not collected by the TypeScript context.` |
 | `byte[]` root or property | attribute / member | `'Blob.Data' is byte[]: System.Text.Json writes base64, the TypeScript context writes a number array.` |
+
+Not reported, because they are mirrored: `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`,
+`NumberHandling = AllowReadingFromString`, `JsonSerializerDefaults.Web` and
+`AllowOutOfOrderMetadataProperties` (FR-002, FR-048).

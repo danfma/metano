@@ -50,6 +50,19 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0030` | `ExportsSubpathKeyCollision` | Under `[EmitPackage(SubpathRoot = …)]`, two namespace barrels claim one `package.json#exports` key (e.g. `--namespace-barrels` root barrel + types in the root namespace on `.`); raised by the transform before files are written. |
 | `MS0031` | `ExplicitImplementationConflict` | An explicit interface implementation (`string IPlain.Name`) cannot be declared under its interface member's name because another emitted member of the type or a base class (an implicit `Name`, or `IOther.Name`) with the same static-ness already claims it (case-insensitive, `[Name]`-aware). Only for interfaces of the transpiled contract (source, `[Transpile]`, or a `[TranspileAssembly]` package); a BCL bridge such as `IEnumerable.GetEnumerator` is dropped silently. The explicit member is dropped; rename one, implement implicitly, or mark the explicit member `[Ignore]` (#278). |
 
+## Reserved codes (specified, not yet implemented)
+
+Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0044`: `MS0038`–`MS0043` are reserved by the C# unions specification, PR #310).
+
+| Code | Symbolic name | Severity | Meaning | Spec |
+| --- | --- | --- | --- | --- |
+| `MS0032` | `InvalidJsonPolymorphism` | Error | A `[JsonDerivedType]` registration the generated TS context cannot honor: not assignable to the base, not transpilable, duplicate type or tag, abstract without `FallBackToNearestAncestor`, interface-typed entry, generic derived type, a property named like the discriminator, an integer-like JSON name, or two `[PlainObject]` variants whose shapes cannot be told apart on write. | [009](../../009-polymorphic-json/contracts/diagnostics.md) |
+| `MS0033` | `LossyJsonPolymorphism` | Warning | An untagged registration (reads back as the base, as in STJ) or a derived type that is itself polymorphic (not re-dispatched, as in STJ). | [009](../../009-polymorphic-json/contracts/diagnostics.md) |
+| `MS0034` | `InvalidJsonFactory` | Error | An invalid `[JsonFactory]` method on a `[Branded]` type (not a single-parameter named static returning the type, overloaded, not emitted, or named like a companion member), or `[JsonFactory]` on a non-branded type. | [009](../../009-polymorphic-json/contracts/diagnostics.md) |
+| `MS0035` | `InvalidJsonSerializableRoot` | Error | A `[JsonSerializable]` root the context cannot describe: open generic, error type, `object`, non-collection interface, non-transpilable object kind, or an array of rank > 1. | [009](../../009-polymorphic-json/contracts/diagnostics.md) |
+| `MS0036` | `JsonTypeInfoNameCollision` | Error / Warning | Two types map to one context member name (Error when the loser is referenced, Warning for an unreferenced root), or a name equals a `SerializerContext` member. | [009](../../009-polymorphic-json/contracts/diagnostics.md) |
+| `MS0037` | `UnmirroredJsonOption` | Warning | A wire-affecting `[JsonSourceGenerationOptions]` option the generated context does not mirror, a `[JsonInclude]` member, a `byte[]` member, or `[JsonPropertyOrder]`. | [009](../../009-polymorphic-json/contracts/diagnostics.md) |
+
 ## Build integration (`Metano.Build`)
 
 Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` code space.
