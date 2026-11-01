@@ -1,6 +1,6 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 
 namespace Metano.Compiler.Extraction;
 
@@ -14,8 +14,8 @@ namespace Metano.Compiler.Extraction;
 /// <para>
 /// Computed properties (a getter or setter with a body) are returned too, with
 /// their bodies, so the backend decides whether it can declare them; extension
-/// members, indexers and <c>[Ignore]</c>d members are not module state and are
-/// skipped.
+/// members, indexers, <c>[Inline]</c>, <c>[External]</c> and <c>[Ignore]</c>d
+/// members are not module state and are skipped (see <see cref="IsModuleState"/>).
 /// </para>
 /// </summary>
 public static class IrModuleVariableExtractor
@@ -24,7 +24,7 @@ public static class IrModuleVariableExtractor
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver = null,
         Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        TargetLanguage? target = null
     )
     {
         var variables = new List<IrMemberDeclaration>();
@@ -32,7 +32,9 @@ public static class IrModuleVariableExtractor
         foreach (var member in type.GetMembers())
         {
             if (!IsModuleState(member, target))
+            {
                 continue;
+            }
 
             var variable = member switch
             {
@@ -52,39 +54,38 @@ public static class IrModuleVariableExtractor
             };
 
             if (variable is not null)
+            {
                 variables.Add(variable);
+            }
         }
 
         return variables;
     }
 
-    private static bool IsModuleState(ISymbol member, Metano.Annotations.TargetLanguage? target)
+    /// <summary>
+    /// True when <paramref name="member"/> of a containerless static class is
+    /// module state: a static field or a static non-indexer property that is
+    /// neither compiler-generated, <c>[Ignore]</c>d for <paramref name="target"/>,
+    /// a C# 14 extension block member, <c>[Inline]</c> nor <c>[External]</c>. <see cref="Extract"/> returns exactly
+    /// these members, in declaration order.
+    /// </summary>
+    public static bool IsModuleState(ISymbol member, TargetLanguage? target)
     {
         if (!member.IsStatic || member.IsImplicitlyDeclared)
             return false;
 
-        if (SymbolHelper.HasIgnore(member, target))
+        if (SymbolHelper.HasIgnore(member, target) || member.IsExtensionBlockMember())
+            return false;
+
+        // Rewritten at every call site, so never read as a module variable.
+        if (member.IsInlineMember() || member.HasExternal())
             return false;
 
         return member switch
         {
             IFieldSymbol => true,
-            IPropertySymbol property => property.Parameters.Length == 0
-                && !property.IsExtensionBlockMember(),
+            IPropertySymbol property => property.Parameters.Length == 0,
             _ => false,
         };
     }
-
-    /// <summary>
-    /// A C# 14 <c>extension(R r) { … }</c> block member, which Roslyn may also surface
-    /// on the containing static class. Those members lower to functions through
-    /// <see cref="IrModuleFunctionExtractor"/>, never to module state.
-    /// </summary>
-    private static bool IsExtensionBlockMember(this IPropertySymbol property) =>
-        property.DeclaringSyntaxReferences.Any(reference =>
-            reference
-                .GetSyntax()
-                .Ancestors()
-                .Any(node => node.Kind().ToString() == "ExtensionBlockDeclaration")
-        );
 }

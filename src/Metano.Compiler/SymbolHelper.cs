@@ -783,6 +783,13 @@ public static class SymbolHelper
         HasNoContainer(symbol) || HasExportedAsModule(symbol);
 
     /// <summary>
+    /// A member of a C# 14 <c>extension(R r) { … }</c> block: Roslyn declares it
+    /// on the block's unnamed type, nested in the static class that holds it.
+    /// </summary>
+    public static bool IsExtensionBlockMember(this ISymbol member) =>
+        member.ContainingType is { Name: "", ContainingType.IsStatic: true };
+
+    /// <summary>
     /// Reads <c>[StrictUnionGuard]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. When present on
     /// a <c>[GenerateGuard]</c> abstract base, the emitted guard

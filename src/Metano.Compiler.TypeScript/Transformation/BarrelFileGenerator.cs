@@ -171,6 +171,7 @@ public static class BarrelFileGenerator
             TsInterface { Exported: true } i => i.Name,
             TsConstObject { Exported: true } co => co.Name,
             TsNamespaceDeclaration { Exported: true } ns => ns.Name,
+            TsTopLevelStatement { Inner: TsVariableDeclaration { Exported: true } v } => v.Name,
             _ => null,
         };
 

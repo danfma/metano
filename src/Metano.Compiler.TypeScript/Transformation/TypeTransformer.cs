@@ -329,6 +329,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
         };
 
+        // Module state of containerless classes (#314): reject the uses the
+        // emitted ES module cannot keep, at their C# location. Runs over every
+        // type, including the groups the per-group cache reuses below.
+        new ModuleVariableValidator(
+            compilation,
+            transpilableTypes,
+            transpilableTypesDict,
+            ReportDiagnostic
+        ).Validate();
+
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();
         var perGroupClosure = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -1615,13 +1625,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             }
         }
 
+        var variables = ExtractDeclarableModuleVariables(type, ref diagnosed);
+
         // No work to do: when a diagnostic was already raised, swallow the
         // type so the caller's `sink.Count == startCount` check skips file
         // emission without falling back to a now-deleted legacy path.
-        var variables = ExtractModuleVariables(type);
-
         if (functions.Count == 0 && entryBody is null && variables.Count == 0)
             return diagnosed;
+
+        if (ReportModuleNameCollisions(type, functions, variables))
+            return true;
+
         foreach (var fn in functions)
         {
             if (fn.Body is null || !IrBodyCoverageProbe.IsFullyCovered(fn.Body))
@@ -1705,11 +1719,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// The static fields and auto-properties a containerless static class declares
     /// as module variables: call sites read them as bare identifiers, so the module
     /// must declare them (#314). A computed static property has no variable form,
-    /// so it is reported as unsupported and left out. Extension holders keep no
-    /// module state, because only containerless classes flatten member access at
-    /// call sites.
+    /// so it is reported as unsupported (setting <paramref name="diagnosed"/>) and
+    /// left out. Extension holders keep no module state, because only containerless
+    /// classes flatten member access at call sites.
     /// </summary>
-    private IReadOnlyList<IrMemberDeclaration> ExtractModuleVariables(INamedTypeSymbol type)
+    private IReadOnlyList<IrMemberDeclaration> ExtractDeclarableModuleVariables(
+        INamedTypeSymbol type,
+        ref bool diagnosed
+    )
     {
         if (!type.IsContainerless())
             return [];
@@ -1725,9 +1742,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var member in members)
         {
-            if (IsComputedProperty(member))
+            if (member is IrPropertyDeclaration property && IsComputed(property))
             {
-                ReportComputedModuleProperty(type, member.Name);
+                ReportComputedModuleProperty(type, property);
+                diagnosed = true;
+
                 continue;
             }
 
@@ -1737,24 +1756,68 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         return variables;
     }
 
-    private static bool IsComputedProperty(IrMemberDeclaration member) =>
-        member
-            is IrPropertyDeclaration
-            {
-                Semantics: { HasGetterBody: true } or { HasSetterBody: true },
-            };
+    private static bool IsComputed(IrPropertyDeclaration property) =>
+        property.Semantics is { HasGetterBody: true } or { HasSetterBody: true };
 
-    private void ReportComputedModuleProperty(INamedTypeSymbol type, string propertyName) =>
+    private void ReportComputedModuleProperty(
+        INamedTypeSymbol type,
+        IrPropertyDeclaration property
+    ) =>
         Context.ReportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.UnsupportedFeature,
-                $"Static property '{type.Name}.{propertyName}' has a getter or setter body, "
+                $"Static property '{type.Name}.{property.Name}' has a getter or setter body, "
                     + "which a containerless static class cannot declare: its call sites read "
                     + "a module variable. Use a field, an auto-property or a method instead.",
-                type.GetMembers(propertyName).FirstOrDefault()?.Locations.FirstOrDefault()
+                type.GetMembers(property.Name)
+                    .OfType<IPropertySymbol>()
+                    .FirstOrDefault(symbol => symbol.Parameters.Length == 0)
+                    ?.Locations.FirstOrDefault()
             )
         );
+
+    /// <summary>
+    /// A module variable and a module function share the module's one value
+    /// namespace, so the same emitted name on both would declare it twice
+    /// (TS2451). Reports MS0001 for each such name and returns whether any was
+    /// found.
+    /// </summary>
+    private bool ReportModuleNameCollisions(
+        INamedTypeSymbol type,
+        IReadOnlyList<IrModuleFunction> functions,
+        IReadOnlyList<IrMemberDeclaration> variables
+    )
+    {
+        var functionNames = functions
+            .Select(fn => IrToTsNamingPolicy.ToFunctionName(fn.Name, fn.Attributes))
+            .ToHashSet(StringComparer.Ordinal);
+        var collisions = variables
+            .Where(variable =>
+                functionNames.Contains(
+                    IrToTsNamingPolicy.ToDeclaredDataMemberName(variable.Name, variable.Attributes)
+                )
+            )
+            .ToList();
+
+        foreach (var variable in collisions)
+        {
+            Context.ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"Module variable '{type.Name}.{variable.Name}' and a module function of "
+                        + $"'{type.Name}' are emitted under the same name. Add a "
+                        + "[Name(\"...\")] override on one of them.",
+                    type.GetMembers(variable.Name)
+                        .FirstOrDefault(member => member is not IMethodSymbol)
+                        ?.Locations.FirstOrDefault()
+                )
+            );
+        }
+
+        return collisions.Count > 0;
+    }
 
     private void ReportInvalidEntryPoint(IMethodSymbol method, string message) =>
         Context.ReportDiagnostic(

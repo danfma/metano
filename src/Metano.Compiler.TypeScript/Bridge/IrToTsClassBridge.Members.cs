@@ -64,6 +64,7 @@ internal static partial class IrToTsClassBridge
         }
 
         var members = new List<TsClassMember>();
+
         if (hasGetterBody)
         {
             var body = prop.GetterBody is null
@@ -71,11 +72,13 @@ internal static partial class IrToTsClassBridge
                 : IrToTsStatementBridge.MapBody(prop.GetterBody, bclRegistry).ToList();
             members.Add(new TsGetterMember(name, tsType, body, Static: prop.IsStatic));
         }
+
         if (hasSetterBody)
         {
             var body = prop.SetterBody is null
                 ? new List<TsStatement>()
                 : IrToTsStatementBridge.MapBody(prop.SetterBody, bclRegistry).ToList();
+
             members.Add(
                 new TsSetterMember(
                     name,
@@ -85,6 +88,7 @@ internal static partial class IrToTsClassBridge
                 )
             );
         }
+
         return members;
     }
 

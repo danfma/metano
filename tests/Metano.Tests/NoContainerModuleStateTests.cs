@@ -120,7 +120,9 @@ public class NoContainerModuleStateTests
             """
         );
 
-        await Assert.That(result["meter.ts"]).DoesNotContain("import");
+        var output = result["meter.ts"];
+        await Assert.That(output).Contains("const max = 3;");
+        await Assert.That(output).DoesNotContain("import { max }");
     }
 
     [Test]
@@ -149,7 +151,8 @@ public class NoContainerModuleStateTests
                 d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("'hits'")
             )
             .ToList();
-        await Assert.That(writes.Count).IsEqualTo(1);
+        await Assert.That(writes.Count).IsEqualTo(2);
+        await Assert.That(writes.All(d => d.Location is not null)).IsTrue();
         await Assert.That(files["counters.ts"]).Contains("export let hits: number = 0;");
     }
 
@@ -196,7 +199,8 @@ public class NoContainerModuleStateTests
                 )
             )
             .IsTrue();
-        await Assert.That(files["limits.ts"]).DoesNotContain("twice");
+        await Assert.That(files["limits.ts"]).Contains("export const max: number = 10;");
+        await Assert.That(files["limits.ts"]).DoesNotContain("twice:");
     }
 
     [Test]
@@ -272,4 +276,223 @@ public class NoContainerModuleStateTests
             )
             .IsTrue();
     }
+
+    [Test]
+    public async Task CompoundAndNullCoalescingWrites_FromAnotherFile_ReportUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Counters
+            {
+                public static int Hits;
+                public static string? Label;
+            }
+
+            [Transpile]
+            public class Clicker
+            {
+                public void Click() => Counters.Hits += 2;
+
+                public void Name() => Counters.Label ??= "x";
+
+                public bool Compare() => Counters.Hits >= 1 && Counters.Label! == "x";
+            }
+            """
+        );
+
+        var writes = UnsupportedFeatures(diagnostics);
+        await Assert.That(writes.Count).IsEqualTo(2);
+        await Assert.That(writes.Count(d => d.Message.Contains("'hits'"))).IsEqualTo(1);
+        await Assert.That(writes.Count(d => d.Message.Contains("'label'"))).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task ParameterShadowingModuleVariable_InDeclaringFile_ReportsUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                public static int Max = 10;
+
+                public static bool Fits(int max) => max <= Max;
+            }
+            """
+        );
+
+        var shadows = UnsupportedFeatures(diagnostics);
+        await Assert.That(shadows.Count).IsEqualTo(1);
+        await Assert.That(shadows[0].Message).Contains("parameter 'max'");
+        await Assert.That(shadows[0].Location).IsNotNull();
+    }
+
+    [Test]
+    public async Task LocalShadowingImportedModuleVariable_ReportsUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                public static readonly int Max = 10;
+            }
+
+            [Transpile]
+            public class Meter
+            {
+                public int Use(int value)
+                {
+                    var max = value;
+                    return max + Limits.Max;
+                }
+            }
+            """
+        );
+
+        var shadows = UnsupportedFeatures(diagnostics);
+        await Assert.That(shadows.Count).IsEqualTo(1);
+        await Assert.That(shadows[0].Message).Contains("local 'max'");
+    }
+
+    [Test]
+    public async Task NameOverrideAvoidsShadow_IsAllowed()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                [Name("maxLimit")]
+                public static int Max = 10;
+
+                public static bool Fits(int max) => max <= Max;
+            }
+            """
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["limits.ts"]).Contains("return max <= maxLimit;");
+    }
+
+    [Test]
+    public async Task InlineMember_IsNotModuleState()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Tags
+            {
+                [Inline]
+                public static readonly string Div = "div";
+
+                public static string Wrap()
+                {
+                    var div = Div;
+                    return div;
+                }
+            }
+            """
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["tags.ts"]).Contains("const div = \"div\";");
+        await Assert.That(files["tags.ts"]).DoesNotContain("export const div");
+    }
+
+    [Test]
+    public async Task StaticConstructor_ReportsUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                public static readonly int Computed;
+
+                static Limits()
+                {
+                    Computed = 42;
+                }
+            }
+            """
+        );
+
+        var rejected = UnsupportedFeatures(diagnostics);
+        await Assert.That(rejected.Count).IsEqualTo(1);
+        await Assert.That(rejected[0].Message).Contains("static constructor");
+    }
+
+    [Test]
+    public async Task InitializerReadingLaterVariable_ReportsUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                public static readonly int First = 1;
+                public static readonly int Derived = First + Later;
+                public static int Later = 5;
+                public static readonly Func<int> Deferred = () => Later;
+            }
+            """
+        );
+
+        var rejected = UnsupportedFeatures(diagnostics);
+        await Assert.That(rejected.Count).IsEqualTo(1);
+        await Assert.That(rejected[0].Message).Contains("'Limits.Later' before");
+    }
+
+    [Test]
+    public async Task VariableAndFunctionWithSameEmittedName_ReportUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                public static int Count = 3;
+
+                public static int count() => 4;
+            }
+            """
+        );
+
+        var rejected = UnsupportedFeatures(diagnostics);
+        await Assert.That(rejected.Count).IsEqualTo(1);
+        await Assert.That(rejected[0].Message).Contains("'Limits.Count'");
+    }
+
+    [Test]
+    public async Task NamespaceBarrel_ReexportsModuleVariables()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App.Config
+            {
+                [Transpile, NoContainer]
+                public static class Limits
+                {
+                    public static readonly int Max = 10;
+                    private static readonly int Secret = 7;
+
+                    public static int Bump() => Max + Secret;
+                }
+            }
+            """
+        );
+
+        var barrel = result.Single(kv => kv.Key.EndsWith("index.ts")).Value;
+        await Assert.That(barrel).Contains("bump");
+        await Assert.That(barrel).Contains("max");
+        await Assert.That(barrel).DoesNotContain("secret");
+    }
+
+    private static List<MetanoDiagnostic> UnsupportedFeatures(
+        IEnumerable<MetanoDiagnostic> diagnostics
+    ) => diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
 }
