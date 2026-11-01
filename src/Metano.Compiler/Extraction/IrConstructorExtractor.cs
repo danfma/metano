@@ -153,21 +153,16 @@ public static class IrConstructorExtractor
         /// case.
         /// </summary>
         public IPropertySymbol? PromotionTarget(IParameterSymbol parameter) =>
+            IsInspectablePrimaryParameter(parameter)
+                ? Promotion.PromotedPropertyOf(parameter)
+                : PrimaryConstructorPropertyAlias
+                    .CandidatesNamed(Type, parameter.Name, Target)
+                    .FirstOrDefault();
+
+        private bool IsInspectablePrimaryParameter(IParameterSymbol parameter) =>
             Compilation is not null
             && parameter.ContainingSymbol is IMethodSymbol constructor
-            && IsPrimaryConstructor(constructor)
-                ? Promotion.PromotedPropertyOf(parameter)
-                : NamedCandidate(parameter.Name);
-
-        private IPropertySymbol? NamedCandidate(string name) =>
-            Type.GetMembers()
-                .OfType<IPropertySymbol>()
-                .Where(property =>
-                    string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
-                    && PrimaryConstructorPropertyAlias.IsPromotionCandidate(property, Target)
-                )
-                .OrderBy(property => property.Name == name ? 0 : 1)
-                .FirstOrDefault();
+            && IsPrimaryConstructor(constructor);
     }
 
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
@@ -182,7 +177,6 @@ public static class IrConstructorExtractor
         PromotionContext context
     )
     {
-        var type = context.Type;
         var compilation = context.Compilation;
         var target = context.Target;
 

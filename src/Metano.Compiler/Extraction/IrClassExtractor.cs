@@ -54,10 +54,11 @@ public static class IrClassExtractor
         // bodies see `this._field` instead of an out-of-scope param
         // binding. The map and its synthesized fields are scoped to
         // this type's extraction via an `AsyncLocal`.
+        var deferInitializers = PrimaryConstructorInitializerDeferral.AppliesTo(type);
+
         // The promotion decision is made once and shared by the capture scan
         // and the constructor extraction, so the constructor folds exactly
         // the parameters whose reads the scan redirects to the property.
-        var deferInitializers = PrimaryConstructorInitializerDeferral.AppliesTo(type);
         var promotion = PrimaryConstructorPromotion.For(type, compilation, target);
 
         var captureScan = ImplicitCaptureDetector.Scan(

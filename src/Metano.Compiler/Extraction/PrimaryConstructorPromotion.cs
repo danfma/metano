@@ -36,6 +36,14 @@ internal sealed class PrimaryConstructorPromotion
     {
         _promoted = promoted;
         _written = written;
+
+        ReadThroughProperties = promoted
+            .Where(entry => CannotDiverge(entry.Value))
+            .ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value,
+                (IEqualityComparer<ISymbol>)SymbolEqualityComparer.Default
+            );
     }
 
     /// <summary>
@@ -47,14 +55,14 @@ internal sealed class PrimaryConstructorPromotion
     /// <c>virtual</c> nor <c>abstract</c>). Every other read parameter keeps
     /// its own storage, as C# does (warning CS9124).
     /// </summary>
-    public IReadOnlyDictionary<ISymbol, IPropertySymbol> ReadThroughProperties =>
-        _promoted
-            .Where(entry => CannotDiverge(entry.Value))
-            .ToDictionary(
-                entry => entry.Key,
-                entry => entry.Value,
-                (IEqualityComparer<ISymbol>)SymbolEqualityComparer.Default
-            );
+    public IReadOnlyDictionary<ISymbol, IPropertySymbol> ReadThroughProperties { get; }
+
+    /// <summary>The property <paramref name="parameter"/> is promoted to, if any.</summary>
+    public IPropertySymbol? PromotedPropertyOf(IParameterSymbol parameter) =>
+        _promoted.GetValueOrDefault(parameter);
+
+    /// <summary>Something in the type writes <paramref name="parameter"/>.</summary>
+    public bool IsWritten(IParameterSymbol parameter) => _written.Contains(parameter);
 
     public static PrimaryConstructorPromotion For(
         INamedTypeSymbol type,
@@ -84,13 +92,6 @@ internal sealed class PrimaryConstructorPromotion
         return new PrimaryConstructorPromotion(promoted, written);
     }
 
-    /// <summary>The property <paramref name="parameter"/> is promoted to, if any.</summary>
-    public IPropertySymbol? PromotedPropertyOf(IParameterSymbol parameter) =>
-        _promoted.GetValueOrDefault(parameter);
-
-    /// <summary>Something in the type writes <paramref name="parameter"/>.</summary>
-    public bool IsWritten(IParameterSymbol parameter) => _written.Contains(parameter);
-
     private static bool CannotDiverge(IPropertySymbol property) =>
         property is { SetMethod: null, IsVirtual: false, IsAbstract: false };
 
@@ -114,20 +115,22 @@ internal sealed class PrimaryConstructorPromotion
             var writes = declaration
                 .DescendantNodes()
                 .OfType<IdentifierNameSyntax>()
-                .Select(identifier => (identifier, symbol: model.GetSymbolInfo(identifier).Symbol))
-                .Where(reference =>
-                    reference.symbol is IParameterSymbol parameter
-                    && SymbolEqualityComparer.Default.Equals(
-                        parameter.ContainingSymbol,
-                        primaryCtor
-                    )
-                    && WriteAccess.IsWriteTarget(reference.identifier, model)
-                )
-                .Select(reference => reference.symbol!);
+                .Where(identifier => IsWriteOfParameterOf(primaryCtor, identifier, model))
+                .Select(identifier => model.GetSymbolInfo(identifier).Symbol)
+                .OfType<IParameterSymbol>();
 
             written.UnionWith(writes);
         }
 
         return written;
     }
+
+    private static bool IsWriteOfParameterOf(
+        IMethodSymbol constructor,
+        IdentifierNameSyntax identifier,
+        SemanticModel model
+    ) =>
+        model.GetSymbolInfo(identifier).Symbol is IParameterSymbol parameter
+        && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, constructor)
+        && WriteAccess.IsWriteTarget(identifier, model);
 }

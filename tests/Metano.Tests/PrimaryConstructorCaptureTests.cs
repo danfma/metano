@@ -321,12 +321,11 @@ public class PrimaryConstructorCaptureTests
 
         var output = result["ordered.ts"];
         await Assert.That(output).Contains("constructor(a: number)");
+        await Assert.That(output).Contains("return this._a;");
 
         await Assert
             .That(output)
             .Contains("this._a = a;\n    this.b = this._a++;\n    this.a = this._a;");
-
-        await Assert.That(output).Contains("return this._a;");
     }
 
     [Test]
@@ -353,12 +352,12 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
-    public async Task ParenthesizedAndDeconstructionWrites_AreWrites()
+    public async Task ParenthesizedWrite_IsAWrite()
     {
-        // Parentheses and deconstruction targets bind to no syntax-level
-        // assignment of the identifier itself; the bound operations still
-        // see the write, so neither parameter is promoted.
-        var (result, _) = TranspileHelper.TranspileWithDiagnostics(
+        // The identifier's syntactic parent is the parentheses, not the
+        // assignment, but the bound operation is the assignment's target, so
+        // the parameter is not promoted.
+        var result = TranspileHelper.Transpile(
             """
             [Transpile]
             public sealed class Parenthesized(int a)
@@ -371,7 +370,24 @@ public class PrimaryConstructorCaptureTests
                     return a;
                 }
             }
+            """
+        );
 
+        var output = result["parenthesized.ts"];
+        await Assert.That(output).Contains("constructor(a: number)");
+        await Assert.That(output).Contains("private _a: number;");
+        await Assert.That(output).Contains("this._a = 9;");
+    }
+
+    [Test]
+    public async Task DeconstructionWrite_IsAWrite()
+    {
+        // Every element of a deconstruction target is written, so neither
+        // parameter is promoted and both fields are mutable. The
+        // deconstruction itself still reports MS0001, which this test does
+        // not inspect.
+        var (result, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
             [Transpile]
             public sealed class Deconstructed(int a, int b)
             {
@@ -386,14 +402,10 @@ public class PrimaryConstructorCaptureTests
             """
         );
 
-        var parenthesized = result["parenthesized.ts"];
-        await Assert.That(parenthesized).Contains("constructor(a: number)");
-        await Assert.That(parenthesized).Contains("private _a: number;");
-        await Assert.That(parenthesized).Contains("this._a = 9;");
-
-        var deconstructed = result["deconstructed.ts"];
-        await Assert.That(deconstructed).Contains("constructor(a: number, b: number)");
-        await Assert.That(deconstructed).Contains("private _a: number;");
+        var output = result["deconstructed.ts"];
+        await Assert.That(output).Contains("constructor(a: number, b: number)");
+        await Assert.That(output).Contains("private _a: number;");
+        await Assert.That(output).Contains("private _b: number;");
     }
 
     [Test]
@@ -466,10 +478,11 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
-    public async Task PropertiesDifferingOnlyByCase_PairWithTheExactCaseMatch()
+    public async Task PropertiesDifferingOnlyByCase_PromoteTheExactCaseMatch()
     {
-        // Two properties whose names differ only by case used to crash the
-        // name-keyed lookup; the exact-case one is the parameter's alias.
+        // Two alias properties whose names differ only by case used to crash
+        // the case-insensitive name lookup. The exact-case one is promoted;
+        // the other reads it, since the parameter is never written.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -477,12 +490,14 @@ public class PrimaryConstructorCaptureTests
             {
                 public int value { get; } = value;
 
-                public int Value => 42;
+                public int Value => value;
             }
             """
         );
 
-        await Assert.That(result).ContainsKey("cased.ts");
+        var output = result["cased.ts"];
+        await Assert.That(output).Contains("constructor(readonly value: number)");
+        await Assert.That(output).DoesNotContain("_value");
     }
 
     [Test]

@@ -128,6 +128,7 @@ internal static class ImplicitCaptureDetector
                     continue;
 
                 var resolved = model.GetSymbolInfo(identifier).Symbol;
+
                 if (
                     resolved is IParameterSymbol paramSymbol
                     && primaryParams.ContainsKey(paramSymbol)
@@ -318,15 +319,6 @@ internal static class ImplicitCaptureDetector
         MemberInitializerSyntax.Contains(identifier, stopAtExecutableBodies: false);
 
     /// <summary>
-    /// Picks the synthesized field name from a primary-ctor param's
-    /// source name. The convention matches the rest of the code base:
-    /// camelCase parameter prefixed with an underscore
-    /// (<c>view</c> → <c>_view</c>, <c>onClick</c> → <c>_onClick</c>).
-    /// Reserved JS keywords already get their reserved-word treatment
-    /// downstream when the backend renders the field, so the leading
-    /// underscore is enough here.
-    /// </summary>
-    /// <summary>
     /// <see cref="SynthesizeFieldName"/>'s name for <paramref name="paramName"/>,
     /// or, when a member already has it, the first free one with a numeric
     /// suffix, so the synthesized field never shadows a member.
@@ -342,6 +334,15 @@ internal static class ImplicitCaptureDetector
             .First(name => !takenNames.Contains(name));
     }
 
+    /// <summary>
+    /// Picks the synthesized field name from a primary-ctor param's
+    /// source name. The convention matches the rest of the code base:
+    /// camelCase parameter prefixed with an underscore
+    /// (<c>view</c> → <c>_view</c>, <c>onClick</c> → <c>_onClick</c>).
+    /// Reserved JS keywords already get their reserved-word treatment
+    /// downstream when the backend renders the field, so the leading
+    /// underscore is enough here.
+    /// </summary>
     private static string SynthesizeFieldName(string paramName)
     {
         if (string.IsNullOrEmpty(paramName))
