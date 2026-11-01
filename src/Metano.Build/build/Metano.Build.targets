@@ -20,7 +20,11 @@
                                          generated files by reconciling the cache manifest, so a
                                          renamed/moved/deleted type no longer leaves stale output.
       MetanoDist             (optional)  JS dist dir relative to package root (default: ./dist)
-      MetanoPackageRoot      (optional)  Root of the npm package (default: parent of OutputDir)
+      MetanoPackageRoot      (optional)  Root of the npm package. Default: the nearest directory with a
+                                         package.json, searching up from OutputDir but never above the
+                                         C# project directory, the repository root (.git) or the solution
+                                         directory; without one, the parent of OutputDir. When that parent
+                                         lies above the boundary the build fails with MS0044 (#334).
       MetanoSrcRoot          (optional)  TS source root relative to package root (default: inferred)
       MetanoImportAlias      (optional)  Isolated subpath-imports alias for internal imports in generated TS (e.g. `contracts` → `#contracts/...`). Lets generated code live in a subfolder of an existing npm project without colliding with that project's own `#` alias. Leading `#` optional; use a simple identifier (letters, digits, `-`, `_`). Default: unset (uses `#`). When several Metano projects target the same package, give each a distinct alias.
       MetanoSkipPackageJson  (optional)  true to skip package.json generation (default: false)

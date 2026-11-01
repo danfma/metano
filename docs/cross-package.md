@@ -59,9 +59,16 @@ during compilation, walks the referenced assembly's public types, and registers
 them in its cross-assembly type map.
 
 The TypeScript CLI also finds the target package root by walking upward from
-`MetanoOutputDir` until it sees a `package.json`. If no package file is found,
-it falls back to the legacy convention: the parent directory of the output
-folder. Set `MetanoPackageRoot` when your generated files live somewhere unusual.
+`MetanoOutputDir` until it sees a `package.json`. The walk never goes past the
+workspace boundary: the nearest directory, starting at the output folder itself,
+that is the C# project directory, a repository root (it holds `.git`) or a
+solution directory (it holds a `.sln` or `.slnx` file). A `package.json` above
+that boundary belongs to another project and is left alone. If no package file
+is found, it falls back to the legacy convention: the parent directory of the
+output folder. When that parent lies above the boundary (the output folder is
+the boundary itself), the run fails with `MS0044` instead of writing there. Set
+`MetanoPackageRoot` (`--package-root`) when your generated files live somewhere
+unusual; an explicit root is used as given.
 
 ## What Metano generates
 
