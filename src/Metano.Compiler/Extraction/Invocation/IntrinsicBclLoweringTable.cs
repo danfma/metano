@@ -10,7 +10,9 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// to the receiver's instance method, and overloads normalized to a
 /// canonical overload the registry can tell apart by argument count —
 /// see the <c>Rounding</c>, <c>GetValueOrDefault</c> and <c>StringJoin</c>
-/// partials). Symbol-keyed via
+/// partials — and calls retargeted by an argument's static type, which a
+/// mapping cannot see once the argument converts to <c>object</c>; see the
+/// <c>ObjectEquals</c> partial). Symbol-keyed via
 /// <see cref="SymbolEqualityComparer.Default"/> so dispatch is O(1)
 /// per call site and adding the next BCL form is one entry, not one
 /// rewriter class.

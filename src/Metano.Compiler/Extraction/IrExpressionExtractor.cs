@@ -1226,24 +1226,8 @@ public sealed partial class IrExpressionExtractor
         )
             return new IrMemberAccess(new IrThisExpression(), capturedFieldName);
 
-        // A parameter folded into the property that only exposes it
-        // (`A { get; } = a`) has no storage of its own: the property is the
-        // parameter property the backends emit. A member body reads it
-        // there. An initializer keeps the bare parameter, which is in scope
-        // when it runs in the constructor body.
-        if (
-            symbol is IParameterSymbol promotedParam
-            && PrimaryCtorScope is { } promotionScope
-            && promotionScope.PromotedParams.TryGetValue(promotedParam, out var promotedProperty)
-            && !IsInsideInitializer(id)
-        )
-        {
-            return new IrMemberAccess(
-                new IrThisExpression(),
-                promotedProperty.Name,
-                BuildOrigin(promotedProperty)
-            );
-        }
+        if (TryReadPromotedParameter(symbol, id) is { } promotedRead)
+            return promotedRead;
 
         // `[Inline]` member referenced without an explicit qualifier
         // (same-type static access, extension receiver, etc.). Expand
@@ -1346,6 +1330,31 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private static bool IsInsideInitializer(SyntaxNode node) =>
         MemberInitializerSyntax.Contains(node, stopAtExecutableBodies: true);
+
+    /// <summary>
+    /// A member-body read of a primary-constructor parameter folded into the
+    /// property that only exposes it (<c>A { get; } = a</c>): the property
+    /// the backends emit as a parameter property is the parameter's only
+    /// storage, so the read becomes <c>this.A</c>. <c>null</c> for any other
+    /// identifier, and inside an initializer, which keeps the bare parameter
+    /// as captured parameters do: it is in scope when the initializer is
+    /// deferred into the constructor body
+    /// (<see cref="PrimaryCtorExtractionScope.InitializersRunInConstructor"/>),
+    /// and a field initializer cannot read the parameter property either,
+    /// since it runs before the constructor assigns it.
+    /// </summary>
+    private IrMemberAccess? TryReadPromotedParameter(ISymbol? symbol, SyntaxNode id)
+    {
+        if (symbol is not IParameterSymbol parameter || PrimaryCtorScope is not { } scope)
+            return null;
+
+        if (!scope.PromotedParams.TryGetValue(parameter, out var property))
+            return null;
+
+        return IsInsideInitializer(id)
+            ? null
+            : new IrMemberAccess(new IrThisExpression(), property.Name, BuildOrigin(property));
+    }
 
     // ── Literals ──────────────────────────────────────────────────────────
 

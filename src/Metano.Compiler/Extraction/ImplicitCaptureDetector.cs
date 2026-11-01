@@ -41,7 +41,11 @@ internal static class ImplicitCaptureDetector
         IReadOnlyDictionary<ISymbol, string> ParamFieldMap,
         IReadOnlyList<IrFieldDeclaration> SynthesizedFields,
         IReadOnlyDictionary<ISymbol, IPropertySymbol> PromotedParams
-    );
+    )
+    {
+        /// <summary>No parameter read needs rewriting in the member bodies.</summary>
+        public bool HasNoRewrites => ParamFieldMap.Count == 0 && PromotedParams.Count == 0;
+    }
 
     private static readonly Result Empty = new(
         new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default),
@@ -80,7 +84,7 @@ internal static class ImplicitCaptureDetector
             // backing field would duplicate state and surface as
             // double-emitted fields in regenerated samples, so a member
             // body reads the property instead.
-            if (PromotedProperty(param, type, compilation) is { } property)
+            if (FindPromotedProperty(param, type, compilation) is { } property)
                 promotedParams[param] = property;
             else
                 primaryParams[param] = param;
@@ -250,7 +254,7 @@ internal static class ImplicitCaptureDetector
     /// it — only a property that merely exposes the parameter
     /// (<see cref="PrimaryConstructorPropertyAlias"/>) counts.
     /// </summary>
-    private static IPropertySymbol? PromotedProperty(
+    private static IPropertySymbol? FindPromotedProperty(
         IParameterSymbol param,
         INamedTypeSymbol type,
         Compilation compilation
