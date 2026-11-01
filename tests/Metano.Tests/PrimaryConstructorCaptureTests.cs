@@ -200,6 +200,65 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
+    public async Task PromotedParam_ThatCanDivergeFromItsProperty_KeepsItsOwnField()
+    {
+        // A settable property, or a member that writes the parameter, can
+        // make the two differ, so C# keeps separate storage for the
+        // parameter (CS9124) and the read must not go through the property.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Settable(int limit)
+            {
+                public int Limit { get; set; } = limit;
+
+                public int Original() => limit;
+            }
+
+            [Transpile]
+            public sealed class Written(int count)
+            {
+                public int Count { get; } = count;
+
+                public void Reset() => count = 0;
+
+                public int Current() => count;
+            }
+            """
+        );
+
+        var settable = result["settable.ts"];
+        await Assert.That(settable).Contains("this._limit = limit;");
+        await Assert.That(settable).Contains("return this._limit;");
+
+        var written = result["written.ts"];
+        await Assert.That(written).Contains("this._count = count;");
+        await Assert.That(written).Contains("return this._count;");
+    }
+
+    [Test]
+    public async Task PromotedParam_ToAnIgnoredProperty_IsCaptured()
+    {
+        // An [Ignore]d property is not emitted, so nothing is promoted: the
+        // parameter needs its own field for the member body to read.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Hidden(int limit)
+            {
+                [Ignore]
+                public int Limit { get; } = limit;
+
+                public int Twice() => limit * 2;
+            }
+            """
+        );
+
+        var output = result["hidden.ts"];
+        await Assert.That(output).Contains("return this._limit * 2;");
+    }
+
+    [Test]
     public async Task CapturedParam_ReadFromFieldInitializer_KeepsBareReference()
     {
         // Field initializers execute before the ctor body assigns the

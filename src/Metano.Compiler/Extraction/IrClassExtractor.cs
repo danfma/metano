@@ -59,6 +59,7 @@ public static class IrClassExtractor
             type,
             compilation,
             originResolver,
+            target,
             deferInitializers
         );
 

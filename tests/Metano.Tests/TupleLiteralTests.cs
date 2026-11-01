@@ -148,25 +148,22 @@ public class TupleLiteralTests
     }
 
     /// <summary>
-    /// <c>object.Equals</c> with an operand that is statically a tuple
-    /// compares element by element through the tuple's own <c>Equals</c>
-    /// (<c>tupleEquals</c>), never by reference as the general
-    /// <c>objectEquals</c> lowering does for an array. A tuple on the right
-    /// becomes the receiver.
+    /// <c>object.Equals</c> over two operands that are statically tuples
+    /// compares element by element through the first tuple's own
+    /// <c>Equals</c> (<c>tupleEquals</c>), never by reference as the general
+    /// <c>objectEquals</c> lowering does for an array.
     /// </summary>
     [Test]
-    public async Task ObjectEqualsOverATuple_ComparesElementWise()
+    public async Task ObjectEqualsOverTwoTuples_ComparesElementWise()
     {
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
             public static class Comparisons
             {
-                public static bool BothTuples(int a) => object.Equals((a, "x"), (a, "x"));
+                public static bool Literals(int a) => object.Equals((a, "x"), (a, "x"));
 
-                public static bool TupleOnTheRight(object o) => object.Equals(o, (1, 2));
-
-                public static bool NoTuple(object a, object b) => object.Equals(a, b);
+                public static bool Locals((int, int) t, (int, int) u) => object.Equals(t, u);
             }
             """
         );
@@ -179,17 +176,17 @@ public class TupleLiteralTests
                 "return tupleEquals([a, \"x\"] as [number, string], [a, \"x\"] as [number, string]);"
             );
 
-        await Assert.That(output).Contains("return tupleEquals([1, 2] as [number, number], o);");
-        await Assert.That(output).Contains("return objectEquals(a, b);");
+        await Assert.That(output).Contains("return tupleEquals(t, u);");
     }
 
     /// <summary>
-    /// Swapping the operands would run a side-effecting first operand after
-    /// the tuple, and a nullable tuple may be <c>null</c> (no receiver), so
-    /// both calls keep the general <c>objectEquals</c>.
+    /// Against an operand that is not statically a tuple (an array of equal
+    /// elements, or an <c>object</c> that may hold one), the element-wise
+    /// comparison could say <c>true</c> where C# says <c>false</c>; a
+    /// nullable tuple may be <c>null</c>. All keep <c>objectEquals</c>.
     /// </summary>
     [Test]
-    public async Task ObjectEqualsWithoutASafeTupleReceiver_KeepsObjectEquals()
+    public async Task ObjectEqualsWithANonTupleOperand_KeepsObjectEquals()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -198,11 +195,11 @@ public class TupleLiteralTests
             [Transpile]
             public static class Comparisons
             {
-                public static object Boxed() => (1, 2);
+                public static bool WithArray(int[] values) => object.Equals(values, (1, 2));
 
-                public static bool SideEffectOnTheLeft() => object.Equals(Boxed(), (1, 2));
+                public static bool WithObject((int, int) t, object o) => object.Equals(t, o);
 
-                public static bool NullableTuple((int, int)? t, object o) => object.Equals(t, o);
+                public static bool NullableTuple((int, int)? t, (int, int) u) => object.Equals(t, u);
             }
             """
         );
@@ -211,8 +208,9 @@ public class TupleLiteralTests
 
         await Assert
             .That(output)
-            .Contains("return objectEquals(Comparisons.boxed(), [1, 2] as [number, number]);");
+            .Contains("return objectEquals(values, [1, 2] as [number, number]);");
 
         await Assert.That(output).Contains("return objectEquals(t, o);");
+        await Assert.That(output).Contains("return objectEquals(t, u);");
     }
 }

@@ -14,6 +14,25 @@ namespace Metano.Compiler.Extraction;
 internal static class PrimaryConstructorPropertyAlias
 {
     /// <summary>
+    /// Whether <paramref name="property"/> is emitted as a member a
+    /// constructor parameter can be promoted to: declared in source, visible
+    /// outside the assembly's internals, not <c>[Ignore]</c>d for
+    /// <paramref name="target"/>, and not an override (whose base declares
+    /// the storage). The constructor extraction and the capture scan share
+    /// it, so a member-body read is never redirected to a property that is
+    /// not emitted.
+    /// </summary>
+    public static bool IsPromotionCandidate(
+        IPropertySymbol property,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        !property.IsImplicitlyDeclared
+        && property.DeclaredAccessibility
+            is not (Accessibility.Internal or Accessibility.NotApplicable)
+        && !SymbolHelper.HasIgnore(property, target)
+        && !property.IsOverride;
+
+    /// <summary>
     /// True when <paramref name="property"/> is the positional property of a
     /// record parameter, an auto-property initialized with the bare
     /// <paramref name="parameter"/> (<c>Name { get; } = name</c>), or a
