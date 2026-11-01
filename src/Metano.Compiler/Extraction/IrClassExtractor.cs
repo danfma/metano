@@ -360,10 +360,12 @@ public static class IrClassExtractor
                 case IFieldSymbol field
                     when IrFieldExtractor.TryExtract(field, originResolver, compilation, target)
                         is { } f:
+                    InheritedDataMemberHiding.ReportIfHiding(field, target);
                     result.Add(f);
                     break;
 
                 case IPropertySymbol prop:
+                    InheritedDataMemberHiding.ReportIfHiding(prop, target);
                     var property = IrPropertyExtractor.Extract(
                         prop,
                         originResolver,

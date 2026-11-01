@@ -22,6 +22,8 @@ internal static partial class IrToTsClassBridge
     ///     <c>get; init;</c> map to <c>readonly</c>; <c>get; set;</c> to mutable.</item>
     ///   <item>A static property keeps <c>static</c> on every emitted member
     ///     (field, getter and setter), so <c>Type.Prop</c> reads the class.</item>
+    ///   <item>Abstract property → abstract declaration with no storage
+    ///     (<see cref="BuildAbstractProperty"/>).</item>
     ///   <item>Computed getter → <see cref="TsGetterMember"/>.</item>
     ///   <item>Custom setter body → <see cref="TsSetterMember"/> (in addition
     ///     to the getter when both are present).</item>
@@ -39,6 +41,10 @@ internal static partial class IrToTsClassBridge
             return [];
 
         var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
+
+        if (prop.Semantics?.IsAbstract == true)
+            return [BuildAbstractProperty(prop, name, tsType)];
+
         var hasGetterBody = prop.Semantics?.HasGetterBody == true;
         var hasSetterBody = prop.Semantics?.HasSetterBody == true;
 
@@ -48,15 +54,13 @@ internal static partial class IrToTsClassBridge
             var initializer = prop.Initializer is { } init
                 ? IrToTsExpressionBridge.Map(init, bclRegistry)
                 : ComputeDefaultInitializer(prop.Type);
-            var isReadonly =
-                prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit;
             return
             [
                 new TsFieldMember(
                     name,
                     tsType,
                     initializer,
-                    isReadonly,
+                    IsReadOnly(prop),
                     Static: prop.IsStatic,
                     Accessibility: MapAccessibility(prop.Visibility),
                     DefinitelyAssigned: prop.Semantics?.IsRequired == true
@@ -92,6 +96,29 @@ internal static partial class IrToTsClassBridge
 
         return members;
     }
+
+    /// <summary>
+    /// An abstract property becomes an abstract property declaration
+    /// (<c>abstract readonly kind: string;</c>) with no initializer: like the
+    /// C# one, it reserves no storage, so it never shadows the field,
+    /// parameter property or accessor a derived class implements it with.
+    /// </summary>
+    private static TsFieldMember BuildAbstractProperty(
+        IrPropertyDeclaration prop,
+        string name,
+        TsType tsType
+    ) =>
+        new(
+            name,
+            tsType,
+            Readonly: IsReadOnly(prop),
+            Accessibility: MapAccessibility(prop.Visibility),
+            Abstract: true
+        );
+
+    /// <summary><c>get;</c> and <c>get; init;</c> map to a <c>readonly</c> member.</summary>
+    private static bool IsReadOnly(IrPropertyDeclaration prop) =>
+        prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit;
 
     /// <summary>
     /// Lowers an <see cref="IrMethodDeclaration"/> into a <see cref="TsMethodMember"/>.

@@ -109,6 +109,25 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task PositionalRecordProperty_OverridingAbstractProperty_IsAssignedByTheConstructor()
+    {
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public abstract record Entry { public abstract int Id { get; init; } }
+
+            [Transpile]
+            public record Note(int Id) : Entry;
+            """
+        );
+
+        var dart = files["note.dart"];
+        await Assert.That(dart).Contains("Note(this.id);");
+        await Assert.That(dart).Contains("final int id;");
+        await Assert.That(dart).DoesNotContain("late final int id;");
+    }
+
+    [Test]
     public async Task RecordType_SynthesizesEqualsHashCodeAndCopyWith()
     {
         var (files, _) = TranspileDart(
