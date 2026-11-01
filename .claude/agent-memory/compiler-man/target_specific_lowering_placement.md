@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-The Dart backend ignores `IrArgument.IsSpread`, `IrParameter.IsParams` and property `SetterBody` (verified 2026-10-31, #320). So a fix whose shape comes from a TS construct (rest parameter cannot hold `null`, setter cannot write a `readonly` field, `[Symbol.iterator]`) belongs in the TS bridge, with only target-neutral *facts* in core IR (e.g. `IrTypeSemantics.EnumeratedElementType`, `IrNamedTypeSemantics.IsDefaultConstructible`). Dropping an argument in the core extractor would turn Dart's valid `count(null)` into `count()`.
+The Dart backend ignores `IrArgument.IsSpread`, `IrParameter.IsParams` and property `SetterBody` (verified 2026-10-31, #320). So a fix whose shape comes from a TS construct (rest parameter cannot hold `null`, setter cannot write a `readonly` field, `[Symbol.iterator]`) belongs in the TS bridge, with only target-neutral *facts* in core IR (e.g. `IrTypeSemantics.Enumerable`/`Enumerator` contracts naming the implementing members, `IrNamedTypeSemantics.IsDefaultConstructible`, `IrFieldDeclaration.IsAssignedByInitAccessor` — core keeps `IsReadonly` true to C#; the TS bridge drops `readonly`). Dropping an argument in the core extractor would turn Dart's valid `count(null)` into `count()`.
 
 **Why:** #320 first dropped the null params array in `ApplyParamsSpread` (core); it would have broken Dart and shifted `[Emit]` template `$N` indices.
 

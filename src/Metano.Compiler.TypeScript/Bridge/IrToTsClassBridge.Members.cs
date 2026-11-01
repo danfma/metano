@@ -206,7 +206,9 @@ internal static partial class IrToTsClassBridge
     /// value comes from a captured ctor parameter skip the default —
     /// the assignment lives in the ctor body to avoid a TDZ-like read. A
     /// <c>required</c> field left without an initializer carries the
-    /// definite-assignment assertion (<c>name!: T</c>).
+    /// definite-assignment assertion (<c>name!: T</c>). A <c>readonly</c>
+    /// field written by a transpiled <c>init</c> accessor drops <c>readonly</c>,
+    /// since the setter that accessor lowers to cannot write a read-only field.
     /// Returns <c>null</c> for accessibility levels below TS-visible.
     /// </summary>
     public static TsFieldMember? BuildField(
@@ -234,7 +236,7 @@ internal static partial class IrToTsClassBridge
             name,
             tsType,
             initializer,
-            field.IsReadonly,
+            field.IsReadonly && !field.IsAssignedByInitAccessor,
             Static: field.IsStatic,
             Accessibility: MapAccessibility(field.Visibility),
             DefinitelyAssigned: field.IsRequired

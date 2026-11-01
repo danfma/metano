@@ -55,6 +55,10 @@ public sealed record IrPropertyDeclaration(
 /// time so the value is assigned exactly once.</param>
 /// <param name="IsRequired">Declared <c>required</c>: every object creation sets it
 /// through an object initializer (or a <c>[SetsRequiredMembers]</c> constructor).</param>
+/// <param name="IsAssignedByInitAccessor">A <c>readonly</c> field that a transpiled
+/// <c>init</c> accessor body of its type assigns (see <c>CustomInitAccessor</c>). C#
+/// allows that write; a backend that lowers the accessor to a setter, which cannot
+/// write a read-only field, declares the field mutable.</param>
 public sealed record IrFieldDeclaration(
     string Name,
     IrVisibility Visibility,
@@ -64,7 +68,8 @@ public sealed record IrFieldDeclaration(
     IrExpression? Initializer = null,
     bool IsCapturedByCtor = false,
     bool IsConstant = false,
-    bool IsRequired = false
+    bool IsRequired = false,
+    bool IsAssignedByInitAccessor = false
 ) : IrMemberDeclaration(Name, Visibility, IsStatic);
 
 /// <summary>

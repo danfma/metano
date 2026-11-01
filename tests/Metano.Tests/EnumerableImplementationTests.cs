@@ -204,4 +204,133 @@ public class EnumerableImplementationTests
 
         await Assert.That(result["holder.ts"]).DoesNotContain("Symbol.iterator");
     }
+
+    [Test]
+    public async Task HandWrittenEnumerator_MatchesTheGoldenOutput()
+    {
+        // A class implementing IEnumerator<T> is declared `implements Iterator<T>`, so
+        // it gets the JS `next()` over its MoveNext/Current; the explicit Current
+        // keeps its name and the non-generic bridge is dropped.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections;
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Countdown : IEnumerator<int>
+            {
+                private int _value = 4;
+
+                int IEnumerator<int>.Current => _value;
+
+                object IEnumerator.Current => _value;
+
+                public bool MoveNext() => --_value > 0;
+
+                public void Reset() => _value = 4;
+
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public class Launch : IEnumerable<int>
+            {
+                public IEnumerator<int> GetEnumerator() => new Countdown();
+
+                IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+            }
+            """
+        );
+
+        await Assert
+            .That(result["countdown.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("hand-written-enumerator.ts"));
+        await Assert.That(result["launch.ts"]).Contains("return new Countdown();");
+    }
+
+    [Test]
+    public async Task EnumeratorDeclaringNext_GetsNoSynthesizedNext()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections;
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Stepper : IEnumerator<int>
+            {
+                public int Current => 0;
+                object IEnumerator.Current => Current;
+                public bool MoveNext() => false;
+                public int Next() => 1;
+                public void Reset() { }
+                public void Dispose() { }
+            }
+            """
+        );
+
+        var output = result["stepper.ts"];
+        await Assert.That(output).Contains("next(): number {");
+        await Assert.That(output).DoesNotContain("IteratorResult");
+    }
+
+    [Test]
+    public async Task GetEnumeratorInheritedFromNonEnumerableBase_IsDelegatedTo()
+    {
+        // The base declares GetEnumerator without taking on IEnumerable; the derived
+        // class takes on the contract, and its iterator member reaches the base
+        // method through the prototype chain.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections;
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Source
+            {
+                public IEnumerator<int> GetEnumerator()
+                {
+                    yield return 1;
+                }
+            }
+
+            [Transpile]
+            public class Inherited : Source, IEnumerable<int>
+            {
+                IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+            }
+            """
+        );
+
+        var output = result["inherited.ts"];
+        await Assert.That(output).Contains("implements Iterable<number>");
+        await Assert.That(output).Contains("[Symbol.iterator](): Iterator<number> {");
+        await Assert.That(output).Contains("return this.getEnumerator();");
+        await Assert.That(result["source.ts"]).DoesNotContain("Symbol.iterator");
+    }
+
+    [Test]
+    public async Task RenamedGetEnumerator_IsDelegatedToUnderItsEmittedName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections;
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Bag : IEnumerable<int>
+            {
+                [Name("cursor")]
+                public IEnumerator<int> GetEnumerator()
+                {
+                    yield return 1;
+                }
+
+                IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+            }
+            """
+        );
+
+        await Assert.That(result["bag.ts"]).Contains("return this.cursor();");
+    }
 }

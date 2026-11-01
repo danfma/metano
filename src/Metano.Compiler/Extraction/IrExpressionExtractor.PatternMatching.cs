@@ -119,7 +119,9 @@ public sealed partial class IrExpressionExtractor
     /// which has a backing field too but may compute.
     /// </summary>
     private static bool IsAutoProperty(IPropertySymbol property) =>
-        HasBackingField(property) && property.GetMethod is { } getter && !HasAccessorBody(getter);
+        HasBackingField(property)
+        && property.GetMethod is { } getter
+        && !AccessorBodies.HasBody(getter);
 
     private static bool HasBackingField(IPropertySymbol property) =>
         property

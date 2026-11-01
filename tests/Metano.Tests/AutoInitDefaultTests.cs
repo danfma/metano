@@ -190,8 +190,10 @@ public class AutoInitDefaultTests
     {
         // C# zero-initializes a struct-typed field: a default-constructible
         // transpiled struct gets a `new S()` initializer. A struct that declares a
-        // parameterized constructor has no parameterless TS construction, so its
-        // field keeps no initializer (#291 tracks a type-correct zero value).
+        // parameterized constructor has no parameterless TS construction, and one
+        // that declares a parameterless constructor would run it where C#'s zero
+        // value skips it (Tally.N is 0, not 5), so their fields keep no initializer
+        // (#291 tracks a type-correct zero value).
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -222,6 +224,14 @@ public class AutoInitDefaultTests
             }
 
             [Transpile]
+            public struct Counter
+            {
+                public int N;
+
+                public Counter() { N = 5; }
+            }
+
+            [Transpile]
             public struct Segment
             {
                 public Point Start;
@@ -229,6 +239,7 @@ public class AutoInitDefaultTests
                 public Box<int> Boxed;
                 public Size Extent { get; set; }
                 public Celsius Temperature;
+                public Counter Tally;
                 public Point Fixed = new Point { X = 1 };
 
                 public Segment() { }

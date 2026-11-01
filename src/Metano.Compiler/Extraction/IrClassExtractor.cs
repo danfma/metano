@@ -26,7 +26,7 @@ public static class IrClassExtractor
         Metano.Annotations.TargetLanguage? target = null
     )
     {
-        var semantics = ExtractSemantics(type, originResolver);
+        var semantics = ExtractSemantics(type, originResolver, target);
 
         var baseType =
             type.BaseType is not null && IsMeaningfulBase(type.BaseType)
@@ -243,7 +243,8 @@ public static class IrClassExtractor
 
     private static IrTypeSemantics ExtractSemantics(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
     ) =>
         new(
             IsRecord: type.IsRecord,
@@ -259,39 +260,12 @@ public static class IrClassExtractor
             IsJsxComponent: SymbolHelper.IsJsxComponent(type),
             JsxNativeElementTag: SymbolHelper.GetJsxNativeElementTag(type),
             RendersAsJsxElement: SymbolHelper.IsJsxRenderable(type),
-            EnumeratedElementType: ExtractEnumeratedElementType(type, originResolver)
-        );
-
-    /// <summary>
-    /// The element type of the <c>IEnumerable&lt;T&gt;</c> (or non-generic
-    /// <c>IEnumerable</c>, as <c>object</c>) contract <paramref name="type"/>
-    /// implements, or <c>null</c> when it implements neither or its base type already
-    /// does — the base then carries the contract, and an overriding
-    /// <c>GetEnumerator</c> is reached through it. Interfaces declare the contract
-    /// without implementing it, so they report <c>null</c> too.
-    /// </summary>
-    private static IrTypeRef? ExtractEnumeratedElementType(
-        INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver
-    )
-    {
-        if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
-            return null;
-
-        if (!IsEnumerable(type) || type.BaseType is { } baseType && IsEnumerable(baseType))
-            return null;
-
-        return GenericEnumerableOf(type) is { } generic
-            ? IrTypeRefMapper.Map(generic.TypeArguments[0], originResolver)
-            : new IrPrimitiveTypeRef(IrPrimitive.Object);
-    }
-
-    private static bool IsEnumerable(INamedTypeSymbol type) =>
-        type.AllInterfaces.Any(i => i.SpecialType == SpecialType.System_Collections_IEnumerable);
-
-    private static INamedTypeSymbol? GenericEnumerableOf(INamedTypeSymbol type) =>
-        type.AllInterfaces.FirstOrDefault(i =>
-            i.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+            Enumerable: EnumerationContractExtractor.ExtractEnumerable(
+                type,
+                originResolver,
+                target
+            ),
+            Enumerator: EnumerationContractExtractor.ExtractEnumerator(type, originResolver, target)
         );
 
     /// <summary>

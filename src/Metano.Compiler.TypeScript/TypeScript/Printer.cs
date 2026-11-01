@@ -778,7 +778,7 @@ public sealed class Printer(string indent = "  ")
                     _sb.Write("async ");
                 if (method.Generator)
                     _sb.Write("*");
-                _sb.Write(method.Name);
+                PrintMethodKey(method);
                 PrintTypeParameters(method.TypeParameters);
                 _sb.Write("(");
                 PrintParameters(method.Parameters);
@@ -796,6 +796,19 @@ public sealed class Printer(string indent = "  ")
                 }
                 break;
         }
+    }
+
+    private void PrintMethodKey(TsMethodMember method)
+    {
+        if (method.ComputedKey is null)
+        {
+            _sb.Write(method.Name);
+            return;
+        }
+
+        _sb.Write("[");
+        PrintExpression(method.ComputedKey);
+        _sb.Write("]");
     }
 
     // ─── Types ──────────────────────────────────────────────

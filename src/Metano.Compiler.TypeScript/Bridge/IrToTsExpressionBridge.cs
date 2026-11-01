@@ -1,7 +1,6 @@
 using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
-using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -574,37 +573,20 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// The arguments of a call to a rest parameter, without a trailing <c>params</c>
-    /// array passed as a <c>null</c> literal (<c>f(null)</c>). Spreading <c>null</c>
-    /// throws and a rest parameter cannot hold it, so the argument is dropped and the
-    /// callee receives an empty array where C# passes <c>null</c>; the divergence is
-    /// reported as an MS0001 warning. A call lowered through a declarative BCL mapping
-    /// keeps the spread, since its template addresses arguments by position and most
-    /// BCL methods reject a <c>null</c> array anyway.
+    /// array passed as <c>null</c> (<c>f(null)</c>; the extractor normalizes casts and
+    /// <c>default</c> to the null literal and reports the divergence). Spreading
+    /// <c>null</c> throws and a rest parameter cannot hold it, so the argument is
+    /// dropped and the callee receives an empty array where C# passes <c>null</c>. A
+    /// call lowered through a declarative BCL mapping keeps the spread, since its
+    /// template addresses arguments by position.
     /// </summary>
     private static IReadOnlyList<TsExpression> WithoutNullRestArray(
         IReadOnlyList<IrArgument> arguments,
         IReadOnlyList<TsExpression> loweredArguments
-    )
-    {
-        if (
-            arguments is not [.., { IsSpread: true, Value: IrLiteral { Kind: IrLiteralKind.Null } }]
-        )
-            return loweredArguments;
-
-        ReportNullRestArray();
-
-        return loweredArguments.Take(loweredArguments.Count - 1).ToList();
-    }
-
-    private static void ReportNullRestArray() =>
-        ExtractionDiagnostics.Report(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.UnsupportedFeature,
-                "A null array is passed to a params parameter: a rest parameter cannot hold "
-                    + "null, so the callee receives an empty array."
-            )
-        );
+    ) =>
+        arguments is [.., { IsSpread: true, Value: IrLiteral { Kind: IrLiteralKind.Null } }]
+            ? loweredArguments.Take(loweredArguments.Count - 1).ToList()
+            : loweredArguments;
 
     private static TsCallExpression MapPlainObjectHelperCall(
         IrMemberOrigin method,

@@ -343,4 +343,34 @@ public class ParamsParameterTests
 
         await Assert.That(result["app/logger.ts"]).Contains("this.count(null)");
     }
+
+    [Test]
+    public async Task CallSite_NullCastToParamsArray_DropsTheArgumentAndReportsItsLocation()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Logger
+            {
+                public int Count(params string[]? items) => items?.Length ?? -1;
+
+                public int Demo() => Count((string[]?)null) + Count(default(string[]));
+            }
+            """
+        );
+
+        var output = result["app/logger.ts"];
+        await Assert.That(output).Contains("this.count() + this.count()");
+        await Assert.That(output).DoesNotContain("...null");
+
+        var warnings = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .ToList();
+        await Assert.That(warnings.All(d => d.Location is not null)).IsTrue();
+        await Assert
+            .That(warnings.Select(d => d.Location!.SourceSpan).Distinct().Count())
+            .IsEqualTo(2);
+    }
 }
