@@ -11,3 +11,4 @@ export * from "./bind-receiver.ts";
 export * from "./integer-division.ts";
 export * from "./math.ts";
 export * from "./number-parsing.ts";
+export * from "./strings.ts";

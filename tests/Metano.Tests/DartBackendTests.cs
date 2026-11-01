@@ -916,6 +916,31 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task OperatorReceivers_KeepSourceGrouping()
+    {
+        // A receiver that binds looser than a selector must keep its parentheses:
+        // `(value ?? "").Trim()` printed bare is `value ?? ''.trim()` (#324).
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class Receivers
+            {
+                public string Trimmed(string? value) => (value ?? "").Trim();
+                public int Length(string? a, string b) => (a ?? b).Length;
+                public string Negated(int a) => (-a).ToString();
+                public int Cast(object o) => ((string)o).Length;
+            }
+            """
+        );
+
+        var dart = files["receivers.dart"];
+        await Assert.That(dart).Contains("(value ?? '').trim()");
+        await Assert.That(dart).Contains("(a ?? b).length");
+        await Assert.That(dart).Contains("(-a).toString()");
+        await Assert.That(dart).Contains("(o as String).length");
+    }
+
+    [Test]
     public async Task DictionaryCounts_MapToLength()
     {
         // #295 rebinds interface dictionary counts and folds view counts into the

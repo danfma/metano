@@ -954,21 +954,76 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        var subs = recursive
-            .PropertyPatternClause?.Subpatterns.Where(s => s.NameColon is not null)
-            .Select(s => new IrPropertySubpattern(
-                s.NameColon!.Name.Identifier.ValueText,
-                ExtractPattern(s.Pattern),
-                ResolveMemberNameOverride(s.NameColon.Name),
-                IsTranspiledDataMember(_semantic.GetSymbolInfo(s.NameColon.Name).Symbol)
-            ))
-            .ToList();
+        var subpatterns = recursive.PropertyPatternClause?.Subpatterns ?? [];
+        var subs = subpatterns.Select(ExtractPropertySubpattern).ToList();
+
+        if (subs.Contains(null))
+            return ReportUnsupportedPattern(recursive);
+
         return new IrPropertyPattern(
             type,
-            subs ?? (IReadOnlyList<IrPropertySubpattern>)[],
+            subs.OfType<IrPropertySubpattern>().ToList(),
             designator
         );
     }
+
+    /// <summary>
+    /// Extracts one <c>Name: pattern</c> entry of a property pattern. The
+    /// C# 10 extended form <c>A.B.C: pattern</c> is defined by the language
+    /// as <c>A: { B: { C: pattern } }</c>, so it is desugared into nested
+    /// type-less property patterns; each intermediate level keeps the
+    /// non-null test a <c>{ … }</c> pattern implies. Returns <c>null</c> when
+    /// the member path is not a chain of simple names (only reachable on
+    /// code with compile errors).
+    /// </summary>
+    private IrPropertySubpattern? ExtractPropertySubpattern(SubpatternSyntax subpattern)
+    {
+        ExpressionSyntax? memberPath =
+            subpattern.NameColon?.Name ?? subpattern.ExpressionColon?.Expression;
+        var segments = memberPath is null ? null : MemberPathSegments(memberPath);
+
+        if (segments is null)
+            return null;
+
+        var pattern = ExtractPattern(subpattern.Pattern);
+        var innermost = PropertySubpattern(segments[^1], pattern);
+
+        return segments
+            .Take(segments.Count - 1)
+            .Reverse()
+            .Aggregate(
+                innermost,
+                (inner, segment) =>
+                    PropertySubpattern(segment, new IrPropertyPattern(Type: null, [inner]))
+            );
+    }
+
+    private IrPropertySubpattern PropertySubpattern(SimpleNameSyntax member, IrPattern pattern) =>
+        new(
+            member.Identifier.ValueText,
+            pattern,
+            ResolveMemberNameOverride(member),
+            IsTranspiledDataMember(_semantic.GetSymbolInfo(member).Symbol)
+        );
+
+    /// <summary>
+    /// The simple names of a member path, outermost first:
+    /// <c>Text.Length</c> → <c>[Text, Length]</c>. Returns <c>null</c> for
+    /// any other expression shape.
+    /// </summary>
+    private static IReadOnlyList<SimpleNameSyntax>? MemberPathSegments(ExpressionSyntax path) =>
+        path switch
+        {
+            IdentifierNameSyntax name => [name],
+            MemberAccessExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.SimpleMemberAccessExpression,
+                Name: IdentifierNameSyntax name,
+            } access => MemberPathSegments(access.Expression) is { } receiver
+                ? [.. receiver, name]
+                : null,
+            _ => null,
+        };
 
     /// <summary>
     /// The member each positional element reads, or <c>null</c> to read the
@@ -2635,7 +2690,8 @@ public sealed partial class IrExpressionExtractor
             IsInitOnly: symbol is IPropertySymbol { SetMethod.IsInitOnly: true },
             CompanionOwner: isPlainObjectInstanceMethod
                 ? TypeReferenceTo(symbol.ContainingType)
-                : null
+                : null,
+            IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation)
         );
     }
 

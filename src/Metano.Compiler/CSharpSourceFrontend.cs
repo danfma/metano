@@ -214,7 +214,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ExternalImports: externalImports,
             BclExports: compilation is null
                 ? new Dictionary<string, IrBclExport>(StringComparer.Ordinal)
-                : BuildBclExports(compilation),
+                : BclExportReader.Read(compilation),
             AssembliesNeedingEmitPackage: assembliesNeedingEmitPackage,
             Diagnostics: diagnostics,
             // Full-namespace layout (D1, spec 005 / ADR-0025): the TypeScript target
@@ -2742,74 +2742,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     visit(type);
                     break;
             }
-        }
-    }
-
-    /// <summary>
-    /// Reads <c>[ExportFromBcl]</c> declarations from every assembly in scope
-    /// (referenced first, current assembly last so user-side overrides win on
-    /// conflict) and returns them keyed by the BCL type's display string.
-    /// Mirrors the legacy <c>TypeTransformer.LoadBclExportMappings</c>; the
-    /// target-side copy stays in place until the contract flip migrates
-    /// consumers onto the IR.
-    /// </summary>
-    private static Dictionary<string, IrBclExport> BuildBclExports(Compilation compilation)
-    {
-        var map = new Dictionary<string, IrBclExport>(StringComparer.Ordinal);
-
-        foreach (var reference in compilation.References)
-        {
-            if (
-                compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol asm
-                && !SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly)
-            )
-                CollectBclExportsFromAssembly(asm, map);
-        }
-        CollectBclExportsFromAssembly(compilation.Assembly, map);
-
-        return map;
-    }
-
-    private static void CollectBclExportsFromAssembly(
-        IAssemblySymbol assembly,
-        Dictionary<string, IrBclExport> sink
-    )
-    {
-        foreach (var attr in assembly.GetAttributes())
-        {
-            if (attr.AttributeClass?.Name is not ("ExportFromBclAttribute" or "ExportFromBcl"))
-                continue;
-
-            if (attr.ConstructorArguments.Length == 0)
-                continue;
-            if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol typeArg)
-                continue;
-
-            var exportedName = "";
-            var fromPackage = "";
-            string? version = null;
-
-            foreach (var namedArg in attr.NamedArguments)
-            {
-                switch (namedArg.Key)
-                {
-                    case "ExportedName":
-                        exportedName = namedArg.Value.Value?.ToString() ?? "";
-                        break;
-                    case "FromPackage":
-                        fromPackage = namedArg.Value.Value?.ToString() ?? "";
-                        break;
-                    case "Version":
-                        var raw = namedArg.Value.Value?.ToString();
-                        version = string.IsNullOrEmpty(raw) ? null : raw;
-                        break;
-                }
-            }
-
-            if (exportedName.Length == 0)
-                continue;
-
-            sink[typeArg.ToDisplayString()] = new IrBclExport(exportedName, fromPackage, version);
         }
     }
 

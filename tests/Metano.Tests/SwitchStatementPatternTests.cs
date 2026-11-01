@@ -186,6 +186,96 @@ public class SwitchStatementPatternTests
     }
 
     [Test]
+    public async Task ExtendedPropertySubpatterns_TestEveryLevelOfThePath()
+    {
+        // `{ A.B: p }` is C#'s shorthand for `{ A: { B: p } }`: each level is
+        // null-checked before the next one is read (#324; it lowered to the bare
+        // type test before).
+        var output = TranspileDescriber(
+            """
+            public static string Describe(object? o)
+            {
+                switch (o)
+                {
+                    case Node { Next.Value: 0 }:
+                        return "next is zero";
+                    case Node { Next.Next.Value: > 1 } n:
+                        return "grandchild " + n.Value;
+                    case Node { Value: 1, Next.Next: null }:
+                        return "short";
+                    default:
+                        return "other";
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains("case o instanceof Node && o.next != null && o.next.value === 0:");
+        await Assert
+            .That(output)
+            .Contains(
+                "case o instanceof Node && o.next != null && o.next.next != null && o.next.next.value > 1:"
+            );
+        await Assert
+            .That(output)
+            .Contains(
+                "case o instanceof Node && o.value === 1 && o.next != null && o.next.next == null:"
+            );
+    }
+
+    [Test]
+    public async Task ExtendedPropertySubpatterns_LowerInIsAndSwitchExpressions()
+    {
+        var output = TranspileDescriber(
+            """
+            public static bool HasNext(Node node) => node is { Next.Value: 1 };
+            public static string Name(object? o) => o switch
+            {
+                Node { Next.Value: 2 } => "two",
+                _ => "other",
+            };
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains("node != null && node.next != null && node.next.value === 1");
+        await Assert
+            .That(output)
+            .Contains("o instanceof Node && o.next != null && o.next.value === 2");
+    }
+
+    [Test]
+    public async Task ExtendedPropertySubpatterns_UseEachMembersEmittedName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Box(Box? inner, int size)
+            {
+                [Name("contents")]
+                public Box? Inner { get; } = inner;
+
+                [Name("volume")]
+                public int Size { get; } = size;
+            }
+
+            [Transpile]
+            public static class Describer
+            {
+                public static bool IsNested(object? o) => o is Box { Inner.Size: 0 };
+            }
+            """
+        );
+
+        await Assert
+            .That(result["describer.ts"])
+            .Contains("o instanceof Box && o.contents != null && o.contents.volume === 0");
+    }
+
+    [Test]
     public async Task NullCaseLabel_MatchesAnAbsentValueToo()
     {
         var output = TranspileDescriber(

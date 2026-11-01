@@ -1,6 +1,7 @@
 using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -372,6 +373,9 @@ public static partial class IrToTsExpressionBridge
                 return mapped;
         }
 
+        if (IsUnmappedForeignStaticData(ma.Origin))
+            ReportUnmappedForeignStatic(ma.Origin!, "read");
+
         var memberName = AccessedMemberName(ma);
 
         // `[External]` and `[NoContainer]` declaring types: the class
@@ -564,12 +568,42 @@ public static partial class IrToTsExpressionBridge
                 return mapped;
         }
 
+        if (call.Origin is { IsStatic: true, IsForeignMember: true } foreign)
+            ReportUnmappedForeignStatic(foreign, "call");
+
         return new TsCallExpression(
             MapNullTolerant(call.Target, bclRegistry),
             WithoutNullRestArray(call.Arguments, loweredArgs),
             call.IsOptional
         );
     }
+
+    /// <summary>
+    /// A static field or property of a BCL or other untranspiled .NET type
+    /// (<see cref="IrMemberOrigin.IsForeignMember"/>). Methods carry
+    /// <see cref="IrMemberOrigin.ParameterTypes"/> and are reported by the call
+    /// that invokes them; enum members lower through the enum mappings.
+    /// </summary>
+    private static bool IsUnmappedForeignStaticData(IrMemberOrigin? origin) =>
+        origin
+            is { IsStatic: true, IsForeignMember: true, IsEnumMember: false, ParameterTypes: null };
+
+    /// <summary>
+    /// A static member of a BCL or other untranspiled .NET type that no
+    /// declarative mapping covers: the <paramref name="use"/> is emitted by
+    /// name (<c>String.compareOrdinal(a, b)</c>, <c>Int32.maxValue</c>), and
+    /// nothing on the JavaScript side declares it.
+    /// </summary>
+    private static void ReportUnmappedForeignStatic(IrMemberOrigin member, string use) =>
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"'{member.DeclaringTypeFullName}.{member.MemberName}' has no declarative "
+                    + $"mapping to TypeScript: the {use} is emitted by name and has no "
+                    + "JavaScript counterpart."
+            )
+        );
 
     /// <summary>
     /// The arguments of a call to a rest parameter, without a trailing <c>params</c>

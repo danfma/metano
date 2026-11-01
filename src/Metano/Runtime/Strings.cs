@@ -1,8 +1,9 @@
 // Declarative BCL → JavaScript mappings for System.String.
 //
 // Most are straightforward renames between the C# method and the JS String prototype
-// equivalent. Methods absent from the JS string prototype (PadLeft/PadRight, Format, etc.)
-// are not mapped here yet — they'll need either templates or runtime helpers.
+// equivalent; members whose C# semantics differ go through metano-runtime helpers.
+// Methods absent from the JS string prototype (PadLeft/PadRight, Format, etc.) are not
+// mapped here yet — they'll need either templates or runtime helpers.
 
 using Metano.Annotations;
 
@@ -36,7 +37,39 @@ using Metano.Annotations;
 // ─── Substring / replace ────────────────────────────────────
 
 [assembly: MapMethod(typeof(string), nameof(string.Substring), JsMethod = "substring")]
-[assembly: MapMethod(typeof(string), nameof(string.Replace), JsMethod = "replace")]
+
+// s.Replace(old, new) → stringReplace(s, old, new) — runtime helper from metano-runtime.
+// C# replaces every occurrence and inserts `new` literally; JS `replace` stops at the
+// first occurrence, and both `replace` and `replaceAll` expand `$&`-style sequences in
+// the replacement. The helper also keeps C#'s argument checks (an empty `old` throws)
+// and treats a null `new` as removal. Covers the (char, char) and (string, string?)
+// overloads; the culture- and comparison-aware overloads stay unmapped.
+
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.Replace),
+    JsTemplate = "stringReplace($this, $0, $1)",
+    RuntimeImports = "stringReplace",
+    WhenArgCount = 2
+)]
+
+// ─── Null / empty checks ────────────────────────────────────
+// string.IsNullOrEmpty(s) / string.IsNullOrWhiteSpace(s) → runtime helpers that read
+// the argument once. IsNullOrWhiteSpace tests .NET's white-space set, which differs
+// from JS `trim()` on U+0085 and U+FEFF.
+
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.IsNullOrEmpty),
+    JsTemplate = "isNullOrEmpty($0)",
+    RuntimeImports = "isNullOrEmpty"
+)]
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.IsNullOrWhiteSpace),
+    JsTemplate = "isNullOrWhiteSpace($0)",
+    RuntimeImports = "isNullOrWhiteSpace"
+)]
 
 // ─── Join ───────────────────────────────────────────────────
 // `string.Join(separator, values)` → `values.join(separator)`. The extractor gathers the
