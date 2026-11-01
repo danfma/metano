@@ -66,6 +66,26 @@ Review the `cases.json` diff like any other golden change; a row whose STJ text 
 TS text cannot follow becomes `divergent` only with a matching entry in spec.md "Documented
 divergences".
 
+## Migrate call sites for the breaking release (S3b)
+
+After S3b, `deserialize` through a `TypeSpec` returns `T | null` (spec.md "Migration"). Build
+every consumer and fix each new strict-mode error by handling `null` or asserting it:
+
+```bash
+cd targets/js/sample-todo && bun run build
+```
+
+```ts
+const item = JsonSerializer.deserialize(data, JsonContext.default.todoItem);
+
+if (item === null) {
+  throw new Error("expected a todo item");
+}
+```
+
+The S3b commit uses `feat!:` with a `BREAKING CHANGE:` footer that carries the migration note, so
+semantic-release cuts a major version.
+
 ## Existing suites (regression)
 
 ```bash

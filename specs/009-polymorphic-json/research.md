@@ -55,13 +55,14 @@ kept outside the repository by the maintainer; plus a source-generation probe ru
 
 **Decision D1**: Mirror every row except duplicate-tag detection, `1.0` int tags and
 exponent/negative-zero number text (not observable after `JSON.parse` / not reproducible by
-`JSON.stringify`), and the value-root converter mismatches of OPEN-16. Each exception is listed in
+`JSON.stringify`), and the value-root converter mismatches of DECIDED-16. Each exception is listed in
 spec.md "Documented divergences".
 
-**Gaps not measured**: `[JsonDerivedType]` on interfaces with diamonds and
-`UnknownDerivedTypeHandling` on interfaces (OPEN-8, rejected in v1); reading the tag of an abstract
-derived entry under `FallBackToNearestAncestor` (OPEN-12); the read-side depth limit (OPEN-15).
-Nested polymorphism is now measured (rows above), which closes OPEN-9.
+**Gaps not measured**: interface-typed derived entries and interface diamonds under
+`FallBackToNearestAncestor` (OPEN-18, rejected in v1); reading the tag of an abstract derived entry
+under `FallBackToNearestAncestor` (DECIDED-12, probed in S6); the read-side depth limit message and
+boundary (DECIDED-15, pinned in S8). Interface bases, Web defaults and null roots are measured in
+R8. Nested polymorphism is measured (rows above), which closed OPEN-9.
 
 ## R2 — Where the generator stands on `main` (post #238 / #250)
 
@@ -109,7 +110,7 @@ Nested polymorphism is now measured (rows above), which closes OPEN-9.
   **FR-046** (`MS0037`).
 - `deserializeWithSpec` throws plain `Error`s for non-object input and missing properties →
   **FR-045**.
-- `ReadNamingPolicy` reads only the named `PropertyNamingPolicy` argument → OPEN-4.
+- `ReadNamingPolicy` reads only the named `PropertyNamingPolicy` argument → FR-048 (DECIDED-4: full Web parity).
 - `BuildBrandedDescriptor` always emits `create: <TsName>.create` → **FR-021**.
 - The non-object root problem is general: the root path never consults `ClassifyPropertyType`,
   although that classifier already produces the right kind for every shape (the same types work as
@@ -172,7 +173,7 @@ the loser safely because its generated `JsonTypeInfo` for a property is resolved
 name; Metano's `ref` thunks resolve **by getter name** and are typed `() => TypeSpec`, so a dropped
 loser that is still referenced would silently serialize with the winner's contract and still
 compile. Hence `MS0036` is an Error in that case, and also when a name hits a `SerializerContext`
-member (`options`, `converters`, `createSpec`, `resolve`, `_registry`) → FR-036, OPEN-14.
+member (`options`, `converters`, `createSpec`, `resolve`, `_registry`, and now `createValueSpec`, `readOptions`) → FR-036, DECIDED-14.
 
 **Decision D6 — `ValueSpec` over the full descriptor union** (not a `CollectionSpec` limited to
 array/map/hashSet): primitive, enum, branded, temporal, decimal and nullable roots then work with no
@@ -204,8 +205,11 @@ selects by the runtime JSON type and could call a different overload than the C#
 ## R6 — Diagnostics numbering
 
 [Verified, after rebasing on `origin/main` `0fa9f4c`]: `MetaSharpDiagnostic.cs` ends at `MS0031`
-(`ExplicitImplementationConflict`, landed with #278 in `d96909c`). No branch on `origin` mentions
-`MS0032`–`MS0039` outside this spec. → reserve `MS0032`–`MS0037` (OPEN-2).
+(`ExplicitImplementationConflict`, landed with #278 in `d96909c`). Re-checked on `cd14e75`:
+`MS0031` is still the last code. The C# unions specification (PR #310) also started at `MS0032`;
+the maintainer allocated `MS0032`–`MS0037` to this spec and `MS0038`–`MS0043` to unions
+(DECIDED-2). This spec lists its range under "Reserved codes" in the baseline diagnostic catalog;
+PR #310 adds its own rows there.
 
 ## R7 — Conformance testing approach
 
@@ -229,3 +233,78 @@ The STJ-side sample builds under `TreatWarningsAsErrors`: cases that produce `SY
 collision) or a Metano warning (`MS0033`, warning-form `MS0036`, `MS0037`) stay in inline TUnit
 compilations and never enter `samples/SampleJsonContracts`. Biome scans only `targets/js/*/src/**`,
 so compact JSON under `test/fixtures/` is not reformatted [Verified].
+
+## R8 — Maintainer-decision probes (interface bases, Web defaults, null roots)
+
+[Verified, source-gen probe for the decision round: .NET SDK 10.0.401, `net10.0`, one
+`[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` context; messages shown without the
+`Path: … | LineNumber: …` suffix.]
+
+**Web defaults.** Comparing every public instance property of `new
+JsonSerializerOptions(JsonSerializerDefaults.Web)` with `General` shows exactly three wire-relevant
+differences: `PropertyNamingPolicy = CamelCase`, `PropertyNameCaseInsensitive = true`,
+`NumberHandling = AllowReadingFromString`. (`Converters` and `TypeInfoResolverChain` differ only as
+object instances.)
+
+| Case (Web context) | STJ result |
+|---|---|
+| `{"PATH":"a","seconds":1}` → `ImageClip` | reads `Path = "a"` |
+| `{"path":"a","Path":"b","seconds":1}` | `Path = "b"` (last key wins) |
+| `{"Kind":"image",…}` through `Clip` | `NotSupportedException … must specify a type discriminator.` (tag case-sensitive) |
+| `"2.5"` for a `double` inside a polymorphic payload | reads `2.5` |
+| `int` from `"5"`, `"+5"`, `"007"`, `"-5"` | `5`, `5`, `7`, `-5` |
+| `int` from `"5.0"`, `" 5"`, `"5 "`, `""`, `"1e2"`, `"0x10"` | `JsonException: The JSON value could not be converted to System.Int32.` |
+| `double` from `"1e2"`, `"+1.5"`, `"-0"`, `"NaN"`, `"Infinity"`, `"-Infinity"` | `100`, `1.5`, `-0`, `NaN`, `∞`, `-∞` |
+| `double` from `"nan"`, `" 1.5"`, `"1.5 "`, `"0x1"` | `JsonException` |
+| `decimal` from `"1.10"` | `1.10` (scale kept) |
+| `List<int>` `["1",2]`, `Dictionary<string,int>` `{"k":"3"}` | `[1,2]`, `{"k":3}` |
+| `int` root `"5"` | `5` |
+| enum from `"1"` | `JsonException: The JSON value could not be converted to Color.` |
+| `int?` from `"null"` | `JsonException: … converted to System.Nullable`1[System.Int32].` |
+| `List<int>` from `"5"` (string for a collection) | `JsonException` |
+| Int tag `"1"` (string) on `[JsonDerivedType(typeof(IA), 1)]` | `JsonException: Read unrecognized type discriminator id '1'.` (number handling does not apply to tags) |
+| Writing numbers | still JSON numbers: `{"n":5,"m":7,"d":1.10,"x":2.5,…}` |
+| Writing `double.NaN` | `ArgumentException: .NET number values such as positive and negative infinity cannot be written as valid JSON. …` |
+
+**Interface bases.**
+
+| Case | STJ result |
+|---|---|
+| `[JsonDerivedType(typeof(Sq), "sq")] interface IShape`, write `Sq(2)` through `IShape` | `{"$type":"sq","side":2}` |
+| Read `{"$type":"sq","side":2}` through `IShape` | `Sq` |
+| Read `{"side":2}` through `IShape` | `NotSupportedException: The JSON payload for polymorphic interface or abstract type 'IShape' must specify a type discriminator.` |
+| Write unregistered `Other : IShape` | `NotSupportedException: Runtime type 'Other' is not supported by polymorphic type 'IShape'.` |
+| `FallBackToBaseType` on `IShapeB { int Area }`, write unregistered `OtherB(3)` (extra member `Extra`) | `{"area":3}` (interface members only) |
+
+**Null roots.**
+
+| Case | STJ result |
+|---|---|
+| `Deserialize("null")` through abstract polymorphic `Clip` | `null` |
+| `Deserialize("null")` through `record struct SPoint` | `JsonException: The JSON value could not be converted to SPoint.` |
+| `Serialize<Clip?>(null)` | `null` |
+
+**`[JsonPropertyOrder]`**: `record Ord([property: JsonPropertyOrder(2)] int A,
+[property: JsonPropertyOrder(1)] int B)` writes `{"b":2,"a":1}`, so ignoring the attribute would
+change the bytes; hence `MS0037` (DECIDED-3).
+
+**Decision D9 — read options live on the context, not on each descriptor.** STJ's
+`PropertyNameCaseInsensitive`, `NumberHandling` and `AllowOutOfOrderMetadataProperties` are
+context-level options. The generated context declares them once (`readOptions` override), and
+`createSpec` / `createValueSpec` attach them to each spec, so the static `JsonSerializer` entry
+points, which receive only a spec, still see them. *Rejected*: a flag on every `PropertySpec`
+(noisy goldens; the options are not per property); keeping `allowOutOfOrderMetadata` on
+`PolymorphismSpec` (two places for one context option). The only per-descriptor addition is
+`numberType` on numeric `primitive` descriptors, because the runtime cannot otherwise tell an
+`int` from a `double` or a `string` property, and it needs the CLR name for the STJ message.
+
+**Decision D10 — structural write dispatch for `[PlainObject]` variants.** Plain objects have no
+constructor, so the base cannot resolve them through `byCtor`. The generator already builds
+shape guards for `[PlainObject]` types (`TypeGuardBuilder.GenerateShapeGuard`, without the
+`instanceof` fast path); FR-019 synthesizes them for every reached variant, as the unions spec
+does for structural cases. Guards are evaluated only for plain objects, ordered most specific
+first, and variants that cover each other are rejected at build time. *Rejected*: a runtime
+shape matcher driven by `PropertySpec`s (a second, divergent definition of "is this value an X";
+the unions spec requires one classification); a stored tag field on `[PlainObject]` values
+(changes the TS shape of user types and their wire form outside JSON contexts).
+

@@ -8,8 +8,9 @@ builds, and the runtime shapes the generated context emits.
 | Source | Members read | Notes |
 |---|---|---|
 | `JsonPolymorphicAttribute` (own attributes only) | `TypeDiscriminatorPropertyName` (default `$type`), `UnknownDerivedTypeHandling` (`FailSerialization` = 0, `FallBackToBaseType` = 1, `FallBackToNearestAncestor` = 2), `IgnoreUnrecognizedTypeDiscriminators` | Optional; `Inherited = false`. |
-| `JsonDerivedTypeAttribute` (own, repeatable) | ctor `(Type)`, `(Type, string)`, `(Type, int)` | ≥ 1 makes the type polymorphic. Attribute order = entry order. |
-| `JsonSourceGenerationOptionsAttribute` on the context | `PropertyNamingPolicy`, `AllowOutOfOrderMetadataProperties`, ctor `JsonSerializerDefaults` (OPEN-4); every other named argument is only checked against the FR-046 list (`MS0037`) | |
+| `JsonDerivedTypeAttribute` (own, repeatable) | ctor `(Type)`, `(Type, string)`, `(Type, int)` | ≥ 1 makes the type polymorphic, whether it is a class, a record, an interface (FR-018) or a `[PlainObject]` type (FR-019). Attribute order = entry order. |
+| `JsonSourceGenerationOptionsAttribute` on the context | ctor `JsonSerializerDefaults` (`Web` sets the next three), `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`, `NumberHandling` (`AllowReadingFromString` only), `AllowOutOfOrderMetadataProperties`; every other named argument is only checked against the FR-046 list (`MS0037`) | A named argument overrides the Web default (FR-048). |
+| `JsonPropertyOrderAttribute` on a contract member | presence only | `MS0037` (DECIDED-3); the order is not mirrored. |
 | `JsonSerializableAttribute` on the context (repeatable) | ctor `Type` (named **or rank-1 array** type), `TypeInfoPropertyName` | Rank > 1 → `MS0035`. |
 | `JsonFactoryAttribute` (new, `Metano.Annotations`) | marker on a static method | `[AttributeUsage(AttributeTargets.Method)]`. |
 
@@ -33,6 +34,17 @@ classDiagram
         INamedTypeSymbol Type
         JsonTypeTag? Tag
         Location Location
+        JsonStructuralShape? Shape
+    }
+    class JsonStructuralShape {
+        IReadOnlyList~RequiredMember~ Required
+        string GuardName
+        Covers(JsonStructuralShape) bool
+    }
+    class JsonReadOptions {
+        bool PropertyNameCaseInsensitive
+        bool AllowReadingFromString
+        bool AllowOutOfOrderMetadataProperties
     }
     class JsonTypeTag {
         <<string | int>>
@@ -47,17 +59,20 @@ classDiagram
     }
     JsonPolymorphism "1" --> "*" JsonDerivedType
     JsonDerivedType --> JsonTypeTag
+    JsonDerivedType --> JsonStructuralShape
 ```
 
 | Entity | Responsibility | Validation (diagnostic) |
 |---|---|---|
 | `JsonContractRoot` | One `[JsonSerializable]` entry. | `MS0035` for open generic / type parameter / error type / `object` / non-collection interface / non-transpilable object kind / array rank > 1. |
-| `JsonPolymorphism` | Read once per type by a reader (`TryRead`). `null` for non-polymorphic types. | `MS0032` / `MS0033` rules (spec FR-012, FR-013). |
-| `JsonDerivedType` | One derived registration (may be the base itself). `Tag == null` → untagged. | Duplicate type/tag, not assignable to the base, abstract without `FallBackToNearestAncestor`, generic, interface/`[PlainObject]`, not transpilable in its declaring assembly → `MS0032`. |
+| `JsonPolymorphism` | Read once per type by a reader (`TryRead`). `null` for non-polymorphic types. `IsAbstractBase` is true for abstract classes and interfaces. | `MS0032` / `MS0033` rules (spec FR-012, FR-013). |
+| `JsonDerivedType` | One derived registration (may be the base itself). `Tag == null` → untagged. `Shape` is set only for a `[PlainObject]` variant. | Duplicate type/tag, not assignable to the base, abstract without `FallBackToNearestAncestor`, interface-typed entry (OPEN-18), generic, not transpilable in its declaring assembly → `MS0032`. |
+| `JsonStructuralShape` | The write-side test of a `[PlainObject]` variant (FR-019): the guard name it references (`isCircle`, synthesized by `TypeGuardBuilder`) and its required members (TS name + coarse kind `string` / `number` / `boolean` / `array` / `object` / `present`). `Covers` drives the test order. | Two shapes that cover each other, or a cycle in the specificity order → `MS0032`. |
+| `JsonReadOptions` | The context's mirrored read behavior (FR-002, FR-048), resolved from the Web default and the named options. Emitted as the `readOptions` override only when non-default. | — |
 | `JsonTypeInfoNames` | The single naming function (spec FR-031) with the context's `TypeInfoPropertyName` overrides; also used for constructed generic types (FR-015, FR-033). | Collision → `MS0036` (first wins; Error when the loser is referenced or the name is a reserved `SerializerContext` member). |
 | `JsonBrandedFactory` | The resolved `[JsonFactory]` of a branded type and its TS member name, computed by `IrToTsNamingPolicy.ToFunctionName` (the function the companion declares it with). | `MS0034` (incl. operators and names equal to `create` / `toString`). |
 | Contract closure | Ordered, deduplicated (by `JsonTypeInfoNames.Getter`) list of context entries: roots, then BFS over properties, `base` chain and `[JsonDerivedType]` targets, including closed generic object types and types from referenced Metano packages (FR-010, FR-033, FR-047). Each entry records whether it is the target of a `ref` / `base` / derived link (drives `MS0036` severity). | — |
-| Property list | Per contract, own declarations deduplicated by final JSON name against the base chain; an `override` / `new` declaration replaces the base one (FR-009). | — |
+| Property list | Per contract, own declarations deduplicated by final JSON name against the base chain; an `override` / `new` declaration replaces the base one (FR-009). For an interface base, the interface's own and inherited interface properties; class variants of an interface do not link to it (FR-018). | `MS0037` for `[JsonInclude]`, `byte[]`, `[JsonPropertyOrder]`. |
 
 ### Naming function (FR-031)
 
@@ -74,8 +89,11 @@ classDiagram
 | `string` / `int` / `Guid` | `String` / `Int32` / `Guid` | `string` / `int32` / `guid` |
 | `Page<EpisodeSummary>` | `PageEpisodeSummary` | `pageEpisodeSummary` |
 | `GBase<int>` (closed generic polymorphic base) | `GBaseInt32` | `gBaseInt32` |
+| `IShape` (interface base; resolved TS name, which may drop the `I` prefix) | `Shape` | `shape` |
 
-## 3. Runtime shapes (`metano-runtime/system/json`, all additive)
+## 3. Runtime shapes (`metano-runtime/system/json`)
+
+Additive except for the `JsonSerializer` / `BoundSerializer` signatures of FR-034 (breaking).
 
 ```ts
 export type TypeDiscriminator = string | number;
@@ -90,30 +108,57 @@ export interface DerivedTypeSpec {
   readonly tag?: TypeDiscriminator;
   /** Lazy: base and derived getters reference each other. */
   readonly spec: () => TypeSpec;
+  /** [PlainObject] variants only: the synthesized guard used on write (FR-019). */
+  readonly test?: (value: unknown) => boolean;
 }
 
 export interface PolymorphismSpec {
   /** Verbatim; never passed through a naming policy. */
   readonly discriminator: string;
-  /** The C# base is abstract (missing / ignored tag → NotSupportedException). */
+  /** The C# base is abstract or an interface (missing / ignored tag → NotSupportedException). */
   readonly abstract?: boolean;
+  /** C# simple name for messages; only when the base has no constructor (interface, [PlainObject]). */
+  readonly typeName?: string;
   readonly derived: readonly DerivedTypeSpec[];
+  /** Indices into `derived` in guard test order; only when it differs from attribute order. */
+  readonly testOrder?: readonly number[];
   /** Default "failSerialization". */
   readonly unknownDerivedType?: UnknownDerivedTypeHandling;
   readonly ignoreUnrecognizedTags?: boolean;
-  readonly allowOutOfOrderMetadata?: boolean;
 }
+
+/** Context-level read behavior (FR-002, FR-048); attached to each spec by createSpec / createValueSpec. */
+export interface JsonReadOptions {
+  readonly propertyNameCaseInsensitive?: boolean;
+  readonly numberHandling?: "allowReadingFromString";
+  readonly allowOutOfOrderMetadataProperties?: boolean;
+}
+
+export type NumberTypeName =
+  | "System.Byte" | "System.SByte" | "System.Int16" | "System.UInt16"
+  | "System.Int32" | "System.UInt32" | "System.Int64" | "System.UInt64"
+  | "System.Single" | "System.Double";
+
+// Existing descriptor with one optional member added (emitted only when the context reads
+// numbers from strings, FR-048):
+export type PrimitiveDescriptor = { readonly kind: "primitive"; readonly numberType?: NumberTypeName };
 
 export interface TypeSpec<T = unknown> {
   // …existing members unchanged…
   readonly polymorphism?: PolymorphismSpec;
+  /** FR-037: a C# struct contract; JSON null at the root throws JsonException. */
+  readonly valueType?: boolean;
+  /** Attached by createSpec when the context has non-default read options. */
+  readonly readOptions?: JsonReadOptions;
 }
 
 export interface ValueSpec<T = unknown> {
   readonly descriptor: TypeDescriptor;
-  /** FR-037: reference-type roots read JSON null as null; the generator then types the
-   *  getter `ValueSpec<T | null>`, so T already includes null. */
-  readonly acceptsNull?: boolean;
+  /** FR-037: a C# value type (int, Guid, enum, branded, …); JSON null at the root throws.
+   *  Absent for reference-type roots, whose getter is typed ValueSpec<T | null>. */
+  readonly valueType?: boolean;
+  /** Attached by createValueSpec when the context has non-default read options. */
+  readonly readOptions?: JsonReadOptions;
   /** Phantom member that keeps T in the type. */
   readonly __type?: (value: T) => void;
 }
@@ -128,8 +173,10 @@ export class NotSupportedException extends Error {}
 export function collectWireProperties(spec: TypeSpec): readonly PropertySpec[];
 ```
 
-`BrandedDescriptor`, `PropertySpec`, the 11 descriptor kinds, `JsonConverter`, `SerializerContext`
-and `collectProperties` are unchanged.
+`SerializerContext` gains a protected `readOptions` getter (default: no options), which generated
+contexts override when their options are not the defaults, and a protected `createValueSpec`.
+`BrandedDescriptor`, `PropertySpec`, the 11 descriptor kinds, `JsonConverter` and
+`collectProperties` are unchanged.
 
 ### Dispatch index (internal)
 
@@ -137,6 +184,7 @@ and `collectProperties` are unchanged.
 |---|---|---|
 | `byCtor` | `Map<constructor, { tag?: TypeDiscriminator; spec: TypeSpec }>`; includes the base's constructor when the base registers itself | first serialize/deserialize through the base spec, never inside a getter |
 | `byTag` | `Map<TypeDiscriminator, TypeSpec>` | same; `Map` keeps `1` and `"1"` distinct |
+| `structural` | `{ test, tag?, spec }[]` in `testOrder` (or attribute order) | same; only entries with a `test` |
 
 Cached in a module-level `WeakMap<PolymorphismSpec, Index>`.
 
@@ -144,11 +192,17 @@ Cached in a module-level `WeakMap<PolymorphismSpec, Index>`.
 
 ```mermaid
 stateDiagram-v2
+    [*] --> NullValue: value is null
+    NullValue --> [*]: JSON null (FR-037)
     [*] --> Polymorphic: spec.polymorphism set
     [*] --> Contract: no polymorphism
-    Polymorphic --> Tagged: byCtor has ctor (checked first, base included when self-registered)
-    Polymorphic --> Contract: ctor is base, not registered (no tag)
-    Polymorphic --> Unknown: ctor neither registered nor base
+    Polymorphic --> Structural: plain object (prototype Object.prototype or null)
+    Polymorphic --> Tagged: class instance, byCtor has ctor (checked first, base included when self-registered)
+    Polymorphic --> Contract: class instance, ctor is base, not registered (no tag)
+    Polymorphic --> Unknown: class instance, ctor neither registered nor base
+    Structural --> Tagged: first guard in test order that accepts the value
+    Structural --> Contract: no variant guard accepts, concrete PlainObject base guard accepts (no tag)
+    Structural --> Unknown: no guard accepts (runtime type name Object)
     Unknown --> Fail: failSerialization
     Unknown --> Contract: fallBackToBaseType (base, no tag)
     Unknown --> Tagged: fallBackToNearestAncestor (ancestor found, abstract entries included)
@@ -165,8 +219,10 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    [*] --> NullRoot: JSON null at the root
+    NullRoot --> [*]: null (reference type) or JsonException (valueType)
     [*] --> Inspect: spec.polymorphism set
-    Inspect --> Missing: no own key == discriminator, or not first key (and not allowOutOfOrder)
+    Inspect --> Missing: no own key == discriminator (case-sensitive), or not first key (and not readOptions.allowOutOfOrderMetadataProperties)
     Inspect --> BadTag: tag neither string nor number (Null / True / False / StartObject / StartArray)
     Inspect --> Known: byTag has tag
     Inspect --> UnknownTag: byTag lacks tag
@@ -177,11 +233,11 @@ stateDiagram-v2
     UnknownTag --> Unrecognized: otherwise
     Known --> DerivedContract: tag of a derived entry
     Known --> BaseContract: tag of the base's self-registration
-    Known --> AbstractEntry: tag of an abstract entry (OPEN-12)
-    AbstractEntry --> [*]: pending probe
+    Known --> AbstractEntry: tag of an abstract entry (DECIDED-12)
+    AbstractEntry --> [*]: S6 probe result (interim: NotSupportedException)
     Abstract --> [*]: NotSupportedException (must specify a type discriminator)
     Unrecognized --> [*]: JsonException (Read unrecognized type discriminator id)
     BadTag --> [*]: JsonException (metadata properties must be JSON strings)
     BaseContract --> [*]: base factory
-    DerivedContract --> [*]: derived factory
+    DerivedContract --> [*]: derived factory (object literal for a PlainObject variant)
 ```
