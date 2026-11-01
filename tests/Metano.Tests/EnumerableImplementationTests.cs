@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -249,9 +251,13 @@ public class EnumerableImplementationTests
     }
 
     [Test]
-    public async Task EnumeratorDeclaringNext_GetsNoSynthesizedNext()
+    public async Task EnumeratorDeclaringNext_IsNotDeclaredAnIterator()
     {
-        var result = TranspileHelper.Transpile(
+        // The declared `Next()` claims the name the iterator protocol reserves, with a
+        // signature `Iterator<T>` rejects (TS2416), so the class keeps it, gets no
+        // synthesized next(), drops the `implements Iterator<T>` clause and is
+        // reported.
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using System.Collections;
             using System.Collections.Generic;
@@ -270,8 +276,18 @@ public class EnumerableImplementationTests
         );
 
         var output = result["stepper.ts"];
+        await Assert.That(output).Contains("export class Stepper {");
         await Assert.That(output).Contains("next(): number {");
         await Assert.That(output).DoesNotContain("IteratorResult");
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Severity == MetanoDiagnosticSeverity.Warning
+                    && d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("'Stepper' implements IEnumerator")
+                )
+            )
+            .IsTrue();
     }
 
     [Test]

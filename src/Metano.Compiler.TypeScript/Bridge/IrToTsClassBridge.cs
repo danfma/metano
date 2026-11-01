@@ -44,11 +44,13 @@ internal static partial class IrToTsClassBridge
     /// <summary>
     /// Builds the <c>implements</c> list for an <see cref="IrClassDeclaration"/>.
     /// Filters out non-transpilable interfaces — TypeScript can't implement an
-    /// interface that doesn't get emitted alongside the class. Returns
+    /// interface that doesn't get emitted alongside the class — and an iterator
+    /// contract the class cannot honor
+    /// (<see cref="IrToTsIterationProtocolBridge.ImplementedInterfaces"/>). Returns
     /// <c>null</c> when nothing remains so the printer elides the clause.
     /// </summary>
     public static IReadOnlyList<TsType>? BuildImplements(IrClassDeclaration ir) =>
-        ConvertHeritageList(ir.Interfaces);
+        ConvertHeritageList(IrToTsIterationProtocolBridge.ImplementedInterfaces(ir));
 
     /// <summary>
     /// Lowers a list of IR base / interface references into TS heritage
