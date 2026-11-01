@@ -291,6 +291,46 @@ public class EnumerableImplementationTests
     }
 
     [Test]
+    public async Task PlainObjectEnumeratorDeclaringNext_IsReported()
+    {
+        // A [PlainObject] lowers to an interface plus helper functions, so a declared
+        // `Next()` drops the `extends Iterator<T>` clause the same way the class
+        // lowering drops `implements Iterator<T>`, and is reported the same way.
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections;
+            using System.Collections.Generic;
+
+            [Transpile, PlainObject]
+            public record Stepper(int Start) : IEnumerator<int>
+            {
+                public int Current => Start;
+                object IEnumerator.Current => Current;
+                public bool MoveNext() => false;
+                public int Next() => 1;
+                public void Reset() { }
+                public void Dispose() { }
+            }
+            """
+        );
+
+        var output = result["stepper.ts"];
+        await Assert.That(output).Contains("export interface Stepper {");
+        await Assert.That(output).Contains("export function next(self: Stepper): number {");
+        await Assert.That(output).DoesNotContain("Iterator<");
+        await Assert
+            .That(
+                diagnostics.Count(d =>
+                    d.Severity == MetanoDiagnosticSeverity.Warning
+                    && d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("'Stepper' implements IEnumerator")
+                    && d.Location is not null
+                )
+            )
+            .IsEqualTo(1);
+    }
+
+    [Test]
     public async Task GetEnumeratorInheritedFromNonEnumerableBase_IsDelegatedTo()
     {
         // The base declares GetEnumerator without taking on IEnumerable; the derived

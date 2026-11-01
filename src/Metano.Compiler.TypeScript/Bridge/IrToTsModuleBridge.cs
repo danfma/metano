@@ -129,7 +129,7 @@ public static class IrToTsModuleBridge
         var parameters = fn
             .Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type),
+                IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
                 DefaultValue: p.HasDefaultValue && p.DefaultValue is not null
                     ? IrToTsExpressionBridge.Map(p.DefaultValue, bclRegistry)

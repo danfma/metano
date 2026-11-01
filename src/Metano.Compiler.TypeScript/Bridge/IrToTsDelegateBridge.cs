@@ -15,7 +15,7 @@ public static class IrToTsDelegateBridge
         var parameters = ir
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.Map(p.Type),
+                IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
                 Rest: p.IsParams
             ))

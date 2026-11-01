@@ -252,8 +252,27 @@ public static class IrToTsTypeMapper
     private static TsParameter MapParameter(IrParameter param, IrToTsTypeOverrides? overrides) =>
         new(
             IrToTsNamingPolicy.ToParameterName(param.Name),
-            Map(param.Type, overrides),
+            MapParameterType(param, overrides),
             Rest: param.IsParams
+        );
+
+    /// <summary>
+    /// The TS type of a parameter's annotation. A <c>params</c> parameter lowers to
+    /// a rest parameter, which must have an array type (TS2370) and never holds
+    /// <c>null</c>: a call that passes a null array drops the argument (reported as
+    /// MS0001), so the callee receives an empty array. A nullable <c>params T[]?</c>
+    /// therefore drops its nullability (<c>...xs: T[]</c>, not
+    /// <c>...xs: T[] | null</c>).
+    /// </summary>
+    public static TsType MapParameterType(
+        IrParameter parameter,
+        IrToTsTypeOverrides? overrides = null
+    ) =>
+        Map(
+            parameter is { IsParams: true, Type: IrNullableTypeRef nullable }
+                ? nullable.Inner
+                : parameter.Type,
+            overrides
         );
 
     private static TsType MakeNullable(TsType inner)

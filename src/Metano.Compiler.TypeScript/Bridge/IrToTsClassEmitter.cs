@@ -69,7 +69,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
 
         var ctorParams = IrToTsClassBridge.BuildPrimaryCtorParams(
             ir.Constructor,
-            ip => ResolveCtorParamTsType(ip.Parameter.Type),
+            ip => IrToTsTypeMapper.MapParameterType(ip.Parameter, BclOverrides),
             _context.DeclarativeMappings
         );
 
@@ -279,27 +279,10 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
 
         if (IrToTsIterationProtocolBridge.DeclaresConflictingNext(ir))
-            ReportConflictingIteratorNext(type);
+            _context.ReportDiagnostic(
+                IrToTsIterationProtocolBridge.ConflictingNextDiagnostic(type)
+            );
     }
-
-    /// <summary>
-    /// Reports MS0001 when an <c>IEnumerator&lt;T&gt;</c> implementation declares
-    /// its own member emitted as <c>next</c>: the class is emitted without
-    /// <c>implements Iterator&lt;T&gt;</c> or a synthesized <c>next()</c>, so it does
-    /// not follow the JavaScript iterator protocol — <c>for…of</c>, spread and a
-    /// <c>GetEnumerator()</c> that returns it cannot consume it.
-    /// </summary>
-    private void ReportConflictingIteratorNext(INamedTypeSymbol type) =>
-        _context.ReportDiagnostic(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.UnsupportedFeature,
-                $"'{type.Name}' implements IEnumerator but declares a member emitted as "
-                    + "'next', which the JavaScript iterator protocol reserves: it is not "
-                    + "emitted as an Iterator, so it cannot be consumed as one.",
-                type.Locations.FirstOrDefault()
-            )
-        );
 
     /// <summary>
     /// When the type's single public constructor carries <c>[ObjectArgs]</c>,
@@ -482,7 +465,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 .Select<IrMethodDeclaration, IReadOnlyList<TsParameter>>(o =>
                     o.Parameters.Select(p => new TsParameter(
                             IrToTsNamingPolicy.ToParameterName(p.Name),
-                            IrToTsTypeMapper.Map(p.Type, BclOverrides),
+                            IrToTsTypeMapper.MapParameterType(p, BclOverrides),
                             Rest: p.IsParams
                         ))
                         .ToList()
@@ -511,7 +494,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         var parameters = irOp
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.Map(p.Type, BclOverrides),
+                IrToTsTypeMapper.MapParameterType(p, BclOverrides),
                 Rest: p.IsParams
             ))
             .ToList();
@@ -557,7 +540,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         var parameters = irMethod
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.Map(p.Type, BclOverrides),
+                IrToTsTypeMapper.MapParameterType(p, BclOverrides),
                 Optional: p.IsOptional || (!emitDefaults && p.HasDefaultValue),
                 DefaultValue: emitDefaults ? LowerDefaultValue(p) : null,
                 Rest: p.IsParams
@@ -769,8 +752,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// Maps a constructor parameter's IR type to TS, applying the
     /// <c>[ExportFromBcl]</c> overrides (decimal → Decimal from
     /// "decimal.js", etc.) via <see cref="BclExportTypeOverrides"/>. Used by
-    /// the constructor-parameter builders that take an IR-type-to-TS-type
-    /// callback.
+    /// the companion field of a promoted <c>params</c> parameter, which keeps
+    /// the declared nullability (the rest parameter itself drops it, see
+    /// <see cref="IrToTsTypeMapper.MapParameterType"/>).
     /// </summary>
     private TsType ResolveCtorParamTsType(IrTypeRef irType) =>
         IrToTsTypeMapper.Map(irType, BclOverrides);
