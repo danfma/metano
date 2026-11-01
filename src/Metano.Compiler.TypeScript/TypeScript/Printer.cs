@@ -716,6 +716,8 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsSetterMember setter:
+                if (setter.Static)
+                    _sb.Write("static ");
                 _sb.Write("set ");
                 _sb.Write(setter.Name);
                 _sb.Write("(");
@@ -1177,10 +1179,10 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(typeRef.Name);
                 break;
 
-            case TsCompanionFunctionReference companion:
+            case TsModuleExportReference exportReference:
                 // Likewise: the owner type only tells the import collector where
-                // the function is exported from.
-                _sb.Write(companion.Name);
+                // the name is exported from.
+                _sb.Write(exportReference.Name);
                 break;
 
             case TsLiteral lit:

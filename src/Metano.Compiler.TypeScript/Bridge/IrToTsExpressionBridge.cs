@@ -386,10 +386,14 @@ public static partial class IrToTsExpressionBridge
         // global). Instance access (ill-formed on a static class)
         // falls through to the normal property-access path.
         if (
-            ma.Origin is { IsStatic: true, IsDeclaringTypeNoContainer: true }
-            && ma.Target is IrTypeReference
+            ma.Origin is { IsStatic: true, IsDeclaringTypeNoContainer: true } containerless
+            && ma.Target is IrTypeReference container
         )
-            return new TsIdentifier(memberName);
+            // A field or property is a module variable of the container's file
+            // (#314): carry the owner so another file imports it from there.
+            return containerless.IsTranspiledDataMember
+                ? ModuleExportReference(memberName, container)
+                : new TsIdentifier(memberName);
         return new TsPropertyAccess(loweredTarget, memberName);
     }
 
@@ -565,23 +569,20 @@ public static partial class IrToTsExpressionBridge
         var helperName = method.EmittedName ?? TypeScriptNaming.ToCamelCase(method.MemberName);
 
         return new TsCallExpression(
-            CompanionFunctionReference(helperName, method.CompanionOwner),
+            ModuleExportReference(helperName, method.CompanionOwner),
             [Map(receiver, bclRegistry), .. loweredArgs]
         );
     }
 
     /// <summary>
-    /// The value reference to a helper exported from <paramref name="owner"/>'s
-    /// module, carrying what the import collector needs to import it: the
-    /// owner's cross-package origin, or else the owner type itself. A nested
-    /// owner's helper is exported from its container's namespace
+    /// The value reference to a function or variable exported from
+    /// <paramref name="owner"/>'s module, carrying what the import collector
+    /// needs to import it: the owner's cross-package origin, or else the owner
+    /// type itself. A nested owner's export lives in its container's namespace
     /// (<c>Outer.dbl</c>), so it is reached through the container, which is
     /// imported like any type reference.
     /// </summary>
-    private static TsExpression CompanionFunctionReference(
-        string helperName,
-        IrTypeReference? owner
-    )
+    private static TsExpression ModuleExportReference(string helperName, IrTypeReference? owner)
     {
         if (owner is null)
             return new TsIdentifier(helperName);
@@ -596,7 +597,7 @@ public static partial class IrToTsExpressionBridge
 
         return IrToTsTypeMapper.TryResolveOrigin(owner) is { } origin
             ? new TsTypeReference(helperName, origin)
-            : new TsCompanionFunctionReference(helperName, owner.Name);
+            : new TsModuleExportReference(helperName, owner.Name);
     }
 
     private static string? TsTypeArgName(IrTypeRef type) =>
