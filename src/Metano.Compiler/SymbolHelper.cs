@@ -1460,12 +1460,15 @@ public static class SymbolHelper
         && !HasHandWrittenBinding(member);
 
     private static bool IsForeignType(INamedTypeSymbol type, Compilation compilation) =>
-        !HasExternal(type)
-        && !HasImport(type)
-        && !type.IsContainerless()
-        && !IsDeclaredIn(type, compilation.Assembly)
-        && !IsTranspiledPackageType(type)
-        && !BclExportReader.IsExported(type, compilation);
+        !HasHandWrittenTypeBinding(type) && !IsKnownToToolchain(type, compilation);
+
+    private static bool HasHandWrittenTypeBinding(INamedTypeSymbol type) =>
+        HasExternal(type) || HasImport(type) || type.IsContainerless();
+
+    private static bool IsKnownToToolchain(INamedTypeSymbol type, Compilation compilation) =>
+        IsDeclaredIn(type, compilation.Assembly)
+        || IsTranspiledPackageType(type)
+        || BclExportReader.IsExported(type, compilation);
 
     private static bool HasHandWrittenBinding(ISymbol member) =>
         HasExternal(member) || HasImport(member) || HasEmit(member) || HasName(member);

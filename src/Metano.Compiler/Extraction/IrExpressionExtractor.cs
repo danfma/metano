@@ -990,10 +990,12 @@ public sealed partial class IrExpressionExtractor
 
         // Wrap from the innermost member outward: `A.B.C: p` → `A: { B: { C: p } }`.
         for (var index = segments.Count - 2; index >= 0; index--)
+        {
             current = PropertySubpattern(
                 segments[index],
                 new IrPropertyPattern(Type: null, [current])
             );
+        }
 
         return current;
     }

@@ -24,7 +24,7 @@ public static class BclExportReader
 
     /// <summary>Whether an <c>[ExportFromBcl]</c> in scope binds <paramref name="type"/>.</summary>
     public static bool IsExported(INamedTypeSymbol type, Compilation compilation) =>
-        Read(compilation).ContainsKey(type.OriginalDefinition.ToDisplayString());
+        Read(compilation).ContainsKey(ExportKey(type));
 
     private static IReadOnlyDictionary<string, IrBclExport> Build(Compilation compilation)
     {
@@ -69,16 +69,16 @@ public static class BclExportReader
         if (attribute.ConstructorArguments is not [{ Value: INamedTypeSymbol type }, ..])
             return null;
 
-        var exportedName = NamedArgument(attribute, "ExportedName") ?? "";
+        var exportedName = NamedArgument(attribute, "ExportedName");
 
-        if (exportedName.Length == 0)
+        if (string.IsNullOrEmpty(exportedName))
             return null;
 
         var fromPackage = NamedArgument(attribute, "FromPackage") ?? "";
         var version = NamedArgument(attribute, "Version");
 
         return (
-            type.ToDisplayString(),
+            ExportKey(type),
             new IrBclExport(
                 exportedName,
                 fromPackage,
@@ -86,6 +86,14 @@ public static class BclExportReader
             )
         );
     }
+
+    /// <summary>
+    /// The map key of <paramref name="type"/>: the display string of its original
+    /// definition, so an unbound <c>typeof(List&lt;&gt;)</c> argument and a constructed
+    /// <c>List&lt;int&gt;</c> reference both key as <c>List&lt;T&gt;</c>.
+    /// </summary>
+    private static string ExportKey(INamedTypeSymbol type) =>
+        type.OriginalDefinition.ToDisplayString();
 
     private static string? NamedArgument(AttributeData attribute, string name) =>
         attribute

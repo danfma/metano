@@ -934,6 +934,7 @@ public class DartBackendTests
         );
 
         var dart = files["receivers.dart"];
+
         await Assert.That(dart).Contains("(value ?? '').trim()");
         await Assert.That(dart).Contains("(a ?? b).length");
         await Assert.That(dart).Contains("(-a).toString()");
