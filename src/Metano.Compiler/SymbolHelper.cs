@@ -1442,6 +1442,32 @@ public static class SymbolHelper
         && !HasImport(type)
         && (IsDeclaredIn(type, currentAssembly) || IsTranspiledPackageType(type));
 
+    /// <summary>
+    /// Whether <paramref name="member"/> comes from a referenced .NET assembly —
+    /// the BCL or a third-party library — that the toolchain neither transpiles
+    /// nor binds to the target, so the target has no declaration of it and the
+    /// member is reachable only through a declarative mapping. A hand-written
+    /// binding opts out: <c>[External]</c>, <c>[Import]</c>, <c>[Emit]</c> or
+    /// <c>[Name]</c> on the member; <c>[External]</c>, <c>[Import]</c> or
+    /// <c>[NoContainer]</c> on its type; or an <c>[ExportFromBcl]</c> for its type
+    /// in scope of <paramref name="compilation"/>.
+    /// </summary>
+    public static bool IsForeignMember(ISymbol member, Compilation compilation) =>
+        member.ContainingType is { } type
+        && IsForeignType(type, compilation)
+        && !IsBindingMember(member);
+
+    private static bool IsForeignType(INamedTypeSymbol type, Compilation compilation) =>
+        !HasExternal(type)
+        && !HasImport(type)
+        && !type.IsContainerless()
+        && !IsDeclaredIn(type, compilation.Assembly)
+        && !IsTranspiledPackageType(type)
+        && !BclExportReader.IsExported(type, compilation);
+
+    private static bool IsBindingMember(ISymbol member) =>
+        HasExternal(member) || HasImport(member) || HasEmit(member) || HasAttribute(member, "Name");
+
     private static bool IsDeclaredIn(INamedTypeSymbol type, IAssemblySymbol? assembly) =>
         SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, assembly);
 

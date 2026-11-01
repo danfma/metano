@@ -333,10 +333,11 @@ native array methods directly:
 | `s.StartsWith(p)` | `s.startsWith(p)` |
 | `s.EndsWith(p)` | `s.endsWith(p)` |
 | `s.Substring(i)` / `s.Substring(i, n)` | `s.substring(i)` / `s.substring(i, i+n)` |
-| `s.Replace(a, b)` | `s.replaceAll(a, b)` |
+| `s.Replace(a, b)` (`char` or `string` overloads) | `stringReplace(s, a, b)` (from `metano-runtime`) |
 | `s.Split(c)` | `s.split(c)` |
 | `s.Length` | `s.length` |
-| `string.IsNullOrEmpty(s)` | `(s == null \|\| s.length === 0)` |
+| `string.IsNullOrEmpty(s)` | `isNullOrEmpty(s)` (from `metano-runtime`) |
+| `string.IsNullOrWhiteSpace(s)` | `isNullOrWhiteSpace(s)` (from `metano-runtime`) |
 | `string.Join(sep, items)` (array, `List<T>`, `IReadOnlyList<T>`, …) | `items.join(sep)` |
 | `string.Join(sep, items)` (other `IEnumerable<T>`) | `[...items].join(sep)` |
 | `string.Join(sep, a, b, c)` (`params`) | `[a, b, c].join(sep)` |
@@ -347,6 +348,16 @@ same conversion string interpolation and `ToString()` use elsewhere in the gener
 code: `null` elements become empty strings, as in .NET, but `bool` values print as
 `true` / `false` (C# prints `True` / `False`) and numbers use the JS number format
 (`1e+21`, where C# prints `1E+21`).
+
+`stringReplace` replaces every occurrence, as C# does (JS `replace` stops at the first),
+and inserts the replacement literally (JS `replace` and `replaceAll` expand `$&`-style
+sequences). Like C#, it throws on an empty old value and treats a `null` replacement as
+removal. `isNullOrWhiteSpace` tests .NET's white-space set, which differs from JS `trim()`
+on U+0085 and U+FEFF. Both null checks are type predicates, so a `false` result narrows
+the argument to `string`.
+
+A static member of a BCL type with no mapping (`string.CompareOrdinal(a, b)`) reports an
+`MS0001` warning: the call is emitted by name and nothing declares it on the JS side.
 
 ## Math
 

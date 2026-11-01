@@ -285,7 +285,7 @@ public static class IrBodyPrinter
                 sb.Append(".hashCode");
                 break;
             case IrCallExpression call:
-                PrintCallTarget(sb, call.Target);
+                PrintReceiver(sb, call.Target);
                 if (call.IsOptional)
                     sb.Append("?.call");
                 sb.Append('(');
@@ -357,7 +357,7 @@ public static class IrBodyPrinter
                 // C# `source with { X = e }` → Dart `source.copyWith(x: e)`
                 // (the synthesized copyWith method is already emitted on
                 // every record class by IrToDartClassBridge).
-                PrintExpression(sb, withExpr.Source);
+                PrintReceiver(sb, withExpr.Source);
                 sb.Append(".copyWith(");
                 for (var i = 0; i < withExpr.Assignments.Count; i++)
                 {
@@ -414,32 +414,33 @@ public static class IrBodyPrinter
     }
 
     /// <summary>
-    /// Print a call target, wrapping it in parentheses when its node
-    /// kind has lower precedence than the call. Required because the
-    /// IR may surface low-precedence shapes as the call target (e.g.
-    /// <c>(a ?? b)?.Invoke()</c> lowers to a call whose target is a
-    /// binary expression — printed bare it would parse as
-    /// <c>a ?? b()</c>).
+    /// Print a call target or the object of a member / element access,
+    /// wrapping it in parentheses when its node kind binds looser than the
+    /// call or selector that follows. Required because the IR carries
+    /// grouping only as tree shape: <c>(a ?? b)?.Invoke()</c> and
+    /// <c>(value ?? "").Trim()</c> put a binary expression in receiver
+    /// position, which printed bare would parse as <c>a ?? b()</c> and
+    /// <c>value ?? ''.trim()</c>.
     /// </summary>
-    private static void PrintCallTarget(StringBuilder sb, IrExpression target)
-    {
-        if (CallTargetRequiresParens(target))
-        {
-            sb.Append('(');
-            PrintExpression(sb, target);
-            sb.Append(')');
-        }
-        else
-        {
-            PrintExpression(sb, target);
-        }
-    }
+    private static void PrintReceiver(StringBuilder sb, IrExpression target) =>
+        PrintOperand(sb, target, ReceiverRequiresParens(target));
 
-    private static bool CallTargetRequiresParens(IrExpression expression) =>
+    /// <summary>
+    /// Whether <paramref name="expression"/> binds looser than a Dart
+    /// selector (<c>.name</c>, <c>[index]</c>, <c>(args)</c>): every
+    /// operator expression — binary, prefix unary (<c>-a.abs()</c> negates
+    /// the call), <c>as</c> / <c>is</c>, <c>await</c>, <c>throw</c> — and
+    /// the conditional and lambda forms.
+    /// </summary>
+    private static bool ReceiverRequiresParens(IrExpression expression) =>
         expression
             is IrBinaryExpression
+                or IrUnaryExpression { IsPrefix: true }
+                or IrCastExpression
+                or IrIsPatternExpression
                 or IrConditionalExpression
                 or IrAwaitExpression
+                or IrThrowExpression
                 or IrLambdaExpression;
 
     /// <summary>
@@ -883,13 +884,13 @@ public static class IrBodyPrinter
     {
         if (target is not IrConditionalReceiver)
         {
-            PrintExpression(sb, target);
+            PrintReceiver(sb, target);
             return;
         }
 
         var receiver = CurrentConditionalReceiver();
 
-        PrintCallTarget(sb, receiver.Expression);
+        PrintReceiver(sb, receiver.Expression);
 
         if (receiver.IsNullShorting)
             sb.Append('?');
