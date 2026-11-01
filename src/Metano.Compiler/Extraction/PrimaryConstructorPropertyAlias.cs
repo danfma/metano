@@ -33,6 +33,16 @@ internal static class PrimaryConstructorPropertyAlias
             .FirstOrDefault(property => IsAliasOf(property, parameter, compilation));
 
     /// <summary>
+    /// <paramref name="property"/> is a record's positional property: C#
+    /// synthesizes it from the parameter list and assigns it the argument
+    /// before any member initializer runs.
+    /// </summary>
+    public static bool IsPositionalRecordProperty(IPropertySymbol property) =>
+        property.DeclaringSyntaxReferences.Any(reference =>
+            reference.GetSyntax() is ParameterSyntax
+        );
+
+    /// <summary>
     /// The promotion candidates of <paramref name="type"/> named
     /// <paramref name="name"/>, ignoring case, the exact-case match first.
     /// </summary>

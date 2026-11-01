@@ -14,9 +14,17 @@ namespace Metano.Compiler.Extraction;
 /// A parameter is promoted when it has an alias property
 /// (<see cref="PrimaryConstructorPropertyAlias.AliasPropertyOf"/>) and nothing
 /// in the type writes it (<see cref="WriteAccess"/>). A written parameter is
-/// never promoted: C# keeps its storage apart from the property's, so the
+/// not promoted: C# keeps its storage apart from the property's, so the
 /// property keeps its own declaration and the parameter is captured into a
-/// mutable field.
+/// mutable field. The exception is a record's positional property, which
+/// C# assigns before any initializer can write the parameter
+/// (<see cref="IsPromotable"/>).
+/// </para>
+/// <para>
+/// Known gap: a write inside the base-constructor arguments
+/// (<c>: B(a++)</c>) runs after the derived initializers in C#, which run
+/// before the base constructor; TypeScript must call <c>super(...)</c>
+/// first, so the order differs.
 /// </para>
 /// </summary>
 internal sealed class PrimaryConstructorPromotion
@@ -80,17 +88,30 @@ internal sealed class PrimaryConstructorPromotion
         var written = WrittenParameters(type, primaryCtor, compilation);
         var promoted = new Dictionary<ISymbol, IPropertySymbol>(SymbolEqualityComparer.Default);
 
-        foreach (var parameter in primaryCtor.Parameters.Where(p => !written.Contains(p)))
+        foreach (var parameter in primaryCtor.Parameters)
         {
             if (
-                PrimaryConstructorPropertyAlias.AliasPropertyOf(parameter, compilation, target) is
-                { } property
+                PrimaryConstructorPropertyAlias.AliasPropertyOf(parameter, compilation, target)
+                    is { } property
+                && IsPromotable(property, written.Contains(parameter))
             )
                 promoted[parameter] = property;
         }
 
         return new PrimaryConstructorPromotion(promoted, written);
     }
+
+    /// <summary>
+    /// An alias property is promoted unless the parameter is written, so the
+    /// two may diverge. A record's positional property is promoted even then:
+    /// C# assigns it the original argument before any initializer runs (the
+    /// parameter property does the same), and only an initializer can write
+    /// the parameter, since a member body's <c>X</c> is the property. That
+    /// initializer keeps the bare constructor parameter.
+    /// </summary>
+    private static bool IsPromotable(IPropertySymbol aliasProperty, bool parameterWritten) =>
+        !parameterWritten
+        || PrimaryConstructorPropertyAlias.IsPositionalRecordProperty(aliasProperty);
 
     private static bool CannotDiverge(IPropertySymbol property) =>
         property is { SetMethod: null, IsVirtual: false, IsAbstract: false };
