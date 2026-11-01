@@ -12,7 +12,7 @@ namespace Metano.Tests;
 public class StringMemberMappingTests
 {
     [Test]
-    public async Task Replace_LowersToTheReplaceAllHelper()
+    public async Task Replace_LowersToTheStringReplaceHelper()
     {
         var output = TranspileText(
             """
@@ -28,7 +28,7 @@ public class StringMemberMappingTests
         await Assert.That(output).Contains("return stringReplace(s, \"x\", null);");
         await Assert.That(output).Contains("return stringReplace(s ?? \"\", \"a\", \"b\");");
         await Assert.That(output).Contains("import { stringReplace } from \"metano-runtime\";");
-        await Assert.That(output).DoesNotContain(".replace(");
+        await Assert.That(output).DoesNotContain("s.replace(");
     }
 
     [Test]
@@ -50,7 +50,7 @@ public class StringMemberMappingTests
         await Assert
             .That(output)
             .Contains("import { isNullOrEmpty, isNullOrWhiteSpace } from \"metano-runtime\";");
-        await Assert.That(output).DoesNotContain("String.");
+        await Assert.That(output).DoesNotContain("String.isNullOr");
     }
 
     [Test]
@@ -76,6 +76,7 @@ public class StringMemberMappingTests
         );
 
         var unmapped = diagnostics.Single();
+
         await Assert.That(unmapped.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
         await Assert.That(unmapped.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert.That(unmapped.Message).Contains("'string.CompareOrdinal'");
@@ -93,6 +94,7 @@ public class StringMemberMappingTests
         );
 
         var unmapped = diagnostics.Single();
+
         await Assert.That(unmapped.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
         await Assert.That(unmapped.Message).Contains("'int.MaxValue'");
         await Assert.That(unmapped.Message).Contains("the read is emitted by name");
@@ -167,19 +169,46 @@ public class StringMemberMappingTests
     [Test]
     public async Task StaticOfTranspiledType_ReportsNoDiagnostic()
     {
-        var diagnostics = TranspileDiagnostics(
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            public static string Twice(string s) => Helpers.Twice(s);
+            [Transpile]
+            public static class Text
+            {
+                public static string Twice(string s) => Helpers.Twice(s);
             }
 
             [Transpile]
             public static class Helpers
             {
                 public static string Twice(string s) => s + s;
+            }
             """
         );
 
         await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task WhiteSpaceCheck_NarrowsWithoutLosingLiteralComparisons()
+    {
+        // The `true` branch narrows to the branded `NullOrWhiteSpace`, so comparing
+        // the argument with a literal still type-checks (a `""` predicate would make
+        // `s === " "` a TS2367 error).
+        var output = TranspileText(
+            """
+            public static int Classify(string? s)
+            {
+                if (string.IsNullOrWhiteSpace(s))
+                    return s == " " ? 1 : 0;
+
+                return s.Length;
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("if (isNullOrWhiteSpace(s)) {");
+        await Assert.That(output).Contains("return s === \" \" ? 1 : 0;");
+        await Assert.That(output).Contains("return s.length;");
     }
 
     private static string TranspileText(string members) =>

@@ -19,13 +19,8 @@ public static class BclExportReader
         IReadOnlyDictionary<string, IrBclExport>
     > Cache = new();
 
-    private static readonly ConditionalWeakTable<
-        Compilation,
-        IReadOnlyDictionary<string, IrBclExport>
-    >.CreateValueCallback BuildCallback = Build;
-
     public static IReadOnlyDictionary<string, IrBclExport> Read(Compilation compilation) =>
-        Cache.GetValue(compilation, BuildCallback);
+        Cache.GetValue(compilation, Build);
 
     /// <summary>Whether an <c>[ExportFromBcl]</c> in scope binds <paramref name="type"/>.</summary>
     public static bool IsExported(INamedTypeSymbol type, Compilation compilation) =>
@@ -56,41 +51,44 @@ public static class BclExportReader
     {
         foreach (var attr in assembly.GetAttributes())
         {
-            if (attr.AttributeClass?.Name is not ("ExportFromBclAttribute" or "ExportFromBcl"))
-                continue;
-
-            if (attr.ConstructorArguments.Length == 0)
-                continue;
-
-            if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol typeArg)
-                continue;
-
-            var exportedName = "";
-            var fromPackage = "";
-            string? version = null;
-
-            foreach (var namedArg in attr.NamedArguments)
-            {
-                switch (namedArg.Key)
-                {
-                    case "ExportedName":
-                        exportedName = namedArg.Value.Value?.ToString() ?? "";
-                        break;
-                    case "FromPackage":
-                        fromPackage = namedArg.Value.Value?.ToString() ?? "";
-                        break;
-                    case "Version":
-                        var raw = namedArg.Value.Value?.ToString();
-
-                        version = string.IsNullOrEmpty(raw) ? null : raw;
-                        break;
-                }
-            }
-
-            if (exportedName.Length == 0)
-                continue;
-
-            sink[typeArg.ToDisplayString()] = new IrBclExport(exportedName, fromPackage, version);
+            if (ReadExport(attr) is { } entry)
+                sink[entry.Key] = entry.Export;
         }
     }
+
+    /// <summary>
+    /// The export an <c>[ExportFromBcl]</c> attribute declares, keyed by its type's
+    /// display string; <c>null</c> for any other attribute or one without an exported
+    /// name.
+    /// </summary>
+    private static (string Key, IrBclExport Export)? ReadExport(AttributeData attribute)
+    {
+        if (attribute.AttributeClass?.Name is not ("ExportFromBclAttribute" or "ExportFromBcl"))
+            return null;
+
+        if (attribute.ConstructorArguments is not [{ Value: INamedTypeSymbol type }, ..])
+            return null;
+
+        var exportedName = NamedArgument(attribute, "ExportedName") ?? "";
+
+        if (exportedName.Length == 0)
+            return null;
+
+        var fromPackage = NamedArgument(attribute, "FromPackage") ?? "";
+        var version = NamedArgument(attribute, "Version");
+
+        return (
+            type.ToDisplayString(),
+            new IrBclExport(
+                exportedName,
+                fromPackage,
+                string.IsNullOrEmpty(version) ? null : version
+            )
+        );
+    }
+
+    private static string? NamedArgument(AttributeData attribute, string name) =>
+        attribute
+            .NamedArguments.FirstOrDefault(argument => argument.Key == name)
+            .Value.Value?.ToString();
 }

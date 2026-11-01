@@ -422,8 +422,8 @@ public static class IrBodyPrinter
     /// position, which printed bare would parse as <c>a ?? b()</c> and
     /// <c>value ?? ''.trim()</c>.
     /// </summary>
-    private static void PrintReceiver(StringBuilder sb, IrExpression target) =>
-        PrintOperand(sb, target, ReceiverRequiresParens(target));
+    private static void PrintReceiver(StringBuilder sb, IrExpression receiver) =>
+        PrintOperand(sb, receiver, ReceiverRequiresParens(receiver));
 
     /// <summary>
     /// Whether <paramref name="expression"/> binds looser than a Dart

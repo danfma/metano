@@ -32,16 +32,20 @@ export function isNullOrEmpty(value: string | null | undefined): value is "" | n
 }
 
 /**
+ * What a `true` {@link isNullOrWhiteSpace} result narrows its argument to: a missing
+ * value or a string the brand marks as white space only. The brand exists only in the
+ * type system; it keeps the narrowed string comparable with any literal (`s === " "`).
+ */
+export type NullOrWhiteSpace = (string & { readonly __brand: "WhiteSpace" }) | null | undefined;
+
+/**
  * C#'s `string.IsNullOrWhiteSpace(value)`: `true` for `null`, `undefined`, `""` and a
  * string made only of .NET white-space characters.
  *
  * The type predicate lets a `false` result narrow `value` to `string`, as C#'s
- * `[NotNullWhen(false)]` does. A `true` result narrows a `string` to `""`, which is
- * narrower than the runtime value (it may hold white space).
+ * `[NotNullWhen(false)]` does.
  */
-export function isNullOrWhiteSpace(
-  value: string | null | undefined,
-): value is "" | null | undefined {
+export function isNullOrWhiteSpace(value: string | null | undefined): value is NullOrWhiteSpace {
   if (value == null) {
     return true;
   }
