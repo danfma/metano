@@ -54,10 +54,17 @@ public static class IrClassExtractor
         // bodies see `this._field` instead of an out-of-scope param
         // binding. The map and its synthesized fields are scoped to
         // this type's extraction via an `AsyncLocal`.
-        var captureScan = ImplicitCaptureDetector.Scan(type, compilation, originResolver);
+        var deferInitializers = PrimaryConstructorInitializerDeferral.AppliesTo(type);
+        var captureScan = ImplicitCaptureDetector.Scan(
+            type,
+            compilation,
+            originResolver,
+            deferInitializers
+        );
+
         var members = ExtractWithCaptureContext(
             captureScan.ParamFieldMap,
-            PrimaryConstructorInitializerDeferral.AppliesTo(type),
+            deferInitializers,
             () => ExtractMembers(type, originResolver, compilation, target)
         );
         members.AddRange(captureScan.SynthesizedFields);
@@ -82,15 +89,18 @@ public static class IrClassExtractor
         // Initializers that read a primary-constructor parameter move into
         // the constructor body, where the parameter is in scope. Runs after
         // both capture annotations: reads of a captured field trigger it.
-        var deferral = PrimaryConstructorInitializerDeferral.Apply(
-            type,
-            members,
-            constructor,
-            target
-        );
+        if (deferInitializers)
+        {
+            var deferral = PrimaryConstructorInitializerDeferral.Apply(
+                type,
+                members,
+                constructor,
+                target
+            );
 
-        members = deferral.Members;
-        constructor = deferral.Constructor;
+            members = deferral.Members;
+            constructor = deferral.Constructor;
+        }
 
         return new IrClassDeclaration(
             type.Name,
@@ -116,10 +126,11 @@ public static class IrClassExtractor
         if (captureMap is null || captureMap.Count == 0)
             return extract();
 
-        var previous = IrExpressionExtractor.CapturedPrimaryCtorParams;
-        var previousInitializers = IrExpressionExtractor.InitializersRunInConstructor;
-        IrExpressionExtractor.CapturedPrimaryCtorParams = captureMap;
-        IrExpressionExtractor.InitializersRunInConstructor = initializersRunInConstructor;
+        var previous = IrExpressionExtractor.PrimaryCtorScope;
+        IrExpressionExtractor.PrimaryCtorScope = new PrimaryCtorExtractionScope(
+            captureMap,
+            initializersRunInConstructor
+        );
 
         try
         {
@@ -127,8 +138,7 @@ public static class IrClassExtractor
         }
         finally
         {
-            IrExpressionExtractor.CapturedPrimaryCtorParams = previous;
-            IrExpressionExtractor.InitializersRunInConstructor = previousInitializers;
+            IrExpressionExtractor.PrimaryCtorScope = previous;
         }
     }
 

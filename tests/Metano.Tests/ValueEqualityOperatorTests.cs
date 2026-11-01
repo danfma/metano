@@ -83,6 +83,9 @@ public class ValueEqualityOperatorTests
                 public bool DecimalElements((decimal, int) a, decimal d) => a == (d, 1) && (1, 2m) != (1, d);
 
                 public bool TupleEqualsMethod((int, int) a, (int, int) b) => a.Equals(b);
+
+                public bool AgainstDefault((int, string?) t, (bool, (decimal, Point)) u) =>
+                    t == default || t != default((int, string?)) || u == default || t == (0, default);
             }
             """
         );
@@ -90,6 +93,27 @@ public class ValueEqualityOperatorTests
         await Assert
             .That(result["comparisons.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("value-equality-operators.ts"));
+    }
+
+    [Test]
+    public async Task TupleEqualityAgainstDefaultOfAStruct_ReportsUnsupported()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record struct Size(int W, int H);
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool Empty((int, Size) t) => t == default;
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEqualTo(1);
     }
 
     [Test]

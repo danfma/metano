@@ -18,18 +18,26 @@ namespace Metano.Compiler.Dart;
 /// </summary>
 public static class IrBodyPrinter
 {
-    public static void PrintBody(StringBuilder sb, IReadOnlyList<IrStatement> body, int indentLevel)
+    /// <param name="allowArrow">Whether a single-statement body may print as
+    /// <c>=&gt; expr;</c>. A generative constructor passes <c>false</c>: Dart
+    /// rejects an arrow body there (<c>return_in_generative_constructor</c>).</param>
+    public static void PrintBody(
+        StringBuilder sb,
+        IReadOnlyList<IrStatement> body,
+        int indentLevel,
+        bool allowArrow = true
+    )
     {
         var indent = new string(' ', indentLevel * 2);
         // Expression-bodied optimization: single return of an expression → `=> expr;`
-        if (body.Count == 1 && body[0] is IrReturnStatement { Value: { } returned })
+        if (allowArrow && body.Count == 1 && body[0] is IrReturnStatement { Value: { } returned })
         {
             sb.Append(" => ");
             PrintExpression(sb, returned);
             sb.AppendLine(";");
             return;
         }
-        if (body.Count == 1 && body[0] is IrExpressionStatement singleExpr)
+        if (allowArrow && body.Count == 1 && body[0] is IrExpressionStatement singleExpr)
         {
             sb.Append(" => ");
             PrintExpression(sb, singleExpr.Expression);
@@ -272,7 +280,7 @@ public static class IrBodyPrinter
                 Target: IrMemberAccess hashed,
                 Arguments.Count: 0,
                 Origin: { } hashOrigin,
-            } when IsObjectHashCode(hashOrigin):
+            } when IsHashCodeCall(hashOrigin):
                 PrintAccessTarget(sb, hashed.Target);
                 sb.Append(".hashCode");
                 break;
@@ -1082,23 +1090,17 @@ public static class IrBodyPrinter
     /// field of the emitted class and keeps its name.
     /// </summary>
     private static bool IsRecordFieldRead(IrMemberOrigin origin) =>
-        origin is { IsTupleElement: true, TupleIndex: >= 0 }
-        && IsValueTupleName(origin.DeclaringTypeFullName);
+        origin is { TupleElement: IrTupleElementKind.ValueTuple, TupleIndex: >= 0 };
 
     /// <summary>
-    /// A C# tuple's stable full name: its tuple syntax (<c>(T1, T2)</c>), or
-    /// the <c>ValueTuple</c> generic it stands for.
+    /// A <c>GetHashCode()</c> call: <c>object.GetHashCode</c>'s origin, which
+    /// every such call carries, or an emitted override's (a
+    /// <c>base.GetHashCode()</c>). Both read Dart's <c>hashCode</c> getter, the
+    /// member a <c>GetHashCode</c> override is declared as.
     /// </summary>
-    private static bool IsValueTupleName(string fullName) =>
-        fullName.StartsWith('(')
-        || fullName.StartsWith("System.ValueTuple<", StringComparison.Ordinal);
-
-    /// <summary>
-    /// <c>object.GetHashCode</c> — every <c>GetHashCode()</c> call carries its
-    /// origin — reads Dart's <c>hashCode</c> getter.
-    /// </summary>
-    private static bool IsObjectHashCode(IrMemberOrigin origin) =>
-        origin is { DeclaringTypeFullName: "object", MemberName: nameof(object.GetHashCode) };
+    private static bool IsHashCodeCall(IrMemberOrigin origin) =>
+        IrObjectContract.IsObjectGetHashCode(origin)
+        || IrObjectContract.IsHashCodeOverrideAccess(origin);
 
     /// <summary>
     /// A C# tuple literal as a Dart 3 record literal, <c>(a, b)</c>; a

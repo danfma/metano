@@ -22,10 +22,4 @@ export class Pairs {
 
     return named[0] + named[1] + positional[0] + positional[1].length + local[0] + local[1].length;
   }
-
-  writes(): void {
-    const t = [1, 2] as [number, number];
-    t[0] = 5;
-    t[1] += 1;
-  }
 }

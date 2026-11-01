@@ -6,7 +6,8 @@ namespace Metano.Tests;
 /// declared as <c>hashCode</c> — the name records synthesize and the runtime
 /// (<c>valueHashCode</c>, <c>HashSet</c>) calls (#254). The static
 /// <c>object.Equals(a, b)</c> / <c>ReferenceEquals(a, b)</c> map to
-/// <c>valueEquals</c> / <c>===</c>.
+/// <c>objectEquals</c> (reference equality for a class without an
+/// <c>Equals</c> override) / <c>===</c>.
 /// </summary>
 public class HashCodeLoweringTests
 {

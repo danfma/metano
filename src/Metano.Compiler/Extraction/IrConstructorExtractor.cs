@@ -87,13 +87,6 @@ public static class IrConstructorExtractor
             .Where(c => c.DeclaredAccessibility == Accessibility.Public)
             .ToList();
 
-    private static List<IMethodSymbol> ExplicitConstructors(INamedTypeSymbol type) =>
-        type
-            .Constructors.Where(c =>
-                (!c.IsImplicitlyDeclared || c.Parameters.Length > 0) && !IsRecordCopyConstructor(c)
-            )
-            .ToList();
-
     /// <summary>
     /// Whether <paramref name="constructor"/> is the C# 12 primary constructor
     /// (or a record's positional one): declared by the type declaration's
@@ -111,24 +104,32 @@ public static class IrConstructorExtractor
     public static int ExplicitConstructorCount(INamedTypeSymbol type) =>
         ExplicitConstructors(type).Count;
 
+    private static List<IMethodSymbol> ExplicitConstructors(INamedTypeSymbol type) =>
+        type
+            .Constructors.Where(c =>
+                (!c.IsImplicitlyDeclared || c.Parameters.Length > 0) && !IsRecordCopyConstructor(c)
+            )
+            .ToList();
+
     /// <summary>
-    /// A primary-constructor parameter paired with a property that computes
-    /// its value from it rather than exposing it. Without a compilation (no
-    /// syntax to inspect) the pairing keeps the promotion, as before.
+    /// Whether the same-named <paramref name="property"/> exposes
+    /// <paramref name="parameter"/> unchanged, so promoting the parameter to
+    /// it loses nothing: a primary-constructor parameter only when the
+    /// property merely aliases it (<see cref="PrimaryConstructorPropertyAlias"/>),
+    /// not when it computes its value from it. An explicit constructor's
+    /// parameter keeps pairing by name, and so does any parameter without a
+    /// compilation (no syntax to inspect). Mirrors
+    /// <c>ImplicitCaptureDetector.IsPromotedToProperty</c>.
     /// </summary>
-    private static bool IsComputedFromPrimaryParameter(
+    private static bool ExposesPrimaryParameterUnchanged(
         IPropertySymbol property,
         IParameterSymbol parameter,
         Compilation? compilation
-    )
-    {
-        if (compilation is null)
-            return false;
-
-        return parameter.ContainingSymbol is IMethodSymbol constructor
-            && IsPrimaryConstructor(constructor)
-            && !PrimaryConstructorPropertyAlias.IsAliasOf(property, parameter, compilation);
-    }
+    ) =>
+        compilation is null
+        || parameter.ContainingSymbol is not IMethodSymbol constructor
+        || !IsPrimaryConstructor(constructor)
+        || PrimaryConstructorPropertyAlias.IsAliasOf(property, parameter, compilation);
 
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
         ctor.IsImplicitlyDeclared
@@ -416,7 +417,7 @@ public static class IrConstructorExtractor
         if (!propertiesByName.TryGetValue(param.Name, out var prop))
             return (IrParameterPromotion.None, null, null);
 
-        if (IsComputedFromPrimaryParameter(prop, param, compilation))
+        if (!ExposesPrimaryParameterUnchanged(prop, param, compilation))
             return (IrParameterPromotion.None, null, null);
 
         var promotion =

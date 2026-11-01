@@ -44,42 +44,23 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private readonly HashSet<ISymbol> _inlineExpanding;
 
-    /// Map of primary-constructor parameter symbols that were captured
-    /// by member bodies, keyed to the synthesized backing field name.
-    /// When the extractor resolves an identifier to one of these
-    /// parameters, it rewrites the reference to <c>this._field</c> so
-    /// the emitted code goes through the auto-synthesized field
-    /// instead of an undefined parameter binding. Stored in an
-    /// <see cref="AsyncLocal{T}"/> to scope the rewrite to a single
-    /// type's member-body extraction without threading an extra
-    /// parameter through every extractor constructor; tests run
-    /// concurrently each see their own value.
-    /// </summary>
-    private static readonly AsyncLocal<IReadOnlyDictionary<
-        ISymbol,
-        string
-    >?> _capturedPrimaryCtorParams = new();
-
-    internal static IReadOnlyDictionary<ISymbol, string>? CapturedPrimaryCtorParams
-    {
-        get => _capturedPrimaryCtorParams.Value;
-        set => _capturedPrimaryCtorParams.Value = value;
-    }
-
-    private static readonly AsyncLocal<bool> _initializersRunInConstructor = new();
+    private static readonly AsyncLocal<PrimaryCtorExtractionScope?> _primaryCtorScope = new();
 
     /// <summary>
-    /// Whether the member initializers of the type under extraction run in its
-    /// constructor body, after the captured fields are assigned
-    /// (<see cref="PrimaryConstructorInitializerDeferral.AppliesTo"/>). Then an
-    /// initializer reads a captured parameter through its field too, sharing
-    /// the storage a member body mutates; otherwise initializers keep the bare
-    /// parameter. Scoped like <see cref="CapturedPrimaryCtorParams"/>.
+    /// The primary-constructor facts of the type whose members are being
+    /// extracted: the captured parameters whose reads are rewritten to
+    /// <c>this._field</c> (so the emitted code goes through the synthesized
+    /// field instead of an out-of-scope parameter binding), and whether the
+    /// initializers run in the constructor body. Stored in an
+    /// <see cref="AsyncLocal{T}"/> to scope it to a single type's member-body
+    /// extraction without threading an extra parameter through every
+    /// extractor constructor; tests run concurrently each see their own
+    /// value. <c>null</c> outside that scope.
     /// </summary>
-    internal static bool InitializersRunInConstructor
+    internal static PrimaryCtorExtractionScope? PrimaryCtorScope
     {
-        get => _initializersRunInConstructor.Value;
-        set => _initializersRunInConstructor.Value = value;
+        get => _primaryCtorScope.Value;
+        set => _primaryCtorScope.Value = value;
     }
 
     /// <summary>
@@ -93,13 +74,12 @@ public sealed partial class IrExpressionExtractor
     private readonly IReadOnlyDictionary<ISymbol, IrExpression>? _inlineParameterSubs;
 
     /// <summary>
-    /// Counter for synthesizing fresh <c>receiver$temp</c> binding
-    /// names in <c>BuildReceiverOnceSetter</c>. Each nested
-    /// <see cref="Metano.Compiler.IR.IrLetExpression"/> gets a unique
-    /// suffix so an inner setter cannot accidentally shadow an outer
-    /// one (cheap defense against future Stage 4 indexer reuse).
+    /// Counter for the synthesized <see cref="Metano.Compiler.IR.IrLetExpression"/>
+    /// temporaries of one body (<c>receiver$temp$N</c>, <c>tuple$temp$N</c>).
+    /// Every kind draws from it, so each nested binding gets a unique suffix
+    /// and an inner one cannot shadow an outer one.
     /// </summary>
-    private int _receiverTempCounter;
+    private int _temporaryCounter;
 
     /// <summary>
     /// Counter for the synthesized <c>$subjectN</c> locals that capture an
@@ -119,14 +99,10 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private ExpressionSyntax? _conditionalReceiverSyntax;
 
-    private string NextReceiverTempName() => $"receiver$temp${_receiverTempCounter++}";
+    private string NextReceiverTempName() => $"receiver$temp${_temporaryCounter++}";
 
-    /// <summary>
-    /// A fresh temporary holding one operand value of a tuple comparison;
-    /// shares the receiver counter so the two kinds of temporaries never
-    /// collide in one body.
-    /// </summary>
-    private string NextTupleOperandTempName() => $"tuple$temp${_receiverTempCounter++}";
+    /// <summary>A fresh temporary holding one operand value of a tuple comparison.</summary>
+    private string NextTupleOperandTempName() => $"tuple$temp${_temporaryCounter++}";
 
     public IrExpressionExtractor(
         SemanticModel semanticModel,
@@ -1250,9 +1226,9 @@ public sealed partial class IrExpressionExtractor
         // positions.
         if (
             symbol is IParameterSymbol paramSymbol
-            && CapturedPrimaryCtorParams is { } captured
-            && captured.TryGetValue(paramSymbol, out var capturedFieldName)
-            && (InitializersRunInConstructor || !IsInsideInitializer(id))
+            && PrimaryCtorScope is { } scope
+            && scope.CapturedParams.TryGetValue(paramSymbol, out var capturedFieldName)
+            && (scope.InitializersRunInConstructor || !IsInsideInitializer(id))
         )
             return new IrMemberAccess(new IrThisExpression(), capturedFieldName);
 
@@ -1348,42 +1324,15 @@ public sealed partial class IrExpressionExtractor
         type.ContainingType is null ? null : IrTypeRefMapper.BuildQualifiedName(type, _target);
 
     /// <summary>
-    /// True when the identifier sits inside a field or property
-    /// initializer (the right-hand side of an <c>=</c> on a
-    /// <see cref="VariableDeclaratorSyntax"/> or
-    /// <see cref="PropertyDeclarationSyntax"/>). Captured
-    /// primary-ctor parameter references must not be rewritten in
-    /// these positions because field initializers execute before
-    /// the constructor body assigns the synthesized backing field.
+    /// True when the identifier runs while a field or property initializer
+    /// runs (<see cref="MemberInitializerSyntax.Contains"/>, stopping at
+    /// executable bodies: a block lambda inside the initializer runs later).
+    /// Captured primary-ctor parameter references must not be rewritten in
+    /// these positions because field initializers execute before the
+    /// constructor body assigns the synthesized backing field.
     /// </summary>
-    private static bool IsInsideInitializer(SyntaxNode node)
-    {
-        for (var current = node.Parent; current is not null; current = current.Parent)
-        {
-            // A method body, lambda body, accessor body, or arrow expression
-            // means the identifier lives inside executable code; the
-            // primary-ctor rewrite must apply there. Crucially, this check
-            // runs before the `EqualsValueClauseSyntax` test so a local
-            // declaration such as `var sizeEm = level switch { … }` is not
-            // misclassified as a field initializer.
-            if (current is BlockSyntax or ArrowExpressionClauseSyntax or AccessorDeclarationSyntax)
-                return false;
-            if (current is EqualsValueClauseSyntax equalsValue)
-            {
-                var owner = equalsValue.Parent;
-                if (
-                    owner is PropertyDeclarationSyntax
-                    || (
-                        owner is VariableDeclaratorSyntax declarator
-                        && declarator.Parent is VariableDeclarationSyntax declaration
-                        && declaration.Parent is FieldDeclarationSyntax
-                    )
-                )
-                    return true;
-            }
-        }
-        return false;
-    }
+    private static bool IsInsideInitializer(SyntaxNode node) =>
+        MemberInitializerSyntax.Contains(node, stopAtExecutableBodies: true);
 
     // ── Literals ──────────────────────────────────────────────────────────
 
@@ -1604,6 +1553,9 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ExtractAssignment(AssignmentExpressionSyntax assign)
     {
+        if (TryReportTupleElementWrite(assign, assign.Left) is { } unsupportedWrite)
+            return unsupportedWrite;
+
         // Extension property assignment (`receiver.Prop = value` or any
         // compound form) — rewrite to a helper call against the property's
         // `$set` companion. Compound operators (`+=`, `++` via this path is
@@ -1730,6 +1682,12 @@ public sealed partial class IrExpressionExtractor
             return Extract(suppress.Operand);
         if (node is PrefixUnaryExpressionSyntax plus && plus.IsKind(SyntaxKind.UnaryPlusExpression))
             return Extract(plus.Operand);
+
+        if (
+            IncrementedOperand(node) is { } incremented
+            && TryReportTupleElementWrite(node, incremented) is { } unsupportedWrite
+        )
+            return unsupportedWrite;
 
         var (mappedOp, operand) = node switch
         {
@@ -2297,6 +2255,7 @@ public sealed partial class IrExpressionExtractor
             return constant;
 
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
+        ReportTupleValueLookup(inv, symbol);
 
         // `Nullable<T>.GetValueOrDefault` lives with the other `Nullable<T>`
         // members rather than in `IntrinsicBclLoweringTable`: a side-effecting
@@ -2633,7 +2592,7 @@ public sealed partial class IrExpressionExtractor
         // re-reading the Roslyn symbol.
         var isJsCallableInvoke =
             symbol is IMethodSymbol invokeMethod && SymbolHelper.IsJsCallableInvoke(invokeMethod);
-        var tupleIndex = SymbolHelper.GetPositionalTupleElementIndex(symbol);
+        var tupleElement = SymbolHelper.GetPositionalTupleElement(symbol);
         return new IrMemberOrigin(
             declaringTypeName,
             symbol.Name,
@@ -2646,8 +2605,8 @@ public sealed partial class IrExpressionExtractor
             IsDeclaringTypeExternal: isDeclaringTypeExternal,
             IsDeclaringTypeNoContainer: isDeclaringTypeNoContainer,
             IsJsCallableInvoke: isJsCallableInvoke,
-            IsTupleElement: tupleIndex >= 0,
-            TupleIndex: tupleIndex,
+            TupleElement: tupleElement.Kind,
+            TupleIndex: tupleElement.Index,
             IsBrandedValueMember: isBrandedValueMember,
             IsTranspiledDataMember: IsTranspiledDataMember(symbol),
             ParameterTypes: OverloadParameterTypes(symbol),
@@ -3770,6 +3729,7 @@ public sealed partial class IrExpressionExtractor
     {
         var args = oc.ArgumentList?.Arguments.Select(ExtractArgument).ToList() ?? [];
         var ctorSymbol = _semantic.GetSymbolInfo(oc).Symbol as IMethodSymbol;
+        ReportTupleValueLookup(oc, ctorSymbol);
         if (oc.ArgumentList is { } argList)
             ApplyParamsSpread(args, ctorSymbol, argList.Arguments);
         var typeSymbol = _semantic.GetTypeInfo(oc).Type;
@@ -3783,6 +3743,7 @@ public sealed partial class IrExpressionExtractor
     {
         var args = ioc.ArgumentList.Arguments.Select(ExtractArgument).ToList();
         var ctorSymbol = _semantic.GetSymbolInfo(ioc).Symbol as IMethodSymbol;
+        ReportTupleValueLookup(ioc, ctorSymbol);
         ApplyParamsSpread(args, ctorSymbol, ioc.ArgumentList.Arguments);
         var typeSymbol = _semantic.GetTypeInfo(ioc).Type;
         var type = typeSymbol is not null

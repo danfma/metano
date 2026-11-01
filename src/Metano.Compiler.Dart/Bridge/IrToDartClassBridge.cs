@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Dart.AST;
 using Metano.Compiler.IR;
 
@@ -55,8 +56,16 @@ public static class IrToDartClassBridge
                     case IrPropertyDeclaration prop when !promotedParamNames.Contains(prop.Name):
                         members.Add(ConvertProperty(prop, rewriter));
                         break;
+                    case IrMethodDeclaration method
+                        when IrObjectContract.IsHashCodeOverride(method):
+                        members.Add(ConvertHashCodeOverride(method, rewriter));
+                        break;
                     case IrMethodDeclaration method:
                         members.Add(ConvertMethod(method, rewriter));
+
+                        if (IrObjectContract.IsEqualsOverride(method))
+                            members.Add(BuildEqualsOperatorDelegatingTo(method));
+
                         break;
                 }
             }
@@ -97,6 +106,14 @@ public static class IrToDartClassBridge
     /// a record-like class. The fields to compare/hash/rebuild are the
     /// constructor's primary parameters (promoted or not) — the same set C# uses
     /// for its synthesized value equality.
+    /// <para>
+    /// A record that declares its own equality members
+    /// (<see cref="IrRecordEqualityOverrides"/>) keeps them: a
+    /// <c>GetHashCode</c> override already became the <c>hashCode</c> getter,
+    /// so none is synthesized, and with a user <c>Equals(R? other)</c> the
+    /// synthesized <c>operator ==</c> delegates to it, as C#'s synthesized
+    /// <c>Equals(object)</c> does.
+    /// </para>
     /// </summary>
     private static void SynthesizeRecordMembers(
         IrClassDeclaration ir,
@@ -112,10 +129,89 @@ public static class IrToDartClassBridge
             )
             .ToList();
 
-        members.Add(BuildEqualsOperator(className, fields));
-        members.Add(BuildHashCodeGetter(fields));
+        members.Add(
+            IrRecordEqualityOverrides.DeclaresEquals(ir)
+                ? BuildEqualsOperatorOverUserEquals(className)
+                : BuildEqualsOperator(className, fields)
+        );
+
+        if (!IrRecordEqualityOverrides.DeclaresHashCode(ir))
+            members.Add(BuildHashCodeGetter(fields));
+
         members.Add(BuildCopyWithMethod(className, fields));
     }
+
+    /// <summary>
+    /// <c>bool operator ==(Object other) =&gt; other is T &amp;&amp; equals(other)</c>:
+    /// the record's own <c>Equals(R? other)</c> decides, for any <c>R</c>.
+    /// </summary>
+    private static DartMethodSignature BuildEqualsOperatorOverUserEquals(string className) =>
+        BuildEqualsOperatorReturning(
+            new IrBinaryExpression(
+                new IrIsPatternExpression(
+                    new IrIdentifier("other"),
+                    new IrTypePattern(new IrNamedTypeRef(className))
+                ),
+                IrBinaryOp.LogicalAnd,
+                CallUserEquals(nameof(object.Equals), attributes: null)
+            )
+        );
+
+    /// <summary>
+    /// <c>bool operator ==(Object other) =&gt; equals(other)</c> next to a
+    /// user <c>Equals(object)</c> override, which stays a method so the
+    /// <c>x.Equals(y)</c> call sites keep resolving: Dart's <c>==</c> (and
+    /// every collection) then uses the user's equality.
+    /// </summary>
+    private static DartMethodSignature BuildEqualsOperatorDelegatingTo(
+        IrMethodDeclaration equalsOverride
+    ) =>
+        BuildEqualsOperatorReturning(
+            CallUserEquals(equalsOverride.Name, equalsOverride.Attributes)
+        );
+
+    private static IrCallExpression CallUserEquals(
+        string methodName,
+        IReadOnlyList<IrAttribute>? attributes
+    ) =>
+        new(
+            new IrMemberAccess(
+                new IrThisExpression(),
+                IrToDartNamingPolicy.ToMemberName(methodName, attributes)
+            ),
+            [new IrArgument(new IrIdentifier("other"))]
+        );
+
+    /// <summary>
+    /// <c>@override bool operator ==(Object other) =&gt; result</c>. Dart's
+    /// analyzer warns when a class overrides <c>Object.==</c> without
+    /// <c>@override</c>, so it is always tagged.
+    /// </summary>
+    private static DartMethodSignature BuildEqualsOperatorReturning(IrExpression result) =>
+        new(
+            Name: "==",
+            Parameters: [new DartParameter("other", new DartNamedType("Object"))],
+            ReturnType: new DartNamedType("bool"),
+            Body: [new IrReturnStatement(result)],
+            OperatorSymbol: "==",
+            IsOverride: true
+        );
+
+    /// <summary>
+    /// A C# <c>GetHashCode</c> override as Dart's <c>hashCode</c> getter, the
+    /// member every <c>x.GetHashCode()</c> call site reads and every Dart
+    /// collection hashes with.
+    /// </summary>
+    private static DartGetter ConvertHashCodeOverride(
+        IrMethodDeclaration method,
+        DartIrRewriter rewriter
+    ) =>
+        new(
+            Name: "hashCode",
+            ReturnType: new DartNamedType("int"),
+            Body: rewriter.Rewrite(method.Body),
+            IsOverride: true
+        );
 
     /// <summary>
     /// Emits <c>bool operator ==(Object other) =&gt; other is T &amp;&amp; other.runtimeType
@@ -161,16 +257,7 @@ public static class IrToDartClassBridge
                 )
             );
         }
-        return new DartMethodSignature(
-            Name: "==",
-            Parameters: [new DartParameter("other", new DartNamedType("Object"))],
-            ReturnType: new DartNamedType("bool"),
-            Body: [new IrReturnStatement(body)],
-            OperatorSymbol: "==",
-            // Dart's analyzer warns when a class overrides Object.== without
-            // `@override`; records always do, so tag unconditionally.
-            IsOverride: true
-        );
+        return BuildEqualsOperatorReturning(body);
     }
 
     /// <summary>

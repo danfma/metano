@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -891,18 +892,26 @@ public static class SymbolHelper
     }
 
     /// <summary>
-    /// The zero-based array position <paramref name="member"/> reads on a
-    /// value that lowers to a positional array: a <c>[JsTuple]</c> record's
-    /// positional member (<see cref="GetJsTupleElementIndex"/>), or a C# tuple
-    /// element read by its name or as <c>ItemN</c> (<c>t.x</c>, <c>t.Item2</c>).
-    /// Returns <c>-1</c> for any other member, and for the elements from the
-    /// eighth on, which C# nests in the tuple's <c>Rest</c> element.
+    /// The kind and zero-based position of the positional element
+    /// <paramref name="member"/> reads: a <c>[JsTuple]</c> record's positional
+    /// member (<see cref="GetJsTupleElementIndex"/>), or a C# tuple element
+    /// read by its name or as <c>ItemN</c> (<c>t.x</c>, <c>t.Item2</c>).
+    /// <see cref="IrTupleElementKind.None"/> and <c>-1</c> for any other
+    /// member, and for the elements from the eighth on, which C# nests in the
+    /// tuple's <c>Rest</c> element.
     /// </summary>
-    public static int GetPositionalTupleElementIndex(ISymbol member)
+    public static (IrTupleElementKind Kind, int Index) GetPositionalTupleElement(ISymbol member)
     {
         var jsTupleIndex = GetJsTupleElementIndex(member);
 
-        return jsTupleIndex >= 0 ? jsTupleIndex : GetValueTupleElementIndex(member);
+        if (jsTupleIndex >= 0)
+            return (IrTupleElementKind.JsTuple, jsTupleIndex);
+
+        var valueTupleIndex = GetValueTupleElementIndex(member);
+
+        return valueTupleIndex >= 0
+            ? (IrTupleElementKind.ValueTuple, valueTupleIndex)
+            : (IrTupleElementKind.None, -1);
     }
 
     /// <summary>

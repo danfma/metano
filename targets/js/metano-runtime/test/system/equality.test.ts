@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { equals, hashCode, valueEquals, valueHashCode } from "#/system/equality.ts";
+import {
+  equals,
+  hashCode,
+  objectEquals,
+  tupleEquals,
+  valueEquals,
+  valueHashCode,
+} from "#/system/equality.ts";
 
 describe("equals", () => {
   describe("primitives", () => {
@@ -285,5 +292,60 @@ describe("valueEquals / valueHashCode (the names generated code calls)", () => {
     expect(valueHashCode(null)).toBe(0);
     expect(valueHashCode(42)).toBe(hashCode(42));
     expect(valueHashCode("hello")).toBe(hashCode("hello"));
+  });
+});
+
+describe("objectEquals / tupleEquals (C# object.Equals and ValueTuple.Equals)", () => {
+  // A transpiled C# class that does not override Equals: an instance with its own
+  // prototype and no `equals` method. It has to be a class — an object literal is a
+  // plain object, which `objectEquals` compares by shape.
+  class Node {
+    constructor(readonly value: number) {}
+  }
+
+  class Money {
+    constructor(readonly cents: number) {}
+
+    equals(other: unknown): boolean {
+      return other instanceof Money && other.cents === this.cents;
+    }
+  }
+
+  test("a class without equals compares by reference, like C#", () => {
+    const node = new Node(1);
+
+    expect(objectEquals(node, node)).toBe(true);
+    expect(objectEquals(new Node(1), new Node(1))).toBe(false);
+  });
+
+  test("an equals method decides, and null equals only null", () => {
+    expect(objectEquals(new Money(5), new Money(5))).toBe(true);
+    expect(objectEquals(new Money(5), new Money(6))).toBe(false);
+    expect(objectEquals(null, null)).toBe(true);
+    expect(objectEquals(new Money(5), null)).toBe(false);
+    expect(objectEquals(null, new Money(5))).toBe(false);
+  });
+
+  test("primitives use ===, and NaN equals NaN", () => {
+    expect(objectEquals("a", "a")).toBe(true);
+    expect(objectEquals(1, 2)).toBe(false);
+    expect(objectEquals(Number.NaN, Number.NaN)).toBe(true);
+  });
+
+  test("plain object literals compare by shape; arrays by reference", () => {
+    expect(objectEquals({ name: "x" }, { name: "x" })).toBe(true);
+    expect(objectEquals({ name: "x" }, { name: "y" })).toBe(false);
+    expect(objectEquals([1, 2], [1, 2])).toBe(false);
+  });
+
+  test("tupleEquals compares each element with objectEquals", () => {
+    const node = new Node(1);
+
+    expect(tupleEquals([node, 1], [node, 1])).toBe(true);
+    expect(tupleEquals([new Node(1), 1], [new Node(1), 1])).toBe(false);
+    expect(tupleEquals([new Money(5), "a"], [new Money(5), "a"])).toBe(true);
+    expect(tupleEquals([1, 2], [1, 3])).toBe(false);
+    expect(tupleEquals([1, 2], [1, 2, 3])).toBe(false);
+    expect(tupleEquals([1, 2], null)).toBe(false);
   });
 });

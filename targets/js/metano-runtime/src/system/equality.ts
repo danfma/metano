@@ -182,6 +182,61 @@ export function hashCode(value: unknown): number {
 export const valueEquals = equals;
 
 /**
+ * C#'s static `object.Equals(a, b)`: true when both are null or `a.Equals(b)`, where
+ * `Equals` is what the value's type defines. Unlike {@link equals}, it never compares a
+ * class instance by structure, since a C# class that does not override `Equals`
+ * compares by reference:
+ *
+ * 1. Reference identity (`a === b`) wins immediately; `null` / `undefined` equal only
+ *    themselves.
+ * 2. `NaN` equals `NaN`; other primitives use `===`.
+ * 3. Objects with an `equals(other)` method delegate to it (records, user overrides,
+ *    `Decimal`, Temporal types).
+ * 4. Plain object literals (`[PlainObject]` records, anonymous types) compare by shape
+ *    through {@link equals}, as their C# types compare by value.
+ * 5. Everything else (class instances, arrays, `Map`s, `Set`s) compares by reference,
+ *    as C# arrays, lists, dictionaries and sets do.
+ */
+export function objectEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+
+  if (typeof a === "number") {
+    return typeof b === "number" && Number.isNaN(a) && Number.isNaN(b);
+  }
+
+  if (typeof a !== "object") return false;
+
+  if (hasEqualsMethod(a)) return a.equals(b);
+
+  return isPlainObject(a) && isPlainObject(b) && equals(a, b);
+}
+
+/**
+ * C#'s `ValueTuple.Equals(other)` over the positional arrays C# tuples lower to: same
+ * length, and each element pair equal under {@link objectEquals} (C# compares each
+ * element with `EqualityComparer<T>.Default`, so a class element compares by reference).
+ * A nested tuple element is an array too, so it compares by reference.
+ */
+export function tupleEquals(tuple: readonly unknown[], other: unknown): boolean {
+  if (!Array.isArray(other) || other.length !== tuple.length) return false;
+
+  return tuple.every((element, index) => objectEquals(element, other[index]));
+}
+
+function hasEqualsMethod(value: object): value is { equals(other: unknown): boolean } {
+  return "equals" in value && typeof (value as { equals?: unknown }).equals === "function";
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
  * Alias the compiler emits for every C# `GetHashCode()` call. Same contract as
  * {@link hashCode}; the distinct name keeps a call site from colliding with a
  * local or a method the user named `hashCode` (records declare one).

@@ -59,7 +59,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private bool IsRecordValueComparison(IMethodSymbol method, BinaryExpressionSyntax bin) =>
         IsSynthesizedEqualityOperator(method)
-        && NeedsValueEqualityLowering(method.ContainingType)
+        && HasSynthesizedValueEquality(method.ContainingType)
         && !IsNullLiteral(bin.Left)
         && !IsNullLiteral(bin.Right);
 
@@ -76,8 +76,16 @@ public sealed partial class IrExpressionExtractor
     /// <c>[Branded]</c> one over a primitive, which lowers to that primitive.
     /// An <c>[External]</c> or <c>[Import]</c> record is a foreign class with
     /// no known <c>equals</c>, so it keeps the plain operator.
+    /// <para>
+    /// A <c>[PlainObject]</c> record lowers to an object literal with no
+    /// <c>equals</c>, so the runtime compares it by shape: its own keys and
+    /// their values. That is weaker than C#'s record equality in two ways —
+    /// a missing optional key and a <c>null</c> one differ (the key counts
+    /// differ), and two record types with the same shape compare equal (no
+    /// <c>EqualityContract</c>).
+    /// </para>
     /// </summary>
-    private bool NeedsValueEqualityLowering(ITypeSymbol? type) =>
+    private bool HasSynthesizedValueEquality(ITypeSymbol? type) =>
         type is not null
         && UnwrapNullable(type) is INamedTypeSymbol { IsRecord: true } record
         && SymbolHelper.IsToolchainDeclared(record, _semantic.Compilation.Assembly)
@@ -112,6 +120,16 @@ public sealed partial class IrExpressionExtractor
         var left = TupleOperandOf(bin.Left);
         var right = TupleOperandOf(bin.Right);
 
+        if (left is null || right is null)
+        {
+            return ReportUnsupported(
+                bin,
+                "tuple equality against default",
+                $"Expression '{bin}' compares a tuple with a default value whose element "
+                    + "defaults the transpiler cannot spell; it is not supported by the transpiler."
+            );
+        }
+
         if (ExceedsFlatArity(left) || ExceedsFlatArity(right))
         {
             return ReportUnsupported(
@@ -139,21 +157,89 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// A tuple literal keeps its elements apart, so each one is evaluated
-    /// (and compared) on its own; any other operand is a single value whose
-    /// elements are read by position.
+    /// (and compared) on its own; a <c>default</c> spells out each element's
+    /// default value the same way; any other operand is a single value whose
+    /// elements are read by position. <c>null</c> when a <c>default</c> has an
+    /// element whose default value has no literal
+    /// (<see cref="DefaultOperandOf"/>).
     /// </summary>
-    private TupleOperand TupleOperandOf(ExpressionSyntax syntax)
+    private TupleOperand? TupleOperandOf(ExpressionSyntax syntax)
     {
         var unwrapped = Unparenthesized(syntax);
-        var type = _semantic.GetTypeInfo(unwrapped).Type;
+        var typeInfo = _semantic.GetTypeInfo(unwrapped);
+
+        if (IsDefaultValueSyntax(unwrapped))
+            return DefaultOperandOf(typeInfo.ConvertedType ?? typeInfo.Type);
 
         if (unwrapped is not TupleExpressionSyntax literal)
-            return TupleOperand.Single(type, Extract(unwrapped));
+            return new ValueOperand(typeInfo.Type, Extract(unwrapped));
 
         var elements = literal.Arguments.Select(a => TupleOperandOf(a.Expression)).ToList();
 
-        return TupleOperand.Literal(type, elements);
+        return elements.Contains(null)
+            ? null
+            : new LiteralOperand(typeInfo.Type, elements.OfType<TupleOperand>().ToList());
     }
+
+    private static bool IsDefaultValueSyntax(ExpressionSyntax syntax) =>
+        syntax is DefaultExpressionSyntax || syntax.IsKind(SyntaxKind.DefaultLiteralExpression);
+
+    /// <summary>
+    /// <c>default</c> of <paramref name="type"/> as an operand: a tuple's
+    /// default is the tuple of its elements' defaults, so it compares element
+    /// by element like a literal (reading positions off an
+    /// <c>undefined</c> value would throw). A scalar default is its literal
+    /// (<see cref="DefaultLiteralOf"/>); <c>null</c> when it has none.
+    /// </summary>
+    private static TupleOperand? DefaultOperandOf(ITypeSymbol? type)
+    {
+        if (type is INamedTypeSymbol { IsTupleType: true } tupleType)
+        {
+            var elements = tupleType.TupleElements.Select(e => DefaultOperandOf(e.Type)).ToList();
+
+            return elements.Contains(null)
+                ? null
+                : new LiteralOperand(type, elements.OfType<TupleOperand>().ToList());
+        }
+
+        return DefaultLiteralOf(type) is { } literal ? new ValueOperand(type, literal) : null;
+    }
+
+    /// <summary>
+    /// The literal C#'s <c>default</c> of <paramref name="type"/> is: <c>null</c>
+    /// for a reference, nullable or type-parameter type (as a bare
+    /// <c>default</c> extracts), <c>false</c>, or a numeric zero. <c>null</c>
+    /// (no literal) for any other value type: a struct's default is a value
+    /// the comparison cannot spell as a literal.
+    /// </summary>
+    private static IrLiteral? DefaultLiteralOf(ITypeSymbol? type) =>
+        type switch
+        {
+            null => null,
+            { IsReferenceType: true } or ITypeParameterSymbol => new IrLiteral(
+                null,
+                IrLiteralKind.Null
+            ),
+            _ when type.IsNullableValueType() => new IrLiteral(null, IrLiteralKind.Null),
+            { SpecialType: SpecialType.System_Boolean } => new IrLiteral(
+                false,
+                IrLiteralKind.Boolean
+            ),
+            { SpecialType: SpecialType.System_Int64 or SpecialType.System_UInt64 } =>
+                ClassifyNumeric(0L),
+            {
+                SpecialType: SpecialType.System_Int32
+                    or SpecialType.System_UInt32
+                    or SpecialType.System_Int16
+                    or SpecialType.System_UInt16
+                    or SpecialType.System_Byte
+                    or SpecialType.System_SByte
+            } => ClassifyNumeric(0),
+            { SpecialType: SpecialType.System_Double or SpecialType.System_Single } =>
+                ClassifyNumeric(0d),
+            { SpecialType: SpecialType.System_Decimal } => ClassifyNumeric(0m),
+            _ => null,
+        };
 
     /// <summary>
     /// Rebuilds <paramref name="operand"/> with every non-literal leaf value
@@ -164,24 +250,27 @@ public sealed partial class IrExpressionExtractor
     private TupleOperand BindLeaves(
         TupleOperand operand,
         List<(string Name, IrExpression Value)> bindings
+    ) =>
+        operand switch
+        {
+            LiteralOperand literal => literal with
+            {
+                Elements = literal.Elements.Select(e => BindLeaves(e, bindings)).ToList(),
+            },
+            ValueOperand { Value: IrLiteral } => operand,
+            ValueOperand value => value with { Value = BindToTemporary(value.Value, bindings) },
+            _ => operand,
+        };
+
+    private IrIdentifier BindToTemporary(
+        IrExpression value,
+        List<(string Name, IrExpression Value)> bindings
     )
     {
-        if (operand.Elements is { } elements)
-            return operand with
-            {
-                Elements = elements.Select(e => BindLeaves(e, bindings)).ToList(),
-            };
-
-        if (operand.SingleValue is IrLiteral)
-            return operand;
-
         var name = NextTupleOperandTempName();
-        bindings.Add((name, operand.SingleValue));
+        bindings.Add((name, value));
 
-        return operand with
-        {
-            Value = new IrIdentifier(name),
-        };
+        return new IrIdentifier(name);
     }
 
     private static IrExpression WrapInLetBindings(
@@ -198,7 +287,7 @@ public sealed partial class IrExpressionExtractor
     private IrExpression CompareTupleOperands(TupleOperand left, TupleOperand right, bool negated)
     {
         if (!left.IsTuple || !right.IsTuple)
-            return CompareTupleElements(left, right, negated);
+            return CompareTupleElements(AsValue(left), AsValue(right), negated);
 
         var combinator = negated ? IrBinaryOp.LogicalOr : IrBinaryOp.LogicalAnd;
 
@@ -209,6 +298,14 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// A non-tuple operand: always a single value, since a literal operand is
+    /// a tuple and C# only compares a tuple with a tuple.
+    /// </summary>
+    private static ValueOperand AsValue(TupleOperand operand) =>
+        operand as ValueOperand
+        ?? throw new InvalidOperationException("A tuple literal operand has no single value.");
+
+    /// <summary>
     /// One element pair, with the operator C# binds for it: decimal equality
     /// when a side is a <c>decimal</c> (the same <c>eq</c> call a scalar
     /// decimal <c>==</c> lowers to, on the decimal side so a converted
@@ -216,90 +313,99 @@ public sealed partial class IrExpressionExtractor
     /// needs the value lowering and neither is the <c>null</c> literal, the
     /// plain one otherwise.
     /// </summary>
-    private IrExpression CompareTupleElements(TupleOperand left, TupleOperand right, bool negated)
+    private IrExpression CompareTupleElements(ValueOperand left, ValueOperand right, bool negated)
     {
-        var decimalMethod = MapDecimalBinaryMethod(EqualityOperator(byValue: false, negated))!;
-
         if (IsDecimal(left.Type))
-            return BuildDecimalBinaryCall(left.SingleValue, right.SingleValue, decimalMethod);
+            return BuildDecimalEquality(left.Value, right.Value, negated);
 
         if (IsDecimal(right.Type))
-            return BuildDecimalBinaryCall(right.SingleValue, left.SingleValue, decimalMethod);
+            return BuildDecimalEquality(right.Value, left.Value, negated);
 
         return new IrBinaryExpression(
-            left.SingleValue,
-            EqualityOperator(NeedsValueEquality(left, right), negated),
-            right.SingleValue
+            left.Value,
+            EqualityOperator(ComparesElementsByValue(left, right), negated),
+            right.Value
         );
     }
+
+    private static IrExpression BuildDecimalEquality(
+        IrExpression decimalSide,
+        IrExpression otherSide,
+        bool negated
+    ) =>
+        BuildDecimalBinaryCall(
+            decimalSide,
+            otherSide,
+            MapDecimalBinaryMethod(EqualityOperator(byValue: false, negated))!
+        );
 
     private static bool IsDecimal(ITypeSymbol? type) =>
         type?.SpecialType == SpecialType.System_Decimal;
 
-    private bool NeedsValueEquality(TupleOperand left, TupleOperand right) =>
-        (NeedsValueEqualityLowering(left.Type) || NeedsValueEqualityLowering(right.Type))
+    private bool ComparesElementsByValue(ValueOperand left, ValueOperand right) =>
+        (HasSynthesizedValueEquality(left.Type) || HasSynthesizedValueEquality(right.Type))
         && !left.IsNullLiteral
         && !right.IsNullLiteral;
 
     /// <summary>
-    /// One side of a tuple comparison: a literal's separate
-    /// <see cref="Elements"/> (<see cref="Literal"/>), or one
-    /// <see cref="Value"/> of <see cref="Type"/> — a whole tuple or a scalar
-    /// element (<see cref="Single"/>). Exactly one of the two is set.
+    /// One side of a tuple comparison, of <see cref="Type"/>: a literal's
+    /// separate elements (<see cref="LiteralOperand"/>), or one value — a
+    /// whole tuple or a scalar element (<see cref="ValueOperand"/>).
     /// </summary>
-    private sealed record TupleOperand(
-        ITypeSymbol? Type,
-        IrExpression? Value,
-        IReadOnlyList<TupleOperand>? Elements
-    )
+    private abstract record TupleOperand(ITypeSymbol? Type)
     {
-        public static TupleOperand Literal(
-            ITypeSymbol? type,
-            IReadOnlyList<TupleOperand> elements
-        ) => new(type, Value: null, elements);
-
-        public static TupleOperand Single(ITypeSymbol? type, IrExpression value) =>
-            new(type, value, Elements: null);
-
-        public IrExpression SingleValue =>
-            Value
-            ?? throw new InvalidOperationException("A tuple literal operand has no single value.");
-
         public bool IsTuple =>
-            Elements is not null || Type is INamedTypeSymbol { IsTupleType: true };
+            this is LiteralOperand || Type is INamedTypeSymbol { IsTupleType: true };
 
-        public int Arity =>
-            Elements?.Count ?? (Type as INamedTypeSymbol)?.TupleElements.Length ?? 0;
+        public abstract int Arity { get; }
+
+        public abstract bool AllLeavesSideEffectFree();
+
+        public abstract TupleOperand ElementAt(int index);
+    }
+
+    /// <summary>A tuple literal (or spelled-out <c>default</c>), element by element.</summary>
+    private sealed record LiteralOperand(ITypeSymbol? Type, IReadOnlyList<TupleOperand> Elements)
+        : TupleOperand(Type)
+    {
+        public override int Arity => Elements.Count;
+
+        public override bool AllLeavesSideEffectFree() =>
+            Elements.All(e => e.AllLeavesSideEffectFree());
+
+        public override TupleOperand ElementAt(int index) => Elements[index];
+    }
+
+    /// <summary>One value: a whole tuple, or a scalar element.</summary>
+    private sealed record ValueOperand(ITypeSymbol? Type, IrExpression Value) : TupleOperand(Type)
+    {
+        public override int Arity => (Type as INamedTypeSymbol)?.TupleElements.Length ?? 0;
 
         public bool IsNullLiteral => Value is IrLiteral { Kind: IrLiteralKind.Null };
 
-        public bool AllLeavesSideEffectFree() =>
-            Elements?.All(e => e.AllLeavesSideEffectFree())
-            ?? IrEvaluationTraits.IsSideEffectFree(SingleValue);
+        public override bool AllLeavesSideEffectFree() =>
+            IrEvaluationTraits.IsSideEffectFree(Value);
 
         /// <summary>
-        /// The element at <paramref name="index"/>: a literal's own element, or
-        /// a positional read of the value — the same tuple-element access a
-        /// source <c>t.ItemN</c> produces, so each backend reads it its own
-        /// way.
+        /// A positional read of the element at <paramref name="index"/> — the
+        /// same tuple-element access a source <c>t.ItemN</c> produces, so each
+        /// backend reads it its own way.
         /// </summary>
-        public TupleOperand ElementAt(int index)
+        public override TupleOperand ElementAt(int index)
         {
-            if (Elements is { } elements)
-                return elements[index];
-
             var tupleType = (INamedTypeSymbol)Type!;
             var itemName = SymbolHelper.TupleItemName(index);
+
             var origin = new IrMemberOrigin(
                 tupleType.GetStableFullName(),
                 itemName,
-                IsTupleElement: true,
+                TupleElement: IrTupleElementKind.ValueTuple,
                 TupleIndex: index
             );
 
-            return Single(
+            return new ValueOperand(
                 tupleType.TupleElements[index].Type,
-                new IrMemberAccess(SingleValue, itemName, origin)
+                new IrMemberAccess(Value, itemName, origin)
             );
         }
     }

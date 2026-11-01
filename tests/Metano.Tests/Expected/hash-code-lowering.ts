@@ -1,4 +1,4 @@
-import { valueEquals, valueHashCode } from "metano-runtime";
+import { objectEquals, valueHashCode } from "metano-runtime";
 import type { Color } from "./color";
 import type { Point } from "./point";
 
@@ -20,6 +20,6 @@ export class Money {
   }
 
   same(a: Money | null, b: Money | null): boolean {
-    return valueEquals(a, b) && !(a === b);
+    return objectEquals(a, b) && !(a === b);
   }
 }
