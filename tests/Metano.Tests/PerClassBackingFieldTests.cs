@@ -162,8 +162,10 @@ public class PerClassBackingFieldTests
     }
 
     [Test]
-    public async Task VirtualProperty_NoOneOverrides_KeepsItsPlainField()
+    public async Task VirtualProperty_NoOneOverrides_StillOwnsItsBackingField()
     {
+        // The decision is local to the property, so a package that never sees an override
+        // (a library) agrees with the consumer that adds one.
         var result = TranspileHelper.Transpile(
             """
             namespace App;
@@ -176,9 +178,32 @@ public class PerClassBackingFieldTests
             """
         );
 
-        await Assert.That(result["app/lonely.ts"]).Contains("  readonly z: number = 9;");
-        await Assert.That(result["app/lonely.ts"]).DoesNotMatch(BackingField);
-        await Assert.That(result["app/lonely.ts"]).DoesNotContain("toJSON");
+        var field = FieldOf(result["app/lonely.ts"], "z", "Lonely");
+
+        await Assert
+            .That(result["app/lonely.ts"])
+            .Contains($"  private readonly {field}: number = 9;");
+        await Assert.That(result["app/lonely.ts"]).Contains("  get z(): number {");
+    }
+
+    [Test]
+    public async Task NonVirtualProperty_KeepsItsPlainField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Plain
+            {
+                public int Z { get; } = 9;
+            }
+            """
+        );
+
+        await Assert.That(result["app/plain.ts"]).Contains("  readonly z: number = 9;");
+        await Assert.That(result["app/plain.ts"]).DoesNotMatch(BackingField);
+        await Assert.That(result["app/plain.ts"]).DoesNotContain("toJSON");
     }
 
     [Test]
@@ -702,6 +727,85 @@ public class PerClassBackingFieldTests
         );
 
         await Assert.That(result["app/q-base.ts"]).Contains("return publicJsonShape(this);");
+    }
+
+    [Test]
+    public async Task ConsumerOverride_OfLibraryVirtualProperty_OwnsStorageAndOverridesToJson()
+    {
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            namespace Lib;
+
+            public class LibBase
+            {
+                public virtual int P { get; set; } = 1;
+            }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Consumer : Lib.LibBase
+            {
+                public override int P { get; set; } = 2;
+            }
+
+            public class PlainConsumer : Lib.LibBase
+            {
+                public int Other { get; set; }
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+        var field = FieldOf(result["app/consumer.ts"], "p", "Consumer");
+
+        await Assert.That(result["app/consumer.ts"]).Contains($"  private {field}: number = 2;");
+        await Assert.That(result["app/consumer.ts"]).Contains("  get p(): number {");
+        await Assert.That(result["app/consumer.ts"]).Contains("  override toJSON(): unknown {");
+        // No storage of its own: it inherits the library's toJSON.
+        await Assert.That(result["app/plain-consumer.ts"]).DoesNotContain("toJSON");
+    }
+
+    [Test]
+    public async Task CompoundAndIncrementWrites_ToGetOnlyProperty_StoreToTheBackingField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Counter
+            {
+                public virtual int N { get; }
+                public virtual string? Label { get; }
+                public virtual int M { get; set; }
+
+                public Counter()
+                {
+                    N += 2;
+                    N++;
+                    --N;
+                    Label ??= "none";
+                    M += 1;
+                }
+            }
+            """
+        );
+
+        var output = result["app/counter.ts"];
+        var n = FieldOf(output, "n", "Counter");
+        var label = FieldOf(output, "label", "Counter");
+
+        await Assert.That(output).Contains($"    this.{n} += 2;");
+        await Assert.That(output).Contains($"    this.{n}++;");
+        await Assert.That(output).Contains($"    --this.{n};");
+        await Assert.That(output).Contains($"    this.{label} ??= \"none\";");
+        // A writable property keeps its (virtual) setter call.
+        await Assert.That(output).Contains("    this.m += 1;");
     }
 
     private static string FieldOf(string output, string property, string owner)

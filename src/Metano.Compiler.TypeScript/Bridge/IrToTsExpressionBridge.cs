@@ -68,10 +68,10 @@ public static partial class IrToTsExpressionBridge
             IrBinaryExpression bin => MapBinary(bin, bclRegistry),
             IrUnaryExpression un when un.IsPrefix => new TsUnaryExpression(
                 PrefixOperatorToken(un.Operator),
-                Map(un.Operand, bclRegistry)
+                MapMutatedOperand(un, bclRegistry)
             ),
             IrUnaryExpression un => new TsPostfixUnaryExpression(
-                Map(un.Operand, bclRegistry),
+                MapMutatedOperand(un, bclRegistry),
                 PostfixOperatorToken(un.Operator)
             ),
             IrConditionalExpression cond => new TsConditionalExpression(
@@ -159,14 +159,17 @@ public static partial class IrToTsExpressionBridge
             return MapIntegerDivision(bin, bclRegistry);
 
         if (
-            bin is { Operator: IrBinaryOp.Assign, Left: IrMemberAccess backedMember }
+            bin is { Left: IrMemberAccess backedMember }
+            && IsAssignment(bin.Operator)
             && PerClassBackingFields.TryBackingFieldWrite(backedMember) is { } backingField
         )
+        {
             return new TsBinaryExpression(
                 PerClassBackingFields.StorageAccess(backingField),
-                "=",
+                BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
                 Map(bin.Right, bclRegistry)
             );
+        }
 
         if (
             bin is { Operator: IrBinaryOp.Assign, Left: IrMemberAccess initOnlyMember }
@@ -188,6 +191,30 @@ public static partial class IrToTsExpressionBridge
             MapOperand(bin.Right, comparesWithLiteral, bclRegistry)
         );
     }
+
+    /// <summary>
+    /// <c>=</c> and every compound assignment (<c>+=</c> ... <c>??=</c>).
+    /// </summary>
+    private static bool IsAssignment(IrBinaryOp op) =>
+        op is >= IrBinaryOp.Assign and <= IrBinaryOp.NullCoalescingAssign;
+
+    /// <summary>
+    /// The operand of <c>++</c> / <c>--</c>; a get-only per-class property assigned inside
+    /// its class's constructor (<c>P++</c>) increments the backing field, which has the
+    /// setter C# lets the constructor skip.
+    /// </summary>
+    private static TsExpression MapMutatedOperand(
+        IrUnaryExpression unary,
+        DeclarativeMappingRegistry? bclRegistry
+    ) =>
+        unary
+            is {
+                Operator: IrUnaryOp.Increment or IrUnaryOp.Decrement,
+                Operand: IrMemberAccess member
+            }
+        && PerClassBackingFields.TryBackingFieldWrite(member) is { } backingField
+            ? PerClassBackingFields.StorageAccess(backingField)
+            : Map(unary.Operand, bclRegistry);
 
     /// <summary>
     /// A write to an <c>init</c>-only property through a receiver other than
