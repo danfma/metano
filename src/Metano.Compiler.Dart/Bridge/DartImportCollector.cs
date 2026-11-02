@@ -72,8 +72,8 @@ public static class DartImportCollector
     // module-level functions, and delegate-derived typedefs. Method bodies are
     // walked through DartBodyTypeReferences, which surfaces the types they
     // name (static receivers such as extension-helper hosts, `new`, casts, type
-    // tests) as ordinary Dart types. Future AST features (exception types,
-    // dispatcher-style classes) will plug in additional cases here.
+    // tests) as ordinary Dart types. Future AST features (dispatcher-style
+    // classes) will plug in additional cases here.
 
     private static void WalkTopLevel(DartTopLevel stmt, WalkContext ctx)
     {
@@ -124,8 +124,12 @@ public static class DartImportCollector
             return;
 
         foreach (var p in constructor.Parameters)
+        {
             if (p.Type is not null)
                 WalkType(p.Type, ctx);
+
+            WalkExpression(p.DefaultValue, ctx);
+        }
 
         WalkBody(constructor.Body, ctx);
     }
@@ -136,6 +140,7 @@ public static class DartImportCollector
         {
             case DartField f:
                 WalkType(f.Type, ctx);
+                WalkExpression(f.Initializer, ctx);
                 break;
             case DartGetter g:
                 WalkType(g.ReturnType, ctx);
@@ -149,6 +154,12 @@ public static class DartImportCollector
                 WalkBody(m.Body, ctx);
                 break;
         }
+    }
+
+    private static void WalkExpression(IrExpression? expression, WalkContext ctx)
+    {
+        foreach (var type in DartBodyTypeReferences.Collect(expression))
+            WalkType(type, ctx);
     }
 
     private static void WalkBody(IReadOnlyList<IrStatement>? body, WalkContext ctx)

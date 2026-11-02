@@ -51,7 +51,7 @@ public static class IrToDartClassBridge
                 switch (m)
                 {
                     case IrFieldDeclaration field:
-                        members.Add(ConvertField(field));
+                        members.Add(ConvertField(field, rewriter));
                         break;
                     case IrPropertyDeclaration prop when !promotedParamNames.Contains(prop.Name):
                         members.Add(ConvertProperty(prop, rewriter));
@@ -418,7 +418,7 @@ public static class IrToDartClassBridge
                     : null,
                 IsFieldInitializer: p.Promotion != IrParameterPromotion.None,
                 IsRequired: !p.Parameter.HasDefaultValue,
-                DefaultValue: p.Parameter.DefaultValue
+                DefaultValue: rewriter.Rewrite(p.Parameter.DefaultValue)
             ))
             .ToList();
         return new DartConstructor(className, parameters, Body: rewriter.Rewrite(ctor.Body));
@@ -426,14 +426,14 @@ public static class IrToDartClassBridge
 
     // ── Members ────────────────────────────────────────────────────────────
 
-    private static DartField ConvertField(IrFieldDeclaration field) =>
+    private static DartField ConvertField(IrFieldDeclaration field, DartIrRewriter rewriter) =>
         new(
             IrToDartNamingPolicy.ToParameterName(field.Name),
             IrToDartTypeMapper.Map(field.Type),
             IsFinal: field.IsReadonly,
             IsStatic: field.IsStatic,
             IsLate: NeedsLate(field.Type, field.Initializer is not null),
-            Initializer: field.Initializer
+            Initializer: rewriter.Rewrite(field.Initializer)
         );
 
     private static bool IsNullable(IrTypeRef type) => type is IrNullableTypeRef;
@@ -497,7 +497,7 @@ public static class IrToDartClassBridge
                 IsFinal: isFinal,
                 IsStatic: prop.IsStatic,
                 IsLate: !prop.IsStatic && NeedsLate(prop.Type, prop.Initializer is not null),
-                Initializer: prop.Initializer
+                Initializer: rewriter.Rewrite(prop.Initializer)
             );
         }
 

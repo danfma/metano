@@ -19,7 +19,7 @@ namespace Metano.Compiler.Dart.Bridge;
 public sealed class DartIrRewriter
 {
     private readonly DeclarativeMappingRegistry _registry;
-    private readonly IReadOnlySet<string> _containerlessTypes;
+    private readonly IReadOnlySet<string> _flattenedStaticClassNames;
 
     /// <param name="registry">Declarative BCL mappings.</param>
     /// <param name="containerlessTypes">Stable full names of the static classes this target
@@ -32,8 +32,11 @@ public sealed class DartIrRewriter
     )
     {
         _registry = registry;
-        _containerlessTypes = containerlessTypes ?? new HashSet<string>();
+        _flattenedStaticClassNames = containerlessTypes ?? new HashSet<string>();
     }
+
+    public IrExpression? Rewrite(IrExpression? expression) =>
+        expression is null ? null : RewriteExpression(expression);
 
     public IReadOnlyList<IrStatement>? Rewrite(IReadOnlyList<IrStatement>? body)
     {
@@ -245,19 +248,20 @@ public sealed class DartIrRewriter
     private IrExpression RewriteMemberAccess(IrMemberAccess access)
     {
         var rewrittenTarget = RewriteExpression(access.Target);
+
         var rewritten = access with
         {
             Target = rewrittenTarget,
-            Origin = WithRealContainerlessness(access.Origin),
+            Origin = ClearNoContainerUnlessFlattened(access.Origin),
         };
 
         var mapped = IrToDartBclMapper.TryMapMemberAccess(rewritten, _registry);
         return mapped ?? rewritten;
     }
 
-    private IrMemberOrigin? WithRealContainerlessness(IrMemberOrigin? origin) =>
+    private IrMemberOrigin? ClearNoContainerUnlessFlattened(IrMemberOrigin? origin) =>
         origin is { IsDeclaringTypeNoContainer: true }
-        && !_containerlessTypes.Contains(origin.DeclaringTypeFullName)
+        && !_flattenedStaticClassNames.Contains(origin.DeclaringTypeFullName)
             ? origin with
             {
                 IsDeclaringTypeNoContainer = false,

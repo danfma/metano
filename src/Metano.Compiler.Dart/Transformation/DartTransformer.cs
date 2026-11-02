@@ -141,13 +141,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     // [ExportedAsModule] still tracked under the same predicate)
                     // collapse to top-level Dart functions (the idiomatic
                     // utility-module shape) instead of a class of static methods.
-                    if (
-                        type.IsStatic
-                        && (
-                            SymbolHelper.HasExportedAsModule(type)
-                            || SymbolHelper.HasNoContainer(type)
-                        )
-                    )
+                    if (LowersToTopLevelFunctions(type))
                     {
                         var functions = IrModuleFunctionExtractor.Extract(
                             type,
@@ -214,13 +208,17 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
     /// <summary>
     /// The stable full names of the transpilable static classes that lower to top-level
-    /// functions ([NoContainer] / [ExportedAsModule]) — the same predicate
-    /// <see cref="TransformAll"/> uses to pick the module bridge.
+    /// functions ([NoContainer] / [ExportedAsModule]), by <see cref="LowersToTopLevelFunctions"/>
+    /// — the predicate <see cref="TransformAll"/> uses to pick the module bridge. Types of
+    /// referenced assemblies are not listed, so their call sites keep the qualifier.
     /// </summary>
+    private static bool LowersToTopLevelFunctions(INamedTypeSymbol type) =>
+        type.IsStatic && SymbolHelper.IsContainerless(type);
+
     private static HashSet<string> ContainerlessTypeNames(IrCompilation ir) =>
         (ir.TranspilableTypeEntries ?? [])
             .Select(entry => entry.Symbol)
-            .Where(type => type.IsStatic && SymbolHelper.IsContainerless(type))
+            .Where(LowersToTopLevelFunctions)
             .Select(type => type.GetStableFullName())
             .ToHashSet(StringComparer.Ordinal);
 
