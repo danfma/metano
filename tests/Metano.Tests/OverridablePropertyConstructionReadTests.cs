@@ -258,6 +258,36 @@ public class OverridablePropertyConstructionReadTests
     }
 
     [Test]
+    public async Task ClosedGenericBaseVirtualProperty_ReportsWhenOverridden()
+    {
+        var (_, diagnostics) = TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public abstract class Base<T>
+            {
+                public virtual T X => default!;
+            }
+
+            [Transpile]
+            public class Mid : Base<int>
+            {
+                public int Copy { get; }
+
+                public Mid() { Copy = X; }
+            }
+
+            [Transpile]
+            public class Leaf : Mid
+            {
+                public override int X => 1;
+            }
+            """
+        );
+
+        await Assert.That(ConstructionReads(diagnostics).Count).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task NameofOfOverridableProperty_DoesNotReport()
     {
         var (_, diagnostics) = TranspileWithDiagnostics(

@@ -145,11 +145,14 @@ internal static class OverridablePropertyConstructionReads
     /// Whether a derived class can change what the read returns: an abstract
     /// property always can (it has no value of its own); a virtual or unsealed
     /// override property only when the compilation actually contains an
-    /// override of it. Overrides in other packages are not visible (known gap).
+    /// override of it anywhere (matched per property, not per subtree). Overrides in other packages are not visible (known gap).
     /// </summary>
     private static bool IsOverridden(IPropertySymbol property, Compilation compilation) =>
         property.IsAbstract
-        || (IsOverridable(property) && OverriddenPropertiesIn(compilation).Contains(property));
+        || (
+            IsOverridable(property)
+            && OverriddenPropertiesIn(compilation).Contains(property.OriginalDefinition)
+        );
 
     private static bool IsOverridable(IPropertySymbol property) =>
         !property.IsIndexer && (property.IsVirtual || (property.IsOverride && !property.IsSealed));
