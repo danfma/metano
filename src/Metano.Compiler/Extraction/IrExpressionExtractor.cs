@@ -2357,7 +2357,7 @@ public sealed partial class IrExpressionExtractor
                 return rewritten;
         }
 
-        var target = Extract(inv.Expression);
+        var target = ExtractExplicitInvokeDelegate(inv, symbol) ?? Extract(inv.Expression);
         var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
         ApplyParamsSpread(args, symbol, inv.ArgumentList.Arguments);
         IReadOnlyList<IrTypeRef>? typeArguments = null;
@@ -2375,10 +2375,14 @@ public sealed partial class IrExpressionExtractor
         // receiver parameter receives whatever the caller passed in
         // a normal positional slot, which the runtime helper
         // expects to be `this`.
+        //
+        // An explicit `handler.Invoke(receiver, …)` binds to the same
+        // synthetic `Invoke`, which has no runtime counterpart, so the
+        // `.call` goes on the delegate itself (`handler.call(receiver, …)`),
+        // never on a `.invoke` member (#362).
         if (
             symbol is { MethodKind: MethodKind.DelegateInvoke }
-            && symbol.Parameters.Length > 0
-            && SymbolHelper.HasThis(symbol.Parameters[0])
+            && Invocation.InvocationLoweringHelpers.HasThisParameter(symbol)
             && args.Count > 0
             && IsSafeForCallRewrite(inv)
         )
@@ -2567,6 +2571,28 @@ public sealed partial class IrExpressionExtractor
                 or AwaitExpressionSyntax
             );
     }
+
+    /// <summary>
+    /// The delegate expression of an explicit <c>handler.Invoke(…)</c> /
+    /// <c>handler?.Invoke(…)</c> call on a <c>[This]</c> delegate, or
+    /// <c>null</c> for any other call (implicit <c>handler(…)</c>,
+    /// <c>holder.Get(…)</c> on a delegate-typed member), whose own target
+    /// already is the delegate.
+    /// </summary>
+    private IrExpression? ExtractExplicitInvokeDelegate(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol? invoke
+    ) =>
+        invoke is not null
+        && Invocation.InvocationLoweringHelpers.HasThisParameter(invoke)
+        && QualifiedMemberSyntax.From(inv.Expression) is { } member
+        && Invocation.InvocationLoweringHelpers.IsExplicitDelegateInvoke(
+            invoke,
+            member.Node,
+            _semantic
+        )
+            ? Extract(member.Receiver)
+            : null;
 
     /// <summary>
     /// Returns the syntactic argument index that corresponds to the
