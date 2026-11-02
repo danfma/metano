@@ -203,11 +203,13 @@ internal static partial class IrToTsClassBridge
         if (baseArguments.Count == 0 && !keepsBaseMessage)
             return null;
 
+        var loweredArguments = baseArguments
+            .Select(argument => IrToTsExpressionBridge.MapArgument(argument, bclRegistry))
+            .ToList();
+
         return new TsBaseConstructorCall(
             [],
-            baseArguments
-                .Select(argument => IrToTsExpressionBridge.MapArgument(argument, bclRegistry))
-                .ToList(),
+            IrToTsExpressionBridge.WithoutNullRestArray(baseArguments, loweredArguments),
             keepsBaseMessage
         );
     }

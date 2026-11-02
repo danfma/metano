@@ -620,7 +620,7 @@ public static partial class IrToTsExpressionBridge
         );
 
     /// <summary>
-    /// The arguments of a call to a rest parameter, without a trailing <c>params</c>
+    /// The arguments of a call, <c>new</c> or <c>super(...)</c> to a rest parameter, without a trailing <c>params</c>
     /// array passed as <c>null</c> (<c>f(null)</c>; the extractor normalizes casts and
     /// <c>default</c> to the null literal and reports the divergence). Spreading
     /// <c>null</c> throws and a rest parameter cannot hold it, so the argument is
@@ -628,7 +628,7 @@ public static partial class IrToTsExpressionBridge
     /// call lowered through a declarative BCL mapping keeps the spread, since its
     /// template addresses arguments by position.
     /// </summary>
-    private static IReadOnlyList<TsExpression> WithoutNullRestArray(
+    internal static IReadOnlyList<TsExpression> WithoutNullRestArray(
         IReadOnlyList<IrArgument> arguments,
         IReadOnlyList<TsExpression> loweredArguments
     ) =>

@@ -3780,6 +3780,34 @@ public sealed partial class IrExpressionExtractor
             );
 
     /// <summary>
+    /// Extracts the arguments of a constructor initializer (<c>: base(...)</c>,
+    /// <c>: this(...)</c>, a primary-constructor base call); <c>ref</c>/<c>out</c>
+    /// arguments are not lowered here. When
+    /// <paramref name="callee"/> is given, a <c>params</c> slot follows the <c>params</c> rule of an
+    /// ordinary call (<see cref="ApplyParamsSpread"/>): a forwarded array is spread,
+    /// expanded elements are left as they are, and a constant <c>null</c> array is
+    /// normalized to the null literal, reported as MS0001 on rest-parameter targets.
+    /// A <c>null</c> <paramref name="callee"/> keeps the arguments plain, for a
+    /// chain that binds them to the chained parameters instead of calling it.
+    /// </summary>
+    public List<IrArgument> ExtractInitializerArguments(
+        ArgumentListSyntax argumentList,
+        IMethodSymbol? callee
+    )
+    {
+        var args = argumentList
+            .Arguments.Select(argument => new IrArgument(
+                ExtractStandalone(argument.Expression),
+                argument.NameColon?.Name.Identifier.ValueText
+            ))
+            .ToList();
+
+        ApplyParamsSpread(args, callee, argumentList.Arguments);
+
+        return args;
+    }
+
+    /// <summary>
     /// Marks the trailing argument as a spread when the C# call passes a
     /// single value into a <c>params</c> slot (the value is the array
     /// itself). Discrete element calls (<c>Foo("x", "a", 42)</c>) leave the
