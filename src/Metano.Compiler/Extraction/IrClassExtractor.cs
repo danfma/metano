@@ -26,7 +26,7 @@ public static class IrClassExtractor
         Metano.Annotations.TargetLanguage? target = null
     )
     {
-        var semantics = ExtractSemantics(type, originResolver, target);
+        var semantics = ExtractSemantics(type, originResolver, compilation, target);
 
         var baseType =
             type.BaseType is not null && IsMeaningfulBase(type.BaseType)
@@ -261,6 +261,7 @@ public static class IrClassExtractor
     private static IrTypeSemantics ExtractSemantics(
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver,
+        Compilation? compilation,
         Metano.Annotations.TargetLanguage? target
     ) =>
         new(
@@ -282,7 +283,13 @@ public static class IrClassExtractor
                 originResolver,
                 target
             ),
-            Enumerator: EnumerationContractExtractor.ExtractEnumerator(type, originResolver, target)
+            Enumerator: EnumerationContractExtractor.ExtractEnumerator(
+                type,
+                originResolver,
+                target
+            ),
+            InheritsPerClassStorage: compilation is not null
+                && OverrideChains.AncestorOwnsPerClassStorage(type, compilation)
         );
 
     /// <summary>

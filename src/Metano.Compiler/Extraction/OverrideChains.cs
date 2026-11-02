@@ -1,0 +1,135 @@
+using System.Runtime.CompilerServices;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+namespace Metano.Compiler.Extraction;
+
+/// <summary>
+/// Which properties of the compilation take part in an override chain: the
+/// scan shared by the constructor-read diagnostic
+/// (<see cref="OverridablePropertyConstructionReads"/>) and the per-class storage
+/// decision (<see cref="OwnsPerClassStorage"/>). Overrides declared in other
+/// packages are not visible (known gap).
+/// </summary>
+internal static class OverrideChains
+{
+    private static readonly ConditionalWeakTable<
+        Compilation,
+        HashSet<IPropertySymbol>
+    > OverriddenPropertiesCache = new();
+
+    /// <summary>
+    /// Whether <paramref name="property"/> is overridable (<c>virtual</c> or an
+    /// unsealed <c>override</c>) and the compilation contains an override of it.
+    /// Matched per property, not per subtree.
+    /// </summary>
+    public static bool IsOverridableAndOverridden(
+        IPropertySymbol property,
+        Compilation compilation
+    ) =>
+        IsOverridable(property)
+        && OverriddenPropertiesIn(compilation).Contains(property.OriginalDefinition);
+
+    /// <summary>
+    /// Whether the auto-property keeps a backing field of its own in every class of
+    /// an override chain the compilation declares. C# gives each declaring class a
+    /// private backing field, so a base value stays reachable through
+    /// <c>base.P</c> while a derived class overrides it; a target that lowers the
+    /// auto-property to one field of the property's name would share a single slot
+    /// across the hierarchy, and that field would hide the override's accessor.
+    /// <para>
+    /// Applies to an auto-property that is not static, abstract (it has no storage)
+    /// or an indexer, and that is either overridable and overridden in the
+    /// compilation, or overrides a non-abstract property the compilation declares
+    /// (so a sealed override follows the base it overrides).
+    /// </para>
+    /// </summary>
+    public static bool OwnsPerClassStorage(IPropertySymbol property, Compilation compilation) =>
+        property is { IsStatic: false, IsAbstract: false, IsIndexer: false }
+        && IsAutoProperty(property)
+        && (
+            IsOverridableAndOverridden(property, compilation)
+            || OverridesDeclaredBase(property, compilation)
+        );
+
+    /// <summary>
+    /// Whether a class the compilation declares, among the ancestors of
+    /// <paramref name="type"/>, owns an auto-property with per-class storage
+    /// (<see cref="OwnsPerClassStorage"/>).
+    /// </summary>
+    public static bool AncestorOwnsPerClassStorage(INamedTypeSymbol type, Compilation compilation)
+    {
+        for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+        {
+            if (
+                SymbolEqualityComparer.Default.Equals(
+                    ancestor.ContainingAssembly,
+                    compilation.Assembly
+                )
+                && ancestor
+                    .GetMembers()
+                    .OfType<IPropertySymbol>()
+                    .Any(property => OwnsPerClassStorage(property, compilation))
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool OverridesDeclaredBase(IPropertySymbol property, Compilation compilation) =>
+        property.OverriddenProperty is { IsAbstract: false } overridden
+        && SymbolEqualityComparer.Default.Equals(
+            overridden.ContainingAssembly,
+            compilation.Assembly
+        );
+
+    private static bool IsAutoProperty(IPropertySymbol property) =>
+        property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            is PropertyDeclarationSyntax declaration
+        && PrimaryConstructorPropertyAlias.IsAutoProperty(declaration);
+
+    private static bool IsOverridable(IPropertySymbol property) =>
+        !property.IsIndexer && (property.IsVirtual || (property.IsOverride && !property.IsSealed));
+
+    private static HashSet<IPropertySymbol> OverriddenPropertiesIn(Compilation compilation) =>
+        OverriddenPropertiesCache.GetValue(compilation, ScanOverriddenProperties);
+
+    private static HashSet<IPropertySymbol> ScanOverriddenProperties(Compilation compilation)
+    {
+        var overridden = new HashSet<IPropertySymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var type in AllTypesIn(compilation.Assembly.GlobalNamespace))
+        foreach (var property in type.GetMembers().OfType<IPropertySymbol>())
+            for (
+                var parent = property.OverriddenProperty;
+                parent is not null;
+                parent = parent.OverriddenProperty
+            )
+                overridden.Add(parent.OriginalDefinition);
+
+        return overridden;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> AllTypesIn(INamespaceSymbol ns)
+    {
+        foreach (var type in ns.GetTypeMembers())
+        foreach (var nested in WithNestedTypes(type))
+            yield return nested;
+
+        foreach (var child in ns.GetNamespaceMembers())
+        foreach (var type in AllTypesIn(child))
+            yield return type;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> WithNestedTypes(INamedTypeSymbol type)
+    {
+        yield return type;
+
+        foreach (var nested in type.GetTypeMembers())
+        foreach (var inner in WithNestedTypes(nested))
+            yield return inner;
+    }
+}

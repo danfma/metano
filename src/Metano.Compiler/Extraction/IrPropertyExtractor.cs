@@ -33,7 +33,7 @@ public static class IrPropertyExtractor
             prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as PropertyDeclarationSyntax;
 
-        var semantics = BuildSemantics(prop, syntax);
+        var semantics = BuildSemantics(prop, syntax, compilation);
 
         IReadOnlyList<IrStatement>? getterBody = null;
         IReadOnlyList<IrStatement>? setterBody = null;
@@ -111,7 +111,8 @@ public static class IrPropertyExtractor
 
     private static IrPropertySemantics BuildSemantics(
         IPropertySymbol prop,
-        PropertyDeclarationSyntax? syntax
+        PropertyDeclarationSyntax? syntax,
+        Compilation? compilation
     )
     {
         var hasGetterBody = DetectGetterBody(syntax);
@@ -126,7 +127,9 @@ public static class IrPropertyExtractor
             IsVirtual: prop.IsVirtual,
             IsOverride: prop.IsOverride,
             IsSealed: prop.IsSealed,
-            IsRequired: prop.IsRequired
+            IsRequired: prop.IsRequired,
+            OwnsPerClassStorage: compilation is not null
+                && OverrideChains.OwnsPerClassStorage(prop, compilation)
         );
     }
 

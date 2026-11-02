@@ -29,7 +29,7 @@ internal static class PrimaryConstructorPropertyAlias
         Compilation compilation,
         TargetLanguage? target
     ) =>
-        CandidatesNamed(parameter.ContainingType, parameter.Name, target)
+        CandidatesNamed(parameter.ContainingType, parameter.Name, compilation, target)
             .FirstOrDefault(property => IsAliasOf(property, parameter, compilation));
 
     /// <summary>
@@ -50,13 +50,14 @@ internal static class PrimaryConstructorPropertyAlias
     public static IEnumerable<IPropertySymbol> CandidatesNamed(
         INamedTypeSymbol type,
         string name,
+        Compilation? compilation,
         TargetLanguage? target
     ) =>
         type.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(property =>
                 string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
-                && IsPromotionCandidate(property, target)
+                && IsPromotionCandidate(property, compilation, target)
             )
             .OrderBy(property => property.Name == name ? 0 : 1);
 
@@ -65,16 +66,24 @@ internal static class PrimaryConstructorPropertyAlias
     /// constructor parameter can be promoted to: declared in source, visible
     /// outside the assembly's internals, not <c>[Ignore]</c>d for
     /// <paramref name="target"/>, and owning its storage
-    /// (<see cref="OwnsItsStorage"/>). The constructor
+    /// (<see cref="OwnsItsStorage"/>) in a way a parameter property can: an
+    /// auto-property with per-class storage keeps its own accessor and backing
+    /// field, which a parameter property would replace with a plain shared field.
+    /// The constructor
     /// extraction and the capture scan share it, so a member-body read is
     /// never redirected to a property that is not emitted.
     /// </summary>
-    public static bool IsPromotionCandidate(IPropertySymbol property, TargetLanguage? target) =>
+    public static bool IsPromotionCandidate(
+        IPropertySymbol property,
+        Compilation? compilation,
+        TargetLanguage? target
+    ) =>
         !property.IsImplicitlyDeclared
         && property.DeclaredAccessibility
             is not (Accessibility.Internal or Accessibility.NotApplicable)
         && !SymbolHelper.HasIgnore(property, target)
-        && OwnsItsStorage(property);
+        && OwnsItsStorage(property)
+        && !OwnsPerClassStorage(property, compilation);
 
     /// <summary>
     /// An override's storage is declared by its base, except for a record's
@@ -84,6 +93,9 @@ internal static class PrimaryConstructorPropertyAlias
     /// </summary>
     private static bool OwnsItsStorage(IPropertySymbol property) =>
         !property.IsOverride || IsPositionalRecordProperty(property);
+
+    private static bool OwnsPerClassStorage(IPropertySymbol property, Compilation? compilation) =>
+        compilation is not null && OverrideChains.OwnsPerClassStorage(property, compilation);
 
     /// <summary>
     /// True when <paramref name="property"/> is the positional property of a
@@ -124,7 +136,7 @@ internal static class PrimaryConstructorPropertyAlias
         declaration.ExpressionBody?.Expression
         ?? (IsAutoProperty(declaration) ? declaration.Initializer?.Value : null);
 
-    private static bool IsAutoProperty(PropertyDeclarationSyntax declaration) =>
+    internal static bool IsAutoProperty(PropertyDeclarationSyntax declaration) =>
         declaration.AccessorList?.Accessors.All(a => a.Body is null && a.ExpressionBody is null)
         ?? false;
 

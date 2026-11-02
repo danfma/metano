@@ -703,6 +703,8 @@ public sealed class Printer(string indent = "  ")
         switch (member)
         {
             case TsGetterMember getter:
+                PrintAccessibility(getter.Accessibility);
+
                 if (getter.Static)
                     _sb.Write("static ");
                 if (getter.Override)
@@ -716,6 +718,8 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsSetterMember setter:
+                PrintAccessibility(setter.Accessibility);
+
                 if (setter.Static)
                     _sb.Write("static ");
                 _sb.Write("set ");

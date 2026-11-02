@@ -17,6 +17,12 @@ namespace Metano.Compiler.IR;
 /// <param name="IsSealed">Declared <c>sealed override</c>.</param>
 /// <param name="IsRequired">Declared <c>required</c>: every object creation sets it
 /// through an object initializer (or a <c>[SetsRequiredMembers]</c> constructor).</param>
+/// <param name="OwnsPerClassStorage">An auto-property of an override chain the compilation
+/// declares (<c>virtual</c> and overridden, or an override of a declared non-abstract
+/// property). C# keeps a separate private backing field per declaring class, so a backend
+/// that lowers an auto-property to one field named after it must keep the storage apart
+/// per class instead (the shared field would hide a derived accessor and a
+/// <c>base.P</c> read).</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
     bool HasSetterBody = false,
@@ -25,5 +31,6 @@ public sealed record IrPropertySemantics(
     bool IsVirtual = false,
     bool IsOverride = false,
     bool IsSealed = false,
-    bool IsRequired = false
+    bool IsRequired = false,
+    bool OwnsPerClassStorage = false
 );

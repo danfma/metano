@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Microsoft.CodeAnalysis;
@@ -41,11 +40,6 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class OverridablePropertyConstructionReads
 {
-    private static readonly ConditionalWeakTable<
-        Compilation,
-        HashSet<IPropertySymbol>
-    > OverriddenPropertiesCache = new();
-
     public static void Report(
         INamedTypeSymbol type,
         Compilation? compilation,
@@ -148,53 +142,7 @@ internal static class OverridablePropertyConstructionReads
     /// override of it anywhere (matched per property, not per subtree). Overrides in other packages are not visible (known gap).
     /// </summary>
     private static bool IsOverridden(IPropertySymbol property, Compilation compilation) =>
-        property.IsAbstract
-        || (
-            IsOverridable(property)
-            && OverriddenPropertiesIn(compilation).Contains(property.OriginalDefinition)
-        );
-
-    private static bool IsOverridable(IPropertySymbol property) =>
-        !property.IsIndexer && (property.IsVirtual || (property.IsOverride && !property.IsSealed));
-
-    private static HashSet<IPropertySymbol> OverriddenPropertiesIn(Compilation compilation) =>
-        OverriddenPropertiesCache.GetValue(compilation, ScanOverriddenProperties);
-
-    private static HashSet<IPropertySymbol> ScanOverriddenProperties(Compilation compilation)
-    {
-        var overridden = new HashSet<IPropertySymbol>(SymbolEqualityComparer.Default);
-
-        foreach (var type in AllTypesIn(compilation.Assembly.GlobalNamespace))
-        foreach (var property in type.GetMembers().OfType<IPropertySymbol>())
-            for (
-                var parent = property.OverriddenProperty;
-                parent is not null;
-                parent = parent.OverriddenProperty
-            )
-                overridden.Add(parent.OriginalDefinition);
-
-        return overridden;
-    }
-
-    private static IEnumerable<INamedTypeSymbol> AllTypesIn(INamespaceSymbol ns)
-    {
-        foreach (var type in ns.GetTypeMembers())
-        foreach (var nested in WithNestedTypes(type))
-            yield return nested;
-
-        foreach (var child in ns.GetNamespaceMembers())
-        foreach (var type in AllTypesIn(child))
-            yield return type;
-    }
-
-    private static IEnumerable<INamedTypeSymbol> WithNestedTypes(INamedTypeSymbol type)
-    {
-        yield return type;
-
-        foreach (var nested in type.GetTypeMembers())
-        foreach (var inner in WithNestedTypes(nested))
-            yield return inner;
-    }
+        property.IsAbstract || OverrideChains.IsOverridableAndOverridden(property, compilation);
 
     private static void ReportRead(IPropertyReferenceOperation read)
     {
