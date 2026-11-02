@@ -531,6 +531,11 @@ public class PerClassBackingFieldTests
             [Transpile]
             public class HDer : HBase
             {
+                private protected override int Hidden { get; } = 2;
+
+                [Ignore]
+                public override int Skipped { get; } = 2;
+
                 public virtual int Own { get; } = 1;
             }
 
@@ -572,6 +577,96 @@ public class PerClassBackingFieldTests
 
         await Assert.That(Regex.Matches(result["app/u-base.ts"], "toJSON\\(").Count).IsEqualTo(1);
         await Assert.That(result["app/u-base.ts"]).DoesNotContain("publicJsonShape");
+    }
+
+    [Test]
+    public async Task InheritedSetter_IsForwardedThroughSeveralOverrides()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class LBase
+            {
+                public virtual int Z { get; set; } = 1;
+            }
+
+            [Transpile]
+            public class LMid : LBase
+            {
+                public override int Z => 3;
+            }
+
+            [Transpile]
+            public class LLeaf : LMid
+            {
+                public override int Z => 7;
+            }
+            """
+        );
+
+        await Assert
+            .That(result["app/l-leaf.ts"])
+            .Contains("  set z(value: number) {\n    super.z = value;\n  }");
+    }
+
+    [Test]
+    public async Task AncestorToJson_IsNotReplacedBySynthesizedOne()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class KRoot
+            {
+                public object ToJSON() => "root";
+            }
+
+            [Transpile]
+            public class KMid : KRoot
+            {
+                public virtual int M { get; set; } = 1;
+            }
+
+            [Transpile]
+            public class KLeaf : KMid
+            {
+                public override int M { get; set; } = 2;
+            }
+            """
+        );
+
+        await Assert.That(result["app/k-mid.ts"]).DoesNotContain("publicJsonShape");
+        await Assert.That(result["app/k-leaf.ts"]).DoesNotContain("publicJsonShape");
+    }
+
+    [Test]
+    public async Task RenamedToJson_CountsAsTheUsersToJson()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class NBase
+            {
+                public virtual int P { get; } = 1;
+
+                [Name("toJSON")]
+                public object Serialize() => "x";
+            }
+
+            [Transpile]
+            public class NDer : NBase
+            {
+                public override int P { get; } = 2;
+            }
+            """
+        );
+
+        await Assert.That(result["app/n-base.ts"]).DoesNotContain("publicJsonShape");
     }
 
     private static string FieldOf(string output, string property, string owner)

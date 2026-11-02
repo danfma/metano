@@ -111,8 +111,8 @@ internal sealed class PerClassBackingFields
 
     /// <summary>
     /// <c>toJSON(): unknown { return publicJsonShape(this); }</c> for a class that declares at
-    /// least one backing field, <c>null</c> for any other, or for one that already declares
-    /// its own <c>ToJSON</c>. The runtime function keeps the keys and values
+    /// least one backing field, <c>null</c> for any other, or for one that declares, or
+    /// inherits from a declared ancestor, a <c>ToJSON</c> of its own. The runtime function keeps the keys and values
     /// <c>JSON.stringify</c> produced while the property was a field (every own property of
     /// the instance, base classes included), renaming a backing field back to its property
     /// and reading the value through the accessor. The method overrides the one of an
@@ -126,7 +126,7 @@ internal sealed class PerClassBackingFields
         if (!members.OfType<IrPropertyDeclaration>().Any(DeclaresBackingField))
             return null;
 
-        if (members.OfType<IrMethodDeclaration>().Any(DeclaresToJson))
+        if (ir.Semantics.DeclaresToJson)
             return null;
 
         return new TsMethodMember(
@@ -148,10 +148,6 @@ internal sealed class PerClassBackingFields
             Override: extendsBase && ir.Semantics.InheritsPerClassStorage
         );
     }
-
-    private static bool DeclaresToJson(IrMethodDeclaration method) =>
-        !method.IsStatic
-        && string.Equals(method.Name, "ToJSON", StringComparison.OrdinalIgnoreCase);
 
     private static string Identity(INamedTypeSymbol type) =>
         $"{PackageIdentity(type.ContainingAssembly)}:{type.ContainingNamespace.ToDisplayString()}.{MetadataPath(type)}";
