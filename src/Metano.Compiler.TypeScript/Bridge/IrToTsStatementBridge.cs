@@ -283,6 +283,19 @@ public static class IrToTsStatementBridge
                     Const: false,
                     Type: IrToTsTypeMapper.Map(type)
                 ),
+            // A `null` initializer of a nullable local would make TypeScript infer the
+            // literal type `null` and narrow later member access to `never`, so
+            // the declared C# type is kept as an explicit annotation.
+            IrVariableDeclaration
+            {
+                Initializer: IrLiteral { Kind: IrLiteralKind.Null },
+                Type: IrNullableTypeRef declaredType,
+            } vd => new TsVariableDeclaration(
+                vd.Name,
+                IrToTsExpressionBridge.Map(vd.Initializer, bclRegistry),
+                Const: vd.IsConst,
+                Type: IrToTsTypeMapper.Map(declaredType)
+            ),
             IrVariableDeclaration vd => new TsVariableDeclaration(
                 vd.Name,
                 vd.Initializer is not null
