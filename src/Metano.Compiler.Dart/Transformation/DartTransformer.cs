@@ -29,7 +29,10 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     private readonly Compilation _compilation = compilation;
     private readonly List<MetanoDiagnostic> _diagnostics = new();
     private readonly object _diagnosticsLock = new();
-    private readonly DartIrRewriter _rewriter = new(DeclarativeMappingRegistry.FromIr(ir));
+    private readonly DartIrRewriter _rewriter = new(
+        DeclarativeMappingRegistry.FromIr(ir),
+        ContainerlessTypeNames(ir)
+    );
 
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
 
@@ -208,6 +211,18 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
         return files;
     }
+
+    /// <summary>
+    /// The stable full names of the transpilable static classes that lower to top-level
+    /// functions ([NoContainer] / [ExportedAsModule]) — the same predicate
+    /// <see cref="TransformAll"/> uses to pick the module bridge.
+    /// </summary>
+    private static HashSet<string> ContainerlessTypeNames(IrCompilation ir) =>
+        (ir.TranspilableTypeEntries ?? [])
+            .Select(entry => entry.Symbol)
+            .Where(type => type.IsStatic && SymbolHelper.IsContainerless(type))
+            .Select(type => type.GetStableFullName())
+            .ToHashSet(StringComparer.Ordinal);
 
     // ── Discovery ─────────────────────────────────────────────────────────
 

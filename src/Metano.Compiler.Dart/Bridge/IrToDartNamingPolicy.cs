@@ -28,6 +28,13 @@ public static class IrToDartNamingPolicy
     public static string ToParameterName(string irName) => ToCamelCase(irName);
 
     /// <summary>
+    /// Dart flattens nested types, so a qualified IR type name is emitted (and imported)
+    /// by its last segment only.
+    /// </summary>
+    public static string InnermostTypeSegment(string qualifiedName) =>
+        qualifiedName[(qualifiedName.LastIndexOf('.') + 1)..];
+
+    /// <summary>
     /// The file basename (without extension) for a type. Dart convention is
     /// <c>snake_case</c>.
     /// </summary>

@@ -516,6 +516,194 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task ExtensionOnDelegate_ImportsHelperLibraryAndCallsTheTopLevelFunction()
+    {
+        // The extension helper lives in its own file; both the reduced form
+        // (`h.Get.Twice()`) and the static form (`DelExt.Twice(h.Get)`) must import
+        // it and call the top-level function, not a `DelExt.` qualifier that the
+        // [NoContainer] lowering never emits.
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public delegate int Getter();
+
+            [Transpile, NoContainer]
+            public static class DelExt
+            {
+                public static int Twice(this Getter g) => g() * 2;
+            }
+
+            [Transpile]
+            public class Holder
+            {
+                public Getter Get => () => 1;
+            }
+
+            [Transpile]
+            public class Consumer
+            {
+                public int Reduced(Holder h) => h.Get.Twice();
+
+                public int Static(Holder h) => DelExt.Twice(h.Get);
+            }
+            """
+        );
+
+        var consumer = files["consumer.dart"];
+        await Assert.That(consumer).Contains("import 'del_ext.dart';");
+        await Assert.That(consumer).Contains("int reduced(Holder h) => twice(h.get);");
+        await Assert.That(consumer).Contains("int static(Holder h) => twice(h.get);");
+        await Assert.That(consumer).DoesNotContain("DelExt.");
+    }
+
+    [Test]
+    public async Task ExtensionOnNonDelegateReceiver_ImportsHelperLibrary()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Num { public int V => 3; }
+
+            [Transpile, NoContainer]
+            public static class NumExt
+            {
+                public static int Dbl(this Num n) => n.V * 2;
+            }
+
+            [Transpile]
+            public class Consumer
+            {
+                public int Run(Num n) => n.Dbl();
+            }
+            """
+        );
+
+        var consumer = files["consumer.dart"];
+        await Assert.That(consumer).Contains("import 'num_ext.dart';");
+        await Assert.That(consumer).Contains("int run(Num n) => dbl(n);");
+    }
+
+    [Test]
+    public async Task BodyOnlyTypeReference_ImportsTheDeclaringFile()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Order { public int Id { get; } public Order(int id) { Id = id; } }
+
+            [Transpile]
+            public class Factory
+            {
+                public int Make() => new Order(1).Id;
+            }
+            """
+        );
+
+        await Assert.That(files["factory.dart"]).Contains("import 'order.dart';");
+    }
+
+    [Test]
+    public async Task ExtensionInPlainStaticClass_ImportsAndKeepsTheClassQualifier()
+    {
+        // A static class without [NoContainer] stays a Dart class of static methods,
+        // so both call forms must keep the `NumExt.` qualifier and import its file.
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Num { public int V => 3; }
+
+            [Transpile]
+            public static class NumExt
+            {
+                public static int Dbl(this Num n) => n.V * 2;
+            }
+
+            [Transpile]
+            public class Consumer
+            {
+                public int Reduced(Num n) => n.Dbl();
+
+                public int Static(Num n) => NumExt.Dbl(n);
+            }
+            """
+        );
+
+        var consumer = files["consumer.dart"];
+        await Assert.That(consumer).Contains("import 'num_ext.dart';");
+        await Assert.That(consumer).Contains("int reduced(Num n) => NumExt.dbl(n);");
+        await Assert.That(consumer).Contains("int static(Num n) => NumExt.dbl(n);");
+    }
+
+    [Test]
+    public async Task BodyReferenceToSameFileType_DoesNotSelfImport()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Counter
+            {
+                public static Counter Zero() => new Counter();
+
+                public Counter Clone() => Counter.Zero();
+            }
+            """
+        );
+
+        await Assert.That(files["counter.dart"]).DoesNotContain("import 'counter.dart'");
+    }
+
+    [Test]
+    public async Task BodyReferenceToBclStaticReceiver_AddsNoImport()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public int Largest(int a, int b) => Math.Max(a, b);
+            }
+            """
+        );
+
+        await Assert.That(files["calc.dart"]).DoesNotContain("import ");
+    }
+
+    [Test]
+    public async Task BodyOnlyCastTypeTestLocalAndCatch_ImportTheDeclaringFiles()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Order { }
+
+            [Transpile]
+            public class Invoice { }
+
+            [Transpile]
+            public class Ticket { }
+
+            [Transpile]
+            public class Inspector
+            {
+                public bool IsOrder(object x) => x is Order;
+
+                public object AsInvoice(object x) => (Invoice)x;
+
+                public void Touch(object x)
+                {
+                    Ticket t = (Ticket)x;
+                }
+            }
+            """
+        );
+
+        var inspector = files["inspector.dart"];
+        await Assert.That(inspector).Contains("import 'order.dart';");
+        await Assert.That(inspector).Contains("import 'invoice.dart';");
+        await Assert.That(inspector).Contains("import 'ticket.dart';");
+    }
+
+    [Test]
     public async Task OverloadedMethods_CollapseIntoSingleDartEmissionPlusDiagnostic()
     {
         // Roslyn exposes each overload as a separate IMethodSymbol; the IR
