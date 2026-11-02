@@ -4,6 +4,46 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.7.2
+
+_2026-11-02_
+
+
+### 🐛 Bug Fixes
+
+* assign positional overrides and emit abstract properties without storage ([#336](https://github.com/danfma/metano/issues/336)) ([b6b363d](https://github.com/danfma/metano/commit/b6b363d9bbd274db3265edcafa26f51fdd4e70b6)), closes [#324](https://github.com/danfma/metano/issues/324)
+* bound package root discovery to the workspace ([#334](https://github.com/danfma/metano/issues/334)) ([5609a99](https://github.com/danfma/metano/commit/5609a99fab69f96a1b04a23c78a821757acfd189))
+* call the shared Dart transpile helper in the merged Dart tests ([ae36abf](https://github.com/danfma/metano/commit/ae36abf1c174f6de8e2337a7d605a620ff5632d2)), closes [#336](https://github.com/danfma/metano/issues/336) [#324](https://github.com/danfma/metano/issues/324) [#337](https://github.com/danfma/metano/issues/337)
+* cast null initializers of nullable locals to the declared type ([#364](https://github.com/danfma/metano/issues/364)) ([c916474](https://github.com/danfma/metano/commit/c916474d4a05f937c843b5b2a0362541ad8abe77))
+* cover field initializers and constructor defaults in Dart body imports ([#367](https://github.com/danfma/metano/issues/367)) ([1e11fb0](https://github.com/danfma/metano/commit/1e11fb004f3a202f9ba9adbe46763c35709ab32f))
+* drop the explicit Invoke on delegates with a [This] parameter ([#362](https://github.com/danfma/metano/issues/362)) ([c1494ea](https://github.com/danfma/metano/commit/c1494ea0e62b2ff2ea47ae967d51a8d148e227b6))
+* drop the MSBuild stamp when the package root is refused ([#334](https://github.com/danfma/metano/issues/334)) ([cbda4e7](https://github.com/danfma/metano/commit/cbda4e7a0170dc3b2b7d5a07e4099f67df7ea30e))
+* emit nullable params parameters as array-typed rest parameters ([#329](https://github.com/danfma/metano/issues/329)) ([b2411bd](https://github.com/danfma/metano/commit/b2411bda575151e81d580a2ac77c6fe4490f73a1)), closes [#320](https://github.com/danfma/metano/issues/320)
+* import extension libraries called on delegates in Dart ([#367](https://github.com/danfma/metano/issues/367)) ([809b4b2](https://github.com/danfma/metano/commit/809b4b22b781a34672e04320c7e576cd64d0b956))
+* keep the declared type of nullable locals initialized to null ([#364](https://github.com/danfma/metano/issues/364)) ([1dc6f8a](https://github.com/danfma/metano/commit/1dc6f8ae5ca630f1ca61595fd206025e62323c91))
+* keep the member access when invoking a delegate-typed member ([#337](https://github.com/danfma/metano/issues/337)) ([de2f55c](https://github.com/danfma/metano/commit/de2f55c30426b6cce0e3a5dcd390e66e19986fd5))
+* lower extended case sub-patterns and string BCL members correctly ([#324](https://github.com/danfma/metano/issues/324)) ([8959d18](https://github.com/danfma/metano/commit/8959d1859e1fdf53b92e7e6c25b7ed5ae7203a1c))
+* match overridden properties by their generic definition ([#366](https://github.com/danfma/metano/issues/366)) ([324a0df](https://github.com/danfma/metano/commit/324a0dfc85f4b72b3257b7892b1c1140fc7288cc))
+* never take the directory shared with the project as package root ([#334](https://github.com/danfma/metano/issues/334)) ([59ed4f8](https://github.com/danfma/metano/commit/59ed4f8d639982ec217bc063a21732c0ea59ee19))
+* point the MS0044 message at the documented rules ([#334](https://github.com/danfma/metano/issues/334)) ([f218ff4](https://github.com/danfma/metano/commit/f218ff47af5fa6d779bc56859c8381b6a3a4fcea))
+* prefer repository markers and fold the refusal into the reconciler ([#334](https://github.com/danfma/metano/issues/334)) ([04d2e2f](https://github.com/danfma/metano/commit/04d2e2fb495d0f89aa01a5721adcea28669bc026))
+* refuse an output unrelated to the project without a package.json ([#334](https://github.com/danfma/metano/issues/334)) ([7b36d5b](https://github.com/danfma/metano/commit/7b36d5b13b500eeb3a78831629cc094946509376))
+* report constructors that read overridable properties ([#366](https://github.com/danfma/metano/issues/366)) ([7a29820](https://github.com/danfma/metano/commit/7a29820fe40e60886c3d10135d0ea1e3135e6b26))
+* spread params arrays forwarded through constructor initializers ([#365](https://github.com/danfma/metano/issues/365)) ([ad6f367](https://github.com/danfma/metano/commit/ad6f3674c9583b601f7500691322ac1b8683115f))
+
+### ♻️ Refactor
+
+* address review notes on the [#324](https://github.com/danfma/metano/issues/324) fix ([#324](https://github.com/danfma/metano/issues/324)) ([2da0758](https://github.com/danfma/metano/commit/2da0758fce8878864b0e2f609c83c0b3a495a0f6))
+* keep the iteration bridge free of Roslyn diagnostics ([#329](https://github.com/danfma/metano/issues/329)) ([9ad9bab](https://github.com/danfma/metano/commit/9ad9bab3c253cfda683c6e6e2b33a7da31cb69da))
+* share the droppable delegate-invoke predicate ([#337](https://github.com/danfma/metano/issues/337)) ([b37a310](https://github.com/danfma/metano/commit/b37a310464b9f99af2ef540b01ea62ed55346b6e))
+* simplify the unmapped-static report and export keys ([#324](https://github.com/danfma/metano/issues/324)) ([438e83b](https://github.com/danfma/metano/commit/438e83bbeec6e9d09039dc7fe1b8faef5ec6e5f2))
+* tidy the hiding check and its tests after review ([#336](https://github.com/danfma/metano/issues/336)) ([4d6d4e4](https://github.com/danfma/metano/commit/4d6d4e4f986640f9c460d465569fe09e4124e076))
+* tighten the [#324](https://github.com/danfma/metano/issues/324) fix after review ([#324](https://github.com/danfma/metano/issues/324)) ([20c7516](https://github.com/danfma/metano/commit/20c75167f5680272e342bea34cee7890cab78cfd))
+
+### 📝 Documentation
+
+* add specification for runtime collections and type descriptors ([#335](https://github.com/danfma/metano/issues/335)) ([0f6a860](https://github.com/danfma/metano/commit/0f6a8601ba6320be51a6f37d0d6b2a21dc90baf4))
+
 ## 2.7.1
 
 _2026-11-01_
