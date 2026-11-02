@@ -26,3 +26,4 @@ export {
   registerUnionGuard,
   getUnionGuard,
 } from "./union-guard-registry.ts";
+export { publicJsonShape } from "./public-json-shape.ts";

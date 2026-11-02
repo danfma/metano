@@ -159,6 +159,16 @@ public static partial class IrToTsExpressionBridge
             return MapIntegerDivision(bin, bclRegistry);
 
         if (
+            bin is { Operator: IrBinaryOp.Assign, Left: IrMemberAccess backedMember }
+            && PerClassBackingFields.TryReadOnlyWriteTarget(backedMember) is { } backingField
+        )
+            return new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("this"), backingField),
+                "=",
+                Map(bin.Right, bclRegistry)
+            );
+
+        if (
             bin is { Operator: IrBinaryOp.Assign, Left: IrMemberAccess initOnlyMember }
             && IsInitOnlyInitializerWrite(initOnlyMember)
         )

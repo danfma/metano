@@ -24,6 +24,10 @@ internal static partial class IrToTsClassBridge
     ///     (field, getter and setter), so <c>Type.Prop</c> reads the class.</item>
     ///   <item>Abstract property → abstract declaration with no storage
     ///     (<see cref="BuildAbstractProperty"/>).</item>
+    ///   <item>Auto-property of an override chain
+    ///     (<see cref="IrPropertySemantics.OwnsPerClassStorage"/>) → a private backing
+    ///     field per class plus a getter (and a setter when C# declares <c>set</c> /
+    ///     <c>init</c>) (<see cref="BuildPerClassStorageProperty"/>).</item>
     ///   <item>Computed getter → <see cref="TsGetterMember"/>.</item>
     ///   <item>Custom setter body → <see cref="TsSetterMember"/> (in addition
     ///     to the getter when both are present).</item>
@@ -34,7 +38,8 @@ internal static partial class IrToTsClassBridge
     public static IReadOnlyList<TsClassMember> BuildProperty(
         IrPropertyDeclaration prop,
         TsType tsType,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFields backingFields
     )
     {
         if (prop.Visibility is IrVisibility.PrivateProtected)
@@ -44,6 +49,14 @@ internal static partial class IrToTsClassBridge
 
         if (prop.Semantics?.IsAbstract == true)
             return [BuildAbstractProperty(prop, name, tsType)];
+
+        if (prop.Semantics?.OwnsPerClassStorage == true)
+            return BuildPerClassStorageProperty(
+                prop,
+                tsType,
+                backingFields.NameOf(name),
+                bclRegistry
+            );
 
         var hasGetterBody = prop.Semantics?.HasGetterBody == true;
         var hasSetterBody = prop.Semantics?.HasSetterBody == true;
@@ -93,6 +106,65 @@ internal static partial class IrToTsClassBridge
                 )
             );
         }
+
+        return members;
+    }
+
+    /// <summary>
+    /// An overridable auto-property becomes
+    /// <c>private readonly p$Shape_k3x9: T = init; get p(): T { return this.p$Shape_k3x9; }</c>,
+    /// with a setter writing the same field when C# declares <c>set</c> or <c>init</c>
+    /// (so <c>with</c> and object initializers still assign it). The accessor lives on the
+    /// prototype, so a derived accessor overrides it, and <c>super.p</c> reads the base's
+    /// own field (<see cref="PerClassBackingFields"/>).
+    /// </summary>
+    private static List<TsClassMember> BuildPerClassStorageProperty(
+        IrPropertyDeclaration prop,
+        TsType tsType,
+        string fieldName,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
+        var accessibility = MapAccessibility(prop.Visibility);
+        var storage = new TsPropertyAccess(new TsIdentifier("this"), fieldName);
+        var writable = prop.Accessors is not IrPropertyAccessors.GetOnly;
+
+        var initializer = prop.Initializer is { } init
+            ? IrToTsExpressionBridge.Map(init, bclRegistry)
+            : ComputeDefaultInitializer(prop.Type);
+
+        var members = new List<TsClassMember>
+        {
+            new TsFieldMember(
+                fieldName,
+                tsType,
+                initializer,
+                Readonly: !writable,
+                Accessibility: TsAccessibility.Private,
+                DefinitelyAssigned: prop.Semantics?.IsRequired == true
+            ),
+            new TsGetterMember(
+                name,
+                tsType,
+                [new TsReturnStatement(storage)],
+                Accessibility: accessibility
+            ),
+        };
+
+        if (writable)
+            members.Add(
+                new TsSetterMember(
+                    name,
+                    new TsParameter("value", tsType),
+                    [
+                        new TsExpressionStatement(
+                            new TsBinaryExpression(storage, "=", new TsIdentifier("value"))
+                        ),
+                    ],
+                    Accessibility: accessibility
+                )
+            );
 
         return members;
     }

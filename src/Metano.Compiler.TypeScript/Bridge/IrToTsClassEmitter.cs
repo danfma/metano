@@ -65,6 +65,10 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             keepsBaseMessage
         );
 
+        var backingFields = PerClassBackingFields.For(type);
+
+        using var backingFieldScope = backingFields.EnterClass(ir);
+
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
 
         var ctorParams = IrToTsClassBridge.BuildPrimaryCtorParams(
@@ -89,7 +93,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
 
         EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
-        EmitClassMembers(ir, classMembers, keepsBaseMessage);
+        EmitClassMembers(ir, classMembers, keepsBaseMessage, backingFields);
         EmitDeferredOperatorsAndMethods(type, ir, classMembers);
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers);
 
@@ -159,7 +163,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     private void EmitClassMembers(
         IrClassDeclaration ir,
         List<TsClassMember> classMembers,
-        bool keepsBaseMessage
+        bool keepsBaseMessage,
+        PerClassBackingFields backingFields
     )
     {
         var promotedNames = IrToTsClassBridge.PromotedMemberNames(ir.Constructor);
@@ -185,7 +190,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     var propertyMembers = IrToTsClassBridge.BuildProperty(
                         irProp,
                         IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
-                        _context.DeclarativeMappings
+                        _context.DeclarativeMappings,
+                        backingFields
                     );
 
                     classMembers.AddRange(
@@ -272,6 +278,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
 
         if (objectArgsFactory is not null)
             classMembers.Add(objectArgsFactory);
+
+        if (PerClassBackingFields.BuildJsonShape(ir) is { } jsonShape)
+            classMembers.Add(jsonShape);
 
         if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
             classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir));

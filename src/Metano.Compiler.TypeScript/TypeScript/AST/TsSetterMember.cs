@@ -7,5 +7,6 @@ public sealed record TsSetterMember(
     string Name,
     TsParameter ValueParam,
     IReadOnlyList<TsStatement> Body,
-    bool Static = false
+    bool Static = false,
+    TsAccessibility Accessibility = TsAccessibility.Public
 ) : TsClassMember;
