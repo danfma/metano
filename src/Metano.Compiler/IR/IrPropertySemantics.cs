@@ -23,7 +23,7 @@ namespace Metano.Compiler.IR;
 /// that lowers an auto-property to one field named after it must keep the storage apart
 /// per class instead (the shared field would hide a derived accessor and a
 /// <c>base.P</c> read).</param>
-/// <param name="InheritedAccessor">The accessor of the overridden property, declared in the compilation, that this override leaves to its base.</param>
+/// <param name="InheritedAccessor">The accessor of the nearest overridden property up the chain, declared in the compilation, that this override leaves to its base.</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
     bool HasSetterBody = false,

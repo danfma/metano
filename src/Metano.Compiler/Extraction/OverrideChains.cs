@@ -131,8 +131,13 @@ internal static class OverrideChains
 
     private static bool IsToJson(IMethodSymbol method, Metano.Annotations.TargetLanguage? target) =>
         method is { IsStatic: false, MethodKind: MethodKind.Ordinary }
-        && (method.GetNameOverride(target) ?? (method.Name == "ToJSON" ? "toJSON" : method.Name))
-            == "toJSON";
+        && !method.HasIgnore(target)
+        && EmittedNameOf(method, target) == "toJSON";
+
+    private static string EmittedNameOf(
+        IMethodSymbol method,
+        Metano.Annotations.TargetLanguage? target
+    ) => method.GetNameOverride(target) ?? SymbolHelper.ToCamelCase(method.Name);
 
     /// <summary>
     /// Whether a class the compilation declares, among the ancestors of

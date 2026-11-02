@@ -112,7 +112,7 @@ internal sealed class PerClassBackingFields
     /// <summary>
     /// <c>toJSON(): unknown { return publicJsonShape(this); }</c> for a class that declares at
     /// least one backing field, <c>null</c> for any other, or for one that declares, or
-    /// inherits from a declared ancestor, a <c>ToJSON</c> of its own. The runtime function keeps the keys and values
+    /// inherits one from an ancestor the compilation declares. The runtime function keeps the keys and values
     /// <c>JSON.stringify</c> produced while the property was a field (every own property of
     /// the instance, base classes included), renaming a backing field back to its property
     /// and reading the value through the accessor. The method overrides the one of an
