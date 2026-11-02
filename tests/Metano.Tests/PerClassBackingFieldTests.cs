@@ -808,6 +808,92 @@ public class PerClassBackingFieldTests
         await Assert.That(output).Contains("    this.m += 1;");
     }
 
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ConsumerOverride_OfLibraryImage_OwnsStorageAndOverridesToJson(
+        bool referenceAssembly
+    )
+    {
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            namespace Lib;
+
+            public class LibBase
+            {
+                public virtual int P { get; set; } = 1;
+
+                public virtual int Computed => 3;
+            }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Consumer : Lib.LibBase
+            {
+                public override int P { get; set; } = 2;
+            }
+
+            public class ComputedConsumer : Lib.LibBase
+            {
+                public override int Computed => 4;
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibraryImage(
+            library,
+            consumer,
+            referenceAssembly
+        );
+
+        await Assert.That(result["app/consumer.ts"]).Contains("  override toJSON(): unknown {");
+        await Assert.That(result["app/consumer.ts"]).Contains("  get p(): number {");
+        // A computed virtual property is not auto, so no storage and no toJSON of its own.
+        await Assert.That(result["app/computed-consumer.ts"]).DoesNotContain("toJSON");
+    }
+
+    [Test]
+    public async Task HidingProperty_OfPerClassProperty_AlsoOwnsStorage()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class HidBase
+            {
+                public virtual int X { get; set; } = 1;
+            }
+
+            [Transpile]
+            public class Hider : HidBase
+            {
+                public new int X { get; set; } = 2;
+            }
+
+            [Transpile]
+            public class VirtualHider : HidBase
+            {
+                public new virtual int X { get; set; } = 3;
+            }
+            """
+        );
+
+        var hider = FieldOf(result["app/hider.ts"], "x", "Hider");
+        var virtualHider = FieldOf(result["app/virtual-hider.ts"], "x", "VirtualHider");
+
+        await Assert.That(result["app/hider.ts"]).Contains($"  private {hider}: number = 2;");
+        await Assert.That(result["app/hider.ts"]).Contains("  get x(): number {");
+        await Assert
+            .That(result["app/virtual-hider.ts"])
+            .Contains($"  private {virtualHider}: number = 3;");
+    }
+
     private static string FieldOf(string output, string property, string owner)
     {
         var match = BackingField

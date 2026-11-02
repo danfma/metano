@@ -471,6 +471,43 @@ public static class TranspileHelper
         TranspileWithLibraryCore(librarySource, consumerSource);
 
     /// <summary>
+    /// Cross-package variant that references the library as a compiled PE image, the way
+    /// the build does (no source symbols or syntax): the full implementation assembly, or a
+    /// reference assembly that strips private members (<paramref name="referenceAssembly"/>).
+    /// </summary>
+    public static Dictionary<string, string> TranspileWithLibraryImage(
+        string librarySource,
+        string consumerSource,
+        bool referenceAssembly = false
+    )
+    {
+        var libCompilation = CompileLibrary(librarySource);
+        using var stream = new MemoryStream();
+
+        var emitted = libCompilation.Emit(
+            stream,
+            options: new Microsoft.CodeAnalysis.Emit.EmitOptions(
+                metadataOnly: referenceAssembly,
+                includePrivateMembers: !referenceAssembly
+            )
+        );
+
+        if (!emitted.Success)
+            throw new InvalidOperationException(
+                "Library emit failed:\n" + string.Join("\n", emitted.Diagnostics)
+            );
+
+        var consumerCompilation = CompileAssembly(
+            consumerSource,
+            "TestConsumer",
+            OutputKind.DynamicallyLinkedLibrary,
+            extraReferences: [MetadataReference.CreateFromImage(stream.ToArray())]
+        );
+
+        return TranspileCore(consumerCompilation).Files;
+    }
+
+    /// <summary>
     /// Compiles a library source into an in-memory <see cref="CSharpCompilation"/>.
     /// Useful for tests that want to inspect the cross-package transformer state
     /// directly (e.g., <c>CrossPackageDependencies</c>) instead of just asserting on

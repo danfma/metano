@@ -6,11 +6,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Which properties of the compilation take part in an override chain: the
-/// scan shared by the constructor-read diagnostic
-/// (<see cref="OverridablePropertyConstructionReads"/>) and the per-class storage
-/// decision (<see cref="OwnsPerClassStorage"/>). Overrides declared in other
-/// packages are not visible (known gap).
+/// Override-chain facts about properties: the overrides of the compilation (scan used by the
+/// constructor-read diagnostic <see cref="OverridablePropertyConstructionReads"/>, which
+/// cannot see overrides declared in other packages) and the per-class storage decision
+/// (<see cref="OwnsPerClassStorage"/>), which is local to the property and so identical in
+/// every package that compiles it.
 /// </summary>
 internal static class OverrideChains
 {
@@ -47,8 +47,34 @@ internal static class OverrideChains
     /// </summary>
     public static bool OwnsPerClassStorage(IPropertySymbol property) =>
         property is { IsStatic: false, IsAbstract: false, IsIndexer: false }
-        && (property.IsVirtual || property.IsOverride)
+        && (property.IsVirtual || property.IsOverride || HidesPerClassStorage(property))
         && IsAutoProperty(property);
+
+    /// <summary>
+    /// A non-virtual auto-property (<c>new int P</c>) hiding an inherited one that owns
+    /// per-class storage: declared as a plain field it would sit over the base's accessor.
+    /// </summary>
+    private static bool HidesPerClassStorage(IPropertySymbol property)
+    {
+        for (
+            var ancestor = property.ContainingType.BaseType;
+            ancestor is not null;
+            ancestor = ancestor.BaseType
+        )
+        {
+            if (
+                ancestor
+                    .GetMembers(property.Name)
+                    .OfType<IPropertySymbol>()
+                    .Any(hidden => OwnsPerClassStorage(hidden))
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// The accessor <paramref name="property"/> leaves to the properties it overrides: an
@@ -179,25 +205,37 @@ internal static class OverrideChains
             );
 
     /// <summary>
-    /// The property's or class's declaration is emitted by the toolchain: the compilation
-    /// itself or a transpiled package it references.
+    /// The class's declaration is emitted by the toolchain: the compilation itself or a
+    /// transpiled package it references.
     /// </summary>
     private static bool IsEmittedByToolchain(INamedTypeSymbol type, Compilation compilation) =>
         SymbolHelper.IsToolchainDeclared(type, compilation.Assembly);
 
     /// <summary>
     /// An auto-property: by its syntax when declared in source, and in a referenced assembly
-    /// (no syntax) by the compiler-generated backing field C# stores in its metadata.
+    /// (no syntax) by its accessors, every one of which the compiler generated
+    /// (<c>[CompilerGenerated]</c> survives in reference assemblies too, unlike the private
+    /// backing field, and rejects a semi-auto <c>field</c> property that has a body).
     /// </summary>
     private static bool IsAutoProperty(IPropertySymbol property) =>
         property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             is PropertyDeclarationSyntax declaration
             ? PrimaryConstructorPropertyAlias.IsAutoProperty(declaration)
             : property.DeclaringSyntaxReferences.IsEmpty
-                && property
-                    .ContainingType.GetMembers($"<{property.Name}>k__BackingField")
-                    .OfType<IFieldSymbol>()
-                    .Any();
+                && new[] { property.GetMethod, property.SetMethod }
+                    .OfType<IMethodSymbol>()
+                    .All(IsCompilerGenerated);
+
+    private static bool IsCompilerGenerated(IMethodSymbol accessor) =>
+        accessor
+            .GetAttributes()
+            .Any(attribute =>
+                attribute.AttributeClass
+                    is {
+                        Name: "CompilerGeneratedAttribute",
+                        ContainingNamespace.Name: "CompilerServices"
+                    }
+            );
 
     private static bool IsOverridable(IPropertySymbol property) =>
         !property.IsIndexer && (property.IsVirtual || (property.IsOverride && !property.IsSealed));

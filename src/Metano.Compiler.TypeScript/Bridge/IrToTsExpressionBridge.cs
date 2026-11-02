@@ -196,7 +196,20 @@ public static partial class IrToTsExpressionBridge
     /// <c>=</c> and every compound assignment (<c>+=</c> ... <c>??=</c>).
     /// </summary>
     private static bool IsAssignment(IrBinaryOp op) =>
-        op is >= IrBinaryOp.Assign and <= IrBinaryOp.NullCoalescingAssign;
+        op
+            is IrBinaryOp.Assign
+                or IrBinaryOp.AddAssign
+                or IrBinaryOp.SubtractAssign
+                or IrBinaryOp.MultiplyAssign
+                or IrBinaryOp.DivideAssign
+                or IrBinaryOp.ModuloAssign
+                or IrBinaryOp.BitwiseAndAssign
+                or IrBinaryOp.BitwiseOrAssign
+                or IrBinaryOp.BitwiseXorAssign
+                or IrBinaryOp.LeftShiftAssign
+                or IrBinaryOp.RightShiftAssign
+                or IrBinaryOp.UnsignedRightShiftAssign
+                or IrBinaryOp.NullCoalescingAssign;
 
     /// <summary>
     /// The operand of <c>++</c> / <c>--</c>; a get-only per-class property assigned inside
