@@ -115,6 +115,7 @@ public static class DartImportCollector
         if (cls.Members is not null)
             foreach (var m in cls.Members)
                 WalkMember(m, ctx);
+
         WalkConstructor(cls.Constructor, ctx);
     }
 

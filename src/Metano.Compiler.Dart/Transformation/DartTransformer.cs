@@ -207,14 +207,17 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// The stable full names of the transpilable static classes that lower to top-level
-    /// functions ([NoContainer] / [ExportedAsModule]), by <see cref="LowersToTopLevelFunctions"/>
-    /// — the predicate <see cref="TransformAll"/> uses to pick the module bridge. Types of
-    /// referenced assemblies are not listed, so their call sites keep the qualifier.
+    /// Whether a static class lowers to top-level Dart functions ([NoContainer] /
+    /// [ExportedAsModule]) instead of a class of static methods.
     /// </summary>
     private static bool LowersToTopLevelFunctions(INamedTypeSymbol type) =>
         type.IsStatic && SymbolHelper.IsContainerless(type);
 
+    /// <summary>
+    /// The stable full names of the transpilable static classes that
+    /// <see cref="LowersToTopLevelFunctions"/> flattens. Types of referenced assemblies are
+    /// not listed, so their call sites keep the qualifier.
+    /// </summary>
     private static HashSet<string> ContainerlessTypeNames(IrCompilation ir) =>
         (ir.TranspilableTypeEntries ?? [])
             .Select(entry => entry.Symbol)
