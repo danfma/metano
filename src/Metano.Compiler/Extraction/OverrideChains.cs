@@ -55,9 +55,10 @@ internal static class OverrideChains
         );
 
     /// <summary>
-    /// The accessor <paramref name="property"/> leaves to the property it overrides: an
-    /// override may declare only <c>get</c> or only <c>set</c> and C# keeps the base's other
-    /// accessor. Only a base the compilation declares counts.
+    /// The accessor <paramref name="property"/> leaves to the properties it overrides: an
+    /// override may declare only <c>get</c> or only <c>set</c> and C# keeps the other
+    /// accessor of the nearest overridden property that declares it, however many overrides
+    /// up the chain. Only properties the compilation declares count.
     /// </summary>
     public static IrInheritedAccessor InheritedAccessorOf(
         IPropertySymbol property,
@@ -67,20 +68,71 @@ internal static class OverrideChains
         if (
             compilation is null
             || property is not { IsOverride: true, IsStatic: false, IsIndexer: false }
-            || property.OverriddenProperty is not { } overridden
-            || !IsDeclaredIn(overridden, compilation)
         )
         {
             return IrInheritedAccessor.None;
         }
 
-        if (property.SetMethod is null && overridden.SetMethod is not null)
+        if (
+            property.SetMethod is null
+            && OverriddenChainDeclares(property, compilation, p => p.SetMethod)
+        )
             return IrInheritedAccessor.Setter;
 
-        return property.GetMethod is null && overridden.GetMethod is not null
+        return
+            property.GetMethod is null
+            && OverriddenChainDeclares(property, compilation, p => p.GetMethod)
             ? IrInheritedAccessor.Getter
             : IrInheritedAccessor.None;
     }
+
+    private static bool OverriddenChainDeclares(
+        IPropertySymbol property,
+        Compilation compilation,
+        Func<IPropertySymbol, IMethodSymbol?> accessor
+    )
+    {
+        for (
+            var overridden = property.OverriddenProperty;
+            overridden is not null && IsDeclaredIn(overridden, compilation);
+            overridden = overridden.OverriddenProperty
+        )
+        {
+            if (accessor(overridden) is not null)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> or a class the compilation declares among its
+    /// ancestors declares an instance method that the target emits as <c>toJSON</c>
+    /// (an unrenamed <c>ToJSON</c>, or one renamed to it for <paramref name="target"/>).
+    /// </summary>
+    public static bool DeclaresToJson(
+        INamedTypeSymbol type,
+        Compilation? compilation,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        for (
+            var current = type;
+            current is not null && compilation is not null && IsDeclaredIn(current, compilation);
+            current = current.BaseType
+        )
+        {
+            if (current.GetMembers().OfType<IMethodSymbol>().Any(m => IsToJson(m, target)))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsToJson(IMethodSymbol method, Metano.Annotations.TargetLanguage? target) =>
+        method is { IsStatic: false, MethodKind: MethodKind.Ordinary }
+        && (method.GetNameOverride(target) ?? (method.Name == "ToJSON" ? "toJSON" : method.Name))
+            == "toJSON";
 
     /// <summary>
     /// Whether a class the compilation declares, among the ancestors of

@@ -20,7 +20,8 @@ namespace Metano.Compiler.IR;
 /// <param name="JsxNativeElementTag">The tag from <c>[JsxNativeElement("tag")]</c> — a <c>new T { … }</c> of such a type lowers to an intrinsic <c>&lt;tag&gt;</c> element. Null when absent.</param>
 /// <param name="RendersAsJsxElement">The type is JSX-renderable in a value position (a component, a native element, or an imported renderable typed as the marked element).</param>
 /// <param name="Enumerable">The <c>IEnumerable</c> contract the type takes on itself — directly or through an interface — rather than inheriting it from its base type, with the member that implements <c>GetEnumerator()</c>. A backend whose iteration protocol differs from <c>GetEnumerator()</c> bridges it here. Null for every other type, and for interfaces, which declare the contract without implementing it.</param>
-/// <param name="InheritsPerClassStorage">An ancestor class the compilation declares owns an auto-property with per-class storage (<see cref="IrPropertySemantics.OwnsPerClassStorage"/>). A backend that lowers that storage to members it adds to every class of the chain can declare the shared ones once, on the ancestor, and let this type inherit them.</param>
+/// <param name="InheritsPerClassStorage">A class the compilation declares among the ancestors owns an auto-property with per-class storage (<see cref="IrPropertySemantics.OwnsPerClassStorage"/>) that is not <c>[Ignore]</c>d for the target and not <c>private protected</c>, the properties a backend leaves out.</param>
+/// <param name="DeclaresToJson">The type, or a class the compilation declares among its ancestors, declares an instance method the target emits as <c>toJSON</c>. A backend that synthesizes <c>toJSON</c> leaves it alone.</param>
 /// <param name="Enumerator">The <c>IEnumerator</c> contract the type takes on itself, with the members that implement <c>Current</c> and <c>MoveNext()</c>, for a backend whose iterator protocol differs (JavaScript: <c>next()</c>). Null for every other type.</param>
 public sealed record IrTypeSemantics(
     bool IsRecord = false,
@@ -38,5 +39,6 @@ public sealed record IrTypeSemantics(
     bool RendersAsJsxElement = false,
     IrEnumerableContract? Enumerable = null,
     IrEnumeratorContract? Enumerator = null,
-    bool InheritsPerClassStorage = false
+    bool InheritsPerClassStorage = false,
+    bool DeclaresToJson = false
 );

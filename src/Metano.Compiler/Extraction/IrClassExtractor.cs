@@ -292,7 +292,8 @@ public static class IrClassExtractor
                 type,
                 compilation,
                 target
-            )
+            ),
+            DeclaresToJson: OverrideChains.DeclaresToJson(type, compilation, target)
         );
 
     /// <summary>
