@@ -22,17 +22,17 @@ public sealed class DartIrRewriter
     private readonly IReadOnlySet<string> _flattenedStaticClassNames;
 
     /// <param name="registry">Declarative BCL mappings.</param>
-    /// <param name="containerlessTypes">Stable full names of the static classes this target
+    /// <param name="flattenedStaticClassNames">Stable full names of the static classes this target
     /// flattens into top-level functions. IR origins mark every extension helper as
     /// containerless, but Dart keeps a plain static class as a class, so the call site only
     /// loses its qualifier for the types listed here.</param>
     public DartIrRewriter(
         DeclarativeMappingRegistry registry,
-        IReadOnlySet<string>? containerlessTypes = null
+        IReadOnlySet<string>? flattenedStaticClassNames = null
     )
     {
         _registry = registry;
-        _flattenedStaticClassNames = containerlessTypes ?? new HashSet<string>();
+        _flattenedStaticClassNames = flattenedStaticClassNames ?? new HashSet<string>();
     }
 
     public IrExpression? Rewrite(IrExpression? expression) =>
