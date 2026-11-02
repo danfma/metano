@@ -23,6 +23,7 @@ namespace Metano.Compiler.IR;
 /// that lowers an auto-property to one field named after it must keep the storage apart
 /// per class instead (the shared field would hide a derived accessor and a
 /// <c>base.P</c> read).</param>
+/// <param name="InheritedAccessor">The accessor of the overridden property, declared in the compilation, that this override leaves to its base.</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
     bool HasSetterBody = false,
@@ -32,5 +33,24 @@ public sealed record IrPropertySemantics(
     bool IsOverride = false,
     bool IsSealed = false,
     bool IsRequired = false,
-    bool OwnsPerClassStorage = false
+    bool OwnsPerClassStorage = false,
+    IrInheritedAccessor InheritedAccessor = IrInheritedAccessor.None
 );
+
+/// <summary>
+/// An accessor of an overridden property that an override leaves to its base
+/// (<see cref="IrPropertySemantics.InheritedAccessor"/>). C# lets an override declare
+/// only one accessor and inherits the other; a target whose accessor declaration
+/// replaces both (JavaScript) must forward the missing one to the base.
+/// </summary>
+public enum IrInheritedAccessor
+{
+    /// <summary>The override declares every accessor the overridden property has.</summary>
+    None,
+
+    /// <summary>The override declares only <c>set</c>; <c>get</c> is the base's.</summary>
+    Getter,
+
+    /// <summary>The override declares only <c>get</c>; <c>set</c> (or <c>init</c>) is the base's.</summary>
+    Setter,
+}

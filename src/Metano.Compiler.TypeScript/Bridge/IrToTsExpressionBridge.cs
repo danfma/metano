@@ -160,10 +160,10 @@ public static partial class IrToTsExpressionBridge
 
         if (
             bin is { Operator: IrBinaryOp.Assign, Left: IrMemberAccess backedMember }
-            && PerClassBackingFields.TryReadOnlyWriteTarget(backedMember) is { } backingField
+            && PerClassBackingFields.TryBackingFieldWrite(backedMember) is { } backingField
         )
             return new TsBinaryExpression(
-                new TsPropertyAccess(new TsIdentifier("this"), backingField),
+                PerClassBackingFields.StorageAccess(backingField),
                 "=",
                 Map(bin.Right, bclRegistry)
             );

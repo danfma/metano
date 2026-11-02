@@ -83,7 +83,7 @@ internal static class PrimaryConstructorPropertyAlias
             is not (Accessibility.Internal or Accessibility.NotApplicable)
         && !SymbolHelper.HasIgnore(property, target)
         && OwnsItsStorage(property)
-        && !OwnsPerClassStorage(property, compilation);
+        && !OverrideChains.OwnsPerClassStorage(property, compilation);
 
     /// <summary>
     /// An override's storage is declared by its base, except for a record's
@@ -93,9 +93,6 @@ internal static class PrimaryConstructorPropertyAlias
     /// </summary>
     private static bool OwnsItsStorage(IPropertySymbol property) =>
         !property.IsOverride || IsPositionalRecordProperty(property);
-
-    private static bool OwnsPerClassStorage(IPropertySymbol property, Compilation? compilation) =>
-        compilation is not null && OverrideChains.OwnsPerClassStorage(property, compilation);
 
     /// <summary>
     /// True when <paramref name="property"/> is the positional property of a

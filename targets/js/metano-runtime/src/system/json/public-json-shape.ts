@@ -2,7 +2,8 @@
  * The own-property name of a per-class backing field the transpiler emits for an
  * overridable auto-property: `<property>$<Class>_<hash>` (`p$Shape_k3x9ab`), where the
  * hash is six base-36 characters. `$` never appears in a C# identifier, so no
- * property of the source type can be mistaken for one.
+ * property of the source type can be mistaken for one (a `[Name]` override that carries both a
+ * `$` and a six-character `_` suffix would be; do not name members that way).
  */
 const BACKING_FIELD_NAME = /^([^$]+)\$[^$]+_[0-9a-z]{6}$/;
 
@@ -20,7 +21,8 @@ const BACKING_FIELD_NAME = /^([^$]+)\$[^$]+_[0-9a-z]{6}$/;
  */
 export function publicJsonShape(instance: object): Record<string, unknown> {
   const source = instance as Record<string, unknown>;
-  const shape: Record<string, unknown> = {};
+  // No prototype: a property named `constructor` or `__proto__` is an ordinary key.
+  const shape: Record<string, unknown> = Object.create(null);
 
   for (const key of Object.keys(instance)) {
     const name = publicNameOf(key);

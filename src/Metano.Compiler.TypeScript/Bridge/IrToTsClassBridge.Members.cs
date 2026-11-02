@@ -50,12 +50,12 @@ internal static partial class IrToTsClassBridge
         if (prop.Semantics?.IsAbstract == true)
             return [BuildAbstractProperty(prop, name, tsType)];
 
-        if (prop.Semantics?.OwnsPerClassStorage == true)
-            return BuildPerClassStorageProperty(
+        if (PerClassBackingFields.DeclaresBackingField(prop))
+            return WithInheritedAccessor(
+                BuildPerClassStorageProperty(prop, name, tsType, backingFields, bclRegistry),
                 prop,
-                tsType,
-                backingFields.NameOf(name),
-                bclRegistry
+                name,
+                tsType
             );
 
         var hasGetterBody = prop.Semantics?.HasGetterBody == true;
@@ -107,6 +107,55 @@ internal static partial class IrToTsClassBridge
             );
         }
 
+        return WithInheritedAccessor(members, prop, name, tsType);
+    }
+
+    /// <summary>
+    /// An override that declares one accessor of a property whose other accessor stays
+    /// the base's (<see cref="IrInheritedAccessor"/>) forwards the missing one to
+    /// <c>super</c>: a JavaScript accessor declaration replaces the base's pair, so the
+    /// inherited half would otherwise be gone (a write would throw, a read yield
+    /// <c>undefined</c>).
+    /// </summary>
+    private static List<TsClassMember> WithInheritedAccessor(
+        List<TsClassMember> members,
+        IrPropertyDeclaration prop,
+        string name,
+        TsType tsType
+    )
+    {
+        var superMember = new TsPropertyAccess(new TsIdentifier("super"), name);
+        var accessibility = MapAccessibility(prop.Visibility);
+
+        switch (prop.Semantics?.InheritedAccessor)
+        {
+            case IrInheritedAccessor.Setter:
+                members.Add(
+                    new TsSetterMember(
+                        name,
+                        new TsParameter("value", tsType),
+                        [
+                            new TsExpressionStatement(
+                                new TsBinaryExpression(superMember, "=", new TsIdentifier("value"))
+                            ),
+                        ],
+                        Accessibility: accessibility
+                    )
+                );
+                break;
+
+            case IrInheritedAccessor.Getter:
+                members.Add(
+                    new TsGetterMember(
+                        name,
+                        tsType,
+                        [new TsReturnStatement(superMember)],
+                        Accessibility: accessibility
+                    )
+                );
+                break;
+        }
+
         return members;
     }
 
@@ -120,14 +169,15 @@ internal static partial class IrToTsClassBridge
     /// </summary>
     private static List<TsClassMember> BuildPerClassStorageProperty(
         IrPropertyDeclaration prop,
+        string name,
         TsType tsType,
-        string fieldName,
+        PerClassBackingFields backingFields,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
+        var fieldName = backingFields.FieldOf(prop);
         var accessibility = MapAccessibility(prop.Visibility);
-        var storage = new TsPropertyAccess(new TsIdentifier("this"), fieldName);
+        var storage = PerClassBackingFields.StorageAccess(fieldName);
         var writable = prop.Accessors is not IrPropertyAccessors.GetOnly;
 
         var initializer = prop.Initializer is { } init

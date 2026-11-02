@@ -288,8 +288,11 @@ public static class IrClassExtractor
                 originResolver,
                 target
             ),
-            InheritsPerClassStorage: compilation is not null
-                && OverrideChains.AncestorOwnsPerClassStorage(type, compilation)
+            InheritsPerClassStorage: OverrideChains.AncestorOwnsPerClassStorage(
+                type,
+                compilation,
+                target
+            )
         );
 
     /// <summary>
