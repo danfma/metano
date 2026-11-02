@@ -638,6 +638,8 @@ public class PerClassBackingFieldTests
             """
         );
 
+        await Assert.That(result["app/k-root.ts"]).Contains("toJSON(");
+        await Assert.That(FieldOf(result["app/k-mid.ts"], "m", "KMid")).IsNotEmpty();
         await Assert.That(result["app/k-mid.ts"]).DoesNotContain("publicJsonShape");
         await Assert.That(result["app/k-leaf.ts"]).DoesNotContain("publicJsonShape");
     }
@@ -666,7 +668,40 @@ public class PerClassBackingFieldTests
             """
         );
 
+        await Assert.That(FieldOf(result["app/n-base.ts"], "p", "NBase")).IsNotEmpty();
+        await Assert.That(result["app/n-base.ts"]).Contains("toJSON(");
         await Assert.That(result["app/n-base.ts"]).DoesNotContain("publicJsonShape");
+    }
+
+    [Test]
+    public async Task IgnoredOrUnrelatedToJson_DoesNotSuppressTheSynthesizedOne()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class QBase
+            {
+                public virtual int P { get; } = 1;
+
+                [Ignore]
+                public object ToJSON() => "ignored";
+
+                public static object ToJSON(int value) => value;
+
+                public object ToJson() => "other casing";
+            }
+
+            [Transpile]
+            public class QDer : QBase
+            {
+                public override int P { get; } = 2;
+            }
+            """
+        );
+
+        await Assert.That(result["app/q-base.ts"]).Contains("return publicJsonShape(this);");
     }
 
     private static string FieldOf(string output, string property, string owner)
