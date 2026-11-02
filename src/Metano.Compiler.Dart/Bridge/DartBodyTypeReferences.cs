@@ -28,6 +28,16 @@ public static class DartBodyTypeReferences
         return types;
     }
 
+    public static IReadOnlyList<DartType> Collect(IrExpression? expression)
+    {
+        var types = new List<DartType>();
+
+        if (expression is not null)
+            VisitExpression(expression, types);
+
+        return types;
+    }
+
     private static void VisitStatement(IrStatement statement, List<DartType> types)
     {
         types.AddRange(TypesNamedBy(statement));

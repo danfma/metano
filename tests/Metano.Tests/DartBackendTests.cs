@@ -665,6 +665,7 @@ public class DartBackendTests
             """
         );
 
+        await Assert.That(files["calc.dart"]).Contains("int largest(int a, int b) =>");
         await Assert.That(files["calc.dart"]).DoesNotContain("import ");
     }
 
@@ -683,15 +684,20 @@ public class DartBackendTests
             public class Ticket { }
 
             [Transpile]
+            public class TicketException : Exception { }
+
+            [Transpile]
             public class Inspector
             {
                 public bool IsOrder(object x) => x is Order;
 
                 public object AsInvoice(object x) => (Invoice)x;
 
-                public void Touch(object x)
+                public void Touch()
                 {
-                    Ticket t = (Ticket)x;
+                    Ticket? t = null;
+                    try { }
+                    catch (TicketException) { }
                 }
             }
             """
@@ -701,6 +707,44 @@ public class DartBackendTests
         await Assert.That(inspector).Contains("import 'order.dart';");
         await Assert.That(inspector).Contains("import 'invoice.dart';");
         await Assert.That(inspector).Contains("import 'ticket.dart';");
+        await Assert.That(inspector).Contains("import 'ticket_exception.dart';");
+    }
+
+    [Test]
+    public async Task ExtensionCallsInFieldInitializers_ImportAndQualifyLikeBodies()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Num { public int V => 3; }
+
+            [Transpile]
+            public static class NumExt
+            {
+                public static int Dbl(this Num n) => n.V * 2;
+            }
+
+            [Transpile, NoContainer]
+            public static class Flat
+            {
+                public static int Tri(this Num n) => n.V * 3;
+            }
+
+            [Transpile]
+            public class Consumer
+            {
+                public int Field = new Num().Dbl();
+
+                public int Field2 = new Num().Tri();
+            }
+            """
+        );
+
+        var consumer = files["consumer.dart"];
+        await Assert.That(consumer).Contains("import 'flat.dart';");
+        await Assert.That(consumer).Contains("import 'num_ext.dart';");
+        await Assert.That(consumer).Contains("int field = NumExt.dbl(Num());");
+        await Assert.That(consumer).Contains("int field2 = tri(Num());");
     }
 
     [Test]
