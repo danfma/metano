@@ -180,4 +180,81 @@ public class ConstByDefaultTests
         await Assert.That(output).Contains("let b = ");
         await Assert.That(output).Contains("let c = ");
     }
+
+    [Test]
+    public async Task NullInitializedNullableLocal_KeepsDeclaredType()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Holder
+            {
+                public int Get() => 1;
+            }
+
+            [Transpile]
+            public class Sample
+            {
+                public int? Read()
+                {
+                    Holder? n = null;
+                    Holder? m = null;
+                    m = new Holder();
+                    var v = n?.Get();
+                    return v ?? m?.Get();
+                }
+            }
+            """
+        );
+
+        var output = result["sample.ts"];
+        await Assert.That(output).Contains("const n: Holder | null = null;");
+        await Assert.That(output).Contains("let m: Holder | null = null;");
+    }
+
+    [Test]
+    public async Task DefaultAndValueTypeNullableLocals_KeepDeclaredType()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public string? Read(string? s)
+                {
+                    string? a = default;
+                    int? b = null;
+                    return a ?? s;
+                }
+            }
+            """
+        );
+
+        var output = result["sample.ts"];
+        await Assert.That(output).Contains("const a: string | null = null;");
+        await Assert.That(output).Contains("const b: number | null = null;");
+    }
+
+    [Test]
+    public async Task NonNullableNullOrDefaultLocals_StayUnannotated()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public int Read()
+                {
+                    Sample h = null!;
+                    int x = default;
+                    return x;
+                }
+            }
+            """
+        );
+
+        var output = result["sample.ts"];
+        await Assert.That(output).DoesNotContain("h: Sample");
+        await Assert.That(output).DoesNotContain("x: number");
+    }
 }
