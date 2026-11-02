@@ -204,7 +204,7 @@ public static class IrConstructorExtractor
         if (compilation is null)
             return new IrConstructorDeclaration(Parameters: parameters);
 
-        var baseArguments = TryExtractBaseArguments(ctor, compilation, originResolver);
+        var baseArguments = TryExtractBaseArguments(ctor, compilation, originResolver, target);
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
@@ -280,12 +280,11 @@ public static class IrConstructorExtractor
         if (model.GetSymbolInfo(thisCall).Symbol is not IMethodSymbol chainedCtor)
             return null;
 
-        var arguments = MapArgumentList(
-            thisCall.ArgumentList,
-            thisCall.SyntaxTree,
-            compilation,
-            originResolver
-        );
+        var arguments = new IrExpressionExtractor(
+            model,
+            originResolver,
+            context.Target
+        ).ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
 
         var chainedDecl = BuildFromMethod(chainedCtor, originResolver, context);
 
@@ -357,36 +356,23 @@ public static class IrConstructorExtractor
     private static IReadOnlyList<IrArgument>? TryExtractBaseArguments(
         IMethodSymbol ctor,
         Compilation compilation,
-        IrTypeOriginResolver? originResolver
-    ) =>
-        FindBaseCallSyntax(ctor) is { } baseCall
-            ? MapArgumentList(
-                ArgumentListOf(baseCall),
-                baseCall.SyntaxTree,
-                compilation,
-                originResolver
-            )
-            : null;
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        if (FindBaseCallSyntax(ctor) is not { } baseCall)
+            return null;
+
+        var model = compilation.GetSemanticModel(baseCall.SyntaxTree);
+
+        return new IrExpressionExtractor(model, originResolver, target).ExtractInitializerArguments(
+            ArgumentListOf(baseCall),
+            model.GetSymbolInfo(baseCall).Symbol as IMethodSymbol
+        );
+    }
 
     private static PrimaryConstructorBaseTypeSyntax? FindPrimaryBase(BaseListSyntax? baseList) =>
         baseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>().FirstOrDefault();
-
-    private static IReadOnlyList<IrArgument> MapArgumentList(
-        ArgumentListSyntax argumentList,
-        SyntaxTree tree,
-        Compilation compilation,
-        IrTypeOriginResolver? originResolver
-    )
-    {
-        var model = compilation.GetSemanticModel(tree);
-        var expr = new IrExpressionExtractor(model, originResolver);
-        return argumentList
-            .Arguments.Select(a => new IrArgument(
-                expr.ExtractStandalone(a.Expression),
-                a.NameColon?.Name.Identifier.ValueText
-            ))
-            .ToList();
-    }
 
     /// <summary>
     /// Extracts the C# default-value expression of a parameter into IR when we have the

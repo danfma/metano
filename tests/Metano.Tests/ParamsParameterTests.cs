@@ -4,6 +4,45 @@ namespace Metano.Tests;
 
 public class ParamsParameterTests
 {
+    private const string ParamsBaseSource = """
+        namespace App;
+
+        [Transpile]
+        public class Base
+        {
+            public Base(params int[] xs) { Count = xs.Length; }
+
+            public int Count { get; }
+        }
+
+        [Transpile]
+        public class ParamsForwarding : Base
+        {
+            public ParamsForwarding(params int[] xs) : base(xs) { }
+        }
+
+        [Transpile]
+        public class PlainArrayForwarding : Base
+        {
+            public PlainArrayForwarding(int[] xs) : base(xs) { }
+        }
+
+        [Transpile]
+        public class Expanded : Base
+        {
+            public Expanded() : base(1, 2, 3) { }
+        }
+
+        [Transpile]
+        public class Empty : Base
+        {
+            public Empty() : base() { }
+        }
+
+        [Transpile]
+        public class Primary(int[] xs) : Base(xs);
+        """;
+
     [Test]
     public async Task InstanceMethod_ParamsObjectArray_EmitsRestParameter()
     {
@@ -523,6 +562,154 @@ public class ParamsParameterTests
                 diagnostics.Any(d =>
                     d.Severity == MetanoDiagnosticSeverity.Warning
                     && d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("params parameter")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task BaseInitializer_ForwardedParamsArray_SpreadsIt()
+    {
+        var result = TranspileHelper.Transpile(ParamsBaseSource);
+
+        await Assert.That(result["app/params-forwarding.ts"]).Contains("super(...xs);");
+        await Assert.That(result["app/plain-array-forwarding.ts"]).Contains("super(...xs);");
+    }
+
+    [Test]
+    public async Task BaseInitializer_ExpandedElements_PassThroughUnspread()
+    {
+        var result = TranspileHelper.Transpile(ParamsBaseSource);
+
+        await Assert.That(result["app/expanded.ts"]).Contains("super(1, 2, 3);");
+        await Assert.That(result["app/empty.ts"]).Contains("super();");
+    }
+
+    [Test]
+    public async Task PrimaryConstructorBase_ForwardedArray_SpreadsIt()
+    {
+        var result = TranspileHelper.Transpile(ParamsBaseSource);
+
+        await Assert.That(result["app/primary.ts"]).Contains("super(...xs);");
+    }
+
+    [Test]
+    public async Task BaseInitializer_ArrayAfterFixedArgument_SpreadsOnlyTheArray()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Base
+            {
+                public Base(int first, params int[] rest) { }
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                public Derived(int[] xs) : base(1, xs) { }
+            }
+            """
+        );
+
+        await Assert.That(result["app/derived.ts"]).Contains("super(1, ...xs);");
+    }
+
+    [Test]
+    public async Task ThisInitializer_ForwardedParamsArray_BindsTheArrayToTheChainedParameter()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Chained
+            {
+                public Chained(params int[] xs) { Count = xs.Length; }
+
+                public Chained(string label, int[] xs) : this(xs) { }
+
+                public int Count { get; }
+            }
+            """
+        );
+
+        // The chained constructor is inlined, so its params parameter stays an array binding.
+        await Assert.That(result["app/chained.ts"]).Contains("const __chain0Arg0 = xs;");
+        await Assert.That(result["app/chained.ts"]).DoesNotContain("...__chain0Arg0");
+    }
+
+    [Test]
+    public async Task BaseInitializer_ForwardedParamsArrayInRecord_SpreadsIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public record Base(params int[] Xs);
+
+            [Transpile]
+            public record Derived(int[] Xs, string Label) : Base(Xs);
+            """
+        );
+
+        await Assert.That(result["app/derived.ts"]).Contains("super(...xs);");
+    }
+
+    [Test]
+    public async Task BaseInitializer_NamedParamsArray_SpreadsIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Base
+            {
+                public Base(params int[] xs) { }
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                public Derived(int[] ys) : base(xs: ys) { }
+            }
+            """
+        );
+
+        await Assert.That(result["app/derived.ts"]).Contains("super(...ys);");
+    }
+
+    [Test]
+    public async Task BaseInitializer_NullParamsArray_DropsTheArgumentAndReportsMS0001()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Base
+            {
+                public Base(params int[]? xs) { }
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                public Derived() : base(null) { }
+            }
+            """
+        );
+
+        await Assert.That(result["app/derived.ts"]).Contains("super();");
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature
                     && d.Message.Contains("params parameter")
                 )
             )
