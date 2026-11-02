@@ -69,6 +69,8 @@ public static class IrClassExtractor
             deferInitializers
         );
 
+        OverridablePropertyConstructionReads.Report(type, compilation, target);
+
         var members = ExtractWithCaptureContext(
             captureScan,
             deferInitializers,
