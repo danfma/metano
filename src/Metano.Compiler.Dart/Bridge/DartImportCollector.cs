@@ -69,10 +69,11 @@ public static class DartImportCollector
 
     // ── AST walkers ───────────────────────────────────────────────────────
     // The walker covers the AST shape the bridge currently emits: classes,
-    // module-level functions, and delegate-derived typedefs. Method bodies and
-    // expression-level references aren't traversed yet — the body printer
-    // resolves those identifiers directly. Future AST features (exception
-    // types, dispatcher-style classes) will plug in additional cases here.
+    // module-level functions, and delegate-derived typedefs. Method bodies are
+    // walked through DartBodyTypeReferences, which surfaces the types they
+    // name (static receivers such as extension-helper hosts, `new`, casts, type
+    // tests) as ordinary Dart types. Future AST features (exception types,
+    // dispatcher-style classes) will plug in additional cases here.
 
     private static void WalkTopLevel(DartTopLevel stmt, WalkContext ctx)
     {
@@ -87,6 +88,8 @@ public static class DartImportCollector
                 WalkType(fn.ReturnType, ctx);
                 foreach (var p in fn.Parameters)
                     WalkType(p.Type, ctx);
+
+                WalkBody(fn.Body, ctx);
                 break;
             case DartTypedef td:
                 // Delegate-derived typedefs alias a function signature; both the
@@ -112,10 +115,19 @@ public static class DartImportCollector
         if (cls.Members is not null)
             foreach (var m in cls.Members)
                 WalkMember(m, ctx);
-        if (cls.Constructor is not null)
-            foreach (var p in cls.Constructor.Parameters)
-                if (p.Type is not null)
-                    WalkType(p.Type, ctx);
+        WalkConstructor(cls.Constructor, ctx);
+    }
+
+    private static void WalkConstructor(DartConstructor? constructor, WalkContext ctx)
+    {
+        if (constructor is null)
+            return;
+
+        foreach (var p in constructor.Parameters)
+            if (p.Type is not null)
+                WalkType(p.Type, ctx);
+
+        WalkBody(constructor.Body, ctx);
     }
 
     private static void WalkMember(DartClassMember member, WalkContext ctx)
@@ -127,13 +139,22 @@ public static class DartImportCollector
                 break;
             case DartGetter g:
                 WalkType(g.ReturnType, ctx);
+                WalkBody(g.Body, ctx);
                 break;
             case DartMethodSignature m:
                 WalkType(m.ReturnType, ctx);
                 foreach (var p in m.Parameters)
                     WalkType(p.Type, ctx);
+
+                WalkBody(m.Body, ctx);
                 break;
         }
+    }
+
+    private static void WalkBody(IReadOnlyList<IrStatement>? body, WalkContext ctx)
+    {
+        foreach (var type in DartBodyTypeReferences.Collect(body))
+            WalkType(type, ctx);
     }
 
     private static void WalkType(DartType type, WalkContext ctx)

@@ -233,7 +233,7 @@ public static class IrBodyPrinter
                 // Type references keep their source casing — Dart classes and enums are
                 // PascalCase and should surface as written (e.g., `Counter.zero`).
                 // Dart flattens nested types, so drop the container qualification.
-                sb.Append(InnermostTypeSegment(tr.Name));
+                sb.Append(IrToDartNamingPolicy.InnermostTypeSegment(tr.Name));
                 break;
             case IrThisExpression:
                 sb.Append("this");
@@ -244,6 +244,12 @@ public static class IrBodyPrinter
             case IrMemberAccess { Origin: { } origin } ma when IsRecordFieldRead(origin):
                 PrintAccessTarget(sb, ma.Target);
                 sb.Append(".$").Append(origin.TupleIndex + 1);
+                break;
+            case IrMemberAccess { Target: IrTypeReference, Origin: { } origin } ma
+                when IsContainerlessFunction(origin):
+                // A [NoContainer] static class lowers to top-level functions, so the
+                // class qualifier vanishes at the call site (`DelExt.twice(x)` → `twice(x)`).
+                sb.Append(IrToDartNamingPolicy.ToParameterName(ma.MemberName));
                 break;
             case IrMemberAccess ma:
                 PrintAccessTarget(sb, ma.Target);
@@ -1078,8 +1084,11 @@ public static class IrBodyPrinter
         }
     }
 
-    private static string InnermostTypeSegment(string qualifiedName) =>
-        qualifiedName[(qualifiedName.LastIndexOf('.') + 1)..];
+    // Only functions lose the qualifier: the Dart bridge emits no module-level variables
+    // for [NoContainer] data members, so those keep their (currently unresolved) qualifier.
+    private static bool IsContainerlessFunction(IrMemberOrigin origin) =>
+        origin
+            is { IsStatic: true, IsDeclaringTypeNoContainer: true, IsTranspiledDataMember: false };
 
     private static string EscapeString(string s) =>
         s.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");

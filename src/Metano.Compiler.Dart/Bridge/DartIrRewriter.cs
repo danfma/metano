@@ -19,10 +19,20 @@ namespace Metano.Compiler.Dart.Bridge;
 public sealed class DartIrRewriter
 {
     private readonly DeclarativeMappingRegistry _registry;
+    private readonly IReadOnlySet<string> _containerlessTypes;
 
-    public DartIrRewriter(DeclarativeMappingRegistry registry)
+    /// <param name="registry">Declarative BCL mappings.</param>
+    /// <param name="containerlessTypes">Stable full names of the static classes this target
+    /// flattens into top-level functions. IR origins mark every extension helper as
+    /// containerless, but Dart keeps a plain static class as a class, so the call site only
+    /// loses its qualifier for the types listed here.</param>
+    public DartIrRewriter(
+        DeclarativeMappingRegistry registry,
+        IReadOnlySet<string>? containerlessTypes = null
+    )
     {
         _registry = registry;
+        _containerlessTypes = containerlessTypes ?? new HashSet<string>();
     }
 
     public IReadOnlyList<IrStatement>? Rewrite(IReadOnlyList<IrStatement>? body)
@@ -235,11 +245,24 @@ public sealed class DartIrRewriter
     private IrExpression RewriteMemberAccess(IrMemberAccess access)
     {
         var rewrittenTarget = RewriteExpression(access.Target);
-        var rewritten = access with { Target = rewrittenTarget };
+        var rewritten = access with
+        {
+            Target = rewrittenTarget,
+            Origin = WithRealContainerlessness(access.Origin),
+        };
 
         var mapped = IrToDartBclMapper.TryMapMemberAccess(rewritten, _registry);
         return mapped ?? rewritten;
     }
+
+    private IrMemberOrigin? WithRealContainerlessness(IrMemberOrigin? origin) =>
+        origin is { IsDeclaringTypeNoContainer: true }
+        && !_containerlessTypes.Contains(origin.DeclaringTypeFullName)
+            ? origin with
+            {
+                IsDeclaringTypeNoContainer = false,
+            }
+            : origin;
 
     private IrArgument RewriteArgument(IrArgument arg) =>
         arg with
