@@ -29,7 +29,7 @@ internal static class PrimaryConstructorPropertyAlias
         Compilation compilation,
         TargetLanguage? target
     ) =>
-        CandidatesNamed(parameter.ContainingType, parameter.Name, compilation, target)
+        CandidatesNamed(parameter.ContainingType, parameter.Name, target)
             .FirstOrDefault(property => IsAliasOf(property, parameter, compilation));
 
     /// <summary>
@@ -50,14 +50,13 @@ internal static class PrimaryConstructorPropertyAlias
     public static IEnumerable<IPropertySymbol> CandidatesNamed(
         INamedTypeSymbol type,
         string name,
-        Compilation? compilation,
         TargetLanguage? target
     ) =>
         type.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(property =>
                 string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
-                && IsPromotionCandidate(property, compilation, target)
+                && IsPromotionCandidate(property, target)
             )
             .OrderBy(property => property.Name == name ? 0 : 1);
 
@@ -73,17 +72,13 @@ internal static class PrimaryConstructorPropertyAlias
     /// extraction and the capture scan share it, so a member-body read is
     /// never redirected to a property that is not emitted.
     /// </summary>
-    public static bool IsPromotionCandidate(
-        IPropertySymbol property,
-        Compilation? compilation,
-        TargetLanguage? target
-    ) =>
+    public static bool IsPromotionCandidate(IPropertySymbol property, TargetLanguage? target) =>
         !property.IsImplicitlyDeclared
         && property.DeclaredAccessibility
             is not (Accessibility.Internal or Accessibility.NotApplicable)
         && !SymbolHelper.HasIgnore(property, target)
         && OwnsItsStorage(property)
-        && !OverrideChains.OwnsPerClassStorage(property, compilation);
+        && !OverrideChains.OwnsPerClassStorage(property);
 
     /// <summary>
     /// An override's storage is declared by its base, except for a record's

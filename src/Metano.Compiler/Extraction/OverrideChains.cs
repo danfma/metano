@@ -32,27 +32,23 @@ internal static class OverrideChains
         && OverriddenPropertiesIn(compilation).Contains(property.OriginalDefinition);
 
     /// <summary>
-    /// Whether the auto-property keeps a backing field of its own in every class of
-    /// an override chain the compilation declares. C# gives each declaring class a
-    /// private backing field, so a base value stays reachable through
-    /// <c>base.P</c> while a derived class overrides it; a target that lowers the
-    /// auto-property to one field of the property's name would share a single slot
-    /// across the hierarchy, and that field would hide the override's accessor.
+    /// Whether the auto-property keeps a backing field of its own in every class of the
+    /// chain it belongs to. C# gives each declaring class a private backing field, so a
+    /// base value stays reachable through <c>base.P</c> while a derived class overrides it;
+    /// a target that lowers the auto-property to one field of the property's name would
+    /// share a single slot across the hierarchy, and that field would hide the override's
+    /// accessor.
     /// <para>
-    /// Applies to an auto-property that is not static, abstract (it has no storage)
-    /// or an indexer, and that is either overridable and overridden in the
-    /// compilation, or overrides a non-abstract property the compilation declares
-    /// (so a sealed override follows the base it overrides).
+    /// Decided from the property alone, so every package that compiles it (the declaring
+    /// library and a consumer that overrides it) agrees without seeing the other: a
+    /// <c>virtual</c> or <c>override</c> (sealed or not) auto-property that is not static,
+    /// abstract (it has no storage) or an indexer.
     /// </para>
     /// </summary>
-    public static bool OwnsPerClassStorage(IPropertySymbol property, Compilation? compilation) =>
-        compilation is not null
-        && property is { IsStatic: false, IsAbstract: false, IsIndexer: false }
-        && IsAutoProperty(property)
-        && (
-            IsOverridableAndOverridden(property, compilation)
-            || OverridesDeclaredBase(property, compilation)
-        );
+    public static bool OwnsPerClassStorage(IPropertySymbol property) =>
+        property is { IsStatic: false, IsAbstract: false, IsIndexer: false }
+        && (property.IsVirtual || property.IsOverride)
+        && IsAutoProperty(property);
 
     /// <summary>
     /// The accessor <paramref name="property"/> leaves to the properties it overrides: an
@@ -94,7 +90,7 @@ internal static class OverrideChains
     {
         for (
             var overridden = property.OverriddenProperty;
-            overridden is not null && IsDeclaredIn(overridden, compilation);
+            overridden is not null && IsEmittedByToolchain(overridden.ContainingType, compilation);
             overridden = overridden.OverriddenProperty
         )
         {
@@ -118,7 +114,9 @@ internal static class OverrideChains
     {
         for (
             var current = type;
-            current is not null && compilation is not null && IsDeclaredIn(current, compilation);
+            current is not null
+                && compilation is not null
+                && IsEmittedByToolchain(current, compilation);
             current = current.BaseType
         )
         {
@@ -157,8 +155,8 @@ internal static class OverrideChains
         for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
         {
             if (
-                IsDeclaredIn(ancestor, compilation)
-                && EmitsPerClassStorage(ancestor, compilation, target)
+                IsEmittedByToolchain(ancestor, compilation)
+                && EmitsPerClassStorage(ancestor, target)
             )
             {
                 return true;
@@ -170,28 +168,36 @@ internal static class OverrideChains
 
     private static bool EmitsPerClassStorage(
         INamedTypeSymbol type,
-        Compilation compilation,
         Metano.Annotations.TargetLanguage? target
     ) =>
         type.GetMembers()
             .OfType<IPropertySymbol>()
             .Any(property =>
-                OwnsPerClassStorage(property, compilation)
+                OwnsPerClassStorage(property)
                 && property.DeclaredAccessibility is not Accessibility.ProtectedAndInternal
                 && !SymbolHelper.HasIgnore(property, target)
             );
 
-    private static bool IsDeclaredIn(ISymbol symbol, Compilation compilation) =>
-        SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, compilation.Assembly);
+    /// <summary>
+    /// The property's or class's declaration is emitted by the toolchain: the compilation
+    /// itself or a transpiled package it references.
+    /// </summary>
+    private static bool IsEmittedByToolchain(INamedTypeSymbol type, Compilation compilation) =>
+        SymbolHelper.IsToolchainDeclared(type, compilation.Assembly);
 
-    private static bool OverridesDeclaredBase(IPropertySymbol property, Compilation compilation) =>
-        property.OverriddenProperty is { IsAbstract: false } overridden
-        && IsDeclaredIn(overridden, compilation);
-
+    /// <summary>
+    /// An auto-property: by its syntax when declared in source, and in a referenced assembly
+    /// (no syntax) by the compiler-generated backing field C# stores in its metadata.
+    /// </summary>
     private static bool IsAutoProperty(IPropertySymbol property) =>
         property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             is PropertyDeclarationSyntax declaration
-        && PrimaryConstructorPropertyAlias.IsAutoProperty(declaration);
+            ? PrimaryConstructorPropertyAlias.IsAutoProperty(declaration)
+            : property.DeclaringSyntaxReferences.IsEmpty
+                && property
+                    .ContainingType.GetMembers($"<{property.Name}>k__BackingField")
+                    .OfType<IFieldSymbol>()
+                    .Any();
 
     private static bool IsOverridable(IPropertySymbol property) =>
         !property.IsIndexer && (property.IsVirtual || (property.IsOverride && !property.IsSealed));

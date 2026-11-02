@@ -128,7 +128,7 @@ public static class IrPropertyExtractor
             IsOverride: prop.IsOverride,
             IsSealed: prop.IsSealed,
             IsRequired: prop.IsRequired,
-            OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop, compilation),
+            OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop),
             InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, compilation)
         );
     }

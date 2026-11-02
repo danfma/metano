@@ -156,7 +156,7 @@ public static class IrConstructorExtractor
             IsInspectablePrimaryParameter(parameter)
                 ? Promotion.PromotedPropertyOf(parameter)
                 : PrimaryConstructorPropertyAlias
-                    .CandidatesNamed(Type, parameter.Name, Compilation, Target)
+                    .CandidatesNamed(Type, parameter.Name, Target)
                     .FirstOrDefault();
 
         private bool IsInspectablePrimaryParameter(IParameterSymbol parameter) =>

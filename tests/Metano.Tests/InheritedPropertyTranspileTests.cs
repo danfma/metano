@@ -129,7 +129,10 @@ public class InheritedPropertyTranspileTests
 
         var tripled = result["tripled.ts"];
         await Assert.That(tripled).Contains("constructor(x: number) {");
-        await Assert.That(tripled).Contains("this.x = x * 3;");
+        // The override owns a per-class backing field; the moved initializer stores to it.
+        await Assert.That(tripled).Contains("this.x$Tripled_");
+        await Assert.That(tripled).Contains(" = x * 3;");
+        await Assert.That(tripled).Contains("get x(): number {");
     }
 
     [Test]
@@ -161,7 +164,8 @@ public class InheritedPropertyTranspileTests
         var expected = TranspileHelper.ReadExpected("abstract-property-base.ts");
         await Assert.That(result["shape.ts"]).IsEqualTo(expected);
         await Assert.That(result["circle.ts"]).Contains("get kind(): string {");
-        await Assert.That(result["square.ts"]).Contains("readonly kind: string = \"square\";");
+        await Assert.That(result["square.ts"]).Contains("readonly kind$Square_");
+        await Assert.That(result["square.ts"]).Contains("get kind(): string {");
     }
 
     [Test]
