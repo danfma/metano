@@ -45,9 +45,14 @@ describe("publicJsonShape", () => {
   });
 
   test("passes through a property whose name only resembles a backing field", () => {
-    expect(publicJsonShape({ first_name: "a", item_abcdef: 1 })).toEqual({
-      first_name: "a",
-      item_abcdef: 1,
-    });
+    const shape = publicJsonShape({ first_name: "a", item_abcdef: 1 });
+
+    expect(JSON.stringify(shape)).toBe('{"first_name":"a","item_abcdef":1}');
+  });
+
+  test("keeps a property named like an Object.prototype member", () => {
+    const shape = publicJsonShape({ constructor: 1, toString: 2 });
+
+    expect(JSON.stringify(shape)).toBe('{"constructor":1,"toString":2}');
   });
 });

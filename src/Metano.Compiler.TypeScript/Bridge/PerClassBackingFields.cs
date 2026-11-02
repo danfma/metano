@@ -18,24 +18,35 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// share a field, and the name is the same on every run and machine.
 /// <para>
 /// A get-only auto-property has no setter, yet C# lets the declaring constructor assign
-/// it (and the primary-constructor initializer deferral does): those writes lower to the
-/// field itself, found through <see cref="EnterClass"/> while the class is emitted.
+/// it, and a member initializer the constructor now runs (primary-constructor
+/// initializer deferral) stores to the member's own storage whatever accessors a derived
+/// class overrides: both lower to the backing field itself, found through
+/// <see cref="EnterClass"/>. That scope is ambient because the expression bridge that maps
+/// the assignment takes no per-class context.
 /// </para>
 /// <para>
 /// <c>JSON.stringify</c> walks own enumerable properties, so it would expose the
 /// mangled names. A class that gained a field therefore carries a <c>toJSON()</c>
-/// (<see cref="BuildJsonShape"/>) that answers the public shape instead.
+/// (<see cref="BuildToJson"/>) that answers the public shape instead. The runtime
+/// <c>publicJsonShape</c> recognizes a backing field by this naming scheme
+/// (<c>&lt;property&gt;$&lt;Class&gt;_&lt;six base-36 characters&gt;</c>): change
+/// <see cref="HashLength"/> or the separators together with its pattern.
 /// </para>
 /// </summary>
 internal sealed class PerClassBackingFields
 {
-    private const string JsonShapeHelper = "publicJsonShape";
+    private const string PublicJsonShapeFunction = "publicJsonShape";
     private const int HashLength = 6;
     private const uint FnvOffsetBasis = 2166136261;
     private const uint FnvPrime = 16777619;
-    private const long Base36HashSpace = 2176782336;
 
-    private static readonly AsyncLocal<Dictionary<string, string>> ReadOnlyWriteTargets = new();
+    // 36^HashLength: the hash is reduced to HashLength base-36 characters.
+    private const long Base36HashSpace = 36L * 36 * 36 * 36 * 36 * 36;
+
+    private static readonly AsyncLocal<IReadOnlyDictionary<
+        string,
+        BackedProperty
+    >?> ClassProperties = new();
 
     private readonly string _suffix;
 
@@ -45,28 +56,37 @@ internal sealed class PerClassBackingFields
     public static PerClassBackingFields For(INamedTypeSymbol type) =>
         new($"{type.Name}_{StableHash(Identity(type))}");
 
-    /// <summary>The field behind the property emitted as <paramref name="emittedPropertyName"/>.</summary>
-    public string NameOf(string emittedPropertyName) => $"{emittedPropertyName}${_suffix}";
+    /// <summary>The property is emitted as a backing field plus accessors.</summary>
+    public static bool DeclaresBackingField(IrPropertyDeclaration property) =>
+        property is { Semantics.OwnsPerClassStorage: true }
+        && property.Visibility is not IrVisibility.PrivateProtected;
+
+    /// <summary>The field behind <paramref name="property"/>.</summary>
+    public string FieldOf(IrPropertyDeclaration property) =>
+        $"{IrToTsNamingPolicy.ToDeclaredDataMemberName(property.Name, property.Attributes)}${_suffix}";
+
+    /// <summary><c>this.&lt;field&gt;</c>.</summary>
+    public static TsPropertyAccess StorageAccess(string field) =>
+        new(new TsIdentifier("this"), field);
 
     /// <summary>
-    /// Scopes the emission of one class: while the returned handle is alive, an assignment
-    /// to a get-only property of <paramref name="ir"/> that owns per-class storage lowers
-    /// to its backing field (see <see cref="TryReadOnlyWriteTarget"/>).
+    /// Scopes the emission of one class: while the returned handle is alive, the writes
+    /// <see cref="TryBackingFieldWrite"/> recognizes lower to the backing fields of
+    /// <paramref name="ir"/>'s properties.
     /// </summary>
     public IDisposable EnterClass(IrClassDeclaration ir)
     {
-        var scope = new ClassScope(ReadOnlyWriteTargets.Value);
+        var scope = new ClassScope(ClassProperties.Value);
 
-        ReadOnlyWriteTargets.Value = ReadOnlyOwners(ir)
+        ClassProperties.Value = (ir.Members ?? [])
+            .OfType<IrPropertyDeclaration>()
+            .Where(DeclaresBackingField)
             .ToDictionary(
                 property => property.Name,
-                property =>
-                    NameOf(
-                        IrToTsNamingPolicy.ToDeclaredDataMemberName(
-                            property.Name,
-                            property.Attributes
-                        )
-                    ),
+                property => new BackedProperty(
+                    FieldOf(property),
+                    property.Accessors is IrPropertyAccessors.GetOnly
+                ),
                 StringComparer.Ordinal
             );
 
@@ -74,59 +94,64 @@ internal sealed class PerClassBackingFields
     }
 
     /// <summary>
-    /// The backing field a <c>this.P = value</c> write inside the class being emitted
-    /// stores to, when <c>P</c> is a get-only auto-property with per-class storage;
-    /// <c>null</c> for every other access.
+    /// The backing field an assignment to <c>this.P</c> stores to inside the class being
+    /// emitted: always for a get-only property (only the declaring constructor can assign
+    /// it, and it has no setter), and for a writable one when the assignment is a moved
+    /// member initializer (<see cref="IrMemberOrigin.IsInitializerWrite"/>). An explicit
+    /// <c>P = x</c> on a writable property stays a virtual setter call, as in C#. <c>null</c>
+    /// for every other access.
     /// </summary>
-    public static string? TryReadOnlyWriteTarget(IrMemberAccess access) =>
+    public static string? TryBackingFieldWrite(IrMemberAccess access) =>
         access.Target is IrThisExpression
-        && ReadOnlyWriteTargets.Value is { } targets
-        && targets.TryGetValue(access.MemberName, out var field)
-            ? field
+        && ClassProperties.Value is { } properties
+        && properties.TryGetValue(access.MemberName, out var property)
+        && (property.GetOnly || access.Origin is { IsInitializerWrite: true })
+            ? property.Field
             : null;
 
     /// <summary>
     /// <c>toJSON(): unknown { return publicJsonShape(this); }</c> for a class that declares at
-    /// least one backing field, <c>null</c> for any other. The runtime helper keeps the keys and
-    /// values <c>JSON.stringify</c> produced while the property was a field (every own
-    /// property of the instance, base classes included), renaming a backing field back to its
-    /// property and reading the value through the accessor. A class whose ancestor already
-    /// declares one overrides that ancestor's method.
+    /// least one backing field, <c>null</c> for any other, or for one that already declares
+    /// its own <c>ToJSON</c>. The runtime function keeps the keys and values
+    /// <c>JSON.stringify</c> produced while the property was a field (every own property of
+    /// the instance, base classes included), renaming a backing field back to its property
+    /// and reading the value through the accessor. The method overrides the one of an
+    /// ancestor that declares a backing field, when the class extends it
+    /// (<paramref name="extendsBase"/>).
     /// </summary>
-    public static TsMethodMember? BuildJsonShape(IrClassDeclaration ir) =>
-        (ir.Members ?? []).OfType<IrPropertyDeclaration>().Any(DeclaresBackingField)
-            ? new TsMethodMember(
-                "toJSON",
-                [],
-                new TsNamedType("unknown"),
-                [
-                    new TsReturnStatement(
-                        new TsTemplate(
-                            $"{JsonShapeHelper}($0)",
-                            Receiver: null,
-                            [new TsIdentifier("this")]
-                        )
-                        {
-                            RuntimeImports = [JsonShapeHelper],
-                        }
-                    ),
-                ],
-                Override: ir.Semantics.InheritsPerClassStorage
-            )
-            : null;
+    public static TsMethodMember? BuildToJson(IrClassDeclaration ir, bool extendsBase)
+    {
+        var members = ir.Members ?? [];
 
-    /// <summary>The property is emitted as a backing field plus accessors.</summary>
-    public static bool DeclaresBackingField(IrPropertyDeclaration property) =>
-        property is { Semantics.OwnsPerClassStorage: true }
-        && property.Visibility is not IrVisibility.PrivateProtected;
+        if (!members.OfType<IrPropertyDeclaration>().Any(DeclaresBackingField))
+            return null;
 
-    private static IEnumerable<IrPropertyDeclaration> ReadOnlyOwners(IrClassDeclaration ir) =>
-        (ir.Members ?? [])
-            .OfType<IrPropertyDeclaration>()
-            .Where(property =>
-                property.Accessors is IrPropertyAccessors.GetOnly
-                && property.Semantics?.OwnsPerClassStorage == true
-            );
+        if (members.OfType<IrMethodDeclaration>().Any(DeclaresToJson))
+            return null;
+
+        return new TsMethodMember(
+            "toJSON",
+            [],
+            new TsNamedType("unknown"),
+            [
+                new TsReturnStatement(
+                    new TsTemplate(
+                        $"{PublicJsonShapeFunction}($0)",
+                        Receiver: null,
+                        [new TsIdentifier("this")]
+                    )
+                    {
+                        RuntimeImports = [PublicJsonShapeFunction],
+                    }
+                ),
+            ],
+            Override: extendsBase && ir.Semantics.InheritsPerClassStorage
+        );
+    }
+
+    private static bool DeclaresToJson(IrMethodDeclaration method) =>
+        !method.IsStatic
+        && string.Equals(method.Name, "ToJSON", StringComparison.OrdinalIgnoreCase);
 
     private static string Identity(INamedTypeSymbol type) =>
         $"{PackageIdentity(type.ContainingAssembly)}:{type.ContainingNamespace.ToDisplayString()}.{MetadataPath(type)}";
@@ -165,8 +190,11 @@ internal sealed class PerClassBackingFields
         return result.ToString();
     }
 
-    private sealed class ClassScope(Dictionary<string, string>? previous) : IDisposable
+    private sealed record BackedProperty(string Field, bool GetOnly);
+
+    private sealed class ClassScope(IReadOnlyDictionary<string, BackedProperty>? previous)
+        : IDisposable
     {
-        public void Dispose() => ReadOnlyWriteTargets.Value = previous!;
+        public void Dispose() => ClassProperties.Value = previous;
     }
 }

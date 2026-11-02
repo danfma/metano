@@ -45,7 +45,7 @@ public class PerClassBackingFieldTests
         await Assert.That(baseOutput).Contains($"    return this.{field};");
         await Assert.That(baseOutput).DoesNotContain("  readonly p: number");
         await Assert.That(result["app/v-der.ts"]).Contains("  get p(): number {\n    return 2;");
-        await Assert.That(result["app/v-der.ts"]).DoesNotContain("$");
+        await Assert.That(result["app/v-der.ts"]).DoesNotMatch(BackingField);
     }
 
     [Test]
@@ -177,7 +177,7 @@ public class PerClassBackingFieldTests
         );
 
         await Assert.That(result["app/lonely.ts"]).Contains("  readonly z: number = 9;");
-        await Assert.That(result["app/lonely.ts"]).DoesNotContain("$");
+        await Assert.That(result["app/lonely.ts"]).DoesNotMatch(BackingField);
         await Assert.That(result["app/lonely.ts"]).DoesNotContain("toJSON");
     }
 
@@ -427,6 +427,153 @@ public class PerClassBackingFieldTests
         await Assert.That(result["app/pr-der.ts"]).Contains("  protected get pr(): number {");
     }
 
+    [Test]
+    public async Task PrimaryConstructorInitializer_OnWritableProperty_StoresToTheDeclaringClassField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class WBase(int x)
+            {
+                public virtual int P { get; set; } = x;
+            }
+
+            [Transpile]
+            public class WDer(int y) : WBase(y)
+            {
+                public override int P { get; set; } = 9;
+
+                public int FromBase() => base.P;
+            }
+            """
+        );
+
+        var field = FieldOf(result["app/w-base.ts"], "p", "WBase");
+
+        await Assert.That(result["app/w-base.ts"]).Contains($"    this.{field} = x;");
+        await Assert.That(result["app/w-base.ts"]).DoesNotContain("this.p = x");
+    }
+
+    [Test]
+    public async Task GetterOnlyOverride_OfWritableProperty_ForwardsTheInheritedSetter()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class FBase
+            {
+                public virtual int P { get; set; } = 1;
+            }
+
+            [Transpile]
+            public class FDer : FBase
+            {
+                public override int P => 5;
+            }
+            """
+        );
+
+        await Assert.That(result["app/f-der.ts"]).Contains("  get p(): number {\n    return 5;");
+        await Assert
+            .That(result["app/f-der.ts"])
+            .Contains("  set p(value: number) {\n    super.p = value;\n  }");
+    }
+
+    [Test]
+    public async Task SetterOnlyOverride_ForwardsTheInheritedGetter()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class GBase
+            {
+                public virtual int P { get; set; } = 1;
+            }
+
+            [Transpile]
+            public class GDer : GBase
+            {
+                public override int P
+                {
+                    set { }
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(result["app/g-der.ts"])
+            .Contains("  get p(): number {\n    return super.p;\n  }");
+    }
+
+    [Test]
+    public async Task ToJson_OverridesOnlyAnAncestorThatEmitsOne()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class HBase
+            {
+                private protected virtual int Hidden { get; } = 1;
+
+                [Ignore]
+                public virtual int Skipped { get; } = 1;
+            }
+
+            [Transpile]
+            public class HDer : HBase
+            {
+                public virtual int Own { get; } = 1;
+            }
+
+            [Transpile]
+            public class HDerDer : HDer
+            {
+                public override int Own { get; } = 2;
+            }
+            """
+        );
+
+        await Assert.That(result["app/h-der.ts"]).Contains("  toJSON(): unknown {");
+        await Assert.That(result["app/h-der.ts"]).DoesNotContain("override toJSON");
+        await Assert.That(result["app/h-der-der.ts"]).Contains("  override toJSON(): unknown {");
+    }
+
+    [Test]
+    public async Task UserToJson_IsNotDuplicated()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class UBase
+            {
+                public virtual int P { get; } = 1;
+
+                public string ToJSON() => "x";
+            }
+
+            [Transpile]
+            public class UDer : UBase
+            {
+                public override int P { get; } = 2;
+            }
+            """
+        );
+
+        await Assert.That(Regex.Matches(result["app/u-base.ts"], "toJSON\\(").Count).IsEqualTo(1);
+        await Assert.That(result["app/u-base.ts"]).DoesNotContain("publicJsonShape");
+    }
+
     private static string FieldOf(string output, string property, string owner)
     {
         var match = BackingField
@@ -437,7 +584,7 @@ public class PerClassBackingFieldTests
 
         return match?.Value
             ?? throw new InvalidOperationException(
-                $"No backing field '{property}$ {owner}_<hash>' in:\n{output}"
+                $"No backing field '{property}${owner}_<hash>' in:\n{output}"
             );
     }
 }

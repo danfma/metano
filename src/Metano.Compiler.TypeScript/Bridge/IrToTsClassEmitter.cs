@@ -279,8 +279,11 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         if (objectArgsFactory is not null)
             classMembers.Add(objectArgsFactory);
 
-        if (PerClassBackingFields.BuildJsonShape(ir) is { } jsonShape)
-            classMembers.Add(jsonShape);
+        if (
+            PerClassBackingFields.BuildToJson(ir, IrToTsClassBridge.BuildExtends(ir) is not null) is
+            { } toJson
+        )
+            classMembers.Add(toJson);
 
         if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
             classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir));

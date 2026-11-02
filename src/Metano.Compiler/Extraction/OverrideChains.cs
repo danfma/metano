@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -44,8 +45,9 @@ internal static class OverrideChains
     /// (so a sealed override follows the base it overrides).
     /// </para>
     /// </summary>
-    public static bool OwnsPerClassStorage(IPropertySymbol property, Compilation compilation) =>
-        property is { IsStatic: false, IsAbstract: false, IsIndexer: false }
+    public static bool OwnsPerClassStorage(IPropertySymbol property, Compilation? compilation) =>
+        compilation is not null
+        && property is { IsStatic: false, IsAbstract: false, IsIndexer: false }
         && IsAutoProperty(property)
         && (
             IsOverridableAndOverridden(property, compilation)
@@ -53,23 +55,53 @@ internal static class OverrideChains
         );
 
     /// <summary>
-    /// Whether a class the compilation declares, among the ancestors of
-    /// <paramref name="type"/>, owns an auto-property with per-class storage
-    /// (<see cref="OwnsPerClassStorage"/>).
+    /// The accessor <paramref name="property"/> leaves to the property it overrides: an
+    /// override may declare only <c>get</c> or only <c>set</c> and C# keeps the base's other
+    /// accessor. Only a base the compilation declares counts.
     /// </summary>
-    public static bool AncestorOwnsPerClassStorage(INamedTypeSymbol type, Compilation compilation)
+    public static IrInheritedAccessor InheritedAccessorOf(
+        IPropertySymbol property,
+        Compilation? compilation
+    )
     {
+        if (
+            compilation is null
+            || property is not { IsOverride: true, IsStatic: false, IsIndexer: false }
+            || property.OverriddenProperty is not { } overridden
+            || !IsDeclaredIn(overridden, compilation)
+        )
+        {
+            return IrInheritedAccessor.None;
+        }
+
+        if (property.SetMethod is null && overridden.SetMethod is not null)
+            return IrInheritedAccessor.Setter;
+
+        return property.GetMethod is null && overridden.GetMethod is not null
+            ? IrInheritedAccessor.Getter
+            : IrInheritedAccessor.None;
+    }
+
+    /// <summary>
+    /// Whether a class the compilation declares, among the ancestors of
+    /// <paramref name="type"/>, emits an auto-property with per-class storage
+    /// (<see cref="OwnsPerClassStorage"/>): one that is neither <c>[Ignore]</c>d for
+    /// <paramref name="target"/> nor <c>private protected</c>, which a backend omits.
+    /// </summary>
+    public static bool AncestorOwnsPerClassStorage(
+        INamedTypeSymbol type,
+        Compilation? compilation,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        if (compilation is null)
+            return false;
+
         for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
         {
             if (
-                SymbolEqualityComparer.Default.Equals(
-                    ancestor.ContainingAssembly,
-                    compilation.Assembly
-                )
-                && ancestor
-                    .GetMembers()
-                    .OfType<IPropertySymbol>()
-                    .Any(property => OwnsPerClassStorage(property, compilation))
+                IsDeclaredIn(ancestor, compilation)
+                && EmitsPerClassStorage(ancestor, compilation, target)
             )
             {
                 return true;
@@ -79,12 +111,25 @@ internal static class OverrideChains
         return false;
     }
 
+    private static bool EmitsPerClassStorage(
+        INamedTypeSymbol type,
+        Compilation compilation,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        type.GetMembers()
+            .OfType<IPropertySymbol>()
+            .Any(property =>
+                OwnsPerClassStorage(property, compilation)
+                && property.DeclaredAccessibility is not Accessibility.ProtectedAndInternal
+                && !SymbolHelper.HasIgnore(property, target)
+            );
+
+    private static bool IsDeclaredIn(ISymbol symbol, Compilation compilation) =>
+        SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, compilation.Assembly);
+
     private static bool OverridesDeclaredBase(IPropertySymbol property, Compilation compilation) =>
         property.OverriddenProperty is { IsAbstract: false } overridden
-        && SymbolEqualityComparer.Default.Equals(
-            overridden.ContainingAssembly,
-            compilation.Assembly
-        );
+        && IsDeclaredIn(overridden, compilation);
 
     private static bool IsAutoProperty(IPropertySymbol property) =>
         property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()

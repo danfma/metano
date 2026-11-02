@@ -177,7 +177,8 @@ internal static class PrimaryConstructorInitializerDeferral
             type.GetStableFullName(),
             member.Name,
             EmittedName: symbol?.GetNameOverride(target),
-            IsTranspiledDataMember: true
+            IsTranspiledDataMember: true,
+            IsInitializerWrite: true
         );
 
         var access = new IrMemberAccess(new IrThisExpression(), member.Name, origin);
