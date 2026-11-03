@@ -34,18 +34,23 @@ public sealed partial class IrExpressionExtractor
         )
             return new IrIsPatternExpression(subject, pattern);
 
-        var capture = new IrVarPattern(
-            new IrPatternDesignator(
-                $"$subject{_patternSubjectCounter++}",
-                ExpressionType(isPattern.Expression)
-            )
-        );
-
         return new IrIsPatternExpression(
             subject,
-            new IrLogicalPattern(IrLogicalOp.And, capture, pattern)
+            CapturedFirst(ExpressionType(isPattern.Expression), pattern)
         );
     }
+
+    /// <summary>
+    /// <c>var $subjectN and pattern</c>: captures the matched value in a
+    /// synthesized designator (the <c>$</c> keeps it clear of every C#
+    /// identifier) that the rest of the pattern reads.
+    /// </summary>
+    private IrLogicalPattern CapturedFirst(IrTypeRef type, IrPattern pattern) =>
+        new(
+            IrLogicalOp.And,
+            new IrVarPattern(new IrPatternDesignator($"$subject{_patternSubjectCounter++}", type)),
+            pattern
+        );
 
     /// <summary>
     /// Whether reading the subject again yields the value of the first read

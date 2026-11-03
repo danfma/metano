@@ -80,6 +80,8 @@ internal static class SwitchSharedLocals
         if (statement is not IrVariableDeclaration declaration || !names.Contains(declaration.Name))
             return [statement];
 
+        // Nothing left to assign: an uninitialized local, or a const already
+        // declared ahead with its value.
         if (declaration.Initializer is null || declaration.IsConst)
             return [];
 

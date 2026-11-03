@@ -79,7 +79,8 @@ public sealed class IrStatementExtractor(
 
         return extracted
             .SelectMany(
-                (stmt, index) => _expressions.OutArgumentCalls.Lower(stmt, extracted[(index + 1)..])
+                (stmt, index) =>
+                    _expressions.ExpressionVariables.Lower(stmt, extracted[(index + 1)..])
             )
             .ToList();
     }
@@ -371,8 +372,7 @@ public sealed class IrStatementExtractor(
         VariableDeclarationSyntax declaration,
         VariableDeclaratorSyntax variable
     ) =>
-        declaration.Type is IdentifierNameSyntax { Identifier.ValueText: "var" }
-        && _semantic.GetDeclaredSymbol(variable) is ILocalSymbol local
+        declaration.Type.IsVar && _semantic.GetDeclaredSymbol(variable) is ILocalSymbol local
             ? IrTypeRefMapper.Map(local.Type, _originResolver)
             : null;
 
@@ -386,7 +386,7 @@ public sealed class IrStatementExtractor(
         VariableDeclaratorSyntax variable
     )
     {
-        if (declaration.Type is IdentifierNameSyntax { Identifier.ValueText: "var" })
+        if (declaration.Type.IsVar)
             return null;
 
         var typeSymbol =
