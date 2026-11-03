@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.RegularExpressions;
 using Metano.Compiler;
 
@@ -10,11 +9,10 @@ namespace Metano;
 /// app supplies a single shared copy (the runtime's classes rely on <c>instanceof</c>).
 /// </summary>
 /// <remarks>
-/// <c>metano-runtime</c> is published with the same version as the compiler release: the
-/// release pipeline packs the compiler with <c>-p:MinVerVersionOverride=X</c> (MinVer is what
-/// sets the assembly's informational version; <c>-p:Version</c> alone does not reach it) and
-/// <c>scripts/sync-npm-version.sh</c> publishes the runtime as <c>X</c> from the same tag. So
-/// the compiler's own informational version is the runtime version it targets.
+/// <c>metano-runtime</c> is published with the same version as the compiler release
+/// (<see cref="CompilerRelease"/>): <c>scripts/sync-npm-version.sh</c> publishes the runtime
+/// as <c>X</c> from the same tag the compiler is packed from. So the compiler's own release
+/// version is the runtime version it targets.
 /// </remarks>
 public static partial class RuntimePeerDependency
 {
@@ -27,7 +25,7 @@ public static partial class RuntimePeerDependency
     public const string UnpublishedBuildSpecifier = "*";
 
     /// <summary>The specifier for the running compiler's own release version.</summary>
-    public static string CurrentSpecifier { get; } = SpecifierFor(ReadCompilerVersion());
+    public static string CurrentSpecifier { get; } = SpecifierFor(CompilerRelease.Version);
 
     /// <summary>
     /// <c>^Major.Minor.Patch</c> for a stable release version (build metadata such as the
@@ -70,11 +68,6 @@ public static partial class RuntimePeerDependency
     /// </summary>
     public static bool IsImportedBy(IEnumerable<GeneratedFile> files) =>
         files.Any(file => RuntimeImport().IsMatch(file.Content));
-
-    private static string? ReadCompilerVersion() =>
-        typeof(RuntimePeerDependency)
-            .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion;
 
     [GeneratedRegex(
         """^import\b[^\n]*\bfrom "metano-runtime(?:/[^"\n]*)?";\s*$""",

@@ -48,6 +48,33 @@
 
       or install it machine-wide with the tool install `global` flag.
 
+    Incremental builds and Metano upgrades (#433):
+
+      MetanoTranspile is skipped while every input is older than
+      $(MetanoOutputDir)/.metano-stamp. Besides the user's sources, assets and
+      project file, its inputs include a toolchain key file,
+      $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.cache,
+      rewritten only when its content changes. The content names the Metano
+      toolchain: the path of this .targets file (inside the versioned
+      Metano.Build package folder), the referenced Metano.dll, and either
+      MetanoCompilerProject (dev mode) or a hash of the nearest .NET tool
+      manifest plus the installed global tool versions. Bumping any of them
+      rewrites the key, so the next build reruns the target, and the compiler
+      treats a different compiler release as an incremental cache miss
+      (.metano-cache.json), so the output is regenerated. The key is a content
+      check on purpose: NuGet extracts package files with their pack-time
+      timestamps, so the .targets file of a new package can be older than the
+      stamp and listing it in Inputs alone would not rerun the target.
+
+      `dotnet build - -no-incremental` (Rebuild) does not force a rerun: the
+      stamp lives in the output directory, not in obj/, so Clean leaves it in
+      place, and the compiled assembly is not an input. Delete the stamp to
+      force a rerun (MetanoClean alone does not: it only applies when the
+      target runs).
+
+      Not tracked: a tool installed with the tool install `tool-path` option,
+      and edits to the compiler sources in dev mode (MetanoCompilerProject).
+
     Asset item type (FR-048):
 
       <MetanoAsset Include="schema.sql" />
@@ -100,12 +127,69 @@
     </ItemGroup>
   </Target>
 
+  <!-- Toolchain key (#433): one line per piece of the Metano toolchain that
+       produces the output. WriteOnlyWhenDifferent keeps the file's timestamp
+       while the toolchain is unchanged, so an up-to-date build still skips
+       MetanoTranspile; any upgrade rewrites it and reruns the target. -->
+  <Target Name="_MetanoWriteToolchainKey">
+    <PropertyGroup>
+      <_MetanoToolchainKeyFile>$(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.cache</_MetanoToolchainKeyFile>
+    </PropertyGroup>
+
+    <!-- Installed tool mode: `dotnet metano-typescript` resolves the nearest
+         tool manifest (either file name) or the global tool store. -->
+    <PropertyGroup Condition="'$(MetanoCompilerProject)' == ''">
+      <_MetanoToolManifestDir>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.config/dotnet-tools.json'))</_MetanoToolManifestDir>
+      <_MetanoToolManifest Condition="'$(_MetanoToolManifestDir)' != ''"
+        >$(_MetanoToolManifestDir)/.config/dotnet-tools.json</_MetanoToolManifest
+      >
+      <_MetanoRootToolManifest>$([MSBuild]::GetPathOfFileAbove('dotnet-tools.json', '$(MSBuildProjectDirectory)'))</_MetanoRootToolManifest>
+      <_MetanoDotnetHome>$(DOTNET_CLI_HOME)</_MetanoDotnetHome>
+      <_MetanoDotnetHome Condition="'$(_MetanoDotnetHome)' == ''"
+        >$([System.Environment]::GetFolderPath(SpecialFolder.UserProfile))</_MetanoDotnetHome
+      >
+      <_MetanoGlobalToolStore>$(_MetanoDotnetHome)/.dotnet/tools/.store/metano.compiler.typescript</_MetanoGlobalToolStore>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_MetanoAnnotationsReference
+        Include="@(ReferencePath)"
+        Condition="'%(ReferencePath.Filename)' == 'Metano'"
+      />
+      <_MetanoToolchainLine Include="build=$(MSBuildThisFileFullPath)" />
+      <_MetanoToolchainLine Include="@(_MetanoAnnotationsReference->'annotations=%(FullPath)')" />
+      <_MetanoToolchainLine
+        Include="compilerProject=$(MetanoCompilerProject)"
+        Condition="'$(MetanoCompilerProject)' != ''"
+      />
+      <_MetanoToolchainLine
+        Include="toolManifest=$(_MetanoToolManifest):$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(_MetanoToolManifest)'))))"
+        Condition="'$(_MetanoToolManifest)' != ''"
+      />
+      <_MetanoToolchainLine
+        Include="toolManifest=$(_MetanoRootToolManifest):$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(_MetanoRootToolManifest)'))))"
+        Condition="'$(_MetanoRootToolManifest)' != ''"
+      />
+      <_MetanoToolchainLine
+        Include="globalTool=$([System.IO.Directory]::GetDirectories('$(_MetanoGlobalToolStore)'))"
+        Condition="'$(MetanoCompilerProject)' == '' and Exists('$(_MetanoGlobalToolStore)')"
+      />
+    </ItemGroup>
+
+    <WriteLinesToFile
+      File="$(_MetanoToolchainKeyFile)"
+      Lines="@(_MetanoToolchainLine)"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true"
+    />
+  </Target>
+
   <Target
     Name="MetanoTranspile"
     AfterTargets="Build"
-    DependsOnTargets="_MetanoCollectUserInputs"
+    DependsOnTargets="_MetanoCollectUserInputs;_MetanoWriteToolchainKey"
     Condition="'$(MetanoEnabled)' == 'true' and '$(MetanoOutputDir)' != ''"
-    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath)"
+    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoToolchainKeyFile)"
     Outputs="$(MetanoOutputDir)/.metano-stamp"
   >
     <PropertyGroup>
