@@ -1727,8 +1727,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 ReportInvalidEntryPoint(
                     entryPoint,
                     $"[ExportVarFromBody(\"{export.Name}\")] on "
-                        + $"'{entryPoint.Name}' did not find a local variable named "
-                        + $"'{export.Name}' in the entry point body."
+                        + $"'{entryPoint.Name}' could not export the local variable named "
+                        + $"'{export.Name}': it was not found in the entry point body, "
+                        + "or it does not lower to a variable declaration."
                 );
             }
         }

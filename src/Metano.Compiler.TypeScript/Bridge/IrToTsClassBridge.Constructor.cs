@@ -240,12 +240,13 @@ internal static partial class IrToTsClassBridge
                     continue;
 
                 // The parameter binding uses the local policy; the captured
-                // field it writes is named by the same data-member policy its
-                // declaration uses.
+                // field it writes uses the data-member rule (camelCase,
+                // reserved words escaped). A [Name] override on the captured
+                // field is not consulted here.
                 var paramName = IrToTsNamingPolicy.ToParameterName(p.Parameter.Name);
                 var fieldName = IrToTsNamingPolicy.ToDeclaredDataMemberName(
                     p.CapturedFieldName,
-                    null
+                    attributes: null
                 );
 
                 body.Add(
