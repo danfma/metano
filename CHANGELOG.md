@@ -4,6 +4,30 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.9.0
+
+_2026-11-03_
+
+
+### ✨ Features
+
+* let generated packages name their source export condition ([#424](https://github.com/danfma/metano/issues/424)) ([6236f8e](https://github.com/danfma/metano/commit/6236f8e930891f6d74a9df27b00fcd592d15a801))
+
+### 🐛 Bug Fixes
+
+* admit library bases and closed generic types in the SerializerContext closure ([#268](https://github.com/danfma/metano/issues/268)) ([a66fbb5](https://github.com/danfma/metano/commit/a66fbb5894c6faa7d40057d36e9855d42827ceb4))
+* dedupe only redeclared JSON properties and reject unreachable generic arguments ([#268](https://github.com/danfma/metano/issues/268)) ([67d16d2](https://github.com/danfma/metano/commit/67d16d21b6e682ccfc040322912d0c1188ad224d))
+* drop a stale source condition only on a rename ([#424](https://github.com/danfma/metano/issues/424)) ([9ab8fe5](https://github.com/danfma/metano/commit/9ab8fe50eb0066f8a3be493507c796c818aa5514))
+* hide a base JSON property only under an ignored override ([#268](https://github.com/danfma/metano/issues/268)) ([1d6a2bb](https://github.com/danfma/metano/commit/1d6a2bbfaa9f7f4e92ffa6a44f0a2827033688f7))
+* hoist module-local nested types and keep their names TypeScript-only ([#412](https://github.com/danfma/metano/issues/412)) ([c5c8478](https://github.com/danfma/metano/commit/c5c84780c5f3dbaaf74cc0737a0bc94d9163554c))
+* keep non-public nested types out of the companion exports ([#412](https://github.com/danfma/metano/issues/412)) ([7a33475](https://github.com/danfma/metano/commit/7a33475843cecb31d577dcfd6cccede76a59f01a))
+* name module-local guards after their declared name ([#412](https://github.com/danfma/metano/issues/412)) ([1b3c59d](https://github.com/danfma/metano/commit/1b3c59d484a16d44832bc761a55cdc974b0e7998))
+* place module-local nested types by their load-time dependencies ([#412](https://github.com/danfma/metano/issues/412)) ([73607dd](https://github.com/danfma/metano/commit/73607dd43176401a8d417d896aa2a0ac20df606c))
+
+### 📝 Documentation
+
+* state exactly which source condition a rename replaces ([#424](https://github.com/danfma/metano/issues/424)) ([bfde7a2](https://github.com/danfma/metano/commit/bfde7a2f48aa69b564c877edd10c2f7b1e464dc8))
+
 ## 2.8.0
 
 _2026-11-03_
