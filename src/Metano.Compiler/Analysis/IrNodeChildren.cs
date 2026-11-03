@@ -42,6 +42,7 @@ public static class IrNodeChildren
             IrYieldExpression { Value: { } yielded } => [yielded],
             IrArrayLiteral array => array.Elements,
             IrTupleLiteral tuple => tuple.Elements,
+            IrTupleEqualityExpression tupleEquality => [tupleEquality.Left, tupleEquality.Right],
             IrObjectLiteral obj => obj.Properties.Select(p => p.Value),
             IrSpreadExpression spread => [spread.Expression],
             IrStringInterpolation interpolation => interpolation

@@ -381,8 +381,10 @@ public static class IrBodyPrinter
             case IrTupleEqualityExpression tupleEquality:
                 // C# tuples are Dart records: `==` compares them
                 // element-wise at every level, and a `List` element by
-                // reference — exactly what C# answers (a nullable tuple
-                // element is the value or null, so `null == null` holds).
+                // reference — C#'s answers (a nullable tuple element is the
+                // value or null, so `null == null` holds). Divergence: Dart
+                // `==` on doubles is `NaN != NaN`, where C#
+                // `(double.NaN, 1).Equals((double.NaN, 1))` is true.
                 PrintGroupedOperand(sb, tupleEquality.Left);
                 sb.Append(" == ");
                 PrintGroupedOperand(sb, tupleEquality.Right);
