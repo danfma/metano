@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
 using Metano.Compiler.Diagnostics;
@@ -1025,6 +1026,17 @@ public sealed partial class IrExpressionExtractor
         return new IrLogicalPattern(IrLogicalOp.And, capture, pattern);
     }
 
+    private static bool NeedsCapturedRead(
+        ISymbol? member,
+        IrPattern pattern,
+        [NotNullWhen(true)] out IPropertySymbol? property
+    )
+    {
+        property = member as IPropertySymbol;
+
+        return property is not null && !IsStableSymbol(property) && !ReadsValueOnce(pattern);
+    }
+
     /// <summary>
     /// Whether testing <paramref name="pattern"/> reads the matched value a
     /// single time: a constant, relational, <c>var</c> or discard pattern, or
@@ -1114,11 +1126,16 @@ public sealed partial class IrExpressionExtractor
     /// pattern falls back to its input type, which admits <c>null</c> for any
     /// reference type.
     /// </summary>
-    private bool ListSubjectMayBeNull(ListPatternSyntax list, ITypeSymbol? inputType) =>
-        PatternSubject(list) is { } subject
-            ? _semantic.GetTypeInfo(subject).Nullability.FlowState != NullableFlowState.NotNull
-                && InputMayBeNull(inputType)
-            : InputMayBeNull(inputType);
+    private bool ListSubjectMayBeNull(ListPatternSyntax list, ITypeSymbol? inputType)
+    {
+        if (PatternSubject(list) is not { } subject)
+            return InputMayBeNull(inputType);
+
+        return !IsNotNullByFlow(subject) && InputMayBeNull(inputType);
+    }
+
+    private bool IsNotNullByFlow(ExpressionSyntax subject) =>
+        _semantic.GetTypeInfo(subject).Nullability.FlowState == NullableFlowState.NotNull;
 
     /// <summary>
     /// The expression a top-level pattern is matched against, or <c>null</c>
@@ -1127,7 +1144,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private static ExpressionSyntax? PatternSubject(PatternSyntax pattern)
     {
-        SyntaxNode? parent = pattern.Parent;
+        var parent = pattern.Parent;
 
         while (parent is BinaryPatternSyntax or ParenthesizedPatternSyntax or UnaryPatternSyntax)
             parent = parent.Parent;
@@ -2995,7 +3012,7 @@ public sealed partial class IrExpressionExtractor
                 arrow: null,
                 isVoid: false
             ),
-            ExpressionSyntax expr => LowerOutArgumentCalls(new IrReturnStatement(Extract(expr))),
+            ExpressionSyntax expr => LowerExpressionVariables(new IrReturnStatement(Extract(expr))),
             _ => [new IrUnsupportedStatement(body.Kind().ToString())],
         };
 

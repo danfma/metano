@@ -285,7 +285,7 @@ public static class IrToTsStatementBridge
                     Initializer: null,
                     Const: false,
                     Type: IrToTsTypeMapper.Map(type),
-                    DefinitelyAssigned: vd.AssignedInClosure
+                    DefinitelyAssigned: vd.AssignedInWhenGuard
                 ),
             // Declared ahead of its first assignment with no known type (a `var`
             // local a switch section shares): a bare `let x;` takes the type of

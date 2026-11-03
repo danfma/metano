@@ -351,13 +351,12 @@ internal sealed partial class ExpressionVariableLowering
         if (ahead is not [])
             return new IrBlockStatement([.. ahead, .. lowered]);
 
-        var declarations = lowered.Take(lowered.Count - 1);
-        var inPlace = (IrForStatement)lowered[^1];
-
-        return inPlace with
-        {
-            Initializers = [.. header, .. declarations],
-        };
+        return lowered is [.. var declarations, IrForStatement inPlace]
+            ? inPlace with
+            {
+                Initializers = [.. header, .. declarations],
+            }
+            : new IrBlockStatement(lowered);
     }
 
     /// <summary>
@@ -443,14 +442,14 @@ internal sealed partial class ExpressionVariableLowering
                 local.Name,
                 local.Type,
                 Initializer: null,
-                AssignedInClosure: assignedInGuards.Contains(local.Name)
+                AssignedInWhenGuard: assignedInGuards.Contains(local.Name)
             ));
     }
 
     /// <summary>
     /// The designators declared in the <c>when</c> guards of the switch
-    /// statements among <paramref name="statements"/>. A backend may run a
-    /// guard in a closure, where it assigns them for the section body to read.
+    /// statements among <paramref name="statements"/>, which the section body
+    /// may read.
     /// </summary>
     private static HashSet<string> GuardDesignatorNames(IEnumerable<IrStatement> statements) =>
         statements

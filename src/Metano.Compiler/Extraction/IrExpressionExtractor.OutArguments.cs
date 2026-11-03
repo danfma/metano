@@ -42,7 +42,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     public IrExpression ExtractStandalone(ExpressionSyntax expression)
     {
-        var lowered = LowerOutArgumentCalls(new IrReturnStatement(Extract(expression)));
+        var lowered = LowerExpressionVariables(new IrReturnStatement(Extract(expression)));
 
         if (lowered is [IrReturnStatement { Value: { } value }])
             return value;
@@ -55,7 +55,7 @@ public sealed partial class IrExpressionExtractor
     /// results of its <c>out</c>-argument calls are bound, with the bindings
     /// promoted to <c>const</c> when nothing reassigns them.
     /// </summary>
-    internal IReadOnlyList<IrStatement> LowerOutArgumentCalls(IrStatement statement) =>
+    internal IReadOnlyList<IrStatement> LowerExpressionVariables(IrStatement statement) =>
         IrStatementExtractor.PromoteEffectiveConsts(OutArgumentCalls.Lower(statement));
 
     private IrExpression ExtractInvocation(InvocationExpressionSyntax inv)
