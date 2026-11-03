@@ -86,7 +86,11 @@ Rules:
 - A closed generic polymorphic base (FR-015) uses the constructed name everywhere:
   `get gBaseInt32(): TypeSpec<GBase<number>>`, and `GDer`'s spec links `base: this.gBaseInt32`.
 - Property lists are deduplicated by final JSON name; on the wire an overridden property appears
-  once, from the most-derived spec (FR-009, DECIDED-19 c).
+  once, from the most-derived spec (FR-009, DECIDED-19 c). An inlined list (a base without a spec)
+  is emitted in wire order: own properties first, then each ancestor's, nearest first, a
+  redeclaration at its most-derived position; the factory keeps declaration order (DECIDED-20 a).
+- A `[JsonIgnore]` override over a linked base adds `ignoredProperties: ["<ts name>", …]` after
+  `properties`, naming every overridden declaration (DECIDED-20 a); absent otherwise.
 - A C# `struct` contract adds `valueType: true` after `properties` (FR-037).
 
 ### 1a. Interface base (FR-018)

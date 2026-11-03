@@ -508,11 +508,12 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   throw `JsonException` "A possible object cycle was detected. This can either be due to a cycle or
   if the object depth is larger than the maximum allowed depth of 64. Consider using
   ReferenceHandler.Preserve on JsonSerializerOptions to support cycles." on serialize when the
-  depth exceeds 64, instead of overflowing the stack. The exact boundary (depth 64 vs 65) is pinned
-  by a manifest row measured against STJ. The read side MUST enforce the same limit
+  depth exceeds 64, instead of overflowing the stack. The read side MUST enforce the same limit
   (DECIDED-15): `deserializeContract` counts container depth on the parsed value and throws
-  `JsonException` with STJ's reader message once S8 has measured that message and boundary. Until
-  that row exists, the read-side limit is listed as a documented divergence.
+  `JsonException` "The maximum configured depth of 64 has been exceeded. Cannot read next JSON
+  object." (`… JSON array.` for an array). Both boundaries were measured on .NET 10 in S4
+  (DECIDED-20 b): 64 nested containers are written and read, the 65th throws; S8 pins them with a
+  manifest row.
 - **FR-017**: Under `FallBackToNearestAncestor`, an abstract derived entry MUST be accepted as a
   nearest-ancestor target on serialize (its tag, if any, is written, then the runtime value's
   nearest-registered-ancestor contract). Reading its tag MUST be probed against STJ before S6 is
@@ -815,7 +816,9 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
 | Runtime type name of a plain object in `Runtime type '…' is not supported` | the C# type name | `Object` | FR-019 |
 | Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Not measured; fixtures use ASCII names; probed in S8 |
-| Read depth limit | reader throws at max depth | enforced once S8 pins the message | DECIDED-15 |
+| Read depth limit | the reader counts every container of the document | counts only the containers the contract visits (a deep value under an undeclared key is skipped) | DECIDED-20 (b) |
+| Write depth limit, source-generated fast path | `InvalidOperationException` "CurrentDepth (64) is equal to or larger than …" | `JsonException` "A possible object cycle was detected. …" (STJ's metadata-mode error) | DECIDED-20 (b) |
+| Non-object / non-array input type name | the CLR type (`System.Collections.Generic.List`1[Arr]`) | the constructor name; `Object` for a `[PlainObject]` contract; `Expected array for deserialization, got <kind>` for collections | DECIDED-20 (c) |
 | Error messages | with a `Path`, `LineNumber`, `BytePositionInLine` suffix | without | DECIDED-5 |
 
 ### Key Entities
@@ -900,7 +903,8 @@ the former `OPEN-N`.
 - **DECIDED-14 — Name-collision strategy.** FR-036 as written: STJ names kept; Error when the loser
   is referenced or the name is a reserved `SerializerContext` member, Warning otherwise.
 - **DECIDED-15 — Depth limit on read.** Enforced with the serialize-side counter; the reader message
-  and boundary are pinned by an S8 manifest row (FR-016).
+  and boundary are pinned by an S8 manifest row (FR-016). S4 measured both on .NET 10 and enforces
+  the limit already (DECIDED-20 b).
 - **DECIDED-16 — Value-root wire mismatches** (`byte[]`, `TimeSpan`, `DateTimeOffset`). Recorded as
   `divergent` manifest rows and documented divergences; `MS0037` for `byte[]`; each converter is
   fixed in its own follow-up issue.
@@ -963,14 +967,48 @@ the former `OPEN-N`.
     the base declaration (STJ writes nothing): the derived spec has no way to suppress a base
     property yet, which needs an "ignored" marker in the derived spec and a runtime rule (open gap,
     S4). The FR-009 phrase "appears only in the most-derived spec" applies to the wire, not to the
-    emitted lists.
+    emitted lists. **Resolved in S4** (DECIDED-20 a).
   - (f) S4 must also reorder the generator's inlined lists derived-first: the runtime sees an
-    inlined list as one flat spec and has no hierarchy information to reorder it.
+    inlined list as one flat spec and has no hierarchy information to reorder it. **Resolved in
+    S4**: the emitted `properties` list follows the wire order; the factory keeps reading the
+    properties in declaration order (DECIDED-20 a).
   - (g) A closed generic object contract is `MS0035` as a root (directly or as the element of a
     value root) when a type argument has no contract, with the nested value-root rules
     (`Page<System.Version>`, `Page<IShape>`); otherwise its properties would `ref` a missing
     getter. The getter's `TypeSpec<…>` maps type arguments without their nullable annotation
     (`Page<Leaf?>` and `Page<Leaf>` share one contract), so it does not depend on discovery order.
+
+- **DECIDED-20 — Slice S4 decisions (#268, #425).** Taken while implementing FR-009 (runtime half
+  and the inlined order), FR-016 and FR-045, measured against a source-generated
+  `JsonSerializerContext` on .NET 10:
+  - (a) Wire order. STJ writes `class Mid : Derived { int Y; override string Name }` over
+    `class Derived : Root { int X; override string Name }` and `class Root { int Base; virtual string
+    Name }` as `{"Y":3,"Name":"d","X":2,"Base":1}`, a `new int Base` as `{"X":2,"Base":1,"Name":""}`
+    and an override renamed `n` as `{"X":2,"n":"d","Base":1,"Name":"d"}` (`Root` declaring `Base`
+    first). The runtime's `collectWireProperties` walks the spec, then its bases, keeps the first
+    (most-derived) property of each JSON name and is used for both writing and reading; the
+    generator emits an inlined list in the same order. `[JsonIgnore]` on an override over a linked
+    base is recorded on the derived spec as `ignoredProperties: ["<ts name>", …]` (the TS names of
+    every overridden declaration, after `properties`, only when non-empty); `collectWireProperties`
+    then skips base declarations with those `ts` names. A more-derived redeclaration of the property
+    is written again, as in STJ. `TypeSpec.ignoredProperties` is a new optional, additive member.
+  - (b) Depth. STJ writes and reads 64 nested containers (objects, arrays, dictionaries) and throws
+    on the 65th; scalars do not count. Read message: `The maximum configured depth of 64 has been
+    exceeded. Cannot read next JSON object.` / `… JSON array.`. Write: a source-generated context in
+    its default fast-path mode throws `InvalidOperationException` `CurrentDepth (64) is equal to or
+    larger than the maximum allowed depth of 64. Cannot write the next JSON object or array.`; in
+    metadata mode, and through reflection, it throws FR-016's `JsonException` "A possible object
+    cycle was detected. …". Metano keeps FR-016's `JsonException` for every context (documented
+    divergence). The counter is one module-level count of open containers, safe because
+    serialization is synchronous; on read it counts only the containers the contract visits.
+  - (c) Errors. Non-object input for an object contract (now including a JSON array) throws
+    `JsonException` `The JSON value could not be converted to <constructor name>.`, with `Object`
+    for a `[PlainObject]` contract that has no constructor (S5 adds `polymorphism.typeName` for
+    polymorphic bases only). The array and hash-set converters reject non-array input with
+    `JsonException` `Expected array for deserialization, got <object|string|number|boolean>` (#425;
+    STJ names the CLR collection type, which the descriptor does not carry); `null` still reads as
+    `null`. The enum converters' existing errors become `JsonException` with unchanged messages.
+    `NotSupportedException` lands with the polymorphism runtime (S5).
 
 ## Open questions
 

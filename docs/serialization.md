@@ -293,7 +293,7 @@ your own `JsonConverter`.
 | `[JsonFactory]` (Metano) | ✅ | On a `[Branded]` type's static method: deserialization calls it instead of `create` ([details](#validating-branded-types)) |
 | `[JsonSourceGenerationOptions]` with `PropertyNamingPolicy` | ✅ | Applies the naming policy to all properties |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
-| `[JsonIgnore]` | ✅ | Excludes the property from the spec |
+| `[JsonIgnore]` | ✅ | Excludes the property from the spec; on an override, also hides the base declarations ([details](#inheritance)) |
 | `JsonKnownNamingPolicy.CamelCase` | ✅ | `FirstName` → `firstName` |
 | `JsonKnownNamingPolicy.SnakeCaseLower` | ✅ | `FirstName` → `first_name` |
 | `JsonKnownNamingPolicy.SnakeCaseUpper` | ✅ | `FirstName` → `FIRST_NAME` |
@@ -354,8 +354,47 @@ get dog(): TypeSpec<Dog> {
 }
 ```
 
-At serialize/deserialize time, the runtime walks the `base` chain and collects
-all inherited properties before processing own properties.
+At serialize/deserialize time, the runtime walks the `base` chain
+(`collectWireProperties`) and writes properties in System.Text.Json's order:
+the type's own properties first, then its base's, recursively
+(`{"breed":…,"name":…,"legs":…}`). A property redeclared in a derived type
+(`override` or `new`) under the same JSON name is written once, at the
+most-derived declaration's position and with its type; an override renamed
+with `[JsonPropertyName]` is written under both names, as STJ does. When the
+base emits no spec (`[Ignore]`, a non-transpiled base), its properties are
+inlined into the derived spec in the same order. Reading does not depend on key
+order. The exported `collectProperties` still lists properties base-first.
+
+A `[JsonIgnore]` override hides every base declaration of that property, as in
+System.Text.Json, which neither writes nor reads it. A linked spec records the
+hidden members in `ignoredProperties` (TS names, e.g. `ignoredProperties:
+["name"]`); the base spec keeps the property for its own instances. The
+factory of the derived type then receives no value for it.
+
+## Errors and limits
+
+Deserialization errors are `JsonException` (exported from
+`metano-runtime/system/json`, extends `Error`, `name === "JsonException"`).
+Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
+
+| Input | Message |
+|---|---|
+| A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor) |
+| A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence) |
+| A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |
+| An unknown enum value | `Invalid enum value: …` / `Invalid numeric enum value: …` |
+| More than 64 nested containers on read | `The maximum configured depth of 64 has been exceeded. Cannot read next JSON object.` (`… JSON array.` for an array) |
+| More than 64 nested containers on write, or an object cycle | `A possible object cycle was detected. This can either be due to a cycle or if the object depth is larger than the maximum allowed depth of 64. Consider using ReferenceHandler.Preserve on JsonSerializerOptions to support cycles.` |
+
+The depth limit is System.Text.Json's default `MaxDepth` of 64: 64 nested
+objects, arrays and dictionaries are written and read, the 65th throws. On
+read, only the containers the contract visits count; a deeply nested value
+under a key the contract does not declare is skipped without being counted,
+where the STJ reader would throw. With a source-generated context at its
+default (fast-path) settings, STJ's writer throws `InvalidOperationException`
+`CurrentDepth (64) is equal to or larger than the maximum allowed depth of
+64. …` at the same depth; Metano always throws the `JsonException` above,
+which STJ throws in metadata mode.
 
 ## When to use `[PlainObject]` vs `JsonSerializerContext`
 

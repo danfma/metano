@@ -52,6 +52,7 @@ interface TypeSpec<T> {
   readonly polymorphism?: PolymorphismSpec; // new, optional
   readonly valueType?: boolean;             // new, optional (struct contracts)
   readonly readOptions?: JsonReadOptions;   // new, optional (attached by createSpec)
+  readonly ignoredProperties?: readonly string[]; // new, optional (S4): TS names of base properties a [JsonIgnore] override hides
 }
 
 type PrimitiveDescriptor = { readonly kind: "primitive"; readonly numberType?: NumberTypeName }; // numberType new, optional
@@ -80,12 +81,18 @@ abstract class SerializerContext {
 5. The dispatch index is built lazily, outside every generated getter, and is safe whichever getter
    is accessed first.
 6. `collectProperties` keeps returning base-first order; `collectWireProperties` returns own-then-base
-   order deduplicated by JSON name (most-derived declaration wins).
+   order deduplicated by JSON name (most-derived declaration wins), leaving out every base
+   declaration whose `ts` name a more-derived spec lists in `ignoredProperties`. Serialization and
+   deserialization both use it.
 7. Custom converters registered for `kind: "ref"` replace dispatch for every `ref` (unchanged rule:
    converters match by kind).
-8. `serializeContract` / `deserializeContract` count JSON container depth; beyond 64 they throw
-   `JsonException` "A possible object cycle was detected. …" on serialize (FR-016) and the STJ
-   reader message pinned in S8 on read (DECIDED-15).
+8. `serializeContract` / `deserializeContract` (`serializeWithSpec` / `deserializeWithSpec` until
+   S5 splits them) and the array, hash-set and map converters count JSON container depth; the 65th
+   nested container throws `JsonException` "A possible object cycle was detected. …" on serialize
+   (FR-016) and "The maximum configured depth of 64 has been exceeded. Cannot read next JSON
+   object." (`… JSON array.`) on read (DECIDED-15, DECIDED-20 b).
+8a. The array and hash-set converters throw `JsonException` "Expected array for deserialization,
+   got <kind>" for a non-array, non-null JSON value (#425, DECIDED-20 c).
 9. JSON `null` at a root returns `null` unless the spec has `valueType: true`, which throws
    `JsonException` `The JSON value could not be converted to <Type>.`; a `null` value serializes to
    JSON `null` (FR-037).

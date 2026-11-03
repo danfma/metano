@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   JsonSerializer,
   SerializerContext,
+  JsonException,
   collectProperties,
   type TypeSpec,
   type ValueSpec,
@@ -716,19 +717,25 @@ describe("JsonSerializer — error cases", () => {
   test("deserialize null throws", () => {
     expect(() => {
       JsonSerializer.deserialize(null, personSpec);
-    }).toThrow(/Expected object/);
+    }).toThrow(new JsonException("The JSON value could not be converted to Person."));
   });
 
   test("deserialize non-object throws", () => {
     expect(() => {
       JsonSerializer.deserialize("not an object", personSpec);
-    }).toThrow(/Expected object/);
+    }).toThrow(new JsonException("The JSON value could not be converted to Person."));
+  });
+
+  test("deserialize an array for an object contract throws", () => {
+    expect(() => {
+      JsonSerializer.deserialize([], personSpec);
+    }).toThrow(new JsonException("The JSON value could not be converted to Person."));
   });
 
   test("missing required property throws", () => {
     expect(() => {
       JsonSerializer.deserialize({ first_name: "Alice" }, personSpec);
-    }).toThrow(/Missing required property.*"age"/);
+    }).toThrow(new JsonException('Missing required property: "age"'));
   });
 });
 

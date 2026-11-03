@@ -150,6 +150,8 @@ export interface TypeSpec<T = unknown> {
   readonly valueType?: boolean;
   /** Attached by createSpec when the context has non-default read options. */
   readonly readOptions?: JsonReadOptions;
+  /** S4: TS names of base properties a [JsonIgnore] override hides (DECIDED-20 a). */
+  readonly ignoredProperties?: readonly string[];
 }
 
 export interface ValueSpec<T = unknown> {
@@ -169,7 +171,8 @@ export class JsonException extends Error {}
 export class NotSupportedException extends Error {}
 
 /** Wire order: own properties, then base's, recursively (STJ); deduplicated by JSON name,
- *  keeping the most-derived declaration (FR-009). */
+ *  keeping the most-derived declaration (FR-009); skips base declarations a more-derived
+ *  spec lists in ignoredProperties (DECIDED-20 a). */
 export function collectWireProperties(spec: TypeSpec): readonly PropertySpec[];
 ```
 
