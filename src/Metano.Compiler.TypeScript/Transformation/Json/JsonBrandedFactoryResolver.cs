@@ -170,6 +170,7 @@ internal static class JsonBrandedFactoryResolver
     /// <summary>
     /// Another method of the type the companion declares under the factory's
     /// TypeScript name: an overload, or a method renamed onto it with <c>[Name]</c>.
+    /// A sibling the companion never emits (<c>[Ignore]</c>, inlined) cannot clash.
     /// </summary>
     private static IMethodSymbol? SiblingSharingTsName(
         INamedTypeSymbol type,
@@ -178,7 +179,7 @@ internal static class JsonBrandedFactoryResolver
     ) =>
         type.GetMembers()
             .OfType<IMethodSymbol>()
-            .Where(other => other.MethodKind == MethodKind.Ordinary)
+            .Where(other => other.MethodKind == MethodKind.Ordinary && !IsNotEmitted(other))
             .FirstOrDefault(other =>
                 !SymbolEqualityComparer.Default.Equals(other, method) && TsNameOf(other) == tsName
             );
