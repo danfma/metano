@@ -5,7 +5,7 @@ namespace Metano.Compiler.Extraction;
 
 /// <summary>
 /// Synthesizes the backing fields for the primary-constructor parameters the
-/// capture walk collected: one private field per parameter, named after the
+/// capture scan collected: one private field per parameter, named after the
 /// code base's convention (<c>view</c> → <c>_view</c>) and moved past any
 /// colliding member name. A parameter something in the type writes gets a
 /// mutable field; a read-only one gets <c>readonly</c>.

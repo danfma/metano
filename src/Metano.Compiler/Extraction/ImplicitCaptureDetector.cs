@@ -142,6 +142,7 @@ internal static class ImplicitCaptureDetector
     )
     {
         var result = new HashSet<IParameterSymbol>(SymbolEqualityComparer.Default);
+
         foreach (var field in type.GetMembers().OfType<IFieldSymbol>())
         {
             if (
@@ -149,16 +150,19 @@ internal static class ImplicitCaptureDetector
                 is not VariableDeclaratorSyntax declaration
             )
                 continue;
+
             if (declaration.Initializer?.Value is not IdentifierNameSyntax initializerId)
                 continue;
 
             var model = compilation.GetSemanticModel(declaration.SyntaxTree);
+
             if (
                 model.GetSymbolInfo(initializerId).Symbol is IParameterSymbol param
                 && primaryParams.ContainsKey(param)
             )
                 result.Add(param);
         }
+
         return result;
     }
 }
