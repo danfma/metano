@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   JsonException,
   JsonSerializer,
+  NotSupportedException,
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
@@ -41,6 +42,17 @@ describe("JsonException", () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe("JsonException");
     expect(error.message).toBe("bad");
+  });
+});
+
+describe("NotSupportedException", () => {
+  test("is an Error named after its class, distinct from JsonException", () => {
+    const error = new NotSupportedException("unsupported");
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(JsonException);
+    expect(error.name).toBe("NotSupportedException");
+    expect(error.message).toBe("unsupported");
   });
 });
 

@@ -86,8 +86,8 @@ abstract class SerializerContext {
    deserialization both use it.
 7. Custom converters registered for `kind: "ref"` replace dispatch for every `ref` (unchanged rule:
    converters match by kind).
-8. `serializeContract` / `deserializeContract` (`serializeWithSpec` / `deserializeWithSpec` until
-   S5 splits them) and the array, hash-set and map converters count JSON container depth; the 65th
+8. `serializeContract` / `deserializeContract` (module-internal since S5; `serializeWithSpec` /
+   `deserializeWithSpec` dispatch over them) and the array, hash-set and map converters count JSON container depth; the 65th
    nested container throws `JsonException` "A possible object cycle was detected. …" on serialize
    (FR-016) and "The maximum configured depth of 64 has been exceeded. Cannot read next JSON
    object." (`… JSON array.`) on read (DECIDED-15, DECIDED-20 b).
@@ -100,6 +100,8 @@ abstract class SerializerContext {
    JSON `null` (FR-037).
 10. A non-scalar tag throws `JsonException` naming the STJ token type (`Null`, `True`, `False`,
     `StartObject`, `StartArray`).
+    A number tag that is not an `Int32` throws `JsonException` `The JSON value could not be
+    converted to <Base>.` (DECIDED-21 b).
 11. With `readOptions.propertyNameCaseInsensitive`, JSON keys match properties case-insensitively,
     in document order (the last match wins); the discriminator is still matched case-sensitively
     (FR-048).
@@ -107,3 +109,12 @@ abstract class SerializerContext {
     `numberType` and every `decimal` descriptor accept a JSON string by the FR-048 grammar, and
     otherwise throw `JsonException` `The JSON value could not be converted to <numberType>.`.
     Writing is unchanged.
+
+## Delivery status (S5)
+
+S5 ships the polymorphism types, both exception classes, `collectWireProperties` (S4) and
+guarantees 1–8 and 10. `JsonReadOptions` ships with `allowOutOfOrderMetadataProperties` only; the
+other members, the `readOptions` getter and its attachment by `createSpec` arrive with S2b, and
+the null-root and `valueType` rules (guarantee 9, `ValueSpec.valueType`) with S3b. See DECIDED-21
+for the runtime rules S5 settled (number tags, the concrete `[PlainObject]` base, FR-017's read
+side deferred to S6).

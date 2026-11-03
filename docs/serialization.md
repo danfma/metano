@@ -371,6 +371,52 @@ hidden members in `ignoredProperties` (TS names, e.g. `ignoredProperties:
 ["name"]`); the base spec keeps the property for its own instances. The
 factory of the derived type then receives no value for it.
 
+## Polymorphism (runtime)
+
+The runtime dispatches `[JsonPolymorphic]` / `[JsonDerivedType]` hierarchies
+as System.Text.Json does. The transpiler does not emit the descriptor yet; that
+comes with the generator slice of
+[#268](https://github.com/danfma/metano/issues/268) (S6), so today only a
+hand-written spec carries it. A polymorphic base spec gets a data-only
+`polymorphism` member:
+
+```typescript
+polymorphism: {
+  discriminator: "kind",            // verbatim, never renamed by a naming policy
+  abstract: true,                   // abstract class or interface base
+  derived: [
+    { tag: "image", spec: () => this.imageClip },
+    { tag: "silence", spec: () => this.silenceClip },
+  ],
+}
+```
+
+- **Write.** A class instance is matched by its constructor: a registered type
+  (the base too, when it registers itself) writes its tag as the first key,
+  then its contract (`{"kind":"image","Path":"a.png","Seconds":1.5}`); an
+  unregistered base instance is written with no tag; any other runtime type
+  follows `unknownDerivedType` — `failSerialization` (default) throws
+  `NotSupportedException` `Runtime type 'X' is not supported by polymorphic
+  type 'Clip'.`, `fallBackToBaseType` writes the base contract with no tag,
+  `fallBackToNearestAncestor` writes the nearest registered ancestor class (or
+  the base). A plain object has no runtime type: it is matched by the `test`
+  guards of `[PlainObject]` variants, in `testOrder`. A derived contract
+  reached this way is never dispatched again, even when it is polymorphic too.
+- **Read.** The tag counts only under its exact name and only as the first key
+  (anywhere with `readOptions: { allowOutOfOrderMetadataProperties: true }`). A
+  string tag never matches a number tag (`1` ≠ `"1"`). An unknown tag throws
+  `JsonException` `Read unrecognized type discriminator id 'video'.` unless
+  `ignoreUnrecognizedTags` is set; a missing tag reads a concrete base and, on
+  an abstract or interface base, throws `NotSupportedException` `The JSON
+  payload for polymorphic interface or abstract type 'Clip' must specify a type
+  discriminator.`; a tag that is neither a string nor a number throws
+  `JsonException` `The '$id', '$ref' or '$type' metadata properties must be
+  JSON strings. Current token type is 'Null'.`, and a number outside `Int32`
+  throws `The JSON value could not be converted to Clip.`.
+- Dispatch applies at the root and through `ref`, `array`, `hashSet`, `map` and
+  `nullable` descriptors. A custom converter registered for `kind: "ref"`
+  replaces it, as before.
+
 ## Errors and limits
 
 Deserialization errors are `JsonException` (exported from

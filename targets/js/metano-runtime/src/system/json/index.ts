@@ -15,6 +15,11 @@ export type {
   TypeSpec,
   ValueSpec,
   JsonTypeInfo,
+  TypeDiscriminator,
+  UnknownDerivedTypeHandling,
+  DerivedTypeSpec,
+  PolymorphismSpec,
+  JsonReadOptions,
   JsonConverter,
   SerializerContextOptions,
 } from "./types.ts";
@@ -23,7 +28,7 @@ export { SerializerContext } from "./serializer-context.ts";
 export { JsonSerializer, BoundSerializer } from "./json-serializer.ts";
 export { PropertyNamingPolicy } from "./property-naming-policy.ts";
 export { collectProperties, collectWireProperties } from "./converters.ts";
-export { JsonException } from "./errors.ts";
+export { JsonException, NotSupportedException } from "./errors.ts";
 export {
   UnionGuardRegistry,
   registerUnionGuard,

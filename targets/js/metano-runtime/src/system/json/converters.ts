@@ -12,10 +12,13 @@ import type {
   RefDescriptor,
   TemporalDescriptor,
   JsonConverter,
+  TypeDiscriminator,
 } from "./types.ts";
 import { HashSet } from "../collections/hash-set.ts";
 import { readContainer, writeContainer } from "./container-depth.ts";
+import { contractNameOf } from "./contract-name.ts";
 import { JsonException } from "./errors.ts";
+import { resolveDeserializeTarget, resolveSerializeTarget } from "./polymorphism.ts";
 
 // ─── Converter Resolution ────────────────────────────────────────────────────
 
@@ -357,24 +360,50 @@ function* specChainOf(spec: TypeSpec): Generator<TypeSpec> {
 }
 
 /**
- * The C# type name a contract reports in errors: its constructor's name. A
- * `[PlainObject]` contract has no constructor and reports `Object`.
- */
-function contractNameOf(spec: TypeSpec): string {
-  return spec.type?.name ?? "Object";
-}
-
-/**
- * Serialize a TS object to a JSON-safe plain object using the given spec.
+ * Serialize a TS object to a JSON-safe plain object using the given spec. A
+ * polymorphic spec first chooses the derived contract and writes its tag
+ * before every property (FR-005); the chosen contract is never dispatched
+ * again (FR-006).
  */
 export function serializeWithSpec(
   value: unknown,
   spec: TypeSpec,
   customConverters?: readonly JsonConverter[],
 ): Record<string, unknown> {
+  const { polymorphism } = spec;
+
+  if (!polymorphism) {
+    return serializeContract(value, spec, customConverters);
+  }
+
+  const target = resolveSerializeTarget(value, spec, polymorphism);
+
+  const typeMetadata =
+    target.tag === undefined ? undefined : { name: polymorphism.discriminator, tag: target.tag };
+
+  return serializeContract(value, target.spec, customConverters, typeMetadata);
+}
+
+/** The type discriminator a polymorphic write puts first. */
+interface TypeMetadata {
+  readonly name: string;
+  readonly tag: TypeDiscriminator;
+}
+
+/** Writes `value` with exactly `spec`'s properties, after the tag when one is given. */
+function serializeContract(
+  value: unknown,
+  spec: TypeSpec,
+  customConverters?: readonly JsonConverter[],
+  typeMetadata?: TypeMetadata,
+): Record<string, unknown> {
   return writeContainer(() => {
     const obj = value as Record<string, unknown>;
     const result: Record<string, unknown> = {};
+
+    if (typeMetadata) {
+      result[typeMetadata.name] = typeMetadata.tag;
+    }
 
     for (const prop of collectWireProperties(spec)) {
       const tsValue = obj[prop.ts];
@@ -393,19 +422,43 @@ export function serializeWithSpec(
 }
 
 /**
- * Deserialize unknown data (from JSON.parse) into a typed instance using the spec.
+ * Deserialize unknown data (from JSON.parse) into a typed instance using the
+ * spec. A polymorphic spec reads the derived contract its tag selects
+ * (FR-007).
  */
 export function deserializeWithSpec<T>(
   data: unknown,
   spec: TypeSpec<T>,
   customConverters?: readonly JsonConverter[],
 ): T {
+  const raw = jsonObjectFor(data, spec);
+  const { polymorphism } = spec;
+
+  if (!polymorphism) {
+    return deserializeContract(raw, spec, customConverters);
+  }
+
+  const target = resolveDeserializeTarget(raw, spec, polymorphism);
+
+  return deserializeContract(raw, target, customConverters) as T;
+}
+
+/** `data` as a JSON object; any other JSON value cannot be converted to the contract. */
+function jsonObjectFor(data: unknown, spec: TypeSpec): Record<string, unknown> {
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     throw new JsonException(`The JSON value could not be converted to ${contractNameOf(spec)}.`);
   }
 
+  return data as Record<string, unknown>;
+}
+
+/** Reads `raw` with exactly `spec`'s properties and builds it with `spec`'s factory. */
+function deserializeContract<T>(
+  raw: Record<string, unknown>,
+  spec: TypeSpec<T>,
+  customConverters?: readonly JsonConverter[],
+): T {
   return readContainer("object", () => {
-    const raw = data as Record<string, unknown>;
     const deserialized: Record<string, unknown> = {};
 
     for (const prop of collectWireProperties(spec)) {
