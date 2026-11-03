@@ -192,7 +192,7 @@ public static class PackageJsonWriter
         }
 
         if (runtimePeerSpecifier is not null)
-            DeclareRuntimePeerDependency(root, runtimePeerSpecifier, authoritativePackageName);
+            DeclareRuntimePeerDependency(root, runtimePeerSpecifier);
 
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
@@ -208,15 +208,9 @@ public static class PackageJsonWriter
     /// <see cref="MergeTranspilerManagedExports"/>). A package that is itself
     /// <c>metano-runtime</c> never depends on itself.
     /// </summary>
-    private static void DeclareRuntimePeerDependency(
-        JsonObject root,
-        string versionSpecifier,
-        string? authoritativePackageName
-    )
+    private static void DeclareRuntimePeerDependency(JsonObject root, string versionSpecifier)
     {
-        var packageName = ReadStringField(root, "name") ?? authoritativePackageName;
-
-        if (packageName == RuntimePeerDependency.PackageName)
+        if (ReadStringField(root, "name") == RuntimePeerDependency.PackageName)
             return;
 
         var declaredElsewhere = DependencySections

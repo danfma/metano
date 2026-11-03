@@ -108,16 +108,16 @@ public class RuntimePeerDependencyTests
     }
 
     [Test]
-    [Arguments("^2.7.3", "^9.8.7")]
-    [Arguments("*", "^9.8.7")]
-    public async Task PeerEntryOfTheWritersOwnShape_IsRefreshed(string stored, string expected)
+    [Arguments("^2.7.3")]
+    [Arguments("*")]
+    public async Task PeerEntryOfTheWritersOwnShape_IsRefreshed(string stored)
     {
         var root = CreateTempDir();
 
         WriteManifest(root, PeerManifest(stored));
-        WritePackageJson(root, expected);
+        WritePackageJson(root, Specifier);
 
-        await Assert.That(DeclaredVersion(ReadJson(root), "peerDependencies")).IsEqualTo(expected);
+        await Assert.That(DeclaredVersion(ReadJson(root), "peerDependencies")).IsEqualTo(Specifier);
     }
 
     [Test]

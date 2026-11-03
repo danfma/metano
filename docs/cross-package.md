@@ -281,8 +281,8 @@ imports use their own `#<alias>` key instead of the app's `#`:
 
 The generated entries are merged into the app's own `package.json`. If the app
 does not declare `metano-runtime`, the writer adds the `peerDependencies` entry
-described above; an app should replace it with a regular `dependency` on
-`metano-runtime`, after which the writer leaves it alone.
+described above; an app should move it to a regular `dependencies` entry,
+after which the writer leaves it alone.
 
 ## Diagnostics you might hit
 
