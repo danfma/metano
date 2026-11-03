@@ -58,7 +58,7 @@ public static class IrToTsConstructorDispatcherBridge
         var overloads = sorted
             .Select(c => new TsConstructorOverload(
                 c.Parameters.Select(p => new TsConstructorParam(
-                        TypeScriptNaming.ToCamelCase(p.Parameter.Name),
+                        IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
                         IrToTsTypeMapper.MapParameterType(p.Parameter),
                         Accessibility: TsAccessibility.None,
                         Rest: p.Parameter.IsParams
@@ -130,7 +130,7 @@ public static class IrToTsConstructorDispatcherBridge
             var param = ctor.Parameters[i].Parameter;
             branch.Add(
                 new TsVariableDeclaration(
-                    TypeScriptNaming.ToCamelCase(param.Name),
+                    IrToTsNamingPolicy.ToParameterName(param.Name),
                     new TsCastExpression(
                         new TsElementAccess(new TsIdentifier("args"), new TsLiteral(i.ToString())),
                         IrToTsTypeMapper.Map(param.Type)
@@ -211,7 +211,7 @@ public static class IrToTsConstructorDispatcherBridge
 
             targetScope.Add(
                 new TsVariableDeclaration(
-                    TypeScriptNaming.ToCamelCase(parameter.Name),
+                    IrToTsNamingPolicy.ToParameterName(parameter.Name),
                     BindChainedParameter(chain, temporaries, parameter, index, context)
                 )
             );

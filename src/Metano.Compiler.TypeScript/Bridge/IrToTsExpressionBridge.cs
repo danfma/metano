@@ -475,10 +475,16 @@ public static partial class IrToTsExpressionBridge
             { IsStringEnumMember: true } => ma.MemberName,
             { IsEnumMember: true } origin => origin.EmittedName ?? ma.MemberName,
             // A module-scope compile-time constant the toolchain declares keeps
-            // its C# name (ToModuleConstantName); a const of a foreign or
-            // non-containerless declaring type is an ordinary member read and
-            // falls through to the arms below.
+            // its C# name (ToModuleConstantName); any other module variable
+            // takes the member rule with reserved words escaped, naming what
+            // the module declared (ToModuleVariableName). A const of a foreign
+            // or non-containerless declaring type is an ordinary member read
+            // and falls through to the arms below.
             { IsModuleConstant: true } origin => IrToTsNamingPolicy.ToModuleConstantName(
+                ma.MemberName,
+                origin.EmittedName
+            ),
+            { IsModuleVariable: true } origin => IrToTsNamingPolicy.ToModuleVariableName(
                 ma.MemberName,
                 origin.EmittedName
             ),
@@ -1054,7 +1060,7 @@ public static partial class IrToTsExpressionBridge
         // generated TS keeps call-site type information.
         var mappedParameters = lambda
             .Parameters.Select(p => new TsParameter(
-                TypeScriptNaming.ToCamelCase(p.Name),
+                IrToTsNamingPolicy.ToParameterName(p.Name),
                 LowerLambdaParameterType(p)
             ))
             .ToList();

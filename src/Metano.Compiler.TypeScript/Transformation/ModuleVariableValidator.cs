@@ -219,6 +219,8 @@ public sealed class ModuleVariableValidator(
         && SymbolHelper.IsToolchainDeclared(owner, compilation.Assembly)
         && IsModuleState(symbol.OriginalDefinition);
 
+    // Mirrors IrToTsNamingPolicy.ToDeclaredModuleVariableName (the IR overload)
+    // from the Roslyn symbol this validator sees; keep the two in sync.
     private static string EmittedName(ISymbol member)
     {
         var overrideName = member.GetNameOverride(TargetLanguage.TypeScript);

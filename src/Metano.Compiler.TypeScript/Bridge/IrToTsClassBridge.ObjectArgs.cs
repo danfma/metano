@@ -76,7 +76,7 @@ internal static partial class IrToTsClassBridge
         );
 
         var ctorArgs = parameters
-            .Select(p => (TsExpression)new TsIdentifier(TypeScriptNaming.ToCamelCase(p.Name)))
+            .Select(p => (TsExpression)new TsIdentifier(IrToTsNamingPolicy.ToParameterName(p.Name)))
             .ToList();
 
         TsType returnType = typeParameters is { Count: > 0 } tps

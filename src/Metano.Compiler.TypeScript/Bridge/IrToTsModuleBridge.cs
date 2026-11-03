@@ -107,7 +107,7 @@ public static class IrToTsModuleBridge
             : IrToTsClassBridge.ComputeDefaultInitializer(type);
 
         return new TsVariableDeclaration(
-            IrToTsNamingPolicy.ToModuleVariableName(member),
+            IrToTsNamingPolicy.ToDeclaredModuleVariableName(member),
             value,
             // A `const` needs an initializer; a member with no literal default is a `let`.
             Const: isReadonly && value is not null,
@@ -128,7 +128,7 @@ public static class IrToTsModuleBridge
 
         var parameters = fn
             .Parameters.Select(p => new TsParameter(
-                TypeScriptNaming.ToCamelCase(p.Name),
+                IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
                 DefaultValue: p.HasDefaultValue && p.DefaultValue is not null

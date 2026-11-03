@@ -1680,33 +1680,35 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var lowered = IrToTsStatementBridge
                 .MapBody(entryBody, IrToTsBridgeContext.For(Context.DeclarativeMappings))
                 .ToList();
-            // The attribute names the C# local; the emitted declaration carries
-            // the local's emitted name, so match and export under that name —
-            // the trailing form references the binding (#390).
-            var exportLocalName = exportInfo is null
-                ? null
-                : IrToTsNamingPolicy.ToLocalName(exportInfo.Name);
+
+            // The attribute names the C# local, so the declaration is matched
+            // on the IR body — under the C# name, exactly as written (#390).
+            // MapBody lowers one IR statement per TS statement, so the index
+            // carries over; the export names the emitted binding, which is
+            // what the trailing form references.
+            var exportLocalIndex = exportInfo is null
+                ? -1
+                : IndexOfLocal(entryBody, exportInfo.Name);
+
             TsTopLevel? trailingExport = null;
-            var foundLocal = false;
             for (var i = 0; i < lowered.Count; i++)
             {
                 if (
-                    exportInfo is not null
-                    && exportLocalName is { } localName
+                    i == exportLocalIndex
+                    && exportInfo is { } export
                     && lowered[i] is TsVariableDeclaration varDecl
-                    && varDecl.Name == localName
                 )
                 {
-                    foundLocal = true;
-                    if (exportInfo.InPlace)
+                    if (export.InPlace)
                         lowered[i] = varDecl with { Exported = true };
                     else
-                        trailingExport = new TsModuleExport(localName, exportInfo.AsDefault);
+                        trailingExport = new TsModuleExport(varDecl.Name, export.AsDefault);
                 }
+
                 sink.Add(new TsTopLevelStatement(lowered[i]));
             }
 
-            if (exportInfo is not null && !foundLocal)
+            if (exportInfo is not null && exportLocalIndex < 0)
             {
                 ReportInvalidEntryPoint(
                     entryPoint,
@@ -1719,8 +1721,28 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (trailingExport is not null)
                 sink.Add(trailingExport);
         }
+
         return true;
     }
+
+    /// <summary>
+    /// The position of the <c>IrVariableDeclaration</c> naming
+    /// <paramref name="localName"/> (the C# spelling), or <c>-1</c> when the
+    /// body declares no such local.
+    /// </summary>
+    private static int IndexOfLocal(IReadOnlyList<IrStatement> body, string localName)
+    {
+        for (var i = 0; i < body.Count; i++)
+        {
+            if (DeclaresLocal(body[i], localName))
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static bool DeclaresLocal(IrStatement statement, string localName) =>
+        statement is IrVariableDeclaration declaration && declaration.Name == localName;
 
     /// <summary>
     /// The static fields and auto-properties a containerless static class declares
@@ -1801,7 +1823,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .ToHashSet(StringComparer.Ordinal);
         var collisions = variables
             .Where(variable =>
-                functionNames.Contains(IrToTsNamingPolicy.ToModuleVariableName(variable))
+                functionNames.Contains(IrToTsNamingPolicy.ToDeclaredModuleVariableName(variable))
             )
             .ToList();
 
