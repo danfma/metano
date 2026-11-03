@@ -13,9 +13,11 @@ namespace Metano.Compiler.Extraction;
 /// emitted TypeScript drops the parameter from the ctor signature
 /// and references an out-of-scope identifier inside member bodies.
 /// <para>
-/// This detector walks the class's syntax once before member extraction
-/// runs, semantically resolves identifier references inside non-ctor
-/// members, and produces:
+/// This detector orchestrates the scan: it decides the primary
+/// constructor, applies the promotion read-through map and the
+/// explicit-capture exemption, and delegates the identifier walk to
+/// <see cref="PrimaryCtorCaptureWalker"/> and the field synthesis to
+/// <see cref="CapturedFieldSynthesizer"/>. The result is:
 /// </para>
 /// <list type="bullet">
 ///   <item>A <c>param-symbol → field-name</c> map that the
@@ -34,17 +36,17 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class ImplicitCaptureDetector
 {
-    /// <param name="ParamFieldMap">Captured parameters keyed to their synthesized backing field.</param>
+    /// <param name="CapturedParams">Captured parameters keyed to their synthesized backing field.</param>
     /// <param name="SynthesizedFields">The backing fields to append to the class's members.</param>
-    /// <param name="PromotedParams">The promoted parameters whose member-body reads go through their property (<see cref="PrimaryConstructorPromotion.ReadThroughProperties"/>), keyed to it. Any other parameter a member body reads is captured into <paramref name="ParamFieldMap"/>.</param>
+    /// <param name="AliasedParams">The parameters whose member-body reads go through the property they alias (<see cref="PrimaryConstructorPromotion.ReadThroughProperties"/>), keyed to it. Any other parameter a member body reads is captured into <paramref name="CapturedParams"/>.</param>
     internal sealed record Result(
-        IReadOnlyDictionary<ISymbol, string> ParamFieldMap,
+        IReadOnlyDictionary<ISymbol, string> CapturedParams,
         IReadOnlyList<IrFieldDeclaration> SynthesizedFields,
-        IReadOnlyDictionary<ISymbol, IPropertySymbol> PromotedParams
+        IReadOnlyDictionary<ISymbol, IPropertySymbol> AliasedParams
     )
     {
-        /// <summary>No parameter read needs rewriting in the member bodies.</summary>
-        public bool HasNoRewrites => ParamFieldMap.Count == 0 && PromotedParams.Count == 0;
+        /// <summary>Any parameter read needs rewriting in the member bodies.</summary>
+        public bool HasRewrites => CapturedParams.Count > 0 || AliasedParams.Count > 0;
     }
 
     private static readonly Result Empty = new(
@@ -64,7 +66,9 @@ internal static class ImplicitCaptureDetector
         if (compilation is null)
             return Empty;
 
-        var primaryCtor = type.Constructors.FirstOrDefault(IsPrimaryConstructor);
+        var primaryCtor = type.Constructors.FirstOrDefault(
+            IrConstructorExtractor.IsPrimaryConstructor
+        );
         if (primaryCtor is null || primaryCtor.Parameters.Length == 0)
             return Empty;
 
@@ -83,10 +87,10 @@ internal static class ImplicitCaptureDetector
                 (IEqualityComparer<ISymbol>)SymbolEqualityComparer.Default
             );
 
-        var promotedOnly = Empty with { PromotedParams = readThroughProperties };
+        var aliasedOnly = Empty with { AliasedParams = readThroughProperties };
 
         if (primaryParams.Count == 0)
-            return promotedOnly;
+            return aliasedOnly;
 
         // Parameters captured by an explicit field initializer get their
         // synthesis suppressed early — the existing AnnotateCapturedParams
@@ -100,99 +104,30 @@ internal static class ImplicitCaptureDetector
             primaryParams
         );
 
-        var primaryCtorSyntaxNodes = CollectPrimaryCtorSyntaxNodes(type);
-        // TypeScript shares one namespace across fields, properties and
-        // methods, so the collision check has to consider every
-        // member's name — not just fields — or the synthesizer would
-        // happily emit a private field that shadows a public method.
-        var existingMemberNames = type.GetMembers()
-            .Select(m => m.Name)
-            .ToHashSet(StringComparer.Ordinal);
-        var captured = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        var capturedParams = PrimaryCtorCaptureWalker.CapturedParameters(
+            type,
+            compilation,
+            primaryParams,
+            explicitlyCapturedParams,
+            initializersRunInConstructor
+        );
 
-        // Walk only the members of THIS type (skip nested types); C# 12
-        // primary-ctor parameters are not in scope for a nested type,
-        // so an identifier inside a nested type that happens to share a
-        // parameter name must not be misclassified as a capture.
-        foreach (var memberSyntax in EnumerateMemberSyntaxNodes(type))
-        {
-            var model = compilation.GetSemanticModel(memberSyntax.SyntaxTree);
-            foreach (
-                var identifier in memberSyntax.DescendantNodes().OfType<IdentifierNameSyntax>()
-            )
-            {
-                if (IsInsidePrimaryCtor(identifier, primaryCtorSyntaxNodes))
-                    continue;
+        if (capturedParams.Count == 0)
+            return aliasedOnly;
 
-                if (initializersRunInConstructor && IsInsideMemberInitializer(identifier))
-                    continue;
+        var (captured, synthesizedFields) = CapturedFieldSynthesizer.Synthesize(
+            capturedParams,
+            type,
+            originResolver,
+            promotion
+        );
 
-                var resolved = model.GetSymbolInfo(identifier).Symbol;
-
-                if (
-                    resolved is IParameterSymbol paramSymbol
-                    && primaryParams.ContainsKey(paramSymbol)
-                    && !explicitlyCapturedParams.Contains(paramSymbol)
-                )
-                {
-                    captured.Add(paramSymbol);
-                }
-            }
-        }
-
-        if (captured.Count == 0)
-            return promotedOnly;
-
-        var paramFieldMap = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
-        var synthesized = new List<IrFieldDeclaration>(captured.Count);
-        foreach (var symbol in captured)
-        {
-            if (symbol is not IParameterSymbol paramSymbol)
-                continue;
-
-            // A member of the same name (a hand-written `_a`) moves the
-            // synthesized field to the next free name (`_a2`, `_a3`, …).
-            var fieldName = FreeFieldName(paramSymbol.Name, existingMemberNames);
-
-            existingMemberNames.Add(fieldName);
-            paramFieldMap[paramSymbol] = fieldName;
-            synthesized.Add(
-                new IrFieldDeclaration(
-                    Name: fieldName,
-                    Visibility: IrVisibility.Private,
-                    IsStatic: false,
-                    Type: IrTypeRefMapper.Map(paramSymbol.Type, originResolver),
-                    IsReadonly: !promotion.IsWritten(paramSymbol),
-                    Initializer: null,
-                    IsCapturedByCtor: true
-                )
-            );
-        }
-
-        return new Result(paramFieldMap, synthesized, readThroughProperties);
-    }
-
-    /// <summary>
-    /// True for the synthesized C# 12+ primary constructor — the
-    /// instance constructor whose declaring syntax is the type
-    /// declaration itself rather than a separate
-    /// <c>ConstructorDeclarationSyntax</c>.
-    /// </summary>
-    private static bool IsPrimaryConstructor(IMethodSymbol ctor)
-    {
-        if (ctor.MethodKind != MethodKind.Constructor || ctor.IsStatic)
-            return false;
-
-        var syntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        return syntax
-            is ClassDeclarationSyntax
-                or StructDeclarationSyntax
-                or RecordDeclarationSyntax;
+        return new Result(captured, synthesizedFields, readThroughProperties);
     }
 
     /// <summary>
     /// Collects parameters already captured by an explicit field
-    /// initializer of the form <c>= paramName</c>, so the detector
+    /// initializer of the form <c>= paramName</c>, so the scan
     /// does not synthesize a second backing field for them. Symbol-
     /// identity match (via <see cref="SemanticModel.GetSymbolInfo"/>)
     /// guards against the false positive where the initializer
@@ -224,130 +159,5 @@ internal static class ImplicitCaptureDetector
                 result.Add(param);
         }
         return result;
-    }
-
-    /// <summary>
-    /// Returns the syntax nodes of every direct member of the type
-    /// (fields, properties, methods, events, accessors) so the
-    /// detector can iterate identifier references without descending
-    /// into nested types — primary-ctor parameters are not in scope
-    /// for a nested type's body.
-    /// </summary>
-    private static IEnumerable<SyntaxNode> EnumerateMemberSyntaxNodes(INamedTypeSymbol type)
-    {
-        foreach (var member in type.GetMembers())
-        {
-            if (member is INamedTypeSymbol)
-                continue;
-            foreach (var declaringRef in member.DeclaringSyntaxReferences)
-                yield return declaringRef.GetSyntax();
-        }
-    }
-
-    /// <summary>
-    /// Returns the syntax nodes that delimit the primary
-    /// constructor's body — the type's parameter list and any base
-    /// initializer arguments, the only places where primary-ctor
-    /// parameters are in scope as plain locals. Identifier
-    /// references inside these nodes do not need rewriting.
-    /// </summary>
-    private static IReadOnlyList<SyntaxNode> CollectPrimaryCtorSyntaxNodes(INamedTypeSymbol type)
-    {
-        var nodes = new List<SyntaxNode>();
-        foreach (var declaringRef in type.DeclaringSyntaxReferences)
-        {
-            var syntax = declaringRef.GetSyntax();
-            switch (syntax)
-            {
-                case ClassDeclarationSyntax cls:
-                    if (cls.ParameterList is not null)
-                        nodes.Add(cls.ParameterList);
-                    AddPrimaryBaseArguments(cls.BaseList, nodes);
-                    break;
-                case StructDeclarationSyntax st:
-                    if (st.ParameterList is not null)
-                        nodes.Add(st.ParameterList);
-                    AddPrimaryBaseArguments(st.BaseList, nodes);
-                    break;
-                case RecordDeclarationSyntax rec:
-                    if (rec.ParameterList is not null)
-                        nodes.Add(rec.ParameterList);
-                    AddPrimaryBaseArguments(rec.BaseList, nodes);
-                    break;
-            }
-        }
-        return nodes;
-    }
-
-    private static void AddPrimaryBaseArguments(BaseListSyntax? baseList, List<SyntaxNode> nodes)
-    {
-        var primaryBase = baseList
-            ?.Types.OfType<PrimaryConstructorBaseTypeSyntax>()
-            .FirstOrDefault();
-        if (primaryBase?.ArgumentList is not null)
-            nodes.Add(primaryBase.ArgumentList);
-    }
-
-    private static bool IsInsidePrimaryCtor(
-        SyntaxNode identifier,
-        IReadOnlyList<SyntaxNode> primaryCtorScopes
-    )
-    {
-        // `Span.Contains` only makes sense within a single `SyntaxTree`
-        // — partial types declared across multiple files share the same
-        // INamedTypeSymbol but live in distinct trees, so an identifier
-        // in file A could spuriously match a primary-ctor scope in
-        // file B. Compare both span and tree identity to avoid the
-        // false positive.
-        foreach (var scope in primaryCtorScopes)
-        {
-            if (scope.SyntaxTree == identifier.SyntaxTree && scope.Span.Contains(identifier.Span))
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// True inside a field or property initializer. When the class extractor
-    /// moves the initializers into the constructor body
-    /// (<see cref="PrimaryConstructorInitializerDeferral.AppliesTo"/>), the
-    /// parameter is in scope there, so a read captures nothing (as in C#,
-    /// which only captures parameters read by members that outlive
-    /// construction).
-    /// </summary>
-    private static bool IsInsideMemberInitializer(SyntaxNode identifier) =>
-        MemberInitializerSyntax.Contains(identifier, stopAtExecutableBodies: false);
-
-    /// <summary>
-    /// <see cref="SynthesizeFieldName"/>'s name for <paramref name="paramName"/>,
-    /// or, when a member already has it, the first free one with a numeric
-    /// suffix, so the synthesized field never shadows a member.
-    /// </summary>
-    private static string FreeFieldName(string paramName, IReadOnlySet<string> takenNames)
-    {
-        var baseName = SynthesizeFieldName(paramName);
-
-        return Enumerable
-            .Range(2, int.MaxValue - 2)
-            .Select(suffix => baseName + suffix)
-            .Prepend(baseName)
-            .First(name => !takenNames.Contains(name));
-    }
-
-    /// <summary>
-    /// Picks the synthesized field name from a primary-ctor param's
-    /// source name. The convention matches the rest of the code base:
-    /// camelCase parameter prefixed with an underscore
-    /// (<c>view</c> → <c>_view</c>, <c>onClick</c> → <c>_onClick</c>).
-    /// Reserved JS keywords already get their reserved-word treatment
-    /// downstream when the backend renders the field, so the leading
-    /// underscore is enough here.
-    /// </summary>
-    private static string SynthesizeFieldName(string paramName)
-    {
-        if (string.IsNullOrEmpty(paramName))
-            return "_value";
-        var first = char.ToLowerInvariant(paramName[0]);
-        return paramName.Length == 1 ? "_" + first : "_" + first + paramName[1..];
     }
 }

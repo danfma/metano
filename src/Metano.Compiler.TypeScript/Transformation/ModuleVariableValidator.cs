@@ -170,6 +170,15 @@ public sealed class ModuleVariableValidator(
         );
     }
 
+    /// <summary>
+    /// A module variable assigned outside its declaring file. The write is
+    /// decided by the core <see cref="WriteAccess"/> on the bound operation
+    /// — the same check the promotion analysis uses — which also sees the
+    /// writes a purely syntactic parent check would miss: parenthesized
+    /// targets (<c>(Counters.Hits) = 1</c>), deconstruction targets
+    /// (<c>(Counters.Hits, x) = pair</c>) and <c>ref</c> local initializers
+    /// (<c>ref var r = ref Counters.Hits</c>).
+    /// </summary>
     private void RejectImportedWrite(
         SemanticModel model,
         IdentifierNameSyntax identifier,
@@ -178,7 +187,7 @@ public sealed class ModuleVariableValidator(
     )
     {
         if (
-            !IsWriteTarget(identifier)
+            !WriteAccess.IsWriteTarget(WriteTargetExpression(identifier), model)
             || IsSameFile(symbol.ContainingType, Accessor(model, identifier))
         )
         {
@@ -240,31 +249,15 @@ public sealed class ModuleVariableValidator(
             );
 
     /// <summary>
-    /// True when the member read through <paramref name="identifier"/> is the
-    /// target of an assignment (simple or compound), an increment or decrement,
-    /// or a <c>ref</c> / <c>out</c> argument.
+    /// The expression a write through <paramref name="identifier"/> lands on:
+    /// the whole member access for a qualified one (<c>Counters.Hits++</c>),
+    /// whose bound operation — and with it the write — belongs to the access
+    /// and not to the bare name.
     /// </summary>
-    private static bool IsWriteTarget(IdentifierNameSyntax identifier)
-    {
-        var access =
-            identifier.Parent is MemberAccessExpressionSyntax member && member.Name == identifier
-                ? (ExpressionSyntax)member
-                : identifier;
-
-        return access.Parent switch
-        {
-            AssignmentExpressionSyntax assignment => assignment.Left == access,
-            PrefixUnaryExpressionSyntax prefix => prefix.Kind()
-                is SyntaxKind.PreIncrementExpression
-                    or SyntaxKind.PreDecrementExpression,
-            PostfixUnaryExpressionSyntax postfix => postfix.Kind()
-                is SyntaxKind.PostIncrementExpression
-                    or SyntaxKind.PostDecrementExpression,
-            ArgumentSyntax argument => !argument.RefKindKeyword.IsKind(SyntaxKind.None)
-                && !argument.RefKindKeyword.IsKind(SyntaxKind.InKeyword),
-            _ => false,
-        };
-    }
+    private static ExpressionSyntax WriteTargetExpression(IdentifierNameSyntax identifier) =>
+        identifier.Parent is MemberAccessExpressionSyntax member && member.Name == identifier
+            ? member
+            : identifier;
 
     private static INamedTypeSymbol? Accessor(SemanticModel model, SyntaxNode node) =>
         node.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault() is { } declaration

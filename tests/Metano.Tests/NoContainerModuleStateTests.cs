@@ -308,6 +308,67 @@ public class NoContainerModuleStateTests
     }
 
     [Test]
+    public async Task ParenthesizedWrite_FromAnotherFile_ReportsUnsupported()
+    {
+        // The write is decided on the bound operation, so the parentheses —
+        // which add no operation of their own — do not hide the write a
+        // purely syntactic parent check would miss.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Counters
+            {
+                public static int Hits;
+            }
+
+            [Transpile]
+            public class Clicker
+            {
+                public void Reset() => (Counters.Hits) = 0;
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("'hits'")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task OutArgument_FromAnotherFile_ReportsUnsupported()
+    {
+        // An `out` argument writes the variable through the callee, so the
+        // imported read-only binding cannot back it.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Counters
+            {
+                public static int Hits;
+            }
+
+            [Transpile]
+            public class Clicker
+            {
+                public bool Parse() => int.TryParse("2", out Counters.Hits);
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("'hits'")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
     public async Task ParameterShadowingModuleVariable_InDeclaringFile_ReportsUnsupported()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(

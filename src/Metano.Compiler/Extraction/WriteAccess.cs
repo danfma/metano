@@ -18,8 +18,13 @@ namespace Metano.Compiler.Extraction;
 ///   <item>the initializer of a <c>ref</c> local (<c>ref var r = ref a</c>),
 ///     which can write it through the alias.</item>
 /// </list>
+/// <para>
+/// The core's promotion and capture analyses and the targets' diagnostics
+/// share it, so they agree on what a write is (the TypeScript
+/// module-variable validator rejects imported writes with it).
+/// </para>
 /// </summary>
-internal static class WriteAccess
+public static class WriteAccess
 {
     /// <summary>
     /// <paramref name="expression"/> is written; <c>false</c> when it binds to
