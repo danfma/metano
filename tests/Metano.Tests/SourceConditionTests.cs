@@ -50,6 +50,7 @@ public class SourceConditionTests
     [Arguments("source")]
     [Arguments("my_pkg.source:ts")]
     [Arguments("Dev2")]
+    [Arguments("v1")]
     public async Task ValidName_IsAccepted(string raw)
     {
         var parsed = SourceCondition.TryFrom(raw, out var condition, out var diagnostic);
@@ -63,20 +64,23 @@ public class SourceConditionTests
     [Arguments("my source", "only letters, digits")]
     [Arguments("a/b", "only letters, digits")]
     [Arguments("@scope", "only letters, digits")]
-    [Arguments("import", "built-in resolution condition")]
-    [Arguments("require", "built-in resolution condition")]
-    [Arguments("default", "built-in resolution condition")]
-    [Arguments("types", "built-in resolution condition")]
-    [Arguments("node", "built-in resolution condition")]
-    [Arguments("browser", "built-in resolution condition")]
+    [Arguments("123", "made only of digits")]
+    [Arguments("import", "built-in Node resolution condition")]
+    [Arguments("require", "built-in Node resolution condition")]
+    [Arguments("default", "built-in Node resolution condition")]
+    [Arguments("types", "built-in Node resolution condition")]
+    [Arguments("node", "built-in Node resolution condition")]
+    [Arguments("browser", "built-in Node resolution condition")]
+    [Arguments("module", "bundlers enable by default")]
+    [Arguments("development", "bundlers enable by default")]
+    [Arguments("production", "bundlers enable by default")]
     public async Task InvalidName_IsRejectedWithMs0059(string raw, string expectedProblem)
     {
         var parsed = SourceCondition.TryFrom(raw, out var condition, out var diagnostic);
 
         await Assert.That(parsed).IsFalse();
         await Assert.That(condition).IsEqualTo(SourceCondition.Default);
-        await Assert.That(diagnostic!.Code).IsEqualTo(DiagnosticCodes.InvalidSourceCondition);
-        await Assert.That(diagnostic.Code).IsEqualTo("MS0059");
+        await Assert.That(diagnostic!.Code).IsEqualTo("MS0059");
         await Assert.That(diagnostic.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
         await Assert.That(diagnostic.Message).Contains($"Invalid source condition '{raw}'");
         await Assert.That(diagnostic.Message).Contains(expectedProblem);
@@ -89,67 +93,97 @@ public class SourceConditionTests
     {
         var unset = WriteFresh(default);
         var explicitDefault = WriteFresh(ConditionOf("source"));
+        var exportsOrder = OrderOf(ExportsOf(unset), ".");
+        var importsOrder = OrderOf(ImportsOf(unset), "#/*");
 
         await Assert.That(explicitDefault).IsEqualTo(unset);
-        await Assert.That(ConditionOrder(ExportsOf(unset)["."])).IsEqualTo("source,types,import");
-        await Assert
-            .That(ConditionOrder(ImportsOf(unset)["#/*"]))
-            .IsEqualTo("source,types,import,default");
+        await Assert.That(exportsOrder).IsEqualTo("source,types,import");
+        await Assert.That(importsOrder).IsEqualTo("source,types,import,default");
     }
 
     [Test]
     public async Task CustomName_ReplacesSourceInExportsAndImports()
     {
         var json = WriteFresh(ConditionOf(CustomName));
+        var exports = ExportsOf(json);
+        var imports = ImportsOf(json);
 
-        var root = ExportsOf(json)["."];
-        var users = ExportsOf(json)["./users"];
-        var wildcard = ImportsOf(json)["#/*"];
-        var rootAlias = ImportsOf(json)["#"];
+        await Assert.That(OrderOf(exports, ".")).IsEqualTo($"{CustomName},types,import");
 
-        await Assert.That(ConditionOrder(root)).IsEqualTo($"{CustomName},types,import");
-        await Assert.That(root![CustomName]!.GetValue<string>()).IsEqualTo("./src/index.ts");
-        await Assert.That(users![CustomName]!.GetValue<string>()).IsEqualTo("./src/users/index.ts");
-        await Assert.That(ConditionOrder(wildcard)).IsEqualTo($"{CustomName},types,import,default");
-        await Assert.That(wildcard![CustomName]!.GetValue<string>()).IsEqualTo("./src/*.ts");
-        await Assert.That(rootAlias![CustomName]!.GetValue<string>()).IsEqualTo("./src/index.ts");
-        await Assert.That(json).DoesNotContain("\"source\"");
+        await Assert
+            .That(exports["."]![CustomName]!.GetValue<string>())
+            .IsEqualTo("./src/index.ts");
+
+        await Assert
+            .That(exports["./users"]![CustomName]!.GetValue<string>())
+            .IsEqualTo("./src/users/index.ts");
+
+        await Assert.That(OrderOf(imports, "#/*")).IsEqualTo($"{CustomName},types,import,default");
+        await Assert.That(imports["#/*"]![CustomName]!.GetValue<string>()).IsEqualTo("./src/*.ts");
+
+        await Assert
+            .That(imports["#"]![CustomName]!.GetValue<string>())
+            .IsEqualTo("./src/index.ts");
+
+        await Assert.That(exports["."]!.AsObject().ContainsKey("source")).IsFalse();
+        await Assert.That(imports["#/*"]!.AsObject().ContainsKey("source")).IsFalse();
     }
 
     [Test]
-    public async Task Rename_FromDefault_ReplacesManagedEntryAndKeepsUserConditions()
+    public async Task Default_KeepsUserConditionsBeforeTypesPointingAtTheSources()
     {
         var dir = CreateTempDir();
 
         Write(dir, default);
-        AddUserConditions(dir);
+        AddUserConditionsBeforeTypes(dir);
+
+        Write(dir, default);
+
+        var json = ReadJson(dir);
+
+        await Assert.That(OrderOf(ExportsOf(json), ".")).IsEqualTo("bun,source,types,import");
+
+        await Assert
+            .That(OrderOf(ImportsOf(json), "#/*"))
+            .IsEqualTo("development,source,types,import,default");
+    }
+
+    [Test]
+    public async Task Rename_FromDefault_RemovesSourceAndKeepsUserConditions()
+    {
+        var dir = CreateTempDir();
+
+        Write(dir, default);
+        AddUserConditionsBeforeTypes(dir);
+        AddRequireAfterTypes(dir);
 
         Write(dir, ConditionOf(CustomName));
 
         var json = ReadJson(dir);
+        var exports = ExportsOf(json);
+        var imports = ImportsOf(json);
 
         await Assert
-            .That(ConditionOrder(ExportsOf(json)["."]))
-            .IsEqualTo($"{CustomName},types,import,require");
+            .That(OrderOf(exports, "."))
+            .IsEqualTo($"{CustomName},bun,types,import,require");
+
+        await Assert.That(OrderOf(exports, "./users")).IsEqualTo($"{CustomName},types,import");
+
         await Assert
-            .That(ConditionOrder(ExportsOf(json)["./users"]))
-            .IsEqualTo($"{CustomName},types,import");
+            .That(OrderOf(imports, "#/*"))
+            .IsEqualTo($"{CustomName},development,types,import,default");
+
+        await Assert.That(OrderOf(imports, "#")).IsEqualTo($"{CustomName},types,import,default");
+        await Assert.That(exports["."]!["bun"]!.GetValue<string>()).IsEqualTo("./src/index.ts");
+        await Assert.That(exports["."]!["require"]!.GetValue<string>()).IsEqualTo("./legacy.cjs");
+
         await Assert
-            .That(ConditionOrder(ImportsOf(json)["#/*"]))
-            .IsEqualTo($"{CustomName},types,import,bun,default");
-        await Assert
-            .That(ConditionOrder(ImportsOf(json)["#"]))
-            .IsEqualTo($"{CustomName},types,import,default");
-        await Assert
-            .That(ExportsOf(json)["."]!["require"]!.GetValue<string>())
-            .IsEqualTo("./legacy.cjs");
-        await Assert
-            .That(ImportsOf(json)["#/*"]!["bun"]!.GetValue<string>())
-            .IsEqualTo("./bun/*.ts");
+            .That(imports["#/*"]!["development"]!.GetValue<string>())
+            .IsEqualTo("./src/*.ts");
     }
 
     [Test]
-    public async Task Rename_BetweenCustomNames_LeavesOnlyTheNewOne()
+    public async Task Rename_BetweenCustomNames_LeavesTheOldCustomKeyForTheUser()
     {
         var dir = CreateTempDir();
 
@@ -159,27 +193,12 @@ public class SourceConditionTests
         var json = ReadJson(dir);
 
         await Assert
-            .That(ConditionOrder(ExportsOf(json)["."]))
-            .IsEqualTo($"{CustomName},types,import");
+            .That(OrderOf(ExportsOf(json), "."))
+            .IsEqualTo($"{CustomName},old-source,types,import");
+
         await Assert
-            .That(ConditionOrder(ImportsOf(json)["#/*"]))
-            .IsEqualTo($"{CustomName},types,import,default");
-    }
-
-    [Test]
-    public async Task Rename_BackToDefault_DropsTheFormerCustomName()
-    {
-        var dir = CreateTempDir();
-
-        Write(dir, ConditionOf(CustomName));
-        Write(dir, default);
-
-        var json = ReadJson(dir);
-
-        await Assert.That(ConditionOrder(ExportsOf(json)["."])).IsEqualTo("source,types,import");
-        await Assert
-            .That(ConditionOrder(ImportsOf(json)["#/*"]))
-            .IsEqualTo("source,types,import,default");
+            .That(OrderOf(ImportsOf(json), "#/*"))
+            .IsEqualTo($"{CustomName},old-source,types,import,default");
     }
 
     [Test]
@@ -196,8 +215,7 @@ public class SourceConditionTests
 
         Write(dir, ConditionOf(CustomName));
 
-        var renamed = ReadJson(dir);
-        var root = ExportsOf(renamed)["."];
+        var root = ExportsOf(ReadJson(dir))["."];
 
         await Assert.That(ConditionOrder(root)).IsEqualTo($"{CustomName},source,types,import");
         await Assert.That(root!["source"]!.GetValue<string>()).IsEqualTo("./custom/index.ts");
@@ -217,37 +235,39 @@ public class SourceConditionTests
 
         Write(dir, ConditionOf(CustomName));
 
-        await Assert
-            .That(ConditionOrder(ExportsOf(ReadJson(dir))["."]))
-            .IsEqualTo($"{CustomName},types,import,development");
+        var order = OrderOf(ExportsOf(ReadJson(dir)), ".");
+
+        await Assert.That(order).IsEqualTo($"{CustomName},types,import,development");
     }
 
     [Test]
     public async Task Reconciler_PassesTheConditionToTheWriter()
     {
         var dir = CreateTempDir();
-        var resolution = PackageRootResolver.Resolve(Path.Combine(dir, "src"), "App.csproj", dir);
+        var outputDir = Path.Combine(dir, "src");
+        var resolution = PackageRootResolver.Resolve(outputDir, "App.csproj", dir);
+
         var inputs = new PackageManifestInputs(
-            Barrels(),
-            null,
-            PackageSubpathRoot.None,
-            new Dictionary<string, string>(),
-            false
+            SourceFiles: Barrels(),
+            PackageName: null,
+            SubpathRoot: PackageSubpathRoot.None,
+            CrossPackageDependencies: new Dictionary<string, string>(),
+            IsExecutable: false
         );
 
         PackageJsonReconciler.Reconcile(
             inputs,
             resolution,
-            Path.Combine(dir, "src"),
-            "./dist",
-            null,
-            null,
-            ConditionOf(CustomName)
+            outputDir,
+            dist: "./dist",
+            srcRoot: null,
+            importAlias: null,
+            sourceCondition: ConditionOf(CustomName)
         );
 
-        await Assert
-            .That(ConditionOrder(ExportsOf(ReadJson(dir))["."]))
-            .IsEqualTo($"{CustomName},types,import");
+        var order = OrderOf(ExportsOf(ReadJson(dir)), ".");
+
+        await Assert.That(order).IsEqualTo($"{CustomName},types,import");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -261,6 +281,16 @@ public class SourceConditionTests
         return File.ReadAllText(Path.Combine(dir, "package.json"));
     }
 
+    private string CreateTempDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"metano-source-condition-{Guid.NewGuid():N}");
+
+        Directory.CreateDirectory(dir);
+        _tempDirs.Add(dir);
+
+        return dir;
+    }
+
     private static void Write(string dir, SourceCondition condition) =>
         PackageJsonWriter.UpdateOrCreate(
             dir,
@@ -271,12 +301,20 @@ public class SourceConditionTests
             sourceCondition: condition
         );
 
-    private static void AddUserConditions(string dir)
+    private static void AddUserConditionsBeforeTypes(string dir)
+    {
+        var json = ReadJson(dir);
+
+        ExportsOf(json)["."]!.AsObject().Insert(0, "bun", "./src/index.ts");
+        ImportsOf(json)["#/*"]!.AsObject().Insert(0, "development", "./src/*.ts");
+        File.WriteAllText(Path.Combine(dir, "package.json"), json.ToJsonString());
+    }
+
+    private static void AddRequireAfterTypes(string dir)
     {
         var json = ReadJson(dir);
 
         ExportsOf(json)["."]!.AsObject()["require"] = "./legacy.cjs";
-        ImportsOf(json)["#/*"]!.AsObject().Insert(3, "bun", "./bun/*.ts");
         File.WriteAllText(Path.Combine(dir, "package.json"), json.ToJsonString());
     }
 
@@ -289,6 +327,8 @@ public class SourceConditionTests
 
     private static TsSourceFile[] Barrels() =>
         [new TsSourceFile("index.ts", [], ""), new TsSourceFile("users/index.ts", [], "")];
+
+    private static string OrderOf(JsonObject section, string key) => ConditionOrder(section[key]);
 
     private static string ConditionOrder(JsonNode? entry) =>
         string.Join(",", entry!.AsObject().Select(condition => condition.Key));
@@ -305,14 +345,4 @@ public class SourceConditionTests
 
     private static JsonObject ReadJson(string dir) =>
         (JsonNode.Parse(File.ReadAllText(Path.Combine(dir, "package.json"))) as JsonObject)!;
-
-    private string CreateTempDir()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), $"metano-source-condition-{Guid.NewGuid():N}");
-
-        Directory.CreateDirectory(dir);
-        _tempDirs.Add(dir);
-
-        return dir;
-    }
 }

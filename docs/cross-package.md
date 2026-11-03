@@ -313,17 +313,27 @@ Only the Metano package resolves to sources; packages that export `source` keep
 resolving to their built output. The default stays `source`, so existing
 consumers are unaffected until they set the property.
 
-The name may contain letters, digits, `-`, `_`, `.` and `:`, and must not be a
-built-in condition (`import`, `require`, `default`, `types`, `node`, `browser`,
-`node-addons`, `module-sync`); otherwise the run fails with
+The name may contain letters, digits, `-`, `_`, `.` and `:`. It must not be
+all digits (Node rejects numeric `exports` keys), a Node built-in condition
+(`import`, `require`, `default`, `types`, `node`, `browser`, `node-addons`,
+`module-sync`), or a condition bundlers enable by default (`module`,
+`development`, `production`: choosing one would route the package to its
+sources in ordinary builds). Otherwise the run fails with
 [`MS0059`](#ms0059--invalid-source-condition).
 
-Changing the name is safe. On the next build the writer replaces the condition
-it wrote before (`source` or a former custom name) in `exports` and `imports`
-and leaves your own conditions alone. A condition counts as the writer's own only
-when it sits before `types`, is not the new name, and points at exactly the `.ts`
-file the writer would emit now. A condition you retargeted elsewhere, or added
-after `types` (`require`, `bun`, ...), is never removed.
+Switching from the default to a custom name is safe. On that build the writer
+adds the new condition and removes the `source` entry it wrote before, in
+`exports` and `imports`, and only when `source` still points at the exact `.ts`
+file the writer emits now. Every other condition you own (`bun`,
+`development`, `require`, a retargeted `source`, ...) is left alone, and in a
+steady-state build nothing is ever removed. The writer does not remember an
+earlier custom name, so after renaming one custom name to another, or going back
+to `source`, delete the old key yourself.
+
+Changing only `MetanoSourceCondition` (for example in `Directory.Build.props` or
+with `-p:`) may not re-run the transpile target, whose inputs are the compile
+items and the project file. Touch the `.csproj` or delete the output
+directory's `.metano-stamp` after changing it.
 
 Two requirements of this layout:
 
@@ -379,9 +389,10 @@ subpaths.
 
 Reported (error, fails the run before transpiling) when
 `MetanoSourceCondition` / `--source-condition` is not a usable condition name:
-it contains a character other than letters, digits, `-`, `_`, `.` and `:`, or it
-is a built-in condition such as `import`, `require`, `default`, `types`, `node`
-or `browser`. Pick a package-specific name such as `metano-source`; see
+it contains a character other than letters, digits, `-`, `_`, `.` and `:`, it is
+all digits, it is a Node built-in condition such as `import`, `require`,
+`default`, `types`, `node` or `browser`, or it is a bundler default (`module`,
+`development`, `production`). Pick a package-specific name such as `metano-source`; see
 [Resolving the generated sources](#resolving-the-generated-sources-a-package-specific-condition).
 
 ### `MS0030` — Two barrels claim one `exports` key

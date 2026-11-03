@@ -358,8 +358,9 @@ public static class DiagnosticCodes
     /// <summary>MS0059 — the <c>--source-condition</c> (MSBuild
     /// <c>MetanoSourceCondition</c>) value is not a usable package.json export condition
     /// name: it contains a character other than letters, digits, <c>-</c>, <c>_</c>,
-    /// <c>.</c> and <c>:</c>, or it is a built-in condition (<c>import</c>, <c>require</c>,
-    /// <c>default</c>, <c>types</c>, <c>node</c>, <c>browser</c>, …). An error: the run fails
-    /// before transpiling (#424).</summary>
+    /// <c>.</c> and <c>:</c>, it is all digits, it is a Node built-in condition
+    /// (<c>import</c>, <c>require</c>, <c>default</c>, <c>types</c>, <c>node</c>,
+    /// <c>browser</c>, …), or it is a bundler default (<c>module</c>, <c>development</c>,
+    /// <c>production</c>). An error: the run fails before transpiling (#424).</summary>
     public const string InvalidSourceCondition = "MS0059";
 }
