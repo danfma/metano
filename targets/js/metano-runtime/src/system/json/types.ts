@@ -124,6 +124,12 @@ export interface TypeSpec<T = unknown> {
   readonly factory: (props: Record<string, unknown>) => T;
   /** Own properties only (base properties come from base spec) */
   readonly properties: readonly PropertySpec[];
+  /**
+   * TS names of base properties this contract hides with a `[JsonIgnore]`
+   * override: no spec of its base chain writes or reads them for this
+   * contract (System.Text.Json writes none of them).
+   */
+  readonly ignoredProperties?: readonly string[];
 }
 
 // ─── Value Spec ──────────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Metano.Tests;
 
 public class JsonSerializerContextTests
@@ -595,7 +597,8 @@ public class JsonSerializerContextTests
     }
 
     // A base that emits no spec ([Ignore]) cannot be linked, so its
-    // properties are inlined into the derived spec, base-most first (#253).
+    // properties are inlined into the derived spec (#253), after the
+    // derived type's own ones as System.Text.Json writes them (FR-009).
     [Test]
     public async Task UnlinkedBase_InlinesInheritedProperties()
     {
@@ -618,8 +621,151 @@ public class JsonSerializerContextTests
         var idIndex = ts.IndexOf("ts: \"id\"", StringComparison.Ordinal);
         var pathIndex = ts.IndexOf("ts: \"path\"", StringComparison.Ordinal);
 
-        await Assert.That(idIndex).IsGreaterThan(-1);
-        await Assert.That(pathIndex).IsGreaterThan(idIndex);
+        await Assert.That(pathIndex).IsGreaterThan(-1);
+        await Assert.That(idIndex).IsGreaterThan(pathIndex);
+        await Assert.That(ts).Contains("new Photo(p.id as string, p.path as string)");
+    }
+
+    // System.Text.Json writes the most-derived type's own properties first,
+    // then each base's, with an override at its most-derived position
+    // (measured on .NET 10: {"Y":3,"Name":"d","X":2,"Base":1}). The runtime
+    // has no hierarchy information for an inlined list, so the generator
+    // emits it in that order (DECIDED-19 f).
+    [Test]
+    public async Task InlinedPropertyList_FollowsTheWireOrder()
+    {
+        var ts = TranspileContext(
+            """
+            public class Root
+            {
+                public int Base { get; init; }
+                public virtual string Name { get; init; } = "";
+            }
+
+            public class Derived : Root
+            {
+                public int X { get; init; }
+                public override string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            public sealed class Leaf : Derived
+            {
+                public int Y { get; init; }
+                public override string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Leaf))]
+            """
+        );
+
+        var leafSpec = SpecBodyOf(ts, "leaf");
+
+        await Assert.That(string.Join(",", JsonNamesOf(leafSpec))).IsEqualTo("Y,Name,X,Base");
+    }
+
+    // A [JsonIgnore] override over a linked base marks the base declaration
+    // ignored, so the runtime neither writes nor reads it for the derived
+    // contract (DECIDED-19 e); the base spec keeps it for its own instances.
+    [Test]
+    public async Task IgnoredOverrideOfLinkedBase_ListsTheIgnoredProperty()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public class Media
+            {
+                public virtual string Name { get; init; } = "";
+                public int Size { get; init; }
+            }
+
+            [Transpile]
+            public sealed class Photo : Media
+            {
+                [JsonIgnore]
+                public override string Name { get; init; } = "photo";
+                public string Path { get; init; } = "";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        var photoSpec = SpecBodyOf(ts, "photo");
+        var mediaSpec = SpecBodyOf(ts, "media");
+
+        await Assert.That(photoSpec).Contains("base: this.media");
+        await Assert.That(photoSpec).Contains("ignoredProperties: [\"name\"]");
+        await Assert.That(photoSpec).DoesNotContain("json: \"Name\"");
+        await Assert.That(mediaSpec).Contains("json: \"Name\"");
+        await Assert.That(mediaSpec).DoesNotContain("ignoredProperties");
+    }
+
+    // The marker names the TS member of every overridden declaration, up
+    // the whole linked chain.
+    [Test]
+    public async Task IgnoredOverrideOfALinkedChain_ListsTheBaseTsName()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public class Media
+            {
+                [Name("label")]
+                public virtual string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            public class Picture : Media
+            {
+                public override string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            public sealed class Photo : Picture
+            {
+                [JsonIgnore]
+                public override string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        await Assert
+            .That(SpecBodyOf(ts, "photo"))
+            .Contains("ignoredProperties: [\"name\", \"label\"]");
+        await Assert.That(SpecBodyOf(ts, "picture")).DoesNotContain("ignoredProperties");
+    }
+
+    // An unlinked spec already leaves the ignored base declaration out of
+    // its inlined list, so it carries no marker.
+    [Test]
+    public async Task IgnoredOverrideOfInlinedBase_EmitsNoMarker()
+    {
+        var ts = TranspileContext(
+            """
+            public abstract class Media
+            {
+                public virtual string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            public sealed class Photo : Media
+            {
+                [JsonIgnore]
+                public override string Name { get; init; } = "photo";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        await Assert.That(ts).DoesNotContain("ignoredProperties");
     }
 
     // The spec's `ts:` name and the factory read name the escaped property
@@ -969,6 +1115,13 @@ public class JsonSerializerContextTests
     }
 
     private static int CountOf(string text, string fragment) => text.Split(fragment).Length - 1;
+
+    /// <summary>The <c>json:</c> names of a spec body, in order.</summary>
+    private static List<string> JsonNamesOf(string specBody) =>
+        Regex
+            .Matches(specBody, "json: \"([^\"]*)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToList();
 
     /// <summary>The getter of <paramref name="getterName"/> up to the next
     /// getter.</summary>

@@ -22,7 +22,8 @@ export type {
 export { SerializerContext } from "./serializer-context.ts";
 export { JsonSerializer, BoundSerializer } from "./json-serializer.ts";
 export { PropertyNamingPolicy } from "./property-naming-policy.ts";
-export { collectProperties } from "./converters.ts";
+export { collectProperties, collectWireProperties } from "./converters.ts";
+export { JsonException } from "./errors.ts";
 export {
   UnionGuardRegistry,
   registerUnionGuard,

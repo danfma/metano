@@ -14,6 +14,8 @@ import type {
   JsonConverter,
 } from "./types.ts";
 import { HashSet } from "../collections/hash-set.ts";
+import { readContainer, writeContainer } from "./container-depth.ts";
+import { JsonException } from "./errors.ts";
 
 // ─── Converter Resolution ────────────────────────────────────────────────────
 
@@ -118,29 +120,42 @@ function mapConverter(descriptor: MapDescriptor, customConverters?: readonly Jso
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
-      const map = value as Map<unknown, unknown>;
-      const result: Record<string, unknown> = {};
-      for (const [k, v] of map) {
-        const serializedKey = String(keyConv.serialize(k));
-        result[serializedKey] = valueConv.serialize(v);
-      }
-      return result;
+
+      return writeContainer(() => {
+        const map = value as Map<unknown, unknown>;
+        const result: Record<string, unknown> = {};
+
+        for (const [k, v] of map) {
+          const serializedKey = String(keyConv.serialize(k));
+          result[serializedKey] = valueConv.serialize(v);
+        }
+
+        return result;
+      });
     },
     deserialize: (value: unknown) => {
       if (value == null) return null;
-      const obj = value as Record<string, unknown>;
-      const map = new Map<unknown, unknown>();
-      for (const [k, v] of Object.entries(obj)) {
-        map.set(keyConv.deserialize(k), valueConv.deserialize(v));
-      }
-      return map;
+
+      return readContainer("object", () => {
+        const obj = value as Record<string, unknown>;
+        const map = new Map<unknown, unknown>();
+
+        for (const [k, v] of Object.entries(obj)) {
+          map.set(keyConv.deserialize(k), valueConv.deserialize(v));
+        }
+
+        return map;
+      });
     },
   };
 }
 
 // ─── Array ───────────────────────────────────────────────────────────────────
 
-type ElementConverter = { serialize: (value: unknown) => unknown };
+type ElementConverter = {
+  serialize: (value: unknown) => unknown;
+  deserialize: (value: unknown) => unknown;
+};
 
 /**
  * Writes any iterable (an array, a `Set`, a generator, a LINQ pipe for
@@ -149,7 +164,23 @@ type ElementConverter = { serialize: (value: unknown) => unknown };
 function serializeIterable(value: unknown, elemConv: ElementConverter): unknown[] | null {
   if (value == null) return null;
 
-  return Array.from(value as Iterable<unknown>, (item) => elemConv.serialize(item));
+  return writeContainer(() =>
+    Array.from(value as Iterable<unknown>, (item) => elemConv.serialize(item)),
+  );
+}
+
+/**
+ * Reads a JSON array element by element. Any other JSON value throws
+ * `JsonException` (#425); `null` reads as `null`.
+ */
+function deserializeArray(value: unknown, elemConv: ElementConverter): unknown[] | null {
+  if (value == null) return null;
+
+  if (!Array.isArray(value)) {
+    throw new JsonException(`Expected array for deserialization, got ${jsonKindOf(value)}`);
+  }
+
+  return readContainer("array", () => value.map((item) => elemConv.deserialize(item)));
 }
 
 function arrayConverter(descriptor: ArrayDescriptor, customConverters?: readonly JsonConverter[]) {
@@ -157,10 +188,7 @@ function arrayConverter(descriptor: ArrayDescriptor, customConverters?: readonly
 
   return {
     serialize: (value: unknown) => serializeIterable(value, elemConv),
-    deserialize: (value: unknown) => {
-      if (value == null) return null;
-      return (value as unknown[]).map((item) => elemConv.deserialize(item));
-    },
+    deserialize: (value: unknown) => deserializeArray(value, elemConv),
   };
 }
 
@@ -175,11 +203,9 @@ function hashSetConverter(
   return {
     serialize: (value: unknown) => serializeIterable(value, elemConv),
     deserialize: (value: unknown) => {
-      if (value == null) return null;
+      const items = deserializeArray(value, elemConv);
 
-      const items = (value as unknown[]).map((item) => elemConv.deserialize(item));
-
-      return new HashSet(items);
+      return items === null ? null : new HashSet(items);
     },
   };
 }
@@ -202,7 +228,7 @@ function enumConverter(descriptor: EnumDescriptor) {
     serialize: (value: unknown) => value, // already a string
     deserialize: (value: unknown) => {
       if (typeof value !== "string" || !validValues.has(value)) {
-        throw new Error(
+        throw new JsonException(
           `Invalid enum value: ${JSON.stringify(value)}. ` +
             `Expected one of: ${[...validValues].join(", ")}`,
         );
@@ -223,7 +249,7 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
     serialize: (value: unknown) => value, // already a number
     deserialize: (value: unknown) => {
       if (typeof value !== "number" || !validValues.has(value)) {
-        throw new Error(
+        throw new JsonException(
           `Invalid numeric enum value: ${JSON.stringify(value)}. ` +
             `Expected one of: ${[...validValues].join(", ")}`,
         );
@@ -274,6 +300,61 @@ export function collectProperties(spec: TypeSpec): readonly PropertySpec[] {
 }
 
 /**
+ * The properties a spec writes and reads, in System.Text.Json's wire order
+ * (FR-009): the spec's own properties, then its base's, recursively. A JSON
+ * name appears once, from its most-derived declaration, and a base
+ * declaration whose `ts` name a more-derived spec lists in
+ * `ignoredProperties` (a `[JsonIgnore]` override) is left out.
+ */
+export function collectWireProperties(spec: TypeSpec): readonly PropertySpec[] {
+  const wire: PropertySpec[] = [];
+  const writtenNames = new Set<string>();
+  const ignoredNames = new Set<string>();
+
+  for (const contract of specChainOf(spec)) {
+    const visible = contract.properties.filter(
+      (property) => !ignoredNames.has(property.ts) && !writtenNames.has(property.json),
+    );
+
+    for (const property of visible) {
+      writtenNames.add(property.json);
+      wire.push(property);
+    }
+
+    for (const name of contract.ignoredProperties ?? []) {
+      ignoredNames.add(name);
+    }
+  }
+
+  return wire;
+}
+
+/** The spec and its bases, most-derived first. */
+function* specChainOf(spec: TypeSpec): Generator<TypeSpec> {
+  yield spec;
+
+  if (spec.base) {
+    yield* specChainOf(spec.base);
+  }
+}
+
+/** The JSON kind of a parsed value, for error messages. */
+function jsonKindOf(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+
+  return typeof value;
+}
+
+/**
+ * The C# type name a contract reports in errors: its constructor's name. A
+ * `[PlainObject]` contract has no constructor and reports `Object`.
+ */
+function contractNameOf(spec: TypeSpec): string {
+  return spec.type?.name ?? "Object";
+}
+
+/**
  * Serialize a TS object to a JSON-safe plain object using the given spec.
  */
 export function serializeWithSpec(
@@ -281,21 +362,24 @@ export function serializeWithSpec(
   spec: TypeSpec,
   customConverters?: readonly JsonConverter[],
 ): Record<string, unknown> {
-  const obj = value as Record<string, unknown>;
-  const props = collectProperties(spec);
-  const result: Record<string, unknown> = {};
+  return writeContainer(() => {
+    const obj = value as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
 
-  for (const prop of props) {
-    const tsValue = obj[prop.ts];
-    if (tsValue == null && prop.optional) {
-      result[prop.json] = null;
-      continue;
+    for (const prop of collectWireProperties(spec)) {
+      const tsValue = obj[prop.ts];
+
+      if (tsValue == null && prop.optional) {
+        result[prop.json] = null;
+        continue;
+      }
+
+      const conv = resolveConverter(prop.type, customConverters);
+      result[prop.json] = conv.serialize(tsValue);
     }
-    const conv = resolveConverter(prop.type, customConverters);
-    result[prop.json] = conv.serialize(tsValue);
-  }
 
-  return result;
+    return result;
+  });
 }
 
 /**
@@ -306,30 +390,32 @@ export function deserializeWithSpec<T>(
   spec: TypeSpec<T>,
   customConverters?: readonly JsonConverter[],
 ): T {
-  if (data == null || typeof data !== "object") {
-    throw new Error(
-      `Expected object for deserialization, got ${data === null ? "null" : typeof data}`,
-    );
+  if (data === null || typeof data !== "object" || Array.isArray(data)) {
+    throw new JsonException(`The JSON value could not be converted to ${contractNameOf(spec)}.`);
   }
 
-  const raw = data as Record<string, unknown>;
-  const props = collectProperties(spec);
-  const deserialized: Record<string, unknown> = {};
+  return readContainer("object", () => {
+    const raw = data as Record<string, unknown>;
+    const deserialized: Record<string, unknown> = {};
 
-  for (const prop of props) {
-    const jsonValue = raw[prop.json];
-    if (jsonValue === undefined || jsonValue === null) {
-      if (prop.optional) {
-        deserialized[prop.ts] = null;
-        continue;
+    for (const prop of collectWireProperties(spec)) {
+      const jsonValue = raw[prop.json];
+
+      if (jsonValue === undefined || jsonValue === null) {
+        if (prop.optional) {
+          deserialized[prop.ts] = null;
+          continue;
+        }
+
+        if (jsonValue === undefined) {
+          throw new JsonException(`Missing required property: "${prop.json}"`);
+        }
       }
-      if (jsonValue === undefined) {
-        throw new Error(`Missing required property: "${prop.json}"`);
-      }
+
+      const conv = resolveConverter(prop.type, customConverters);
+      deserialized[prop.ts] = conv.deserialize(jsonValue);
     }
-    const conv = resolveConverter(prop.type, customConverters);
-    deserialized[prop.ts] = conv.deserialize(jsonValue);
-  }
 
-  return spec.factory(deserialized);
+    return spec.factory(deserialized);
+  });
 }

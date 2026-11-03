@@ -138,7 +138,9 @@ internal sealed class JsonSpecBuilder(
 
     /// <summary>
     /// Builds the TypeSpec object literal for a given type:
-    /// { type: T, factory: (p) => new T(...), properties: [...] }
+    /// <c>{ type: T, factory: (p) => new T(...), properties: [...] }</c>.
+    /// The factory reads the properties in declaration order; the
+    /// <c>properties</c> list follows the wire order (FR-009).
     /// </summary>
     private TsObjectLiteral BuildTypeSpecObject(INamedTypeSymbol targetType, string tsTypeName)
     {
@@ -161,7 +163,9 @@ internal sealed class JsonSpecBuilder(
 
         var propertiesProperty = new TsObjectProperty(
             "properties",
-            new TsArrayLiteral(properties.Select(BuildPropertySpec).ToList())
+            new TsArrayLiteral(
+                _properties.WirePropertiesOf(targetType).Select(BuildPropertySpec).ToList()
+            )
         );
 
         var specProperties = new[]
@@ -170,6 +174,7 @@ internal sealed class JsonSpecBuilder(
             BaseLinkProperty(targetType),
             factoryProperty,
             propertiesProperty,
+            IgnoredPropertiesProperty(targetType),
         };
 
         return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());
@@ -192,6 +197,26 @@ internal sealed class JsonSpecBuilder(
                 new TsPropertyAccess(new TsIdentifier("this"), _names.GetterOf(baseType))
             )
             : null;
+
+    /// <summary>
+    /// <c>ignoredProperties: ["name"]</c> when the type hides base
+    /// declarations of a linked spec with a <c>[JsonIgnore]</c> override
+    /// (DECIDED-19 e); absent otherwise.
+    /// </summary>
+    private TsObjectProperty? IgnoredPropertiesProperty(INamedTypeSymbol targetType)
+    {
+        var ignored = _properties.IgnoredBasePropertiesOf(targetType);
+
+        if (ignored.Count == 0)
+            return null;
+
+        return new TsObjectProperty(
+            "ignoredProperties",
+            new TsArrayLiteral(
+                ignored.Select(name => new TsStringLiteral(name)).ToList<TsExpression>()
+            )
+        );
+    }
 
     /// <summary>
     /// The single statement of the spec's <c>factory</c> arrow:
