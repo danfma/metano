@@ -70,12 +70,36 @@ export class Comparisons {
     return false;
   }
 
+  static valueMismatched(a: [number, number], b: [number, number]): boolean {
+    return false;
+  }
+
   static nullableMismatchedObject(a: [number, number] | null, b: Object): boolean {
-    return a == null ? b == null : false;
+    return tupleEquals(a, b);
+  }
+
+  static boxedObject(a: [[number, number], number], b: Object): boolean {
+    return tupleEquals(a, b, [[], null]);
+  }
+
+  static guardedObject(a: [[number, number], number] | null, b: Object): boolean | null {
+    return a == null ? null : tupleEquals(a, b, [[], null]);
+  }
+
+  static valueTypeArgument(a: [[number, number], number], b: ValueType): boolean {
+    return tupleEquals(a, b, [[], null]);
+  }
+
+  static interfaceArgument(a: [[number, number], number], b: IEquatable<[[number, number], number]>): boolean {
+    return tupleEquals(a, b, [[], null]);
+  }
+
+  static typeParameterArgument<T>(a: [[number, number], number], b: T): boolean {
+    return tupleEquals(a, b, [[], null]);
   }
 
   static throughObject(a: [[number, number], number], b: Object): boolean {
-    return tupleEquals(a, b);
+    return tupleEquals(a, b, [[], null]);
   }
 
   static boxed(a: Object, b: Object): boolean {

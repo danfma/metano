@@ -30,8 +30,7 @@ internal static class TupleEqualitySymbols
 
     /// <summary>Whether <paramref name="type"/> is a nullable tuple.</summary>
     internal static bool IsNullableTuple(ITypeSymbol? type) =>
-        type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
-        && UnderlyingTupleOf(type) is not null;
+        type is not null && IsNullableValue(type) && UnderlyingTupleOf(type) is not null;
 
     /// <summary>
     /// Whether a value of <paramref name="type"/> can be <c>null</c>: a
@@ -56,23 +55,21 @@ internal static class TupleEqualitySymbols
         [NotNullWhen(true)] out INamedTypeSymbol? tuple
     )
     {
+        tuple = null;
+
         if (
             first is not { IsTupleType: true }
             || second is not { IsTupleType: true }
             || first.TupleElements.Length != second.TupleElements.Length
         )
         {
-            tuple = null;
             return false;
         }
 
         for (var i = 0; i < first.TupleElements.Length; i++)
         {
             if (!IsSameElement(first.TupleElements[i].Type, second.TupleElements[i].Type))
-            {
-                tuple = null;
                 return false;
-            }
         }
 
         tuple = first;
