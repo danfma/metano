@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// The identifier walk of the primary-constructor capture scan: resolves
+/// The identifier scan of the primary-constructor capture detection: resolves
 /// every identifier of a type's members (nested types excluded) and collects
 /// the primary-constructor parameters the member bodies read — the ones
 /// Roslyn captures into hidden backing fields.
@@ -17,7 +17,7 @@ namespace Metano.Compiler.Extraction;
 /// field.
 /// </para>
 /// </summary>
-internal static class PrimaryCtorCaptureWalker
+internal static class PrimaryCtorCaptureScanner
 {
     public static HashSet<IParameterSymbol> CapturedParameters(
         INamedTypeSymbol type,
@@ -28,9 +28,9 @@ internal static class PrimaryCtorCaptureWalker
     )
     {
         var captured = new HashSet<IParameterSymbol>(SymbolEqualityComparer.Default);
-        var primaryCtorSyntaxNodes = CollectPrimaryCtorSyntaxNodes(type);
+        var primaryCtorScopes = CollectPrimaryCtorScopes(type);
 
-        // Walk only the members of THIS type (skip nested types); C# 12
+        // Scan only the members of THIS type (skip nested types); C# 12
         // primary-ctor parameters are not in scope for a nested type,
         // so an identifier inside a nested type that happens to share a
         // parameter name must not be misclassified as a capture.
@@ -42,21 +42,19 @@ internal static class PrimaryCtorCaptureWalker
                 var identifier in memberSyntax.DescendantNodes().OfType<IdentifierNameSyntax>()
             )
             {
-                if (IsInsidePrimaryCtor(identifier, primaryCtorSyntaxNodes))
-                    continue;
-
-                if (initializersRunInConstructor && IsInsideMemberInitializer(identifier))
-                    continue;
-
-                var resolved = model.GetSymbolInfo(identifier).Symbol;
-
                 if (
-                    resolved is IParameterSymbol paramSymbol
-                    && primaryParams.ContainsKey(paramSymbol)
-                    && !explicitlyCapturedParams.Contains(paramSymbol)
+                    CapturedParamOf(
+                        identifier,
+                        model,
+                        primaryCtorScopes,
+                        primaryParams,
+                        explicitlyCapturedParams,
+                        initializersRunInConstructor
+                    ) is
+                    { } param
                 )
                 {
-                    captured.Add(paramSymbol);
+                    captured.Add(param);
                 }
             }
         }
@@ -65,8 +63,40 @@ internal static class PrimaryCtorCaptureWalker
     }
 
     /// <summary>
+    /// The primary-constructor parameter <paramref name="identifier"/> reads
+    /// implicitly: it resolves to one of <paramref name="primaryParams"/>,
+    /// sits outside the primary constructor's own scopes and outside a member
+    /// initializer that runs in the constructor body, and no explicit field
+    /// initializer already captures it. <c>null</c> for any other identifier.
+    /// </summary>
+    private static IParameterSymbol? CapturedParamOf(
+        SyntaxNode identifier,
+        SemanticModel model,
+        IReadOnlyList<SyntaxNode> primaryCtorScopes,
+        IReadOnlyDictionary<ISymbol, IParameterSymbol> primaryParams,
+        IReadOnlySet<IParameterSymbol> explicitlyCapturedParams,
+        bool initializersRunInConstructor
+    )
+    {
+        if (IsInsidePrimaryCtor(identifier, primaryCtorScopes))
+            return null;
+
+        if (initializersRunInConstructor && IsInsideMemberInitializer(identifier))
+            return null;
+
+        if (model.GetSymbolInfo(identifier).Symbol is not IParameterSymbol paramSymbol)
+            return null;
+
+        return
+            primaryParams.ContainsKey(paramSymbol)
+            && !explicitlyCapturedParams.Contains(paramSymbol)
+            ? paramSymbol
+            : null;
+    }
+
+    /// <summary>
     /// Returns the syntax nodes of every direct member of the type
-    /// (fields, properties, methods, events, accessors) so the walk can
+    /// (fields, properties, methods, events, accessors) so the scan can
     /// iterate identifier references without descending into nested types —
     /// primary-ctor parameters are not in scope for a nested type's body.
     /// </summary>
@@ -76,6 +106,7 @@ internal static class PrimaryCtorCaptureWalker
         {
             if (member is INamedTypeSymbol)
                 continue;
+
             foreach (var declaringRef in member.DeclaringSyntaxReferences)
                 yield return declaringRef.GetSyntax();
         }
@@ -88,31 +119,21 @@ internal static class PrimaryCtorCaptureWalker
     /// locals. Identifier references inside these nodes do not need
     /// rewriting.
     /// </summary>
-    private static IReadOnlyList<SyntaxNode> CollectPrimaryCtorSyntaxNodes(INamedTypeSymbol type)
+    private static IReadOnlyList<SyntaxNode> CollectPrimaryCtorScopes(INamedTypeSymbol type)
     {
         var nodes = new List<SyntaxNode>();
+
         foreach (var declaringRef in type.DeclaringSyntaxReferences)
         {
-            var syntax = declaringRef.GetSyntax();
-            switch (syntax)
-            {
-                case ClassDeclarationSyntax cls:
-                    if (cls.ParameterList is not null)
-                        nodes.Add(cls.ParameterList);
-                    AddPrimaryBaseArguments(cls.BaseList, nodes);
-                    break;
-                case StructDeclarationSyntax st:
-                    if (st.ParameterList is not null)
-                        nodes.Add(st.ParameterList);
-                    AddPrimaryBaseArguments(st.BaseList, nodes);
-                    break;
-                case RecordDeclarationSyntax rec:
-                    if (rec.ParameterList is not null)
-                        nodes.Add(rec.ParameterList);
-                    AddPrimaryBaseArguments(rec.BaseList, nodes);
-                    break;
-            }
+            if (declaringRef.GetSyntax() is not TypeDeclarationSyntax declaration)
+                continue;
+
+            if (declaration.ParameterList is not null)
+                nodes.Add(declaration.ParameterList);
+
+            AddPrimaryBaseArguments(declaration.BaseList, nodes);
         }
+
         return nodes;
     }
 
@@ -121,6 +142,7 @@ internal static class PrimaryCtorCaptureWalker
         var primaryBase = baseList
             ?.Types.OfType<PrimaryConstructorBaseTypeSyntax>()
             .FirstOrDefault();
+
         if (primaryBase?.ArgumentList is not null)
             nodes.Add(primaryBase.ArgumentList);
     }
@@ -141,6 +163,7 @@ internal static class PrimaryCtorCaptureWalker
             if (scope.SyntaxTree == identifier.SyntaxTree && scope.Span.Contains(identifier.Span))
                 return true;
         }
+
         return false;
     }
 

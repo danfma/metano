@@ -369,6 +369,124 @@ public class NoContainerModuleStateTests
     }
 
     [Test]
+    public async Task DeconstructionWrite_FromAnotherFile_ReportsUnsupported()
+    {
+        // Every element of a deconstruction target is written, so the
+        // imported read-only binding cannot back the module variable's slot.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Counters
+            {
+                public static int Hits;
+            }
+
+            [Transpile]
+            public class Clicker
+            {
+                public void Reset()
+                {
+                    int local = 0;
+                    (Counters.Hits, local) = (1, 2);
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("'hits'")
+                    && d.Message.Contains("outside the file")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task RefLocalInitializer_FromAnotherFile_ReportsUnsupported()
+    {
+        // A `ref` local aliases the storage: assigning through it writes the
+        // imported binding, which cannot be.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Counters
+            {
+                public static int Hits;
+            }
+
+            [Transpile]
+            public class Clicker
+            {
+                public void Alias()
+                {
+                    ref int r = ref Counters.Hits;
+                    r = 5;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("'hits'")
+                    && d.Message.Contains("outside the file")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task NonWrites_FromAnotherFile_DoNotReportUnsupported()
+    {
+        // A `ref readonly` alias, a module variable on the right-hand side of
+        // a deconstruction, and a plain read never write the binding, so none
+        // of them reports an imported write.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Counters
+            {
+                public static int Hits;
+            }
+
+            [Transpile]
+            public class Reader
+            {
+                public int Plain() => Counters.Hits + 1;
+
+                public int ReadOnlyAlias()
+                {
+                    ref readonly int r = ref Counters.Hits;
+                    return r;
+                }
+
+                public void FromRightHandSide()
+                {
+                    int a = 0;
+                    int b = 0;
+                    (a, b) = (Counters.Hits, 2);
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("'hits'")
+                    && d.Message.Contains("outside the file")
+                )
+            )
+            .IsFalse();
+    }
+
+    [Test]
     public async Task ParameterShadowingModuleVariable_InDeclaringFile_ReportsUnsupported()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(

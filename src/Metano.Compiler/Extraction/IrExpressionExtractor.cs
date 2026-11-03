@@ -1361,13 +1361,13 @@ public sealed partial class IrExpressionExtractor
 
         // Captured primary-constructor parameter referenced from a
         // member body: the bare reference becomes `this._field`, the
-        // auto-synthesized storage. Paired with the promoted-parameter
+        // auto-synthesized storage. Paired with the aliased-parameter
         // read right after it.
         if (TryReadCapturedParameter(symbol, id) is { } capturedRead)
             return capturedRead;
 
-        if (TryReadPromotedParameter(symbol, id) is { } promotedRead)
-            return promotedRead;
+        if (TryReadAliasedParameter(symbol, id) is { } aliasedRead)
+            return aliasedRead;
 
         // `[Inline]` member referenced without an explicit qualifier
         // (same-type static access, extension receiver, etc.). Expand
@@ -1497,18 +1497,19 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// A member-body read of a primary-constructor parameter folded into the
-    /// property that only exposes it (<c>A { get; } = a</c>): the property
-    /// the backends emit as a parameter property is the parameter's only
-    /// storage, so the read becomes <c>this.A</c>. <c>null</c> for any other
-    /// identifier, and inside an initializer, which keeps the bare parameter
-    /// as captured parameters do: it is in scope when the initializer is
-    /// deferred into the constructor body
+    /// An aliased-parameter read: a member body reads a primary-constructor
+    /// parameter folded into the property that only exposes it
+    /// (<c>A { get; } = a</c>), and the property the backends emit as a
+    /// parameter property is the parameter's only storage, so the read
+    /// becomes <c>this.A</c>. <c>null</c> for any other identifier, and
+    /// inside an initializer, which keeps the bare parameter as captured
+    /// parameters do: it is in scope when the initializer is deferred into
+    /// the constructor body
     /// (<see cref="PrimaryCtorExtractionScope.InitializersRunInConstructor"/>),
     /// and a field initializer cannot read the parameter property either,
     /// since it runs before the constructor assigns it.
     /// </summary>
-    private IrMemberAccess? TryReadPromotedParameter(ISymbol? symbol, SyntaxNode id)
+    private IrMemberAccess? TryReadAliasedParameter(ISymbol? symbol, SyntaxNode id)
     {
         if (symbol is not IParameterSymbol parameter || PrimaryCtorScope is not { } scope)
             return null;

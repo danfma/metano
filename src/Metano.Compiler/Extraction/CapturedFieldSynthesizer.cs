@@ -14,6 +14,7 @@ internal static class CapturedFieldSynthesizer
 {
     /// <param name="CapturedParams">The captured parameters, keyed to their synthesized field's name — the map the identifier rewrite and the constructor annotation consume.</param>
     /// <param name="Fields">The synthesized fields, in capture order, to append to the class's members.</param>
+    /// <param name="isWritten">Decides whether something in the type writes the parameter (<see cref="PrimaryConstructorPromotion.IsWritten"/>): a written parameter's field is mutable.</param>
     public static (
         IReadOnlyDictionary<ISymbol, string> CapturedParams,
         IReadOnlyList<IrFieldDeclaration> Fields
@@ -21,7 +22,7 @@ internal static class CapturedFieldSynthesizer
         IEnumerable<IParameterSymbol> capturedParams,
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver,
-        PrimaryConstructorPromotion promotion
+        Func<IParameterSymbol, bool> isWritten
     )
     {
         // TypeScript shares one namespace across fields, properties and
@@ -40,13 +41,14 @@ internal static class CapturedFieldSynthesizer
 
             takenNames.Add(fieldName);
             capturedParamsByField[param] = fieldName;
+
             fields.Add(
                 new IrFieldDeclaration(
                     Name: fieldName,
                     Visibility: IrVisibility.Private,
                     IsStatic: false,
                     Type: IrTypeRefMapper.Map(param.Type, originResolver),
-                    IsReadonly: !promotion.IsWritten(param),
+                    IsReadonly: !isWritten(param),
                     Initializer: null,
                     IsCapturedByCtor: true
                 )
@@ -84,7 +86,9 @@ internal static class CapturedFieldSynthesizer
     {
         if (string.IsNullOrEmpty(paramName))
             return "_value";
+
         var first = char.ToLowerInvariant(paramName[0]);
+
         return paramName.Length == 1 ? "_" + first : "_" + first + paramName[1..];
     }
 }
