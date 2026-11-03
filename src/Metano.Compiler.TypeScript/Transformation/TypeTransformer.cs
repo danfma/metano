@@ -11,6 +11,7 @@ using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 using Metano.Compiler.TypeScript.Caching;
+using Metano.Compiler.TypeScript.Transformation.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -338,6 +339,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             transpilableTypesDict,
             ReportDiagnostic
         ).Validate();
+
+        new JsonBrandedFactoryValidator(transpilableTypes, ReportDiagnostic).Validate();
 
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();

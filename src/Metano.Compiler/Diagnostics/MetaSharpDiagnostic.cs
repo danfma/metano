@@ -315,6 +315,18 @@ public static class DiagnosticCodes
     /// <c>[Ignore]</c>.</summary>
     public const string ExplicitImplementationConflict = "MS0031";
 
+    /// <summary>MS0034 — a <c>[JsonFactory]</c> the generated context cannot call: on an
+    /// instance method, an operator, a method of a type that is not
+    /// <c>[Branded]</c> / <c>[InlineWrapper]</c>, a method that does not take exactly one
+    /// parameter of the wrapper's underlying type or does not return the containing type,
+    /// a generic or overloaded method, a method not emitted for TypeScript
+    /// (<c>[Ignore]</c>, <c>[Emit]</c>, <c>[Import]</c>, <c>[Inline]</c>), a method whose
+    /// TypeScript name equals a member the companion synthesizes (<c>create</c>,
+    /// <c>toString</c>), or a second factory on the same type. An error at the method; the
+    /// descriptor keeps the non-validating <c>create</c> (spec 009 FR-022, FR-023,
+    /// #269).</summary>
+    public const string InvalidJsonFactory = "MS0034";
+
     /// <summary>MS0035 — a <c>[JsonSerializable]</c> root the generated TypeScript
     /// context cannot describe: an open generic or type parameter, an error type,
     /// <c>object</c> / <c>dynamic</c>, a non-collection interface, an object-kind type

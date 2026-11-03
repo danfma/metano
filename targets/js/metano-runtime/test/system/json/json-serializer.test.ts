@@ -4,6 +4,7 @@ import {
   SerializerContext,
   collectProperties,
   type TypeSpec,
+  type ValueSpec,
   type JsonConverter,
 } from "#/system/json/index.ts";
 import { HashSet } from "#/system/collections/hash-set.ts";
@@ -334,6 +335,68 @@ describe("JsonSerializer — branded", () => {
     const user = JsonSerializer.deserialize({ user_id: "abc123", name: "Alice" }, spec);
     expect(user.id).toBe("abc123");
     expect(user.name).toBe("Alice");
+  });
+});
+
+// ─── Branded with a validating factory (#269) ────────────────────────────────
+
+describe("JsonSerializer — branded with a validating factory", () => {
+  type Title = string & { readonly __brand: "Title" };
+
+  const Title = {
+    create: (value: string): Title => value as Title,
+    from: (value: string): Title => {
+      if (value.trim().length === 0) {
+        throw new Error("blank title");
+      }
+
+      return Title.create(value.trim());
+    },
+  };
+
+  class Video {
+    constructor(
+      readonly title: Title,
+      readonly aliases: Title[],
+    ) {}
+  }
+
+  const titleDescriptor = { kind: "branded", create: Title.from } as const;
+
+  const spec: TypeSpec<Video> = {
+    type: Video,
+    factory: (p) => new Video(p.title as Title, p.aliases as Title[]),
+    properties: [
+      { ts: "title", json: "title", type: titleDescriptor },
+      { ts: "aliases", json: "aliases", type: { kind: "array", element: titleDescriptor } },
+    ],
+  };
+
+  test("a valid value is normalized by the factory and round-trips", () => {
+    const video = JsonSerializer.deserialize({ title: "  ok ", aliases: [" a "] }, spec);
+
+    expect(video.title).toBe("ok");
+    expect(video.aliases).toEqual(["a"]);
+    expect(JsonSerializer.serialize(video, spec)).toEqual({ title: "ok", aliases: ["a"] });
+  });
+
+  test("an invalid value throws the factory's own error", () => {
+    expect(() => JsonSerializer.deserialize({ title: "   ", aliases: [] }, spec)).toThrow(
+      new Error("blank title"),
+    );
+  });
+
+  test("the factory's error propagates unchanged from a nested element", () => {
+    expect(() => JsonSerializer.deserialize({ title: "ok", aliases: ["fine", ""] }, spec)).toThrow(
+      new Error("blank title"),
+    );
+  });
+
+  test("a branded value root runs the factory", () => {
+    const rootSpec: ValueSpec<Title> = { descriptor: titleDescriptor };
+
+    expect(JsonSerializer.deserialize("  ok ", rootSpec)).toBe("ok");
+    expect(() => JsonSerializer.deserialize("", rootSpec)).toThrow("blank title");
   });
 });
 

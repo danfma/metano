@@ -324,3 +324,32 @@ describe("JsonContext — IReadOnlyList<Comment> value root", () => {
     expect(JsonSerializer.deserialize(null, ctx.iReadOnlyListComment)).toBeNull();
   });
 });
+
+describe("JsonContext — UserId deserializes through its [JsonFactory]", () => {
+  const ctx = JsonContext.default;
+
+  const commentJson = (authorId: string) => ({
+    authorId,
+    message: "Hello",
+    createdAt: "2026-04-11T10:45:00+00:00[UTC]",
+    isSystem: false,
+  });
+
+  test("a valid id is normalized by UserId.from", () => {
+    const comment = JsonSerializer.deserialize(commentJson("  dave "), ctx.comment);
+
+    expect(comment.authorId).toBe(UserId.create("dave"));
+  });
+
+  test("a blank id throws the validation error instead of being accepted", () => {
+    expect(() => JsonSerializer.deserialize(commentJson("   "), ctx.comment)).toThrow(
+      "A user id cannot be blank.",
+    );
+  });
+
+  test("a blank id inside a list value root throws as well", () => {
+    expect(() =>
+      JsonSerializer.deserialize([commentJson("erin"), commentJson("")], ctx.iReadOnlyListComment),
+    ).toThrow("A user id cannot be blank.");
+  });
+});

@@ -1217,6 +1217,18 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// True when <paramref name="symbol"/> carries <c>[JsonFactory]</c> from
+    /// <c>Metano.Annotations</c> (namespace-qualified, like <see cref="HasBranded"/>).
+    /// </summary>
+    public static bool HasJsonFactory(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is "JsonFactoryAttribute" or "JsonFactory"
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+            );
+
+    /// <summary>
     /// Legacy alias preserved so older call sites keep compiling
     /// after the <c>[InlineWrapper]</c> → <c>[Branded]</c> rename.
     /// Delegates to <see cref="HasBranded"/> so adding <c>[Branded]</c>
