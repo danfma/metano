@@ -55,6 +55,29 @@ public static class IrToTsNamingPolicy
     public static string ToParameterName(string irName) => TypeScriptNaming.ToCamelCase(irName);
 
     /// <summary>
+    /// The emitted name of a local binding — a local (a <c>const</c> included),
+    /// a foreach or catch variable, or a deconstruction element: camelCase with
+    /// reserved-word escaping, the same policy parameters use. Every declaration
+    /// site (the statement bridge) and every read (the expression bridge's
+    /// <c>IrIdentifier</c> arm) routes through here so the two name the same
+    /// symbol whatever the C# casing was (#390).
+    /// </summary>
+    public static string ToLocalName(string irName) => TypeScriptNaming.ToCamelCase(irName);
+
+    /// <summary>
+    /// The emitted name of a module variable — a static field or property of a
+    /// containerless static class declared as a top-level variable: the
+    /// <c>[Name]</c> override verbatim, otherwise a C# compile-time constant
+    /// (<c>const</c>) keeps its C# name — module scope makes it the module's
+    /// public shape, and C# spells constants in PascalCase — while anything else
+    /// is camelCased like any data member. The declaration (module bridge), the
+    /// read (member-access bridge) and the shadow validation all resolve through
+    /// here so they agree on one name (#390).
+    /// </summary>
+    public static string ToModuleVariableName(string irName, string? emittedName, bool isConst) =>
+        emittedName ?? (isConst ? irName : TypeScriptNaming.ToCamelCase(irName));
+
+    /// <summary>
     /// Resolves the emitted type name from the IR's <see cref="IrAttribute"/>
     /// entries (which already carry <c>[Name]</c> overrides). Mirrors the
     /// per-target resolution the frontend now ships via

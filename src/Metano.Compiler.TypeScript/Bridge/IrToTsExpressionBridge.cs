@@ -48,7 +48,7 @@ public static partial class IrToTsExpressionBridge
         return expression switch
         {
             IrLiteral lit => MapLiteral(lit),
-            IrIdentifier id => new TsIdentifier(TypeScriptNaming.ToCamelCase(id.Name)),
+            IrIdentifier id => new TsIdentifier(IrToTsNamingPolicy.ToLocalName(id.Name)),
             IrTypeReference tr => MapTypeReference(tr),
             IrThisExpression => new TsIdentifier("this"),
             IrBaseExpression => new TsIdentifier("super"),
@@ -474,6 +474,11 @@ public static partial class IrToTsExpressionBridge
         {
             { IsStringEnumMember: true } => ma.MemberName,
             { IsEnumMember: true } origin => origin.EmittedName ?? ma.MemberName,
+            // A module-scope compile-time constant keeps its C# name (see
+            // ToModuleVariableName); a const field of an emitted class stays a
+            // data member and falls through to the camelCase arm below.
+            { IsDeclaringTypeNoContainer: true, IsConst: true } origin =>
+                IrToTsNamingPolicy.ToModuleVariableName(ma.MemberName, origin.EmittedName, true),
             { IsTranspiledDataMember: true } origin => IrToTsNamingPolicy.ToDataMemberName(
                 ma.MemberName,
                 origin.EmittedName

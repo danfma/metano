@@ -32,7 +32,8 @@ public static class IrToTsStatementBridge
         // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var body = MapBody(fe.Body, context);
-        var header = $"for (const {fe.Variable} of {PrintExpression(collection)}) {{";
+        var variable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
+        var header = $"for (const {variable} of {PrintExpression(collection)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
         {
@@ -174,7 +175,14 @@ public static class IrToTsStatementBridge
         var body = MapBody(ts.Body, context);
 
         var catches = (ts.Catches ?? [])
-            .Select(c => (Variable: c.VariableName ?? "_err", Body: MapBody(c.Body, context)))
+            .Select(c =>
+                (
+                    Variable: c.VariableName is { } name
+                        ? IrToTsNamingPolicy.ToLocalName(name)
+                        : "_err",
+                    Body: MapBody(c.Body, context)
+                )
+            )
             .ToList();
 
         var finallyBody = ts.Finally is null ? null : MapBody(ts.Finally, context);
@@ -267,7 +275,7 @@ public static class IrToTsStatementBridge
             // definite-assignment analysis in charge instead of `undefined`.
             IrVariableDeclaration { Initializer: null, Type: { } type } vd =>
                 new TsVariableDeclaration(
-                    vd.Name,
+                    IrToTsNamingPolicy.ToLocalName(vd.Name),
                     Initializer: null,
                     Const: false,
                     Type: IrToTsTypeMapper.Map(type),
@@ -277,7 +285,7 @@ public static class IrToTsStatementBridge
             // local a switch section shares): a bare `let x;` takes the type of
             // its assignments.
             IrVariableDeclaration { Initializer: null, Type: null } vd => new TsVariableDeclaration(
-                vd.Name,
+                IrToTsNamingPolicy.ToLocalName(vd.Name),
                 Initializer: null,
                 Const: false
             ),
@@ -289,19 +297,22 @@ public static class IrToTsStatementBridge
                 Initializer: IrLiteral { Kind: IrLiteralKind.Null },
                 Type: IrNullableTypeRef declaredType,
             } vd => new TsVariableDeclaration(
-                vd.Name,
+                IrToTsNamingPolicy.ToLocalName(vd.Name),
                 new TsCastExpression(new TsLiteral("null"), IrToTsTypeMapper.Map(declaredType)),
                 Const: vd.IsConst
             ),
             IrVariableDeclaration vd => new TsVariableDeclaration(
-                vd.Name,
+                IrToTsNamingPolicy.ToLocalName(vd.Name),
                 vd.Initializer is not null
                     ? IrToTsExpressionBridge.Map(vd.Initializer, context)
                     : new TsIdentifier("undefined"),
                 Const: vd.IsConst
             ),
             IrTupleDeconstruction td => new TsDestructuringDeclaration(
-                td.Elements.Select(e => e.Name).ToList(),
+                td.Elements.Select(e =>
+                        e.Name is { } name ? IrToTsNamingPolicy.ToLocalName(name) : null
+                    )
+                    .ToList(),
                 td.Initializer is IrOutArgumentCall outCall
                     ? IrToTsExpressionBridge.MapOutArgumentCallValue(outCall, context)
                     : IrToTsExpressionBridge.Map(td.Initializer, context),
