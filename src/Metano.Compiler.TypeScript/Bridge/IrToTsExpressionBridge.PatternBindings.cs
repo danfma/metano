@@ -25,8 +25,7 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildBindingPatternTest(
         TsExpression value,
         IrPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     ) =>
         pattern switch
         {
@@ -36,31 +35,20 @@ public static partial class IrToTsExpressionBridge
                 AssignDesignator(designator, value)
             ),
             IrVarPattern varPattern => AssignDesignator(varPattern.Designator, value),
-            IrPropertyPattern property => BuildBindingPropertyPatternTest(
-                value,
-                property,
-                bclRegistry,
-                classFields
-            ),
+            IrPropertyPattern property => BuildBindingPropertyPatternTest(value, property, context),
             IrPositionalPattern positional => BuildBindingPositionalPatternTest(
                 value,
                 positional,
-                bclRegistry,
-                classFields
+                context
             ),
-            IrListPattern list => BuildBindingListPatternTest(
-                value,
-                list,
-                bclRegistry,
-                classFields
-            ),
+            IrListPattern list => BuildBindingListPatternTest(value, list, context),
             IrLogicalPattern { Operator: IrLogicalOp.Not } not => new TsUnaryExpression(
                 "!",
-                BuildBindingPatternTest(value, not.Left, bclRegistry, classFields)
+                BuildBindingPatternTest(value, not.Left, context)
             ),
             IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
-                BuildBindingConjunction(value, and.Left, right, bclRegistry, classFields),
-            _ => BuildPatternTest(value, pattern, bclRegistry, classFields),
+                BuildBindingConjunction(value, and.Left, right, context),
+            _ => BuildPatternTest(value, pattern, context),
         };
 
     /// <summary>
@@ -73,8 +61,7 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         IrPattern left,
         IrPattern right,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var rightValue = left is IrVarPattern capture
@@ -82,17 +69,16 @@ public static partial class IrToTsExpressionBridge
             : value;
 
         return new TsBinaryExpression(
-            BuildBindingPatternTest(value, left, bclRegistry, classFields),
+            BuildBindingPatternTest(value, left, context),
             "&&",
-            BuildBindingPatternTest(rightValue, right, bclRegistry, classFields)
+            BuildBindingPatternTest(rightValue, right, context)
         );
     }
 
     private static TsExpression BuildBindingPropertyPatternTest(
         TsExpression value,
         IrPropertyPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var typeTest = pattern.Type is null
@@ -103,8 +89,7 @@ public static partial class IrToTsExpressionBridge
             BuildBindingPatternTestOrNull(
                 PropertyPatternMemberAccess(value, sub),
                 sub.Pattern,
-                bclRegistry,
-                classFields
+                context
             )
         );
 
@@ -118,8 +103,7 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildBindingPositionalPatternTest(
         TsExpression value,
         IrPositionalPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var elementTests = pattern.Elements.Select(
@@ -127,8 +111,7 @@ public static partial class IrToTsExpressionBridge
                 BuildBindingPatternTestOrNull(
                     PositionalElementAccess(value, pattern, i),
                     element,
-                    bclRegistry,
-                    classFields
+                    context
                 )
         );
 
@@ -144,8 +127,7 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildBindingListPatternTest(
         TsExpression value,
         IrListPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var elementTests = pattern.Elements.Select(
@@ -153,8 +135,7 @@ public static partial class IrToTsExpressionBridge
                 BuildBindingPatternTestOrNull(
                     ListElementAccess(value, pattern, i),
                     element,
-                    bclRegistry,
-                    classFields
+                    context
                 )
         );
 
@@ -176,12 +157,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression? BuildBindingPatternTestOrNull(
         TsExpression value,
         IrPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    ) =>
-        pattern is IrDiscardPattern
-            ? null
-            : BuildBindingPatternTest(value, pattern, bclRegistry, classFields);
+        IrToTsBridgeContext context
+    ) => pattern is IrDiscardPattern ? null : BuildBindingPatternTest(value, pattern, context);
 
     private static IEnumerable<TsExpression> OwnDesignatorAssignment(
         IrPatternDesignator? designator,
@@ -220,31 +197,26 @@ public static partial class IrToTsExpressionBridge
     internal static TsExpression BuildCasePatternTest(
         TsExpression subject,
         IrPatternCaseLabel label,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var test = BuildPatternTestOrNull(subject, label.Pattern, bclRegistry, classFields);
+        var test = BuildPatternTestOrNull(subject, label.Pattern, context);
 
         if (label.WhenClause is not { } guard)
             return test ?? new TsLiteral("true");
 
-        return JoinWithGuard(
-            test,
-            BuildCaseGuard(subject, label.Pattern, guard, bclRegistry, classFields)
-        );
+        return JoinWithGuard(test, BuildCaseGuard(subject, label.Pattern, guard, context));
     }
 
     private static TsExpression BuildCaseGuard(
         TsExpression subject,
         IrPattern pattern,
         IrExpression guard,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var bindings = EnumeratePatternBindings(subject, pattern).ToList();
-        var lowered = Map(guard, bclRegistry, classFields);
+        var lowered = Map(guard, context);
 
         if (!IrReferencedNames.AnyIn(guard, bindings.Select(binding => binding.Name)))
             return lowered;

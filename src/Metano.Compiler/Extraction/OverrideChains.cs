@@ -149,7 +149,7 @@ internal static class OverrideChains
     /// <paramref name="type"/>, emits an auto-property with per-class storage
     /// (<see cref="EmitsPerClassStorage(IPropertySymbol, Metano.Annotations.TargetLanguage?)"/>).
     /// </summary>
-    public static bool AncestorOwnsPerClassStorage(
+    public static bool AncestorEmitsPerClassStorage(
         INamedTypeSymbol type,
         Compilation? compilation,
         Metano.Annotations.TargetLanguage? target
@@ -209,12 +209,8 @@ internal static class OverrideChains
     private static bool IsAutoProperty(IPropertySymbol property) =>
         property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             is PropertyDeclarationSyntax declaration
-            ? IsSourceAutoProperty(declaration)
+            ? PrimaryConstructorPropertyAlias.IsAutoProperty(declaration)
             : IsMetadataAutoProperty(property);
-
-    /// <summary>An auto-property declared in source, read off its declaration syntax.</summary>
-    private static bool IsSourceAutoProperty(PropertyDeclarationSyntax declaration) =>
-        PrimaryConstructorPropertyAlias.IsAutoProperty(declaration);
 
     /// <summary>
     /// An auto-property of a referenced assembly (no syntax): every accessor the

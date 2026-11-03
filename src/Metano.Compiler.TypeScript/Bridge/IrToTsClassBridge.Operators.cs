@@ -29,7 +29,12 @@ internal static partial class IrToTsClassBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var body = IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry);
+        // Operators are static: no class scope, so no backing fields exist.
+        var body = IrToTsBodyHelpers.LowerOrNotImplemented(
+            method.Body,
+            method.Name,
+            IrToTsBridgeContext.For(bclRegistry)
+        );
 
         var staticName = $"__{operatorName}";
         var isUnary = method.Parameters.Count == 1;
@@ -122,7 +127,7 @@ internal static partial class IrToTsClassBridge
             var body = IrToTsBodyHelpers.LowerOrNotImplemented(
                 overloads[i].Body,
                 overloads[i].Name,
-                bclRegistry
+                IrToTsBridgeContext.For(bclRegistry)
             );
             members.Add(
                 new TsMethodMember(

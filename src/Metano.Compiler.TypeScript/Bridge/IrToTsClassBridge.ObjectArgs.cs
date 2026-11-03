@@ -25,25 +25,17 @@ internal static partial class IrToTsClassBridge
         IrMethodDeclaration method,
         TsType returnType,
         IReadOnlyList<TsTypeParameter>? typeParameters,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields = null
+        IrToTsBridgeContext context
     )
     {
         var name = IrToTsNamingPolicy.ToMethodName(method);
         var (argsParam, destructureHeader) = IrToTsObjectArgsBridge.BuildArgsParam(
             method.Parameters,
-            bclRegistry
+            context.Bcl
         );
 
         var body = new List<TsStatement> { destructureHeader };
-        body.AddRange(
-            IrToTsBodyHelpers.LowerOrNotImplemented(
-                method.Body,
-                method.Name,
-                bclRegistry,
-                classFields
-            )
-        );
+        body.AddRange(IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context));
 
         return new TsMethodMember(
             name,
@@ -71,7 +63,7 @@ internal static partial class IrToTsClassBridge
         IrConstructorDeclaration? ctor,
         string typeName,
         IReadOnlyList<TsTypeParameter>? typeParameters,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         if (ctor is null)
@@ -80,7 +72,7 @@ internal static partial class IrToTsClassBridge
         var parameters = ctor.Parameters.Select(p => p.Parameter).ToList();
         var (argsParam, destructureHeader) = IrToTsObjectArgsBridge.BuildArgsParam(
             parameters,
-            bclRegistry
+            context.Bcl
         );
 
         var ctorArgs = parameters

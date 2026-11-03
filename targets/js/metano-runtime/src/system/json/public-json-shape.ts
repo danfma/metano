@@ -4,6 +4,9 @@
  * hash is six base-36 characters. `$` never appears in a C# identifier, so no
  * property of the source type can be mistaken for one (a `[Name]` override that carries both a
  * `$` and a six-character `_` suffix would be; do not name members that way).
+ *
+ * Kept in sync with the compiler side by the .NET golden test
+ * `PerClassBackingFieldTests.BackingFieldName_MatchesTheRuntimePublicJsonShapePattern`.
  */
 const BACKING_FIELD_NAME = /^([^$]+)\$[^$]+_[0-9a-z]{6}$/;
 

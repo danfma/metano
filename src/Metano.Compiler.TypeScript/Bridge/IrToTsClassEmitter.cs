@@ -66,14 +66,17 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         );
 
         var backingFields = PerClassBackingFields.For(type);
-        var classFields = backingFields.ScopeFor(ir);
+        var lowering = new IrToTsBridgeContext(
+            _context.DeclarativeMappings,
+            backingFields.ScopeFor(ir)
+        );
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
 
         var ctorParams = IrToTsClassBridge.BuildPrimaryCtorParams(
             ir.Constructor,
             ip => IrToTsTypeMapper.MapParameterType(ip.Parameter, BclOverrides),
-            _context.DeclarativeMappings
+            lowering
         );
 
         var explicitCtors = IrConstructorExtractor.PublicExplicitConstructors(type);
@@ -84,7 +87,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             explicitCtors,
             extendsType,
             keepsBaseMessage,
-            classFields
+            lowering
         );
 
         var classMembers = new List<TsClassMember>();
@@ -93,9 +96,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
 
         EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
-        EmitClassMembers(ir, classMembers, keepsBaseMessage, classFields);
-        EmitDeferredOperatorsAndMethods(type, ir, classMembers, classFields);
-        EmitSynthesizedMembers(type, ir, explicitCtors, classMembers);
+        EmitClassMembers(ir, classMembers, keepsBaseMessage, lowering);
+        EmitDeferredOperatorsAndMethods(type, ir, classMembers, lowering);
+        EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
 
         statements.Add(
             new TsClass(
@@ -126,7 +129,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         List<IMethodSymbol> explicitCtors,
         TsType? extendsType,
         bool keepsBaseMessage,
-        PerClassBackingFieldScope classFields
+        IrToTsBridgeContext lowering
     )
     {
         if (explicitCtors.Count > 1)
@@ -136,11 +139,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             // build-time diagnostic and emit an empty constructor stub —
             // crashing here would abort the whole transpile for an otherwise
             // valid type, and silently dropping the type would hide the gap.
-            return TryBuildConstructorDispatcherFromIr(
-                    ir.Constructor,
-                    keepsBaseMessage,
-                    classFields
-                )
+            return TryBuildConstructorDispatcherFromIr(ir.Constructor, keepsBaseMessage, lowering)
                 ?? EmitUnsupportedConstructor(
                     type,
                     $"Constructor overload group on '{type.Name}' contains constructs the IR "
@@ -151,9 +150,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         return IrToTsClassBridge.BuildSimpleConstructor(
             ir.Constructor,
             ctorParams,
-            ResolveBaseCall(extendsType, ir, keepsBaseMessage),
-            _context.DeclarativeMappings,
-            classFields
+            ResolveBaseCall(extendsType, ir, keepsBaseMessage, lowering),
+            lowering
         );
     }
 
@@ -170,7 +168,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         IrClassDeclaration ir,
         List<TsClassMember> classMembers,
         bool keepsBaseMessage,
-        PerClassBackingFieldScope classFields
+        IrToTsBridgeContext lowering
     )
     {
         var promotedNames = IrToTsClassBridge.PromotedMemberNames(ir.Constructor);
@@ -183,7 +181,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     var fieldMember = IrToTsClassBridge.BuildField(
                         irField,
                         IrToTsTypeMapper.Map(irField.Type, BclOverrides),
-                        _context.DeclarativeMappings
+                        lowering
                     );
                     if (fieldMember is not null)
                         classMembers.Add(fieldMember);
@@ -196,8 +194,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     var propertyMembers = IrToTsClassBridge.BuildProperty(
                         irProp,
                         IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
-                        _context.DeclarativeMappings,
-                        classFields
+                        lowering
                     );
 
                     classMembers.AddRange(
@@ -234,7 +231,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         INamedTypeSymbol type,
         IrClassDeclaration ir,
         List<TsClassMember> classMembers,
-        PerClassBackingFieldScope classFields
+        IrToTsBridgeContext lowering
     )
     {
         var deferredOperators = new List<IrMethodDeclaration>();
@@ -258,7 +255,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
 
         foreach (var m in deferredMethods)
         {
-            var members = EmitMethod(type, ir, m, classFields);
+            var members = EmitMethod(type, ir, m, lowering);
             if (members is not null)
                 classMembers.AddRange(members);
         }
@@ -278,10 +275,11 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         INamedTypeSymbol type,
         IrClassDeclaration ir,
         List<IMethodSymbol> explicitCtors,
-        List<TsClassMember> classMembers
+        List<TsClassMember> classMembers,
+        IrToTsBridgeContext lowering
     )
     {
-        var objectArgsFactory = TryBuildObjectArgsCreateFactory(type, ir, explicitCtors);
+        var objectArgsFactory = TryBuildObjectArgsCreateFactory(type, ir, explicitCtors, lowering);
 
         if (objectArgsFactory is not null)
             classMembers.Add(objectArgsFactory);
@@ -311,7 +309,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     private TsMethodMember? TryBuildObjectArgsCreateFactory(
         INamedTypeSymbol type,
         IrClassDeclaration ir,
-        IReadOnlyList<IMethodSymbol> explicitCtors
+        IReadOnlyList<IMethodSymbol> explicitCtors,
+        IrToTsBridgeContext lowering
     )
     {
         var ctorsWithObjectArgs = explicitCtors.Where(SymbolHelper.HasObjectArgs).ToList();
@@ -333,7 +332,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             ir.Constructor,
             _context.ResolveTsName(type),
             IrToTsClassBridge.BuildTypeParameters(ir),
-            _context.DeclarativeMappings
+            lowering
         );
     }
 
@@ -388,7 +387,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         INamedTypeSymbol type,
         IrClassDeclaration ir,
         IrMethodDeclaration irMethod,
-        PerClassBackingFieldScope classFields
+        IrToTsBridgeContext lowering
     )
     {
         if (irMethod.Body is { } body)
@@ -411,7 +410,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 return null;
             }
 
-            var dispatcher = TryBuildOverloadDispatcherFromIr(irMethod, type.Name, classFields);
+            var dispatcher = TryBuildOverloadDispatcherFromIr(irMethod, type.Name, lowering);
             if (dispatcher is null)
             {
                 _context.ReportUnsupportedBody(
@@ -424,7 +423,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             return dispatcher;
         }
 
-        var (parameters, returnType, typeParameters) = LowerMethodSignature(irMethod, ir);
+        var (parameters, returnType, typeParameters) = LowerMethodSignature(irMethod, ir, lowering);
 
         if (
             !irMethod.Semantics.IsAbstract
@@ -437,8 +436,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     irMethod,
                     returnType,
                     typeParameters,
-                    _context.DeclarativeMappings,
-                    classFields
+                    lowering
                 ),
             ];
         }
@@ -450,8 +448,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 parameters,
                 returnType,
                 typeParameters,
-                _context.DeclarativeMappings,
-                classFields
+                lowering
             ),
         ];
     }
@@ -551,7 +548,11 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         IReadOnlyList<TsParameter> Parameters,
         TsType ReturnType,
         IReadOnlyList<TsTypeParameter> TypeParameters
-    ) LowerMethodSignature(IrMethodDeclaration irMethod, IrClassDeclaration owner)
+    ) LowerMethodSignature(
+        IrMethodDeclaration irMethod,
+        IrClassDeclaration owner,
+        IrToTsBridgeContext lowering
+    )
     {
         // TypeScript forbids parameter initializers in declaration-
         // only positions (abstract / overload / interface signatures).
@@ -563,7 +564,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p, BclOverrides),
                 Optional: p.IsOptional || (!emitDefaults && p.HasDefaultValue),
-                DefaultValue: emitDefaults ? LowerDefaultValue(p) : null,
+                DefaultValue: emitDefaults ? LowerDefaultValue(p, lowering) : null,
                 Rest: p.IsParams
             ))
             .ToList();
@@ -694,7 +695,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
         IrConstructorDeclaration? primary,
         bool keepsBaseMessage,
-        PerClassBackingFieldScope classFields
+        IrToTsBridgeContext lowering
     )
     {
         if (!_context.UseIrBodiesWhenCovered)
@@ -708,12 +709,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 return null;
         }
 
-        return IrToTsConstructorDispatcherBridge.Build(
-            primary,
-            _context.DeclarativeMappings,
-            keepsBaseMessage,
-            classFields
-        );
+        return IrToTsConstructorDispatcherBridge.Build(primary, keepsBaseMessage, lowering);
     }
 
     /// <summary>
@@ -725,7 +721,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     private IReadOnlyList<TsClassMember>? TryBuildOverloadDispatcherFromIr(
         IrMethodDeclaration primary,
         string typeName,
-        PerClassBackingFieldScope classFields
+        IrToTsBridgeContext lowering
     )
     {
         if (!_context.UseIrBodiesWhenCovered)
@@ -739,12 +735,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 return null;
         }
 
-        return IrToTsOverloadDispatcherBridge.BuildMethod(
-            primary,
-            typeName,
-            _context.DeclarativeMappings,
-            classFields
-        );
+        return IrToTsOverloadDispatcherBridge.BuildMethod(primary, typeName, lowering);
     }
 
     /// <summary>
@@ -782,9 +773,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     /// expression bridge so BCL-mapped initializers (decimal
     /// literals, enum members, etc.) get their target form.
     /// </summary>
-    private TsExpression? LowerDefaultValue(IrParameter parameter) =>
+    private TsExpression? LowerDefaultValue(IrParameter parameter, IrToTsBridgeContext lowering) =>
         parameter.HasDefaultValue && parameter.DefaultValue is not null
-            ? IrToTsExpressionBridge.Map(parameter.DefaultValue, _context.DeclarativeMappings)
+            ? IrToTsExpressionBridge.Map(parameter.DefaultValue, lowering)
             : null;
 
     /// <summary>
@@ -800,14 +791,15 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
     private TsBaseConstructorCall? ResolveBaseCall(
         TsType? extendsType,
         IrClassDeclaration ir,
-        bool keepsBaseMessage
+        bool keepsBaseMessage,
+        IrToTsBridgeContext lowering
     )
     {
         if (extendsType is null)
             return null;
 
         var baseCall = ir.Constructor is { } ctor
-            ? IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, _context.DeclarativeMappings)
+            ? IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, lowering)
             : null;
 
         return baseCall ?? new TsBaseConstructorCall([], [], keepsBaseMessage);

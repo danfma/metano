@@ -46,25 +46,9 @@ internal sealed class PerClassBackingFields
 
     private PerClassBackingFields(string suffix) => _suffix = suffix;
 
-    /// <summary>The backing fields of <paramref name="type"/>'s own auto-properties.</summary>
-    public static PerClassBackingFields For(INamedTypeSymbol type) =>
-        new($"{type.Name}_{StableHash(Identity(type))}");
-
-    /// <summary>
-    /// The property is emitted as a backing field plus accessors: it owns per-class
-    /// storage the target emits, decided by the one core predicate
-    /// (<see cref="IrPropertySemantics.EmitsPerClassStorage"/>).
-    /// </summary>
-    public static bool DeclaresBackingField(IrPropertyDeclaration property) =>
-        property is { Semantics.EmitsPerClassStorage: true };
-
     /// <summary>The field behind <paramref name="property"/>.</summary>
     public string FieldOf(IrPropertyDeclaration property) =>
         $"{IrToTsNamingPolicy.ToDeclaredDataMemberName(property.Name, property.Attributes)}${_suffix}";
-
-    /// <summary><c>this.&lt;field&gt;</c>.</summary>
-    public static TsPropertyAccess StorageAccess(string field) =>
-        new(new TsIdentifier("this"), field);
 
     /// <summary>
     /// The writes <see cref="PerClassBackingFieldScope.TryBackingFieldWrite"/> recognizes
@@ -74,7 +58,6 @@ internal sealed class PerClassBackingFields
     /// </summary>
     public PerClassBackingFieldScope ScopeFor(IrClassDeclaration ir) =>
         new(
-            this,
             (ir.Members ?? [])
                 .OfType<IrPropertyDeclaration>()
                 .Where(DeclaresBackingField)
@@ -87,6 +70,22 @@ internal sealed class PerClassBackingFields
                     StringComparer.Ordinal
                 )
         );
+
+    /// <summary>The backing fields of <paramref name="type"/>'s own auto-properties.</summary>
+    public static PerClassBackingFields For(INamedTypeSymbol type) =>
+        new($"{type.Name}_{StableHash(Identity(type))}");
+
+    /// <summary>
+    /// The property is emitted as a backing field plus accessors: it owns per-class
+    /// storage the target emits, decided by the one core predicate
+    /// (<see cref="IrPropertySemantics.EmitsPerClassStorage"/>).
+    /// </summary>
+    public static bool DeclaresBackingField(IrPropertyDeclaration property) =>
+        property is { Semantics.EmitsPerClassStorage: true };
+
+    /// <summary><c>this.&lt;field&gt;</c>.</summary>
+    public static TsPropertyAccess StorageAccess(string field) =>
+        new(new TsIdentifier("this"), field);
 
     /// <summary>
     /// <c>toJSON(): unknown { return publicJsonShape(this); }</c> for a class that
@@ -173,25 +172,29 @@ internal sealed record BackedProperty(string Field, bool GetOnly);
 /// <summary>
 /// The per-class backing fields of the one class whose members are being mapped. The
 /// class emitter creates it (<see cref="PerClassBackingFields.ScopeFor"/>) and threads
-/// it through <see cref="IrToTsExpressionBridge.Map"/>, so expression lowering reads
-/// no ambient state: outside the scope, no write is recognized.
+/// it through the expression bridge inside <see cref="IrToTsBridgeContext"/>, so
+/// expression lowering reads no ambient state: outside the class's scope — the
+/// <see cref="None"/> null object — no write is recognized and no field resolves.
 /// </summary>
-public sealed class PerClassBackingFieldScope
+internal sealed class PerClassBackingFieldScope
 {
-    private readonly PerClassBackingFields _owner;
+    /// <summary>The scope outside any class emission: no backing fields at all.</summary>
+    internal static readonly PerClassBackingFieldScope None = new(
+        new Dictionary<string, BackedProperty>()
+    );
+
     private readonly IReadOnlyDictionary<string, BackedProperty> _properties;
 
-    internal PerClassBackingFieldScope(
-        PerClassBackingFields owner,
-        IReadOnlyDictionary<string, BackedProperty> properties
-    )
-    {
-        _owner = owner;
+    internal PerClassBackingFieldScope(IReadOnlyDictionary<string, BackedProperty> properties) =>
         _properties = properties;
-    }
 
-    /// <summary>The backing field behind <paramref name="property"/>.</summary>
-    public string FieldOf(IrPropertyDeclaration property) => _owner.FieldOf(property);
+    /// <summary>
+    /// The backing field behind <paramref name="property"/>, or <c>null</c> when this
+    /// scope holds no field for it (always, under <see cref="None"/>). The one way to
+    /// resolve a field name.
+    /// </summary>
+    public string? FieldOf(IrPropertyDeclaration property) =>
+        _properties.TryGetValue(property.Name, out var backed) ? backed.Field : null;
 
     /// <summary>
     /// The backing field an assignment to <c>this.P</c> stores to inside the class being

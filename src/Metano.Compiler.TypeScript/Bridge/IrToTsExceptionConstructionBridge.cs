@@ -193,19 +193,13 @@ public static class IrToTsExceptionConstructionBridge
     /// extractor has already let-bound any side-effecting arguments the
     /// role-ordered lowering would reorder or drop.
     /// </summary>
-    public static TsExpression MapNewError(
+    internal static TsExpression MapNewError(
         IrNewExpression creation,
         IrExceptionConstruction construction,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var operands = ErrorOperands.Bind(
-            construction,
-            creation.Arguments,
-            bclRegistry,
-            classFields
-        );
+        var operands = ErrorOperands.Bind(construction, creation.Arguments, context);
 
         return new TsNewExpression(
             new TsIdentifier("Error"),
@@ -218,18 +212,13 @@ public static class IrToTsExceptionConstructionBridge
     /// exception: role-mapped <c>Error</c> arguments, preceded by source-order
     /// temporaries when <see cref="IrExceptionConstruction.RequiresArgumentTemporaries"/>.
     /// </summary>
-    public static TsBaseConstructorCall MapBaseExceptionCall(
+    internal static TsBaseConstructorCall MapBaseExceptionCall(
         IrConstructorDeclaration ctor,
         IrExceptionConstruction construction,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
-        var operands = ErrorOperands.Bind(
-            construction,
-            ctor.BaseArguments ?? [],
-            bclRegistry,
-            classFields: null
-        );
+        var operands = ErrorOperands.Bind(construction, ctor.BaseArguments ?? [], context);
 
         return new TsBaseConstructorCall(
             operands.Temporaries,
@@ -361,14 +350,11 @@ public static class IrToTsExceptionConstructionBridge
         public static ErrorOperands Bind(
             IrExceptionConstruction construction,
             IReadOnlyList<IrArgument> arguments,
-            DeclarativeMappingRegistry? bclRegistry,
-            PerClassBackingFieldScope? classFields
+            IrToTsBridgeContext context
         )
         {
             var lowered = arguments
-                .Select(argument =>
-                    IrToTsExpressionBridge.Map(argument.Value, bclRegistry, classFields)
-                )
+                .Select(argument => IrToTsExpressionBridge.Map(argument.Value, context))
                 .ToList();
 
             if (!construction.RequiresArgumentTemporaries)

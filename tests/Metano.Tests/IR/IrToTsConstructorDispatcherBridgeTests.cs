@@ -31,7 +31,13 @@ public class IrToTsConstructorDispatcherBridgeTests
             """
         );
 
-        var printed = PrintConstructor(IrToTsConstructorDispatcherBridge.Build(ctor)!);
+        var printed = PrintConstructor(
+            IrToTsConstructorDispatcherBridge.Build(
+                ctor,
+                keepsBaseMessage: false,
+                IrToTsBridgeContext.For(null)
+            )!
+        );
         // One overload signature per constructor, most-specific first (same arity
         // here, so order is preserved by the input). The TS printer tags every
         // ctor parameter with `public` — we assert on the parameter shape alone.
@@ -63,7 +69,13 @@ public class IrToTsConstructorDispatcherBridgeTests
             typeName: "Derived"
         );
 
-        var printed = PrintConstructor(IrToTsConstructorDispatcherBridge.Build(ctor)!);
+        var printed = PrintConstructor(
+            IrToTsConstructorDispatcherBridge.Build(
+                ctor,
+                keepsBaseMessage: false,
+                IrToTsBridgeContext.For(null)
+            )!
+        );
         // Each branch opens with the matching super(...) call derived from the
         // C# `: base(...)` initializer.
         await Assert.That(printed).Contains("super(x)");
@@ -83,7 +95,15 @@ public class IrToTsConstructorDispatcherBridgeTests
             }
             """
         );
-        await Assert.That(IrToTsConstructorDispatcherBridge.Build(ctor)).IsNull();
+        await Assert
+            .That(
+                IrToTsConstructorDispatcherBridge.Build(
+                    ctor,
+                    keepsBaseMessage: false,
+                    IrToTsBridgeContext.For(null)
+                )
+            )
+            .IsNull();
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

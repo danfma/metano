@@ -24,19 +24,18 @@ public static partial class IrToTsExpressionBridge
     /// The invocation whose value is the <c>[result, out1, …]</c> tuple — the
     /// initializer of the destructuring that binds it.
     /// </summary>
-    public static TsExpression MapOutArgumentCallValue(
+    internal static TsExpression MapOutArgumentCallValue(
         IrOutArgumentCall outCall,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        if (HasJsMapping(outCall, bclRegistry))
-            return Map(WithOutDefaults(outCall), bclRegistry, classFields);
+        if (HasJsMapping(outCall, context.Bcl))
+            return Map(WithOutDefaults(outCall), context);
 
         if (outCall.IsExternalCallee)
             ReportUnmappedExternalCallee(outCall.Call);
 
-        return Map(outCall.Call, bclRegistry, classFields);
+        return Map(outCall.Call, context);
     }
 
     /// <summary>
@@ -64,18 +63,15 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapOutArgumentCall(
         IrOutArgumentCall outCall,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var value = MapOutArgumentCallValue(outCall, bclRegistry, classFields);
+        var value = MapOutArgumentCallValue(outCall, context);
 
         if (outCall.OutArguments.All(o => o.Target is IrOutDiscard))
             return value;
 
-        var targets = outCall.OutArguments.Select(o =>
-            MapOutTarget(o.Target, bclRegistry, classFields)
-        );
+        var targets = outCall.OutArguments.Select(o => MapOutTarget(o.Target, context));
         var pattern = outCall.ResultType is null ? targets : targets.Prepend(new TsArrayHole());
         var assignment = new TsBinaryExpression(new TsArrayLiteral(pattern.ToList()), "=", value);
 
@@ -84,15 +80,11 @@ public static partial class IrToTsExpressionBridge
             : new TsElementAccess(new TsParenthesized(assignment), new TsLiteral("0"));
     }
 
-    private static TsExpression MapOutTarget(
-        IrOutTarget target,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    ) =>
+    private static TsExpression MapOutTarget(IrOutTarget target, IrToTsBridgeContext context) =>
         target switch
         {
             IrOutLocalDeclaration local => new TsIdentifier(local.Name),
-            IrOutAssignment assignment => Map(assignment.Destination, bclRegistry, classFields),
+            IrOutAssignment assignment => Map(assignment.Destination, context),
             _ => new TsArrayHole(),
         };
 
@@ -150,11 +142,6 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapOutResultAssertion(
         IrCastExpression cast,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    ) =>
-        new TsCastExpression(
-            Map(cast.Expression, bclRegistry, classFields),
-            IrToTsTypeMapper.Map(cast.TargetType)
-        );
+        IrToTsBridgeContext context
+    ) => new TsCastExpression(Map(cast.Expression, context), IrToTsTypeMapper.Map(cast.TargetType));
 }

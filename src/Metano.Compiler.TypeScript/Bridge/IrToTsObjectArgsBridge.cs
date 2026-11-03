@@ -73,5 +73,10 @@ internal static class IrToTsObjectArgsBridge
     private static string RenderDefaultValue(
         IrExpression defaultValue,
         DeclarativeMappingRegistry? bclRegistry
-    ) => Printer.RenderExpression(IrToTsExpressionBridge.Map(defaultValue, bclRegistry)).Trim();
+    ) =>
+        Printer
+            .RenderExpression(
+                IrToTsExpressionBridge.Map(defaultValue, IrToTsBridgeContext.For(bclRegistry))
+            )
+            .Trim();
 }

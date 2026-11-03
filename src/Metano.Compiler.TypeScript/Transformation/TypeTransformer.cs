@@ -1678,7 +1678,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             }
 
             var lowered = IrToTsStatementBridge
-                .MapBody(entryBody, Context.DeclarativeMappings)
+                .MapBody(entryBody, IrToTsBridgeContext.For(Context.DeclarativeMappings))
                 .ToList();
             TsTopLevel? trailingExport = null;
             var foundLocal = false;
@@ -1863,7 +1863,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .ToList();
 
         var irBody = stmtExtractor.ExtractStatements(globalStatements);
-        foreach (var ts in IrToTsStatementBridge.MapBody(irBody, Context.DeclarativeMappings))
+        foreach (
+            var ts in IrToTsStatementBridge.MapBody(
+                irBody,
+                IrToTsBridgeContext.For(Context.DeclarativeMappings)
+            )
+        )
             sink.Add(new TsTopLevelStatement(ts));
     }
 

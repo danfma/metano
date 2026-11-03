@@ -29,12 +29,11 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapSwitchExpression(
         IrSwitchExpression sw,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     ) =>
         CanLowerSwitchAsTernary(sw)
-            ? LowerSwitchAsTernary(sw, bclRegistry, classFields)
-            : LowerSwitchAsIife(sw, bclRegistry, classFields);
+            ? LowerSwitchAsTernary(sw, context)
+            : LowerSwitchAsIife(sw, context);
 
     private static bool CanLowerSwitchAsTernary(IrSwitchExpression sw) =>
         sw.Arms.Count > 0
@@ -44,12 +43,11 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression LowerSwitchAsTernary(
         IrSwitchExpression sw,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var scrutinee = Map(sw.Scrutinee, bclRegistry, classFields);
-        var fallback = Map(sw.Arms[^1].Result, bclRegistry, classFields);
+        var scrutinee = Map(sw.Scrutinee, context);
+        var fallback = Map(sw.Arms[^1].Result, context);
 
         return sw
             .Arms.Take(sw.Arms.Count - 1)
@@ -58,8 +56,8 @@ public static partial class IrToTsExpressionBridge
                 fallback,
                 (otherwise, arm) =>
                     new TsConditionalExpression(
-                        BuildArmCondition(scrutinee, arm, bclRegistry, classFields),
-                        Map(arm.Result, bclRegistry, classFields),
+                        BuildArmCondition(scrutinee, arm, context),
+                        Map(arm.Result, context),
                         otherwise
                     )
             );
@@ -72,16 +70,15 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildArmCondition(
         TsExpression scrutinee,
         IrSwitchArm arm,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var test = BuildPatternTestOrNull(scrutinee, arm.Pattern, bclRegistry, classFields);
+        var test = BuildPatternTestOrNull(scrutinee, arm.Pattern, context);
 
         if (arm.WhenClause is null)
             return test ?? new TsLiteral("true");
 
-        return JoinWithGuard(test, Map(arm.WhenClause, bclRegistry, classFields));
+        return JoinWithGuard(test, Map(arm.WhenClause, context));
     }
 
     private static bool CanLowerPatternAsBooleanTest(IrPattern pattern) =>
@@ -112,8 +109,7 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression LowerSwitchAsIife(
         IrSwitchExpression sw,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var scrutinee = new TsIdentifier(ScrutineeParameterName);
@@ -121,14 +117,14 @@ public static partial class IrToTsExpressionBridge
         var catchAll = sw.Arms.FirstOrDefault(IsCatchAllArm);
 
         var conditionalStatements = conditionalArms.Select(arm =>
-            LowerConditionalSwitchArm(arm, scrutinee, bclRegistry, classFields)
+            LowerConditionalSwitchArm(arm, scrutinee, context)
         );
 
         var tail = catchAll is null
             ? [BuildNonExhaustiveSwitchThrow()]
-            : LowerSwitchArmBody(catchAll, scrutinee, bclRegistry, classFields);
+            : LowerSwitchArmBody(catchAll, scrutinee, context);
 
-        return BuildSwitchIife(sw, [.. conditionalStatements, .. tail], bclRegistry, classFields);
+        return BuildSwitchIife(sw, [.. conditionalStatements, .. tail], context);
     }
 
     /// <summary>
@@ -139,16 +135,10 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildSwitchIife(
         IrSwitchExpression sw,
         IReadOnlyList<TsStatement> body,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     ) =>
         TsImmediateInvocation.Of(
-            [
-                new TsImmediateBinding(
-                    ScrutineeParameterName,
-                    Map(sw.Scrutinee, bclRegistry, classFields)
-                ),
-            ],
+            [new TsImmediateBinding(ScrutineeParameterName, Map(sw.Scrutinee, context))],
             body,
             isAsync: sw.Arms.Any(ArmAwaits)
         );
@@ -178,24 +168,23 @@ public static partial class IrToTsExpressionBridge
     private static TsStatement LowerConditionalSwitchArm(
         IrSwitchArm arm,
         TsExpression scrutinee,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         if (IsAlwaysMatchingPattern(arm.Pattern) && arm.WhenClause is { } guard)
-            return LowerGuardedCatchAllArm(arm, guard, scrutinee, bclRegistry, classFields);
+            return LowerGuardedCatchAllArm(arm, guard, scrutinee, context);
 
         if (HasDesignators(arm.Pattern) || arm.WhenClause is null)
         {
             return new TsIfStatement(
-                BuildPatternTest(scrutinee, arm.Pattern, bclRegistry, classFields),
-                LowerSwitchArmBody(arm, scrutinee, bclRegistry, classFields)
+                BuildPatternTest(scrutinee, arm.Pattern, context),
+                LowerSwitchArmBody(arm, scrutinee, context)
             );
         }
 
         return new TsIfStatement(
-            BuildArmCondition(scrutinee, arm, bclRegistry, classFields),
-            [LowerSwitchArmOutcome(arm.Result, bclRegistry, classFields)]
+            BuildArmCondition(scrutinee, arm, context),
+            [LowerSwitchArmOutcome(arm.Result, context)]
         );
     }
 
@@ -208,15 +197,14 @@ public static partial class IrToTsExpressionBridge
         IrSwitchArm arm,
         IrExpression guard,
         TsExpression scrutinee,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var bindings = BuildArmBindings(arm, scrutinee);
 
         var guarded = new TsIfStatement(
-            Map(guard, bclRegistry, classFields),
-            [LowerSwitchArmOutcome(arm.Result, bclRegistry, classFields)]
+            Map(guard, context),
+            [LowerSwitchArmOutcome(arm.Result, context)]
         );
 
         return bindings.Count == 0 ? guarded : new TsBlockStatement([.. bindings, guarded]);
@@ -230,15 +218,14 @@ public static partial class IrToTsExpressionBridge
     private static IReadOnlyList<TsStatement> LowerSwitchArmBody(
         IrSwitchArm arm,
         TsExpression scrutinee,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var outcome = LowerSwitchArmOutcome(arm.Result, bclRegistry, classFields);
+        var outcome = LowerSwitchArmOutcome(arm.Result, context);
 
         var guardedOutcome = arm.WhenClause is null
             ? outcome
-            : new TsIfStatement(Map(arm.WhenClause, bclRegistry, classFields), [outcome]);
+            : new TsIfStatement(Map(arm.WhenClause, context), [outcome]);
 
         return [.. BuildArmBindings(arm, scrutinee), guardedOutcome];
     }
@@ -268,10 +255,9 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsStatement LowerSwitchArmOutcome(
         IrExpression result,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     ) =>
         result is IrThrowExpression thrown
-            ? new TsThrowStatement(Map(thrown.Expression, bclRegistry, classFields))
-            : new TsReturnStatement(Map(result, bclRegistry, classFields));
+            ? new TsThrowStatement(Map(thrown.Expression, context))
+            : new TsReturnStatement(Map(result, context));
 }

@@ -37,11 +37,10 @@ public static class IrToTsOverloadDispatcherBridge
     /// <param name="bclRegistry">
     /// Optional BCL mapping registry threaded through to the body bridge.
     /// </param>
-    public static IReadOnlyList<TsClassMember> BuildMethod(
+    internal static IReadOnlyList<TsClassMember> BuildMethod(
         IrMethodDeclaration primary,
         string containingTypeName,
-        DeclarativeMappingRegistry? bclRegistry = null,
-        PerClassBackingFieldScope? classFields = null
+        IrToTsBridgeContext context
     )
     {
         var primaryName = TypeScriptNaming.ToCamelCaseMember(primary.Name);
@@ -59,8 +58,7 @@ public static class IrToTsOverloadDispatcherBridge
                 plan.Sorted[i],
                 plan.FastPathNames[i],
                 isStatic,
-                bclRegistry,
-                classFields
+                context
             );
 
             if (fastPath is not null)
@@ -247,8 +245,7 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         string fastPathName,
         bool isStatic,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         if (method.Body is null)
@@ -258,7 +255,7 @@ public static class IrToTsOverloadDispatcherBridge
             fastPathName,
             MapParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
-            IrToTsStatementBridge.MapBody(method.Body, bclRegistry, classFields),
+            IrToTsStatementBridge.MapBody(method.Body, context),
             Static: isStatic,
             Async: method.Semantics.IsAsync,
             // Fast paths are private — the dispatcher is the public entry point.
@@ -284,7 +281,11 @@ public static class IrToTsOverloadDispatcherBridge
             fastPathName,
             MapParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
-            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry),
+            IrToTsBodyHelpers.LowerOrNotImplemented(
+                method.Body,
+                method.Name,
+                IrToTsBridgeContext.For(bclRegistry)
+            ),
             // Namespace-local: the exported dispatcher is the public entry point.
             Exported: false,
             Async: method.Semantics.IsAsync,
