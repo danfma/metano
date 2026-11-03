@@ -1639,7 +1639,9 @@ public class DartBackendTests
 
         var output = files["comparisons.dart"];
 
-        await Assert.That(output).Contains("static bool? renamed(User? a, User b) => a?.equals(b);");
+        await Assert
+            .That(output)
+            .Contains("static bool? renamed(User? a, User b) => a?.equals(b);");
 
         await Assert
             .That(output)
