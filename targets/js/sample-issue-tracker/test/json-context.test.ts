@@ -270,3 +270,55 @@ describe("JsonContext — decimal-as-string custom converter", () => {
     expect(typeof defaultJson.estimatedHours).toBe("number");
   });
 });
+
+// ─── Value roots ─────────────────────────────────────────────────────────────
+
+describe("JsonContext — IReadOnlyList<Comment> value root", () => {
+  const ctx = JsonContext.default;
+
+  const comments = [
+    new Comment(
+      UserId.create("bob"),
+      "First comment",
+      Temporal.ZonedDateTime.from("2026-04-11T10:45:00+00:00[UTC]"),
+    ),
+    new Comment(
+      UserId.create("carol"),
+      "Second comment",
+      Temporal.ZonedDateTime.from("2026-04-11T11:15:00+00:00[UTC]"),
+    ),
+  ];
+
+  test("serializes the list element by element through the comment spec", () => {
+    const json = JsonSerializer.serialize(comments, ctx.iReadOnlyListComment);
+
+    expect(json).toEqual([
+      {
+        authorId: "bob",
+        message: "First comment",
+        createdAt: String(comments[0]?.createdAt),
+        isSystem: false,
+      },
+      {
+        authorId: "carol",
+        message: "Second comment",
+        createdAt: String(comments[1]?.createdAt),
+        isSystem: false,
+      },
+    ]);
+  });
+
+  test("round-trips through JSON text into Comment instances", () => {
+    const text = JSON.stringify(JsonSerializer.serialize(comments, ctx.iReadOnlyListComment));
+    const restored = JsonSerializer.deserialize(JSON.parse(text), ctx.iReadOnlyListComment);
+
+    expect(restored).toHaveLength(2);
+    expect(restored?.[0]).toBeInstanceOf(Comment);
+    expect(restored?.[1]?.message).toBe("Second comment");
+    expect(restored?.[1]?.createdAt.epochMilliseconds).toBe(comments[1]?.createdAt.epochMilliseconds);
+  });
+
+  test("reads JSON null as null", () => {
+    expect(JsonSerializer.deserialize(null, ctx.iReadOnlyListComment)).toBeNull();
+  });
+});

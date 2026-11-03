@@ -63,10 +63,14 @@ export type EnumDescriptor = {
   readonly values: Record<string, string>;
 };
 
-/** Numeric enum — passthrough both ways */
+/**
+ * Numeric enum — passthrough both ways. `values` is the TS enum object itself,
+ * whose reverse mapping (`Level[0] === "Low"`) adds string values; only the
+ * numbers are valid members.
+ */
 export type NumericEnumDescriptor = {
   readonly kind: "numericEnum";
-  readonly values: Record<string, number>;
+  readonly values: Record<string, string | number>;
 };
 
 /** Nullable wrapper — delegates to inner descriptor, passes null through */
@@ -121,6 +125,32 @@ export interface TypeSpec<T = unknown> {
   /** Own properties only (base properties come from base spec) */
   readonly properties: readonly PropertySpec[];
 }
+
+// ─── Value Spec ──────────────────────────────────────────────────────────────
+
+/**
+ * Spec of a non-object `[JsonSerializable]` root (a collection, dictionary,
+ * set, primitive, enum, branded or nullable type): the same descriptor that
+ * type gets as a property. `T` is the root's TS type and only types the
+ * `JsonSerializer` overloads; it has no runtime representation.
+ */
+export interface ValueSpec<T = unknown> {
+  /** How to convert the whole value between TS and JSON */
+  readonly descriptor: TypeDescriptor;
+  /**
+   * The C# root is a value type (`int`, `Guid`, an enum, a branded type, …).
+   * Absent for reference-type roots, whose getter is typed `ValueSpec<T | null>`.
+   */
+  readonly valueType?: boolean;
+  /**
+   * Phantom member that keeps `T` in the type; never set at runtime. Covariant
+   * like `TypeSpec<T>`, so any `ValueSpec<T>` is a `ValueSpec<unknown>`.
+   */
+  readonly __type?: () => T;
+}
+
+/** Any spec the generated context exposes: an object contract or a value root. */
+export type JsonTypeInfo<T = unknown> = TypeSpec<T> | ValueSpec<T>;
 
 // ─── Converter ───────────────────────────────────────────────────────────────
 

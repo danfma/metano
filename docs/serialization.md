@@ -116,7 +116,8 @@ When it sees a class that inherits from `JsonSerializerContext`:
    `KebabCaseUpper`, or `null`/default for PascalCase preservation).
 
 2. **Collects `[JsonSerializable(typeof(T))]` attributes** — each `T` becomes a
-   lazy getter on the context class.
+   lazy getter on the context class (see [Roots](#roots) for the accepted
+   types, the getter names and the diagnostics).
 
 3. **Adds every object type reachable from those roots**, as System.Text.Json
    does: types reached through property types, array / list / set elements,
@@ -124,7 +125,9 @@ When it sees a class that inherits from `JsonSerializerContext`:
    get their own getter, so every `ref` descriptor and `base` link resolves.
    Roots come first, in declaration order, followed by the discovered types in
    breadth-first order; each type is emitted once, and cycles (`A → B → A`)
-   terminate. Only non-generic classes and structs transpiled by the current
+   terminate. The element, dictionary value and nullable inner types of a
+   collection root are discovered the same way, so `typeof(ShotTiming[])`
+   also emits `shotTiming`. Only non-generic classes and structs transpiled by the current
    project (nested ones included) are discovered through properties —
    interfaces, generic types, and types from referenced packages are not.
    Base types
@@ -140,7 +143,68 @@ When it sees a class that inherits from `JsonSerializerContext`:
      branded, enum, ref, etc.)
 
 5. **Emits a `TypeSpec<T>`** as a lazy getter on the `SerializerContext`
-   subclass, with pre-computed `ts`/`json` names.
+   subclass, with pre-computed `ts`/`json` names, for every object type, and a
+   **`ValueSpec<T>`** for every other root.
+
+## Roots
+
+`[JsonSerializable]` accepts the same root types as System.Text.Json:
+
+| Root | Getter | Spec |
+|------|--------|------|
+| `typeof(EpisodeSummary)` (a transpiled class, record or struct) | `episodeSummary` | `TypeSpec<EpisodeSummary>` |
+| `typeof(IReadOnlyList<EpisodeSummary>)` | `iReadOnlyListEpisodeSummary` | `ValueSpec<EpisodeSummary[] \| null>` |
+| `typeof(EpisodeSummary[])` | `episodeSummaryArray` | `ValueSpec<EpisodeSummary[] \| null>` |
+| `typeof(IEnumerable<Leaf>)` | `iEnumerableLeaf` | `ValueSpec<Iterable<Leaf> \| null>` |
+| `typeof(Dictionary<string, EpisodeSummary>)` | `dictionaryStringEpisodeSummary` | `ValueSpec<Map<string, EpisodeSummary> \| null>` |
+| `typeof(HashSet<string>)` | `hashSetString` | `ValueSpec<HashSet<string> \| null>` |
+| `typeof(string)`, `typeof(int)`, `typeof(int?)` | `string`, `int32`, `nullableInt32` | `ValueSpec<string \| null>`, `ValueSpec<number>`, `ValueSpec<number \| null>` |
+| `typeof(Guid)`, a `[StringEnum]`, a `[Branded]` type | `guid`, the type's name | `ValueSpec<UUID>`, `ValueSpec<Mood>`, `ValueSpec<EpisodeId>` |
+| `typeof(List<string>), TypeInfoPropertyName = "Names"` | `names` | `ValueSpec<string[] \| null>` |
+
+A `ValueSpec` holds the same descriptor the type gets as a property, so it goes
+through the same converters (custom converters still match by `kind`):
+
+```typescript
+const json = JsonSerializer.serialize(shots, AppJsonContext.default.shotTimingArray);
+const restored = JsonSerializer.deserialize(data, AppJsonContext.default.shotTimingArray); // ShotTiming[] | null
+```
+
+A reference-type root (a collection, dictionary, set or `string`) is typed
+`T | null`, because JSON `null` reads back as `null`; a value-type root is not.
+`IEnumerable<T>` / `IReadOnlyCollection<T>` roots and properties serialize any
+iterable (a `Set`, a generator, a LINQ pipe) as a JSON array.
+
+**Names** follow System.Text.Json's `JsonTypeInfo` property names, camel-cased:
+a non-generic type uses its TypeScript name (so `[Name]` applies); a closed
+generic type is its name without arity followed by its type arguments' names
+(`ListListInt32`); an array is its element's name + `Array`; `Nullable<T>` is
+`Nullable` + `T`'s name; BCL types use their CLR names (`String`, `Int32`,
+`Guid`, `DateTimeOffset`). `TypeInfoPropertyName` replaces the name of its type
+everywhere in the context, including `ref` / `base` links and the names of
+generic types that use it as an argument. Type arguments use the same rule, so
+`[Name("User")] UserDto` makes `List<UserDto>` → `listUser` (System.Text.Json:
+`ListUserDto`).
+
+**Diagnostics:**
+
+- `MS0035` (error) rejects a root the context cannot describe: an open generic,
+  `object`, a non-collection interface, a type that is not a transpiled class
+  or struct (`KeyValuePair<,>`, tuples, `[Ignore]` / `[External]` types, types
+  of non-Metano assemblies), a closed generic object type (not supported yet),
+  an array of rank > 1, a dictionary with non-`string` keys (not supported
+  yet), or a collection whose element type has no spec in the context (a type
+  from a referenced package must be listed as its own root).
+- `MS0036` reports two types that map to one getter (a warning that drops an
+  unreferenced root, an error when the losing type is referenced by another
+  spec), a getter that would shadow a `SerializerContext` member (`options`,
+  `converters`, `createSpec`, `createValueSpec`, `readOptions`, `resolve`,
+  `default`, …), and a type listed twice with different `TypeInfoPropertyName`
+  values (a warning; the first one is kept). Use `TypeInfoPropertyName` to
+  resolve a collision.
+
+**Divergences:** `Stack<T>` is written and read in array order (System.Text.Json
+writes it top-first and reverses it on read); the `[Name]` naming above.
 
 ## Supported type descriptors
 
@@ -152,9 +216,9 @@ handles these kinds:
 | `primitive` | string, number, boolean | passthrough | passthrough |
 | `temporal` | `Temporal.PlainDate`, etc. | `.toString()` | `Type.from(iso)` |
 | `decimal` | `Decimal` | `.toNumber()` (or string via custom converter) | factory wraps `new Decimal(...)` |
-| `array` | `T[]` | `.map(serialize)` | `.map(deserialize)` |
+| `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
-| `hashSet` | `HashSet<T>` | `[...set]` | `new HashSet(arr)` |
+| `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
 | `branded` | `[Branded]` / `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)` |
 | `enum` | string enum | passthrough (already string) | validates against allowed values |
 | `numericEnum` | numeric enum | passthrough | validates against allowed values |
@@ -165,7 +229,8 @@ handles these kinds:
 
 | C# attribute | Handled by Metano? | Effect |
 |---|---|---|
-| `[JsonSerializable(typeof(T))]` | ✅ | Adds `T` and every object type reachable from it to the context's type list |
+| `[JsonSerializable(typeof(T))]` | ✅ | Adds `T` and every object type reachable from it to the context's type list; collection, dictionary, set, primitive, enum, branded and nullable roots get a `ValueSpec` |
+| `[JsonSerializable(..., TypeInfoPropertyName = "X")]` | ✅ | Names the getter `x` for that type everywhere in the context |
 | `[JsonSourceGenerationOptions]` with `PropertyNamingPolicy` | ✅ | Applies the naming policy to all properties |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
 | `[JsonIgnore]` | ✅ | Excludes the property from the spec |

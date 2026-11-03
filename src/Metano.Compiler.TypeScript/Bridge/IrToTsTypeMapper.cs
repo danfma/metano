@@ -274,7 +274,9 @@ public static class IrToTsTypeMapper
             ? nullable.Inner
             : parameter.Type;
 
-    private static TsType MakeNullable(TsType inner)
+    /// <summary><c>inner | null</c>, unless <paramref name="inner"/> already
+    /// admits <c>null</c>.</summary>
+    internal static TsType MakeNullable(TsType inner)
     {
         if (inner is TsUnionType union && union.Types.Any(t => t is TsNamedType { Name: "null" }))
             return inner;

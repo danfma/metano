@@ -17,10 +17,13 @@ namespace SampleIssueTracker;
 ///   <item>Temporal types (<see cref="System.DateTimeOffset"/>)</item>
 ///   <item>decimal (for the custom-converter round-trip test)</item>
 ///   <item>array of nested refs (<see cref="Comment"/>[])</item>
+///   <item>a collection root (<c>IReadOnlyList&lt;Comment&gt;</c>), emitted as a
+///   <c>ValueSpec</c> (#270)</item>
 /// </list>
 /// </para>
 /// </summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(IssueSnapshot))]
 [JsonSerializable(typeof(Comment))]
+[JsonSerializable(typeof(IReadOnlyList<Comment>))]
 public partial class JsonContext : JsonSerializerContext;

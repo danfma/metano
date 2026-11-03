@@ -1083,6 +1083,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             foreach (var req in IrRuntimeRequirementScanner.Scan(typeIr))
                 acc.Add(req);
 
+        if (IsJsonSerializerContextType(type))
+            acc.UnionWith(JsonSerializerContextTransformer.RuntimeRequirementsOf(type));
+
         foreach (var nested in type.GetTypeMembers())
             if (ShouldEmitInCompanionNamespace(nested))
                 ScanTypeAndEmittedNested(nested, acc, irCache);

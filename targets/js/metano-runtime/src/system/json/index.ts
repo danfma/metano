@@ -13,6 +13,8 @@ export type {
   NullableDescriptor,
   PropertySpec,
   TypeSpec,
+  ValueSpec,
+  JsonTypeInfo,
   JsonConverter,
   SerializerContextOptions,
 } from "./types.ts";
