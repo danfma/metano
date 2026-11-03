@@ -912,10 +912,16 @@ the former `OPEN-N`.
     that attribute. A repeated root without an override is emitted once, silently.
   - (c) `ImmutableDictionary<K,V>` / `IImmutableDictionary<K,V>` are dictionary-like (a `map`
     descriptor and a TS `Map<K,V>`), matched by name up to a generic boundary (`<` or `` ` ``).
+    `SortedDictionary`, `ReadOnlyDictionary` and `FrozenDictionary` are not dictionary-like yet;
+    as roots they are `MS0035` (not a transpiled class or struct).
   - (d) `Stack<T>` round-trips in reverse order, as a documented divergence, with no code change.
-  - (e) The reserved member list of FR-036 also contains `default` and `_default`, the static
-    singleton members every generated context declares. Getters use the member camelCase (no
-    reserved-word escape), so a type named `Default` maps to `default` and is reported.
+  - (e) Getters use the member camelCase, with no reserved-word escape: they sit in property
+    position, where a JS reserved word is a valid name. A type named `Delete` maps to `delete`
+    (it was `delete_` before #270, a getter rename listed in `docs/serialization.md`). The static
+    `default` / `_default` members of the generated context are **not** reserved: an instance
+    `get default()` / `_default` field does not clash with them (checked with `tsgo --strict` and
+    Bun), so a type named `Default` maps to `default` and compiles. `constructor` and the
+    `SerializerContext` instance members of FR-036 stay reserved.
   - Until S4 fixes dictionary key conversion, a value root whose descriptor contains a `map` with a
     non-`string` key is `MS0035`. Until S1 admits closed generic object types and referenced
     package types into the closure (FR-033, FR-047), an object root that is a closed generic is

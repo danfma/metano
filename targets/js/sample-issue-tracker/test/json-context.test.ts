@@ -315,7 +315,9 @@ describe("JsonContext — IReadOnlyList<Comment> value root", () => {
     expect(restored).toHaveLength(2);
     expect(restored?.[0]).toBeInstanceOf(Comment);
     expect(restored?.[1]?.message).toBe("Second comment");
-    expect(restored?.[1]?.createdAt.epochMilliseconds).toBe(comments[1]?.createdAt.epochMilliseconds);
+    expect(restored?.[1]?.createdAt.epochMilliseconds).toBe(
+      comments[1]?.createdAt.epochMilliseconds,
+    );
   });
 
   test("reads JSON null as null", () => {

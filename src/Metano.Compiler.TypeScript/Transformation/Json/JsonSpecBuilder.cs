@@ -10,10 +10,9 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// <summary>
 /// Builds the members of the generated context for its claimed entries: one
 /// lazy field + getter pair per entry, over a <c>TypeSpec</c> for an object
-/// contract or a <c>ValueSpec</c> for a value root, with the runtime
-/// <c>TypeDescriptor</c> of every property and value root. Every
-/// <c>ref</c> descriptor and <c>base</c> link names its target through
-/// <see cref="JsonTypeInfoNames"/>.
+/// contract or a <c>ValueSpec</c> for a value root. Descriptors come from
+/// <see cref="JsonTypeDescriptorBuilder"/>; every <c>base</c> link names its
+/// target through <see cref="JsonTypeInfoNames"/>.
 /// </summary>
 internal sealed class JsonSpecBuilder(
     TypeScriptTransformContext context,
@@ -26,12 +25,7 @@ internal sealed class JsonSpecBuilder(
     private readonly TypeScriptTransformContext _context = context;
     private readonly JsonTypeInfoNames _names = names;
     private readonly JsonPropertyCollector _properties = properties;
-
-    private TsType MapType(ITypeSymbol symbol) =>
-        IrToTsTypeMapper.Map(
-            IrTypeRefMapper.Map(symbol, _context.OriginResolver, TargetLanguage.TypeScript),
-            _context.BclOverrides
-        );
+    private readonly JsonTypeDescriptorBuilder _descriptors = new(context, names);
 
     /// <summary>
     /// The lazy field + getter pair of one context entry:
@@ -92,7 +86,7 @@ internal sealed class JsonSpecBuilder(
             new TsNamedType("ValueSpec", [ValueSpecTypeArgument(entry.Type)], RuntimeJsonOrigin),
             "createValueSpec",
             new TsObjectLiteral([
-                new TsObjectProperty("descriptor", BuildTypeDescriptor(entry.Type, entry.Kind)),
+                new TsObjectProperty("descriptor", _descriptors.Build(entry.Type, entry.Kind)),
             ])
         );
     }
@@ -105,7 +99,7 @@ internal sealed class JsonSpecBuilder(
     /// </summary>
     private TsType ValueSpecTypeArgument(ITypeSymbol root)
     {
-        var mapped = MapType(root);
+        var mapped = JsonTsTypes.Map(_context, root);
 
         return root.IsReferenceType ? IrToTsTypeMapper.MakeNullable(mapped) : mapped;
     }
@@ -117,7 +111,9 @@ internal sealed class JsonSpecBuilder(
     /// types reference it.
     /// </summary>
     private string SpecTypeReferenceName(INamedTypeSymbol type) =>
-        MapType(type) is TsNamedType namedTs ? namedTs.Name : _context.ResolveTsName(type);
+        JsonTsTypes.Map(_context, type) is TsNamedType namedTs
+            ? namedTs.Name
+            : _context.ResolveTsName(type);
 
     /// <summary>
     /// Builds the TypeSpec object literal for a given type:
@@ -126,61 +122,55 @@ internal sealed class JsonSpecBuilder(
     private TsObjectLiteral BuildTypeSpecObject(INamedTypeSymbol targetType, string tsTypeName)
     {
         var properties = _properties.PropertiesOf(targetType);
-        var propSpecs = new List<TsExpression>();
-
-        foreach (var (prop, jsonName, tsName) in properties)
-        {
-            var descriptor = JsonTypeClassifier.Classify(prop.Type);
-            propSpecs.Add(BuildPropertySpec(tsName, jsonName, descriptor, prop));
-        }
-
         var isPlainObject = SymbolHelper.HasPlainObject(targetType);
 
-        // type: TodoItem — only for class-backed types. [PlainObject] types
-        // lower to TS interfaces with no runtime constructor, so there's no
-        // value to reference. Their specs are accessed via the context getter
-        // (e.g., ctx.storedTodo), not via resolve(Class).
-        TsObjectProperty? typeProperty = isPlainObject
-            ? null
-            : new TsObjectProperty("type", new TsIdentifier(tsTypeName));
-
-        // base: this.baseSpec (if type has a transpilable base)
-        TsObjectProperty? baseProperty = null;
-        if (_properties.LinkedBaseOf(targetType) is { } baseType)
-        {
-            baseProperty = new TsObjectProperty(
-                "base",
-                new TsPropertyAccess(new TsIdentifier("this"), _names.GetterOf(baseType))
-            );
-        }
-
-        // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject
-        var factoryParam = new TsParameter(
+        var factoryParameter = new TsParameter(
             "p",
             new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
         );
 
+        // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject
         var factoryProperty = new TsObjectProperty(
             "factory",
             new TsArrowFunction(
-                [factoryParam],
+                [factoryParameter],
                 [BuildFactoryStatement(targetType, tsTypeName, isPlainObject, properties)]
             )
         );
 
-        // properties: [...]
-        var propertiesProperty = new TsObjectProperty("properties", new TsArrayLiteral(propSpecs));
+        var propertiesProperty = new TsObjectProperty(
+            "properties",
+            new TsArrayLiteral(properties.Select(BuildPropertySpec).ToList())
+        );
 
-        var objectProps = new List<TsObjectProperty>();
-        if (typeProperty is not null)
-            objectProps.Add(typeProperty);
-        if (baseProperty is not null)
-            objectProps.Add(baseProperty);
-        objectProps.Add(factoryProperty);
-        objectProps.Add(propertiesProperty);
+        var specProperties = new[]
+        {
+            TypeProperty(tsTypeName, isPlainObject),
+            BaseLinkProperty(targetType),
+            factoryProperty,
+            propertiesProperty,
+        };
 
-        return new TsObjectLiteral(objectProps);
+        return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());
     }
+
+    /// <summary>
+    /// <c>type: TodoItem</c> — only for class-backed types. [PlainObject] types
+    /// lower to TS interfaces with no runtime constructor, so there's no value
+    /// to reference. Their specs are accessed via the context getter (e.g.,
+    /// <c>ctx.storedTodo</c>), not via <c>resolve(Class)</c>.
+    /// </summary>
+    private static TsObjectProperty? TypeProperty(string tsTypeName, bool isPlainObject) =>
+        isPlainObject ? null : new TsObjectProperty("type", new TsIdentifier(tsTypeName));
+
+    /// <summary><c>base: this.baseSpec</c> when the type links to a base spec.</summary>
+    private TsObjectProperty? BaseLinkProperty(INamedTypeSymbol targetType) =>
+        _properties.LinkedBaseOf(targetType) is { } baseType
+            ? new TsObjectProperty(
+                "base",
+                new TsPropertyAccess(new TsIdentifier("this"), _names.GetterOf(baseType))
+            )
+            : null;
 
     /// <summary>
     /// The single statement of the spec's <c>factory</c> arrow:
@@ -220,9 +210,9 @@ internal sealed class JsonSpecBuilder(
     ) =>
         new(
             properties
-                .Select(x => new TsObjectProperty(
-                    x.TsName,
-                    CastProperty(x.TsName, x.Property.Type)
+                .Select(property => new TsObjectProperty(
+                    property.TsName,
+                    CastProperty(property.TsName, property.Property.Type)
                 ))
                 .ToList()
         );
@@ -245,7 +235,9 @@ internal sealed class JsonSpecBuilder(
             IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
 
         if (parameters.Length == 0)
-            return properties.Select(x => CastProperty(x.TsName, x.Property.Type)).ToList();
+            return properties
+                .Select(property => CastProperty(property.TsName, property.Property.Type))
+                .ToList();
 
         return parameters.Select(BuildConstructorArgument).ToList();
     }
@@ -269,202 +261,31 @@ internal sealed class JsonSpecBuilder(
     }
 
     private TsExpression CastProperty(string tsName, ITypeSymbol type) =>
-        new TsCastExpression(new TsPropertyAccess(new TsIdentifier("p"), tsName), MapType(type));
+        new TsCastExpression(
+            new TsPropertyAccess(new TsIdentifier("p"), tsName),
+            JsonTsTypes.Map(_context, type)
+        );
 
     /// <summary>
-    /// Wire-format string for the runtime <c>TypeDescriptor.kind</c>
-    /// field. Kept as a single-source-of-truth mapping so the on-disk
-    /// shape can never drift from the enum.
+    /// Builds a property spec object literal:
+    /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true }</c>.
     /// </summary>
-    private static string GetWireKind(JsonPropertyKind kind) =>
-        kind switch
+    private TsObjectLiteral BuildPropertySpec(JsonSerializableProperty property)
+    {
+        var type = property.Property.Type;
+
+        var specProperties = new[]
         {
-            JsonPropertyKind.Primitive => "primitive",
-            JsonPropertyKind.Nullable => "nullable",
-            JsonPropertyKind.Branded => "branded",
-            JsonPropertyKind.Decimal => "decimal",
-            JsonPropertyKind.Temporal => "temporal",
-            JsonPropertyKind.Map => "map",
-            JsonPropertyKind.HashSet => "hashSet",
-            JsonPropertyKind.Array => "array",
-            JsonPropertyKind.Enum => "enum",
-            JsonPropertyKind.NumericEnum => "numericEnum",
-            JsonPropertyKind.Ref => "ref",
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
+            new TsObjectProperty("ts", new TsStringLiteral(property.TsName)),
+            new TsObjectProperty("json", new TsStringLiteral(property.JsonName)),
+            new TsObjectProperty("type", _descriptors.Build(type)),
+            JsonTypeClassifier.IsNullable(type)
+                ? new TsObjectProperty("optional", new TsLiteral("true"))
+                : null,
         };
 
-    /// <summary>
-    /// Builds a property spec object literal: { ts: "name", json: "name", type: { kind: "..." } }
-    /// </summary>
-    private TsObjectLiteral BuildPropertySpec(
-        string tsName,
-        string jsonName,
-        JsonPropertyKind descriptorKind,
-        IPropertySymbol prop
-    )
-    {
-        var props = new List<TsObjectProperty>
-        {
-            new("ts", new TsStringLiteral(tsName)),
-            new("json", new TsStringLiteral(jsonName)),
-            new("type", BuildTypeDescriptor(prop.Type, descriptorKind)),
-        };
-
-        if (
-            prop.Type.NullableAnnotation == NullableAnnotation.Annotated
-            || prop.Type
-                is INamedTypeSymbol
-                {
-                    OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
-                }
-        )
-        {
-            props.Add(new TsObjectProperty("optional", new TsLiteral("true")));
-        }
-
-        return new TsObjectLiteral(props);
+        return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());
     }
-
-    /// <summary>
-    /// Dispatches to the per-kind descriptor builder. Compiler-enforced
-    /// exhaustiveness: a new <see cref="JsonPropertyKind"/> value will
-    /// fail to build if no arm is added here.
-    /// </summary>
-    private TsObjectLiteral BuildTypeDescriptor(ITypeSymbol type, JsonPropertyKind kind) =>
-        kind switch
-        {
-            JsonPropertyKind.Nullable => BuildNullableDescriptor(type),
-            JsonPropertyKind.Array => BuildArrayDescriptor(type),
-            JsonPropertyKind.Map => BuildMapDescriptor(type),
-            JsonPropertyKind.HashSet => BuildHashSetDescriptor(type),
-            JsonPropertyKind.Temporal => BuildTemporalDescriptor(type),
-            JsonPropertyKind.Branded => BuildBrandedDescriptor(type),
-            JsonPropertyKind.Enum => BuildEnumValuesDescriptor(type, JsonPropertyKind.Enum),
-            JsonPropertyKind.NumericEnum => BuildEnumValuesDescriptor(
-                type,
-                JsonPropertyKind.NumericEnum
-            ),
-            JsonPropertyKind.Ref => BuildRefDescriptor(type),
-            JsonPropertyKind.Primitive or JsonPropertyKind.Decimal => BuildBareKindDescriptor(kind),
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
-        };
-
-    private TsObjectLiteral BuildNullableDescriptor(ITypeSymbol type)
-    {
-        var innerType = JsonTypeClassifier.UnwrapNullable(type);
-        var innerKind = JsonTypeClassifier.Classify(innerType);
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Nullable)),
-            new TsObjectProperty("inner", BuildTypeDescriptor(innerType, innerKind)),
-        ]);
-    }
-
-    private TsObjectLiteral BuildArrayDescriptor(ITypeSymbol type)
-    {
-        var elementType = JsonTypeClassifier.ElementTypeOf(type);
-        var elementKind = JsonTypeClassifier.Classify(elementType);
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Array)),
-            new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
-        ]);
-    }
-
-    private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type)
-    {
-        var named = (INamedTypeSymbol)type;
-        var keyType = named.TypeArguments[0];
-        var valueType = named.TypeArguments[1];
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Map)),
-            new TsObjectProperty(
-                "key",
-                BuildTypeDescriptor(keyType, JsonTypeClassifier.Classify(keyType))
-            ),
-            new TsObjectProperty(
-                "value",
-                BuildTypeDescriptor(valueType, JsonTypeClassifier.Classify(valueType))
-            ),
-        ]);
-    }
-
-    private TsObjectLiteral BuildHashSetDescriptor(ITypeSymbol type)
-    {
-        var named = (INamedTypeSymbol)type;
-        var elementType = named.TypeArguments[0];
-        var elementKind = JsonTypeClassifier.Classify(elementType);
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.HashSet)),
-            new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
-        ]);
-    }
-
-    private TsObjectLiteral BuildTemporalDescriptor(ITypeSymbol type)
-    {
-        var tsType = MapType(type);
-        var typeName = tsType is TsNamedType namedTs ? namedTs.Name : "Temporal.PlainDateTime";
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Temporal)),
-            new TsObjectProperty("parse", new TsPropertyAccess(new TsIdentifier(typeName), "from")),
-        ]);
-    }
-
-    /// <summary>
-    /// System.Guid maps to the UUID branded type from metano-runtime.
-    /// Other branded types come from user-defined <c>[Branded]</c>
-    /// structs and use their TS type name directly.
-    /// </summary>
-    private TsObjectLiteral BuildBrandedDescriptor(ITypeSymbol type)
-    {
-        var named = (INamedTypeSymbol)type;
-        var tsTypeName =
-            named.ToDisplayString() == "System.Guid" ? "UUID" : _context.ResolveTsName(named);
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Branded)),
-            new TsObjectProperty(
-                "create",
-                new TsPropertyAccess(new TsIdentifier(tsTypeName), "create")
-            ),
-        ]);
-    }
-
-    private TsObjectLiteral BuildEnumValuesDescriptor(ITypeSymbol type, JsonPropertyKind kind)
-    {
-        var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(kind)),
-            new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
-        ]);
-    }
-
-    private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type)
-    {
-        var getterName = _names.GetterOf(type);
-        return new TsObjectLiteral([
-            new TsObjectProperty("kind", WireKindLiteral(JsonPropertyKind.Ref)),
-            new TsObjectProperty(
-                "spec",
-                new TsArrowFunction(
-                    [],
-                    [
-                        new TsReturnStatement(
-                            new TsPropertyAccess(new TsIdentifier("this"), getterName)
-                        ),
-                    ]
-                )
-            ),
-        ]);
-    }
-
-    /// <summary>
-    /// Builds a kind-only descriptor for leaf wire kinds with no
-    /// payload (primitive / decimal). The runtime <c>SerializerContext</c>
-    /// reads the <c>kind</c> field and routes by it without further
-    /// fields.
-    /// </summary>
-    private static TsObjectLiteral BuildBareKindDescriptor(JsonPropertyKind kind) =>
-        new([new TsObjectProperty("kind", WireKindLiteral(kind))]);
-
-    private static TsStringLiteral WireKindLiteral(JsonPropertyKind kind) => new(GetWireKind(kind));
 
     private static TsThrowStatement BuildAbstractFactoryThrow(string tsTypeName) =>
         new(

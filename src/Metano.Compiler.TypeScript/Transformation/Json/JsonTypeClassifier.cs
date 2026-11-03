@@ -35,19 +35,37 @@ internal static class JsonTypeClassifier
 
     /// <summary>
     /// The types a container descriptor nests: nullable inner, array /
-    /// hash-set element, map key and value. Keep in sync with the
-    /// descriptor builders, which build the nested descriptors for exactly
-    /// these types.
+    /// hash-set element, map key and value — the same accessors
+    /// <see cref="JsonTypeDescriptorBuilder"/> builds the nested descriptors from.
     /// </summary>
     public static IEnumerable<ITypeSymbol> ChildTypesOf(ITypeSymbol type, JsonPropertyKind kind) =>
         kind switch
         {
             JsonPropertyKind.Nullable => [UnwrapNullable(type)],
             JsonPropertyKind.Array => [ElementTypeOf(type)],
-            JsonPropertyKind.HashSet => [((INamedTypeSymbol)type).TypeArguments[0]],
-            JsonPropertyKind.Map => ((INamedTypeSymbol)type).TypeArguments.Take(2),
+            JsonPropertyKind.HashSet => [SetElementTypeOf(type)],
+            JsonPropertyKind.Map => [KeyTypeOf(type), ValueTypeOf(type)],
             _ => [],
         };
+
+    /// <summary>The element of a set (<c>HashSet&lt;T&gt;</c> → <c>T</c>).</summary>
+    public static ITypeSymbol SetElementTypeOf(ITypeSymbol type) =>
+        ((INamedTypeSymbol)type).TypeArguments[0];
+
+    /// <summary>The key of a dictionary (<c>Dictionary&lt;K,V&gt;</c> → <c>K</c>).</summary>
+    public static ITypeSymbol KeyTypeOf(ITypeSymbol type) =>
+        ((INamedTypeSymbol)type).TypeArguments[0];
+
+    /// <summary>The value of a dictionary (<c>Dictionary&lt;K,V&gt;</c> → <c>V</c>).</summary>
+    public static ITypeSymbol ValueTypeOf(ITypeSymbol type) =>
+        ((INamedTypeSymbol)type).TypeArguments[1];
+
+    /// <summary>
+    /// <c>Nullable&lt;T&gt;</c> or an annotated reference type <c>T?</c>: the
+    /// descriptor is <c>nullable</c> and a property spec is <c>optional</c>.
+    /// </summary>
+    public static bool IsNullable(ITypeSymbol type) =>
+        type.IsNullableValueType() || type.NullableAnnotation == NullableAnnotation.Annotated;
 
     /// <summary><c>T</c> for <c>Nullable&lt;T&gt;</c> or an annotated
     /// reference type <c>T?</c>; the type itself otherwise.</summary>
@@ -74,9 +92,6 @@ internal static class JsonTypeClassifier
 
         return type;
     }
-
-    private static bool IsNullable(ITypeSymbol type) =>
-        type.IsNullableValueType() || type.NullableAnnotation == NullableAnnotation.Annotated;
 
     private static bool IsPrimitive(ITypeSymbol type) =>
         type.SpecialType

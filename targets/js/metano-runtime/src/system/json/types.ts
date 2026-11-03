@@ -138,11 +138,6 @@ export interface ValueSpec<T = unknown> {
   /** How to convert the whole value between TS and JSON */
   readonly descriptor: TypeDescriptor;
   /**
-   * The C# root is a value type (`int`, `Guid`, an enum, a branded type, …).
-   * Absent for reference-type roots, whose getter is typed `ValueSpec<T | null>`.
-   */
-  readonly valueType?: boolean;
-  /**
    * Phantom member that keeps `T` in the type; never set at runtime. Covariant
    * like `TypeSpec<T>`, so any `ValueSpec<T>` is a `ValueSpec<unknown>`.
    */

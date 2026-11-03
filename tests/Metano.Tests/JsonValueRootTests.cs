@@ -93,10 +93,9 @@ public class JsonValueRootTests
     public async Task ValueRoots_MatchGolden()
     {
         var ts = TranspileContext(GoldenDeclarations);
+        var expected = TranspileHelper.ReadExpected("json-context-value-roots.ts");
 
-        await Assert
-            .That(ts)
-            .IsEqualTo(TranspileHelper.ReadExpected("json-context-value-roots.ts"));
+        await Assert.That(ts).IsEqualTo(expected);
     }
 
     [Test]
@@ -104,16 +103,15 @@ public class JsonValueRootTests
     {
         // The STJ generator declares a JsonTypeInfo<T> member per root; the
         // context's imports (HashSet, UUID, Temporal) must not depend on it.
-        var (files, _) = TranspileHelper.TranspileWithJsonSourceGenerator(
-            WrapInNamespace(
-                GoldenDeclarations,
-                "public partial class JsonContext : JsonSerializerContext;"
-            )
+        var source = WrapInNamespace(
+            GoldenDeclarations,
+            "public partial class JsonContext : JsonSerializerContext;"
         );
 
-        await Assert
-            .That(files[ContextPath])
-            .IsEqualTo(TranspileHelper.ReadExpected("json-context-value-roots.ts"));
+        var (files, _) = TranspileHelper.TranspileWithJsonSourceGenerator(source);
+        var expected = TranspileHelper.ReadExpected("json-context-value-roots.ts");
+
+        await Assert.That(files[ContextPath]).IsEqualTo(expected);
     }
 
     [Test]
@@ -132,6 +130,7 @@ public class JsonValueRootTests
         await Assert
             .That(ts)
             .Contains("get iReadOnlyListEpisodeSummary(): ValueSpec<EpisodeSummary[] | null>");
+
         await Assert.That(ts).Contains("spec: () => this.episodeSummary");
         await Assert.That(ts).Contains("get episodeSummary(): TypeSpec<EpisodeSummary>");
     }
@@ -157,7 +156,7 @@ public class JsonValueRootTests
     }
 
     [Test]
-    public async Task ValueTypeRoots_AreNotNullable()
+    public async Task ValueRootNullability_FollowsTheCSharpType()
     {
         var ts = TranspileContext(GoldenDeclarations);
 
@@ -240,6 +239,33 @@ public class JsonValueRootTests
     }
 
     [Test]
+    public async Task ReservedWordTypeName_KeepsTheBareGetterName()
+    {
+        // Getters sit in property position, so a JS reserved word needs no
+        // escape: a type named Delete gets `delete` (it was `delete_` before
+        // #270; documented in docs/serialization.md).
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Delete(string Id);
+
+            [Transpile]
+            public sealed record Default(string Id);
+
+            [Transpile]
+            [JsonSerializable(typeof(Delete))]
+            [JsonSerializable(typeof(Default))]
+            """
+        );
+
+        await Assert.That(ts).Contains("get delete(): TypeSpec<Delete>");
+        await Assert.That(ts).Contains("private _delete?: TypeSpec<Delete>;");
+        await Assert.That(ts).Contains("get default(): TypeSpec<Default>");
+        await Assert.That(ts).Contains("private _default?: TypeSpec<Default>;");
+        await Assert.That(ts).DoesNotContain("delete_");
+    }
+
+    [Test]
     public async Task NestedValueRootElements_AreDiscovered()
     {
         var ts = TranspileContext(
@@ -255,6 +281,7 @@ public class JsonValueRootTests
         await Assert
             .That(ts)
             .Contains("get dictionaryStringListLeaf(): ValueSpec<Map<string, Leaf[]> | null>");
+
         await Assert.That(ts).Contains("get leaf(): TypeSpec<Leaf>");
     }
 
@@ -269,7 +296,7 @@ public class JsonValueRootTests
             """
         );
 
-        await Assert.That(ts.Split("get listString()").Length).IsEqualTo(2);
+        await Assert.That(CountOf(ts, "get listString()")).IsEqualTo(1);
     }
 
     [Test]
@@ -287,6 +314,7 @@ public class JsonValueRootTests
             .Contains(
                 "get immutableDictionaryStringInt32(): ValueSpec<Map<string, number> | null>"
             );
+
         await Assert.That(ts).Contains("kind: \"map\"");
     }
 
@@ -295,8 +323,9 @@ public class JsonValueRootTests
     [Arguments("typeof(object)", "'object' and 'dynamic'")]
     [Arguments("typeof(IShape)", "interfaces other than")]
     [Arguments("typeof(int[,])", "multi-dimensional arrays")]
-    [Arguments("typeof(KeyValuePair<string, int>)", "closed generic object types")]
-    [Arguments("typeof((int, string))", "closed generic object types")]
+    [Arguments("typeof(KeyValuePair<string, int>)", "not a transpiled class or struct")]
+    [Arguments("typeof((int, string))", "not a transpiled class or struct")]
+    [Arguments("typeof(SortedDictionary<string, int>)", "not a transpiled class or struct")]
     [Arguments("typeof(Hidden)", "not a transpiled class or struct")]
     [Arguments("typeof(Native)", "not a transpiled class or struct")]
     [Arguments("typeof(System.Version)", "not a transpiled class or struct")]
@@ -356,17 +385,79 @@ public class JsonValueRootTests
     }
 
     [Test]
+    public async Task InvalidRootListedTwice_IsReportedOnce()
+    {
+        var diagnostics = DiagnosticsOf(
+            """
+            [Transpile]
+            public sealed record Leaf(string Name);
+
+            [Transpile]
+            [JsonSerializable(typeof(Leaf))]
+            [JsonSerializable(typeof(Dictionary<int, Leaf>))]
+            [JsonSerializable(typeof(Dictionary<int, Leaf>))]
+            """,
+            DiagnosticCodes.InvalidJsonSerializableRoot
+        );
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task RejectedRoot_AddsNoRuntimeImport()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record Leaf(string Name);
+
+            [Transpile]
+            [JsonSerializable(typeof(Leaf))]
+            [JsonSerializable(typeof(HashSet<System.Version>))]
+            """,
+            allowDiagnostics: true
+        );
+
+        await Assert.That(ts).DoesNotContain("HashSet");
+    }
+
+    [Test]
+    public async Task DroppedRoot_AddsNoRuntimeImport()
+    {
+        // The class HashSetString claims `hashSetString` first, so the
+        // HashSet<string> root is dropped with an MS0036 warning.
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed record HashSetString(string Name);
+
+            [Transpile]
+            [JsonSerializable(typeof(HashSetString))]
+            [JsonSerializable(typeof(HashSet<string>))]
+            """,
+            allowDiagnostics: true
+        );
+
+        await Assert.That(ts).Contains("get hashSetString(): TypeSpec<HashSetString>");
+        await Assert.That(ts).DoesNotContain("import { HashSet }");
+        await Assert.That(ts).DoesNotContain("ValueSpec<HashSet<string>");
+    }
+
+    [Test]
     public async Task PackageElementTypeListedAsItsOwnRoot_IsAdmitted()
     {
+        var consumer = PackageConsumer(
+            """
+            [JsonSerializable(typeof(Tag))]
+            [JsonSerializable(typeof(List<Tag>))]
+            """
+        );
+
         var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
             PackageLibrary,
-            PackageConsumer(
-                """
-                [JsonSerializable(typeof(Tag))]
-                [JsonSerializable(typeof(List<Tag>))]
-                """
-            )
+            consumer
         );
+
         var ts = files["app/json-context.ts"];
 
         await Assert.That(diagnostics.Where(IsJsonDiagnostic)).IsEmpty();
@@ -378,14 +469,14 @@ public class JsonValueRootTests
     [Test]
     public async Task PackageElementTypeWithoutItsOwnRoot_ReportsMs0035()
     {
+        var consumer = PackageConsumer("[JsonSerializable(typeof(List<Tag>))]");
+
         var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
             PackageLibrary,
-            PackageConsumer("[JsonSerializable(typeof(List<Tag>))]")
+            consumer
         );
 
-        var ms0035 = diagnostics
-            .Where(x => x.Code == DiagnosticCodes.InvalidJsonSerializableRoot)
-            .ToList();
+        var ms0035 = DiagnosticsWithCode(diagnostics, DiagnosticCodes.InvalidJsonSerializableRoot);
 
         await Assert.That(ms0035).Count().IsEqualTo(1);
         await Assert.That(ms0035[0].Message).Contains("'Shared.Tag' has no TypeScript contract");
@@ -403,18 +494,18 @@ public class JsonValueRootTests
                 [JsonSerializable(typeof(Anchor.Image))]
                 """
         );
-        var ms0036 = NameCollisionsIn(diagnostics);
+
+        var ms0036 = DiagnosticsWithCode(diagnostics, DiagnosticCodes.JsonTypeInfoNameCollision);
         var ts = files[ContextPath];
+
+        var expectedMessage =
+            "'TestApp.Anchor.Image' and 'TestApp.Clip.Image' both map to context member "
+            + "'image'; 'TestApp.Clip.Image' was kept. Use TypeInfoPropertyName to "
+            + "resolve the collision.";
 
         await Assert.That(ms0036).Count().IsEqualTo(1);
         await Assert.That(ms0036[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
-        await Assert
-            .That(ms0036[0].Message)
-            .IsEqualTo(
-                "'TestApp.Anchor.Image' and 'TestApp.Clip.Image' both map to context member "
-                    + "'image'; 'TestApp.Clip.Image' was kept. Use TypeInfoPropertyName to "
-                    + "resolve the collision."
-            );
+        await Assert.That(ms0036[0].Message).IsEqualTo(expectedMessage);
         await Assert.That(ts).Contains("get image(): TypeSpec<Clip.Image>");
         await Assert.That(ts).DoesNotContain("TypeSpec<Anchor.Image>");
     }
@@ -433,11 +524,11 @@ public class JsonValueRootTests
             DiagnosticCodes.JsonTypeInfoNameCollision
         );
 
+        var expectedFragment = "'TestApp.Anchor.Image' is referenced by 'TestApp.Anchor.Overlay'";
+
         await Assert.That(diagnostics).Count().IsEqualTo(1);
         await Assert.That(diagnostics[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
-        await Assert
-            .That(diagnostics[0].Message)
-            .Contains("'TestApp.Anchor.Image' is referenced by 'TestApp.Anchor.Overlay'");
+        await Assert.That(diagnostics[0].Message).Contains(expectedFragment);
     }
 
     [Test]
@@ -460,7 +551,10 @@ public class JsonValueRootTests
     [Test]
     [Arguments("Options", "context member 'options'")]
     [Arguments("Resolve", "context member 'resolve'")]
-    [Arguments("Default", "context member 'default'")]
+    [Arguments("Converters", "context member 'converters'")]
+    [Arguments("CreateSpec", "context member 'createSpec'")]
+    [Arguments("CreateValueSpec", "context member 'createValueSpec'")]
+    [Arguments("ReadOptions", "context member 'readOptions'")]
     [Arguments("Registry", "context field '_registry'")]
     public async Task ReservedMemberName_IsAnError(string typeName, string member)
     {
@@ -473,7 +567,8 @@ public class JsonValueRootTests
             [JsonSerializable(typeof({{typeName}}))]
             """
         );
-        var ms0036 = NameCollisionsIn(diagnostics);
+
+        var ms0036 = DiagnosticsWithCode(diagnostics, DiagnosticCodes.JsonTypeInfoNameCollision);
 
         await Assert.That(ms0036).Count().IsEqualTo(1);
         await Assert.That(ms0036[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
@@ -491,19 +586,19 @@ public class JsonValueRootTests
             [JsonSerializable(typeof(List<string>), TypeInfoPropertyName = "Labels")]
             """
         );
-        var ms0036 = NameCollisionsIn(diagnostics);
+
+        var ms0036 = DiagnosticsWithCode(diagnostics, DiagnosticCodes.JsonTypeInfoNameCollision);
+
+        var expectedMessage =
+            "'System.Collections.Generic.List<string>' is listed again with "
+            + "TypeInfoPropertyName 'Labels'; the first TypeInfoPropertyName 'Names' "
+            + "was kept.";
 
         await Assert.That(ms0036).Count().IsEqualTo(1);
         await Assert.That(ms0036[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
-        await Assert
-            .That(ms0036[0].Message)
-            .IsEqualTo(
-                "'System.Collections.Generic.List<string>' is listed again with "
-                    + "TypeInfoPropertyName 'Labels'; the first TypeInfoPropertyName 'Names' "
-                    + "was kept."
-            );
+        await Assert.That(ms0036[0].Message).IsEqualTo(expectedMessage);
         await Assert.That(files[ContextPath]).Contains("get names()");
-        await Assert.That(files[ContextPath]).DoesNotContain("labels");
+        await Assert.That(files[ContextPath]).DoesNotContain("get labels()");
     }
 
     private static string WrapInNamespace(string declarations, string contextDeclaration) =>
@@ -537,16 +632,17 @@ public class JsonValueRootTests
     ) Transpile(string declarations) =>
         TranspileHelper.TranspileWithDiagnostics(WrapInNamespace(declarations, ContextBoilerplate));
 
-    private static string TranspileContext(string declarations)
+    private static string TranspileContext(string declarations, bool allowDiagnostics = false)
     {
         var (files, diagnostics) = Transpile(declarations);
         var jsonDiagnostics = diagnostics.Where(IsJsonDiagnostic).ToList();
 
-        if (jsonDiagnostics.Count > 0)
-            throw new InvalidOperationException(
-                "Unexpected diagnostics: "
-                    + string.Join("; ", jsonDiagnostics.Select(x => x.Format()))
-            );
+        if (jsonDiagnostics.Count > 0 && !allowDiagnostics)
+        {
+            var formatted = string.Join("; ", jsonDiagnostics.Select(d => d.Format()));
+
+            throw new InvalidOperationException("Unexpected diagnostics: " + formatted);
+        }
 
         return files[ContextPath];
     }
@@ -556,10 +652,13 @@ public class JsonValueRootTests
             is DiagnosticCodes.InvalidJsonSerializableRoot
                 or DiagnosticCodes.JsonTypeInfoNameCollision;
 
-    private static List<MetanoDiagnostic> NameCollisionsIn(
-        IReadOnlyList<MetanoDiagnostic> diagnostics
-    ) => diagnostics.Where(x => x.Code == DiagnosticCodes.JsonTypeInfoNameCollision).ToList();
+    private static List<MetanoDiagnostic> DiagnosticsWithCode(
+        IReadOnlyList<MetanoDiagnostic> diagnostics,
+        string code
+    ) => diagnostics.Where(diagnostic => diagnostic.Code == code).ToList();
 
     private static List<MetanoDiagnostic> DiagnosticsOf(string declarations, string code) =>
-        Transpile(declarations).Diagnostics.Where(x => x.Code == code).ToList();
+        DiagnosticsWithCode(Transpile(declarations).Diagnostics, code);
+
+    private static int CountOf(string text, string fragment) => text.Split(fragment).Length - 1;
 }

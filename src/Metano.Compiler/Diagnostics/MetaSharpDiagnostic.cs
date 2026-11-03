@@ -326,8 +326,8 @@ public static class DiagnosticCodes
     public const string InvalidJsonSerializableRoot = "MS0035";
 
     /// <summary>MS0036 — two context members collide: two distinct types map to one
-    /// <c>JsonTypeInfo</c> member name, a name equals a <c>SerializerContext</c> member
-    /// (or the generated <c>default</c> / <c>_default</c>), or one type is listed
+    /// <c>JsonTypeInfo</c> member name, a name equals a <c>SerializerContext</c> instance
+    /// member (<c>options</c>, <c>createSpec</c>, <c>_registry</c>, …), or one type is listed
     /// twice with different <c>TypeInfoPropertyName</c> values. An error when the
     /// losing type is referenced by a <c>ref</c> / <c>base</c> link or the name is
     /// reserved; a warning when the loser is an unreferenced root (which is dropped)

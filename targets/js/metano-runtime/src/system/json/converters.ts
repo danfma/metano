@@ -140,15 +140,23 @@ function mapConverter(descriptor: MapDescriptor, customConverters?: readonly Jso
 
 // ─── Array ───────────────────────────────────────────────────────────────────
 
+type ElementConverter = { serialize: (value: unknown) => unknown };
+
+/**
+ * Writes any iterable (an array, a `Set`, a generator, a LINQ pipe for
+ * `IEnumerable<T>`) as a JSON array, converting each element (FR-038).
+ */
+function serializeIterable(value: unknown, elemConv: ElementConverter): unknown[] | null {
+  if (value == null) return null;
+
+  return Array.from(value as Iterable<unknown>, (item) => elemConv.serialize(item));
+}
+
 function arrayConverter(descriptor: ArrayDescriptor, customConverters?: readonly JsonConverter[]) {
   const elemConv = resolveConverter(descriptor.element, customConverters);
 
   return {
-    serialize: (value: unknown) => {
-      if (value == null) return null;
-      // Any iterable (a Set, a generator, a LINQ pipe for IEnumerable<T>), not only arrays.
-      return Array.from(value as Iterable<unknown>, (item) => elemConv.serialize(item));
-    },
+    serialize: (value: unknown) => serializeIterable(value, elemConv),
     deserialize: (value: unknown) => {
       if (value == null) return null;
       return (value as unknown[]).map((item) => elemConv.deserialize(item));
@@ -165,14 +173,13 @@ function hashSetConverter(
   const elemConv = resolveConverter(descriptor.element, customConverters);
 
   return {
-    serialize: (value: unknown) => {
-      if (value == null) return null;
-      return Array.from(value as Iterable<unknown>, (item) => elemConv.serialize(item));
-    },
+    serialize: (value: unknown) => serializeIterable(value, elemConv),
     deserialize: (value: unknown) => {
       if (value == null) return null;
-      const arr = (value as unknown[]).map((item) => elemConv.deserialize(item));
-      return new HashSet(arr);
+
+      const items = Array.from(value as Iterable<unknown>, (item) => elemConv.deserialize(item));
+
+      return new HashSet(items);
     },
   };
 }

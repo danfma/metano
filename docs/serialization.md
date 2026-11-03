@@ -191,7 +191,8 @@ generic types that use it as an argument. Type arguments use the same rule, so
 - `MS0035` (error) rejects a root the context cannot describe: an open generic,
   `object`, a non-collection interface, a type that is not a transpiled class
   or struct (`KeyValuePair<,>`, tuples, `[Ignore]` / `[External]` types, types
-  of non-Metano assemblies), a closed generic object type (not supported yet),
+  of non-Metano assemblies, and the dictionary types that are not recognized as
+  dictionaries yet: `SortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary`), a closed generic object type (not supported yet),
   an array of rank > 1, a dictionary with non-`string` keys (not supported
   yet), or a collection whose element type has no spec in the context (a type
   from a referenced package must be listed as its own root).
@@ -199,12 +200,19 @@ generic types that use it as an argument. Type arguments use the same rule, so
   unreferenced root, an error when the losing type is referenced by another
   spec), a getter that would shadow a `SerializerContext` member (`options`,
   `converters`, `createSpec`, `createValueSpec`, `readOptions`, `resolve`,
-  `default`, …), and a type listed twice with different `TypeInfoPropertyName`
+  `_registry`, `constructor`), and a type listed twice with different `TypeInfoPropertyName`
   values (a warning; the first one is kept). Use `TypeInfoPropertyName` to
   resolve a collision.
 
 **Divergences:** `Stack<T>` is written and read in array order (System.Text.Json
 writes it top-first and reverses it on read); the `[Name]` naming above.
+
+**Getter renames (#270):** every getter now comes from the naming rule above.
+A type whose camel-cased name is a JavaScript reserved word keeps the bare
+name, because getters sit in property position: `Delete` → `get delete()`
+(previously `get delete_()`), `Default` → `get default()` (previously
+`default_`; it does not clash with the static `JsonContext.default`). Update
+call sites such as `ctx.delete_` to `ctx.delete`.
 
 ## Supported type descriptors
 
