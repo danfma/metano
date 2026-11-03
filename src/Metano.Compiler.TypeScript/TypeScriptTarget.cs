@@ -205,7 +205,9 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             SubpathRoot: ir.PackageSubpathRoot,
             CrossPackageDependencies: crossPackageDependencies,
             IsExecutable: compilation.Options.OutputKind == OutputKind.ConsoleApplication,
-            ImportsRuntime: RuntimePeerDependency.IsImportedBy(generatedFiles)
+            RuntimePeerSpecifier: RuntimePeerDependency.IsImportedBy(generatedFiles)
+                ? RuntimePeerDependency.CurrentSpecifier
+                : null
         );
 
     private static Compilation RequireRoslynCompilation(Compilation? compilation) =>

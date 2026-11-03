@@ -19,6 +19,16 @@ namespace Metano;
 /// </summary>
 public static class PackageJsonWriter
 {
+    private const string PeerDependenciesSection = "peerDependencies";
+
+    private static readonly string[] DependencySections =
+    [
+        "dependencies",
+        "devDependencies",
+        PeerDependenciesSection,
+        "optionalDependencies",
+    ];
+
     private static readonly JsonSerializerOptions WriteOptions = new()
     {
         WriteIndented = true,
@@ -63,12 +73,9 @@ public static class PackageJsonWriter
     /// <param name="subpathRoot">The package's <c>[EmitPackage(SubpathRoot = …)]</c>: a
     /// namespace prefix stripped from the <c>exports</c> keys only (spec 008). On-disk
     /// targets and <c>imports</c> are unaffected. Default: none.</param>
-    /// <param name="runtimeVersionSpecifier">Version specifier written for the
-    /// <c>metano-runtime</c> peer dependency. Default: the running compiler's release
-    /// version (<see cref="RuntimePeerDependency.CurrentSpecifier"/>).</param>
-    /// <param name="importsRuntime">Whether any emitted file imports <c>metano-runtime</c>
-    /// (see <see cref="RuntimePeerDependency.IsImportedBy"/>); when true the runtime is
-    /// declared as a peer dependency unless the consumer already declares it.</param>
+    /// <param name="runtimePeerSpecifier">Version specifier for the <c>metano-runtime</c> peer
+    /// dependency (see <see cref="RuntimePeerDependency"/>); <c>null</c> when no emitted file
+    /// imports the runtime, in which case nothing is added.</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -81,8 +88,7 @@ public static class PackageJsonWriter
         string? srcRoot = null,
         string? importAlias = null,
         PackageSubpathRoot subpathRoot = default,
-        string? runtimeVersionSpecifier = null,
-        bool importsRuntime = false
+        string? runtimePeerSpecifier = null
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -185,13 +191,8 @@ public static class PackageJsonWriter
             root["dependencies"] = deps;
         }
 
-        if (importsRuntime)
-        {
-            DeclareRuntimePeerDependency(
-                root,
-                runtimeVersionSpecifier ?? RuntimePeerDependency.CurrentSpecifier
-            );
-        }
+        if (runtimePeerSpecifier is not null)
+            DeclareRuntimePeerDependency(root, runtimePeerSpecifier, authoritativePackageName);
 
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
@@ -199,32 +200,49 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Adds <c>metano-runtime</c> to <c>peerDependencies</c> unless the consumer already
-    /// declares it in any dependency section (e.g. <c>workspace:*</c> in a monorepo), in
-    /// which case their entry is left exactly as written.
+    /// Declares <c>metano-runtime</c> in <c>peerDependencies</c>. The consumer's declaration
+    /// wins: an entry in any other dependency section, or a peer entry whose value is not the
+    /// shape this writer produces (e.g. <c>workspace:*</c>, <c>~2.7</c>), is left exactly as
+    /// written. A peer entry that does have the writer's own shape is refreshed, so an upgrade
+    /// of the compiler does not leave a stale range behind (shape-based ownership, as in
+    /// <see cref="MergeTranspilerManagedExports"/>). A package that is itself
+    /// <c>metano-runtime</c> never depends on itself.
     /// </summary>
-    private static void DeclareRuntimePeerDependency(JsonObject root, string versionSpecifier)
+    private static void DeclareRuntimePeerDependency(
+        JsonObject root,
+        string versionSpecifier,
+        string? authoritativePackageName
+    )
     {
-        string[] dependencySections =
-        [
-            "dependencies",
-            "devDependencies",
-            "peerDependencies",
-            "optionalDependencies",
-        ];
+        var packageName = ReadStringField(root, "name") ?? authoritativePackageName;
 
-        var alreadyDeclared = dependencySections.Any(section =>
-            root[section] is JsonObject declared
-            && declared.ContainsKey(RuntimePeerDependency.PackageName)
-        );
-
-        if (alreadyDeclared)
+        if (packageName == RuntimePeerDependency.PackageName)
             return;
 
-        var peers = root["peerDependencies"] as JsonObject ?? new JsonObject();
+        var declaredElsewhere = DependencySections
+            .Where(section => section != PeerDependenciesSection)
+            .Any(section => DeclaresRuntime(root, section));
+
+        if (declaredElsewhere)
+            return;
+
+        var peers = root[PeerDependenciesSection] as JsonObject ?? new JsonObject();
+        var existing = ReadStringField(peers, RuntimePeerDependency.PackageName);
+
+        var isConsumerEntry =
+            peers.ContainsKey(RuntimePeerDependency.PackageName)
+            && !RuntimePeerDependency.IsOwnSpecifier(existing);
+
+        if (isConsumerEntry)
+            return;
+
         peers[RuntimePeerDependency.PackageName] = versionSpecifier;
-        root["peerDependencies"] = peers;
+        root[PeerDependenciesSection] = peers;
     }
+
+    private static bool DeclaresRuntime(JsonObject root, string section) =>
+        root[section] is JsonObject declared
+        && declared.ContainsKey(RuntimePeerDependency.PackageName);
 
     /// <summary>
     /// Seeds <c>package.json#name</c> from <c>[assembly: EmitPackage(...)]</c>

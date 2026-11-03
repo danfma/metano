@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Metano.Compiler;
+using Metano.Compiler.IR;
 
 namespace Metano.Tests;
 
@@ -10,6 +11,16 @@ namespace Metano.Tests;
 public class RuntimePeerDependencyTests
 {
     private const string Specifier = "^9.8.7";
+
+    private const string RuntimeName = "metano-runtime";
+
+    private static readonly string[] DependencySections =
+    [
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+        "optionalDependencies",
+    ];
 
     private readonly List<string> _tempDirs = [];
 
@@ -25,12 +36,11 @@ public class RuntimePeerDependencyTests
     {
         var root = CreateTempDir();
 
-        Write(root, importsRuntime: true);
+        WritePackageJson(root, Specifier);
 
         var pkg = ReadJson(root);
-        await Assert
-            .That(pkg["peerDependencies"]?["metano-runtime"]?.GetValue<string>())
-            .IsEqualTo(Specifier);
+
+        await Assert.That(DeclaredVersion(pkg, "peerDependencies")).IsEqualTo(Specifier);
         await Assert.That(pkg["dependencies"]).IsNull();
     }
 
@@ -39,7 +49,17 @@ public class RuntimePeerDependencyTests
     {
         var root = CreateTempDir();
 
-        Write(root, importsRuntime: false);
+        WritePackageJson(root, runtimePeerSpecifier: null);
+
+        await Assert.That(ReadJson(root).ContainsKey("peerDependencies")).IsFalse();
+    }
+
+    [Test]
+    public async Task OwnPackageIsTheRuntime_AddsNothing()
+    {
+        var root = CreateTempDir();
+
+        WritePackageJson(root, Specifier, packageName: RuntimeName);
 
         await Assert.That(ReadJson(root).ContainsKey("peerDependencies")).IsFalse();
     }
@@ -61,6 +81,7 @@ public class RuntimePeerDependencyTests
     [Test]
     [Arguments("dependencies", "workspace:*")]
     [Arguments("devDependencies", "^1.0.0")]
+    [Arguments("optionalDependencies", "^1.0.0")]
     [Arguments("peerDependencies", ">=2.0.0")]
     public async Task AlreadyDeclared_IsLeftUntouchedWithoutDuplicate(
         string section,
@@ -68,39 +89,91 @@ public class RuntimePeerDependencyTests
     )
     {
         var root = CreateTempDir();
-        File.WriteAllText(
-            Path.Combine(root, "package.json"),
+
+        WriteManifest(
+            root,
             $$"""{ "name": "consumer", "{{section}}": { "metano-runtime": "{{declared}}" } }"""
         );
 
-        Write(root, importsRuntime: true);
+        WritePackageJson(root, Specifier);
 
         var pkg = ReadJson(root);
-        await Assert.That(pkg[section]?["metano-runtime"]?.GetValue<string>()).IsEqualTo(declared);
 
-        var sectionsDeclaring = new[]
-        {
-            "dependencies",
-            "devDependencies",
-            "peerDependencies",
-        }.Count(name => (pkg[name] as JsonObject)?.ContainsKey("metano-runtime") == true);
+        var sectionsDeclaring = DependencySections.Count(name =>
+            (pkg[name] as JsonObject)?.ContainsKey(RuntimeName) == true
+        );
+
+        await Assert.That(DeclaredVersion(pkg, section)).IsEqualTo(declared);
         await Assert.That(sectionsDeclaring).IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments("^2.7.3", "^9.8.7")]
+    [Arguments("*", "^9.8.7")]
+    public async Task PeerEntryOfTheWritersOwnShape_IsRefreshed(string stored, string expected)
+    {
+        var root = CreateTempDir();
+
+        WriteManifest(root, PeerManifest(stored));
+        WritePackageJson(root, expected);
+
+        await Assert.That(DeclaredVersion(ReadJson(root), "peerDependencies")).IsEqualTo(expected);
+    }
+
+    [Test]
+    [Arguments("workspace:*")]
+    [Arguments("~2.7")]
+    [Arguments(">=2")]
+    public async Task PeerEntryOfAnotherShape_IsKept(string stored)
+    {
+        var root = CreateTempDir();
+
+        WriteManifest(root, PeerManifest(stored));
+        WritePackageJson(root, Specifier);
+
+        await Assert.That(DeclaredVersion(ReadJson(root), "peerDependencies")).IsEqualTo(stored);
+    }
+
+    [Test]
+    public async Task OwnShapedPeerEntry_IsKeptWhenAnotherSectionDeclaresTheRuntime()
+    {
+        var root = CreateTempDir();
+
+        WriteManifest(
+            root,
+            """
+            {
+              "name": "consumer",
+              "dependencies": { "metano-runtime": "workspace:*" },
+              "peerDependencies": { "metano-runtime": "^2.7.3" }
+            }
+            """
+        );
+
+        WritePackageJson(root, Specifier);
+
+        var pkg = ReadJson(root);
+
+        await Assert.That(DeclaredVersion(pkg, "dependencies")).IsEqualTo("workspace:*");
+        await Assert.That(DeclaredVersion(pkg, "peerDependencies")).IsEqualTo("^2.7.3");
     }
 
     [Test]
     public async Task ExistingPeerDependencies_KeepOtherEntries()
     {
         var root = CreateTempDir();
-        File.WriteAllText(
-            Path.Combine(root, "package.json"),
+
+        WriteManifest(
+            root,
             """{ "name": "consumer", "peerDependencies": { "solid-js": "^1.9.0" } }"""
         );
 
-        Write(root, importsRuntime: true);
+        WritePackageJson(root, Specifier);
 
         var peers = ReadJson(root)["peerDependencies"] as JsonObject;
+
         await Assert.That(peers!["solid-js"]?.GetValue<string>()).IsEqualTo("^1.9.0");
-        await Assert.That(peers["metano-runtime"]?.GetValue<string>()).IsEqualTo(Specifier);
+        await Assert.That(peers[RuntimeName]?.GetValue<string>()).IsEqualTo(Specifier);
     }
 
     [Test]
@@ -119,17 +192,15 @@ public class RuntimePeerDependencyTests
             {
                 ["@acme/shared"] = "^1.2.3",
             },
-            runtimeVersionSpecifier: Specifier,
-            importsRuntime: true
+            runtimePeerSpecifier: Specifier
         );
 
         var pkg = ReadJson(root);
+
         await Assert
             .That(pkg["dependencies"]?["@acme/shared"]?.GetValue<string>())
             .IsEqualTo("^1.2.3");
-        await Assert
-            .That(pkg["peerDependencies"]?["metano-runtime"]?.GetValue<string>())
-            .IsEqualTo(Specifier);
+        await Assert.That(DeclaredVersion(pkg, "peerDependencies")).IsEqualTo(Specifier);
     }
 
     [Test]
@@ -137,25 +208,13 @@ public class RuntimePeerDependencyTests
     {
         var root = CreateTempDir();
 
-        Write(root, importsRuntime: true);
+        WritePackageJson(root, Specifier);
+
         var first = File.ReadAllText(Path.Combine(root, "package.json"));
-        Write(root, importsRuntime: true);
+
+        WritePackageJson(root, Specifier);
 
         await Assert.That(File.ReadAllText(Path.Combine(root, "package.json"))).IsEqualTo(first);
-    }
-
-    [Test]
-    public async Task DefaultSpecifier_IsDerivedFromTheCompilerVersion()
-    {
-        var root = CreateTempDir();
-        var srcDir = Path.Combine(root, "src");
-        Directory.CreateDirectory(srcDir);
-
-        PackageJsonWriter.UpdateOrCreate(root, srcDir, [], importsRuntime: true);
-
-        await Assert
-            .That(ReadJson(root)["peerDependencies"]?["metano-runtime"]?.GetValue<string>())
-            .IsEqualTo(RuntimePeerDependency.CurrentSpecifier);
     }
 
     [Test]
@@ -166,10 +225,69 @@ public class RuntimePeerDependencyTests
     [Arguments("0.0.0-alpha.0", "*")]
     [Arguments("", "*")]
     [Arguments(null, "*")]
-    public async Task SpecifierFor_MapsReleaseVersions(string? version, string expected) =>
+    public async Task SpecifierFor_MapsVersionToCaretOrWildcard(string? version, string expected) =>
         await Assert.That(RuntimePeerDependency.SpecifierFor(version)).IsEqualTo(expected);
 
-    private static void Write(string root, bool importsRuntime)
+    [Test]
+    public async Task Transform_RecordNeedingTheRuntime_CapturesTheCurrentSpecifier()
+    {
+        var inputs = TransformInputs(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            namespace Acme;
+
+            public record Money(int Amount);
+            """
+        );
+
+        await Assert
+            .That(inputs.RuntimePeerSpecifier)
+            .IsEqualTo(RuntimePeerDependency.CurrentSpecifier);
+    }
+
+    [Test]
+    public async Task Transform_PlainEnum_CapturesNoRuntimePeer()
+    {
+        var inputs = TransformInputs(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            namespace Acme;
+
+            public enum Color { Red, Green }
+            """
+        );
+
+        await Assert.That(inputs.RuntimePeerSpecifier).IsNull();
+    }
+
+    private static PackageManifestInputs TransformInputs(string source)
+    {
+        var compilation = TranspileHelper.CompileLibrary(source);
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        var target = new TypeScriptTarget();
+
+        target.Transform(ir, compilation);
+
+        return target.LastPackageManifestInputs;
+    }
+
+    private static string PeerManifest(string runtimeSpecifier) =>
+        $$"""{ "name": "consumer", "peerDependencies": { "metano-runtime": "{{runtimeSpecifier}}" } }""";
+
+    private static void WriteManifest(string root, string json) =>
+        File.WriteAllText(Path.Combine(root, "package.json"), json);
+
+    private static void WritePackageJson(
+        string root,
+        string? runtimePeerSpecifier,
+        string packageName = "consumer"
+    )
     {
         var srcDir = Path.Combine(root, "src");
         Directory.CreateDirectory(srcDir);
@@ -178,9 +296,8 @@ public class RuntimePeerDependencyTests
             root,
             srcDir,
             [],
-            authoritativePackageName: "consumer",
-            runtimeVersionSpecifier: Specifier,
-            importsRuntime: importsRuntime
+            authoritativePackageName: packageName,
+            runtimePeerSpecifier: runtimePeerSpecifier
         );
     }
 
@@ -189,8 +306,12 @@ public class RuntimePeerDependencyTests
         var dir = Path.Combine(Path.GetTempPath(), $"metano-runtime-peer-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         _tempDirs.Add(dir);
+
         return dir;
     }
+
+    private static string? DeclaredVersion(JsonObject pkg, string section) =>
+        pkg[section]?[RuntimeName]?.GetValue<string>();
 
     private static JsonObject ReadJson(string dir) =>
         (JsonNode.Parse(File.ReadAllText(Path.Combine(dir, "package.json"))) as JsonObject)!;

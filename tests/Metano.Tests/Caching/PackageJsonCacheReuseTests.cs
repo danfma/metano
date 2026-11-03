@@ -196,6 +196,31 @@ public class PackageJsonCacheReuseTests
     }
 
     /// <summary>
+    /// Issue #411: the full-hit path never transforms, so the <c>metano-runtime</c> peer
+    /// declaration must be rebuilt from the reused files' printed imports.
+    /// </summary>
+    [Test]
+    public async Task FullCacheHit_RebuildsDeletedPackageJsonWithRuntimePeer()
+    {
+        var package = NewPackage();
+        var sources = new[] { ItemsSource, ListsSource };
+        var coldManifest = await TranspileColdAndReadManifest(package, sources);
+
+        DeleteManifest(package);
+        var reused = await TranspileAndReconcile(package, sources);
+        var rebuiltManifest = ReadManifest(package);
+
+        await Assert.That(reused.ServedFromCache).IsTrue();
+        await Assert.That(rebuiltManifest).IsEqualTo(coldManifest);
+
+        await Assert
+            .That(
+                JsonNode.Parse(rebuiltManifest)!["peerDependencies"]?["metano-runtime"]?.ToString()
+            )
+            .IsEqualTo(RuntimePeerDependency.CurrentSpecifier);
+    }
+
+    /// <summary>
     /// Issue #299: a partial hit reuses unchanged groups from the per-group cache, so the
     /// dependencies only those groups require must come back from that cache.
     /// </summary>

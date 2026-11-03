@@ -57,7 +57,7 @@ public static class PackageJsonReconciler
             srcRoot: srcRoot,
             importAlias: importAlias,
             subpathRoot: inputs.SubpathRoot,
-            importsRuntime: inputs.ImportsRuntime
+            runtimePeerSpecifier: inputs.RuntimePeerSpecifier
         );
 
         return PackageJsonReconciliation.Written(packageJsonPath, diagnostics);
