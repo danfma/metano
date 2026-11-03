@@ -32,7 +32,9 @@ internal static class IrParameterNaming
     /// lambda are renamed: those declare their parameters under the IR name
     /// and bind them as bare identifiers. A constructor parameter may be
     /// promoted to a member or captured, an accessor's <c>value</c> and an
-    /// operator's parameters are declared elsewhere, so they keep their name.
+    /// operator's parameters are declared elsewhere, and an <c>[ObjectArgs]</c>
+    /// method's parameters are the keys of its public argument object, so they
+    /// keep their name.
     /// </summary>
     private static bool IsRenamableOwner(ISymbol owner) =>
         owner
@@ -40,7 +42,8 @@ internal static class IrParameterNaming
             {
                 MethodKind: MethodKind.Ordinary or MethodKind.AnonymousFunction
             } method
-        && !method.IsExtensionBlockMember();
+        && !method.IsExtensionBlockMember()
+        && !method.HasObjectArgs();
 
     private static HashSet<string> CollidingNamesOf(ISymbol owner, Compilation compilation) =>
         CollidingNamesByOwner.GetValue(owner, key => FindCollidingNames(key, compilation));

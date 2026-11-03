@@ -2011,7 +2011,7 @@ public sealed partial class IrExpressionExtractor
             IParameterSymbol parameter => IsNonNullableReference(parameter.Type),
             ILocalSymbol local => IsNonNullableReference(local.Type),
             IFieldSymbol field => IsNonNullableReference(field.Type),
-            IPropertySymbol property => IsNonNullableReference(property.Type),
+            IPropertySymbol { IsIndexer: false } property => IsNonNullableReference(property.Type),
             _ => false,
         };
 
