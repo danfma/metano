@@ -207,11 +207,17 @@ public static class IrConstructorExtractor
         if (compilation is null)
             return new IrConstructorDeclaration(Parameters: parameters);
 
-        var baseArguments = TryExtractBaseArguments(ctor, compilation, context.Context);
+        // One map per constructor declaration (#398): the walk's root is the
+        // whole declaration, so the `: base(...)` / `: this(...)` argument
+        // lambdas and the body share it — a collision renames one name every
+        // half agrees on.
+        var localNames = LocalBindingDisambiguator.ForMember(ctor, context.Context);
+
+        var baseArguments = TryExtractBaseArguments(ctor, compilation, context.Context, localNames);
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
-            Body: TryExtractBody(ctor, compilation, context.Context),
+            Body: TryExtractBody(ctor, compilation, context.Context, localNames),
             BaseArguments: baseArguments,
             BaseExceptionConstruction: TryExtractBaseExceptionConstruction(
                 ctor,
@@ -219,7 +225,7 @@ public static class IrConstructorExtractor
                 compilation,
                 target
             ),
-            ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context)
+            ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context, localNames)
         );
     }
 
@@ -272,7 +278,8 @@ public static class IrConstructorExtractor
         IMethodSymbol ctor,
         IrTypeOriginResolver? originResolver,
         Compilation compilation,
-        PromotionContext context
+        PromotionContext context,
+        LocalBindingNames localNames
     )
     {
         if (FindThisCallSyntax(ctor) is not { } thisCall)
@@ -283,10 +290,9 @@ public static class IrConstructorExtractor
         if (model.GetSymbolInfo(thisCall).Symbol is not IMethodSymbol chainedCtor)
             return null;
 
-        var arguments = new IrExpressionExtractor(
-            model,
-            context.Context
-        ).ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
+        var extractor = new IrExpressionExtractor(model, context.Context);
+        extractor.AdoptLocalNames(localNames);
+        var arguments = extractor.ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
 
         var chainedDecl = BuildFromMethod(chainedCtor, originResolver, context);
 
@@ -336,7 +342,8 @@ public static class IrConstructorExtractor
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol ctor,
         Compilation compilation,
-        IrExtractionContext context
+        IrExtractionContext context,
+        LocalBindingNames localNames
     )
     {
         var syntax =
@@ -346,8 +353,9 @@ public static class IrConstructorExtractor
             return null;
 
         var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, context);
-        return extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, isVoid: true);
+        var extractor = new IrStatementExtractor(model, context, inheritedLocalNames: localNames);
+
+        return extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, isVoid: true).Statements;
     }
 
     /// <summary>
@@ -358,15 +366,18 @@ public static class IrConstructorExtractor
     private static IReadOnlyList<IrArgument>? TryExtractBaseArguments(
         IMethodSymbol ctor,
         Compilation compilation,
-        IrExtractionContext context
+        IrExtractionContext context,
+        LocalBindingNames localNames
     )
     {
         if (FindBaseCallSyntax(ctor) is not { } baseCall)
             return null;
 
         var model = compilation.GetSemanticModel(baseCall.SyntaxTree);
+        var extractor = new IrExpressionExtractor(model, context);
+        extractor.AdoptLocalNames(localNames);
 
-        return new IrExpressionExtractor(model, context).ExtractInitializerArguments(
+        return extractor.ExtractInitializerArguments(
             ArgumentListOf(baseCall),
             model.GetSymbolInfo(baseCall).Symbol as IMethodSymbol
         );

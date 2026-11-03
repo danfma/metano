@@ -248,6 +248,7 @@ public class JsInteropReviewGuardTests
             .OfType<MethodDeclarationSyntax>()
             .Last(m => m.Identifier.ValueText == "M");
         var extractor = new IrStatementExtractor(model);
-        return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid: true);
+
+        return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid: true).Statements;
     }
 }

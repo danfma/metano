@@ -134,6 +134,12 @@ public sealed partial class IrExpressionExtractor
             _inlineExpanding,
             inlineParameterSubs: subs
         );
+
+        // The inline member's own bindings (its parameters against the
+        // lambdas its body declares) disambiguate against the member's
+        // declaration, independent of the call site (#398).
+        extractor.AdoptLocalNames(LocalBindingDisambiguator.ForMember(declaringMethod, _options));
+
         return extractor.Extract(bodyExpr);
     }
 
@@ -244,17 +250,23 @@ public sealed partial class IrExpressionExtractor
             bodySubs = subs;
         }
 
+        var localNames = LocalBindingDisambiguator.ForMember(declaringMethod, _options);
         var bodyExtractor = new IrExpressionExtractor(
             semanticModel,
             _options,
             _inlineExpanding,
             inlineParameterSubs: bodySubs
         );
+
+        // The inline member's own bindings (its parameters against the
+        // lambdas its body declares) disambiguate against the member's
+        // declaration, independent of the call site (#398).
+        bodyExtractor.AdoptLocalNames(localNames);
         var bodyIr = bodyExtractor.Extract(bodyExpr);
 
         var parameters = declaringMethod
             .Parameters.Select(p => new IrParameter(
-                p.Name,
+                localNames.NameOf(p, p.Name),
                 IrTypeRefMapper.Map(p.Type, _originResolver, _target),
                 HasDefaultValue: p.HasExplicitDefaultValue,
                 DefaultValue: p.HasExplicitDefaultValue

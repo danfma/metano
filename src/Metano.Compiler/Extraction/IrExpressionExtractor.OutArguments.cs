@@ -43,6 +43,22 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     public IrExpression ExtractStandalone(ExpressionSyntax expression)
     {
+        // A field or property initializer is its own disambiguation root: the
+        // bindings its expression declares (lambda parameters, designators,
+        // out-vars) collide inside it, and no member body computed a map for
+        // it. A constructor initializer's arguments keep the constructor's
+        // map (computed with its body, #398) — this root walk finds no
+        // declarator there and leaves the adopted map alone.
+        if (_localNames.RenamedBySymbol.Count == 0 && _localNaming is { } naming)
+        {
+            var root = expression
+                .Ancestors()
+                .FirstOrDefault(a => a is VariableDeclaratorSyntax or PropertyDeclarationSyntax);
+
+            if (root is not null)
+                AdoptLocalNames(LocalBindingDisambiguator.ForRoot(root, _options));
+        }
+
         var lowered = LowerExpressionVariables(new IrReturnStatement(Extract(expression)));
 
         if (lowered is [IrReturnStatement { Value: { } value }])

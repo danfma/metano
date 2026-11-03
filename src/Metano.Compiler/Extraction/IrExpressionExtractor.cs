@@ -39,23 +39,10 @@ public sealed partial class IrExpressionExtractor
     /// The local-binding renames of the body being extracted (#398),
     /// adopted from the statement extractor that computed them per body so
     /// identifier reads, lambda parameters, pattern designators and out-vars
-    /// name the same symbol the declarations named. Null when no target
+    /// name the same symbol the declarations named. Empty when no target
     /// naming policy was supplied (shape-only extraction).
     /// </summary>
-    private IReadOnlyDictionary<ISymbol, string>? _localNames;
-
-    /// <summary>Adopts the body's local-binding renames (#398).</summary>
-    internal void AdoptLocalNames(IReadOnlyDictionary<ISymbol, string> renames) =>
-        _localNames = renames;
-
-    /// <summary>
-    /// The IR name of a local binding's declaration site: its disambiguated
-    /// name when the body's map renamed it (#398), otherwise the fallback.
-    /// </summary>
-    private string LocalIrNameOf(ISymbol? symbol, string identifier) =>
-        symbol is not null && _localNames?.TryGetValue(symbol, out var renamed) is true
-            ? renamed
-            : identifier;
+    private LocalBindingNames _localNames = LocalBindingNames.Empty;
 
     /// <summary>
     /// Tracks the set of <c>[Inline]</c> members currently being
@@ -191,6 +178,16 @@ public sealed partial class IrExpressionExtractor
     private readonly Invocation.IInvocationRewriter[] _invocationRewriters;
 
     internal HashSet<ISymbol> InlineExpandingSet => _inlineExpanding;
+
+    /// <summary>Adopts the body's local-binding renames (#398).</summary>
+    internal void AdoptLocalNames(LocalBindingNames names) => _localNames = names;
+
+    /// <summary>
+    /// The IR name of a local binding's declaration site: its disambiguated
+    /// name when the body's map renamed it (#398), otherwise the fallback.
+    /// </summary>
+    private string LocalIrNameOf(ISymbol? symbol, string identifier) =>
+        _localNames.NameOf(symbol, identifier);
 
     public IrExpression Extract(ExpressionSyntax expression) =>
         _conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax
@@ -1465,14 +1462,22 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The IR name of a local or parameter read: its disambiguated name when
-    /// the body's map renamed it (#398); a parameter that a flattened static
-    /// member would shadow is renamed (see <see cref="IrParameterNaming"/>).
+    /// the body's map renamed it (#398) — looked up through
+    /// <see cref="LocalBindingNames.NameOf(ISymbol?, string)"/>; a parameter
+    /// that a flattened static member would shadow is renamed (see
+    /// <see cref="IrParameterNaming"/>).
     /// </summary>
-    private string IdentifierNameOf(IdentifierNameSyntax id, ISymbol? symbol) =>
-        symbol is not null && _localNames?.TryGetValue(symbol, out var renamed) is true ? renamed
-        : symbol is IParameterSymbol parameter
+    private string IdentifierNameOf(IdentifierNameSyntax id, ISymbol? symbol)
+    {
+        var disambiguated = _localNames.NameOf(symbol, id.Identifier.ValueText);
+
+        if (symbol is not null && disambiguated != id.Identifier.ValueText)
+            return disambiguated;
+
+        return symbol is IParameterSymbol parameter
             ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation)
-        : id.Identifier.ValueText;
+            : id.Identifier.ValueText;
+    }
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
         symbol is ILocalSymbol or IParameterSymbol or IRangeVariableSymbol;
@@ -3146,7 +3151,9 @@ public sealed partial class IrExpressionExtractor
                 _semantic,
                 _options,
                 inheritedLocalNames: _localNames
-            ).ExtractBody(block, arrow: null, isVoid: false),
+            )
+                .ExtractBody(block, arrow: null, isVoid: false)
+                .Statements,
             ExpressionSyntax expr => LowerExpressionVariables(new IrReturnStatement(Extract(expr))),
             _ => [new IrUnsupportedStatement(body.Kind().ToString())],
         };

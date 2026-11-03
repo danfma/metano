@@ -33,13 +33,13 @@ public static class IrMethodExtractor
         // One map covers the parameters and the body: the walk's root is the
         // whole method declaration, so a collision between a parameter and a
         // body local renames one name both halves agree on (#398).
-        var localNames = LocalNamesOf(method, compilation, context.LocalNaming);
+        var localNames = LocalBindingDisambiguator.ForMember(method, context);
 
         var parameters = method
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        LocalIrNameOf(localNames, p, IrParameterNaming.IrNameOf(p, compilation)),
+                        localNames.NameOf(p, IrParameterNaming.IrNameOf(p, compilation)),
                         IrTypeRefMapper.Map(p.Type, originResolver, target),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
@@ -122,48 +122,10 @@ public static class IrMethodExtractor
             return null;
 
         var model = context.Compilation!.GetSemanticModel(syntax!.SyntaxTree);
-        var extractor = new IrStatementExtractor(
-            model,
-            context,
-            inheritedLocalNames: localNames?.RenamedBySymbol
-        );
-        return extractor.ExtractBody(body, expressionBody, method.ReturnsVoid);
+        var extractor = new IrStatementExtractor(model, context, inheritedLocalNames: localNames);
+
+        return extractor.ExtractBody(body, expressionBody, method.ReturnsVoid).Statements;
     }
-
-    /// <summary>
-    /// The method's local-binding renames (#398), computed from the whole
-    /// method declaration so the parameter list and the body share one map.
-    /// Null when there is nothing to disambiguate against (no naming policy,
-    /// no compilation, or no reachable declaration syntax).
-    /// </summary>
-    private static LocalBindingNames? LocalNamesOf(
-        IMethodSymbol method,
-        Compilation? compilation,
-        LocalNaming? localNaming
-    )
-    {
-        if (localNaming is null || compilation is null)
-            return null;
-
-        var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        if (syntax is null)
-            return null;
-
-        return LocalBindingDisambiguator.Disambiguate(
-            syntax,
-            compilation.GetSemanticModel(syntax.SyntaxTree),
-            localNaming
-        );
-    }
-
-    private static string LocalIrNameOf(
-        LocalBindingNames? localNames,
-        IParameterSymbol parameter,
-        string fallback
-    ) =>
-        localNames?.RenamedBySymbol.TryGetValue(parameter, out var renamed) is true
-            ? renamed
-            : fallback;
 
     /// <summary>
     /// Parses a parameter's default-value syntax into IR so backends that render

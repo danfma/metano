@@ -50,7 +50,9 @@ public static class IrPropertyExtractor
             // Expression-bodied property: the whole `=> expr;` is the getter.
             if (syntax.ExpressionBody is not null)
             {
-                getterBody = stmtExtractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false);
+                getterBody = stmtExtractor
+                    .ExtractBody(null, syntax.ExpressionBody, isVoid: false)
+                    .Statements;
             }
             else if (syntax.AccessorList is not null)
             {
@@ -64,19 +66,15 @@ public static class IrPropertyExtractor
                     && (getter.Body is not null || getter.ExpressionBody is not null)
                 )
                 {
-                    getterBody = stmtExtractor.ExtractBody(
-                        getter.Body,
-                        getter.ExpressionBody,
-                        isVoid: false
-                    );
+                    getterBody = stmtExtractor
+                        .ExtractBody(getter.Body, getter.ExpressionBody, isVoid: false)
+                        .Statements;
                 }
                 if (setter is not null)
                 {
-                    setterBody = stmtExtractor.ExtractBody(
-                        setter.Body,
-                        setter.ExpressionBody,
-                        isVoid: true
-                    );
+                    setterBody = stmtExtractor
+                        .ExtractBody(setter.Body, setter.ExpressionBody, isVoid: true)
+                        .Statements;
                 }
             }
 

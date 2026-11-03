@@ -1618,22 +1618,24 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             else
             {
                 var export = SymbolHelper.GetExportVarFromBody(entryPoint);
-                (entryBody, var pinnedCollisions) = ExtractMethodBody(
+                (entryBody, var unresolvable) = ExtractMethodBody(
                     entryPoint,
                     export is null ? null : new HashSet<string> { export.Name }
                 );
 
                 // A local promoted by [ExportVarFromBody] is the module's
                 // surface, so it keeps its name and the colliding binding is
-                // renamed instead; the collision itself is reported (#398).
-                foreach (var emittedName in pinnedCollisions)
+                // renamed instead. Only a collision the rename cannot resolve
+                // (the other binding is not renamable either) is reported,
+                // against the attribute's C# argument (#398).
+                if (unresolvable.Count > 0 && export is { } pinned)
                 {
                     ReportInvalidEntryPoint(
                         entryPoint,
-                        $"[ExportVarFromBody(\"{emittedName}\")] on '{entryPoint.Name}' names a "
-                            + $"local whose emitted name '{emittedName}' collides with another "
-                            + "binding in the entry point body; rename one of them so the "
-                            + "exported name is unambiguous."
+                        $"[ExportVarFromBody(\"{pinned.Name}\")] on '{entryPoint.Name}' names a "
+                            + $"local whose emitted name collides with another binding that "
+                            + "cannot be renamed; rename one of them so the exported name is "
+                            + "unambiguous."
                     );
                 }
 
@@ -1921,7 +1923,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .Select(g => g.Statement)
             .ToList();
 
-        var irBody = stmtExtractor.ExtractStatements(globalStatements);
+        var irBody = stmtExtractor.ExtractStatements(globalStatements).Statements;
         foreach (
             var ts in IrToTsStatementBridge.MapBody(
                 irBody,
@@ -1952,11 +1954,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// camelCase collisions inside the body are renamed (#398).
     /// <paramref name="pinnedLocalNames"/> names locals that must keep their
     /// emitted name (a <c>[ExportVarFromBody]</c> export); the returned
-    /// collision set names the pinned names that collided anyway.
+    /// collision set names emitted names no rename could resolve.
     /// </summary>
     private (
         IReadOnlyList<IrStatement>? Body,
-        IReadOnlySet<string> PinnedCollisions
+        IReadOnlySet<string> UnresolvableCollisions
     ) ExtractMethodBody(IMethodSymbol method, IReadOnlySet<string>? pinnedLocalNames = null)
     {
         var syntax =
@@ -1969,7 +1971,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var extractor = new IrStatementExtractor(model, ExtractionOptionsFor(pinnedLocalNames));
         var body = extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, method.ReturnsVoid);
 
-        return (body, extractor.PinnedCollisions);
+        return (body.Statements, body.LocalNames.UnresolvableCollisions);
     }
 
     private static bool IsValidEntryPointReturn(ITypeSymbol returnType)

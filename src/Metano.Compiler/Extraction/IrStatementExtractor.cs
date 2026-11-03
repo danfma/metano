@@ -13,17 +13,31 @@ namespace Metano.Compiler.Extraction;
 /// Unsupported kinds produce <see cref="IrUnsupportedStatement"/> placeholders
 /// so callers can detect partial support and fall back to legacy emission.
 /// </summary>
+/// <summary>
+/// One extracted body: its statements, plus the local-binding renames and
+/// unresolvable collisions of the scope they were extracted from (#398) — a
+/// value per body, never extractor state a later body could inherit.
+/// </summary>
+public sealed record ExtractedBody(
+    IReadOnlyList<IrStatement> Statements,
+    LocalBindingNames LocalNames = null!
+)
+{
+    public static ExtractedBody Empty { get; } = new([], LocalBindingNames.Empty);
+}
+
 public sealed class IrStatementExtractor(
     SemanticModel semanticModel,
     IrExtractionContext? options = null,
-    IReadOnlyDictionary<ISymbol, string>? inheritedLocalNames = null
+    LocalBindingNames? inheritedLocalNames = null
 )
 {
     private readonly SemanticModel _semantic = semanticModel;
+    private readonly IrExtractionContext _options = options ?? IrExtractionContext.Empty;
     private readonly IrTypeOriginResolver? _originResolver = options?.OriginResolver;
     private readonly LocalNaming? _localNaming = options?.LocalNaming;
     private readonly IrExpressionExtractor _expressions = new(semanticModel, options);
-    private readonly bool _inheritsLocalNames = inheritedLocalNames is not null;
+    private readonly LocalBindingNames? _inheritedLocalNames = inheritedLocalNames;
 
     /// <summary>
     /// The renames of the body being extracted. Recomputed per body — a
@@ -31,25 +45,7 @@ public sealed class IrStatementExtractor(
     /// except for a lambda-block body, which inherits its member's map so
     /// nested reads see the member's renames (#398).
     /// </summary>
-    private IReadOnlyDictionary<ISymbol, string>? _localNames = inheritedLocalNames;
-
-    /// <summary>
-    /// Emitted names of pinned bindings (module exports) that collided with
-    /// another binding in the last body this extractor disambiguated — the
-    /// TypeScript transformer reports them as MS0006 instead of renaming the
-    /// export (#398).
-    /// </summary>
-    public IReadOnlySet<string> PinnedCollisions { get; private set; } =
-        new HashSet<string>(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The IR name of a local binding's declaration: its disambiguated name
-    /// when the body's map renamed it (#398), otherwise its C# spelling.
-    /// </summary>
-    private string LocalIrName(ISymbol? symbol, string identifier) =>
-        symbol is not null && _localNames?.TryGetValue(symbol, out var renamed) is true
-            ? renamed
-            : identifier;
+    private LocalBindingNames _localNames = LocalBindingNames.Empty;
 
     /// <summary>
     /// Computes the body's local-binding renames once, before any statement
@@ -59,27 +55,31 @@ public sealed class IrStatementExtractor(
     /// own parameters join the walk; a lambda-block body without a member
     /// ancestor (a field initializer) disambiguates against the lambda alone.
     /// An inherited map (a lambda block inside a member body, or a member
-    /// whose map was computed by its extractor) is adopted as-is.
+    /// whose map was computed by its extractor) is adopted as-is, and a body
+    /// with no disambiguable root resets to the empty map.
     /// </summary>
-    private void DisambiguateLocalNames(SyntaxNode? block, ArrowExpressionClauseSyntax? arrow)
+    private LocalBindingNames DisambiguateLocalNames(
+        SyntaxNode? block,
+        ArrowExpressionClauseSyntax? arrow
+    )
     {
-        if (_localNames is not null && (_inheritsLocalNames || _localNaming is null))
+        if (_inheritedLocalNames is not null)
         {
+            _localNames = _inheritedLocalNames;
             _expressions.AdoptLocalNames(_localNames);
-            return;
+            return _localNames;
         }
 
-        if (_localNaming is null)
-            return;
+        if (_localNaming is null || MemberRootOf(block ?? arrow) is not { } root)
+        {
+            _localNames = LocalBindingNames.Empty;
+            _expressions.AdoptLocalNames(_localNames);
+            return _localNames;
+        }
 
-        var root = MemberRootOf(block ?? (SyntaxNode?)arrow);
-        if (root is null)
-            return;
-
-        var names = LocalBindingDisambiguator.Disambiguate(root, _semantic, _localNaming);
-        _localNames = names.RenamedBySymbol;
-        PinnedCollisions = names.PinnedCollisions;
-        _expressions.AdoptLocalNames(names.RenamedBySymbol);
+        _localNames = LocalBindingDisambiguator.ForRoot(root, _options);
+        _expressions.AdoptLocalNames(_localNames);
+        return _localNames;
     }
 
     private static SyntaxNode? MemberRootOf(SyntaxNode? body) =>
@@ -95,29 +95,43 @@ public sealed class IrStatementExtractor(
             );
 
     /// <summary>
+    /// The IR name of a local binding's declaration: its disambiguated name
+    /// when the body's map renamed it (#398), otherwise its C# spelling.
+    /// </summary>
+    private string LocalIrName(ISymbol? symbol, string identifier) =>
+        _localNames.NameOf(symbol, identifier);
+
+    /// <summary>
     /// Extracts a method/constructor/property body from a block or
     /// expression-bodied arrow. Returns the statements that should appear
-    /// inside the target-language body (empty for bodiless declarations).
+    /// inside the target-language body (empty for bodiless declarations)
+    /// with the body's local-binding names (#398).
     /// </summary>
-    public IReadOnlyList<IrStatement> ExtractBody(
+    public ExtractedBody ExtractBody(
         BlockSyntax? block,
         ArrowExpressionClauseSyntax? arrow,
         bool isVoid = false
     )
     {
-        DisambiguateLocalNames(block, arrow);
+        var localNames = DisambiguateLocalNames(block, arrow);
 
         if (arrow is not null)
         {
             var expr = _expressions.Extract(arrow.Expression);
 
-            return _expressions.LowerExpressionVariables(ArrowStatement(expr, isVoid));
+            return new ExtractedBody(
+                _expressions.LowerExpressionVariables(ArrowStatement(expr, isVoid)),
+                localNames
+            );
         }
 
         if (block is null)
-            return [];
+            return new ExtractedBody([], localNames);
 
-        return ExtractStatements(block.Statements);
+        return new ExtractedBody(
+            PromoteEffectiveConsts(ExtractStatementSequence(block.Statements)),
+            localNames
+        );
     }
 
     private static IrStatement ArrowStatement(IrExpression expr, bool isVoid) =>
@@ -131,12 +145,23 @@ public sealed class IrStatementExtractor(
     /// lowering and effective-const promotion passes apply, since they only
     /// need a contiguous statement sequence.
     /// </summary>
-    public IReadOnlyList<IrStatement> ExtractStatements(IReadOnlyList<StatementSyntax> source)
+    public ExtractedBody ExtractStatements(IReadOnlyList<StatementSyntax> source)
     {
-        if (source.Count > 0)
-            DisambiguateLocalNames(source[0], arrow: null);
+        var localNames =
+            _inheritedLocalNames
+            ?? (
+                _localNaming is not null && source.Count > 0
+                    ? LocalBindingDisambiguator.ForStatements(source, _semantic, _localNaming)
+                    : LocalBindingNames.Empty
+            );
 
-        return PromoteEffectiveConsts(ExtractStatementSequence(source));
+        _localNames = localNames;
+        _expressions.AdoptLocalNames(localNames);
+
+        return new ExtractedBody(
+            PromoteEffectiveConsts(ExtractStatementSequence(source)),
+            localNames
+        );
     }
 
     /// <summary>
