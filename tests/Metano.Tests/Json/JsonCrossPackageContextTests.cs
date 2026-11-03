@@ -29,6 +29,8 @@ public class JsonCrossPackageContextTests
         public sealed record Tag(string Name);
 
         public sealed record Page<T>(List<T> Items);
+
+        public abstract record Box<T>(T Value);
         """;
 
     private const string ContextBoilerplate = """
@@ -64,9 +66,7 @@ public class JsonCrossPackageContextTests
     public async Task ConsumerTypeDerivingFromLibraryBase_LinksTheBaseAndReadsItsProperties()
     {
         var ts = TranspileContext(
-            """
-            [JsonSerializable(typeof(VideoClip))]
-            """,
+            "[JsonSerializable(typeof(VideoClip))]",
             "[Transpile] public sealed record VideoClip(string Url, double Seconds) : Clip(Seconds);"
         );
 
@@ -113,9 +113,24 @@ public class JsonCrossPackageContextTests
     }
 
     [Test]
+    public async Task ConsumerTypeDerivingFromLibraryGenericBase_LinksTheConstructedBase()
+    {
+        var ts = TranspileContext(
+            "[JsonSerializable(typeof(TagBox))]",
+            "[Transpile] public sealed record TagBox(Tag Value, int Rank) : Box<Tag>(Value);"
+        );
+
+        await Assert.That(ts).Contains("base: this.boxTag");
+        await Assert.That(ts).Contains("get boxTag(): TypeSpec<Box<Tag>>");
+        await Assert.That(ts).Contains("this.createSpec<Box<Tag>>(");
+        await Assert.That(ts).Contains("spec: () => this.tag");
+        await Assert.That(ts).Contains("import { Box, Tag } from \"shared/shared\";");
+    }
+
+    [Test]
     [Arguments(false)]
     [Arguments(true)]
-    public async Task LibraryImage_LinksTheLibraryBase(bool referenceAssembly)
+    public async Task LibraryHierarchyFromCompiledImage_LinksTheLibraryBase(bool referenceAssembly)
     {
         var files = TranspileHelper.TranspileWithLibraryImage(
             Library,

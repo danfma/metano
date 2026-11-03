@@ -61,11 +61,8 @@ internal sealed class JsonContractClosure(
             if (LinkedBaseOf(current) is { } baseType)
                 Link(current, baseType);
 
-            foreach (var target in RefTargetsOf(current))
-            {
-                if (seen.Contains(target) || _admission.IsDiscoverable(target))
-                    Link(current, target);
-            }
+            foreach (var target in RefTargetsOf(current).Where(_admission.HasObjectContract))
+                Link(current, target);
         }
 
         return new JsonContract(entries, referrers);

@@ -198,8 +198,9 @@ generic types that use it as an argument. Type arguments use the same rule, so
   of non-Metano assemblies, and the dictionary types that are not recognized as
   dictionaries yet: `SortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary`),
   an array of rank > 1, a dictionary with non-`string` keys (not supported
-  yet), or a collection whose element type has no spec in the context (an
-  interface or a type that is not transpiled).
+  yet), a collection whose element type has no spec in the context (an
+  interface or a type that is not transpiled), or a closed generic whose type
+  argument has no spec (`Page<System.Version>`).
 - `MS0036` reports two types that map to one getter (a warning that drops an
   unreferenced root, an error when the losing type is referenced by another
   spec), a getter that would shadow a `SerializerContext` member (`options`,

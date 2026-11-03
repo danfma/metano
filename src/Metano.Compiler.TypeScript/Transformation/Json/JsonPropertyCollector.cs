@@ -26,22 +26,29 @@ internal sealed class JsonPropertyCollector(
     /// no spec), the inherited properties of every toolchain-declared ancestor
     /// are inlined ahead of the own ones, base-most first like the runtime's
     /// base walk, so they are still written, read and passed to the factory.
-    /// Like System.Text.Json, the inlined list is deduplicated by final JSON
-    /// name (FR-009): a property redeclared down the chain (<c>override</c> or
-    /// <c>new</c>) under the same JSON name is declared once, at its base-most
-    /// position with its most-derived declaration, while a redeclaration under
-    /// another JSON name is written under both names.
+    /// The inlined list follows System.Text.Json's hierarchy rules (FR-009):
+    /// a redeclaration (<c>override</c> or <c>new</c>, the same CLR name)
+    /// under the same JSON name is declared once, at its base-most position
+    /// with its most-derived declaration; a redeclaration under another JSON
+    /// name is written under both names; and a <c>[JsonIgnore]</c>
+    /// redeclaration hides every base declaration of that name. Distinct
+    /// properties that share a JSON name (System.Text.Json throws) are all
+    /// kept.
     /// </summary>
     public List<JsonSerializableProperty> PropertiesOf(INamedTypeSymbol type)
     {
         if (LinkedBaseOf(type) is not null)
             return CollectOwnProperties(type);
 
-        return InlinedAncestorsOf(type)
-            .Reverse()
-            .Append(type)
-            .SelectMany(CollectOwnProperties)
-            .GroupBy(property => property.JsonName, StringComparer.Ordinal)
+        var chain = InlinedAncestorsOf(type).Reverse().Append(type).ToList();
+
+        return chain
+            .SelectMany(
+                (declaringType, depth) =>
+                    CollectOwnProperties(declaringType)
+                        .Where(property => !IsIgnoredBelow(chain, depth, property.Property.Name))
+            )
+            .GroupBy(property => (property.Property.Name, property.JsonName))
             .Select(redeclarations => redeclarations.Last())
             .ToList();
     }
@@ -50,7 +57,7 @@ internal sealed class JsonPropertyCollector(
     /// The base type a spec links to through <c>base: this.x</c>, or
     /// <c>null</c> when the base has no object contract in the context. The
     /// base is admitted by the closure rule
-    /// (<see cref="JsonContractAdmission.IsDiscoverable"/>), evaluated against
+    /// (<see cref="JsonContractAdmission.HasObjectContract"/>), evaluated against
     /// its declaring assembly (FR-010): a base of this project under
     /// <c>[Transpile]</c> or <c>[assembly: TranspileAssembly]</c>, a closed
     /// generic base, and a base of a referenced Metano package (FR-047) all
@@ -58,7 +65,7 @@ internal sealed class JsonPropertyCollector(
     /// instead (<see cref="PropertiesOf"/>).
     /// </summary>
     public INamedTypeSymbol? LinkedBaseOf(INamedTypeSymbol type) =>
-        type.BaseType is { } baseType && _admission.IsDiscoverable(baseType) ? baseType : null;
+        type.BaseType is { } baseType && _admission.HasObjectContract(baseType) ? baseType : null;
 
     /// <summary>
     /// The ancestors whose properties an unlinked spec inlines, nearest first:
@@ -87,6 +94,22 @@ internal sealed class JsonPropertyCollector(
             .Where(IsSerializable)
             .Select(ToSerializableProperty)
             .ToList();
+
+    /// <summary>
+    /// Whether a type below <paramref name="depth"/> in the base-first
+    /// <paramref name="chain"/> redeclares the property with
+    /// <c>[JsonIgnore]</c>, which hides the base declarations as in
+    /// System.Text.Json.
+    /// </summary>
+    private static bool IsIgnoredBelow(
+        IReadOnlyList<INamedTypeSymbol> chain,
+        int depth,
+        string propertyName
+    ) =>
+        chain
+            .Skip(depth + 1)
+            .SelectMany(derived => derived.GetMembers(propertyName).OfType<IPropertySymbol>())
+            .Any(redeclaration => SymbolHelper.HasAttribute(redeclaration, "JsonIgnore"));
 
     private static bool IsSerializable(IPropertySymbol property) =>
         !property.IsStatic
