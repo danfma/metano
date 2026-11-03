@@ -4,6 +4,28 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.10.0
+
+_2026-11-03_
+
+
+### ✨ Features
+
+* dispatch polymorphic JSON in the runtime ([#268](https://github.com/danfma/metano/issues/268)) ([c07d251](https://github.com/danfma/metano/commit/c07d251795ea28b90f03d46f402e27b047f739de))
+
+### 🐛 Bug Fixes
+
+* align misplaced JSON metadata errors with STJ ([#268](https://github.com/danfma/metano/issues/268)) ([30cfa36](https://github.com/danfma/metano/commit/30cfa360575b2e866cebd7c902c09fd8079dc060))
+* apply review notes to the JSON wire order and limits ([#268](https://github.com/danfma/metano/issues/268)) ([7faed2a](https://github.com/danfma/metano/commit/7faed2a2b841ccef424f39769d8a6a41a87bc6d7))
+* keep a pending $values misplaced on an ignore-unrecognized abstract base ([#268](https://github.com/danfma/metano/issues/268)) ([74b692c](https://github.com/danfma/metano/commit/74b692cf139d439ed1ba50db0d0b4c36f87a0b71))
+* match STJ for out-of-order $values metadata ([#268](https://github.com/danfma/metano/issues/268)) ([00a8541](https://github.com/danfma/metano/commit/00a8541d16bdaf6ae687a6f9e958b672901aafa3))
+* reject an out-of-order tag on a concrete polymorphic base ([#268](https://github.com/danfma/metano/issues/268)) ([24f5500](https://github.com/danfma/metano/commit/24f5500357b0745e5ad4a4b2900dea5545e20fb5))
+* write JSON derived-first and report runtime errors as JsonException ([#268](https://github.com/danfma/metano/issues/268)) ([729984d](https://github.com/danfma/metano/commit/729984d8f7ddcec7f6a8605e83a9406404673c67)), closes [#425](https://github.com/danfma/metano/issues/425)
+
+### 📝 Documentation
+
+* note the source condition requirement and NuGet registration delay ([9417adb](https://github.com/danfma/metano/commit/9417adb560befd040996ccf0bd617802e87adfeb))
+
 ## 2.9.0
 
 _2026-11-03_
