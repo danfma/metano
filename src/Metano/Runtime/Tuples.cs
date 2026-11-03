@@ -11,8 +11,7 @@
 // reference, never by structure. Calls the compiler recognizes as tuple value
 // equality lower to that helper with the element shape appended when the static
 // tuple type has tuple elements (#331); this flat mapping still serves the calls it
-// does not (an `Equals` with an object-typed argument), comparing a nested tuple
-// element by reference there.
+// declines, comparing a nested tuple element by reference there.
 
 using Metano.Annotations;
 

@@ -12,35 +12,42 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// strongly-typed overload, <c>Equals(object)</c> (a boxed nullable argument
 /// included), through <c>Nullable&lt;T&gt;.Equals</c> or a conditional access
 /// (<c>t?.Equals(u)</c>) — and named arguments in either form. Every call is
-/// recognized from its resolved method symbol, not its syntax shape, and
-/// lowered to one node: <see cref="IrTupleEqualityExpression"/> when both
-/// operands are statically the same <c>ValueTuple</c> instantiation (element
-/// names aside, a nullable tuple unwrapping to it).
+/// recognized from its resolved method symbol, not its syntax shape, when
+/// one operand unwraps to a tuple (the instance form: the receiver), and
+/// lowered to one node.
 /// <para>
-/// An argument that may hold the receiver's tuple — statically
-/// <c>object</c>, <c>ValueType</c>, an interface the tuple implements
-/// (<c>IEquatable&lt;(int, int)&gt;</c>, <c>ITuple</c>, …) or a type
-/// parameter — lowers to the same node: the runtime comparison null-guards
-/// both operands and answers what <c>Nullable&lt;T&gt;.Equals(object)</c>
-/// answers, whatever the argument holds at run time.
+/// <see cref="IrTupleEqualityExpression"/> when the other operand compares
+/// as that tuple: the strongly-typed overload's argument (overload
+/// resolution converted it to the receiver's instantiation, whatever its
+/// natural type), or an operand that may hold the tuple — the same
+/// instantiation (element names aside, a nullable tuple unwrapping to it),
+/// <c>object</c>, <c>ValueType</c>, an interface, a type parameter (struct
+/// constrained or not) or the <c>null</c> literal. The runtime comparison
+/// null-guards both operands, so it answers what C# answers for whatever
+/// that operand holds at run time.
 /// </para>
 /// <para>
-/// An argument that cannot hold the tuple — statically another tuple, or
-/// any other value type (its boxing is that value, never the tuple) — folds
-/// to C#'s answer, <c>false</c>, unless both operands can be <c>null</c>
-/// and are; the operands still evaluate once, receiver first. A receiver
-/// that is not a tuple is not recognized at all, so a user
+/// A fold to C#'s answer when the other operand provably cannot hold the
+/// tuple (<see cref="TupleEqualitySymbols.CannotHoldTuple"/>: another
+/// instantiation, any other concrete value type, a class such as an
+/// array): <c>false</c>, unless both operands can be <c>null</c> and are.
+/// The operands still evaluate once, in order.
+/// </para>
+/// <para>
+/// A receiver that is not a tuple is not recognized at all, so a user
 /// <c>Equals</c> override (renamed or not, over a class, <c>string</c> or a
-/// generic <c>T</c>) keeps the general lowering.
+/// generic <c>T</c>) keeps the general lowering; so do two operands that
+/// both may hold a tuple without either being one (<c>object</c> and
+/// <c>object</c>). The recognizer runs before the declarative
+/// <c>[MapMethod]</c> registry, so a user mapping of
+/// <c>ValueTuple.Equals</c> does not apply to a recognized call.
 /// </para>
 /// <para>
-/// A boxed tuple (an operand statically <c>object</c>) compares by value
-/// when the other operand is statically the tuple; two operands both
-/// statically <c>object</c> keep the reference comparison — at runtime
-/// either may hold a C# array. The recognizer runs before the declarative
-/// <c>[MapMethod]</c> registry, so a user mapping of
-/// <c>ValueTuple.Equals</c> does not apply to a same-instantiation tuple
-/// equality.
+/// Limitation (type erasure): a boxed value whose runtime shape is the
+/// tuple's — an array or tuple of equal elements under a different C# type,
+/// such as <c>object o = (1, 2L)</c> or an <c>int[]</c> boxed as
+/// <c>object</c> — compares equal in TypeScript and Dart, where C# answers
+/// <c>false</c>.
 /// </para>
 /// </summary>
 public sealed partial class IntrinsicBclLoweringTable
@@ -58,9 +65,9 @@ public sealed partial class IntrinsicBclLoweringTable
     /// let-lowerings scope each binding to its own immediately invoked
     /// function, so a nested fold never reads an enclosing one's binding.
     /// </summary>
-    private const string ReceiverTemp = "tuple$receiver";
+    private const string LeftTemp = "tuple$left";
 
-    private const string ArgumentTemp = "tuple$argument";
+    private const string RightTemp = "tuple$right";
 
     private void SeedTupleEquality(Compilation compilation)
     {
@@ -130,37 +137,42 @@ public sealed partial class IntrinsicBclLoweringTable
         if (ctx.Symbol is not { } symbol)
             return null;
 
-        return symbol.IsStatic ? BuildStaticTupleEquality(ctx) : BuildInstanceTupleEquality(ctx);
+        return symbol.IsStatic
+            ? BuildStaticTupleEquality(ctx)
+            : BuildInstanceTupleEquality(ctx, symbol);
     }
 
     /// <summary>
     /// <c>object.Equals(a, b)</c>: the operands in the order written — named
     /// arguments in either order included, since tuple equality is
-    /// symmetric — each lowered once.
+    /// symmetric — each lowered once. One operand must unwrap to a tuple;
+    /// the other compares against it as the instance form's argument does.
     /// </summary>
     private IrExpression? BuildStaticTupleEquality(InvocationRewriteContext ctx)
     {
-        var arguments = ctx.Invocation.ArgumentList.Arguments;
-
-        if (arguments.Count != 2)
+        if (ctx.Invocation.ArgumentList.Arguments is not [{ } first, { } second])
             return null;
 
-        var left = TupleEqualitySymbols.UnderlyingTupleOf(
-            ctx.SemanticModel.GetTypeInfo(arguments[0].Expression).Type
-        );
+        var firstType = ctx.SemanticModel.GetTypeInfo(first.Expression).Type;
+        var secondType = ctx.SemanticModel.GetTypeInfo(second.Expression).Type;
 
-        var right = TupleEqualitySymbols.UnderlyingTupleOf(
-            ctx.SemanticModel.GetTypeInfo(arguments[1].Expression).Type
-        );
+        var tuple =
+            TupleEqualitySymbols.UnderlyingTupleOf(firstType)
+            ?? TupleEqualitySymbols.UnderlyingTupleOf(secondType);
 
-        if (!TupleEqualitySymbols.IsSameInstantiation(left, right, out var tupleType))
+        if (tuple is null)
             return null;
 
-        return TupleEqualityNode(
-            tupleType,
-            ctx.Recurse(arguments[0].Expression),
-            ctx.Recurse(arguments[1].Expression)
-        );
+        var left = ctx.Recurse(first.Expression);
+        var right = ctx.Recurse(second.Expression);
+
+        var eitherCannotHold =
+            TupleEqualitySymbols.CannotHoldTuple(firstType, tuple)
+            || TupleEqualitySymbols.CannotHoldTuple(secondType, tuple);
+
+        return eitherCannotHold
+            ? FoldedEquality(left, firstType, right, secondType)
+            : TupleEqualityNode(tuple, left, right);
     }
 
     /// <summary>
@@ -170,7 +182,10 @@ public sealed partial class IntrinsicBclLoweringTable
     /// form, so the enclosing null-conditional guard re-reads — never
     /// re-evaluates — the receiver.
     /// </summary>
-    private IrExpression? BuildInstanceTupleEquality(InvocationRewriteContext ctx)
+    private IrExpression? BuildInstanceTupleEquality(
+        InvocationRewriteContext ctx,
+        IMethodSymbol symbol
+    )
     {
         if (ReceiverOperand.Of(ctx.Invocation) is not { } receiver)
             return null;
@@ -188,29 +203,12 @@ public sealed partial class IntrinsicBclLoweringTable
             return null;
 
         var argumentType = ctx.SemanticModel.GetTypeInfo(argument.Expression).Type;
-        var argumentTuple = TupleEqualitySymbols.UnderlyingTupleOf(argumentType);
 
-        if (
-            TupleEqualitySymbols.IsSameInstantiation(
-                receiverTuple,
-                argumentTuple,
-                out var tupleType
-            )
-        )
-        {
-            return TupleEqualityNode(
-                tupleType,
-                ReceiverValueOf(ctx, receiver),
-                ctx.Recurse(argument.Expression)
-            );
-        }
+        var comparesAsTuple =
+            IsStronglyTypedTupleEquals(symbol)
+            || !TupleEqualitySymbols.CannotHoldTuple(argumentType, receiverTuple);
 
-        // An argument that may hold the tuple (object, ValueType, an
-        // interface, a type parameter) compares like the same instantiation
-        // — the runtime null-guards answer whatever the argument holds. Only
-        // a value-type argument cannot: its boxing is that value, never the
-        // tuple, so C# answers false (unless both are null).
-        if (argumentType is not { IsValueType: true })
+        if (comparesAsTuple)
         {
             return TupleEqualityNode(
                 receiverTuple,
@@ -219,19 +217,29 @@ public sealed partial class IntrinsicBclLoweringTable
             );
         }
 
+        // The enclosing null-conditional guard already evaluated the
+        // receiver and answers null for it, so the fold is left with the
+        // argument alone.
         if (receiver.IsConditionalAccess)
             return FalseAfter(ctx.Recurse(argument.Expression));
 
-        if (!TupleEqualitySymbols.IsNullableTuple(receiverType))
-            return FalseAfter(ctx.Recurse(receiver.Syntax), ctx.Recurse(argument.Expression));
-
-        if (!TupleEqualitySymbols.MayBeNull(argumentType))
-        {
-            return FalseAfter(ctx.Recurse(receiver.Syntax), ctx.Recurse(argument.Expression));
-        }
-
-        return FalseUnlessBothNull(ctx.Recurse(receiver.Syntax), ctx.Recurse(argument.Expression));
+        return FoldedEquality(
+            ctx.Recurse(receiver.Syntax),
+            receiverType,
+            ctx.Recurse(argument.Expression),
+            argumentType
+        );
     }
+
+    /// <summary>
+    /// The strongly-typed <c>ValueTuple.Equals(ValueTuple&lt;…&gt;)</c>:
+    /// overload resolution converted the argument to the receiver's own
+    /// instantiation (<c>(int, int)</c> to <c>(long, long)</c>), so it
+    /// compares as that tuple whatever its natural type.
+    /// </summary>
+    private static bool IsStronglyTypedTupleEquals(IMethodSymbol symbol) =>
+        symbol.Parameters is [{ Type: var parameterType }]
+        && TupleEqualitySymbols.UnderlyingTupleOf(parameterType) is not null;
 
     private IrExpression? TupleEqualityNode(
         INamedTypeSymbol tuple,
@@ -247,40 +255,53 @@ public sealed partial class IntrinsicBclLoweringTable
     }
 
     /// <summary>
-    /// <c>false</c> after every operand's evaluation (C# evaluates the
-    /// receiver, then the boxed argument) — the flat literal when all the
-    /// operands are side-effect free.
+    /// C#'s answer for two operands of which one provably cannot hold the
+    /// other's tuple: <c>false</c>, unless both can be <c>null</c> and are.
+    /// The operands still evaluate once, in the order given.
+    /// </summary>
+    private static IrExpression FoldedEquality(
+        IrExpression left,
+        ITypeSymbol? leftType,
+        IrExpression right,
+        ITypeSymbol? rightType
+    )
+    {
+        var bothMayBeNull =
+            TupleEqualitySymbols.MayBeNull(leftType) && TupleEqualitySymbols.MayBeNull(rightType);
+
+        return bothMayBeNull ? FalseUnlessBothNull(left, right) : FalseAfter(left, right);
+    }
+
+    /// <summary>
+    /// <c>false</c> after every operand's evaluation, in order — the flat
+    /// literal when all the operands are side-effect free.
     /// </summary>
     private static IrExpression FalseAfter(params IrExpression[] operands) =>
-        operands.All(AreSideEffectFree)
+        operands.All(IrEvaluationTraits.IsSideEffectFree)
             ? FalseLiteral()
             : new IrSequenceExpression(operands, FalseLiteral());
 
-    private static bool AreSideEffectFree(IrExpression operand) =>
-        IrEvaluationTraits.IsSideEffectFree(operand);
-
     /// <summary>
-    /// C#'s answer for a nullable tuple against a value-type argument that
-    /// can itself be <c>null</c>: <c>false</c>, unless both operands are
-    /// <c>null</c>. The operands are bound when either has side effects, so
-    /// each still evaluates exactly once, receiver first.
+    /// <c>false</c>, unless both operands are <c>null</c>. The operands are
+    /// bound when either has side effects, so each still evaluates exactly
+    /// once, left first.
     /// </summary>
-    private static IrExpression FalseUnlessBothNull(IrExpression receiver, IrExpression argument)
+    private static IrExpression FalseUnlessBothNull(IrExpression left, IrExpression right)
     {
-        if (AreSideEffectFree(receiver) && AreSideEffectFree(argument))
+        if (IrEvaluationTraits.IsSideEffectFree(left) && IrEvaluationTraits.IsSideEffectFree(right))
         {
-            return new IrConditionalExpression(IsNull(receiver), IsNull(argument), FalseLiteral());
+            return new IrConditionalExpression(IsNull(left), IsNull(right), FalseLiteral());
         }
 
         return new IrLetExpression(
-            ReceiverTemp,
-            receiver,
+            LeftTemp,
+            left,
             new IrLetExpression(
-                ArgumentTemp,
-                argument,
+                RightTemp,
+                right,
                 new IrConditionalExpression(
-                    IsNull(new IrIdentifier(ReceiverTemp)),
-                    IsNull(new IrIdentifier(ArgumentTemp)),
+                    IsNull(new IrIdentifier(LeftTemp)),
+                    IsNull(new IrIdentifier(RightTemp)),
                     FalseLiteral()
                 )
             )
