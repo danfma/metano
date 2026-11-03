@@ -10,14 +10,20 @@ namespace Metano.Compiler.Extraction;
 /// The target's local-naming decision, plumbed into the core extractors
 /// through <see cref="IrExtractionContext"/>: the function maps an IR local
 /// name (the C# spelling) to the name the target emits, and
-/// <see cref="PinnedNames"/> lists C# local names that must not be renamed
-/// because they are part of the module surface (a local promoted by
-/// <c>[ExportVarFromBody]</c>).
+/// <see cref="PinnedLocals"/> lists the local symbols that must not be
+/// renamed because they are part of the module surface (the local promoted
+/// by <c>[ExportVarFromBody]</c>). Pinning is by symbol, not by name: an
+/// inner local that shadows the export with the same spelling is an
+/// ordinary binding and still yields.
 /// </summary>
 public sealed record LocalNaming(
     Func<string, string> EmitLocalName,
-    IReadOnlySet<string>? PinnedNames = null
-);
+    IReadOnlySet<ISymbol>? PinnedLocals = null
+)
+{
+    public bool IsPinned(ISymbol symbol) =>
+        PinnedLocals is not null && PinnedLocals.Contains(symbol);
+}
 
 /// <summary>
 /// One member body's local-binding renames (#398): C# is case-sensitive but
@@ -148,11 +154,17 @@ internal static class LocalBindingDisambiguator
     private static LocalBindingNames ForPrimaryConstructor(
         TypeDeclarationSyntax type,
         IrExtractionContext context
-    ) => ForRoots(PrimaryConstructorScope(type).ToList(), type.ParameterList!, context);
+    ) =>
+        type.ParameterList is { } parameters
+            ? ForRoots(PrimaryConstructorScope(type, parameters).ToList(), parameters, context)
+            : LocalBindingNames.Empty;
 
-    private static IEnumerable<SyntaxNode> PrimaryConstructorScope(TypeDeclarationSyntax type)
+    private static IEnumerable<SyntaxNode> PrimaryConstructorScope(
+        TypeDeclarationSyntax type,
+        ParameterListSyntax parameters
+    )
     {
-        yield return type.ParameterList!;
+        yield return parameters;
 
         var primaryBase = type
             .BaseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>()
@@ -161,25 +173,25 @@ internal static class LocalBindingDisambiguator
         if (primaryBase is not null)
             yield return primaryBase.ArgumentList;
 
-        foreach (var member in type.Members.Where(IsInstanceMember))
-        {
-            switch (member)
-            {
-                case FieldDeclarationSyntax field:
-                    foreach (var declarator in field.Declaration.Variables)
-                    {
-                        if (declarator.Initializer is { } fieldInitializer)
-                            yield return fieldInitializer;
-                    }
-
-                    break;
-
-                case PropertyDeclarationSyntax { Initializer: { } propertyInitializer }:
-                    yield return propertyInitializer;
-                    break;
-            }
-        }
+        foreach (var initializer in type.Members.Where(IsInstanceMember).SelectMany(InitializersOf))
+            yield return initializer;
     }
+
+    /// <summary>
+    /// The initializers a member declares: each initialized declarator of a
+    /// field, or a property's initializer.
+    /// </summary>
+    private static IEnumerable<EqualsValueClauseSyntax> InitializersOf(
+        MemberDeclarationSyntax member
+    ) =>
+        member switch
+        {
+            FieldDeclarationSyntax field => field
+                .Declaration.Variables.Select(declarator => declarator.Initializer)
+                .OfType<EqualsValueClauseSyntax>(),
+            PropertyDeclarationSyntax { Initializer: { } initializer } => [initializer],
+            _ => [],
+        };
 
     /// <summary>
     /// The type declaring a primary constructor whose scope covers the
@@ -290,7 +302,7 @@ internal static class LocalBindingDisambiguator
                 }
 
                 var collisions =
-                    IsPinned(later, naming) || IsPinned(earlier, naming)
+                    naming.IsPinned(later.Symbol) || naming.IsPinned(earlier.Symbol)
                         ? pinnedCollisions
                         : unresolvable;
 
@@ -334,9 +346,6 @@ internal static class LocalBindingDisambiguator
         return (irName, naming.EmitLocalName(irName));
     }
 
-    private static bool IsPinned(Binding binding, LocalNaming naming) =>
-        naming.PinnedNames is not null && naming.PinnedNames.Contains(binding.Identifier);
-
     /// <summary>
     /// Reports each unresolvable collision through the general extraction
     /// sink, at the walk's root — the target transformer's diagnostic list
@@ -375,7 +384,6 @@ internal static class LocalBindingDisambiguator
 
     private sealed record Binding(
         ISymbol Symbol,
-        string Identifier,
         string IrName,
         string EmittedName,
         int Position,
@@ -478,12 +486,11 @@ internal static class LocalBindingDisambiguator
 
             return new Binding(
                 symbol,
-                identifier,
                 irName,
                 naming.EmitLocalName(irName),
                 position,
                 scope,
-                IsRenamable(symbol, identifier, naming)
+                IsRenamable(symbol, naming)
             );
         }
 
@@ -519,11 +526,10 @@ internal static class LocalBindingDisambiguator
         /// constructor parameter, an <c>[ObjectArgs]</c> key, an accessor's
         /// <c>value</c> and an extension receiver keep their name.
         /// </summary>
-        private static bool IsRenamable(ISymbol symbol, string identifier, LocalNaming naming) =>
+        private static bool IsRenamable(ISymbol symbol, LocalNaming naming) =>
             symbol switch
             {
-                ILocalSymbol => naming.PinnedNames is null
-                    || !naming.PinnedNames.Contains(identifier),
+                ILocalSymbol local => !naming.IsPinned(local),
                 IParameterSymbol parameter => IrParameterNaming.IsRenamable(parameter),
                 _ => false,
             };
@@ -579,8 +585,9 @@ internal static class LocalBindingDisambiguator
         /// <summary>
         /// A pattern designator's or out-var's scope: the nearest enclosing
         /// scope container. A field or property initializer, and a primary
-        /// constructor's base-call arguments, scope their own designations. A loop condition's designation scopes to the loop
-        /// (the lowering binds a fresh local per iteration, inside it), a
+        /// constructor's base-call arguments, scope their own designations.
+        /// A loop condition's designation scopes to the loop (the lowering
+        /// binds a fresh local per iteration, inside it), a
         /// switch expression arm's to the arm, a case label's to its switch
         /// section (the bridge wraps each label's bindings in <c>{}</c>);
         /// anything else — a designation a section statement or an if

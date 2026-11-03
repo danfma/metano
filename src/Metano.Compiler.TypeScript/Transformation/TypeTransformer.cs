@@ -1619,10 +1619,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             {
                 var export = SymbolHelper.GetExportVarFromBody(entryPoint);
 
-                (entryBody, var pinnedCollisions) = ExtractMethodBody(
-                    entryPoint,
-                    export is null ? null : new HashSet<string> { export.Name }
-                );
+                (entryBody, var pinnedCollisions) = ExtractMethodBody(entryPoint, export?.Name);
 
                 // A local promoted by [ExportVarFromBody] is the module's
                 // surface, so it keeps its name and the colliding binding is
@@ -1937,45 +1934,74 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// The extraction context for a method body, with the pinned local names
-    /// of a <c>[ExportVarFromBody]</c> export folded into the local-naming
+    /// The extraction context for a method body, with the pinned locals of a
+    /// <c>[ExportVarFromBody]</c> export folded into the local-naming
     /// decision so the export is never renamed (#398).
     /// </summary>
-    private IrExtractionContext ExtractionContextFor(IReadOnlySet<string>? pinnedLocalNames) =>
-        pinnedLocalNames is null
+    private IrExtractionContext ExtractionContextFor(IReadOnlySet<ISymbol> pinnedLocals) =>
+        pinnedLocals.Count == 0
             ? Context.Extraction
             : Context.Extraction with
             {
-                LocalNaming = IrToTsNamingPolicy.LocalNaming with
-                {
-                    PinnedNames = pinnedLocalNames,
-                },
+                LocalNaming = IrToTsNamingPolicy.LocalNaming with { PinnedLocals = pinnedLocals },
             };
 
     /// <summary>
     /// Extracts a method body with the TypeScript local-naming policy, so
     /// camelCase collisions inside the body are renamed (#398).
-    /// <paramref name="pinnedLocalNames"/> names locals that must keep their
-    /// emitted name (a <c>[ExportVarFromBody]</c> export); the returned
-    /// collision set names the emitted names of the pinned locals no rename
-    /// could free.
+    /// <paramref name="exportedLocalName"/> names the <c>[ExportVarFromBody]</c>
+    /// export, whose local keeps its emitted name; the returned collision set
+    /// names the emitted names of the pinned locals no rename could free.
     /// </summary>
     private (
         IReadOnlyList<IrStatement>? Body,
         IReadOnlySet<string> PinnedCollisions
-    ) ExtractMethodBody(IMethodSymbol method, IReadOnlySet<string>? pinnedLocalNames = null)
+    ) ExtractMethodBody(IMethodSymbol method, string? exportedLocalName)
     {
         var syntax =
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as MethodDeclarationSyntax;
+
         if (syntax is null || (syntax.Body is null && syntax.ExpressionBody is null))
             return (null, new HashSet<string>());
 
         var model = Context.Compilation.GetSemanticModel(syntax.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, ExtractionContextFor(pinnedLocalNames));
+        var pinnedLocals = ExportedLocalsOf(syntax.Body, exportedLocalName, model);
+        var extractor = new IrStatementExtractor(model, ExtractionContextFor(pinnedLocals));
         var body = extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, method.ReturnsVoid);
 
         return (body.Statements, body.LocalNames.PinnedCollisions);
+    }
+
+    /// <summary>
+    /// The local an <c>[ExportVarFromBody]</c> export promotes: the one
+    /// declared directly in the entry point's own body block under the
+    /// exported name. A same-named local of a nested scope (a lambda, an
+    /// inner block) is a different symbol and stays renamable.
+    /// </summary>
+    private static IReadOnlySet<ISymbol> ExportedLocalsOf(
+        BlockSyntax? body,
+        string? exportedLocalName,
+        SemanticModel model
+    )
+    {
+        var pinned = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+
+        if (body is null || exportedLocalName is null)
+            return pinned;
+
+        var declarators = body
+            .Statements.OfType<LocalDeclarationStatementSyntax>()
+            .SelectMany(statement => statement.Declaration.Variables)
+            .Where(declarator => declarator.Identifier.ValueText == exportedLocalName);
+
+        foreach (var declarator in declarators)
+        {
+            if (model.GetDeclaredSymbol(declarator) is { } local)
+                pinned.Add(local);
+        }
+
+        return pinned;
     }
 
     private static bool IsValidEntryPointReturn(ITypeSymbol returnType)

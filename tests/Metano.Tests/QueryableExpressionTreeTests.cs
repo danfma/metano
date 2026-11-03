@@ -339,6 +339,7 @@ public class QueryableExpressionTreeTests
                 ),
                 isExplicitOptIn: true
             );
+
             var meta = walker.TryExtract(lambda);
             await Assert.That(meta).IsNull();
         }
@@ -596,6 +597,7 @@ public class QueryableExpressionTreeTests
                 ),
                 isExplicitOptIn: false
             );
+
             walker.TryExtract(lambda);
         }
 

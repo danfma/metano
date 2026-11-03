@@ -113,6 +113,7 @@ public static class IrModuleFunctionExtractor
                 {
                     if (node.Kind().ToString() != "ExtensionBlockDeclaration")
                         continue;
+
                     ExtractFromExtensionBlock(node, context, functions);
                 }
             }
@@ -348,26 +349,15 @@ public static class IrModuleFunctionExtractor
         if (getter is null)
             return null;
 
-        var getterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
-            a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
+        var body = ExtractGetterBody(
+            syntax.ExpressionBody,
+            GetAccessorOf(syntax.AccessorList),
+            model,
+            context
         );
 
-        var extractor = new IrStatementExtractor(model, context);
-        IReadOnlyList<IrStatement>? body;
-        if (syntax.ExpressionBody is not null)
-        {
-            body = extractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false).Statements;
-        }
-        else if (getterSyntax is not null)
-        {
-            body = extractor
-                .ExtractBody(getterSyntax.Body, getterSyntax.ExpressionBody, isVoid: false)
-                .Statements;
-        }
-        else
-        {
+        if (body is null)
             return null;
-        }
 
         var parameters = new List<IrParameter> { receiver };
         parameters.AddRange(
@@ -416,10 +406,12 @@ public static class IrModuleFunctionExtractor
 
         if (setterSyntax is null)
             return null;
+
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
             return null;
 
         var extractor = new IrStatementExtractor(model, context);
+
         var body = extractor
             .ExtractBody(setterSyntax.Body, setterSyntax.ExpressionBody, isVoid: true)
             .Statements;
@@ -521,27 +513,16 @@ public static class IrModuleFunctionExtractor
     )
     {
         var originResolver = context.OriginResolver;
-        var extractor = new IrStatementExtractor(model, context);
-        IReadOnlyList<IrStatement>? body;
-        if (syntax.ExpressionBody is not null)
-        {
-            body = extractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false).Statements;
-        }
-        else if (
-            syntax.AccessorList?.Accessors.FirstOrDefault(a =>
-                a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
-            ) is
-            { } getter
-        )
-        {
-            body = extractor
-                .ExtractBody(getter.Body, getter.ExpressionBody, isVoid: false)
-                .Statements;
-        }
-        else
-        {
+
+        var body = ExtractGetterBody(
+            syntax.ExpressionBody,
+            GetAccessorOf(syntax.AccessorList),
+            model,
+            context
+        );
+
+        if (body is null)
             return null;
-        }
 
         return new IrModuleFunction(
             Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
@@ -582,11 +563,13 @@ public static class IrModuleFunctionExtractor
 
         if (setterSyntax is null)
             return null;
+
         // Skip auto-set without a body — there's no backing field to mutate.
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
             return null;
 
         var extractor = new IrStatementExtractor(model, context);
+
         var body = extractor
             .ExtractBody(setterSyntax.Body, setterSyntax.ExpressionBody, isVoid: true)
             .Statements;
@@ -693,29 +676,17 @@ public static class IrModuleFunctionExtractor
     )
     {
         var originResolver = context.OriginResolver;
-        var extractor = new IrStatementExtractor(model, context);
-        IReadOnlyList<IrStatement>? body;
-        if (syntax.ExpressionBody is not null)
-        {
-            body = extractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false).Statements;
-        }
-        else if (
-            syntax.AccessorList?.Accessors.FirstOrDefault(a =>
-                a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
-            ) is
-            { } getter
-        )
-        {
-            if (getter.Body is null && getter.ExpressionBody is null)
-                return null;
-            body = extractor
-                .ExtractBody(getter.Body, getter.ExpressionBody, isVoid: false)
-                .Statements;
-        }
-        else
-        {
+        var getter = GetAccessorOf(syntax.AccessorList);
+
+        // An auto-property getter has no body: the module form has no
+        // backing field to read from.
+        if (syntax.ExpressionBody is null && getter is { Body: null, ExpressionBody: null })
             return null;
-        }
+
+        var body = ExtractGetterBody(syntax.ExpressionBody, getter, model, context);
+
+        if (body is null)
+            return null;
 
         return new IrModuleFunction(
             Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
@@ -752,10 +723,12 @@ public static class IrModuleFunctionExtractor
 
         if (setterSyntax is null)
             return null;
+
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
             return null;
 
         var extractor = new IrStatementExtractor(model, context);
+
         var body = extractor
             .ExtractBody(setterSyntax.Body, setterSyntax.ExpressionBody, isVoid: true)
             .Statements;
@@ -908,5 +881,34 @@ public static class IrModuleFunctionExtractor
         var model = context.Compilation.GetSemanticModel(syntax!.SyntaxTree);
 
         return new IrExpressionExtractor(model, context).Extract(defaultExpression);
+    }
+
+    private static AccessorDeclarationSyntax? GetAccessorOf(AccessorListSyntax? accessors) =>
+        accessors?.Accessors.FirstOrDefault(a =>
+            a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
+        );
+
+    /// <summary>
+    /// The body of a getter-shaped module function: the declaration's
+    /// <c>=&gt; expr</c> arrow, else its get accessor's body; null when it
+    /// has neither.
+    /// </summary>
+    private static IReadOnlyList<IrStatement>? ExtractGetterBody(
+        ArrowExpressionClauseSyntax? arrow,
+        AccessorDeclarationSyntax? getter,
+        SemanticModel model,
+        IrExtractionContext context
+    )
+    {
+        var extractor = new IrStatementExtractor(model, context);
+
+        return (arrow, getter) switch
+        {
+            ({ } expression, _) => extractor.ExtractBody(null, expression).Statements,
+            (null, { } accessor) => extractor
+                .ExtractBody(accessor.Body, accessor.ExpressionBody)
+                .Statements,
+            _ => null,
+        };
     }
 }

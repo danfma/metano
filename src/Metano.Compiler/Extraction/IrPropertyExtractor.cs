@@ -59,6 +59,7 @@ public static class IrPropertyExtractor
                 var getter = syntax.AccessorList.Accessors.FirstOrDefault(a =>
                     a.IsKind(SyntaxKind.GetAccessorDeclaration)
                 );
+
                 var setter = SetterBodySyntax(prop, syntax.AccessorList);
 
                 if (
@@ -70,6 +71,7 @@ public static class IrPropertyExtractor
                         .ExtractBody(getter.Body, getter.ExpressionBody, isVoid: false)
                         .Statements;
                 }
+
                 if (setter is not null)
                 {
                     setterBody = stmtExtractor

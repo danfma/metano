@@ -2516,6 +2516,7 @@ public sealed partial class IrExpressionExtractor
                 localNames: null,
                 _inlineExpanding
             );
+
             return extractor.Extract(initializer);
         }
         finally

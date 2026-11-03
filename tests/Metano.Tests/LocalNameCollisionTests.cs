@@ -685,6 +685,28 @@ public class LocalNameCollisionTests
     }
 
     [Test]
+    public async Task StaticFieldInitializer_InPrimaryConstructorType_DoesNotYieldToConstructorParameter()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample(int total)
+            {
+                public static Func<int, int> F = Total => Total + 1;
+
+                public int Total => total;
+            }
+            """
+        )["sample.ts"];
+
+        // A static initializer cannot see the constructor parameter, so it
+        // is its own root and its lambda parameter keeps its name.
+        await Assert
+            .That(output)
+            .Contains("static f: (arg: number) => number = (total: number) => total + 1;");
+    }
+
+    [Test]
     public async Task ExplicitConstructorCollision_InPrimaryConstructorType_ReportsOnce()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
@@ -784,7 +806,10 @@ public class LocalNameCollisionTests
         );
 
         // A local function's parameter keeps its name and the export is
-        // pinned: neither yields, so the export's attribute is blamed.
+        // pinned: neither yields, so the export's attribute is blamed. This
+        // is the only shape that reaches MS0006 today, and local functions
+        // are themselves unsupported in an entry point (MS0001 skips it);
+        // the test pins the guard for when they are supported.
         await Assert
             .That(
                 diagnostics.Count(d =>
@@ -793,6 +818,37 @@ public class LocalNameCollisionTests
             )
             .IsEqualTo(1);
         await Assert.That(diagnostics.Any(d => d.Code == "MS0003")).IsFalse();
+    }
+
+    [Test]
+    public async Task InnerLocalShadowingExport_RenamesInnerLocal_NoDiagnostic()
+    {
+        var (output, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Program
+            {
+                [ModuleEntryPoint, ExportVarFromBody("App")]
+                public static void Main()
+                {
+                    var App = 1;
+                    Func<int> f = () => { var App = 2; return App; };
+                    System.Console.WriteLine(f() + App);
+                }
+            }
+            """
+        );
+
+        var program = output["program.ts"];
+
+        // Only the entry point's own `App` is the export; the lambda's `App`
+        // is a different symbol, an ordinary local that yields its name.
+        await Assert.That(program).Contains("const app = 1;");
+        await Assert.That(program).Contains("const app$1 = 2;");
+        await Assert.That(program).Contains("return app$1;");
+        await Assert.That(program).Contains("console.log(f() + app);");
+        await Assert.That(program).Contains("export { app };");
+        await Assert.That(diagnostics.Any(d => d.Code is "MS0006" or "MS0003")).IsFalse();
     }
 
     [Test]
