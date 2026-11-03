@@ -24,11 +24,12 @@ internal static class IrToTsBodyHelpers
     public static List<TsStatement> LowerOrNotImplemented(
         IReadOnlyList<IrStatement>? body,
         string nameForError,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields = null
     ) =>
         body is null
             ? [NotImplementedThrow(nameForError)]
-            : IrToTsStatementBridge.MapBody(body, bclRegistry).ToList();
+            : IrToTsStatementBridge.MapBody(body, bclRegistry, classFields).ToList();
 
     private static TsStatement NotImplementedThrow(string name) =>
         new TsThrowStatement(

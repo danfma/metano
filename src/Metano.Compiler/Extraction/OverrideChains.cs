@@ -53,28 +53,16 @@ internal static class OverrideChains
     /// <summary>
     /// A non-virtual auto-property (<c>new int P</c>) hiding an inherited one that owns
     /// per-class storage: declared as a plain field it would sit over the base's accessor.
+    /// Starts above the declaring class, whose own property is the one being decided.
     /// </summary>
-    private static bool HidesPerClassStorage(IPropertySymbol property)
-    {
-        for (
-            var ancestor = property.ContainingType.BaseType;
-            ancestor is not null;
-            ancestor = ancestor.BaseType
-        )
-        {
-            if (
+    private static bool HidesPerClassStorage(IPropertySymbol property) =>
+        AncestorsOf(property.ContainingType)
+            .Any(ancestor =>
                 ancestor
                     .GetMembers(property.Name)
                     .OfType<IPropertySymbol>()
                     .Any(hidden => OwnsPerClassStorage(hidden))
-            )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+            );
 
     /// <summary>
     /// The accessor <paramref name="property"/> leaves to the properties it overrides: an
@@ -131,27 +119,20 @@ internal static class OverrideChains
     /// Whether <paramref name="type"/> or a class the compilation declares among its
     /// ancestors declares an instance method that the target emits as <c>toJSON</c>
     /// (an unrenamed <c>ToJSON</c>, or one renamed to it for <paramref name="target"/>).
+    /// Stops at the first ancestor the toolchain does not emit, as an inheritance
+    /// chain never re-enters emitted types after leaving them.
     /// </summary>
     public static bool DeclaresToJson(
         INamedTypeSymbol type,
         Compilation? compilation,
         Metano.Annotations.TargetLanguage? target
-    )
-    {
-        for (
-            var current = type;
-            current is not null
-                && compilation is not null
-                && IsEmittedByToolchain(current, compilation);
-            current = current.BaseType
-        )
-        {
-            if (current.GetMembers().OfType<IMethodSymbol>().Any(m => IsToJson(m, target)))
-                return true;
-        }
-
-        return false;
-    }
+    ) =>
+        compilation is not null
+        && TypeAndAncestorsOf(type)
+            .TakeWhile(current => IsEmittedByToolchain(current, compilation))
+            .Any(current =>
+                current.GetMembers().OfType<IMethodSymbol>().Any(m => IsToJson(m, target))
+            );
 
     private static bool IsToJson(IMethodSymbol method, Metano.Annotations.TargetLanguage? target) =>
         method is { IsStatic: false, MethodKind: MethodKind.Ordinary }
@@ -166,43 +147,53 @@ internal static class OverrideChains
     /// <summary>
     /// Whether a class the compilation declares, among the ancestors of
     /// <paramref name="type"/>, emits an auto-property with per-class storage
-    /// (<see cref="OwnsPerClassStorage"/>): one that is neither <c>[Ignore]</c>d for
-    /// <paramref name="target"/> nor <c>private protected</c>, which a backend omits.
+    /// (<see cref="EmitsPerClassStorage(IPropertySymbol, Metano.Annotations.TargetLanguage?)"/>).
     /// </summary>
     public static bool AncestorOwnsPerClassStorage(
         INamedTypeSymbol type,
         Compilation? compilation,
         Metano.Annotations.TargetLanguage? target
-    )
-    {
-        if (compilation is null)
-            return false;
-
-        for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
-        {
-            if (
+    ) =>
+        compilation is not null
+        && AncestorsOf(type)
+            .Any(ancestor =>
                 IsEmittedByToolchain(ancestor, compilation)
-                && EmitsPerClassStorage(ancestor, target)
-            )
-            {
-                return true;
-            }
-        }
+                && ancestor
+                    .GetMembers()
+                    .OfType<IPropertySymbol>()
+                    .Any(property => EmitsPerClassStorage(property, target))
+            );
 
-        return false;
-    }
-
-    private static bool EmitsPerClassStorage(
-        INamedTypeSymbol type,
+    /// <summary>
+    /// Whether the property's per-class storage reaches the emitted output: it
+    /// <see cref="OwnsPerClassStorage">owns storage</see> and is a member a backend
+    /// emits — neither <c>private protected</c> nor <c>[Ignore]</c>d for
+    /// <paramref name="target"/>. The one predicate both the core and the backends
+    /// apply to decide that a backing field is declared.
+    /// </summary>
+    public static bool EmitsPerClassStorage(
+        IPropertySymbol property,
         Metano.Annotations.TargetLanguage? target
     ) =>
-        type.GetMembers()
-            .OfType<IPropertySymbol>()
-            .Any(property =>
-                OwnsPerClassStorage(property)
-                && property.DeclaredAccessibility is not Accessibility.ProtectedAndInternal
-                && !SymbolHelper.HasIgnore(property, target)
-            );
+        OwnsPerClassStorage(property)
+        && property.DeclaredAccessibility is not Accessibility.ProtectedAndInternal
+        && !SymbolHelper.HasIgnore(property, target);
+
+    /// <summary>The type's base classes, nearest first, without the type itself.</summary>
+    private static IEnumerable<INamedTypeSymbol> AncestorsOf(INamedTypeSymbol type)
+    {
+        for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+            yield return ancestor;
+    }
+
+    /// <summary>The type itself, then its base classes, nearest first.</summary>
+    private static IEnumerable<INamedTypeSymbol> TypeAndAncestorsOf(INamedTypeSymbol type)
+    {
+        yield return type;
+
+        foreach (var ancestor in AncestorsOf(type))
+            yield return ancestor;
+    }
 
     /// <summary>
     /// The class's declaration is emitted by the toolchain: the compilation itself or a
@@ -212,19 +203,30 @@ internal static class OverrideChains
         SymbolHelper.IsToolchainDeclared(type, compilation.Assembly);
 
     /// <summary>
-    /// An auto-property: by its syntax when declared in source, and in a referenced assembly
-    /// (no syntax) by its accessors, every one of which the compiler generated
-    /// (<c>[CompilerGenerated]</c> survives in reference assemblies too, unlike the private
-    /// backing field, and rejects a semi-auto <c>field</c> property that has a body).
+    /// An auto-property: by its syntax when declared in source, and in a referenced
+    /// assembly by its metadata accessors.
     /// </summary>
     private static bool IsAutoProperty(IPropertySymbol property) =>
         property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             is PropertyDeclarationSyntax declaration
-            ? PrimaryConstructorPropertyAlias.IsAutoProperty(declaration)
-            : property.DeclaringSyntaxReferences.IsEmpty
-                && new[] { property.GetMethod, property.SetMethod }
-                    .OfType<IMethodSymbol>()
-                    .All(IsCompilerGenerated);
+            ? IsSourceAutoProperty(declaration)
+            : IsMetadataAutoProperty(property);
+
+    /// <summary>An auto-property declared in source, read off its declaration syntax.</summary>
+    private static bool IsSourceAutoProperty(PropertyDeclarationSyntax declaration) =>
+        PrimaryConstructorPropertyAlias.IsAutoProperty(declaration);
+
+    /// <summary>
+    /// An auto-property of a referenced assembly (no syntax): every accessor the
+    /// compiler generated (<c>[CompilerGenerated]</c> survives in reference assemblies
+    /// too, unlike the private backing field, and rejects a semi-auto <c>field</c>
+    /// property that has a body).
+    /// </summary>
+    private static bool IsMetadataAutoProperty(IPropertySymbol property) =>
+        property.DeclaringSyntaxReferences.IsEmpty
+        && new[] { property.GetMethod, property.SetMethod }
+            .OfType<IMethodSymbol>()
+            .All(IsCompilerGenerated);
 
     private static bool IsCompilerGenerated(IMethodSymbol accessor) =>
         accessor

@@ -26,16 +26,17 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     public static TsExpression MapOutArgumentCallValue(
         IrOutArgumentCall outCall,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         if (HasJsMapping(outCall, bclRegistry))
-            return Map(WithOutDefaults(outCall), bclRegistry);
+            return Map(WithOutDefaults(outCall), bclRegistry, classFields);
 
         if (outCall.IsExternalCallee)
             ReportUnmappedExternalCallee(outCall.Call);
 
-        return Map(outCall.Call, bclRegistry);
+        return Map(outCall.Call, bclRegistry, classFields);
     }
 
     /// <summary>
@@ -63,15 +64,18 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapOutArgumentCall(
         IrOutArgumentCall outCall,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var value = MapOutArgumentCallValue(outCall, bclRegistry);
+        var value = MapOutArgumentCallValue(outCall, bclRegistry, classFields);
 
         if (outCall.OutArguments.All(o => o.Target is IrOutDiscard))
             return value;
 
-        var targets = outCall.OutArguments.Select(o => MapOutTarget(o.Target, bclRegistry));
+        var targets = outCall.OutArguments.Select(o =>
+            MapOutTarget(o.Target, bclRegistry, classFields)
+        );
         var pattern = outCall.ResultType is null ? targets : targets.Prepend(new TsArrayHole());
         var assignment = new TsBinaryExpression(new TsArrayLiteral(pattern.ToList()), "=", value);
 
@@ -82,12 +86,13 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapOutTarget(
         IrOutTarget target,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         target switch
         {
             IrOutLocalDeclaration local => new TsIdentifier(local.Name),
-            IrOutAssignment assignment => Map(assignment.Destination, bclRegistry),
+            IrOutAssignment assignment => Map(assignment.Destination, bclRegistry, classFields),
             _ => new TsArrayHole(),
         };
 
@@ -145,10 +150,11 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapOutResultAssertion(
         IrCastExpression cast,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         new TsCastExpression(
-            Map(cast.Expression, bclRegistry),
+            Map(cast.Expression, bclRegistry, classFields),
             IrToTsTypeMapper.Map(cast.TargetType)
         );
 }

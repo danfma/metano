@@ -196,10 +196,16 @@ public static class IrToTsExceptionConstructionBridge
     public static TsExpression MapNewError(
         IrNewExpression creation,
         IrExceptionConstruction construction,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var operands = ErrorOperands.Bind(construction, creation.Arguments, bclRegistry);
+        var operands = ErrorOperands.Bind(
+            construction,
+            creation.Arguments,
+            bclRegistry,
+            classFields
+        );
 
         return new TsNewExpression(
             new TsIdentifier("Error"),
@@ -218,7 +224,12 @@ public static class IrToTsExceptionConstructionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var operands = ErrorOperands.Bind(construction, ctor.BaseArguments ?? [], bclRegistry);
+        var operands = ErrorOperands.Bind(
+            construction,
+            ctor.BaseArguments ?? [],
+            bclRegistry,
+            classFields: null
+        );
 
         return new TsBaseConstructorCall(
             operands.Temporaries,
@@ -350,11 +361,14 @@ public static class IrToTsExceptionConstructionBridge
         public static ErrorOperands Bind(
             IrExceptionConstruction construction,
             IReadOnlyList<IrArgument> arguments,
-            DeclarativeMappingRegistry? bclRegistry
+            DeclarativeMappingRegistry? bclRegistry,
+            PerClassBackingFieldScope? classFields
         )
         {
             var lowered = arguments
-                .Select(argument => IrToTsExpressionBridge.Map(argument.Value, bclRegistry))
+                .Select(argument =>
+                    IrToTsExpressionBridge.Map(argument.Value, bclRegistry, classFields)
+                )
                 .ToList();
 
             if (!construction.RequiresArgumentTemporaries)

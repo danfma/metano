@@ -27,22 +27,23 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapIsPattern(
         IrIsPatternExpression node,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var subject = Map(node.Expression, bclRegistry);
+        var subject = Map(node.Expression, bclRegistry, classFields);
 
         if (IrPatternDesignators.Declares(node.Pattern))
-            return BuildBindingPatternTest(subject, node.Pattern, bclRegistry);
+            return BuildBindingPatternTest(subject, node.Pattern, bclRegistry, classFields);
 
         if (IrEvaluationTraits.IsSideEffectFree(node.Expression) || ReadsSubjectOnce(node.Pattern))
-            return MapIsPatternTest(subject, node, bclRegistry);
+            return MapIsPatternTest(subject, node, bclRegistry, classFields);
 
         var boundSubject = new TsIdentifier(PatternSubjectParameterName);
 
         return TsImmediateInvocation.Of(
             [new TsImmediateBinding(PatternSubjectParameterName, subject)],
-            [new TsReturnStatement(MapIsPatternTest(boundSubject, node, bclRegistry))],
+            [new TsReturnStatement(MapIsPatternTest(boundSubject, node, bclRegistry, classFields))],
             isAsync: false
         );
     }
@@ -71,7 +72,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapIsPatternTest(
         TsExpression lowered,
         IrIsPatternExpression node,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         switch (node.Pattern)
@@ -81,20 +83,21 @@ public static partial class IrToTsExpressionBridge
                     lowered,
                     BinaryOperatorToken(IrBinaryOp.Equal, node.Expression, constant.Value),
                     constant.Value,
-                    bclRegistry
+                    bclRegistry,
+                    classFields
                 );
             case IrTypePattern typePat:
                 return BuildTypeTest(lowered, typePat.Type);
             case IrDiscardPattern:
                 return new TsLiteral("true");
             case IrPropertyPattern prop:
-                return BuildPropertyPatternTest(lowered, prop, bclRegistry);
+                return BuildPropertyPatternTest(lowered, prop, bclRegistry, classFields);
             case IrRelationalPattern:
             case IrLogicalPattern:
             case IrListPattern:
-                return BuildPatternTest(lowered, node.Pattern, bclRegistry);
+                return BuildPatternTest(lowered, node.Pattern, bclRegistry, classFields);
             case IrPositionalPattern pos:
-                return BuildPositionalPatternTest(lowered, pos, bclRegistry);
+                return BuildPositionalPatternTest(lowered, pos, bclRegistry, classFields);
             default:
                 return new TsIdentifier(
                     $"/* TODO: unsupported is-pattern {node.Pattern.GetType().Name} */"
@@ -111,14 +114,19 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         string equalityOperator,
         IrExpression constantValue,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         IsNaNConstant(constantValue)
             ? new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier("Number"), "isNaN"),
                 [value]
             )
-            : new TsBinaryExpression(value, equalityOperator, Map(constantValue, bclRegistry));
+            : new TsBinaryExpression(
+                value,
+                equalityOperator,
+                Map(constantValue, bclRegistry, classFields)
+            );
 
     /// <summary>
     /// Lowers one <c>case</c> label of a switch statement that was rewritten to
@@ -128,13 +136,15 @@ public static partial class IrToTsExpressionBridge
     internal static TsExpression BuildCaseLabelTest(
         TsExpression subject,
         IrExpression label,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         BuildConstantPatternTest(
             subject,
             BinaryOperatorToken(IrBinaryOp.Equal, right: label),
             label,
-            bclRegistry
+            bclRegistry,
+            classFields
         );
 
     internal static bool IsNaNConstant(IrExpression constant) =>
@@ -159,7 +169,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildPatternTest(
         TsExpression value,
         IrPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         pattern switch
         {
@@ -167,28 +178,39 @@ public static partial class IrToTsExpressionBridge
                 value,
                 BinaryOperatorToken(IrBinaryOp.Equal, right: constant.Value),
                 constant.Value,
-                bclRegistry
+                bclRegistry,
+                classFields
             ),
             IrTypePattern typePat => BuildTypeTest(value, typePat.Type),
             IrDiscardPattern => new TsLiteral("true"),
             IrVarPattern => new TsLiteral("true"),
-            IrPropertyPattern prop => BuildPropertyPatternTest(value, prop, bclRegistry),
+            IrPropertyPattern prop => BuildPropertyPatternTest(
+                value,
+                prop,
+                bclRegistry,
+                classFields
+            ),
             IrRelationalPattern rel => new TsBinaryExpression(
                 value,
                 RelationalOpToken(rel.Operator),
-                Map(rel.Value, bclRegistry)
+                Map(rel.Value, bclRegistry, classFields)
             ),
             IrLogicalPattern { Operator: IrLogicalOp.Not } notPat => new TsUnaryExpression(
                 "!",
-                BuildPatternTest(value, notPat.Left, bclRegistry)
+                BuildPatternTest(value, notPat.Left, bclRegistry, classFields)
             ),
             IrLogicalPattern log => new TsBinaryExpression(
-                BuildPatternTest(value, log.Left, bclRegistry),
+                BuildPatternTest(value, log.Left, bclRegistry, classFields),
                 log.Operator is IrLogicalOp.And ? "&&" : "||",
-                BuildPatternTest(value, log.Right!, bclRegistry)
+                BuildPatternTest(value, log.Right!, bclRegistry, classFields)
             ),
-            IrListPattern list => BuildListPatternTest(value, list, bclRegistry),
-            IrPositionalPattern pos => BuildPositionalPatternTest(value, pos, bclRegistry),
+            IrListPattern list => BuildListPatternTest(value, list, bclRegistry, classFields),
+            IrPositionalPattern pos => BuildPositionalPatternTest(
+                value,
+                pos,
+                bclRegistry,
+                classFields
+            ),
             _ => new TsIdentifier($"/* TODO: unsupported pattern {pattern.GetType().Name} */"),
         };
 
@@ -199,8 +221,12 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression? BuildPatternTestOrNull(
         TsExpression value,
         IrPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
-    ) => IsAlwaysMatchingPattern(pattern) ? null : BuildPatternTest(value, pattern, bclRegistry);
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
+    ) =>
+        IsAlwaysMatchingPattern(pattern)
+            ? null
+            : BuildPatternTest(value, pattern, bclRegistry, classFields);
 
     private static bool IsAlwaysMatchingPattern(IrPattern pattern) =>
         pattern is IrDiscardPattern or IrVarPattern;
@@ -266,10 +292,11 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapCast(
         IrCastExpression cast,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var value = Map(cast.Expression, bclRegistry);
+        var value = Map(cast.Expression, bclRegistry, classFields);
         var testedType = cast.TargetType is IrNullableTypeRef nullable
             ? nullable.Inner
             : cast.TargetType;
@@ -304,12 +331,18 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildListPatternTest(
         TsExpression value,
         IrListPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var elementTests = pattern.Elements.Select(
             (element, i) =>
-                BuildPatternTestOrNull(ListElementAccess(value, pattern, i), element, bclRegistry)
+                BuildPatternTestOrNull(
+                    ListElementAccess(value, pattern, i),
+                    element,
+                    bclRegistry,
+                    classFields
+                )
         );
 
         return JoinWithAnd([
@@ -371,7 +404,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildPositionalPatternTest(
         TsExpression value,
         IrPositionalPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var typeTest = PositionalTypeTest(value, pattern);
@@ -381,7 +415,8 @@ public static partial class IrToTsExpressionBridge
                 BuildPatternTestOrNull(
                     PositionalElementAccess(value, pattern, i),
                     element,
-                    bclRegistry
+                    bclRegistry,
+                    classFields
                 )
         );
 
@@ -439,7 +474,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression BuildPropertyPatternTest(
         TsExpression value,
         IrPropertyPattern pattern,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var typeTest = pattern.Type is null
@@ -450,7 +486,8 @@ public static partial class IrToTsExpressionBridge
             BuildPatternTestOrNull(
                 PropertyPatternMemberAccess(value, sub),
                 sub.Pattern,
-                bclRegistry
+                bclRegistry,
+                classFields
             )
         );
 

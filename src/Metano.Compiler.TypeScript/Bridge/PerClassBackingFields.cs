@@ -20,9 +20,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// A get-only auto-property has no setter, yet C# lets the declaring constructor assign
 /// it, and a member initializer the constructor now runs (primary-constructor
 /// initializer deferral) stores to the member's own storage whatever accessors a derived
-/// class overrides: both lower to the backing field itself, found through
-/// <see cref="EnterClass"/>. That scope is ambient because the expression bridge that maps
-/// the assignment takes no per-class context.
+/// class overrides: both lower to the backing field itself, found through the
+/// <see cref="ScopeFor"/> scope the caller threads into the expression bridge.
 /// </para>
 /// <para>
 /// <c>JSON.stringify</c> walks own enumerable properties, so it would expose the
@@ -41,12 +40,7 @@ internal sealed class PerClassBackingFields
     private const uint FnvPrime = 16777619;
 
     // 36^HashLength: the hash is reduced to HashLength base-36 characters.
-    private const long Base36HashSpace = 36L * 36 * 36 * 36 * 36 * 36;
-
-    private static readonly AsyncLocal<IReadOnlyDictionary<
-        string,
-        BackedProperty
-    >?> ClassProperties = new();
+    private static readonly long Base36HashSpace = (long)Math.Pow(36, HashLength);
 
     private readonly string _suffix;
 
@@ -56,10 +50,13 @@ internal sealed class PerClassBackingFields
     public static PerClassBackingFields For(INamedTypeSymbol type) =>
         new($"{type.Name}_{StableHash(Identity(type))}");
 
-    /// <summary>The property is emitted as a backing field plus accessors.</summary>
+    /// <summary>
+    /// The property is emitted as a backing field plus accessors: it owns per-class
+    /// storage the target emits, decided by the one core predicate
+    /// (<see cref="IrPropertySemantics.EmitsPerClassStorage"/>).
+    /// </summary>
     public static bool DeclaresBackingField(IrPropertyDeclaration property) =>
-        property is { Semantics.OwnsPerClassStorage: true }
-        && property.Visibility is not IrVisibility.PrivateProtected;
+        property is { Semantics.EmitsPerClassStorage: true };
 
     /// <summary>The field behind <paramref name="property"/>.</summary>
     public string FieldOf(IrPropertyDeclaration property) =>
@@ -70,53 +67,36 @@ internal sealed class PerClassBackingFields
         new(new TsIdentifier("this"), field);
 
     /// <summary>
-    /// Scopes the emission of one class: while the returned handle is alive, the writes
-    /// <see cref="TryBackingFieldWrite"/> recognizes lower to the backing fields of
-    /// <paramref name="ir"/>'s properties.
+    /// The writes <see cref="PerClassBackingFieldScope.TryBackingFieldWrite"/> recognizes
+    /// inside the class being emitted: its own properties that declare a backing field.
+    /// The caller threads the returned scope through the expression bridge — no ambient
+    /// state.
     /// </summary>
-    public IDisposable EnterClass(IrClassDeclaration ir)
-    {
-        var scope = new ClassScope(ClassProperties.Value);
-
-        ClassProperties.Value = (ir.Members ?? [])
-            .OfType<IrPropertyDeclaration>()
-            .Where(DeclaresBackingField)
-            .ToDictionary(
-                property => property.Name,
-                property => new BackedProperty(
-                    FieldOf(property),
-                    property.Accessors is IrPropertyAccessors.GetOnly
-                ),
-                StringComparer.Ordinal
-            );
-
-        return scope;
-    }
+    public PerClassBackingFieldScope ScopeFor(IrClassDeclaration ir) =>
+        new(
+            this,
+            (ir.Members ?? [])
+                .OfType<IrPropertyDeclaration>()
+                .Where(DeclaresBackingField)
+                .ToDictionary(
+                    property => property.Name,
+                    property => new BackedProperty(
+                        FieldOf(property),
+                        property.Accessors is IrPropertyAccessors.GetOnly
+                    ),
+                    StringComparer.Ordinal
+                )
+        );
 
     /// <summary>
-    /// The backing field an assignment to <c>this.P</c> stores to inside the class being
-    /// emitted: always for a get-only property (only the declaring constructor can assign
-    /// it, and it has no setter), and for a writable one when the assignment is a moved
-    /// member initializer (<see cref="IrMemberOrigin.IsInitializerWrite"/>). An explicit
-    /// <c>P = x</c> on a writable property stays a virtual setter call, as in C#. <c>null</c>
-    /// for every other access.
-    /// </summary>
-    public static string? TryBackingFieldWrite(IrMemberAccess access) =>
-        access.Target is IrThisExpression
-        && ClassProperties.Value is { } properties
-        && properties.TryGetValue(access.MemberName, out var property)
-        && (property.GetOnly || access.Origin is { IsInitializerWrite: true })
-            ? property.Field
-            : null;
-
-    /// <summary>
-    /// <c>toJSON(): unknown { return publicJsonShape(this); }</c> for a class that declares at
-    /// least one backing field, <c>null</c> for any other, or for one that declares, or
-    /// inherits one from an ancestor the compilation declares. The runtime function keeps the keys and values
-    /// <c>JSON.stringify</c> produced while the property was a field (every own property of
-    /// the instance, base classes included), renaming a backing field back to its property
-    /// and reading the value through the accessor. The method overrides the one of an
-    /// ancestor that declares a backing field, when the class extends it
+    /// <c>toJSON(): unknown { return publicJsonShape(this); }</c> for a class that
+    /// declares at least one backing field; <c>null</c> for any other class, or for one
+    /// that already carries a <c>toJSON</c> — its own, or an ancestor's that the
+    /// compilation declares. The runtime function keeps the keys and values
+    /// <c>JSON.stringify</c> produced while the property was a field (every own
+    /// property of the instance, base classes included), renaming a backing field back
+    /// to its property and reading the value through the accessor. The method overrides
+    /// the one of an ancestor that declares a backing field, when the class extends it
     /// (<paramref name="extendsBase"/>).
     /// </summary>
     public static TsMethodMember? BuildToJson(IrClassDeclaration ir, bool extendsBase)
@@ -185,12 +165,46 @@ internal sealed class PerClassBackingFields
 
         return result.ToString();
     }
+}
 
-    private sealed record BackedProperty(string Field, bool GetOnly);
+/// <summary>One property of the class being emitted that declares a backing field.</summary>
+internal sealed record BackedProperty(string Field, bool GetOnly);
 
-    private sealed class ClassScope(IReadOnlyDictionary<string, BackedProperty>? previous)
-        : IDisposable
+/// <summary>
+/// The per-class backing fields of the one class whose members are being mapped. The
+/// class emitter creates it (<see cref="PerClassBackingFields.ScopeFor"/>) and threads
+/// it through <see cref="IrToTsExpressionBridge.Map"/>, so expression lowering reads
+/// no ambient state: outside the scope, no write is recognized.
+/// </summary>
+public sealed class PerClassBackingFieldScope
+{
+    private readonly PerClassBackingFields _owner;
+    private readonly IReadOnlyDictionary<string, BackedProperty> _properties;
+
+    internal PerClassBackingFieldScope(
+        PerClassBackingFields owner,
+        IReadOnlyDictionary<string, BackedProperty> properties
+    )
     {
-        public void Dispose() => ClassProperties.Value = previous;
+        _owner = owner;
+        _properties = properties;
     }
+
+    /// <summary>The backing field behind <paramref name="property"/>.</summary>
+    public string FieldOf(IrPropertyDeclaration property) => _owner.FieldOf(property);
+
+    /// <summary>
+    /// The backing field an assignment to <c>this.P</c> stores to inside the class being
+    /// emitted: always for a get-only property (only the declaring constructor can assign
+    /// it, and it has no setter), and for a writable one when the assignment is a moved
+    /// member initializer (<see cref="IrMemberOrigin.IsInitializerWrite"/>). An explicit
+    /// <c>P = x</c> on a writable property stays a virtual setter call, as in C#. <c>null</c>
+    /// for every other access.
+    /// </summary>
+    public string? TryBackingFieldWrite(IrMemberAccess access) =>
+        access.Target is IrThisExpression
+        && _properties.TryGetValue(access.MemberName, out var property)
+        && (property.GetOnly || access.Origin is { IsInitializerWrite: true })
+            ? property.Field
+            : null;
 }
