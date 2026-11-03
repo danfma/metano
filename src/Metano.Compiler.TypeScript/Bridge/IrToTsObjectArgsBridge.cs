@@ -57,22 +57,25 @@ internal static class IrToTsObjectArgsBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        // The wire key keeps the raw camelCase name; the local binding the
-        // body reads escapes reserved words, so it is aliased when the two
-        // differ (`const { of: of_ = 0 } = args;`).
+        // The wire key is the camelCased name — ToCamelCase escapes a reserved
+        // word only when it re-cases an uppercase first letter, so `Of` keys
+        // `of_` while `of` keys `of`. The local binding the body reads always
+        // escapes, so it is aliased in the destructure when the two differ
+        // (`const { of: of_ = 0 } = args;`).
         var key = TypeScriptNaming.ToCamelCase(parameter.Name);
         var binding = IrToTsNamingPolicy.ToParameterName(parameter.Name);
         var type = IrToTsTypeMapper.Map(parameter.Type);
         var isOptional = parameter.IsOptional || parameter.HasDefaultValue;
         var field = new TsObjectTypeField(key, type, isOptional);
 
-        var fragment = key == binding ? key : $"{key}: {binding}";
-        var defaultValue =
+        var bindingFragment = key == binding ? key : $"{key}: {binding}";
+
+        var defaultSuffix =
             parameter.HasDefaultValue && parameter.DefaultValue is not null
                 ? $" = {RenderDefaultValue(parameter.DefaultValue, bclRegistry)}"
                 : "";
 
-        return (field, $"{fragment}{defaultValue}");
+        return (field, $"{bindingFragment}{defaultSuffix}");
     }
 
     private static string RenderDefaultValue(

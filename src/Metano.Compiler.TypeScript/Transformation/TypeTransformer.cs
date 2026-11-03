@@ -1690,39 +1690,54 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 ? -1
                 : IndexOfLocal(entryBody, exportInfo.Name);
 
-            TsTopLevel? trailingExport = null;
-            for (var i = 0; i < lowered.Count; i++)
-            {
-                if (
-                    i == exportLocalIndex
-                    && exportInfo is { } export
-                    && lowered[i] is TsVariableDeclaration varDecl
-                )
-                {
-                    if (export.InPlace)
-                        lowered[i] = varDecl with { Exported = true };
-                    else
-                        trailingExport = new TsModuleExport(varDecl.Name, export.AsDefault);
-                }
-
-                sink.Add(new TsTopLevelStatement(lowered[i]));
-            }
-
-            if (exportInfo is not null && exportLocalIndex < 0)
-            {
-                ReportInvalidEntryPoint(
-                    entryPoint,
-                    $"[ExportVarFromBody(\"{exportInfo.Name}\")] on "
-                        + $"'{entryPoint.Name}' did not find a local variable named "
-                        + $"'{exportInfo.Name}' in the entry point body."
-                );
-            }
-
-            if (trailingExport is not null)
-                sink.Add(trailingExport);
+            ApplyBodyExport(lowered, exportLocalIndex, exportInfo, entryPoint, sink);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Emits the lowered entry-point body with the export folded into the
+    /// matched declaration: in place (an exported declaration) or as a
+    /// trailing export statement referencing the emitted binding. An IR local
+    /// that was not found, or whose lowering is not a variable declaration,
+    /// cannot be exported — reported instead of silently dropped.
+    /// </summary>
+    private void ApplyBodyExport(
+        List<TsStatement> lowered,
+        int exportLocalIndex,
+        SymbolHelper.ExportVarFromBodyInfo? exportInfo,
+        IMethodSymbol entryPoint,
+        List<TsTopLevel> sink
+    )
+    {
+        TsModuleExport? trailingExport = null;
+
+        if (exportInfo is { } export)
+        {
+            if (lowered.ElementAtOrDefault(exportLocalIndex) is TsVariableDeclaration declaration)
+            {
+                if (export.InPlace)
+                    lowered[exportLocalIndex] = declaration with { Exported = true };
+                else
+                    trailingExport = new TsModuleExport(declaration.Name, export.AsDefault);
+            }
+            else
+            {
+                ReportInvalidEntryPoint(
+                    entryPoint,
+                    $"[ExportVarFromBody(\"{export.Name}\")] on "
+                        + $"'{entryPoint.Name}' did not find a local variable named "
+                        + $"'{export.Name}' in the entry point body."
+                );
+            }
+        }
+
+        foreach (var statement in lowered)
+            sink.Add(new TsTopLevelStatement(statement));
+
+        if (trailingExport is not null)
+            sink.Add(trailingExport);
     }
 
     /// <summary>
