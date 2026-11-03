@@ -15,10 +15,16 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// The load-time code of a private type is the <c>extends</c> clause, static field and
 /// property initializers, and static constructor bodies of the type itself and of the
 /// non-private nested types declared with it. Lambdas and local functions inside them
-/// are deferred, so they are not walked; neither are the bodies of the methods those
-/// initializers call. A real cycle — the owner's load-time code constructs the type
-/// and the type's load-time code reads the owner — has no valid order in either
-/// direction and keeps the type after the owner.
+/// are deferred, so they are not walked. Two load-time paths are not followed either:
+/// the bodies of the methods those initializers call, and the instance initialization
+/// (field initializers, constructor body) a <c>new X()</c> runs at load time — a
+/// dependency reached only through them is not seen, as on main. A real cycle — the
+/// owner's load-time code constructs the type and the type's load-time code reads the
+/// owner — has no valid order in either direction and keeps the type after the owner.
+/// </para>
+/// <para>
+/// Only the side of the owner is decided here; the order of the private types within
+/// each side is their declaration order.
 /// </para>
 /// </summary>
 internal sealed class ModuleLocalPlacement(INamedTypeSymbol owner, Compilation compilation)
@@ -38,8 +44,9 @@ internal sealed class ModuleLocalPlacement(INamedTypeSymbol owner, Compilation c
         if (_followsOwner.TryGetValue(privateType, out var decided))
             return decided;
 
-        // Private types reading each other at load time are ordered among themselves
-        // (#422); the cycle itself says nothing about the owner.
+        // A load-time cycle among private types says nothing about the owner: the type
+        // being decided counts as not following it. The results cached below while a
+        // cycle is open are therefore order-dependent, by design.
         if (!_deciding.Add(privateType))
             return false;
 
@@ -82,6 +89,17 @@ internal sealed class ModuleLocalPlacement(INamedTypeSymbol owner, Compilation c
                 BaseTypeOf(type).Concat(StaticInitializationCode(type).SelectMany(ReferencedTypes))
             );
 
+    private IEnumerable<INamedTypeSymbol> ReferencedTypes(SyntaxNode code)
+    {
+        var model = compilation.GetSemanticModel(code.SyntaxTree);
+
+        return code.DescendantNodesAndSelf(IsEvaluatedAtLoadTime)
+            .OfType<ExpressionSyntax>()
+            .Select(expression => model.GetSymbolInfo(expression).Symbol)
+            .Select(DeclaringType)
+            .OfType<INamedTypeSymbol>();
+    }
+
     private static IEnumerable<INamedTypeSymbol> DeclaredWith(INamedTypeSymbol privateType) =>
         privateType
             .GetTypeMembers()
@@ -107,17 +125,6 @@ internal sealed class ModuleLocalPlacement(INamedTypeSymbol owner, Compilation c
             ConstructorDeclarationSyntax constructor => constructor,
             _ => null,
         };
-
-    private IEnumerable<INamedTypeSymbol> ReferencedTypes(SyntaxNode code)
-    {
-        var model = compilation.GetSemanticModel(code.SyntaxTree);
-
-        return code.DescendantNodesAndSelf(IsEvaluatedAtLoadTime)
-            .OfType<ExpressionSyntax>()
-            .Select(expression => model.GetSymbolInfo(expression).Symbol)
-            .Select(DeclaringType)
-            .OfType<INamedTypeSymbol>();
-    }
 
     private static bool IsEvaluatedAtLoadTime(SyntaxNode node) =>
         node is not (AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax);

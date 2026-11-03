@@ -422,9 +422,11 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["holder.ts"];
+
         await Assert
             .That(output.IndexOf("class Holder$P {"))
             .IsLessThan(output.IndexOf("export class Holder {"));
+
         await Assert.That(output).Contains("new Holder.Pub(new Holder$P(0).v)");
     }
 
@@ -447,6 +449,7 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["registry.ts"];
+
         await Assert
             .That(output.IndexOf("class Registry$Entry {"))
             .IsLessThan(output.IndexOf("export class Registry {"));
@@ -472,6 +475,7 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["grid.ts"];
+
         await Assert
             .That(output.IndexOf("class Grid$Cell {"))
             .IsLessThan(output.IndexOf("const origin: Grid$Cell = new Grid$Cell(0);"));
@@ -499,6 +503,7 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["outer.ts"];
+
         await Assert
             .That(output.IndexOf("class Outer$Impl extends Outer.PublicBase"))
             .IsGreaterThan(output.IndexOf("export class PublicBase"));
@@ -586,9 +591,11 @@ public class NestedTypesInStaticClassTests
         var output = result["api.ts"];
         await Assert.That(output).Contains("class Api$Ctx extends SerializerContext {");
         await Assert.That(output).DoesNotContain("export class Api$Ctx");
+
         await Assert
             .That(output)
             .Contains("private static readonly _default: Api$Ctx = new Api$Ctx();");
+
         await Assert.That(output).Contains("get payload(): TypeSpec<Api$Payload>");
         await Assert.That(output).DoesNotContain("api$Payload");
     }
@@ -621,6 +628,7 @@ public class NestedTypesInStaticClassTests
         await Assert
             .That(output.IndexOf("class Settings$Nested {"))
             .IsGreaterThan(output.IndexOf("export class Settings {"));
+
         await Assert.That(output).Contains("static readonly instance: Settings = new Settings();");
     }
 
@@ -681,6 +689,7 @@ public class NestedTypesInStaticClassTests
         await Assert
             .That(output.IndexOf("class Shelf$Cache {"))
             .IsGreaterThan(output.IndexOf("export namespace Shelf {"));
+
         await Assert.That(output).Contains("static readonly item: Shelf.Book = new Shelf.Book(9);");
     }
 
@@ -813,8 +822,10 @@ public class NestedTypesInStaticClassTests
     }
 
     [Test]
-    public async Task PrivateNestedType_WithGenerateGuard_NamesTheGuardAndAssertAfterItself()
+    public async Task PrivateNestedType_WithGenerateGuard_NamesTheGuardAndAssertAfterItsDeclaredName()
     {
+        // The guard and assert are unexported, so they spell the module-local identifier;
+        // only the error message reads the type's own name.
         var result = TranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
@@ -833,14 +844,146 @@ public class NestedTypesInStaticClassTests
 
         await Assert
             .That(output)
-            .Contains("function isCircle(value: unknown): value is Guards$Circle {");
+            .Contains("function isGuards$Circle(value: unknown): value is Guards$Circle {");
+
         await Assert
             .That(output)
             .Contains(
-                "function assertCircle(value: unknown, message?: string): asserts value is Guards$Circle {"
+                "function assertGuards$Circle(value: unknown, message?: string): asserts value is Guards$Circle {"
             );
+
         await Assert.That(output).Contains("\"Value is not a Circle\"");
-        await Assert.That(output).DoesNotContain("assertGuards$Circle");
+        await Assert.That(output).DoesNotContain("function isCircle");
+    }
+
+    [Test]
+    public async Task PrivateNestedGuards_WithTheSameSimpleName_DoNotClash()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Drawing
+            {
+                private static class Left
+                {
+                    [GenerateGuard]
+                    private sealed record Circle(double R);
+
+                    public static double Run() => new Circle(1).R;
+                }
+
+                private static class Right
+                {
+                    [GenerateGuard]
+                    private sealed record Circle(double R);
+
+                    public static double Run() => new Circle(2).R;
+                }
+
+                public static double Run() => Left.Run() + Right.Run();
+            }
+            """
+        );
+
+        var output = result["drawing.ts"];
+
+        await Assert.That(output).Contains("function isDrawing$Left$Circle(value: unknown)");
+        await Assert.That(output).Contains("function isDrawing$Right$Circle(value: unknown)");
+        await Assert.That(output).Contains("function assertDrawing$Left$Circle(value: unknown");
+        await Assert.That(output).Contains("function assertDrawing$Right$Circle(value: unknown");
+        await Assert.That(output).DoesNotContain("function isCircle");
+    }
+
+    [Test]
+    public async Task PrivateNestedGuard_InAModule_DoesNotClashWithTheModuleOwnFunction()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            [ExportedAsModule]
+            public static class Shapes
+            {
+                [GenerateGuard]
+                private sealed record Circle(double R);
+
+                public static bool IsCircle(object value) => value is Circle;
+            }
+            """
+        );
+
+        var output = result["shapes.ts"];
+
+        await Assert.That(output).Contains("export function isCircle(value: Object): boolean {");
+        await Assert.That(output).Contains("\nfunction isShapes$Circle(value: unknown)");
+        await Assert.That(output).Contains("\nfunction assertShapes$Circle(value: unknown");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_ReadingAPrivateSiblingThatFollowsTheOwner_FollowsItToo()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Hub
+            {
+                public int V { get; } = 2;
+
+                private static class Source
+                {
+                    public static readonly Hub Instance = new Hub();
+                }
+
+                private static class Reader
+                {
+                    public static readonly int Value = Source.Instance.V;
+                }
+
+                public static int Read() => Reader.Value;
+            }
+            """
+        );
+
+        var output = result["hub.ts"];
+        var owner = output.IndexOf("export class Hub {");
+
+        await Assert.That(output.IndexOf("class Hub$Source {")).IsGreaterThan(owner);
+        await Assert.That(output.IndexOf("class Hub$Reader {")).IsGreaterThan(owner);
+    }
+
+    [Test]
+    public async Task PrivateNestedType_ReadingAHoistedPrivateSibling_StaysBeforeTheOwner()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Hub
+            {
+                private static class Source
+                {
+                    public static readonly int Seed = 2;
+                }
+
+                private static class Reader
+                {
+                    public static readonly int Value = Source.Seed;
+                }
+
+                private static readonly int Cached = Reader.Value;
+
+                public static int Read() => Cached;
+            }
+            """
+        );
+
+        var output = result["hub.ts"];
+        var owner = output.IndexOf("export class Hub {");
+
+        await Assert.That(output.IndexOf("class Hub$Source {")).IsLessThan(owner);
+        await Assert.That(output.IndexOf("class Hub$Reader {")).IsLessThan(owner);
     }
 
     [Test]

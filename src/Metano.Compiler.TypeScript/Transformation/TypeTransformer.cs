@@ -198,11 +198,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
             }
 
-            var moduleLocalSink = moduleLocal.MustFollowOwner(nestedType)
-                ? moduleLocal.Trailing
-                : moduleLocal.Hoisted;
-
-            BuildModuleLocalTypeStatements(nestedType, moduleLocalSink, moduleLocal);
+            BuildModuleLocalTypeStatements(
+                nestedType,
+                moduleLocal.SinkFor(nestedType),
+                moduleLocal
+            );
         }
 
         if (namespaceMembers.Count > 0)
@@ -2163,6 +2163,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     {
         if (irCache is not null && irCache.TryGetValue(type, out var cached))
             return cached;
+
         IrTypeDeclaration? ir = type.TypeKind switch
         {
             TypeKind.Enum => IrEnumExtractor.Extract(type, Context.Extraction),
