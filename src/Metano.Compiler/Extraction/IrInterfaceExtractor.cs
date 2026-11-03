@@ -11,11 +11,11 @@ public static class IrInterfaceExtractor
 {
     public static IrInterfaceDeclaration Extract(
         INamedTypeSymbol type,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var originResolver = options?.OriginResolver;
-        var target = options?.Target;
+        var originResolver = context?.OriginResolver;
+        var target = context?.Target;
         var members = new List<IrMemberDeclaration>();
 
         foreach (var member in type.GetMembers())

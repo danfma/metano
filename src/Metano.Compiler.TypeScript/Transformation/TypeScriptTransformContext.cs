@@ -481,7 +481,7 @@ public sealed class TypeScriptTransformContext(
     public bool UseIrBodiesWhenCovered { get; init; } = true;
 
     /// <summary>
-    /// The extraction options the core extractors receive, built once here:
+    /// The extraction context the core extractors receive, built once here:
     /// the cross-package origin resolver, this compilation, the TypeScript
     /// target and its local-naming decision
     /// (<see cref="Bridge.IrToTsNamingPolicy.LocalNaming"/>) for the

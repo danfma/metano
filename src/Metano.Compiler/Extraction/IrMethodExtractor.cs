@@ -14,10 +14,10 @@ public static class IrMethodExtractor
 {
     public static IrMethodDeclaration Extract(
         IMethodSymbol method,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var context = options ?? IrExtractionContext.Empty;
+        context ??= IrExtractionContext.Empty;
         var originResolver = context.OriginResolver;
         var compilation = context.Compilation;
         var target = context.Target;
@@ -151,10 +151,9 @@ public static class IrMethodExtractor
 
         var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
 
-        return new IrExpressionExtractor(
-            model,
-            options: new IrExtractionContext(originResolver)
-        ).Extract(defaultExpression);
+        return new IrExpressionExtractor(model, new IrExtractionContext(originResolver)).Extract(
+            defaultExpression
+        );
     }
 
     private static bool DetectYield(IMethodSymbol method)

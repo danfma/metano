@@ -23,7 +23,7 @@ internal static class EnumerationContractExtractor
 
     public static IrEnumerableContract? ExtractEnumerable(
         INamedTypeSymbol type,
-        IrExtractionContext? options
+        IrExtractionContext? context
     )
     {
         if (!TakesOnContract(type, SpecialType.System_Collections_IEnumerable))
@@ -33,20 +33,20 @@ internal static class EnumerationContractExtractor
         var contract = generic ?? Interface(type, SpecialType.System_Collections_IEnumerable);
 
         if (
-            Implementation(type, contract, GetEnumeratorName, options?.Target)
+            Implementation(type, contract, GetEnumeratorName, context?.Target)
             is not { } getEnumerator
         )
             return null;
 
         return new IrEnumerableContract(
-            ElementType(generic, options?.OriginResolver),
+            ElementType(generic, context?.OriginResolver),
             getEnumerator
         );
     }
 
     public static IrEnumeratorContract? ExtractEnumerator(
         INamedTypeSymbol type,
-        IrExtractionContext? options
+        IrExtractionContext? context
     )
     {
         if (!TakesOnContract(type, SpecialType.System_Collections_IEnumerator))
@@ -54,14 +54,14 @@ internal static class EnumerationContractExtractor
 
         var nonGeneric = Interface(type, SpecialType.System_Collections_IEnumerator);
         var generic = GenericInterface(type, SpecialType.System_Collections_Generic_IEnumerator_T);
-        var current = Implementation(type, generic ?? nonGeneric, CurrentName, options?.Target);
-        var moveNext = Implementation(type, nonGeneric, MoveNextName, options?.Target);
+        var current = Implementation(type, generic ?? nonGeneric, CurrentName, context?.Target);
+        var moveNext = Implementation(type, nonGeneric, MoveNextName, context?.Target);
 
         if (current is null || moveNext is null)
             return null;
 
         return new IrEnumeratorContract(
-            ElementType(generic, options?.OriginResolver),
+            ElementType(generic, context?.OriginResolver),
             current,
             moveNext
         );

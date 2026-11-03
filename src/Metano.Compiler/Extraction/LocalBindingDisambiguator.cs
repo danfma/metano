@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Metano.Compiler.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -28,30 +29,44 @@ public sealed record LocalNaming(
 /// same scope — takes a <c>$N</c> suffix on its IR name at its declaration
 /// and at every read, so the target's naming policy emits
 /// <c>total$1</c> from <c>Total$1</c> unchanged. A binding that cannot be
-/// renamed (a pinned module export, or a parameter that is part of the call
-/// surface) keeps its name and the other binding yields; a collision where
+/// renamed (a pinned module export, or a parameter whose name the target
+/// keeps) keeps its name and the other binding yields; a collision where
 /// NEITHER binding can yield is listed in <see cref="UnresolvableCollisions"/>
-/// and reported as MS0003 — the emitted code would redeclare one name.
+/// and reported as MS0003 — the emitted code would redeclare one name —
+/// unless a pinned name takes part in it: those are listed in
+/// <see cref="PinnedCollisions"/> for the entry-point transformer to report
+/// against the <c>[ExportVarFromBody]</c> argument instead.
 /// </summary>
 public sealed record LocalBindingNames(
     IReadOnlyDictionary<ISymbol, string> RenamedBySymbol,
-    IReadOnlySet<string> UnresolvableCollisions
+    IReadOnlySet<string> UnresolvableCollisions,
+    IReadOnlySet<string> PinnedCollisions
 )
 {
     public static LocalBindingNames Empty { get; } =
         new(
             new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default),
+            new HashSet<string>(StringComparer.Ordinal),
             new HashSet<string>(StringComparer.Ordinal)
         );
+
+    /// <summary>
+    /// The disambiguated IR name of a local binding when this map renamed
+    /// it (#398).
+    /// </summary>
+    public bool TryGetRenamed(ISymbol? symbol, [NotNullWhen(true)] out string? renamed)
+    {
+        renamed = null;
+
+        return symbol is not null && RenamedBySymbol.TryGetValue(symbol, out renamed);
+    }
 
     /// <summary>
     /// The IR name of a local binding: its disambiguated name when this map
     /// renamed it (#398), otherwise the fallback spelling.
     /// </summary>
     public string NameOf(ISymbol? symbol, string fallback) =>
-        symbol is not null && RenamedBySymbol.TryGetValue(symbol, out var renamed)
-            ? renamed
-            : fallback;
+        TryGetRenamed(symbol, out var renamed) ? renamed : fallback;
 }
 
 /// <summary>
@@ -63,44 +78,42 @@ public sealed record LocalBindingNames(
 /// </summary>
 internal static class LocalBindingDisambiguator
 {
-    public static LocalBindingNames ForMember(ISymbol member, IrExtractionContext context)
-    {
-        if (context.LocalNaming is null || context.Compilation is null)
-            return LocalBindingNames.Empty;
+    /// <summary>
+    /// The map of a member: its declaration is the walk's root, except for a
+    /// C# 12 primary constructor, whose declaring syntax is the whole type —
+    /// its scope is <see cref="ForPrimaryConstructor"/>'s, not every member
+    /// body the type declares.
+    /// </summary>
+    public static LocalBindingNames ForMember(ISymbol member, IrExtractionContext context) =>
+        member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() switch
+        {
+            TypeDeclarationSyntax { ParameterList: not null } type => ForPrimaryConstructor(
+                type,
+                context
+            ),
+            { } root => ForRoot(root, context),
+            null => LocalBindingNames.Empty,
+        };
 
-        var root = member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        if (root is null)
-            return LocalBindingNames.Empty;
+    public static LocalBindingNames ForRoot(SyntaxNode root, IrExtractionContext context) =>
+        ForRoots([root], root, context);
 
-        // A referenced assembly's declaring syntax belongs to its own
-        // compilation; try the symbol-helper lookup (source references) and
-        // leave the map empty when the tree is unreachable.
-        var model = SymbolHelper.TryGetSemanticModel(context.Compilation, root.SyntaxTree);
-
-        return model is null
-            ? LocalBindingNames.Empty
-            : Disambiguate(
-                new BindingCollector(model, context.LocalNaming).Collect(root).ToList(),
-                root,
-                context.LocalNaming
-            );
-    }
-
-    public static LocalBindingNames ForRoot(SyntaxNode root, IrExtractionContext context)
-    {
-        if (context.LocalNaming is null || context.Compilation is null)
-            return LocalBindingNames.Empty;
-
-        var model = SymbolHelper.TryGetSemanticModel(context.Compilation, root.SyntaxTree);
-
-        return model is null
-            ? LocalBindingNames.Empty
-            : Disambiguate(
-                new BindingCollector(model, context.LocalNaming).Collect(root).ToList(),
-                root,
-                context.LocalNaming
-            );
-    }
+    /// <summary>
+    /// The map of a field declarator's or property's initializer. An
+    /// instance initializer of a type with a primary constructor reads the
+    /// constructor's parameters directly (the target emits it inside the
+    /// constructor), so it shares the primary constructor's map: a lambda
+    /// parameter <c>Total</c> yields to the constructor parameter
+    /// <c>total</c> it would otherwise shadow. Any other initializer is its
+    /// own root.
+    /// </summary>
+    public static LocalBindingNames ForInitializer(
+        SyntaxNode initializerOwner,
+        IrExtractionContext context
+    ) =>
+        PrimaryConstructorTypeOf(initializerOwner) is { } type
+            ? ForPrimaryConstructor(type, context)
+            : ForRoot(initializerOwner, context);
 
     /// <summary>
     /// The disambiguation of a flat statement list that forms one C# scope —
@@ -123,9 +136,102 @@ internal static class LocalBindingDisambiguator
         return Disambiguate(bindings, statements[0], naming);
     }
 
+    /// <summary>
+    /// The primary constructor's scope (#398): its parameter list, the
+    /// arguments of its base call and the type's instance member
+    /// initializers — the code the target emits inside the constructor. The
+    /// other member bodies (methods, accessors, explicit constructors) and
+    /// nested types are their own roots: a primary-constructor parameter they
+    /// read is captured, never shadowed by their bindings, and walking them
+    /// here would report their collisions a second time.
+    /// </summary>
+    private static LocalBindingNames ForPrimaryConstructor(
+        TypeDeclarationSyntax type,
+        IrExtractionContext context
+    ) => ForRoots(PrimaryConstructorScope(type).ToList(), type.ParameterList!, context);
+
+    private static IEnumerable<SyntaxNode> PrimaryConstructorScope(TypeDeclarationSyntax type)
+    {
+        yield return type.ParameterList!;
+
+        var primaryBase = type
+            .BaseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>()
+            .FirstOrDefault();
+
+        if (primaryBase is not null)
+            yield return primaryBase.ArgumentList;
+
+        foreach (var member in type.Members.Where(IsInstanceMember))
+        {
+            switch (member)
+            {
+                case FieldDeclarationSyntax field:
+                    foreach (var declarator in field.Declaration.Variables)
+                    {
+                        if (declarator.Initializer is { } fieldInitializer)
+                            yield return fieldInitializer;
+                    }
+
+                    break;
+
+                case PropertyDeclarationSyntax { Initializer: { } propertyInitializer }:
+                    yield return propertyInitializer;
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The type declaring a primary constructor whose scope covers the
+    /// initializer of <paramref name="initializerOwner"/> (an instance
+    /// field's declarator or an instance property), or null.
+    /// </summary>
+    private static TypeDeclarationSyntax? PrimaryConstructorTypeOf(SyntaxNode initializerOwner)
+    {
+        var member = initializerOwner switch
+        {
+            VariableDeclaratorSyntax { Parent.Parent: FieldDeclarationSyntax field } => field,
+            PropertyDeclarationSyntax property => property,
+            _ => (MemberDeclarationSyntax?)null,
+        };
+
+        return
+            member is { Parent: TypeDeclarationSyntax { ParameterList: not null } type }
+            && IsInstanceMember(member)
+            ? type
+            : null;
+    }
+
+    private static bool IsInstanceMember(MemberDeclarationSyntax member) =>
+        !member.Modifiers.Any(modifier =>
+            modifier.IsKind(SyntaxKind.StaticKeyword) || modifier.IsKind(SyntaxKind.ConstKeyword)
+        );
+
+    private static LocalBindingNames ForRoots(
+        IReadOnlyList<SyntaxNode> roots,
+        SyntaxNode reportAt,
+        IrExtractionContext context
+    )
+    {
+        if (context.LocalNaming is not { } naming || context.Compilation is null)
+            return LocalBindingNames.Empty;
+
+        // A referenced assembly's declaring syntax belongs to its own
+        // compilation; try the symbol-helper lookup (source references) and
+        // leave the map empty when the tree is unreachable.
+        var model = SymbolHelper.TryGetSemanticModel(context.Compilation, reportAt.SyntaxTree);
+
+        if (model is null)
+            return LocalBindingNames.Empty;
+
+        var collector = new BindingCollector(model, naming);
+
+        return Disambiguate(roots.SelectMany(collector.Collect).ToList(), reportAt, naming);
+    }
+
     private static LocalBindingNames Disambiguate(
         List<Binding> bindings,
-        SyntaxNode root,
+        SyntaxNode reportAt,
         LocalNaming naming
     )
     {
@@ -133,17 +239,18 @@ internal static class LocalBindingDisambiguator
 
         var emittedNames = bindings.Select(b => b.EmittedName).ToHashSet(StringComparer.Ordinal);
         var renamed = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
-        var unresolvable = new HashSet<string>(StringComparer.Ordinal);
+        var resolution = ResolveCollisions(bindings, naming);
 
-        foreach (var yielding in FindYieldingBindings(bindings, unresolvable, naming))
+        foreach (var yielding in resolution.Yielding)
         {
             var (irName, emittedName) = NextFreeSuffixedName(yielding, emittedNames, naming);
             renamed[yielding.Symbol] = irName;
             emittedNames.Add(emittedName);
         }
 
-        ReportUnresolvable(unresolvable, root);
-        return new LocalBindingNames(renamed, unresolvable);
+        ReportUnresolvable(resolution.Unresolvable, reportAt);
+
+        return new LocalBindingNames(renamed, resolution.Unresolvable, resolution.PinnedCollisions);
     }
 
     /// <summary>
@@ -151,17 +258,20 @@ internal static class LocalBindingDisambiguator
     /// name whose earlier binding's scope contains the later one's
     /// declaration. The binding that must give up the name is the later one
     /// when it can be renamed, otherwise the earlier one; a collision where
-    /// neither yields is unresolvable and recorded by emitted name — except
-    /// one a pinned name takes part in, which the entry-point transformer
-    /// reports against its <c>[ExportVarFromBody]</c> argument instead.
+    /// neither yields is unresolvable — recorded by emitted name, under
+    /// <see cref="CollisionResolution.PinnedCollisions"/> when a pinned name
+    /// takes part in it (the entry-point transformer reports those against
+    /// its <c>[ExportVarFromBody]</c> argument), under
+    /// <see cref="CollisionResolution.Unresolvable"/> otherwise.
     /// </summary>
-    private static IEnumerable<Binding> FindYieldingBindings(
+    private static CollisionResolution ResolveCollisions(
         IReadOnlyList<Binding> bindings,
-        ISet<string> unresolvable,
         LocalNaming naming
     )
     {
         var yielding = new List<Binding>();
+        var unresolvable = new HashSet<string>(StringComparer.Ordinal);
+        var pinnedCollisions = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var later in bindings)
         {
@@ -179,12 +289,20 @@ internal static class LocalBindingDisambiguator
                     continue;
                 }
 
-                if (!IsPinned(later, naming) && !IsPinned(earlier, naming))
-                    unresolvable.Add(later.EmittedName);
+                var collisions =
+                    IsPinned(later, naming) || IsPinned(earlier, naming)
+                        ? pinnedCollisions
+                        : unresolvable;
+
+                collisions.Add(later.EmittedName);
             }
         }
 
-        return yielding.DistinctBy(b => b.Symbol).OrderBy(b => b.Position);
+        return new CollisionResolution(
+            yielding.DistinctBy(b => b.Symbol).OrderBy(b => b.Position).ToList(),
+            unresolvable,
+            pinnedCollisions
+        );
     }
 
     private static bool IsVisibleCollision(Binding earlier, Binding later) =>
@@ -221,11 +339,13 @@ internal static class LocalBindingDisambiguator
 
     /// <summary>
     /// Reports each unresolvable collision through the general extraction
-    /// sink, at the declaring member's root — the target transformer's
-    /// diagnostic list receives it wherever a body is extracted, not only at
-    /// the module entry points.
+    /// sink, at the walk's root — the target transformer's diagnostic list
+    /// receives it wherever a body is extracted, not only at the module entry
+    /// points. A root walked more than once (a primary constructor's scope is
+    /// computed for each initializer) reports the same diagnostic at the same
+    /// location, which the transformer's sink keeps once.
     /// </summary>
-    private static void ReportUnresolvable(IReadOnlySet<string> unresolvable, SyntaxNode root)
+    private static void ReportUnresolvable(IReadOnlySet<string> unresolvable, SyntaxNode reportAt)
     {
         foreach (var emittedName in unresolvable)
         {
@@ -234,13 +354,24 @@ internal static class LocalBindingDisambiguator
                     MetanoDiagnosticSeverity.Error,
                     DiagnosticCodes.AmbiguousConstruct,
                     $"Two bindings in this member emit the same name '{emittedName}' and neither "
-                        + "can be renamed (parameters of the call surface); rename one of them "
-                        + "in C#.",
-                    root.GetLocation()
+                        + "can be renamed (a constructor, local-function, accessor or "
+                        + "[ObjectArgs] parameter, or an extension receiver, keeps its C# name); "
+                        + "rename one of them in C#.",
+                    reportAt.GetLocation()
                 )
             );
         }
     }
+
+    /// <summary>
+    /// The outcome of <see cref="ResolveCollisions"/>: the bindings that take
+    /// a suffix, and the emitted names of the collisions no rename resolves.
+    /// </summary>
+    private sealed record CollisionResolution(
+        IReadOnlyList<Binding> Yielding,
+        IReadOnlySet<string> Unresolvable,
+        IReadOnlySet<string> PinnedCollisions
+    );
 
     private sealed record Binding(
         ISymbol Symbol,
@@ -334,7 +465,7 @@ internal static class LocalBindingDisambiguator
                     when semantic.GetDeclaredSymbol(designation) is ILocalSymbol symbol => (
                     symbol,
                     designation.Identifier.ValueText,
-                    ScopeOfDesignation(designation)
+                    ScopeContainerOf(designation)
                 ),
                 _ => null,
             };
@@ -383,35 +514,36 @@ internal static class LocalBindingDisambiguator
 
         /// <summary>
         /// Only bindings the target declares itself may rename: every local
-        /// that is not pinned, and the parameters the target names itself —
-        /// an ordinary method's, a module function's, a lambda's (the policy
-        /// <see cref="IrParameterNaming"/> already renames) and an operator's
-        /// (an operator is called through the IR dispatch, never by a TS
-        /// caller naming a parameter). A promoted constructor parameter, an
-        /// <c>[ObjectArgs]</c> key, an accessor's <c>value</c> and an
-        /// extension receiver are the call surface and keep their name.
+        /// that is not pinned, and the parameters
+        /// <see cref="IrParameterNaming.IsRenamable"/> allows. A promoted
+        /// constructor parameter, an <c>[ObjectArgs]</c> key, an accessor's
+        /// <c>value</c> and an extension receiver keep their name.
         /// </summary>
         private static bool IsRenamable(ISymbol symbol, string identifier, LocalNaming naming) =>
             symbol switch
             {
                 ILocalSymbol => naming.PinnedNames is null
                     || !naming.PinnedNames.Contains(identifier),
-                IParameterSymbol parameter => IrParameterNaming.IsRenamable(parameter)
-                    || parameter.ContainingSymbol
-                        is IMethodSymbol
-                        {
-                            MethodKind: MethodKind.UserDefinedOperator or MethodKind.Conversion,
-                        },
+                IParameterSymbol parameter => IrParameterNaming.IsRenamable(parameter),
                 _ => false,
             };
 
         /// <summary>
         /// A parameter's scope is its owner's whole declaration — the
         /// parameter list lives before the body, so two colliding parameters
-        /// (<c>int a, int A</c>) are declared inside each other's scope.
+        /// (<c>int a, int A</c>) are declared inside each other's scope. A
+        /// simple lambda's lone parameter (<c>x =&gt; …</c>) has no
+        /// parameter list: its owner is its direct parent. A primary
+        /// constructor's owner is the type declaration, which spans every
+        /// initializer that reads the parameter.
         /// </summary>
         private static SyntaxNode ScopeOfParameter(ParameterSyntax parameter) =>
-            parameter.Parent?.Parent ?? parameter;
+            parameter.Parent switch
+            {
+                SimpleLambdaExpressionSyntax lambda => lambda,
+                { Parent: { } owner } => owner,
+                _ => parameter,
+            };
 
         /// <summary>
         /// A local declaration's scope is the block (or switch section, or
@@ -446,7 +578,8 @@ internal static class LocalBindingDisambiguator
 
         /// <summary>
         /// A pattern designator's or out-var's scope: the nearest enclosing
-        /// scope container. A loop condition's designation scopes to the loop
+        /// scope container. A field or property initializer, and a primary
+        /// constructor's base-call arguments, scope their own designations. A loop condition's designation scopes to the loop
         /// (the lowering binds a fresh local per iteration, inside it), a
         /// switch expression arm's to the arm, a case label's to its switch
         /// section (the bridge wraps each label's bindings in <c>{}</c>);
@@ -456,9 +589,6 @@ internal static class LocalBindingDisambiguator
         /// the whole switch for a section's statements, or member body,
         /// catch clause, lambda).
         /// </summary>
-        private static SyntaxNode ScopeOfDesignation(SingleVariableDesignationSyntax designation) =>
-            ScopeContainerOf(designation);
-
         private static SyntaxNode ScopeContainerOf(SingleVariableDesignationSyntax designation)
         {
             foreach (var ancestor in designation.Ancestors())
@@ -475,6 +605,9 @@ internal static class LocalBindingDisambiguator
                     case BaseMethodDeclarationSyntax:
                     case AccessorDeclarationSyntax:
                     case CatchClauseSyntax:
+                    case FieldDeclarationSyntax:
+                    case PropertyDeclarationSyntax:
+                    case PrimaryConstructorBaseTypeSyntax:
                     case BlockSyntax:
                     case CompilationUnitSyntax:
                         return ancestor;

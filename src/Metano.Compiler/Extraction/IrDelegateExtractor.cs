@@ -8,11 +8,12 @@ public static class IrDelegateExtractor
 {
     public static IrDelegateDeclaration? Extract(
         INamedTypeSymbol type,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var originResolver = options?.OriginResolver;
-        var target = options?.Target;
+        var originResolver = context?.OriginResolver;
+        var target = context?.Target;
+
         if (type.TypeKind != TypeKind.Delegate)
             return null;
 

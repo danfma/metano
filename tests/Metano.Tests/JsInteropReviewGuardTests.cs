@@ -247,7 +247,7 @@ public class JsInteropReviewGuardTests
             .DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .Last(m => m.Identifier.ValueText == "M");
-        var extractor = new IrStatementExtractor(model);
+        var extractor = new IrStatementExtractor(model, IrExtractionContext.Empty);
 
         return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid: true).Statements;
     }

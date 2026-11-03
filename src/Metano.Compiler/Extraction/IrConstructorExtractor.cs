@@ -19,10 +19,10 @@ public static class IrConstructorExtractor
 {
     public static IrConstructorDeclaration? Extract(
         INamedTypeSymbol type,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var context = options ?? IrExtractionContext.Empty;
+        context ??= IrExtractionContext.Empty;
 
         return Extract(
             type,
@@ -137,13 +137,13 @@ public static class IrConstructorExtractor
     /// </summary>
     private sealed record PromotionContext(
         INamedTypeSymbol Type,
-        IrExtractionContext Context,
+        IrExtractionContext Extraction,
         PrimaryConstructorPromotion Promotion
     )
     {
-        public Compilation? Compilation => Context.Compilation;
+        public Compilation? Compilation => Extraction.Compilation;
 
-        public Metano.Annotations.TargetLanguage? Target => Context.Target;
+        public Metano.Annotations.TargetLanguage? Target => Extraction.Target;
 
         /// <summary>
         /// The property <paramref name="parameter"/> is promoted to. A
@@ -211,13 +211,18 @@ public static class IrConstructorExtractor
         // whole declaration, so the `: base(...)` / `: this(...)` argument
         // lambdas and the body share it — a collision renames one name every
         // half agrees on.
-        var localNames = LocalBindingDisambiguator.ForMember(ctor, context.Context);
+        var localNames = LocalBindingDisambiguator.ForMember(ctor, context.Extraction);
 
-        var baseArguments = TryExtractBaseArguments(ctor, compilation, context.Context, localNames);
+        var baseArguments = TryExtractBaseArguments(
+            ctor,
+            compilation,
+            context.Extraction,
+            localNames
+        );
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
-            Body: TryExtractBody(ctor, compilation, context.Context, localNames),
+            Body: TryExtractBody(ctor, compilation, context.Extraction, localNames),
             BaseArguments: baseArguments,
             BaseExceptionConstruction: TryExtractBaseExceptionConstruction(
                 ctor,
@@ -290,8 +295,7 @@ public static class IrConstructorExtractor
         if (model.GetSymbolInfo(thisCall).Symbol is not IMethodSymbol chainedCtor)
             return null;
 
-        var extractor = new IrExpressionExtractor(model, context.Context);
-        extractor.AdoptLocalNames(localNames);
+        var extractor = new IrExpressionExtractor(model, context.Extraction, localNames);
         var arguments = extractor.ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
 
         var chainedDecl = BuildFromMethod(chainedCtor, originResolver, context);
@@ -374,8 +378,7 @@ public static class IrConstructorExtractor
             return null;
 
         var model = compilation.GetSemanticModel(baseCall.SyntaxTree);
-        var extractor = new IrExpressionExtractor(model, context);
-        extractor.AdoptLocalNames(localNames);
+        var extractor = new IrExpressionExtractor(model, context, localNames);
 
         return extractor.ExtractInitializerArguments(
             ArgumentListOf(baseCall),

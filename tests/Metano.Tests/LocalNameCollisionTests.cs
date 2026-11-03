@@ -402,6 +402,7 @@ public class LocalNameCollisionTests
         // Each case label's bindings are wrapped in their own block, so
         // sibling sections keep the same emitted name.
         await Assert.That(output.Split("const total").Length - 1).IsEqualTo(2);
+        await Assert.That(output).Contains("r += total;");
         await Assert.That(output).DoesNotContain("$1");
     }
 
@@ -620,10 +621,88 @@ public class LocalNameCollisionTests
         // The keys of the public argument object cannot rename; the emitted
         // destructure would declare `a` twice, so the collision is reported.
         await Assert
-            .That(diagnostics.Any(d => d.Code == "MS0003" && d.Message.Contains("'a'")))
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == "MS0003" && d.Message.Contains("'a'") && d.Message.Contains("neither")
+                )
+            )
             .IsTrue();
-        await Assert.That(diagnostics.Any(d => d.Message.Contains("neither"))).IsTrue();
-        _ = output;
+    }
+
+    [Test]
+    public async Task PrimaryConstructorParameter_VsFieldInitializerLambda_RenamesLambdaParameter()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample(int total)
+            {
+                public Func<int, int> F = Total => Total + total;
+            }
+            """
+        )["sample.ts"];
+
+        // The initializer runs inside the constructor, where `total` is the
+        // constructor parameter: the lambda parameter yields to it.
+        await Assert.That(output).Contains("this.f = (total$1: number) => total$1 + total;");
+    }
+
+    [Test]
+    public async Task PrimaryConstructorParameter_VsPropertyInitializerLambda_RenamesLambdaParameter()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample(int total)
+            {
+                public Func<int, int> G { get; } = Total => Total * total;
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("this.g = (total$1: number) => total$1 * total;");
+    }
+
+    [Test]
+    public async Task CapturedPrimaryConstructorParameter_VsInitializerLambda_ReadsField()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample(int total)
+            {
+                public Func<int, int> F = Total => Total + total;
+
+                public int Read() => total;
+            }
+            """
+        )["sample.ts"];
+
+        // A parameter a method also reads is captured into `_total`, so the
+        // initializer reads the field; the lambda parameter still yields,
+        // since the walk sees the constructor parameter in scope.
+        await Assert.That(output).Contains("this.f = (total$1: number) => total$1 + this._total;");
+    }
+
+    [Test]
+    public async Task ExplicitConstructorCollision_InPrimaryConstructorType_ReportsOnce()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Sample(int seed)
+            {
+                public int Seed => seed;
+
+                public Sample(int total, int Total) : this(total + Total) { }
+            }
+            """
+        );
+
+        // The primary constructor's scope is its parameters, base call and
+        // initializers — not the explicit constructor's body — so only the
+        // explicit constructor's walk reports the collision.
+        await Assert.That(diagnostics.Count(d => d.Code == "MS0003")).IsEqualTo(1);
     }
 
     [Test]
@@ -686,6 +765,64 @@ public class LocalNameCollisionTests
     }
 
     [Test]
+    public async Task ExportedLocalVsUnrenamableBinding_ReportsMS0006()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Program
+            {
+                [ModuleEntryPoint, ExportVarFromBody("App")]
+                public static void Main()
+                {
+                    var App = 1;
+                    int Twice(int app) => app + App;
+                    System.Console.WriteLine(Twice(App));
+                }
+            }
+            """
+        );
+
+        // A local function's parameter keeps its name and the export is
+        // pinned: neither yields, so the export's attribute is blamed.
+        await Assert
+            .That(
+                diagnostics.Count(d =>
+                    d.Code == "MS0006" && d.Message.Contains("[ExportVarFromBody(\"App\")]")
+                )
+            )
+            .IsEqualTo(1);
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0003")).IsFalse();
+    }
+
+    [Test]
+    public async Task UnresolvableCollisionBesideExport_ReportsMS0003Only()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Program
+            {
+                [ModuleEntryPoint, ExportVarFromBody("app")]
+                public static void Main()
+                {
+                    var app = 1;
+                    int Sum(int a, int A) => a + A;
+                    System.Console.WriteLine(Sum(app, app));
+                }
+            }
+            """
+        );
+
+        // The collision does not involve the export, so it is MS0003 and the
+        // export's attribute is not blamed.
+        await Assert
+            .That(diagnostics.Count(d => d.Code == "MS0003" && d.Message.Contains("'a'")))
+            .IsEqualTo(1);
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0006")).IsFalse();
+    }
+
+    [Test]
     public async Task NonCollidingLocals_EmitPlainCamelCaseUnchanged()
     {
         var output = TranspileHelper.Transpile(
@@ -707,7 +844,7 @@ public class LocalNameCollisionTests
         )["sample.ts"];
 
         await Assert.That(output).Contains("let total = 0;");
-        await Assert.That(output).Contains("const x of xs");
+        await Assert.That(output).Contains("for (const x of xs) {");
         await Assert.That(output).Contains("total += x;");
         await Assert.That(output).DoesNotContain("$1");
     }
@@ -788,6 +925,30 @@ public class LocalNameCollisionTests
             }
         }
         """;
+
+    public const string PrimaryConstructorGoldenSource = """
+        [Transpile]
+        public class PrimaryCollisions(int total)
+        {
+            public Func<int, int> F = Total => Total + total;
+
+            public Func<int, int> G { get; } = Total => Total * total;
+        }
+        """;
+
+    [Test]
+    public async Task Golden_PrimaryConstructorInitializerCollisions()
+    {
+        var output = TranspileHelper.Transpile(PrimaryConstructorGoldenSource)[
+            "primary-collisions.ts"
+        ];
+
+        await Assert
+            .That(output)
+            .IsEqualTo(
+                TranspileHelper.ReadExpected("primary-constructor-initializer-collisions.ts")
+            );
+    }
 
     [Test]
     public async Task Golden_LocalNameCollisions()

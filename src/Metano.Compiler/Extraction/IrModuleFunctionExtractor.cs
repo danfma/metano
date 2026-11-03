@@ -27,10 +27,10 @@ public static class IrModuleFunctionExtractor
     /// </summary>
     public static IReadOnlyList<IrModuleFunction> Extract(
         INamedTypeSymbol type,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var context = options ?? IrExtractionContext.Empty;
+        context ??= IrExtractionContext.Empty;
         var originResolver = context.OriginResolver;
         var compilation = context.Compilation;
         var target = context.Target;
@@ -135,9 +135,12 @@ public static class IrModuleFunctionExtractor
     {
         var originResolver = context.OriginResolver;
         var getter = prop.GetMethod;
+
         if (getter is null)
             return null;
+
         var syntax = getter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+
         if (syntax is null)
             return null;
 
@@ -252,16 +255,20 @@ public static class IrModuleFunctionExtractor
                             model,
                             context
                         );
+
                         if (staticGetterFn is not null)
                             acc.Add(staticGetterFn);
+
                         var staticSetterFn = ConvertStaticExtensionPropertySetter(
                             propSymbol,
                             propSyntax,
                             model,
                             context
                         );
+
                         if (staticSetterFn is not null)
                             acc.Add(staticSetterFn);
+
                         break;
                     }
 
@@ -272,8 +279,10 @@ public static class IrModuleFunctionExtractor
                         model,
                         context
                     );
+
                     if (propFn is not null)
                         acc.Add(propFn);
+
                     var setterFn = ConvertExtensionPropertySetter(
                         propSymbol,
                         propSyntax,
@@ -281,8 +290,10 @@ public static class IrModuleFunctionExtractor
                         model,
                         context
                     );
+
                     if (setterFn is not null)
                         acc.Add(setterFn);
+
                     break;
 
                 case IndexerDeclarationSyntax indexerSyntax:
@@ -333,8 +344,10 @@ public static class IrModuleFunctionExtractor
     {
         var originResolver = context.OriginResolver;
         var getter = indexer.GetMethod;
+
         if (getter is null)
             return null;
+
         var getterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
             a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
         );
@@ -393,11 +406,14 @@ public static class IrModuleFunctionExtractor
     )
     {
         var originResolver = context.OriginResolver;
+
         if (indexer.SetMethod is null)
             return null;
+
         var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
             a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SetAccessorDeclaration)
         );
+
         if (setterSyntax is null)
             return null;
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
@@ -556,11 +572,14 @@ public static class IrModuleFunctionExtractor
     )
     {
         var originResolver = context.OriginResolver;
+
         if (prop.SetMethod is null)
             return null;
+
         var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
             a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SetAccessorDeclaration)
         );
+
         if (setterSyntax is null)
             return null;
         // Skip auto-set without a body — there's no backing field to mutate.
@@ -723,11 +742,14 @@ public static class IrModuleFunctionExtractor
     )
     {
         var originResolver = context.OriginResolver;
+
         if (prop.SetMethod is null)
             return null;
+
         var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
             a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SetAccessorDeclaration)
         );
+
         if (setterSyntax is null)
             return null;
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)

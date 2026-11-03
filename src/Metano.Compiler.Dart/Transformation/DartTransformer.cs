@@ -35,7 +35,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     );
 
     /// <summary>
-    /// The extraction options the core extractors receive: this compilation
+    /// The extraction context the core extractors receive: this compilation
     /// and the Dart target, no local-naming decision — local-name collision
     /// renaming is TypeScript-only until #402 lands it for Dart.
     /// </summary>

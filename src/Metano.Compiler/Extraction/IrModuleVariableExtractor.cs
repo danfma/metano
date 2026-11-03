@@ -22,10 +22,10 @@ public static class IrModuleVariableExtractor
 {
     public static IReadOnlyList<IrMemberDeclaration> Extract(
         INamedTypeSymbol type,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var context = options ?? IrExtractionContext.Empty;
+        context ??= IrExtractionContext.Empty;
         var variables = new List<IrMemberDeclaration>();
 
         foreach (var member in type.GetMembers())

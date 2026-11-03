@@ -19,10 +19,10 @@ public static class IrFieldExtractor
     /// </summary>
     public static IrFieldDeclaration? TryExtract(
         IFieldSymbol field,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var context = options ?? IrExtractionContext.Empty;
+        context ??= IrExtractionContext.Empty;
         var originResolver = context.OriginResolver;
         var compilation = context.Compilation;
         var target = context.Target;
@@ -34,7 +34,7 @@ public static class IrFieldExtractor
             return null;
 
         var initializer = compilation is not null
-            ? TryExtractInitializer(field, compilation, options)
+            ? TryExtractInitializer(field, compilation, context)
             : null;
 
         return new IrFieldDeclaration(
@@ -63,7 +63,7 @@ public static class IrFieldExtractor
     private static IrExpression? TryExtractInitializer(
         IFieldSymbol field,
         Compilation compilation,
-        IrExtractionContext? options
+        IrExtractionContext context
     )
     {
         var declarator =
@@ -74,7 +74,7 @@ public static class IrFieldExtractor
             return null;
 
         var model = compilation.GetSemanticModel(declarator.SyntaxTree);
-        var expr = new IrExpressionExtractor(model, options);
+        var expr = new IrExpressionExtractor(model, context);
 
         return expr.ExtractStandalone(declarator.Initializer.Value);
     }

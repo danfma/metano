@@ -16,10 +16,10 @@ public static class IrPropertyExtractor
 {
     public static IrPropertyDeclaration Extract(
         IPropertySymbol prop,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var context = options ?? IrExtractionContext.Empty;
+        context ??= IrExtractionContext.Empty;
         var originResolver = context.OriginResolver;
         var target = context.Target;
 
@@ -35,17 +35,17 @@ public static class IrPropertyExtractor
             prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as PropertyDeclarationSyntax;
 
-        var semantics = BuildSemantics(prop, syntax, options);
+        var semantics = BuildSemantics(prop, syntax, context);
 
         IReadOnlyList<IrStatement>? getterBody = null;
         IReadOnlyList<IrStatement>? setterBody = null;
         IrExpression? initializer = null;
 
-        if (options?.Compilation is { } compilation && syntax is not null)
+        if (context.Compilation is { } compilation && syntax is not null)
         {
             var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-            var stmtExtractor = new IrStatementExtractor(model, options);
-            var exprExtractor = new IrExpressionExtractor(model, options);
+            var stmtExtractor = new IrStatementExtractor(model, context);
+            var exprExtractor = new IrExpressionExtractor(model, context);
 
             // Expression-bodied property: the whole `=> expr;` is the getter.
             if (syntax.ExpressionBody is not null)
@@ -112,7 +112,7 @@ public static class IrPropertyExtractor
     private static IrPropertySemantics BuildSemantics(
         IPropertySymbol prop,
         PropertyDeclarationSyntax? syntax,
-        IrExtractionContext? options
+        IrExtractionContext context
     )
     {
         var hasGetterBody = DetectGetterBody(syntax);
@@ -129,8 +129,8 @@ public static class IrPropertyExtractor
             IsSealed: prop.IsSealed,
             IsRequired: prop.IsRequired,
             OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop),
-            EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, options?.Target),
-            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, options?.Compilation)
+            EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, context.Target),
+            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, context.Compilation)
         );
     }
 

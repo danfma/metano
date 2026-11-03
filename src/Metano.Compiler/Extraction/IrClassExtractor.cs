@@ -21,10 +21,10 @@ public static class IrClassExtractor
 {
     public static IrClassDeclaration Extract(
         INamedTypeSymbol type,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        var context = options ?? IrExtractionContext.Empty;
+        context ??= IrExtractionContext.Empty;
         var originResolver = context.OriginResolver;
         var compilation = context.Compilation;
         var target = context.Target;

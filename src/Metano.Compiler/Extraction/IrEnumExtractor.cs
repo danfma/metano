@@ -11,10 +11,10 @@ public static class IrEnumExtractor
 {
     public static IrEnumDeclaration Extract(
         INamedTypeSymbol type,
-        IrExtractionContext? options = null
+        IrExtractionContext? context = null
     )
     {
-        _ = options; // currently unused for enums; reserved for future consistency
+        _ = context; // currently unused for enums; reserved for future consistency
         var isStringEnum = SymbolHelper.HasStringEnum(type);
         var style = isStringEnum ? IrEnumStyle.String : IrEnumStyle.Numeric;
 

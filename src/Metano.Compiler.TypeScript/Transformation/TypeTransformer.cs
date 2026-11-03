@@ -1618,7 +1618,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             else
             {
                 var export = SymbolHelper.GetExportVarFromBody(entryPoint);
-                (entryBody, var unresolvable) = ExtractMethodBody(
+
+                (entryBody, var pinnedCollisions) = ExtractMethodBody(
                     entryPoint,
                     export is null ? null : new HashSet<string> { export.Name }
                 );
@@ -1627,8 +1628,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 // surface, so it keeps its name and the colliding binding is
                 // renamed instead. Only a collision the rename cannot resolve
                 // (the other binding is not renamable either) is reported,
-                // against the attribute's C# argument (#398).
-                if (unresolvable.Count > 0 && export is { } pinned)
+                // against the attribute's C# argument (#398); a collision
+                // between two other bindings is MS0003, reported by the
+                // disambiguator itself.
+                if (pinnedCollisions.Count > 0 && export is { } pinned)
                 {
                     ReportInvalidEntryPoint(
                         entryPoint,
@@ -1934,11 +1937,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// The extraction options for a method body, with the pinned local names
+    /// The extraction context for a method body, with the pinned local names
     /// of a <c>[ExportVarFromBody]</c> export folded into the local-naming
     /// decision so the export is never renamed (#398).
     /// </summary>
-    private IrExtractionContext ExtractionOptionsFor(IReadOnlySet<string>? pinnedLocalNames) =>
+    private IrExtractionContext ExtractionContextFor(IReadOnlySet<string>? pinnedLocalNames) =>
         pinnedLocalNames is null
             ? Context.Extraction
             : Context.Extraction with
@@ -1954,11 +1957,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// camelCase collisions inside the body are renamed (#398).
     /// <paramref name="pinnedLocalNames"/> names locals that must keep their
     /// emitted name (a <c>[ExportVarFromBody]</c> export); the returned
-    /// collision set names emitted names no rename could resolve.
+    /// collision set names the emitted names of the pinned locals no rename
+    /// could free.
     /// </summary>
     private (
         IReadOnlyList<IrStatement>? Body,
-        IReadOnlySet<string> UnresolvableCollisions
+        IReadOnlySet<string> PinnedCollisions
     ) ExtractMethodBody(IMethodSymbol method, IReadOnlySet<string>? pinnedLocalNames = null)
     {
         var syntax =
@@ -1968,10 +1972,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return (null, new HashSet<string>());
 
         var model = Context.Compilation.GetSemanticModel(syntax.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, ExtractionOptionsFor(pinnedLocalNames));
+        var extractor = new IrStatementExtractor(model, ExtractionContextFor(pinnedLocalNames));
         var body = extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, method.ReturnsVoid);
 
-        return (body.Statements, body.LocalNames.UnresolvableCollisions);
+        return (body.Statements, body.LocalNames.PinnedCollisions);
     }
 
     private static bool IsValidEntryPointReturn(ITypeSymbol returnType)

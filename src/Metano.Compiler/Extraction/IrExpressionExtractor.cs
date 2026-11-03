@@ -30,19 +30,21 @@ public sealed partial class IrExpressionExtractor
     );
 
     private readonly SemanticModel _semantic;
-    private readonly IrExtractionContext _options;
+    private readonly IrExtractionContext _context;
+
+    // Shorthands for the two context inputs read at dozens of type-mapping
+    // sites across the partial files.
     private readonly IrTypeOriginResolver? _originResolver;
     private readonly Metano.Annotations.TargetLanguage? _target;
-    private readonly LocalNaming? _localNaming;
 
     /// <summary>
-    /// The local-binding renames of the body being extracted (#398),
-    /// adopted from the statement extractor that computed them per body so
-    /// identifier reads, lambda parameters, pattern designators and out-vars
-    /// name the same symbol the declarations named. Empty when no target
-    /// naming policy was supplied (shape-only extraction).
+    /// The local-binding renames of the body being extracted (#398), handed
+    /// in by the extractor that computed them so identifier reads, lambda
+    /// parameters, pattern designators and out-vars name the same symbol the
+    /// declarations named. Null until a map is supplied: a standalone
+    /// initializer then computes its own (<see cref="ExtractStandalone"/>).
     /// </summary>
-    private LocalBindingNames _localNames = LocalBindingNames.Empty;
+    private LocalBindingNames? _localNames;
 
     /// <summary>
     /// Tracks the set of <c>[Inline]</c> members currently being
@@ -116,21 +118,22 @@ public sealed partial class IrExpressionExtractor
     /// <summary>A fresh temporary holding one operand value of a tuple comparison.</summary>
     private string NextTupleOperandTempName() => $"tuple$temp${_temporaryCounter++}";
 
-    public IrExpressionExtractor(SemanticModel semanticModel, IrExtractionContext? options = null)
-        : this(semanticModel, options, inlineExpanding: null, inlineParameterSubs: null) { }
+    public IrExpressionExtractor(SemanticModel semanticModel, IrExtractionContext context)
+        : this(semanticModel, context, localNames: null) { }
 
     internal IrExpressionExtractor(
         SemanticModel semanticModel,
-        IrExtractionContext? options,
-        HashSet<ISymbol>? inlineExpanding,
-        IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs
+        IrExtractionContext context,
+        LocalBindingNames? localNames,
+        HashSet<ISymbol>? inlineExpanding = null,
+        IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs = null
     )
     {
         _semantic = semanticModel;
-        _options = options ?? IrExtractionContext.Empty;
-        _originResolver = _options.OriginResolver;
-        _target = _options.Target;
-        _localNaming = _options.LocalNaming;
+        _context = context;
+        _originResolver = context.OriginResolver;
+        _target = context.Target;
+        _localNames = localNames;
         _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         _inlineParameterSubs = inlineParameterSubs;
 
@@ -179,15 +182,21 @@ public sealed partial class IrExpressionExtractor
 
     internal HashSet<ISymbol> InlineExpandingSet => _inlineExpanding;
 
-    /// <summary>Adopts the body's local-binding renames (#398).</summary>
+    /// <summary>
+    /// Adopts the local-binding renames of the body a statement extractor is
+    /// about to extract (#398): it shares this extractor across the bodies of
+    /// one member (a property's getter and setter), each with its own map.
+    /// </summary>
     internal void AdoptLocalNames(LocalBindingNames names) => _localNames = names;
+
+    private LocalBindingNames LocalNames => _localNames ?? LocalBindingNames.Empty;
 
     /// <summary>
     /// The IR name of a local binding's declaration site: its disambiguated
     /// name when the body's map renamed it (#398), otherwise the fallback.
     /// </summary>
     private string LocalIrNameOf(ISymbol? symbol, string identifier) =>
-        _localNames.NameOf(symbol, identifier);
+        LocalNames.NameOf(symbol, identifier);
 
     public IrExpression Extract(ExpressionSyntax expression) =>
         _conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax
@@ -1463,16 +1472,14 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The IR name of a local or parameter read: its disambiguated name when
     /// the body's map renamed it (#398) — looked up through
-    /// <see cref="LocalBindingNames.NameOf(ISymbol?, string)"/>; a parameter
+    /// <see cref="LocalBindingNames.TryGetRenamed"/>; a parameter
     /// that a flattened static member would shadow is renamed (see
     /// <see cref="IrParameterNaming"/>).
     /// </summary>
     private string IdentifierNameOf(IdentifierNameSyntax id, ISymbol? symbol)
     {
-        var disambiguated = _localNames.NameOf(symbol, id.Identifier.ValueText);
-
-        if (symbol is not null && disambiguated != id.Identifier.ValueText)
-            return disambiguated;
+        if (LocalNames.TryGetRenamed(symbol, out var renamed))
+            return renamed;
 
         return symbol is IParameterSymbol parameter
             ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation)
@@ -2505,9 +2512,9 @@ public sealed partial class IrExpressionExtractor
             // to the original member bails out instead of recursing.
             var extractor = new IrExpressionExtractor(
                 semanticModel,
-                _options,
-                _inlineExpanding,
-                inlineParameterSubs: null
+                _context,
+                localNames: null,
+                _inlineExpanding
             );
             return extractor.Extract(initializer);
         }
@@ -3149,8 +3156,8 @@ public sealed partial class IrExpressionExtractor
             // must resolve through the same map.
             BlockSyntax block => new IrStatementExtractor(
                 _semantic,
-                _options,
-                inheritedLocalNames: _localNames
+                _context,
+                inheritedLocalNames: LocalNames
             )
                 .ExtractBody(block, arrow: null, isVoid: false)
                 .Statements,
