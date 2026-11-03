@@ -83,6 +83,43 @@ public class JsonFactoryTests
             [JsonSerializable(typeof(Episode.Code))]
             """;
 
+    private const string PackageLibrary = """
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("shared")]
+
+        namespace Shared;
+
+        [Branded]
+        public readonly record struct Title(string Value)
+        {
+            [JsonFactory]
+            public static Title From(string value) => new(value.Trim());
+        }
+
+        public static class Outer
+        {
+            [Branded]
+            public readonly record struct Code(int Value)
+            {
+                [JsonFactory]
+                public static Code From(int value) => new(value);
+            }
+        }
+        """;
+
+    private const string PackageConsumer = """
+        using System.Text.Json.Serialization;
+        using Shared;
+
+        namespace App;
+
+        [Transpile]
+        public sealed record Video(Title Title, Outer.Code Code);
+
+        [Transpile]
+        [JsonSerializable(typeof(Video))]
+        """;
+
     [Test]
     public async Task Factory_MatchesGolden()
     {
@@ -205,43 +242,6 @@ public class JsonFactoryTests
         await Assert.That(ts).Contains("create: Plain.create");
         await Assert.That(ts).Contains("create: UUID.create");
     }
-
-    private const string PackageLibrary = """
-        [assembly: TranspileAssembly]
-        [assembly: EmitPackage("shared")]
-
-        namespace Shared;
-
-        [Branded]
-        public readonly record struct Title(string Value)
-        {
-            [JsonFactory]
-            public static Title From(string value) => new(value.Trim());
-        }
-
-        public static class Outer
-        {
-            [Branded]
-            public readonly record struct Code(int Value)
-            {
-                [JsonFactory]
-                public static Code From(int value) => new(value);
-            }
-        }
-        """;
-
-    private const string PackageConsumer = """
-        using System.Text.Json.Serialization;
-        using Shared;
-
-        namespace App;
-
-        [Transpile]
-        public sealed record Video(Title Title, Outer.Code Code);
-
-        [Transpile]
-        [JsonSerializable(typeof(Video))]
-        """;
 
     [Test]
     public async Task BrandedTypeFromAReferencedPackage_CallsTheFactoryAndIsImported()
@@ -642,10 +642,12 @@ public class JsonFactoryTests
         var (files, diagnostics) = Transpile(declarations);
 
         if (diagnostics.Any(diagnostic => diagnostic.Severity == MetanoDiagnosticSeverity.Error))
+        {
             throw new InvalidOperationException(
                 "Unexpected diagnostics: "
                     + string.Join("; ", diagnostics.Select(diagnostic => diagnostic.Format()))
             );
+        }
 
         return files[ContextPath];
     }
