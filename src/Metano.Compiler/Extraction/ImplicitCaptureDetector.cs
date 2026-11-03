@@ -15,8 +15,8 @@ namespace Metano.Compiler.Extraction;
 /// <para>
 /// This detector orchestrates the scan: it decides the primary
 /// constructor, applies the promotion read-through map and the
-/// explicit-capture exemption, and delegates the identifier walk to
-/// <see cref="PrimaryCtorCaptureWalker"/> and the field synthesis to
+/// explicit-capture exemption, and delegates the identifier scan to
+/// <see cref="PrimaryCtorCaptureScanner"/> and the field synthesis to
 /// <see cref="CapturedFieldSynthesizer"/>. The result is:
 /// </para>
 /// <list type="bullet">
@@ -69,6 +69,7 @@ internal static class ImplicitCaptureDetector
         var primaryCtor = type.Constructors.FirstOrDefault(
             IrConstructorExtractor.IsPrimaryConstructor
         );
+
         if (primaryCtor is null || primaryCtor.Parameters.Length == 0)
             return Empty;
 
@@ -104,7 +105,7 @@ internal static class ImplicitCaptureDetector
             primaryParams
         );
 
-        var capturedParams = PrimaryCtorCaptureWalker.CapturedParameters(
+        var capturedParams = PrimaryCtorCaptureScanner.CapturedParameters(
             type,
             compilation,
             primaryParams,
@@ -119,7 +120,7 @@ internal static class ImplicitCaptureDetector
             capturedParams,
             type,
             originResolver,
-            promotion
+            promotion.IsWritten
         );
 
         return new Result(captured, synthesizedFields, readThroughProperties);
