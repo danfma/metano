@@ -501,6 +501,4 @@ public class PackageJsonCacheReuseTests
 
         public string ProjectPath => Path.Combine(Root, "TodoPackage.csproj");
     }
-
-    private sealed record PipelineRun(bool ServedFromCache);
 }

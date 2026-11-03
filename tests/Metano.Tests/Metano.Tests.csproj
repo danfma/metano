@@ -49,5 +49,11 @@
   <ItemGroup>
     <None Include="Expected/**/*.ts" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Expected/**/*.tsx" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The toolchain-key tests (#433) evaluate the shipped MSBuild target. -->
+    <None
+      Include="../../src/Metano.Build/build/Metano.Build.targets"
+      Link="MetanoBuild/Metano.Build.targets"
+      CopyToOutputDirectory="PreserveNewest"
+    />
   </ItemGroup>
 </Project>

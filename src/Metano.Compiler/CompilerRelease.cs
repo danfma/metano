@@ -17,6 +17,18 @@ public static class CompilerRelease
     /// </summary>
     public static string Version { get; } = ReadInformationalVersion();
 
+    /// <summary>
+    /// <see cref="FingerprintSegment"/> of the running release: the segment every
+    /// incremental cache this process writes leads with.
+    /// </summary>
+    public static string CurrentFingerprintSegment { get; } = FingerprintSegment(Version);
+
+    /// <summary>
+    /// The leading segment of a cache configuration fingerprint (ADR-0021) that pins
+    /// <paramref name="release"/>, so a cache another release wrote is a miss (#433).
+    /// </summary>
+    public static string FingerprintSegment(string release) => $"compiler={release};";
+
     private static string ReadInformationalVersion() =>
         typeof(CompilerRelease)
             .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()

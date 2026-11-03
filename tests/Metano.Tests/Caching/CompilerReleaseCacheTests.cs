@@ -50,9 +50,9 @@ public class CompilerReleaseCacheTests
     {
         await Transpile();
 
-        var servedFromCache = await Transpile();
+        var rerun = await Transpile();
 
-        await Assert.That(servedFromCache).IsTrue();
+        await Assert.That(rerun.ServedFromCache).IsTrue();
     }
 
     [Test]
@@ -61,20 +61,24 @@ public class CompilerReleaseCacheTests
         await Transpile();
         RewriteReleaseInHostCache(OlderRelease);
 
-        var servedAfterUpgrade = await Transpile();
-        var servedOnTheNextRun = await Transpile();
+        var afterUpgrade = await Transpile();
+        var nextRun = await Transpile();
 
-        await Assert.That(servedAfterUpgrade).IsFalse();
-        await Assert.That(servedOnTheNextRun).IsTrue();
+        await Assert.That(afterUpgrade.ServedFromCache).IsFalse();
+        await Assert.That(nextRun.ServedFromCache).IsTrue();
     }
 
+    /// <summary>
+    /// Planting the stale output already makes the host cache miss (its output hashes no
+    /// longer match), so only the group cache's release is rewritten: whether the planted
+    /// group is reused depends on the group fingerprint alone.
+    /// </summary>
     [Test]
     public async Task GroupEmittedByAnotherRelease_IsRegenerated()
     {
         await Transpile();
         var freshContent = File.ReadAllText(NoteFilePath());
         PlantStaleNoteOutput();
-        RewriteReleaseInHostCache(OlderRelease);
         RewriteReleaseInGroupCache(OlderRelease);
 
         await Transpile();
@@ -98,8 +102,7 @@ public class CompilerReleaseCacheTests
         await Assert.That(File.ReadAllText(NoteFilePath())).IsEqualTo(staleContent);
     }
 
-    /// <summary>Runs the host once and returns whether it was served from the full cache.</summary>
-    private async Task<bool> Transpile()
+    private async Task<PipelineRun> Transpile()
     {
         var recordingTarget = new CacheAdoptionRecorder(new TypeScriptTarget());
         var options = new TranspileOptions(ProjectPath, OutputDir);
@@ -115,7 +118,7 @@ public class CompilerReleaseCacheTests
                 $"Transpilation failed: {result.ErrorCount} error(s)."
             );
 
-        return recordingTarget.AdoptedCachedOutput;
+        return new PipelineRun(recordingTarget.AdoptedCachedOutput);
     }
 
     private CSharpCompilation Compile()
@@ -141,22 +144,23 @@ public class CompilerReleaseCacheTests
     /// </summary>
     private string PlantStaleNoteOutput()
     {
-        var staleContent = StaleMarker + File.ReadAllText(NoteFilePath());
         var groupCache = ReadGroupCache();
         var (groupKey, entry) = NoteGroup(groupCache);
+        var noteFilePath = PathOf(entry);
+        var staleContent = StaleMarker + File.ReadAllText(noteFilePath);
 
         var staleEntry = entry with
         {
             Files =
             [
-                entry.Files[0] with
+                entry.Files.Single() with
                 {
                     ContentHash = FileMetadataExtractor.Sha256(staleContent),
                 },
             ],
         };
 
-        File.WriteAllText(NoteFilePath(), staleContent);
+        File.WriteAllText(noteFilePath, staleContent);
 
         var groups = new Dictionary<string, GroupCacheEntry>(groupCache.Groups)
         {
@@ -194,35 +198,33 @@ public class CompilerReleaseCacheTests
         rewritten.Write(OutputDir);
     }
 
-    private static string WithRelease(string fingerprint, string release)
-    {
-        var currentRelease = $"compiler={CompilerRelease.Version};";
-
-        if (!fingerprint.StartsWith(currentRelease, StringComparison.Ordinal))
-            throw new InvalidOperationException(
-                $"The fingerprint does not pin the running compiler release: {fingerprint}"
-            );
-
-        return $"compiler={release};" + fingerprint[currentRelease.Length..];
-    }
-
     private GroupCacheFile ReadGroupCache() =>
         GroupCacheFile.TryRead(OutputDir)
         ?? throw new InvalidOperationException("The group cache was not written.");
 
+    private string NoteFilePath() => PathOf(NoteGroup(ReadGroupCache()).Entry);
+
+    private string PathOf(GroupCacheEntry entry) =>
+        Path.Combine(OutputDir, entry.Files.Single().Path);
+
+    private static string WithRelease(string fingerprint, string release)
+    {
+        var currentSegment = CompilerRelease.CurrentFingerprintSegment;
+
+        if (!fingerprint.StartsWith(currentSegment, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"The fingerprint does not pin the running compiler release: {fingerprint}"
+            );
+
+        return CompilerRelease.FingerprintSegment(release) + fingerprint[currentSegment.Length..];
+    }
+
     private static (string Key, GroupCacheEntry Entry) NoteGroup(GroupCacheFile cache)
     {
         var (key, entry) = cache.Groups.Single(group =>
-            group.Value.Files[0].Path.EndsWith("note.ts", StringComparison.Ordinal)
+            group.Value.Files.Single().Path.EndsWith("note.ts", StringComparison.Ordinal)
         );
 
         return (key, entry);
-    }
-
-    private string NoteFilePath()
-    {
-        var (_, entry) = NoteGroup(ReadGroupCache());
-
-        return Path.Combine(OutputDir, entry.Files[0].Path);
     }
 }
