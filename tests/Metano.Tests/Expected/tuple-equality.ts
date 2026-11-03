@@ -63,7 +63,7 @@ export class Comparisons {
   }
 
   static mismatched(a: [number, number], b: [number, number]): boolean {
-    return objectEquals(a, b);
+    return false;
   }
 
   static nullableMismatched(a: [number, number] | null, b: [number, number]): boolean {
@@ -104,6 +104,42 @@ export class Comparisons {
 
   static boxed(a: Object, b: Object): boolean {
     return objectEquals(a, b);
+  }
+
+  static staticBoxedFirst(a: Object, b: [[number, number], number]): boolean {
+    return tupleEquals(a, b, [[], null]);
+  }
+
+  static staticWithArray(a: number[], b: [[number, number], number]): boolean {
+    return false;
+  }
+
+  static convertedArgument(a: [number, number], b: [number, number]): boolean {
+    return tupleEquals(a, b);
+  }
+
+  static convertedLiteral(a: [number, number]): boolean {
+    return tupleEquals(a, [1, 2] as [number, number]);
+  }
+
+  static guardedConverted(a: [number, number] | null, b: [number, number]): boolean | null {
+    return a == null ? null : tupleEquals(a, b);
+  }
+
+  static boxedConverted(a: [number, number] | null, b: [number, number]): boolean {
+    return false;
+  }
+
+  static structTypeParameter<T>(a: [[number, number], number], b: T): boolean {
+    return tupleEquals(a, b, [[], null]);
+  }
+
+  static nullableStructTypeParameter<T>(a: [[number, number], number], b: T | null): boolean {
+    return tupleEquals(a, b, [[], null]);
+  }
+
+  static arrayArgument(a: [number, number], b: number[]): boolean {
+    return false;
   }
 
   static eight(a: [number, number, number, number, number, number, number, [number]], b: [number, number, number, number, number, number, number, [number]]): boolean {

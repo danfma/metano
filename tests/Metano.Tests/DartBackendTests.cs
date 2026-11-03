@@ -1707,4 +1707,45 @@ public class DartBackendTests
             .That(files["comparisons.dart"])
             .Contains("static bool valueMismatched((int, int) a, (int, int) b) => false;");
     }
+
+    /// <summary>
+    /// An argument the strongly-typed <c>Equals</c> converts to the
+    /// receiver's tuple, one a struct-constrained type parameter carries,
+    /// and an <c>object</c> on either side of the static form all compare
+    /// with the record <c>==</c>, C#'s answer for each (#331).
+    /// </summary>
+    [Test]
+    public async Task ConvertedAndGenericTupleArguments_LowerToRecordEquality()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool Converted((long, long) a, (int, int) b) => a.Equals(b);
+
+                public static bool Constrained<T>((int, int) c, T d)
+                    where T : struct => c.Equals(d);
+
+                public static bool StaticBoxed(object e, (int, int) f) => object.Equals(e, f);
+            }
+            """
+        );
+
+        var output = files["comparisons.dart"];
+
+        await Assert
+            .That(output)
+            .Contains("static bool converted((int, int) a, (int, int) b) => a == b;");
+
+        await Assert
+            .That(output)
+            .Contains("static bool constrained<T>((int, int) c, T d) => c == d;");
+
+        await Assert
+            .That(output)
+            .Contains("static bool staticBoxed(Object e, (int, int) f) => e == f;");
+    }
 }

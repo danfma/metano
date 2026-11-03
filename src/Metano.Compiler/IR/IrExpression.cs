@@ -555,11 +555,12 @@ public sealed record IrTupleLiteral(IReadOnlyList<IrExpression> Elements, IrTupl
     : IrExpression;
 
 /// <summary>
-/// C# value equality of two values of the same <c>ValueTuple</c> instantiation
-/// (element names aside): the lowering of <c>object.Equals(a, b)</c>, a
-/// tuple's own <c>Equals</c> — through <c>Nullable&lt;T&gt;</c>, a conditional
-/// access (<c>t?.Equals(u)</c>) or named arguments — over operands whose
-/// static types unwrap to that tuple. Either operand may be a nullable tuple:
+/// C# value equality against a <c>ValueTuple</c> instantiation (element
+/// names aside): the lowering of <c>object.Equals(a, b)</c>, a tuple's own
+/// <c>Equals</c> — through <c>Nullable&lt;T&gt;</c>, a conditional access
+/// (<c>t?.Equals(u)</c>) or named arguments — where one operand unwraps to
+/// that tuple and the other is converted to it or may hold it (an
+/// <c>object</c>, a type parameter, …). Either operand may be <c>null</c>:
 /// <c>null</c> equals <c>null</c> and nothing else, otherwise the comparison
 /// is element-wise. <see cref="TupleType"/> carries the instantiation, so a
 /// backend whose tuples are positional arrays — where a nested tuple and a C#

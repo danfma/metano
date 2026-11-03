@@ -5,8 +5,9 @@ namespace Metano.Compiler.Extraction;
 
 /// <summary>
 /// The tuple-type facts the value-equality lowerings share: unwrapping a
-/// nullable value (<c>(int, int)?</c>) to the tuple it may hold, and telling
-/// whether two types are the same <c>ValueTuple</c> instantiation.
+/// nullable value (<c>(int, int)?</c>) to the tuple it may hold, telling
+/// whether two types are the same <c>ValueTuple</c> instantiation, and
+/// whether a type provably cannot hold a given tuple.
 /// </summary>
 internal static class TupleEqualitySymbols
 {
@@ -39,6 +40,33 @@ internal static class TupleEqualitySymbols
     /// </summary>
     internal static bool MayBeNull(ITypeSymbol? type) =>
         type is not { IsValueType: true } || IsNullableValue(type);
+
+    /// <summary>
+    /// Whether a value of <paramref name="type"/> provably cannot hold
+    /// <paramref name="tuple"/> boxed, so C#'s value equality between the two
+    /// is <c>false</c> unless both are <c>null</c>: a concrete value type other
+    /// than the tuple's own instantiation (its boxing is that value, never the
+    /// tuple), or a class other than <c>object</c> and <c>ValueType</c> (no
+    /// class derives from a tuple). <c>object</c>, <c>ValueType</c>, an
+    /// interface, <c>dynamic</c>, a type parameter (constrained to
+    /// <c>struct</c> or not) and <c>Nullable</c> of a type parameter may all
+    /// hold it; so may an operand without a type (the <c>null</c> literal).
+    /// </summary>
+    internal static bool CannotHoldTuple(ITypeSymbol? type, INamedTypeSymbol tuple)
+    {
+        if (type is null || IsSameInstantiation(UnderlyingTupleOf(type), tuple, out _))
+            return false;
+
+        return type switch
+        {
+            ITypeParameterSymbol => false,
+            _ when IsNullableOfTypeParameter(type) => false,
+            { IsValueType: true } => true,
+            { TypeKind: TypeKind.Class or TypeKind.Array or TypeKind.Delegate } =>
+                !IsObjectOrValueType(type),
+            _ => false,
+        };
+    }
 
     /// <summary>
     /// Whether <paramref name="first"/> and <paramref name="second"/> are the
@@ -93,6 +121,12 @@ internal static class TupleEqualitySymbols
 
         return SymbolEqualityComparer.Default.Equals(first, second);
     }
+
+    private static bool IsNullableOfTypeParameter(ITypeSymbol type) =>
+        type is INamedTypeSymbol { TypeArguments: [ITypeParameterSymbol] } && IsNullableValue(type);
+
+    private static bool IsObjectOrValueType(ITypeSymbol type) =>
+        type.SpecialType is SpecialType.System_Object or SpecialType.System_ValueType;
 
     private static bool IsNullableValue(ITypeSymbol type) =>
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
