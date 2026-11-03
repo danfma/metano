@@ -149,7 +149,7 @@ public static partial class IrToTsExpressionBridge
             return MapIntegerDivision(bin, context);
 
         if (bin.Operator.IsBooleanLogic())
-            return MapBooleanLogic(bin, bclRegistry);
+            return MapBooleanLogic(bin, context);
 
         if (
             bin is { Left: IrMemberAccess backedMember }
@@ -269,13 +269,10 @@ public static partial class IrToTsExpressionBridge
     /// inequality, and <c>&amp;</c> / <c>|</c> run the numeric operator over
     /// the operands' 0 / 1 values and convert the result back.
     /// </summary>
-    private static TsExpression MapBooleanLogic(
-        IrBinaryExpression bin,
-        DeclarativeMappingRegistry? bclRegistry
-    )
+    private static TsExpression MapBooleanLogic(IrBinaryExpression bin, IrToTsBridgeContext context)
     {
-        var left = Map(bin.Left, bclRegistry);
-        var right = Map(bin.Right, bclRegistry);
+        var left = Map(bin.Left, context);
+        var right = Map(bin.Right, context);
 
         if (bin.Operator is IrBinaryOp.BooleanXor)
             return new TsBinaryExpression(left, "!==", right);
