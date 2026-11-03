@@ -13,7 +13,7 @@ public sealed record IrAttribute(
 )
 {
     /// <summary>The attribute name of a <c>[Name]</c> override.</summary>
-    public const string NameOverrideAttribute = "Name";
+    public const string NameOverrideAttributeName = "Name";
 
     /// <summary>The argument key of the untargeted <c>[Name("…")]</c> value.</summary>
     public const string NameOverrideValueArgument = "Value";
@@ -21,7 +21,7 @@ public sealed record IrAttribute(
     /// <summary>An untargeted <c>[Name]</c> override carrying <paramref name="name"/>.</summary>
     public static IrAttribute NameOverride(string name) =>
         new(
-            NameOverrideAttribute,
+            NameOverrideAttributeName,
             new Dictionary<string, object?> { [NameOverrideValueArgument] = name }
         );
 }

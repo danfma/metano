@@ -264,7 +264,7 @@ public static class IrTypeRefMapper
                             : null,
                         originResolver?.Invoke(named),
                         BuildNamedTypeSemantics(named, target),
-                        ModuleLocalSegmentCount(named)
+                        PrivateNestedSegmentCount(named)
                     );
                 }
                 return MapDelegateType(named, originResolver, target);
@@ -284,7 +284,7 @@ public static class IrTypeRefMapper
                     args,
                     origin,
                     semantics,
-                    ModuleLocalSegmentCount(named)
+                    PrivateNestedSegmentCount(named)
                 );
             }
 
@@ -293,7 +293,7 @@ public static class IrTypeRefMapper
                 GetNamespace(named),
                 Origin: origin,
                 Semantics: semantics,
-                ModuleLocalSegments: ModuleLocalSegmentCount(named)
+                PrivateNestedSegments: PrivateNestedSegmentCount(named)
             );
         }
 
@@ -678,7 +678,7 @@ public static class IrTypeRefMapper
     /// so a class `User` tagged `[Name("ApiUser")]` surfaces as `ApiUser`
     /// in the resulting IR reference.
     /// </summary>
-    internal static string BuildQualifiedName(
+    public static string BuildQualifiedName(
         INamedTypeSymbol type,
         Metano.Annotations.TargetLanguage? target = null
     )
@@ -689,14 +689,15 @@ public static class IrTypeRefMapper
     }
 
     /// <summary>
-    /// How many leading segments of <see cref="BuildQualifiedName"/> form a
-    /// module-local declaration (#412): the path up to and including the deepest
-    /// <c>private</c> nested segment, which a target that hides private nested types
-    /// declares outside the container's exported surface. <c>0</c> when no segment is
-    /// private. Only the fact is recorded; how a target spells the collapsed prefix is
-    /// its own naming policy.
+    /// How many leading segments of <see cref="BuildQualifiedName"/> lead to a
+    /// <c>private</c> nested declaration (#412): the path up to and including the
+    /// deepest <c>private</c> nested segment, which a target that hides private nested
+    /// types may declare outside the container's exported surface. <c>0</c> when no
+    /// segment is private. Only the fact is recorded — every IR type reference carries
+    /// it next to its qualified name; how a target spells the prefix is its own naming
+    /// policy.
     /// </summary>
-    internal static int ModuleLocalSegmentCount(INamedTypeSymbol type) =>
+    public static int PrivateNestedSegmentCount(INamedTypeSymbol type) =>
         ContainmentPath(type).FindLastIndex(SymbolHelper.IsContainerPrivateNestedType) + 1;
 
     /// <summary>The containers of <paramref name="type"/>, outermost first, ending with it.</summary>

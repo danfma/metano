@@ -198,15 +198,18 @@ public static class IrToTsNamingPolicy
             return null;
 
         var targetKey = nameof(TargetLanguage.TypeScript);
+
         foreach (var attr in attributes)
         {
-            if (attr.Name != IrAttribute.NameOverrideAttribute || attr.Arguments is null)
+            if (attr.Name != IrAttribute.NameOverrideAttributeName || attr.Arguments is null)
                 continue;
+
             if (
                 attr.Arguments.TryGetValue(targetKey, out var perTarget)
                 && perTarget is string perTargetS
             )
                 return perTargetS;
+
             if (
                 attr.Arguments.TryGetValue(IrAttribute.NameOverrideValueArgument, out var value)
                 && value is string s

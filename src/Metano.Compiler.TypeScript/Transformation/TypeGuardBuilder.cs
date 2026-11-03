@@ -56,8 +56,11 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (SymbolHelper.HasImport(type))
             return [];
 
+        // A private nested type is declared under its module-local identifier, which
+        // the predicate type spells; the guard, assert and message read its own name.
         var tsName = _context.ResolveTsName(type);
-        var guardName = $"is{_context.ResolveSimpleTsName(type)}";
+        var ownName = _context.ResolveOwnTsName(type);
+        var guardName = $"is{ownName}";
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
 
         TsFunction? guard = null;
@@ -88,7 +91,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (guard is null)
             return [];
 
-        return [guard, GenerateAssert(tsName, guardName, predicateType)];
+        return [guard, GenerateAssert(ownName, guardName, predicateType)];
     }
 
     private IReadOnlyList<INamedTypeSymbol>? TryFindDiscriminatedVariants(INamedTypeSymbol baseType)
@@ -241,7 +244,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             .Select<INamedTypeSymbol, TsExpression>(v => new TsBinaryExpression(
                 new TsPropertyAccess(new TsIdentifier("v"), discriminatorTsName),
                 "===",
-                new TsStringLiteral(_context.ResolveSimpleTsName(v))
+                new TsStringLiteral(_context.ResolveOwnTsName(v))
             ))
             .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
 
@@ -324,7 +327,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (strictBase is null)
             return null;
 
-        var variantTsName = _context.ResolveSimpleTsName(type);
+        var variantTsName = _context.ResolveOwnTsName(type);
         var guardName = $"is{variantTsName}";
 
         // The discriminator value the registry keys on is the variant's
@@ -366,17 +369,13 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         return null;
     }
 
-    private static TsFunction GenerateAssert(
-        string tsName,
-        string guardName,
-        TsType? predicateType = null
-    )
+    private static TsFunction GenerateAssert(string ownName, string guardName, TsType predicateType)
     {
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
         var messageParam = new TsParameter("message", new TsNamedType("string"), Optional: true);
 
         // throw new TypeError(message ?? "Value is not a TName");
-        var defaultMessage = new TsStringLiteral($"Value is not a {tsName}");
+        var defaultMessage = new TsStringLiteral($"Value is not a {ownName}");
         var throwStmt = new TsThrowStatement(
             new TsNewExpression(
                 new TsIdentifier("TypeError"),
@@ -397,13 +396,9 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         };
 
         return new TsFunction(
-            $"assert{tsName}",
+            $"assert{ownName}",
             [valueParam, messageParam],
-            new TsTypePredicateType(
-                "value",
-                predicateType ?? new TsNamedType(tsName),
-                IsAsserts: true
-            ),
+            new TsTypePredicateType("value", predicateType, IsAsserts: true),
             body
         );
     }
@@ -551,7 +546,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                     new TsBinaryExpression(
                         new TsPropertyAccess(new TsIdentifier("v"), discriminatorTsName),
                         "!==",
-                        new TsStringLiteral(tsName)
+                        new TsStringLiteral(_context.ResolveOwnTsName(type))
                     ),
                     [new TsReturnStatement(new TsLiteral("false"))]
                 )

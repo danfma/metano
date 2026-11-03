@@ -436,25 +436,27 @@ public sealed class TypeScriptTransformContext(
             : type.Name;
 
     /// <summary>
-    /// Resolves the target-facing TypeScript name for a Roslyn type symbol.
-    /// Reads the frontend-populated <see cref="TypeNamesBySymbol"/> dictionary
-    /// so <c>[Name(TypeScript, …)]</c> overrides are honored; falls back to
-    /// <see cref="ISymbol.Name"/> for BCL types and anything the frontend did
-    /// not precompute (mirrors the legacy <c>TypeTransformer.GetTsTypeName</c>
-    /// contract that this helper replaces).
+    /// The identifier <paramref name="type"/> is declared under in its TypeScript
+    /// module: the module-local identifier of a <c>private</c> nested type
+    /// (<see cref="ModuleLocalNaming.DeclaredName"/>, #412), otherwise its own name
+    /// (<see cref="ResolveOwnTsName"/>). Declarations and the identifiers that must
+    /// match them (predicate types, <c>instanceof</c> operands) read this.
     /// </summary>
     public string ResolveTsName(INamedTypeSymbol type) =>
-        ModuleLocalNaming.DeclaredName(type) ?? ResolveSimpleTsName(type);
+        ModuleLocalNaming.DeclaredName(type) ?? ResolveOwnTsName(type);
 
     /// <summary>
-    /// The target-facing name of <paramref name="type"/> itself — what names derived
-    /// from the type read (JSON TypeInfo getters, <c>is{Name}</c> guards, discriminator
-    /// literals) — never the module-local identifier of a <c>private</c> nested type
+    /// The target-facing name of <paramref name="type"/> itself, read from the
+    /// frontend-populated <see cref="TypeNamesBySymbol"/> dictionary so
+    /// <c>[Name(TypeScript, …)]</c> overrides are honored, falling back to
+    /// <see cref="ISymbol.Name"/> for BCL types and anything the frontend did not
+    /// precompute. Names derived from the type read it (JSON TypeInfo getters,
+    /// <c>is{Name}</c>/<c>assert{Name}</c> guards, discriminator literals), never the
+    /// module-local identifier of a <c>private</c> nested type
     /// (<see cref="ResolveTsName(INamedTypeSymbol)"/>), which only declarations and
     /// references spell.
     /// </summary>
-    public string ResolveSimpleTsName(INamedTypeSymbol type) =>
-        ResolveTsName(TypeNamesBySymbol, type);
+    public string ResolveOwnTsName(INamedTypeSymbol type) => ResolveTsName(TypeNamesBySymbol, type);
 
     /// <summary>
     /// Reports MS0001 (UnsupportedFeature) for an IR-pipeline body the bridge

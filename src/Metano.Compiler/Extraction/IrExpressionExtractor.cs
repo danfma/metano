@@ -1503,7 +1503,7 @@ public sealed partial class IrExpressionExtractor
         new(
             QualifiedNestedName(type) ?? type.Name,
             CrossAssemblyOriginOf(type),
-            IrTypeRefMapper.ModuleLocalSegmentCount(type)
+            IrTypeRefMapper.PrivateNestedSegmentCount(type)
         );
 
     /// <summary>
@@ -1519,7 +1519,7 @@ public sealed partial class IrExpressionExtractor
         return new(
             QualifiedNestedName(type) ?? spelling,
             CrossAssemblyOriginOf(type),
-            IrTypeRefMapper.ModuleLocalSegmentCount(type)
+            IrTypeRefMapper.PrivateNestedSegmentCount(type)
         );
     }
 
