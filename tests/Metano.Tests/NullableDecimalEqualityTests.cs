@@ -39,6 +39,14 @@ public class NullableDecimalEqualityTests
     }
 
     [Test]
+    public async Task Equality_WithANullableNumericOperand_KeepsNullOutOfTheDecimalConstructor()
+    {
+        var output = Transpile("public static bool Same(decimal? d, int? i) => d == i;");
+
+        await Assert.That(output).Contains("i == null ? null : new Decimal(i)");
+    }
+
+    [Test]
     public async Task Equality_WithTheNullLiteral_StaysANullCheck()
     {
         var output = Transpile(

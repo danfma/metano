@@ -123,6 +123,27 @@ public class ParameterShadowingTests
     }
 
     [Test]
+    public async Task ObjectArgsParameter_KeepsItsNameAsTheArgumentKey()
+    {
+        var files = Transpile(
+            $$"""
+            {{Module}}
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                [ObjectArgs]
+                public int M(int log = 2) => Mod.Log(log);
+                public int U() => M(log: 3);
+            }
+            """
+        );
+
+        await Assert.That(files["caller.ts"]).DoesNotContain("log$");
+    }
+
+    [Test]
     public async Task AccessorValueParameter_KeepsItsName()
     {
         var files = Transpile(

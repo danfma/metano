@@ -80,16 +80,23 @@ public sealed partial class IrExpressionExtractor
     private IrExpression ExtractAsDecimal(ExpressionSyntax operand)
     {
         var value = Extract(operand);
+        var type = _semantic.GetTypeInfo(operand).Type;
 
-        return
-            _semantic.GetTypeInfo(operand).Type.UnderlyingValueType()?.SpecialType
-            == SpecialType.System_Decimal
-            ? value
-            : new IrNewExpression(
-                new IrPrimitiveTypeRef(IrPrimitive.Decimal),
-                [new IrArgument(value)]
-            );
+        if (type.UnderlyingValueType()?.SpecialType == SpecialType.System_Decimal)
+            return value;
+
+        // A missing nullable number stays missing, as the lifted comparison
+        // sees it; `new Decimal(null)` would throw.
+        return type.IsNullableValueType()
+            ? BindValueOnce(
+                value,
+                bound => new IrConditionalExpression(IsNull(bound), NullLiteral, ToDecimal(bound))
+            )
+            : ToDecimal(value);
     }
+
+    private static IrExpression ToDecimal(IrExpression number) =>
+        new IrNewExpression(new IrPrimitiveTypeRef(IrPrimitive.Decimal), [new IrArgument(number)]);
 
     /// <summary>
     /// The record's synthesized <c>==</c> / <c>!=</c> (a record cannot
