@@ -259,7 +259,7 @@ public static class TranspilerHost
         ITranspilerTarget target,
         TranspileOptions options
     ) =>
-        $"compiler={CompilerRelease.Version};target={target.ConfigurationFingerprint};filePrefix={options.FilePrefix ?? string.Empty}";
+        $"{CompilerRelease.CurrentFingerprintSegment}target={target.ConfigurationFingerprint};filePrefix={options.FilePrefix ?? string.Empty}";
 
     private static void WriteCacheIfEnabled(
         TranspileOptions options,

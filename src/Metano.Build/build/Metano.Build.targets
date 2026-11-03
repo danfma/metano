@@ -58,7 +58,9 @@
       toolchain: the path of this .targets file (inside the versioned
       Metano.Build package folder), the referenced Metano.dll, and either
       MetanoCompilerProject (dev mode) or a hash of the nearest .NET tool
-      manifest plus the installed global tool versions. Bumping any of them
+      manifest of each file name (.config/dotnet-tools.json and
+      dotnet-tools.json) plus one line per installed global tool version
+      folder. Bumping any of them
       rewrites the key, so the next build reruns the target, and the compiler
       treats a different compiler release as an incremental cache miss
       (.metano-cache.json), so the output is regenerated. The key is a content
@@ -66,14 +68,18 @@
       timestamps, so the .targets file of a new package can be older than the
       stamp and listing it in Inputs alone would not rerun the target.
 
-      `dotnet build - -no-incremental` (Rebuild) does not force a rerun: the
+      The `no-incremental` flag of `dotnet build` (Rebuild) does not force a rerun: the
       stamp lives in the output directory, not in obj/, so Clean leaves it in
       place, and the compiled assembly is not an input. Delete the stamp to
       force a rerun (MetanoClean alone does not: it only applies when the
       target runs).
 
-      Not tracked: a tool installed with the tool install `tool-path` option,
-      and edits to the compiler sources in dev mode (MetanoCompilerProject).
+      Not tracked: a tool installed with the tool install `tool-path` option;
+      a tool pinned in a manifest further up the tree than the nearest one
+      (`dotnet tool` merges manifests upward until one sets `isRoot: true`,
+      but MSBuild property functions cannot walk an open-ended chain, so only
+      the nearest manifest of each file name is hashed); and edits to the
+      compiler sources in dev mode (MetanoCompilerProject).
 
     Asset item type (FR-048):
 
@@ -170,10 +176,16 @@
         Include="toolManifest=$(_MetanoRootToolManifest):$([MSBuild]::StableStringHash($([System.IO.File]::ReadAllText('$(_MetanoRootToolManifest)'))))"
         Condition="'$(_MetanoRootToolManifest)' != ''"
       />
-      <_MetanoToolchainLine
-        Include="globalTool=$([System.IO.Directory]::GetDirectories('$(_MetanoGlobalToolStore)'))"
-        Condition="'$(MetanoCompilerProject)' == '' and Exists('$(_MetanoGlobalToolStore)')"
+      <!-- One item per version folder: a text prefix in front of the
+           GetDirectories call would render the array as `System.String[]`.
+           Property functions cannot sort, so the folders keep the file
+           system's enumeration order, which is stable while the store is
+           unchanged. -->
+      <_MetanoGlobalToolVersion
+        Include="$([System.IO.Directory]::GetDirectories('$(_MetanoGlobalToolStore)'))"
+        Condition="Exists('$(_MetanoGlobalToolStore)')"
       />
+      <_MetanoToolchainLine Include="@(_MetanoGlobalToolVersion->'globalTool=%(Filename)%(Extension)')" />
     </ItemGroup>
 
     <WriteLinesToFile
