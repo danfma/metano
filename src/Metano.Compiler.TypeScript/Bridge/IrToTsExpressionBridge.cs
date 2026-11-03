@@ -474,11 +474,14 @@ public static partial class IrToTsExpressionBridge
         {
             { IsStringEnumMember: true } => ma.MemberName,
             { IsEnumMember: true } origin => origin.EmittedName ?? ma.MemberName,
-            // A module-scope compile-time constant keeps its C# name (see
-            // ToModuleVariableName); a const field of an emitted class stays a
-            // data member and falls through to the camelCase arm below.
-            { IsDeclaringTypeNoContainer: true, IsConst: true } origin =>
-                IrToTsNamingPolicy.ToModuleVariableName(ma.MemberName, origin.EmittedName, true),
+            // A module-scope compile-time constant the toolchain declares keeps
+            // its C# name (ToModuleConstantName); a const of a foreign or
+            // non-containerless declaring type is an ordinary member read and
+            // falls through to the arms below.
+            { IsModuleConstant: true } origin => IrToTsNamingPolicy.ToModuleConstantName(
+                ma.MemberName,
+                origin.EmittedName
+            ),
             { IsTranspiledDataMember: true } origin => IrToTsNamingPolicy.ToDataMemberName(
                 ma.MemberName,
                 origin.EmittedName
@@ -1227,7 +1230,7 @@ public static partial class IrToTsExpressionBridge
 
         return TryFoldPlainObjectInitializer(let, value, context)
             ?? TsImmediateInvocation.Of(
-                [new TsImmediateBinding(let.Name, value)],
+                [new TsImmediateBinding(IrToTsNamingPolicy.ToLocalName(let.Name), value)],
                 ReturningBody(let.Body, context),
                 isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
             );

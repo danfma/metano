@@ -2911,7 +2911,7 @@ public sealed partial class IrExpressionExtractor
                 ? TypeReferenceTo(symbol.ContainingType)
                 : null,
             IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation),
-            IsConst: symbol is IFieldSymbol { IsConst: true }
+            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true }
         );
     }
 

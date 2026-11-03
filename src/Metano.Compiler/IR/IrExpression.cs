@@ -90,7 +90,7 @@ public sealed record IrBaseExpression() : IrExpression;
 /// <param name="CompanionOwner">For a <c>[PlainObject]</c> instance method (<see cref="IsPlainObjectInstanceMethod"/>), the declaring type as a value reference, with its cross-package origin: the method lowers to a standalone helper exported from that type's module, so a backend can import the helper from there. <c>null</c> for other members.</param>
 /// <param name="IsInitializerWrite">The access is the target of a member initializer a backend moved into the constructor body (<c>int P { get; set; } = x;</c>). C# runs it as a store to the member's own backing storage, never through a (possibly overridden) accessor, so a backend that keeps storage apart from an accessor writes the storage.</param>
 /// <param name="IsForeignMember">The member comes from a referenced .NET assembly (the BCL or a third-party library) that the toolchain neither transpiles nor binds — no <c>[External]</c>, <c>[Import]</c>, <c>[Emit]</c> or <c>[Name]</c> binding on the member, no <c>[External]</c>, <c>[Import]</c>, <c>[NoContainer]</c> or <c>[ExportFromBcl]</c> binding for its type: the target has no declaration of it, so a backend can lower it only through a declarative mapping.</param>
-/// <param name="IsConst">The member is a field declared with the C# <c>const</c> modifier — its value is a compile-time constant. A backend that keeps a module-scope constant's source name (see <see cref="IrFieldDeclaration.IsConst"/>, #390) reads this flag instead of re-reading Roslyn.</param>
+/// <param name="IsCompileTimeConstant">The member is a field declared with the C# <c>const</c> modifier — its value is a compile-time constant (see <see cref="IrFieldDeclaration.IsCompileTimeConstant"/>). A backend that keeps a module-scope constant's source name (#390) reads this flag instead of re-reading Roslyn; distinct from locals' <c>IrVariableDeclaration.IsConst</c>, which only means "never reassigned".</param>
 public sealed record IrMemberOrigin(
     string DeclaringTypeFullName,
     string MemberName,
@@ -112,11 +112,21 @@ public sealed record IrMemberOrigin(
     IrTypeReference? CompanionOwner = null,
     bool IsForeignMember = false,
     bool IsInitializerWrite = false,
-    bool IsConst = false
+    bool IsCompileTimeConstant = false
 )
 {
     /// <summary>The access reads a positional element (<see cref="TupleElement"/> is set).</summary>
     public bool IsTupleElement => TupleElement is not IrTupleElementKind.None;
+
+    /// <summary>
+    /// The access reads a module variable that is a compile-time constant: a C#
+    /// <c>const</c> field of a containerless static class whose declaration the
+    /// toolchain emits. That is the one read the module-constant naming rule
+    /// (kept C# name, see #390) applies to — a const of a foreign or
+    /// non-containerless declaring type is an ordinary member read.
+    /// </summary>
+    public bool IsModuleConstant =>
+        IsDeclaringTypeNoContainer && IsCompileTimeConstant && IsTranspiledDataMember;
 }
 
 /// <summary>

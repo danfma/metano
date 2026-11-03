@@ -32,8 +32,8 @@ public static class IrToTsStatementBridge
         // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var body = MapBody(fe.Body, context);
-        var variable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
-        var header = $"for (const {variable} of {PrintExpression(collection)}) {{";
+        var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
+        var header = $"for (const {loopVariable} of {PrintExpression(collection)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
         {
@@ -175,14 +175,7 @@ public static class IrToTsStatementBridge
         var body = MapBody(ts.Body, context);
 
         var catches = (ts.Catches ?? [])
-            .Select(c =>
-                (
-                    Variable: c.VariableName is { } name
-                        ? IrToTsNamingPolicy.ToLocalName(name)
-                        : "_err",
-                    Body: MapBody(c.Body, context)
-                )
-            )
+            .Select(c => (Variable: CatchVariableName(c), Body: MapBody(c.Body, context)))
             .ToList();
 
         var finallyBody = ts.Finally is null ? null : MapBody(ts.Finally, context);
@@ -204,6 +197,19 @@ public static class IrToTsStatementBridge
             ],
         };
     }
+
+    /// <summary>
+    /// The emitted name of a catch clause's variable; a clause without one
+    /// catches under the synthesized <c>_err</c>.
+    /// </summary>
+    private static string CatchVariableName(IrCatchClause clause) =>
+        clause.VariableName is { } name ? IrToTsNamingPolicy.ToLocalName(name) : "_err";
+
+    /// <summary>
+    /// The emitted name of a deconstruction element; a discard binds nothing.
+    /// </summary>
+    private static string? LocalElementName(IrDeconstructionElement element) =>
+        element.Name is { } name ? IrToTsNamingPolicy.ToLocalName(name) : null;
 
     private static string WrapLoop(string header, IReadOnlyList<TsStatement> body) =>
         header + "\n" + RenderIndentedBody(body) + "}";
@@ -309,10 +315,7 @@ public static class IrToTsStatementBridge
                 Const: vd.IsConst
             ),
             IrTupleDeconstruction td => new TsDestructuringDeclaration(
-                td.Elements.Select(e =>
-                        e.Name is { } name ? IrToTsNamingPolicy.ToLocalName(name) : null
-                    )
-                    .ToList(),
+                td.Elements.Select(LocalElementName).ToList(),
                 td.Initializer is IrOutArgumentCall outCall
                     ? IrToTsExpressionBridge.MapOutArgumentCallValue(outCall, context)
                     : IrToTsExpressionBridge.Map(td.Initializer, context),

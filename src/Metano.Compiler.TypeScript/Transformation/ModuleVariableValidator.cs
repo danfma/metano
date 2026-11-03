@@ -153,7 +153,7 @@ public sealed class ModuleVariableValidator(
             .LookupSymbols(identifier.SpanStart)
             .FirstOrDefault(candidate =>
                 IsLocalBinding(candidate)
-                && TypeScriptNaming.ToCamelCase(candidate.Name) == emittedName
+                && IrToTsNamingPolicy.ToLocalName(candidate.Name) == emittedName
             );
 
         if (shadow is null)
@@ -219,12 +219,14 @@ public sealed class ModuleVariableValidator(
         && SymbolHelper.IsToolchainDeclared(owner, compilation.Assembly)
         && IsModuleState(symbol.OriginalDefinition);
 
-    private static string EmittedName(ISymbol member) =>
-        IrToTsNamingPolicy.ToModuleVariableName(
-            member.Name,
-            member.GetNameOverride(TargetLanguage.TypeScript),
-            member is IFieldSymbol { IsConst: true }
-        );
+    private static string EmittedName(ISymbol member)
+    {
+        var overrideName = member.GetNameOverride(TargetLanguage.TypeScript);
+
+        return member is IFieldSymbol { IsConst: true }
+            ? IrToTsNamingPolicy.ToModuleConstantName(member.Name, overrideName)
+            : IrToTsNamingPolicy.ToModuleVariableName(member.Name, overrideName);
+    }
 
     private static bool IsLocalBinding(ISymbol symbol) =>
         symbol

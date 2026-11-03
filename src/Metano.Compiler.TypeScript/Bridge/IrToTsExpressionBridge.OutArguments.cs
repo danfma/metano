@@ -83,7 +83,9 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapOutTarget(IrOutTarget target, IrToTsBridgeContext context) =>
         target switch
         {
-            IrOutLocalDeclaration local => new TsIdentifier(local.Name),
+            IrOutLocalDeclaration local => new TsIdentifier(
+                IrToTsNamingPolicy.ToLocalName(local.Name)
+            ),
             IrOutAssignment assignment => Map(assignment.Destination, context),
             _ => new TsArrayHole(),
         };

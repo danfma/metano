@@ -1680,21 +1680,28 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var lowered = IrToTsStatementBridge
                 .MapBody(entryBody, IrToTsBridgeContext.For(Context.DeclarativeMappings))
                 .ToList();
+            // The attribute names the C# local; the emitted declaration carries
+            // the local's emitted name, so match and export under that name —
+            // the trailing form references the binding (#390).
+            var exportLocalName = exportInfo is null
+                ? null
+                : IrToTsNamingPolicy.ToLocalName(exportInfo.Name);
             TsTopLevel? trailingExport = null;
             var foundLocal = false;
             for (var i = 0; i < lowered.Count; i++)
             {
                 if (
                     exportInfo is not null
+                    && exportLocalName is { } localName
                     && lowered[i] is TsVariableDeclaration varDecl
-                    && varDecl.Name == exportInfo.Name
+                    && varDecl.Name == localName
                 )
                 {
                     foundLocal = true;
                     if (exportInfo.InPlace)
                         lowered[i] = varDecl with { Exported = true };
                     else
-                        trailingExport = new TsModuleExport(exportInfo.Name, exportInfo.AsDefault);
+                        trailingExport = new TsModuleExport(localName, exportInfo.AsDefault);
                 }
                 sink.Add(new TsTopLevelStatement(lowered[i]));
             }
@@ -1794,9 +1801,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .ToHashSet(StringComparer.Ordinal);
         var collisions = variables
             .Where(variable =>
-                functionNames.Contains(
-                    IrToTsNamingPolicy.ToDeclaredDataMemberName(variable.Name, variable.Attributes)
-                )
+                functionNames.Contains(IrToTsNamingPolicy.ToModuleVariableName(variable))
             )
             .ToList();
 
