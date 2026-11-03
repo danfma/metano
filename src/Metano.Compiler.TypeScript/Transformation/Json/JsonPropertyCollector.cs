@@ -36,7 +36,7 @@ internal sealed class JsonPropertyCollector(
     /// name. Distinct properties that share a JSON name (System.Text.Json
     /// throws) are all kept.
     /// </summary>
-    public List<JsonSerializableProperty> PropertiesOf(INamedTypeSymbol type)
+    public List<JsonSerializableProperty> DeclarationOrderPropertiesOf(INamedTypeSymbol type)
     {
         if (LinkedBaseOf(type) is not null)
             return CollectOwnProperties(type);
@@ -50,7 +50,7 @@ internal sealed class JsonPropertyCollector(
     }
 
     /// <summary>
-    /// The same properties as <see cref="PropertiesOf"/> in System.Text.Json's
+    /// The same properties as <see cref="DeclarationOrderPropertiesOf"/> in System.Text.Json's
     /// wire order, which the emitted <c>properties</c> list follows (FR-009,
     /// DECIDED-19 f): the type's own declarations first, then each inlined
     /// ancestor's, nearest first, with a redeclaration under the same JSON
@@ -79,7 +79,7 @@ internal sealed class JsonPropertyCollector(
     /// skips every base declaration whose <c>ts</c> name a more-derived spec
     /// lists in <c>ignoredProperties</c>. Empty for an unlinked spec, whose
     /// inlined list already leaves those declarations out
-    /// (<see cref="PropertiesOf"/>).
+    /// (<see cref="DeclarationOrderPropertiesOf"/>).
     /// </summary>
     public List<string> IgnoredBasePropertiesOf(INamedTypeSymbol type)
     {
@@ -104,7 +104,7 @@ internal sealed class JsonPropertyCollector(
     /// <c>[Transpile]</c> or <c>[assembly: TranspileAssembly]</c>, a closed
     /// generic base, and a base of a referenced Metano package (FR-047) all
     /// link. Any other base (<c>[Ignore]</c>, BCL) has its properties inlined
-    /// instead (<see cref="PropertiesOf"/>).
+    /// instead (<see cref="DeclarationOrderPropertiesOf"/>).
     /// </summary>
     public INamedTypeSymbol? LinkedBaseOf(INamedTypeSymbol type) =>
         type.BaseType is { } baseType && _admission.HasObjectContract(baseType) ? baseType : null;
@@ -152,14 +152,23 @@ internal sealed class JsonPropertyCollector(
         return chain
             .Select(
                 (declaringType, depth) =>
-                    CollectOwnProperties(declaringType)
-                        .Where(property =>
-                            !IsHiddenByIgnoredOverride(chain.Take(depth), property.Property.Name)
-                        )
-                        .ToList()
+                    VisibleOwnDeclarationsOf(declaringType, derivedTypes: chain.Take(depth))
             )
             .ToList();
     }
+
+    /// <summary>
+    /// The own declarations of <paramref name="declaringType"/> that none of
+    /// its <paramref name="derivedTypes"/> hides with a <c>[JsonIgnore]</c>
+    /// override.
+    /// </summary>
+    private List<JsonSerializableProperty> VisibleOwnDeclarationsOf(
+        INamedTypeSymbol declaringType,
+        IEnumerable<INamedTypeSymbol> derivedTypes
+    ) =>
+        CollectOwnProperties(declaringType)
+            .Where(property => !IsHiddenByIgnoredOverride(derivedTypes, property.Property.Name))
+            .ToList();
 
     private static (string ClrName, string JsonName) RedeclarationKey(
         JsonSerializableProperty property

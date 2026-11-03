@@ -138,3 +138,29 @@ describe("JsonSerializer — non-array input to a collection (#425)", () => {
     expect(JsonSerializer.deserialize(null, nullableTagsSpec)).toBeNull();
   });
 });
+
+describe("JsonSerializer — non-object input to a dictionary", () => {
+  const labelsSpec: ValueSpec<Map<string, string> | null> = {
+    descriptor: { kind: "map", key: { kind: "primitive" }, value: { kind: "primitive" } },
+  };
+
+  test.each([
+    [[1, 2], "array"],
+    ["ab", "string"],
+    [5, "number"],
+    [false, "boolean"],
+  ])("a dictionary root rejects %p", (input, kind) => {
+    expectJsonException(
+      () => JsonSerializer.deserialize(input, labelsSpec),
+      `Expected object for deserialization, got ${kind}`,
+    );
+  });
+
+  test("a JSON object reads as a Map", () => {
+    expect(JsonSerializer.deserialize({ a: "x" }, labelsSpec)).toEqual(new Map([["a", "x"]]));
+  });
+
+  test("null still reads as null", () => {
+    expect(JsonSerializer.deserialize(null, labelsSpec)).toBeNull();
+  });
+});

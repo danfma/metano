@@ -92,7 +92,9 @@ abstract class SerializerContext {
    (FR-016) and "The maximum configured depth of 64 has been exceeded. Cannot read next JSON
    object." (`… JSON array.`) on read (DECIDED-15, DECIDED-20 b).
 8a. The array and hash-set converters throw `JsonException` "Expected array for deserialization,
-   got <kind>" for a non-array, non-null JSON value (#425, DECIDED-20 c).
+   got <kind>" for a non-array, non-null JSON value (#425), and the dictionary (`map`) converter
+   throws `JsonException` "Expected object for deserialization, got <kind>" for a non-object or an
+   array (DECIDED-20 c). `null` reads as `null` in all three.
 9. JSON `null` at a root returns `null` unless the spec has `valueType: true`, which throws
    `JsonException` `The JSON value could not be converted to <Type>.`; a `null` value serializes to
    JSON `null` (FR-037).

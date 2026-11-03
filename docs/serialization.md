@@ -382,19 +382,33 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 | A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor) |
 | A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |
-| An unknown enum value | `Invalid enum value: …` / `Invalid numeric enum value: …` |
+| A non-object JSON value (or an array) for a dictionary | `Expected object for deserialization, got array` |
+| An unknown string enum value | `Invalid enum value: …` (STJ: `The JSON value could not be converted to Color.`) |
+| An unknown numeric enum value | `Invalid numeric enum value: …` — a divergence: STJ reads any number (`7` reads as `(Color)7`) |
 | More than 64 nested containers on read | `The maximum configured depth of 64 has been exceeded. Cannot read next JSON object.` (`… JSON array.` for an array) |
 | More than 64 nested containers on write, or an object cycle | `A possible object cycle was detected. This can either be due to a cycle or if the object depth is larger than the maximum allowed depth of 64. Consider using ReferenceHandler.Preserve on JsonSerializerOptions to support cycles.` |
 
 The depth limit is System.Text.Json's default `MaxDepth` of 64: 64 nested
-objects, arrays and dictionaries are written and read, the 65th throws. On
-read, only the containers the contract visits count; a deeply nested value
-under a key the contract does not declare is skipped without being counted,
-where the STJ reader would throw. With a source-generated context at its
-default (fast-path) settings, STJ's writer throws `InvalidOperationException`
+objects, arrays and dictionaries are written and read, the 65th throws; scalars
+never count. On read, only the containers the contract visits count; a deeply
+nested value under a key the contract does not declare is skipped without being
+counted, where the STJ reader would throw.
+
+On write, Metano is a hybrid of STJ's two modes. Its boundary is the one of a
+source-generated context at its default (fast-path) settings, which also writes
+a scalar inside the 64th container and throws `InvalidOperationException`
 `CurrentDepth (64) is equal to or larger than the maximum allowed depth of
-64. …` at the same depth; Metano always throws the `JsonException` above,
-which STJ throws in metadata mode.
+64. …` at the 65th. Its exception and message are the metadata / reflection
+mode's `JsonException` above, which that mode already throws for a non-null
+scalar written inside the 64th container. A custom converter that serializes a
+separate root inside a call inherits the outer depth, where STJ starts that
+root at depth 0.
+
+Ignored properties: a constructor parameter bound to a `[JsonIgnore]` property
+receives `undefined` (STJ passes `default(T)`), and a `[JsonIgnore] new`
+(non-override) redeclaration does not hide the base declaration, which is then
+written from the single TS member that holds the derived value, at the base's
+position (STJ writes the base value at the redeclaration's position).
 
 ## When to use `[PlainObject]` vs `JsonSerializerContext`
 

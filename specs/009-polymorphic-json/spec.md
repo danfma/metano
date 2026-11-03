@@ -513,7 +513,9 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   `JsonException` "The maximum configured depth of 64 has been exceeded. Cannot read next JSON
   object." (`… JSON array.` for an array). Both boundaries were measured on .NET 10 in S4
   (DECIDED-20 b): 64 nested containers are written and read, the 65th throws; S8 pins them with a
-  manifest row.
+  manifest row. Only containers count: the write side follows the source-generated fast path's
+  boundary, while its exception and message are STJ's metadata / reflection mode's, which already
+  throws for a non-null scalar written inside the 64th container (a hybrid, DECIDED-20 b).
 - **FR-017**: Under `FallBackToNearestAncestor`, an abstract derived entry MUST be accepted as a
   nearest-ancestor target on serialize (its tag, if any, is written, then the runtime value's
   nearest-registered-ancestor contract). Reading its tag MUST be probed against STJ before S6 is
@@ -817,8 +819,13 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Runtime type name of a plain object in `Runtime type '…' is not supported` | the C# type name | `Object` | FR-019 |
 | Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Not measured; fixtures use ASCII names; probed in S8 |
 | Read depth limit | the reader counts every container of the document | counts only the containers the contract visits (a deep value under an undeclared key is skipped) | DECIDED-20 (b) |
-| Write depth limit, source-generated fast path | `InvalidOperationException` "CurrentDepth (64) is equal to or larger than …" | `JsonException` "A possible object cycle was detected. …" (STJ's metadata-mode error) | DECIDED-20 (b) |
-| Non-object / non-array input type name | the CLR type (`System.Collections.Generic.List`1[Arr]`) | the constructor name; `Object` for a `[PlainObject]` contract; `Expected array for deserialization, got <kind>` for collections | DECIDED-20 (c) |
+| Write depth limit | fast path: 64 containers, `InvalidOperationException` "CurrentDepth (64) is equal to or larger than …" at the 65th; metadata / reflection: `JsonException` "A possible object cycle …", also for a non-null scalar inside the 64th container | 64 containers (scalars never count), `JsonException` "A possible object cycle …" at the 65th: the fast path's boundary with the metadata mode's error | DECIDED-20 (b) |
+| Depth inside a custom converter | `JsonSerializer.Serialize(…)` of a separate root inside a converter starts a fresh writer at depth 0 | the root inherits the outer depth (one process-global counter) | DECIDED-20 (b) |
+| Non-object / non-array input type name | the CLR type (`System.Collections.Generic.List`1[Arr]`) | the constructor name; `Object` for a `[PlainObject]` contract; `Expected array for deserialization, got <kind>` for arrays and sets, `Expected object for deserialization, got <kind>` for dictionaries | DECIDED-20 (c) |
+| Unknown numeric enum value | read as is (`7` reads as `(Color)7`) | `JsonException` "Invalid numeric enum value: …" (pre-existing) | DECIDED-20 (c) |
+| Unknown string enum value | `JsonException` "The JSON value could not be converted to Color." | `JsonException` "Invalid enum value: …" (pre-existing message) | DECIDED-20 (c) |
+| Constructor parameter bound to an ignored property | `default(T)` | `undefined` (the factory reads a key the payload never carries) | DECIDED-20 (a) |
+| `[JsonIgnore] new` (non-override) redeclaration | writes the base declaration from the base's own storage, at the redeclaration's position (measured: `{"Name":"base","X":2}` when the derived type declares the ignored `Name` before `X`) | writes the base declaration from the single TS member, which holds the derived value, at the base's position (`{"X":2,"Name":"derived"}`) | DECIDED-20 (a) |
 | Error messages | with a `Path`, `LineNumber`, `BytePositionInLine` suffix | without | DECIDED-5 |
 
 ### Key Entities
@@ -992,22 +999,39 @@ the former `OPEN-N`.
     every overridden declaration, after `properties`, only when non-empty); `collectWireProperties`
     then skips base declarations with those `ts` names. A more-derived redeclaration of the property
     is written again, as in STJ. `TypeSpec.ignoredProperties` is a new optional, additive member.
-  - (b) Depth. STJ writes and reads 64 nested containers (objects, arrays, dictionaries) and throws
-    on the 65th; scalars do not count. Read message: `The maximum configured depth of 64 has been
-    exceeded. Cannot read next JSON object.` / `… JSON array.`. Write: a source-generated context in
-    its default fast-path mode throws `InvalidOperationException` `CurrentDepth (64) is equal to or
-    larger than the maximum allowed depth of 64. Cannot write the next JSON object or array.`; in
-    metadata mode, and through reflection, it throws FR-016's `JsonException` "A possible object
-    cycle was detected. …". Metano keeps FR-016's `JsonException` for every context (documented
-    divergence). The counter is one module-level count of open containers, safe because
-    serialization is synchronous; on read it counts only the containers the contract visits.
+    A constructor parameter bound to an ignored property still gets a factory argument, which is
+    `undefined` because the payload carries no key for it, where STJ passes `default(T)`; the
+    generator would need a per-type default table (`0`, `false`, `Guid.Empty`, temporal and branded
+    defaults) to mirror it, and an own `[JsonIgnore]` member already behaves the same way, so it is
+    a documented divergence. A `[JsonIgnore] new` (non-virtual) redeclaration does not hide the base
+    declaration (FR-009), and TS has one member slot for both, so the base declaration is written
+    with the derived value and at the base's position, where STJ writes the base value at the
+    redeclaration's position (documented divergence).
+  - (b) Depth. STJ reads 64 nested containers (objects, arrays, dictionaries) and throws on the
+    65th; scalars do not count. Read message: `The maximum configured depth of 64 has been exceeded.
+    Cannot read next JSON object.` / `… JSON array.`. Write: a source-generated context in its
+    default fast-path mode writes 64 nested containers, a scalar inside the 64th included, and
+    throws `InvalidOperationException` `CurrentDepth (64) is equal to or larger than the maximum
+    allowed depth of 64. Cannot write the next JSON object or array.` at the 65th; in metadata mode,
+    and through reflection, it throws FR-016's `JsonException` "A possible object cycle was
+    detected. …", already for a non-null scalar written inside the 64th container
+    (`class VNode { int Value; VNode? Next }`: 64 nodes throw). Metano is a hybrid: the fast path's
+    boundary (only containers count) with the metadata mode's `JsonException` and message
+    (documented divergence for both modes). The counter is one process-global count of open
+    containers, safe only because no serialize or deserialize call yields; on read it counts only
+    the containers the contract visits, and a custom converter that serializes a separate root
+    inherits the outer depth (STJ starts that root at depth 0).
   - (c) Errors. Non-object input for an object contract (now including a JSON array) throws
     `JsonException` `The JSON value could not be converted to <constructor name>.`, with `Object`
     for a `[PlainObject]` contract that has no constructor (S5 adds `polymorphism.typeName` for
     polymorphic bases only). The array and hash-set converters reject non-array input with
     `JsonException` `Expected array for deserialization, got <object|string|number|boolean>` (#425;
-    STJ names the CLR collection type, which the descriptor does not carry); `null` still reads as
-    `null`. The enum converters' existing errors become `JsonException` with unchanged messages.
+    STJ names the CLR collection type, which the descriptor does not carry), and the dictionary
+    converter rejects a non-object or an array with `Expected object for deserialization, got
+    <array|string|number|boolean>` (it used to read `[1,2]` as `Map {"0" => 1, …}`); `null` still
+    reads as `null`. The enum converters' existing errors become `JsonException` with unchanged
+    messages; rejecting an unknown numeric value and the string-enum message are pre-existing
+    divergences from STJ.
     `NotSupportedException` lands with the polymorphism runtime (S5).
 
 ## Open questions

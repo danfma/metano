@@ -34,7 +34,7 @@ kept outside the repository by the maintainer; plus a source-generation probe ru
 | Non-scalar tag | message names the token: `True`, `False`, `StartObject`, `StartArray`, `Null` (critic probe) |
 | Int tag written `1.0` | `JsonException: The JSON value could not be converted to IBase.` — not observable after `JSON.parse` (critic probe) |
 | `Deserialize<RefType>("null")` | `null` for every reference-type root, object and polymorphic included; throws for value types (critic probe) |
-| Object cycle | `JsonException: A possible object cycle was detected …` at MaxDepth 64 [Measured in S4 on .NET 10: metadata mode and reflection; the source-generated fast path throws `InvalidOperationException` "CurrentDepth (64) …" instead; 64 nested containers pass, the 65th throws; DECIDED-20 b] |
+| Object cycle | `JsonException: A possible object cycle was detected …` at MaxDepth 64 [Measured in S4 on .NET 10: metadata mode and reflection, which already throw for a non-null scalar written inside the 64th container; the source-generated fast path writes 64 containers, scalars included, and throws `InvalidOperationException` "CurrentDepth (64) …" at the 65th; Metano takes the fast path's boundary with the metadata mode's error; DECIDED-20 b] |
 | Value roots | `byte[]` → base64 `"AQID"`; `TimeSpan` → `"01:02:03"`; `DateTimeOffset` → `…+00:00` (critic probe); TS side: number array, `PT1H2M3S` [Inferred from `converters.ts`] |
 | Tag not first (default) | `NotSupportedException: The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.` |
 | Tag not first + `AllowOutOfOrderMetadataProperties = true` on the context | reads `ImageClip` (source-gen probe) |
