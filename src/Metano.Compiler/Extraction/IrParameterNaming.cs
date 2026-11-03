@@ -22,9 +22,25 @@ internal static class IrParameterNaming
 
     public static string IrNameOf(IParameterSymbol parameter, Compilation? compilation) =>
         compilation is not null
+        && IsRenamableOwner(parameter.ContainingSymbol)
         && CollidingNamesOf(parameter.ContainingSymbol, compilation).Contains(parameter.Name)
             ? parameter.Name + CollisionSuffix
             : parameter.Name;
+
+    /// <summary>
+    /// Only the parameters of an ordinary method, a module function or a
+    /// lambda are renamed: those declare their parameters under the IR name
+    /// and bind them as bare identifiers. A constructor parameter may be
+    /// promoted to a member or captured, an accessor's <c>value</c> and an
+    /// operator's parameters are declared elsewhere, so they keep their name.
+    /// </summary>
+    private static bool IsRenamableOwner(ISymbol owner) =>
+        owner
+            is IMethodSymbol
+            {
+                MethodKind: MethodKind.Ordinary or MethodKind.AnonymousFunction
+            } method
+        && !method.IsExtensionBlockMember();
 
     private static HashSet<string> CollidingNamesOf(ISymbol owner, Compilation compilation) =>
         CollidingNamesByOwner.GetValue(owner, key => FindCollidingNames(key, compilation));
@@ -48,7 +64,7 @@ internal static class IrParameterNaming
             SymbolHelper.ToCamelCase(parameter.Name)
         );
 
-        foreach (var name in declaration.DescendantNodes().OfType<IdentifierNameSyntax>())
+        foreach (var name in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
         {
             if (
                 model.GetSymbolInfo(name).Symbol is not IMethodSymbol callee

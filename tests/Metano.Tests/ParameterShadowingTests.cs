@@ -78,6 +78,74 @@ public class ParameterShadowingTests
     }
 
     [Test]
+    public async Task GenericCallee_ShadowedByAParameter_IsRenamed()
+    {
+        var files = Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Mod
+            {
+                public static T Id<T>(T value) => value;
+                public static int Run(int id) => Id<int>(id);
+            }
+            """
+        );
+
+        await Assert.That(files["mod.ts"]).Contains("run(id$: number)");
+        await Assert.That(files["mod.ts"]).Contains("return id(id$);");
+    }
+
+    [Test]
+    public async Task RecordAndPrimaryConstructorParameters_KeepTheirNames()
+    {
+        var files = Transpile(
+            $$"""
+            {{Module}}
+            }
+
+            [Transpile]
+            public record Rec(int Log)
+            {
+                public int Twice() => Mod.Log(Log) * 2;
+            }
+
+            [Transpile]
+            public class Cls(int log)
+            {
+                public int Run() => Mod.Log(log);
+            }
+            """
+        );
+
+        await Assert.That(files["rec.ts"]).Contains("readonly log: number");
+        await Assert.That(files["rec.ts"]).DoesNotContain("log$");
+        await Assert.That(files["cls.ts"]).DoesNotContain("log$");
+    }
+
+    [Test]
+    public async Task AccessorValueParameter_KeepsItsName()
+    {
+        var files = Transpile(
+            $$"""
+            [Transpile, NoContainer]
+            public static class Mod
+            {
+                public static int Value(int v) => v;
+            }
+
+            [Transpile]
+            public class Holder
+            {
+                private int _x;
+                public int X { set => _x = Mod.Value(value); }
+            }
+            """
+        );
+
+        await Assert.That(files["holder.ts"]).DoesNotContain("value$");
+    }
+
+    [Test]
     public async Task InstanceMethod_ParameterNamedLikeASiblingMethod_IsNotRenamed()
     {
         var files = Transpile(

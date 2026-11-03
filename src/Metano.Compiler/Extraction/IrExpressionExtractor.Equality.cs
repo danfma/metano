@@ -50,9 +50,9 @@ public sealed partial class IrExpressionExtractor
             ),
             IBinaryOperation { IsLifted: true } when IsNullableDecimalComparison(bin) =>
                 new IrBinaryExpression(
-                    Extract(bin.Left),
+                    ExtractAsDecimal(bin.Left),
                     EqualityOperator(byValue: true, negated),
-                    Extract(bin.Right)
+                    ExtractAsDecimal(bin.Right)
                 ),
             _ => null,
         };
@@ -71,6 +71,25 @@ public sealed partial class IrExpressionExtractor
         && IsDecimalOrNullableDecimalOperand(bin.Left)
         && IsDecimalOrNullableDecimalOperand(bin.Right)
         && (IsNullableValueOperand(bin.Left) || IsNullableValueOperand(bin.Right));
+
+    /// <summary>
+    /// The operand as a decimal: an operand C# converts implicitly from
+    /// another numeric type (<c>d == 0</c>) becomes a <c>decimal</c> value, so
+    /// the value comparison sees two decimals.
+    /// </summary>
+    private IrExpression ExtractAsDecimal(ExpressionSyntax operand)
+    {
+        var value = Extract(operand);
+
+        return
+            _semantic.GetTypeInfo(operand).Type.UnderlyingValueType()?.SpecialType
+            == SpecialType.System_Decimal
+            ? value
+            : new IrNewExpression(
+                new IrPrimitiveTypeRef(IrPrimitive.Decimal),
+                [new IrArgument(value)]
+            );
+    }
 
     /// <summary>
     /// The record's synthesized <c>==</c> / <c>!=</c> (a record cannot
