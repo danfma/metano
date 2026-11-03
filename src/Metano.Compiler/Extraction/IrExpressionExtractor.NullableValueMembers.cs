@@ -98,47 +98,6 @@ public sealed partial class IrExpressionExtractor
             : ValueOrTypeDefault(invocation, receiver, method!.ContainingType.TypeArguments[0]);
     }
 
-    /// <summary>
-    /// <c>t.Equals(u)</c> over a nullable tuple (<c>Nullable&lt;T&gt;.Equals</c>)
-    /// retargets to the underlying tuple's own <c>Equals</c>, carrying the
-    /// tuple type: C# answers both null <c>true</c>, one null <c>false</c>,
-    /// else element-wise — the null-guarded comparison a backend's tuple
-    /// equality applies (#331). <c>t.Value.Equals(u)</c> needs no special
-    /// case: <see cref="ValueOrThrowWhenMissing"/> already guards the
-    /// receiver, so the call lands on the tuple itself. <c>null</c> for any
-    /// other call.
-    /// </summary>
-    private IrExpression? TryExtractNullableTupleEquals(
-        InvocationExpressionSyntax invocation,
-        IMethodSymbol? method
-    )
-    {
-        if (
-            method
-                is not {
-                    Name: nameof(object.Equals),
-                    IsStatic: false,
-                    ContainingType.OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
-                    Parameters: [{ Type.SpecialType: SpecialType.System_Object }],
-                }
-            || method.ContainingType.TypeArguments[0]
-                is not INamedTypeSymbol { IsTupleType: true } tuple
-            || SymbolHelper.InstanceEqualsOverObject(tuple) is not { } tupleEquals
-            || QualifiedMemberSyntax.From(invocation.Expression) is not { } member
-            || invocation.ArgumentList.Arguments is not [{ NameColon: null } argument]
-        )
-        {
-            return null;
-        }
-
-        return new IrCallExpression(
-            new IrMemberAccess(Extract(member.Receiver), tupleEquals.Name),
-            [new IrArgument(Extract(argument.Expression))],
-            Origin: BuildOrigin(tupleEquals),
-            TupleType: IrTypeRefMapper.Map(tuple, _originResolver, _target) as IrTupleTypeRef
-        );
-    }
-
     private static bool IsNullableGetValueOrDefault(IMethodSymbol? method) =>
         method
             is {

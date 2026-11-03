@@ -244,11 +244,11 @@ export function tupleEquals(tuple: unknown, other: unknown, shape?: TupleShape):
   }
 
   return tuple.every((element, index) => {
-    const nested = shape?.[index];
+    const elementShape = shape?.[index];
 
-    return nested == null
+    return elementShape == null
       ? objectEquals(element, other[index])
-      : tupleEquals(element, other[index], nested);
+      : tupleEquals(element, other[index], elementShape);
   });
 }
 

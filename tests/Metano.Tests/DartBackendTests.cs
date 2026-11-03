@@ -1571,4 +1571,34 @@ public class DartBackendTests
 
         await Assert.That(files["cursor.dart"]).Contains("Iterator<int>?");
     }
+
+    /// <summary>
+    /// C# tuples are Dart records, whose <c>==</c> compares element-wise at
+    /// every level (a <c>List</c> element by reference) — C#'s answers — so
+    /// the nested value equality lowers to the native operator (#331).
+    /// </summary>
+    [Test]
+    public async Task NestedTupleEquality_LowersToRecordEquality()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool Nested(((int, int), int) a, ((int, int), int) b) =>
+                    object.Equals(a, b);
+
+                public static bool Guarded(((int, int), int)? a, ((int, int), int) b) =>
+                    a?.Equals(b) == true;
+            }
+            """
+        );
+
+        var output = files["comparisons.dart"];
+
+        await Assert.That(output).Contains("=> a == b;");
+        await Assert
+            .That(output)
+            .Contains("=> (($receiver) => $receiver == null ? null : $receiver == b)(a) == true;");
+    }
 }

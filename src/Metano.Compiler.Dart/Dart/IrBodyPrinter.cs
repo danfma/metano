@@ -378,6 +378,15 @@ public static class IrBodyPrinter
             case IrTupleLiteral tuple:
                 PrintRecordLiteral(sb, tuple);
                 break;
+            case IrTupleEqualityExpression tupleEquality:
+                // C# tuples are Dart records: `==` compares them
+                // element-wise at every level, and a `List` element by
+                // reference — exactly what C# answers (a nullable tuple
+                // element is the value or null, so `null == null` holds).
+                PrintGroupedOperand(sb, tupleEquality.Left);
+                sb.Append(" == ");
+                PrintGroupedOperand(sb, tupleEquality.Right);
+                break;
             case IrArrayLiteral array:
                 sb.Append('[');
                 for (var i = 0; i < array.Elements.Count; i++)

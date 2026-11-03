@@ -29,6 +29,10 @@ public static partial class IrToTsExpressionBridge
     private static readonly string ValueEqualityHelper =
         IrRuntimeRequirementToTsImport.ImportedNameOf("ValueEquals");
 
+    /// <summary>The <c>metano-runtime</c> helper backing C# tuple value equality.</summary>
+    private static readonly string TupleEqualityHelper =
+        IrRuntimeRequirementToTsImport.ImportedNameOf("TupleEquals");
+
     /// <summary>
     /// Maps an IR expression to TS. When <paramref name="bclRegistry"/> is provided,
     /// member accesses and calls consult <see cref="IrToTsBclMapper"/> first and
@@ -89,6 +93,7 @@ public static partial class IrToTsExpressionBridge
                 arr.Elements.Select(e => Map(e, context)).ToList()
             ),
             IrTupleLiteral tuple => MapTupleLiteral(tuple, context),
+            IrTupleEqualityExpression equality => MapTupleEquality(equality, context),
             IrSpreadExpression spread => new TsSpreadExpression(Map(spread.Expression, context)),
             IrTemplateExpression tpl => new TsTemplate(
                 tpl.Template,
@@ -327,6 +332,68 @@ public static partial class IrToTsExpressionBridge
             ? new TsCastExpression(array, IrToTsTypeMapper.Map(type))
             : array;
     }
+
+    /// <summary>
+    /// A C# tuple lowers to a positional array, where a nested tuple and a C#
+    /// array are indistinguishable — so the runtime <c>tupleEquals</c> alone
+    /// would compare a nested tuple element by reference. When the tuple type
+    /// has a tuple element (any depth, a nullable tuple element unwrapped),
+    /// the call carries the element shape as a trailing argument: one entry
+    /// per element, <c>null</c> for a non-tuple element, the nested shape for
+    /// a tuple element (<c>[]</c> for a nested tuple without tuple elements
+    /// of its own). A flat tuple keeps the bare two-argument call. Each
+    /// operand lowers once, left first.
+    /// </summary>
+    private static TsExpression MapTupleEquality(
+        IrTupleEqualityExpression equality,
+        IrToTsBridgeContext context
+    )
+    {
+        var left = Map(equality.Left, context);
+        var right = Map(equality.Right, context);
+
+        if (ShapeOf(equality.TupleType) is not { } shape)
+        {
+            return new TsTemplate($"{TupleEqualityHelper}($0, $1)", Receiver: null, [left, right])
+            {
+                RuntimeImports = [TupleEqualityHelper],
+            };
+        }
+
+        return new TsTemplate(
+            $"{TupleEqualityHelper}($0, $1, $2)",
+            Receiver: null,
+            [left, right, shape]
+        )
+        {
+            RuntimeImports = [TupleEqualityHelper],
+        };
+    }
+
+    /// <summary>
+    /// The shape literal for <paramref name="tuple"/>'s elements, or
+    /// <c>null</c> when no element (at any depth) is a tuple.
+    /// </summary>
+    private static TsArrayLiteral? ShapeOf(IrTupleTypeRef tuple)
+    {
+        if (!tuple.Elements.Any(IsTupleElement))
+            return null;
+
+        var entries = tuple.Elements.Select(ElementShapeOf).Cast<TsExpression>().ToList();
+
+        return new TsArrayLiteral(entries);
+    }
+
+    private static TsExpression ElementShapeOf(IrTypeRef element) =>
+        UnwrapNullable(element) is IrTupleTypeRef nested
+            ? ShapeOf(nested) ?? new TsArrayLiteral([])
+            : new TsLiteral("null");
+
+    private static bool IsTupleElement(IrTypeRef element) =>
+        UnwrapNullable(element) is IrTupleTypeRef;
+
+    private static IrTypeRef UnwrapNullable(IrTypeRef element) =>
+        element is IrNullableTypeRef { Inner: var inner } ? inner : element;
 
     private static TsExpression MapElementAccess(IrElementAccess ea, IrToTsBridgeContext context)
     {
