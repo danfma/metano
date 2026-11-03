@@ -11,10 +11,12 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal sealed class JsonPropertyCollector(
     TypeScriptTransformContext context,
+    JsonContractAdmission admission,
     Func<string, string>? namingPolicy
 )
 {
     private readonly TypeScriptTransformContext _context = context;
+    private readonly JsonContractAdmission _admission = admission;
     private readonly Func<string, string>? _namingPolicy = namingPolicy;
 
     /// <summary>
@@ -24,9 +26,11 @@ internal sealed class JsonPropertyCollector(
     /// no spec), the inherited properties of every toolchain-declared ancestor
     /// are inlined ahead of the own ones, base-most first like the runtime's
     /// base walk, so they are still written, read and passed to the factory.
-    /// A property redeclared down the chain (an override) is declared once, at
-    /// its base-most position with its most-derived declaration, whose
-    /// <c>[JsonPropertyName]</c> wins as in System.Text.Json.
+    /// Like System.Text.Json, the inlined list is deduplicated by final JSON
+    /// name (FR-009): a property redeclared down the chain (<c>override</c> or
+    /// <c>new</c>) under the same JSON name is declared once, at its base-most
+    /// position with its most-derived declaration, while a redeclaration under
+    /// another JSON name is written under both names.
     /// </summary>
     public List<JsonSerializableProperty> PropertiesOf(INamedTypeSymbol type)
     {
@@ -37,32 +41,24 @@ internal sealed class JsonPropertyCollector(
             .Reverse()
             .Append(type)
             .SelectMany(CollectOwnProperties)
-            .GroupBy(property => property.TsName, StringComparer.Ordinal)
+            .GroupBy(property => property.JsonName, StringComparer.Ordinal)
             .Select(redeclarations => redeclarations.Last())
             .ToList();
     }
 
     /// <summary>
     /// The base type a spec links to through <c>base: this.x</c>, or
-    /// <c>null</c> when the base emits no spec. Uses the emitter's
-    /// transpilability rule (including <c>[assembly: TranspileAssembly]</c>
-    /// opt-in), so a base whose class is emitted always gets its spec. A base
-    /// from a referenced package links only when it carries <c>[Transpile]</c>;
-    /// one included by that package's <c>[assembly: TranspileAssembly]</c> is
-    /// not opted in for this compilation, so its properties are inlined
-    /// instead (<see cref="PropertiesOf"/>) — both serialize the same
-    /// wire shape.
+    /// <c>null</c> when the base has no object contract in the context. The
+    /// base is admitted by the closure rule
+    /// (<see cref="JsonContractAdmission.IsDiscoverable"/>), evaluated against
+    /// its declaring assembly (FR-010): a base of this project under
+    /// <c>[Transpile]</c> or <c>[assembly: TranspileAssembly]</c>, a closed
+    /// generic base, and a base of a referenced Metano package (FR-047) all
+    /// link. Any other base (<c>[Ignore]</c>, BCL) has its properties inlined
+    /// instead (<see cref="PropertiesOf"/>).
     /// </summary>
     public INamedTypeSymbol? LinkedBaseOf(INamedTypeSymbol type) =>
-        type.BaseType is { } baseType
-        && baseType.SpecialType == SpecialType.None
-        && SymbolHelper.IsTranspilable(
-            baseType,
-            _context.AssemblyWideTranspile,
-            _context.CurrentAssembly
-        )
-            ? baseType
-            : null;
+        type.BaseType is { } baseType && _admission.IsDiscoverable(baseType) ? baseType : null;
 
     /// <summary>
     /// The ancestors whose properties an unlinked spec inlines, nearest first:

@@ -708,8 +708,10 @@ public class JsonSerializerContextTests
         await Assert.That(ts).Contains("new Holder(p.z as number)");
     }
 
+    // An interface needs polymorphic JSON and stays out of the closure; a
+    // closed generic is an object contract under its FR-031 name (FR-033).
     [Test]
-    public async Task InterfaceOrGenericPropertyType_IsNotPulledIntoClosure()
+    public async Task InterfacePropertyType_IsNotPulledIntoClosureButClosedGenericIs()
     {
         var ts = TranspileContext(
             """
@@ -729,7 +731,100 @@ public class JsonSerializerContextTests
 
         await Assert.That(CountGetters(ts, "root")).IsEqualTo(1);
         await Assert.That(CountGetters(ts, "iShape")).IsEqualTo(0);
-        await Assert.That(CountGetters(ts, "box")).IsEqualTo(0);
+        await Assert.That(CountGetters(ts, "boxInt32")).IsEqualTo(1);
+        await Assert.That(ts).Contains("spec: () => this.boxInt32");
+    }
+
+    // A base the spec does not link to has its properties inlined; an
+    // overridden property is declared once, under its most-derived
+    // declaration (FR-009).
+    [Test]
+    public async Task OverriddenPropertyOfInlinedBase_IsDeclaredOnce()
+    {
+        var ts = TranspileContext(
+            """
+            [Ignore]
+            public abstract class Media
+            {
+                public virtual string Name { get; init; } = "";
+                public int Size { get; init; }
+            }
+
+            [Transpile]
+            public sealed class Photo : Media
+            {
+                public override string Name { get; init; } = "photo";
+                public string Path { get; init; } = "";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        await Assert.That(CountOf(ts, "json: \"Name\"")).IsEqualTo(1);
+        await Assert.That(CountOf(ts, "json: \"Size\"")).IsEqualTo(1);
+        await Assert.That(CountOf(ts, "json: \"Path\"")).IsEqualTo(1);
+    }
+
+    // System.Text.Json dedupes by final JSON name: an override renamed with
+    // [JsonPropertyName] is written under both names (measured on .NET 10:
+    // {"X":2,"n":"d","Name":"d","Base":1}).
+    [Test]
+    public async Task OverrideRenamedByJsonPropertyName_KeepsBothJsonNames()
+    {
+        var ts = TranspileContext(
+            """
+            [Ignore]
+            public abstract class Media
+            {
+                public virtual string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            public sealed class Photo : Media
+            {
+                [JsonPropertyName("n")]
+                public override string Name { get; init; } = "photo";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        await Assert.That(CountOf(ts, "json: \"Name\"")).IsEqualTo(1);
+        await Assert.That(CountOf(ts, "json: \"n\"")).IsEqualTo(1);
+    }
+
+    // With a linked base, each spec declares its own declaration once: the
+    // base keeps its property for its own instances and the derived spec
+    // carries the override.
+    [Test]
+    public async Task OverriddenPropertyOfLinkedBase_IsDeclaredOncePerSpec()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public class Media
+            {
+                public virtual string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            public sealed class Photo : Media
+            {
+                public override string Name { get; init; } = "photo";
+                public string Path { get; init; } = "";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        await Assert.That(ts).Contains("base: this.media");
+        await Assert.That(CountOf(ts, "json: \"Name\"")).IsEqualTo(2);
     }
 
     [Test]
@@ -768,6 +863,8 @@ public class JsonSerializerContextTests
         await Assert.That(ts).DoesNotContain("get outer.");
         await Assert.That(ts).DoesNotContain("_outer.");
     }
+
+    private static int CountOf(string text, string fragment) => text.Split(fragment).Length - 1;
 
     private static int CountGetters(string ts, string getterName) =>
         ts.Split($"  get {getterName}(): ").Length - 1;

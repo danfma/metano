@@ -112,7 +112,11 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         if (roots.Count == 0)
             return null;
 
-        var properties = new JsonPropertyCollector(_context, ReadNamingPolicy(contextType));
+        var properties = new JsonPropertyCollector(
+            _context,
+            admission,
+            ReadNamingPolicy(contextType)
+        );
         var names = JsonTypeInfoNames.Create(_context, roots, report);
         var contract = new JsonContractClosure(properties, admission).Collect(roots);
 
