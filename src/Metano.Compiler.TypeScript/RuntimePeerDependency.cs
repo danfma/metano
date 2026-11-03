@@ -26,17 +26,6 @@ public static partial class RuntimePeerDependency
     /// </summary>
     public const string UnpublishedBuildSpecifier = "*";
 
-    private static readonly Regex StableCaretSpecifier = new(@"^\^\d+\.\d+\.\d+$");
-
-    /// <summary>
-    /// True when <paramref name="specifier"/> has the shape this class writes
-    /// (<c>*</c> or <c>^Major.Minor.Patch</c>), so a stored value of that shape is the
-    /// writer's own and may be refreshed; any other shape is the consumer's.
-    /// </summary>
-    public static bool IsOwnSpecifier(string? specifier) =>
-        specifier == UnpublishedBuildSpecifier
-        || (specifier is not null && StableCaretSpecifier.IsMatch(specifier));
-
     /// <summary>The specifier for the running compiler's own release version.</summary>
     public static string CurrentSpecifier { get; } = SpecifierFor(ReadCompilerVersion());
 
@@ -54,6 +43,22 @@ public static partial class RuntimePeerDependency
 
         return $"^{match.Groups["version"].Value}";
     }
+
+    /// <summary>
+    /// True when <paramref name="specifier"/> has the shape this class writes
+    /// (<c>*</c> or <c>^Major.Minor.Patch</c>), so a stored value of that shape is the
+    /// writer's own and may be refreshed; any other shape is the consumer's.
+    /// </summary>
+    public static bool IsOwnSpecifier(string? specifier) =>
+        specifier == UnpublishedBuildSpecifier
+        || (specifier is not null && StableCaretSpecifier().IsMatch(specifier));
+
+    /// <summary>
+    /// <see cref="CurrentSpecifier"/> when any generated file imports the runtime;
+    /// <c>null</c> (no peer dependency) otherwise.
+    /// </summary>
+    public static string? PeerSpecifierFor(IEnumerable<GeneratedFile> files) =>
+        IsImportedBy(files) ? CurrentSpecifier : null;
 
     /// <summary>
     /// True when any generated file imports <c>metano-runtime</c> (or one of its subpaths).
@@ -79,4 +84,7 @@ public static partial class RuntimePeerDependency
 
     [GeneratedRegex(@"^(?<version>\d+\.\d+\.\d+)(\+.*)?$")]
     private static partial Regex StableVersion();
+
+    [GeneratedRegex(@"^\^\d+\.\d+\.\d+$")]
+    private static partial Regex StableCaretSpecifier();
 }
