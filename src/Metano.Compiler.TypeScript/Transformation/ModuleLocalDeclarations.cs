@@ -13,22 +13,25 @@ internal sealed class ModuleLocalDeclarations(INamedTypeSymbol owner, Compilatio
     private readonly ModuleLocalPlacement _placement = new(owner, compilation);
 
     /// <summary>Declared before the owner: its load-time code may construct them.</summary>
-    public List<TsTopLevel> Hoisted { get; } = [];
+    private readonly List<TsTopLevel> _hoisted = [];
 
     /// <summary>Declared after the owner: their load-time code reads the owner block.</summary>
-    public List<TsTopLevel> Trailing { get; } = [];
-
-    /// <inheritdoc cref="ModuleLocalPlacement.MustFollowOwner"/>
-    public bool MustFollowOwner(INamedTypeSymbol privateType) =>
-        _placement.MustFollowOwner(privateType);
+    private readonly List<TsTopLevel> _trailing = [];
 
     /// <summary>
-    /// Inserts <see cref="Hoisted"/> before the owner's declarations, which start at
-    /// <paramref name="ownerStart"/>, and appends <see cref="Trailing"/> after them.
+    /// The list the declarations of <paramref name="privateType"/> go to, by its
+    /// load-time dependencies (<see cref="ModuleLocalPlacement.MustFollowOwner"/>).
+    /// </summary>
+    public List<TsTopLevel> SinkFor(INamedTypeSymbol privateType) =>
+        _placement.MustFollowOwner(privateType) ? _trailing : _hoisted;
+
+    /// <summary>
+    /// Inserts the hoisted declarations before the owner's own, which start at
+    /// <paramref name="ownerStart"/>, and appends the trailing ones after them.
     /// </summary>
     public void PlaceAround(List<TsTopLevel> statements, int ownerStart)
     {
-        statements.InsertRange(ownerStart, Hoisted);
-        statements.AddRange(Trailing);
+        statements.InsertRange(ownerStart, _hoisted);
+        statements.AddRange(_trailing);
     }
 }

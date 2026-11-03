@@ -56,11 +56,13 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (SymbolHelper.HasImport(type))
             return [];
 
-        // A private nested type is declared under its module-local identifier, which
-        // the predicate type spells; the guard, assert and message read its own name.
+        // A private nested type is declared under its module-local identifier (#412).
+        // The predicate type and the unexported guard and assert identifiers spell it,
+        // so two private `Circle`s, or a private `Circle` next to a module's own
+        // `isCircle`, never clash; the error message reads the type's own name.
         var tsName = _context.ResolveTsName(type);
         var ownName = _context.ResolveOwnTsName(type);
-        var guardName = $"is{ownName}";
+        var guardName = $"is{tsName}";
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
 
         TsFunction? guard = null;
@@ -91,7 +93,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (guard is null)
             return [];
 
-        return [guard, GenerateAssert(ownName, guardName, predicateType)];
+        return [guard, GenerateAssert(tsName, ownName, guardName, predicateType)];
     }
 
     private IReadOnlyList<INamedTypeSymbol>? TryFindDiscriminatedVariants(INamedTypeSymbol baseType)
@@ -328,10 +330,10 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             return null;
 
         var variantTsName = _context.ResolveOwnTsName(type);
-        var guardName = $"is{variantTsName}";
+        var guardName = $"is{_context.ResolveTsName(type)}";
 
         // The discriminator value the registry keys on is the variant's
-        // TS name — matches the per-variant guard convention
+        // own TS name — matches the per-variant guard convention
         // (`v.kind === "Circle"`). Reading the variant's own
         // discriminator field isn't needed: the registry's key space is
         // the discriminator-value vocabulary, and the variant's emitted
@@ -369,7 +371,12 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         return null;
     }
 
-    private static TsFunction GenerateAssert(string ownName, string guardName, TsType predicateType)
+    private static TsFunction GenerateAssert(
+        string tsName,
+        string ownName,
+        string guardName,
+        TsType predicateType
+    )
     {
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
         var messageParam = new TsParameter("message", new TsNamedType("string"), Optional: true);
@@ -396,7 +403,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         };
 
         return new TsFunction(
-            $"assert{ownName}",
+            $"assert{tsName}",
             [valueParam, messageParam],
             new TsTypePredicateType("value", predicateType, IsAsserts: true),
             body
