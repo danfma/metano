@@ -111,6 +111,63 @@ public class JsonClosureGenericTests
         await Assert.That(ts).Contains("type: Box,");
     }
 
+    [Test]
+    [Arguments("typeof(Page<System.Version>)", "'System.Version' has no TypeScript contract")]
+    [Arguments("typeof(Page<IShape>)", "'TestApp.IShape' has no TypeScript contract")]
+    [Arguments("typeof(List<Page<IShape>>)", "'TestApp.IShape' has no TypeScript contract")]
+    [Arguments("typeof(Page<Page<System.Version>>)", "'System.Version' has no TypeScript")]
+    public async Task GenericRootWithArgumentWithoutContract_ReportsMs0035(
+        string typeOf,
+        string reason
+    )
+    {
+        var (files, diagnostics) = Transpile(
+            $$"""
+            [Transpile]
+            public interface IShape { }
+
+            [Transpile]
+            public sealed record Page<T>(List<T> Items);
+
+            [Transpile]
+            [JsonSerializable({{typeOf}})]
+            """
+        );
+
+        var ms0035 = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.InvalidJsonSerializableRoot)
+            .ToList();
+
+        await Assert.That(ms0035).Count().IsEqualTo(1);
+        await Assert.That(ms0035[0].Message).Contains(reason);
+        await Assert.That(files.ContainsKey(ContextPath)).IsFalse();
+    }
+
+    [Test]
+    [Arguments("Page<Leaf?> First, Page<Leaf> Second")]
+    [Arguments("Page<Leaf> First, Page<Leaf?> Second")]
+    public async Task GenericSpecType_DoesNotDependOnTheFirstNullableVariant(string parameters)
+    {
+        var ts = TranspileContext(
+            $$"""
+            [Transpile]
+            public sealed record Leaf(string Name);
+
+            [Transpile]
+            public sealed record Page<T>(List<T> Items);
+
+            [Transpile]
+            public sealed record Root({{parameters}});
+
+            [Transpile]
+            [JsonSerializable(typeof(Root))]
+            """
+        );
+
+        await Assert.That(ts).Contains("get pageLeaf(): TypeSpec<Page<Leaf>>");
+        await Assert.That(ts).Contains("this.createSpec<Page<Leaf>>(");
+    }
+
     private static (
         Dictionary<string, string> Files,
         IReadOnlyList<MetanoDiagnostic> Diagnostics

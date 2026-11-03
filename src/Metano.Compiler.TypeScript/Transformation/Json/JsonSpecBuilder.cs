@@ -72,7 +72,7 @@ internal sealed class JsonSpecBuilder(
 
         return (
             new TsNamedType("ValueSpec", [ValueSpecTypeArgument(entry.Type)], RuntimeJsonOrigin),
-            ContextCall(
+            ContextFactoryCall(
                 "createValueSpec",
                 new TsObjectLiteral([new TsObjectProperty("descriptor", descriptor)])
             )
@@ -89,19 +89,19 @@ internal sealed class JsonSpecBuilder(
     /// </summary>
     private (TsType SpecType, TsCallExpression Factory) BuildTypeSpec(INamedTypeSymbol objectType)
     {
-        var contractType = JsonTsTypes.Map(_context, objectType);
-        var spec = BuildTypeSpecObject(objectType, SpecTypeReferenceName(objectType));
+        var contractType = JsonTsTypes.MapContract(_context, objectType);
+        var spec = BuildTypeSpecObject(objectType, SpecTypeReferenceName(objectType, contractType));
 
         return (
             new TsNamedType("TypeSpec", [contractType], RuntimeJsonOrigin),
-            ContextCall("createSpec", spec, ExplicitTypeArgumentsOf(contractType))
+            ContextFactoryCall("createSpec", spec, ExplicitTypeArgumentsOf(contractType))
         );
     }
 
     private static IReadOnlyList<TsType>? ExplicitTypeArgumentsOf(TsType contractType) =>
         contractType is TsNamedType { TypeArguments.Count: > 0 } ? [contractType] : null;
 
-    private static TsCallExpression ContextCall(
+    private static TsCallExpression ContextFactoryCall(
         string factoryName,
         TsObjectLiteral spec,
         IReadOnlyList<TsType>? typeArguments = null
@@ -129,13 +129,12 @@ internal sealed class JsonSpecBuilder(
     /// The TS value a spec names in <c>type: T</c> and <c>new T(...)</c>: the
     /// mapped type name without type arguments, which is qualified for a
     /// nested type (<c>Outer.Inner</c>) exactly as property types reference
-    /// it. <c>TypeSpec&lt;T&gt;</c> carries the full mapped type instead
+    /// it. <c>TypeSpec&lt;T&gt;</c> carries the full mapped
+    /// <paramref name="contractType"/> instead
     /// (<c>TypeSpec&lt;Page&lt;EpisodeSummary&gt;&gt;</c>, FR-032).
     /// </summary>
-    private string SpecTypeReferenceName(INamedTypeSymbol type) =>
-        JsonTsTypes.Map(_context, type) is TsNamedType namedTs
-            ? namedTs.Name
-            : _context.ResolveTsName(type);
+    private string SpecTypeReferenceName(INamedTypeSymbol type, TsType contractType) =>
+        contractType is TsNamedType namedTs ? namedTs.Name : _context.ResolveTsName(type);
 
     /// <summary>
     /// Builds the TypeSpec object literal for a given type:

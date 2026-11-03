@@ -19,14 +19,14 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
     /// <c>[EmitPackage]</c> library whose types the context imports (FR-047).
     /// Interfaces need polymorphic JSON and are not admitted.
     /// </summary>
-    public bool IsDiscoverable(ITypeSymbol type) =>
+    public bool HasObjectContract(ITypeSymbol type) =>
         type is INamedTypeSymbol named
-        && IsClassOrStruct(named)
+        && IsUserClassOrStruct(named)
         && IsTranspiledInDeclaringAssembly(named.OriginalDefinition);
 
     /// <summary>
     /// Why an object-kind root cannot get a <c>TypeSpec</c>, or <c>null</c>
-    /// when it can (<see cref="IsDiscoverable"/>). A BCL generic
+    /// when it can (<see cref="HasObjectContract"/>). A BCL generic
     /// (<c>KeyValuePair</c>, <c>ValueTuple</c>, <c>SortedDictionary</c>, …) is
     /// not transpiled at all.
     /// </summary>
@@ -40,14 +40,18 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
         if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
             return "it is not a class or struct, so it has no JSON object contract";
 
-        if (IsDiscoverable(type))
+        if (HasObjectContract(type))
             return null;
 
         return "it is not a transpiled class or struct of this project or of a referenced "
             + "Metano package, so it has no TypeScript contract";
     }
 
-    private static bool IsClassOrStruct(INamedTypeSymbol type) =>
+    /// <summary>
+    /// A class or struct that can carry its own JSON object contract;
+    /// <c>object</c> has no properties to describe.
+    /// </summary>
+    private static bool IsUserClassOrStruct(INamedTypeSymbol type) =>
         type.TypeKind is TypeKind.Class or TypeKind.Struct
         && type.SpecialType != SpecialType.System_Object;
 

@@ -179,7 +179,7 @@ specs/001-project-baseline-evolution/baseline/{attribute-catalog,diagnostic-cata
 | S2b | Context read options: case-insensitive names, numbers from strings, `numberType` hints (FR-048 items 2–5, FR-002 plumbing) | #268 #270 | `feat:` | S2 |
 | S3 | Naming function + roots + `ValueSpec` runtime (FR-030–FR-036, FR-038 typing, `MS0035`, `MS0036`) | #270 | `feat:` | — |
 | S3b | Null-root parity: `T \| null` overloads, `valueType` flags, migration note (FR-034 signatures, FR-037, FR-049). May be held to share one major with the C# unions spec | #270 | `feat!:` (`BREAKING CHANGE:` footer) | S3 |
-| S4 | Derived-first wire order (`collectWireProperties`, FR-009), `Array.from` iterables (FR-038), `JsonException` for existing errors (FR-045), depth limit (FR-016) | #268 #270 | `fix:` | — |
+| S4 | Derived-first wire order (`collectWireProperties`, FR-009; generator reorders inlined property lists, DECIDED-19 f), `Array.from` iterables (FR-038), `JsonException` for existing errors (FR-045), depth limit (FR-016) | #268 #270 | `fix:` | — |
 | S5 | Runtime polymorphism (types, errors, dispatch) with bun tests | #268 | `feat:` | S4 |
 | S6 | Generator polymorphism for class hierarchies (reader, closure, descriptor, constructed generic bases, `MS0032`/`MS0033`) + golden; first probe DECIDED-12 | #268 | `feat:` | S1, S3, S5 |
 | S6c | Interface bases (FR-018) and `[PlainObject]` variants with synthesized guards, `testOrder` and the indistinguishability rule (FR-019) + goldens | #268 | `feat:` | S6 |

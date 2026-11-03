@@ -678,6 +678,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
 
 - **FR-040**: Contexts that use none of the new attributes and only object roots MUST produce
   byte-identical generated TypeScript, except where FR-010 adds a previously missing `base:` link,
+  FR-033 / FR-047 add the getters (and their imports and `package.json` dependency) of closed
+  generic and referenced-package types that were previously dangling `ref` / inlined bases,
   FR-009 removes a duplicated overridden property, FR-037 adds `valueType: true` to struct
   contracts, and FR-048 changes contexts declared with `JsonSerializerDefaults.Web` (camelCase
   names, read options, number hints). The types of call sites change with FR-034 (breaking,
@@ -945,14 +947,30 @@ the former `OPEN-N`.
     (`base:` under `TranspileAssembly`) was already fixed by #253; S1 adds library bases.
   - (b) A closed generic contract passes its mapped type to `createSpec<…>` explicitly, because
     `type: Page` alone infers `Page<unknown>` (checked with `tsgo --strict`).
-  - (c) FR-009 generator half: an inlined (unlinked) property list is deduplicated by final JSON
-    name, keeping the most-derived declaration at the base-most position; a redeclaration under a
-    different JSON name is written under both names, as System.Text.Json does (measured on .NET 10:
-    an override renamed `n` writes `{"X":2,"n":"d","Name":"d","Base":1}`). With a linked base, the
-    base spec must keep its own declaration for its own instances, so an override appears once in
-    each spec of the chain; the cross-spec duplicate is removed on the wire by
-    `collectWireProperties` (S4). The FR-009 phrase "appears only in the most-derived spec" applies
-    to the wire, not to the emitted lists.
+  - (c) FR-009 generator half, for an inlined (unlinked) property list, following System.Text.Json's
+    hierarchy rules: a redeclaration (`override` / `new`, the same CLR name) under the same JSON
+    name is declared once, with the most-derived declaration at the base-most position; a
+    redeclaration under a different JSON name is written under both names (measured on .NET 10: an
+    override renamed `n` writes `{"X":2,"n":"d","Name":"d","Base":1}`); a `[JsonIgnore]`
+    redeclaration hides every base declaration of that CLR name (STJ writes none).
+  - (d) Distinct CLR properties that share a JSON name (STJ throws `InvalidOperationException`) are
+    all kept, never merged: no diagnostic code covers a JSON-name collision inside a contract yet,
+    so the generator does not silently drop one of them. A diagnostic for it is a follow-up.
+  - (e) Linked chains: the base spec keeps its own declaration for its own instances, so an
+    override appears once in each spec of the chain. There is no wire duplicate today
+    (`serializeWithSpec` writes by key); what remains is double work and base-first order, which
+    S4's `collectWireProperties` fixes. A `[JsonIgnore]` override over a linked base still writes
+    the base declaration (STJ writes nothing): the derived spec has no way to suppress a base
+    property yet, which needs an "ignored" marker in the derived spec and a runtime rule (open gap,
+    S4). The FR-009 phrase "appears only in the most-derived spec" applies to the wire, not to the
+    emitted lists.
+  - (f) S4 must also reorder the generator's inlined lists derived-first: the runtime sees an
+    inlined list as one flat spec and has no hierarchy information to reorder it.
+  - (g) A closed generic object contract is `MS0035` as a root (directly or as the element of a
+    value root) when a type argument has no contract, with the nested value-root rules
+    (`Page<System.Version>`, `Page<IShape>`); otherwise its properties would `ref` a missing
+    getter. The getter's `TypeSpec<…>` maps type arguments without their nullable annotation
+    (`Page<Leaf?>` and `Page<Leaf>` share one contract), so it does not depend on discovery order.
 
 ## Open questions
 

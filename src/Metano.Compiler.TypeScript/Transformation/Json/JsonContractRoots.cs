@@ -127,14 +127,19 @@ internal sealed class JsonContractRoots(
         };
 
     /// <summary>
-    /// Why a value root is not describable, or <c>null</c> when every type its
-    /// descriptor nests is: arrays have rank 1, dictionary keys are strings,
-    /// and every object element, value or nullable inner is an object
-    /// contract the closure discovers. Object roots pass: their properties
+    /// Why a root's contents are not describable, or <c>null</c> when every
+    /// type its descriptor nests is: arrays have rank 1, dictionary keys are
+    /// strings, and every object element, value, nullable inner or type
+    /// argument is an object contract the closure discovers. A closed generic
+    /// object root is checked through its type arguments, the types its
+    /// properties take from the root (<c>Page&lt;System.Version&gt;</c> would
+    /// otherwise emit a <c>ref</c> to a missing getter); its other properties
     /// follow the property rules.
     /// </summary>
     private string? ContentsRejectionReasonOf(JsonContractRoot root) =>
-        IsObjectRoot(root) ? null : NestedRejectionReasonOf(root.Type, root.Kind);
+        IsObjectRoot(root)
+            ? TypeArgumentsRejectionReasonOf(root.Type)
+            : NestedRejectionReasonOf(root.Type, root.Kind);
 
     private string? NestedRejectionReasonOf(ITypeSymbol type, JsonPropertyKind kind)
     {
@@ -155,11 +160,24 @@ internal sealed class JsonContractRoots(
     }
 
     private string? NestedObjectRejectionReasonOf(ITypeSymbol type) =>
-        _admission.IsDiscoverable(type)
-            ? null
+        _admission.HasObjectContract(type)
+            ? TypeArgumentsRejectionReasonOf(type)
             : $"'{type.ToDisplayString()}' has no TypeScript contract in this context "
                 + "(it is not a transpiled class or struct of this project or of a referenced "
                 + "Metano package)";
+
+    /// <summary>
+    /// The first nested rejection among the type arguments of a closed
+    /// generic object contract, or <c>null</c>.
+    /// </summary>
+    private string? TypeArgumentsRejectionReasonOf(ITypeSymbol type) =>
+        type is INamedTypeSymbol named
+            ? named
+                .TypeArguments.Select(argument =>
+                    NestedRejectionReasonOf(argument, JsonTypeClassifier.Classify(argument))
+                )
+                .FirstOrDefault(reason => reason is not null)
+            : null;
 
     private static bool HasStringKey(ITypeSymbol mapType) =>
         JsonTypeClassifier.KeyTypeOf(mapType).SpecialType == SpecialType.System_String;
