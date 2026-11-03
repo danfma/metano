@@ -1115,11 +1115,26 @@ the former `OPEN-N`.
     discriminator, `$id`, `$ref` or `$values` → "metadata property … not the first property"; any
     other `$`-prefixed key → "Properties that start with '$' are not allowed in types that support
     metadata. …". With `allowOutOfOrderMetadataProperties`, every key is checked in document
-    order, the tag's JSON kind when the walk reaches it (`{"V":1,"$type":null,"$x":1}` → the
-    `Null` token message), `$values` → "Deserialization failed for one of these reasons: 1. A JSON
-    object containing metadata for a nested array includes a non-metadata property '$values'. 2.
-    The JSON value could not be converted to <Base>." (lines separated by `\n`); the contract is
-    chosen after the walk, so `{"$type":"zz","$x":1}` throws the `$` message.
+    order and the contract is chosen after the walk (measured rows): the tag's JSON kind where it
+    appears (`{"V":1,"$type":null,"$x":1}` → the `Null` token message); `$id` / `$ref` anywhere →
+    "metadata property … not the first property"; `{"$type":"zz","$x":1}` → the `$` message.
+    `$values` makes STJ expect a preserved array, and its two-reason message is "Deserialization
+    failed for one of these reasons:\n1. A JSON object containing metadata for a nested array
+    includes a non-metadata property '<key>'.\n2. The JSON value could not be converted to
+    <Base>.": a data key before `$values` names `$values` (`{"V":1,"$values":[]}`,
+    `{"$type":"d","V":1,"$values":[]}`, `{"Seconds":1,"$values":[]}`,
+    `{"V":1,"$values":[],"$type":null}`); a non-metadata key after it names that key
+    (`{"$values":[],"V":1}` → `V`, `{"$values":[],"$x":1}` → `$x`, `{"$values":[],"Seconds":1}` →
+    `Seconds`, `{"$type":"d","$values":[],"V":1}` and `{"$values":[],"$type":"d","V":1}` → `V`).
+    After `$values`, `$id` → "not the first property" and a `null` tag → the `Null` token message.
+    An object that ends with `$values` pending resolves its tag first (`{"$values":[],"$type":"zz"}`
+    and `{"$type":"zz","$values":[]}` → "Read unrecognized type discriminator id 'zz'.") and then
+    throws "not the first property" (`{"$type":"d","$values":[]}`, `{"$values":[],"$type":"d"}`,
+    `{"kind":"image","$values":[]}`, `{"$values":[],"kind":"image"}` on `Clip`); without a tag
+    it throws the leading-`$values` message, on an abstract base too, ahead of the missing tag
+    (`{"$values":[]}`). Not measured: a pending `$values` with an unknown tag under
+    `IgnoreUnrecognizedTypeDiscriminators` (the runtime reads the base, then throws "not the first
+    property").
 
 ## Open questions
 

@@ -10,12 +10,13 @@ import {
 import {
   cannotConvertMessage,
   DOLLAR_PROPERTY_MESSAGE,
-  LEADING_VALUES_MESSAGE,
   expectJsonException,
   expectNotSupportedException,
+  LEADING_VALUES_MESSAGE,
   METADATA_NOT_FIRST_MESSAGE,
   metadataTokenMessage,
   missingDiscriminatorMessage,
+  outOfOrderValuesMessage,
   unrecognizedDiscriminatorMessage,
   unsupportedRuntimeTypeMessage,
 } from "./json-exception-assertions.ts";
@@ -1120,13 +1121,60 @@ describe("polymorphism — '$'-prefixed keys", () => {
       );
     });
 
-    test("$values gets the two-reason message", () => {
+    const clipAnywhere: TypeSpec<Clip> = {
+      ...studio.clip,
+      readOptions: { allowOutOfOrderMetadataProperties: true },
+    };
+
+    // STJ rows (.NET 10, out-of-order metadata allowed), the 2nd reason naming the contract.
+    const twoReasonRows: readonly (readonly [string, string, string, TypeSpec, string])[] = [
+      ["F6", '{"V":1,"$values":[]}', "$values", cBaseAnywhere, "CBase"],
+      ["T1", '{"$type":"d","V":1,"$values":[]}', "$values", cBaseAnywhere, "CBase"],
+      ["P", '{"$values":[],"V":1}', "V", cBaseAnywhere, "CBase"],
+      ["S3", '{"$values":[],"$x":1}', "$x", cBaseAnywhere, "CBase"],
+      ["T2", '{"$type":"d","$values":[],"V":1}', "V", cBaseAnywhere, "CBase"],
+      ["S4", '{"$values":[],"Seconds":1}', "Seconds", clipAnywhere, "Clip"],
+    ];
+
+    for (const [row, json, property, spec, typeName] of twoReasonRows) {
+      test(`$values beside data key '${property}' gets the two-reason message (${row})`, () => {
+        expectJsonException(() => read(json, spec), outOfOrderValuesMessage(property, typeName));
+      });
+    }
+
+    test("a pending $values without a tag is a leading $values, even on an abstract base (P2, S1)", () => {
+      expectJsonException(() => read('{"$values":[]}', clipAnywhere), LEADING_VALUES_MESSAGE);
+      expectJsonException(() => read('{"$values":[]}', cBaseAnywhere), LEADING_VALUES_MESSAGE);
+    });
+
+    test("a pending $values with a known tag is misplaced metadata (P5, S2)", () => {
       expectJsonException(
-        () => read('{"V":1,"$values":[]}', cBaseAnywhere),
-        "Deserialization failed for one of these reasons:\n" +
-          "1. A JSON object containing metadata for a nested array includes a non-metadata " +
-          "property '$values'.\n" +
-          "2. The JSON value could not be converted to CBase.",
+        () => read('{"$type":"d","$values":[]}', cBaseAnywhere),
+        METADATA_NOT_FIRST_MESSAGE,
+      );
+
+      expectJsonException(
+        () => read('{"$values":[],"$type":"d"}', cBaseAnywhere),
+        METADATA_NOT_FIRST_MESSAGE,
+      );
+    });
+
+    test("a pending $values with an unknown tag reports the tag first (P9)", () => {
+      expectJsonException(
+        () => read('{"$values":[],"$type":"zz"}', cBaseAnywhere),
+        unrecognizedDiscriminatorMessage("zz"),
+      );
+    });
+
+    test("after $values, $id is misplaced metadata and the tag's kind is checked (S5, S6)", () => {
+      expectJsonException(
+        () => read('{"$values":[],"$id":"1"}', cBaseAnywhere),
+        METADATA_NOT_FIRST_MESSAGE,
+      );
+
+      expectJsonException(
+        () => read('{"$values":[],"$type":null}', cBaseAnywhere),
+        metadataTokenMessage("Null"),
       );
     });
   });

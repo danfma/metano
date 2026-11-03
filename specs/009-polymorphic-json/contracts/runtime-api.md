@@ -110,7 +110,9 @@ abstract class SerializerContext {
     the same message, `$values` as the first key its own, and any other `$`-prefixed key
     "Properties that start with '$' are not allowed in types that support metadata. …". With
     `allowOutOfOrderMetadataProperties`, the tag's JSON kind is checked where it appears, `$values`
-    gets STJ's two-reason message, and the contract is chosen after the walk. Array-index keys are
+    next to a data key gets STJ's two-reason message naming the offending key, a `$values` left
+    pending at the end throws after the tag is resolved (or the leading-`$values` message without
+    a tag), and the contract is chosen after the walk. Array-index keys are
     not positioned (JS enumerates them first) (DECIDED-21 h–j).
 11. With `readOptions.propertyNameCaseInsensitive`, JSON keys match properties case-insensitively,
     in document order (the last match wins); the discriminator is still matched case-sensitively

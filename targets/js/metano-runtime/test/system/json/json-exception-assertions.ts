@@ -77,3 +77,16 @@ export const DOLLAR_PROPERTY_MESSAGE =
 export const LEADING_VALUES_MESSAGE =
   "A '$values' metadata property must always be preceded by other metadata properties, such " +
   "as '$id' or '$type'.";
+
+/**
+ * `$values` beside a non-metadata `propertyName` with out-of-order metadata
+ * allowed (STJ reads the object as a preserved array).
+ */
+export function outOfOrderValuesMessage(propertyName: string, typeName: string): string {
+  return (
+    "Deserialization failed for one of these reasons:\n" +
+    "1. A JSON object containing metadata for a nested array includes a non-metadata property " +
+    `'${propertyName}'.\n` +
+    `2. The JSON value could not be converted to ${typeName}.`
+  );
+}
