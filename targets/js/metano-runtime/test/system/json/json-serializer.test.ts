@@ -382,13 +382,13 @@ describe("JsonSerializer — branded with a validating factory", () => {
 
   test("an invalid value throws the factory's own error", () => {
     expect(() => JsonSerializer.deserialize({ title: "   ", aliases: [] }, spec)).toThrow(
-      new Error("blank title"),
+      "blank title",
     );
   });
 
   test("the factory's error propagates unchanged from a nested element", () => {
     expect(() => JsonSerializer.deserialize({ title: "ok", aliases: ["fine", ""] }, spec)).toThrow(
-      new Error("blank title"),
+      "blank title",
     );
   });
 

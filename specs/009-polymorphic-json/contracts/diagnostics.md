@@ -6,7 +6,8 @@ Codes `MS0032`–`MS0037` are reserved by this spec (DECIDED-2); the C# unions s
 stable table, and into `src/Metano.Compiler/Diagnostics/MetaSharpDiagnostic.cs`, with the slice
 that implements it.
 All are raised by the TypeScript target while transforming a `JsonSerializerContext` (or, for
-`MS0034`, while transforming the branded type), located at the offending attribute, member or
+`MS0034`, by a dedicated validation pass over all transpilable types, so a cache hit on a type's
+file cannot suppress it), located at the offending attribute, member or
 method.
 
 Warning cases (`MS0033`, `MS0036` warning form, `MS0037`) are tested with inline TUnit
@@ -49,7 +50,10 @@ compilations only and never placed in `samples/SampleJsonContracts`, which build
 | Wrong arity or parameter type | `[JsonFactory] 'Title.From' must take exactly one 'string' parameter.` |
 | Wrong return type | `[JsonFactory] 'Title.From' must return 'Title'.` |
 | More than one factory | `'Title' declares more than one [JsonFactory] method.` |
+| Generic factory | `[JsonFactory] 'Title.From' must not be generic.` |
 | Overloaded factory | `[JsonFactory] 'Title.From' is overloaded; the TypeScript dispatcher could call a different overload.` |
+| Another method emitted under the factory's TS name (`[Name]` rename) | `[JsonFactory] 'Title.From' emits as 'from', which 'Title.Other' also uses; rename one or add [Name].` |
+| Non-public factory in an `[EmitPackage]` library | `[JsonFactory] 'Title.From' must be public in a package library; consumers compiled against its metadata cannot see it.` |
 | Not emitted (`[Ignore]`, `[Emit]`, `[Import]`, `[Inline]`) | `[JsonFactory] 'Title.From' is not emitted to TypeScript.` |
 | TS name equals a synthesized companion member | `[JsonFactory] 'Title.Create' emits as 'create', which the branded companion already declares; rename it or add [Name].` (also `toString`) |
 

@@ -1,4 +1,5 @@
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation.Json;
@@ -117,18 +118,32 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// </summary>
     private TsObjectLiteral BuildBrandedDescriptor(ITypeSymbol type)
     {
-        var named = (INamedTypeSymbol)type;
-        var isGuid = named.ToDisplayString() == "System.Guid";
-        var tsTypeName = isGuid ? "UUID" : TypeReferenceName(named);
-        var factoryName = isGuid ? null : JsonBrandedFactoryResolver.Resolve(named)?.TsName;
+        var (typeName, member) = BrandedFactoryTarget((INamedTypeSymbol)type);
 
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Branded),
             new TsObjectProperty(
                 "create",
-                new TsPropertyAccess(QualifiedReference(tsTypeName), factoryName ?? "create")
+                new TsPropertyAccess(QualifiedReference(typeName), member)
             ),
         ]);
+    }
+
+    /// <summary>
+    /// The companion a branded descriptor's <c>create</c> points at: the type
+    /// reference and the member name. <c>System.Guid</c> is <c>UUID.create</c>;
+    /// any other type uses its valid <c>[JsonFactory]</c>, else <c>create</c>.
+    /// </summary>
+    private (string TypeName, string Member) BrandedFactoryTarget(INamedTypeSymbol type)
+    {
+        if (type.ToDisplayString() == "System.Guid")
+        {
+            return ("UUID", IrToTsBrandedBridge.CreateMember);
+        }
+
+        var factory = JsonBrandedFactoryResolver.Resolve(type);
+
+        return (TypeReferenceName(type), factory?.TsName ?? IrToTsBrandedBridge.CreateMember);
     }
 
     /// <summary>

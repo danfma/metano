@@ -17,7 +17,7 @@ internal sealed class JsonBrandedFactoryValidator(
     {
         foreach (var type in transpilableTypes.SelectMany(WithNestedTypes))
         {
-            foreach (var diagnostic in JsonBrandedFactoryResolver.Validate(type))
+            foreach (var diagnostic in JsonBrandedFactoryResolver.DiagnosticsFor(type))
             {
                 reportDiagnostic(diagnostic);
             }
