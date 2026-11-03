@@ -47,7 +47,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         // helpers do all the filtering. Inherited primary-ctor params still
         // need a Roslyn round-trip (the IR constructor on the base type isn't
         // in scope here).
-        var ir = IrEmissionNormalizer.NormalizeForEmission(
+        var ir = IrEmissionNormalizer.Normalize(
             IrClassExtractor.Extract(type, _context.Extraction),
             type
         );

@@ -51,11 +51,16 @@ public sealed record IrIdentifier(string Name) : IrExpression;
 /// import a type that appears only in a value position. Null for intra-project,
 /// BCL and synthesized references.
 /// </para>
+/// <para>
+/// <see cref="PrivateNestedSegments"/> mirrors <see cref="IrNamedTypeRef.PrivateNestedSegments"/>:
+/// how many leading segments of the dotted <see cref="Name"/> lead to a <c>private</c>
+/// nested declaration (<c>0</c> when none is private).
+/// </para>
 /// </summary>
 public sealed record IrTypeReference(
     string Name,
     IrTypeOrigin? Origin = null,
-    int ModuleLocalSegments = 0
+    int PrivateNestedSegments = 0
 ) : IrExpression;
 
 /// <summary>

@@ -4,7 +4,6 @@ using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
-using Metano.Compiler.TypeScript.Bridge;
 using Metano.Compiler.TypeScript.Transformation.Json;
 using Microsoft.CodeAnalysis;
 
@@ -32,7 +31,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         if (Plan(type, _context.ReportDiagnostic) is not { } plan)
             return;
 
-        var contextName = ModuleLocalNaming.DeclaredName(type) ?? type.Name;
+        var contextName = _context.ResolveTsName(type);
         var specs = new JsonSpecBuilder(_context, plan.Names, plan.Properties);
         var members = new List<TsClassMember>();
 

@@ -167,10 +167,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// A <c>private</c> nested type is not part of the container's surface (#412): it
     /// is declared module-local and unexported under <see cref="ModuleLocalNaming"/>'s
     /// identifier, so the namespace — and with it the barrel and the package — never
-    /// exposes it. It is placed before the owner's own declarations (from
-    /// <paramref name="ownerStart"/>) so the owner's static initializers and module
-    /// constants can construct it at load time; only a type extending the owner or a
-    /// member of its namespace must follow them.
+    /// exposes it. It goes to <paramref name="moduleLocal"/>, which places it before or
+    /// after the module-level owner's declarations by its load-time dependencies
+    /// (<see cref="ModuleLocalPlacement"/>) once the owner is built
+    /// (<see cref="BuildTypeStatements"/>).
     /// </para>
     /// </summary>
     private void TransformNestedTypes(
@@ -193,11 +193,16 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // path computation are the parent file's responsibility (the parent's
             // ImportCollector already walks these statements).
             if (!SymbolHelper.IsContainerPrivateNestedType(nestedType))
+            {
                 BuildTypeStatements(nestedType, namespaceMembers, moduleLocal: moduleLocal);
-            else if (ExtendsOwnerSurface(nestedType, parent))
-                BuildModuleLocalTypeStatements(nestedType, moduleLocal.Trailing, moduleLocal);
-            else
-                BuildModuleLocalTypeStatements(nestedType, moduleLocal.Hoisted, moduleLocal);
+                continue;
+            }
+
+            var moduleLocalSink = moduleLocal.MustFollowOwner(nestedType)
+                ? moduleLocal.Trailing
+                : moduleLocal.Hoisted;
+
+            BuildModuleLocalTypeStatements(nestedType, moduleLocalSink, moduleLocal);
         }
 
         if (namespaceMembers.Count > 0)
@@ -215,36 +220,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
     }
 
-    /// <summary>
-    /// True when <paramref name="nested"/> derives from <paramref name="owner"/> or from a
-    /// type declared in the owner's namespace: its <c>extends</c> clause is evaluated at
-    /// load time, so it can only follow those declarations.
-    /// </summary>
-    private static bool ExtendsOwnerSurface(INamedTypeSymbol nested, INamedTypeSymbol owner)
-    {
-        for (var baseType = nested.BaseType; baseType is not null; baseType = baseType.BaseType)
-        {
-            if (IsDeclaredWithOwner(baseType.OriginalDefinition, owner))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsDeclaredWithOwner(INamedTypeSymbol type, INamedTypeSymbol owner)
-    {
-        for (var current = type; current is not null; current = current.ContainingType)
-        {
-            if (SymbolEqualityComparer.Default.Equals(current, owner))
-                return true;
-
-            if (SymbolHelper.IsContainerPrivateNestedType(current))
-                return false;
-        }
-
-        return false;
-    }
-
     private void BuildModuleLocalTypeStatements(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
@@ -255,25 +230,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         BuildTypeStatements(type, declarations, moduleLocal: moduleLocal);
         sink.AddRange(declarations.Select(WithoutExport));
-    }
-
-    /// <summary>
-    /// The unexported declarations of the <c>private</c> nested types under one
-    /// module-level type, collected from every nesting depth (#412).
-    /// </summary>
-    private sealed class ModuleLocalDeclarations
-    {
-        /// <summary>Declared before the owner: its load-time code may construct them.</summary>
-        public List<TsTopLevel> Hoisted { get; } = [];
-
-        /// <summary>Declared after the owner: they extend it or a member of its namespace.</summary>
-        public List<TsTopLevel> Trailing { get; } = [];
-
-        public void PlaceAround(List<TsTopLevel> statements, int ownerStart)
-        {
-            statements.InsertRange(ownerStart, Hoisted);
-            statements.AddRange(Trailing);
-        }
     }
 
     private static TsTopLevel WithoutExport(TsTopLevel statement) =>
@@ -732,15 +688,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 sink.Add(registration);
         }
 
-        // Process nested types — emit a companion namespace with the nested members.
-        // TypeScript declaration merging makes `Outer.Inner` accessible just like in C#.
-        var ownModuleLocal = moduleLocal ?? new ModuleLocalDeclarations();
+        // Process nested types — the non-private ones go to a companion namespace
+        // (declaration merging makes `Outer.Inner` read just like in C#), the private
+        // ones to the module-level collection.
+        var collectedModuleLocal =
+            moduleLocal ?? new ModuleLocalDeclarations(type, Context.Compilation);
 
-        TransformNestedTypes(type, sink, ownModuleLocal);
+        TransformNestedTypes(type, sink, collectedModuleLocal);
 
         // A nested caller owns the collection; the module-level type places it.
         if (moduleLocal is null)
-            ownModuleLocal.PlaceAround(sink, startCount);
+            collectedModuleLocal.PlaceAround(sink, startCount);
 
         return true;
     }
@@ -2213,7 +2171,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TypeKind.Delegate => IrDelegateExtractor.Extract(type, Context.Extraction),
             _ => null,
         };
-        var normalized = ir is null ? null : IrEmissionNormalizer.NormalizeForEmission(ir, type);
+
+        var normalized = ir is null ? null : IrEmissionNormalizer.Normalize(ir, type);
 
         if (normalized is not null && irCache is not null)
             irCache[type] = normalized;

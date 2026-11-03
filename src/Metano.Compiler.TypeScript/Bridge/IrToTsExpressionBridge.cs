@@ -588,9 +588,10 @@ public static partial class IrToTsExpressionBridge
     {
         var segments = IrToTsTypeMapper
             .ResolveAliasedName(
-                ModuleLocalNaming.Flatten(reference.Name, reference.ModuleLocalSegments)
+                ModuleLocalNaming.Flatten(reference.Name, reference.PrivateNestedSegments)
             )
             .Split('.');
+
         var root = TypeValueReference(segments[0], IrToTsTypeMapper.TryResolveOrigin(reference));
 
         return segments
@@ -775,33 +776,45 @@ public static partial class IrToTsExpressionBridge
     /// needs to import it: the owner's cross-package origin, or else the owner
     /// type itself. A nested owner's export lives in its container's namespace
     /// (<c>Outer.dbl</c>), so it is reached through the container, which is
-    /// imported like any type reference.
+    /// imported like any type reference. A <c>private</c> nested owner is declared
+    /// module-local, and its exports with it (#412), so they are reached bare.
     /// </summary>
     private static TsExpression ModuleExportReference(string exportName, IrTypeReference? owner)
     {
         if (owner is null)
             return new TsIdentifier(exportName);
 
+        if (ModuleLocalNaming.IsDeclaredModuleLocal(owner.Name, owner.PrivateNestedSegments))
+            return new TsIdentifier(exportName);
+
         var containerLength = owner.Name.LastIndexOf('.');
 
         if (containerLength > 0)
             return new TsPropertyAccess(
-                MapTypeReference(
-                    owner with
-                    {
-                        Name = owner.Name[..containerLength],
-                        ModuleLocalSegments = Math.Min(
-                            owner.ModuleLocalSegments,
-                            owner.Name[..containerLength].Count(c => c == '.') + 1
-                        ),
-                    }
-                ),
+                MapTypeReference(ContainerOf(owner, containerLength)),
                 exportName
             );
 
         return IrToTsTypeMapper.TryResolveOrigin(owner) is { } origin
             ? new TsTypeReference(exportName, origin)
             : new TsModuleExportReference(exportName, owner.Name);
+    }
+
+    /// <summary>
+    /// The reference to the container of a nested <paramref name="owner"/>: its
+    /// qualified name up to <paramref name="containerLength"/>, keeping only the
+    /// private-nested segments that still belong to it.
+    /// </summary>
+    private static IrTypeReference ContainerOf(IrTypeReference owner, int containerLength)
+    {
+        var containerName = owner.Name[..containerLength];
+        var containerSegments = containerName.Count(c => c == '.') + 1;
+
+        return owner with
+        {
+            Name = containerName,
+            PrivateNestedSegments = Math.Min(owner.PrivateNestedSegments, containerSegments),
+        };
     }
 
     private static string? TsTypeArgName(IrTypeRef type) =>

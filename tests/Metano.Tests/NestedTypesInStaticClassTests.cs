@@ -171,6 +171,7 @@ public class NestedTypesInStaticClassTests
         await Assert.That(output).Contains("class Pairs$Pair {");
         await Assert.That(output).DoesNotContain("export class Pairs$Pair");
         await Assert.That(output).DoesNotContain("namespace Pairs");
+
         var barrel = result["index.ts"];
         await Assert.That(barrel).Contains("export { Marker } from \"./marker\"");
         await Assert.That(barrel).DoesNotContain("Pairs");
@@ -590,5 +591,313 @@ public class NestedTypesInStaticClassTests
             .Contains("private static readonly _default: Api$Ctx = new Api$Ctx();");
         await Assert.That(output).Contains("get payload(): TypeSpec<Api$Payload>");
         await Assert.That(output).DoesNotContain("api$Payload");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_WhoseStaticInitializerConstructsTheOwner_FollowsIt()
+    {
+        // The lazy-singleton holder: its static initializer constructs the owner, so it
+        // can only be declared once the owner class exists.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Settings
+            {
+                public int V { get; } = 3;
+
+                private static class Nested
+                {
+                    public static readonly Settings Instance = new Settings();
+                }
+
+                public static int Read() => Nested.Instance.V;
+            }
+            """
+        );
+
+        var output = result["settings.ts"];
+
+        await Assert
+            .That(output.IndexOf("class Settings$Nested {"))
+            .IsGreaterThan(output.IndexOf("export class Settings {"));
+        await Assert.That(output).Contains("static readonly instance: Settings = new Settings();");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_WhoseStaticConstructorConstructsTheOwner_FollowsIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Settings
+            {
+                private static class Nested
+                {
+                    public static Settings? Instance;
+
+                    static Nested()
+                    {
+                        Instance = new Settings();
+                    }
+                }
+
+                public static bool Ready() => Nested.Instance is not null;
+            }
+            """
+        );
+
+        var output = result["settings.ts"];
+
+        await Assert
+            .That(output.IndexOf("class Settings$Nested {"))
+            .IsGreaterThan(output.IndexOf("export class Settings {"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_WhoseStaticInitializerConstructsAPublicSibling_FollowsTheNamespace()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Shelf
+            {
+                public sealed record Book(int Pages);
+
+                private static class Cache
+                {
+                    public static readonly Book Item = new Book(9);
+                }
+
+                public static int Read() => Cache.Item.Pages;
+            }
+            """
+        );
+
+        var output = result["shelf.ts"];
+
+        await Assert
+            .That(output.IndexOf("class Shelf$Cache {"))
+            .IsGreaterThan(output.IndexOf("export namespace Shelf {"));
+        await Assert.That(output).Contains("static readonly item: Shelf.Book = new Shelf.Book(9);");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_WhosePublicNestedTypeReadsTheOwnerNamespace_FollowsIt()
+    {
+        // The public type nested in the private one is declared in its module-local
+        // namespace, so its load-time code decides the private type's placement too.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Shelf
+            {
+                public sealed record Book(int Pages);
+
+                private sealed class Store
+                {
+                    public static class Index
+                    {
+                        public static readonly Book First = new Book(12);
+                    }
+                }
+
+                public static int Read() => Store.Index.First.Pages;
+            }
+            """
+        );
+
+        var output = result["shelf.ts"];
+
+        await Assert
+            .That(output.IndexOf("class Shelf$Store {"))
+            .IsGreaterThan(output.IndexOf("export namespace Shelf {"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_ReadingTheOwnerOnlyInsideALambda_StaysBeforeIt()
+    {
+        // A lambda body runs when it is called, not at load time, while the owner's own
+        // static field constructs the private type during load.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Factory
+            {
+                private sealed class Maker
+                {
+                    public static readonly Func<Factory> Make = () => new Factory();
+                }
+
+                private static readonly Maker Seed = new Maker();
+
+                public static Factory Create() => Maker.Make();
+            }
+            """
+        );
+
+        var output = result["factory.ts"];
+
+        await Assert
+            .That(output.IndexOf("class Factory$Maker {"))
+            .IsLessThan(output.IndexOf("export class Factory {"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_InsideAPublicNestedType_ExtendingTheOwnerNamespace_FollowsIt()
+    {
+        // The placement is decided against the module-level owner, not the immediate
+        // container: `Outer.PubBase` is declared in the owner's namespace.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Outer
+            {
+                public class PubBase
+                {
+                    public int V() => 21;
+                }
+
+                public sealed class Mid
+                {
+                    private sealed class Leaf : PubBase { }
+
+                    public int Run() => new Leaf().V();
+                }
+
+                public static int Go() => new Mid().Run();
+            }
+            """
+        );
+
+        var output = result["outer.ts"];
+
+        await Assert
+            .That(output.IndexOf("class Outer$Mid$Leaf extends Outer.PubBase {"))
+            .IsGreaterThan(output.IndexOf("export namespace Outer {"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_InsideAPublicNestedType_IsDeclaredBeforeItsStaticField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Outer
+            {
+                public sealed class Mid
+                {
+                    private sealed record Leaf(int N);
+
+                    private static readonly Leaf Seed = new Leaf(4);
+
+                    public int Run() => Seed.N;
+                }
+
+                public static int Go() => new Mid().Run();
+            }
+            """
+        );
+
+        var output = result["outer.ts"];
+
+        await Assert
+            .That(output.IndexOf("class Outer$Mid$Leaf {"))
+            .IsLessThan(output.IndexOf("export class Outer {"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_WithGenerateGuard_NamesTheGuardAndAssertAfterItself()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Guards
+            {
+                [GenerateGuard]
+                private sealed record Circle(double R);
+
+                public static double Run() => new Circle(2).R;
+            }
+            """
+        );
+
+        var output = result["guards.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("function isCircle(value: unknown): value is Guards$Circle {");
+        await Assert
+            .That(output)
+            .Contains(
+                "function assertCircle(value: unknown, message?: string): asserts value is Guards$Circle {"
+            );
+        await Assert.That(output).Contains("\"Value is not a Circle\"");
+        await Assert.That(output).DoesNotContain("assertGuards$Circle");
+    }
+
+    [Test]
+    public async Task PrivateNestedPlainObject_ReachesItsHelperAtModuleLevel()
+    {
+        // The helper of a module-local [PlainObject] is itself module-local: there is
+        // no `Plain.dbl` because the owner's namespace does not hold it.
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Plain
+            {
+                [PlainObject]
+                private sealed record Pt(int X)
+                {
+                    public int Dbl() => X * 2;
+                }
+
+                public static int Run() => new Pt(8).Dbl();
+            }
+            """
+        );
+
+        var output = result["plain.ts"];
+
+        await Assert.That(output).Contains("\nfunction dbl(self: Plain$Pt): number {");
+        await Assert.That(output).Contains("return dbl({ x: 8 });");
+        await Assert.That(output).DoesNotContain("Plain.dbl");
+    }
+
+    [Test]
+    public async Task PublicPlainObjectInsideAPrivateContainer_ReachesItsHelperThroughTheContainer()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Plain
+            {
+                private static class Box
+                {
+                    [PlainObject]
+                    public sealed record Pt(int X)
+                    {
+                        public int Dbl() => X * 3;
+                    }
+                }
+
+                public static int Run() => new Box.Pt(5).Dbl();
+            }
+            """
+        );
+
+        var output = result["plain.ts"];
+
+        await Assert.That(output).Contains("namespace Plain$Box {");
+        await Assert.That(output).Contains("return Plain$Box.dbl({ x: 5 });");
     }
 }

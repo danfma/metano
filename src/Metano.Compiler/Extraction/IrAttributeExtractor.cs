@@ -77,9 +77,12 @@ public static class IrAttributeExtractor
         }
 
         var result = new List<IrAttribute>();
+
         if (nameArgs is not null)
-            result.Add(new IrAttribute(IrAttribute.NameOverrideAttribute, nameArgs));
+            result.Add(new IrAttribute(IrAttribute.NameOverrideAttributeName, nameArgs));
+
         result.AddRange(others);
+
         return result.Count == 0 ? null : result;
     }
 }

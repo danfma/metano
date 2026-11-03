@@ -10,13 +10,13 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal static class IrEmissionNormalizer
 {
-    public static IrTypeDeclaration NormalizeForEmission(
+    public static IrTypeDeclaration Normalize(
         IrTypeDeclaration declaration,
         INamedTypeSymbol type
     ) => ModuleLocalNaming.Apply(OutParameterLowering.Lower(declaration), type);
 
-    public static IrClassDeclaration NormalizeForEmission(
+    public static IrClassDeclaration Normalize(
         IrClassDeclaration declaration,
         INamedTypeSymbol type
-    ) => (IrClassDeclaration)NormalizeForEmission((IrTypeDeclaration)declaration, type);
+    ) => (IrClassDeclaration)Normalize((IrTypeDeclaration)declaration, type);
 }
