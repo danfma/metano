@@ -87,8 +87,8 @@ abstract class SerializerContext {
 7. Custom converters registered for `kind: "ref"` replace dispatch for every `ref` (unchanged rule:
    converters match by kind).
 8. `serializeContract` / `deserializeContract` (module-internal since S5; `serializeWithSpec` /
-   `deserializeWithSpec` dispatch over them) and the array, hash-set and map converters count JSON container depth; the 65th
-   nested container throws `JsonException` "A possible object cycle was detected. …" on serialize
+   `deserializeWithSpec` dispatch over them) and the array, hash-set and map converters count JSON
+   container depth; the 65th nested container throws `JsonException` "A possible object cycle was detected. …" on serialize
    (FR-016) and "The maximum configured depth of 64 has been exceeded. Cannot read next JSON
    object." (`… JSON array.`) on read (DECIDED-15, DECIDED-20 b).
 8a. The array and hash-set converters throw `JsonException` "Expected array for deserialization,
@@ -102,6 +102,13 @@ abstract class SerializerContext {
     `StartObject`, `StartArray`).
     A number tag that is not an `Int32` throws `JsonException` `The JSON value could not be
     converted to <Base>.` (DECIDED-21 b).
+10a. A polymorphic read rejects misplaced metadata in document order: on a concrete base, a tag
+    that is not the first key (the out-of-order option off) throws `JsonException` "The metadata
+    property is either not supported by the type or is not the first property in the deserialized
+    JSON object." (an abstract or interface base reports a missing tag instead); `$id` / `$ref`
+    throw the same message, `$values` its own, and any other `$`-prefixed key "Properties that
+    start with '$' are not allowed in types that support metadata. …". Array-index keys are not
+    positioned (JS enumerates them first) (DECIDED-21 h–j).
 11. With `readOptions.propertyNameCaseInsensitive`, JSON keys match properties case-insensitively,
     in document order (the last match wins); the discriminator is still matched case-sensitively
     (FR-048).
@@ -113,8 +120,8 @@ abstract class SerializerContext {
 ## Delivery status (S5)
 
 S5 ships the polymorphism types, both exception classes, `collectWireProperties` (S4) and
-guarantees 1–8 and 10. `JsonReadOptions` ships with `allowOutOfOrderMetadataProperties` only; the
+guarantees 1–8, 10 and 10a. `JsonReadOptions` ships with `allowOutOfOrderMetadataProperties` only; the
 other members, the `readOptions` getter and its attachment by `createSpec` arrive with S2b, and
 the null-root and `valueType` rules (guarantee 9, `ValueSpec.valueType`) with S3b. See DECIDED-21
-for the runtime rules S5 settled (number tags, the concrete `[PlainObject]` base, FR-017's read
-side deferred to S6).
+for the runtime rules S5 settled (number tags, misplaced metadata, the interim concrete
+`[PlainObject]` base until S6c, FR-017's read side deferred to S6).

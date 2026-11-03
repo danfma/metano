@@ -324,9 +324,22 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
 
 ### Edge Cases
 
-- **Out-of-order tag**: `{"Path":"a","kind":"image",...}` is treated as *missing* tag (STJ
-  default). With `[JsonSourceGenerationOptions(AllowOutOfOrderMetadataProperties = true)]` on the
-  context, the tag may appear anywhere (FR-002).
+- **Out-of-order tag**: on an abstract or interface base, `{"Path":"a","kind":"image",...}` is
+  treated as a *missing* tag (`NotSupportedException`, STJ default). On a concrete base the later
+  tag is rejected: `{"V":1,"$type":"d","W":2}` throws `JsonException` "The metadata property is
+  either not supported by the type or is not the first property in the deserialized JSON
+  object." (measured; also for an unknown tag, under `IgnoreUnrecognizedTypeDiscriminators`, for
+  a self-registered base, for a custom discriminator and when an unknown key comes first). With
+  `[JsonSourceGenerationOptions(AllowOutOfOrderMetadataProperties = true)]` on the context, the tag
+  may appear anywhere (FR-002).
+- **`$`-prefixed keys** in a polymorphic payload (measured): `$id` / `$ref` throw the
+  "metadata property … not the first property" `JsonException`; `$values` throws "A '$values'
+  metadata property must always be preceded by other metadata properties, such as '$id' or
+  '$type'."; any other key that starts with `$` (`$x`, `$Type` beside a `$type` discriminator,
+  `$type` beside a custom one) throws `JsonException` "Properties that start with '$' are not
+  allowed in types that support metadata. Either replace the character or disable reference
+  preservation and polymorphic deserialization.". An abstract base without a leading tag reports
+  the missing tag first. A spec without `polymorphism` reads past such keys.
 - **Null / non-scalar tag**: a tag value that is neither a JSON string nor a JSON number throws
   `JsonException` "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current
   token type is '<Token>'." where `<Token>` follows the FR-007 mapping (`Null`, `True`, `False`,
@@ -449,7 +462,11 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   `ignoreUnrecognizedTags` is set, in which case a concrete base reads the base contract and an
   abstract base throws `NotSupportedException`; on a missing tag, an abstract base throws
   `NotSupportedException` "The JSON payload for polymorphic interface or abstract type '<Base>' must
-  specify a type discriminator." and a concrete base reads the base contract.
+  specify a type discriminator." and a concrete base reads the base contract. A tag present as a
+  later key (the out-of-order option off) is a missing tag for an abstract or interface base, and
+  on a concrete base throws `JsonException` "The metadata property is either not supported by the
+  type or is not the first property in the deserialized JSON object."; `$`-prefixed data keys are
+  rejected as in the Edge Cases (measured, DECIDED-21 h–j).
 - **FR-008**: The runtime MUST export `JsonException` and `NotSupportedException` (both extend
   `Error`, `name` set to the class name). Their messages are STJ's text **without** the
   `Path: … | LineNumber: … | BytePositionInLine: …` suffix (DECIDED-5). The two pre-existing plain
@@ -521,7 +538,11 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   nearest-registered-ancestor contract). Reading its tag MUST be probed against STJ before S6 is
   implemented (DECIDED-12). Until the probe, the runtime treats such a tag as an abstract base with
   a missing tag (`NotSupportedException` "…must specify a type discriminator." naming the abstract
-  entry), and the probe result replaces this rule and adds a manifest row.
+  entry), and the probe result replaces this rule and adds a manifest row. Measured in S5 (source
+  generation and reflection, .NET 10): reading `{"$type":"m","M":2,"A":1}` through `AB`, whose
+  abstract `AMid` is registered as `"m"`, throws `NotSupportedException` "Deserialization of
+  interface or abstract types is not supported. Type 'AMid'." S6 implements this text
+  (DECIDED-21 f).
 - **FR-018**: An **interface base** MUST be supported. `[JsonDerivedType]` on a C# interface makes
   it polymorphic as for a class. Its spec has no `type` (the TS interface has no constructor), a
   throwing `factory` with the FR-011 message (`Cannot deserialize interface type 'IShape'
@@ -806,6 +827,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Number text `1E+21`, `-0` | as shown | `1e+21`, `0` | Fixtures avoid them |
 | Writing `NaN` / `±Infinity` without `AllowNamedFloatingPointLiterals` | `ArgumentException` (measured) | `JSON.stringify` writes `null` | Pre-existing; reachable now that Web contexts read `"NaN"` |
 | Integer-like property names in a polymorphic hierarchy | allowed | JS key order puts them first | Rejected, `MS0032` |
+| Array-index payload key (`"0"`) written **before** the tag | `JsonException` "The metadata property … not the first property …" (measured) | the tag is read as first (JS enumerates index keys first, so their position is lost) | Undetectable after `JSON.parse`; an index key after the tag reads as in STJ (DECIDED-21 i) |
 | `byte[]` | base64 string | number array | `MS0037`; follow-up issue (DECIDED-16) |
 | `TimeSpan` | `"01:02:03"` | `Temporal.Duration` string `PT1H2M3S` | Manifest row `divergent`; follow-up issue (DECIDED-16) |
 | `DateTimeOffset` offset text | `+00:00` | per temporal converter | Manifest row; `divergent` if the bytes differ (DECIDED-16) |
@@ -1054,18 +1076,41 @@ the former `OPEN-N`.
   - (d) Untagged registrations write their own contract with no tag (`{"A":2,"V":1}`) and read back
     as the base (measured).
   - (e) A concrete `[PlainObject]` base that does not register itself has no slot for its guard in
-    `PolymorphismSpec`, so the runtime writes **every** plain object that matches no variant guard
-    as the base (no tag) when the base is concrete and has no constructor, instead of testing the
-    base guard first (FR-019 rule 5). A self-registered base is an entry with a `test` and is
-    checked like any variant. S6c adds a base-guard member only if the generator needs the
-    stricter rule.
+    `PolymorphismSpec`. **Interim** (until S6c): the runtime writes **every** plain object that
+    matches no variant guard as the base (no tag) when the base is concrete and has no
+    constructor, instead of testing the base guard first and otherwise following
+    `unknownDerivedType` (FR-019 rule 5). A self-registered base is an entry with a `test` and is
+    checked like any variant. S6c adds a base-guard member to `PolymorphismSpec` and the rule 5
+    check (plan.md, S6c row), which removes the interim behavior.
   - (f) FR-017 read side (the tag of an abstract derived entry) is **not** implemented: no member
     of the descriptor marks an entry as abstract, so its tag reads through the entry's throwing
-    factory (a plain `Error`). S6 probes DECIDED-12 and adds the rule with the marker it needs.
+    factory (a plain `Error`). Measured STJ text, both modes: `NotSupportedException`
+    "Deserialization of interface or abstract types is not supported. Type 'AMid'." S6 adds the
+    marker and this message (it replaces FR-017's interim rule).
   - (g) `JsonReadOptions` lands with `allowOutOfOrderMetadataProperties` only, read from the
     polymorphic spec's `readOptions`; the other two members, the `SerializerContext.readOptions`
     getter and `createSpec` attaching it stay in S2b (FR-002 plumbing). Null roots through a
     polymorphic spec keep today's behavior until S3b (FR-037).
+  - (h) Tag not first on a concrete base (measured): `{"V":1,"$type":"d","W":2}` throws
+    `JsonException` "The metadata property is either not supported by the type or is not the first
+    property in the deserialized JSON object." — also for an unknown later tag, under
+    `IgnoreUnrecognizedTypeDiscriminators`, for a self-registered base, with a custom discriminator
+    and when an unknown key comes first. Before this, the runtime read the base and dropped the
+    derived members (`W`). An abstract or interface base keeps the `NotSupportedException` of a
+    missing tag.
+  - (i) Array-index keys (`"0"`, `"1"`, …) are enumerated before every other key of a parsed
+    object, so the "first key" is the first key that is not an array index. An index key after the
+    tag reads as in STJ (measured: `{"$type":"d","0":5,…}` reads `CDer`); one written before the
+    tag is undetectable (documented divergence).
+  - (j) Polymorphic payloads only (the base and the contract reached by dispatch): in document
+    order, a later discriminator (option off), `$id` / `$ref` → the "metadata property … not the
+    first property" `JsonException`; `$values` → "A '$values' metadata property must always be
+    preceded by other metadata properties, such as '$id' or '$type'."; any other `$`-prefixed key →
+    "Properties that start with '$' are not allowed in types that support metadata. …" (all
+    measured; the `$values` text measured as the first key only). An abstract base without a
+    leading tag throws the missing-tag `NotSupportedException` first. With
+    `allowOutOfOrderMetadataProperties`, the `$` keys are rejected before the tag is read
+    (measured with `$x` before the tag).
 
 ## Open questions
 

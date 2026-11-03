@@ -7,14 +7,30 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
-import { expectJsonException, expectNotSupportedException } from "./json-exception-assertions.ts";
+import {
+  cannotConvertMessage,
+  DOLLAR_PROPERTY_MESSAGE,
+  expectJsonException,
+  expectNotSupportedException,
+  METADATA_NOT_FIRST_MESSAGE,
+  metadataTokenMessage,
+  missingDiscriminatorMessage,
+  unrecognizedDiscriminatorMessage,
+  unsupportedRuntimeTypeMessage,
+} from "./json-exception-assertions.ts";
+import { abstractFactory } from "./spec-fixtures.ts";
 
 // Hand-written specs shaped like the generated context of contracts/context-codegen.md §1.
 // Expected text mirrors System.Text.Json source-generated contexts on .NET 10 (research.md R1,
 // R8, and an S5 probe):
 //   Clip [JsonPolymorphic("kind")] image/silence   ImageClip("a.png",1.5) → {"kind":"image","Path":"a.png","Seconds":1.5}
 //   {"kind":"video",…} / {"kind":"Image",…}        → JsonException "Read unrecognized type discriminator id 'video'."
-//   {"Seconds":2} / tag not first                  → NotSupportedException "… must specify a type discriminator."
+//   {"Seconds":2} / tag not first (abstract base)  → NotSupportedException "… must specify a type discriminator."
+//   tag not first on a concrete base, a later tag, $id / $ref
+//                                                  → JsonException "The metadata property is either not supported …"
+//   any other key starting with '$' (after the tag, or on a concrete base)
+//                                                  → JsonException "Properties that start with '$' are not allowed …"
+//   {"$type":"d","0":5,…}                          → reads CDer (an index key after the tag is fine)
 //   tag not first + AllowOutOfOrderMetadataProperties → reads the derived type
 //   IBase int tag 1 / string tag "s"               IA(5) → {"$type":1,"X":5}; {"$type":"1"} unrecognized '1'
 //   {"$type":2} / {"$type":-1}                     → unrecognized id '2' / '-1'
@@ -216,35 +232,35 @@ describe("polymorphism — string tags (Clip)", () => {
   test("an unknown tag throws JsonException (E1)", () => {
     expectJsonException(
       () => read('{"kind":"video","Seconds":2}', studio.clip),
-      "Read unrecognized type discriminator id 'video'.",
+      unrecognizedDiscriminatorMessage("video"),
     );
   });
 
   test("tags match case-sensitively (E2)", () => {
     expectJsonException(
       () => read('{"kind":"Image","Seconds":2}', studio.clip),
-      "Read unrecognized type discriminator id 'Image'.",
+      unrecognizedDiscriminatorMessage("Image"),
     );
   });
 
   test("a missing tag on an abstract base throws NotSupportedException (E3)", () => {
     expectNotSupportedException(
       () => read('{"Seconds":2}', studio.clip),
-      "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      missingDiscriminatorMessage("Clip"),
     );
   });
 
   test("a tag that is not the first key is a missing tag by default (E4)", () => {
     expectNotSupportedException(
       () => read('{"Path":"a","kind":"image","Seconds":1}', studio.clip),
-      "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      missingDiscriminatorMessage("Clip"),
     );
   });
 
   test("the discriminator name matches case-sensitively", () => {
     expectNotSupportedException(
       () => read('{"Kind":"image","Path":"a","Seconds":1}', studio.clip),
-      "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      missingDiscriminatorMessage("Clip"),
     );
   });
 
@@ -257,20 +273,14 @@ describe("polymorphism — string tags (Clip)", () => {
   test("an unregistered runtime type fails by default", () => {
     expectNotSupportedException(
       () => write(new VideoClip(1), studio.clip),
-      "Runtime type 'VideoClip' is not supported by polymorphic type 'Clip'.",
+      unsupportedRuntimeTypeMessage("VideoClip", "Clip"),
     );
   });
 
   test("a non-object payload names the base", () => {
-    expectJsonException(
-      () => read("[1]", studio.clip),
-      "The JSON value could not be converted to Clip.",
-    );
+    expectJsonException(() => read("[1]", studio.clip), cannotConvertMessage("Clip"));
 
-    expectJsonException(
-      () => read('"x"', studio.clip),
-      "The JSON value could not be converted to Clip.",
-    );
+    expectJsonException(() => read('"x"', studio.clip), cannotConvertMessage("Clip"));
   });
 });
 
@@ -287,8 +297,7 @@ describe("polymorphism — non-scalar tags", () => {
     test(`a ${tag} tag names the ${token} token (E5)`, () => {
       expectJsonException(
         () => read(`{"kind":${tag},"Seconds":2}`, studio.clip),
-        "The '$id', '$ref' or '$type' metadata properties must be JSON strings. " +
-          `Current token type is '${token}'.`,
+        metadataTokenMessage(token),
       );
     });
   }
@@ -405,21 +414,21 @@ describe("polymorphism — out-of-order metadata", () => {
   test("with the option, a missing tag still throws NotSupportedException", () => {
     expectNotSupportedException(
       () => read('{"Seconds":1}', clipAnywhere),
-      "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      missingDiscriminatorMessage("Clip"),
     );
   });
 
   test("with the option, a later non-scalar tag is rejected by its token", () => {
     expectJsonException(
       () => read('{"Seconds":1,"kind":true}', clipAnywhere),
-      "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current token type is 'True'.",
+      metadataTokenMessage("True"),
     );
   });
 
   test("without the option, a later non-scalar tag is a missing tag", () => {
     expectNotSupportedException(
       () => read('{"Seconds":1,"kind":null}', studio.clip),
-      "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      missingDiscriminatorMessage("Clip"),
     );
   });
 });
@@ -454,9 +463,7 @@ const isSpec: TypeSpec<IS> = {
 
 const iBaseSpec: TypeSpec<IBase> = {
   type: IBase,
-  factory: () => {
-    throw new Error("abstract");
-  },
+  factory: abstractFactory,
   properties: [],
   polymorphism: {
     discriminator: "$type",
@@ -485,38 +492,38 @@ describe("polymorphism — int and mixed tags (IBase)", () => {
   test("a string tag never matches an int registration (E6)", () => {
     expectJsonException(
       () => read('{"$type":"1","X":5}', iBaseSpec),
-      "Read unrecognized type discriminator id '1'.",
+      unrecognizedDiscriminatorMessage("1"),
     );
   });
 
   test("an unknown int tag reports its number", () => {
     expectJsonException(
       () => read('{"$type":2,"X":5}', iBaseSpec),
-      "Read unrecognized type discriminator id '2'.",
+      unrecognizedDiscriminatorMessage("2"),
     );
 
     expectJsonException(
       () => read('{"$type":-1,"X":5}', iBaseSpec),
-      "Read unrecognized type discriminator id '-1'.",
+      unrecognizedDiscriminatorMessage("-1"),
     );
   });
 
   test("a number tag outside Int32 cannot be converted to the base", () => {
     expectJsonException(
       () => read('{"$type":1.5,"X":5}', iBaseSpec),
-      "The JSON value could not be converted to IBase.",
+      cannotConvertMessage("IBase"),
     );
 
     expectJsonException(
       () => read('{"$type":3000000000,"X":5}', iBaseSpec),
-      "The JSON value could not be converted to IBase.",
+      cannotConvertMessage("IBase"),
     );
   });
 
   test("a number tag on a base with string tags only is an unknown id", () => {
     expectJsonException(
       () => read('{"kind":1,"Seconds":2}', studio.clip),
-      "Read unrecognized type discriminator id '1'.",
+      unrecognizedDiscriminatorMessage("1"),
     );
   });
 });
@@ -633,9 +640,7 @@ class UFailX extends UFail {
 
 const uFailSpec: TypeSpec<UFail> = {
   type: UFail,
-  factory: () => {
-    throw new Error("abstract");
-  },
+  factory: abstractFactory,
   properties: [],
   polymorphism: {
     discriminator: "$type",
@@ -692,9 +697,7 @@ class UNearZ extends UNear {}
 
 const uNearSpec: TypeSpec<UNear> = {
   type: UNear,
-  factory: () => {
-    throw new Error("abstract");
-  },
+  factory: abstractFactory,
   properties: [{ ts: "a", json: "A", type: primitive }],
   polymorphism: {
     discriminator: "$type",
@@ -717,9 +720,7 @@ const uNearASpec: TypeSpec<UNearA> = {
 const uNearAbstractSpec: TypeSpec<UNearAbstract> = {
   type: UNearAbstract,
   base: uNearSpec,
-  factory: () => {
-    throw new Error("abstract");
-  },
+  factory: abstractFactory,
   properties: [],
 };
 
@@ -740,9 +741,7 @@ class UBaseX extends UBaseH {
 
 const uBaseHSpec: TypeSpec<UBaseH> = {
   type: UBaseH,
-  factory: () => {
-    throw new Error("abstract");
-  },
+  factory: abstractFactory,
   properties: [{ ts: "a", json: "A", type: primitive }],
   polymorphism: {
     discriminator: "$type",
@@ -766,7 +765,7 @@ describe("polymorphism — unknown derived type handling", () => {
   test("failSerialization throws NotSupportedException (E8)", () => {
     expectNotSupportedException(
       () => write(new UFailX(1), uFailSpec),
-      "Runtime type 'UFailX' is not supported by polymorphic type 'UFail'.",
+      unsupportedRuntimeTypeMessage("UFailX", "UFail"),
     );
   });
 
@@ -774,8 +773,11 @@ describe("polymorphism — unknown derived type handling", () => {
     const json = write(new UNearB(1, 2, 3), uNearSpec);
 
     expect(json).toBe('{"$type":"a","B":2,"A":1}');
-    expect(read(json, uNearSpec)).toBeInstanceOf(UNearA);
-    expect(read(json, uNearSpec)).not.toBeInstanceOf(UNearB);
+
+    const value = read(json, uNearSpec);
+
+    expect(value).toBeInstanceOf(UNearA);
+    expect(value).not.toBeInstanceOf(UNearB);
   });
 
   test("fallBackToNearestAncestor accepts an abstract registration (FR-017)", () => {
@@ -793,14 +795,14 @@ describe("polymorphism — unknown derived type handling", () => {
 
     expectNotSupportedException(
       () => read(json, uBaseHSpec),
-      "The JSON payload for polymorphic interface or abstract type 'UBaseH' must specify a type discriminator.",
+      missingDiscriminatorMessage("UBaseH"),
     );
   });
 
   test("a plain-object copy of a class variant is an unregistered runtime type", () => {
     expectNotSupportedException(
       () => write({ ...new SilenceClip(2) } as Clip, studio.clip),
-      "Runtime type 'Object' is not supported by polymorphic type 'Clip'.",
+      unsupportedRuntimeTypeMessage("Object", "Clip"),
     );
   });
 });
@@ -864,11 +866,9 @@ abstract class IgnAbs {}
 
 class IgnAbsA extends IgnAbs {}
 
-const ignorePolymorphism = (spec: () => TypeSpec): PolymorphismSpec => ({
-  discriminator: "k",
-  ignoreUnrecognizedTags: true,
-  derived: [{ tag: "a", spec }],
-});
+function ignorePolymorphism(spec: () => TypeSpec): PolymorphismSpec {
+  return { discriminator: "k", ignoreUnrecognizedTags: true, derived: [{ tag: "a", spec }] };
+}
 
 const ignBaseSpec: TypeSpec<IgnBase> = {
   type: IgnBase,
@@ -884,9 +884,7 @@ const ignBaseSpec: TypeSpec<IgnBase> = {
 
 const ignAbsSpec: TypeSpec<IgnAbs> = {
   type: IgnAbs,
-  factory: () => {
-    throw new Error("abstract");
-  },
+  factory: abstractFactory,
   properties: [],
   polymorphism: {
     ...ignorePolymorphism(() => ({ type: IgnAbsA, factory: () => new IgnAbsA(), properties: [] })),
@@ -910,14 +908,165 @@ describe("polymorphism — ignoreUnrecognizedTags", () => {
   test("an abstract base still throws NotSupportedException (E7)", () => {
     expectNotSupportedException(
       () => read('{"k":"zzz","V":1}', ignAbsSpec),
-      "The JSON payload for polymorphic interface or abstract type 'IgnAbs' must specify a type discriminator.",
+      missingDiscriminatorMessage("IgnAbs"),
     );
   });
 
   test("a non-scalar tag is still rejected", () => {
+    expectJsonException(() => read('{"k":null,"V":1}', ignBaseSpec), metadataTokenMessage("Null"));
+  });
+});
+
+// ─── Misplaced metadata ──────────────────────────────────────────────────────
+
+class CBase {
+  constructor(readonly v: number) {}
+}
+
+class CDer extends CBase {
+  constructor(
+    v: number,
+    readonly w: number,
+  ) {
+    super(v);
+  }
+}
+
+const cBaseSpec: TypeSpec<CBase> = {
+  type: CBase,
+  factory: (p) => new CBase(p.v as number),
+  properties: [{ ts: "v", json: "V", type: primitive }],
+  polymorphism: { discriminator: "$type", derived: [{ tag: "d", spec: () => cDerSpec }] },
+};
+
+const cDerSpec: TypeSpec<CDer> = {
+  type: CDer,
+  base: cBaseSpec,
+  factory: (p) => new CDer(p.v as number, p.w as number),
+  properties: [{ ts: "w", json: "W", type: primitive }],
+};
+
+describe("polymorphism — a concrete base rejects a tag that is not first", () => {
+  test("a leading tag reads the derived type", () => {
+    expect(read('{"$type":"d","V":1,"W":2}', cBaseSpec)).toEqual(new CDer(1, 2));
+  });
+
+  const rejected: readonly (readonly [string, string, TypeSpec])[] = [
+    ["a registered tag", '{"V":1,"$type":"d","W":2}', cBaseSpec],
+    ["an unknown tag", '{"V":1,"$type":"zz"}', cBaseSpec],
+    ["an unknown key before the tag", '{"Q":0,"$type":"d","V":1}', cBaseSpec],
+    ["a self-registered base tag", '{"V":1,"$type":"b"}', sBaseSpec],
+  ];
+
+  for (const [label, json, spec] of rejected) {
+    test(`${label} after another key throws JsonException`, () => {
+      expectJsonException(() => read(json, spec), METADATA_NOT_FIRST_MESSAGE);
+    });
+  }
+
+  test("ignoreUnrecognizedTags does not accept a later tag", () => {
+    expectJsonException(() => read('{"V":1,"k":"zzz"}', ignBaseSpec), METADATA_NOT_FIRST_MESSAGE);
+  });
+
+  test("a custom discriminator after another key throws JsonException", () => {
+    expectJsonException(() => read('{"V":1,"k":"a"}', ignBaseSpec), METADATA_NOT_FIRST_MESSAGE);
+  });
+
+  test("with out-of-order metadata, a later tag reads the derived type", () => {
+    const anywhere: TypeSpec<CBase> = {
+      ...cBaseSpec,
+      readOptions: { allowOutOfOrderMetadataProperties: true },
+    };
+
+    const value = read('{"V":1,"$type":"d","W":2}', anywhere);
+
+    expect(value).toEqual(new CDer(1, 2));
+    expect(value).toBeInstanceOf(CDer);
+  });
+
+  test("a missing tag still reads the concrete base", () => {
+    const value = read('{"V":1}', cBaseSpec);
+
+    expect(value).toBeInstanceOf(CBase);
+    expect(value).not.toBeInstanceOf(CDer);
+  });
+});
+
+describe("polymorphism — array-index keys", () => {
+  test("an index key after the tag leaves the tag first (concrete base)", () => {
+    expect(read('{"$type":"d","0":5,"V":1,"W":2}', cBaseSpec)).toEqual(new CDer(1, 2));
+  });
+
+  test("an index key after the tag leaves the tag first (abstract base)", () => {
+    const clip = read('{"kind":"image","0":5,"Path":"a","Seconds":1}', studio.clip);
+
+    expect(clip).toEqual(new ImageClip("a", 1));
+  });
+
+  test("an index-like key that is not an array index still counts", () => {
     expectJsonException(
-      () => read('{"k":null,"V":1}', ignBaseSpec),
-      "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current token type is 'Null'.",
+      () => read('{"01":5,"$type":"d","V":1}', cBaseSpec),
+      METADATA_NOT_FIRST_MESSAGE,
+    );
+  });
+});
+
+describe("polymorphism — '$'-prefixed keys", () => {
+  const dollarRejected: readonly (readonly [string, string, TypeSpec])[] = [
+    ["first on a concrete base", '{"$x":1,"V":1}', cBaseSpec],
+    ["after the tag", '{"$type":"d","$x":1,"V":1}', cBaseSpec],
+    ["later on a concrete base", '{"V":1,"$x":2}', cBaseSpec],
+    [
+      "after the tag of an abstract base",
+      '{"kind":"image","$x":1,"Path":"a","Seconds":1}',
+      studio.clip,
+    ],
+    ["after the self-registered tag", '{"$type":"b","$x":1,"V":1}', sBaseSpec],
+    ["$Type, which is not the $type discriminator", '{"$Type":"d","V":1}', cBaseSpec],
+    ["$type, under a custom discriminator", '{"V":1,"$type":"a"}', ignBaseSpec],
+  ];
+
+  for (const [label, json, spec] of dollarRejected) {
+    test(`a $ key ${label} throws JsonException`, () => {
+      expectJsonException(() => read(json, spec), DOLLAR_PROPERTY_MESSAGE);
+    });
+  }
+
+  test("$id and $ref are unsupported metadata", () => {
+    expectJsonException(() => read('{"$id":"1","V":1}', cBaseSpec), METADATA_NOT_FIRST_MESSAGE);
+    expectJsonException(() => read('{"$ref":"1"}', cBaseSpec), METADATA_NOT_FIRST_MESSAGE);
+  });
+
+  test("$values must follow other metadata", () => {
+    expectJsonException(
+      () => read('{"$values":[],"V":1}', cBaseSpec),
+      "A '$values' metadata property must always be preceded by other metadata properties, " +
+        "such as '$id' or '$type'.",
+    );
+  });
+
+  test("an abstract base without a leading tag reports the missing tag first", () => {
+    expectNotSupportedException(
+      () => read('{"$x":1,"kind":"image","Path":"a","Seconds":1}', studio.clip),
+      missingDiscriminatorMessage("Clip"),
+    );
+  });
+
+  test("with out-of-order metadata, a $ key throws before the tag is read", () => {
+    const clipAnywhere: TypeSpec<Clip> = {
+      ...studio.clip,
+      readOptions: { allowOutOfOrderMetadataProperties: true },
+    };
+
+    expectJsonException(
+      () => read('{"Seconds":1,"$x":2,"kind":"image","Path":"a"}', clipAnywhere),
+      DOLLAR_PROPERTY_MESSAGE,
+    );
+  });
+
+  test("a non-polymorphic spec reads past a $ key", () => {
+    expect(read('{"$x":1,"Path":"a","Seconds":1}', studio.imageClip)).toEqual(
+      new ImageClip("a", 1),
     );
   });
 });
@@ -949,9 +1098,7 @@ class NLeaf extends NMid {
 
 const nBaseSpec: TypeSpec<NBase> = {
   type: NBase,
-  factory: () => {
-    throw new Error("abstract");
-  },
+  factory: abstractFactory,
   properties: [{ ts: "a", json: "A", type: primitive }],
   polymorphism: {
     discriminator: "t",
@@ -993,7 +1140,7 @@ describe("polymorphism — nested bases (no re-dispatch, FR-006)", () => {
   test("a leaf registered only on the middle base fails through the outer base (E9)", () => {
     expectNotSupportedException(
       () => write(new NLeaf(1, 2, 3), nBaseSpec),
-      "Runtime type 'NLeaf' is not supported by polymorphic type 'NBase'.",
+      unsupportedRuntimeTypeMessage("NLeaf", "NBase"),
     );
   });
 
@@ -1121,14 +1268,14 @@ describe("polymorphism — interface base (FR-018)", () => {
   test("a missing tag names the interface (E13)", () => {
     expectNotSupportedException(
       () => read('{"Side":2}', shapeSpec),
-      "The JSON payload for polymorphic interface or abstract type 'IShape' must specify a type discriminator.",
+      missingDiscriminatorMessage("IShape"),
     );
   });
 
   test("an unregistered implementation fails by default (E14)", () => {
     expectNotSupportedException(
       () => write(new Other(3), shapeSpec),
-      "Runtime type 'Other' is not supported by polymorphic type 'IShape'.",
+      unsupportedRuntimeTypeMessage("Other", "IShape"),
     );
   });
 
@@ -1145,9 +1292,6 @@ describe("polymorphism — interface base (FR-018)", () => {
   });
 
   test("a non-object payload names the interface", () => {
-    expectJsonException(
-      () => read("1", shapeSpec),
-      "The JSON value could not be converted to IShape.",
-    );
+    expectJsonException(() => read("1", shapeSpec), cannotConvertMessage("IShape"));
   });
 });

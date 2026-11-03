@@ -1,5 +1,5 @@
 import type { PolymorphismSpec, TypeDiscriminator, TypeSpec } from "./types.ts";
-import { contractNameOf } from "./contract-name.ts";
+import { cannotConvertTo, contractNameOf } from "./contract-name.ts";
 import { JsonException, NotSupportedException } from "./errors.ts";
 
 /**
@@ -11,14 +11,17 @@ export interface SerializeTarget {
   readonly tag?: TypeDiscriminator;
 }
 
+/** The synthesized guard of a `[PlainObject]` variant. */
+type VariantGuard = (value: unknown) => boolean;
+
 /** One registration with its contract resolved. */
 interface ResolvedVariant extends SerializeTarget {
-  readonly test?: (value: unknown) => boolean;
+  readonly test?: VariantGuard;
 }
 
 /** A `[PlainObject]` variant, with the guard that selects it on write. */
 interface StructuralVariant extends ResolvedVariant {
-  readonly test: (value: unknown) => boolean;
+  readonly test: VariantGuard;
 }
 
 /**
@@ -34,10 +37,6 @@ interface DispatchIndex {
 }
 
 const dispatchIndexes = new WeakMap<PolymorphismSpec, DispatchIndex>();
-
-const INT32_MIN = -2_147_483_648;
-
-const INT32_MAX = 2_147_483_647;
 
 function dispatchIndexOf(polymorphism: PolymorphismSpec): DispatchIndex {
   const cached = dispatchIndexes.get(polymorphism);
@@ -154,6 +153,11 @@ function matchStructuralVariant(
   return isConcretePlainObjectBase ? { spec } : undefined;
 }
 
+/**
+ * The target of a runtime type the base does not register (FR-005), per
+ * `unknownDerivedType`: fail, the base contract with no tag, or the nearest
+ * registered ancestor (else the base contract).
+ */
 function unknownDerivedTypeTarget(
   value: unknown,
   spec: TypeSpec,
@@ -166,6 +170,7 @@ function unknownDerivedTypeTarget(
         `Runtime type '${runtimeTypeNameOf(value)}' is not supported by polymorphic type ` +
           `'${contractNameOf(spec)}'.`,
       );
+
     case "fallBackToBaseType":
       return { spec };
     case "fallBackToNearestAncestor":
@@ -222,21 +227,112 @@ function runtimeTypeNameOf(value: unknown): string {
 
 // ─── Deserialize ─────────────────────────────────────────────────────────────
 
+/** A data key in a polymorphic payload that System.Text.Json reads as a metadata property. */
+const NOT_FIRST_METADATA_MESSAGE =
+  "The metadata property is either not supported by the type or is not the first property in " +
+  "the deserialized JSON object.";
+
+const DOLLAR_PROPERTY_MESSAGE =
+  "Properties that start with '$' are not allowed in types that support metadata. Either " +
+  "replace the character or disable reference preservation and polymorphic deserialization.";
+
+const VALUES_METADATA_MESSAGE =
+  "A '$values' metadata property must always be preceded by other metadata properties, such " +
+  "as '$id' or '$type'.";
+
+/** Metadata names System.Text.Json knows besides the discriminator, unsupported here. */
+const REFERENCE_METADATA_NAMES: ReadonlySet<string> = new Set(["$id", "$ref"]);
+
 /**
  * Chooses the contract a polymorphic base reads `raw` with (FR-007): the
  * contract of a known tag, the base for a missing tag (or an ignored unknown
- * one) of a concrete base. Throws System.Text.Json's exceptions otherwise.
+ * one) of a concrete base. Throws System.Text.Json's exceptions otherwise,
+ * including for a later discriminator or `$`-prefixed key, which STJ reads
+ * as misplaced metadata.
  */
 export function resolveDeserializeTarget(
   raw: Record<string, unknown>,
   spec: TypeSpec,
   polymorphism: PolymorphismSpec,
 ): TypeSpec {
-  if (!hasReadableTag(raw, spec, polymorphism)) {
-    return contractWithoutTag(spec, polymorphism);
+  const { discriminator } = polymorphism;
+  const keys = documentOrderKeysOf(raw);
+
+  if (spec.readOptions?.allowOutOfOrderMetadataProperties === true) {
+    rejectMetadataKeys(keys, discriminator, { tagAllowed: true });
+
+    return Object.hasOwn(raw, discriminator)
+      ? targetOfTag(raw[discriminator], spec, polymorphism)
+      : contractWithoutTag(spec, polymorphism);
   }
 
-  const tag = readTag(raw[polymorphism.discriminator], spec);
+  const hasLeadingTag = keys[0] === discriminator;
+
+  const target = hasLeadingTag
+    ? targetOfTag(raw[discriminator], spec, polymorphism)
+    : contractWithoutTag(spec, polymorphism);
+
+  rejectMetadataKeys(hasLeadingTag ? keys.slice(1) : keys, discriminator, { tagAllowed: false });
+
+  return target;
+}
+
+/**
+ * The keys of a parsed object in JSON document order, as far as JS keeps it:
+ * array-index keys (`"0"`, `"1"`, …) are enumerated first whatever their
+ * position, so they are left out. They never start with `$`, so the metadata
+ * checks lose nothing; only an index key written before the tag goes
+ * unnoticed (a documented divergence).
+ */
+function documentOrderKeysOf(raw: Record<string, unknown>): readonly string[] {
+  return Object.keys(raw).filter((key) => !isArrayIndex(key));
+}
+
+const ARRAY_INDEX_PATTERN = /^(?:0|[1-9]\d*)$/;
+
+const MAX_ARRAY_INDEX = 4_294_967_294;
+
+function isArrayIndex(key: string): boolean {
+  return ARRAY_INDEX_PATTERN.test(key) && Number(key) <= MAX_ARRAY_INDEX;
+}
+
+/**
+ * Rejects the keys System.Text.Json reads as metadata in a polymorphic
+ * payload, in document order: the discriminator anywhere but first (unless
+ * out-of-order metadata is allowed), `$id` / `$ref`, `$values`, and any other
+ * key that starts with `$`.
+ */
+function rejectMetadataKeys(
+  keys: readonly string[],
+  discriminator: string,
+  options: { readonly tagAllowed: boolean },
+): void {
+  for (const key of keys) {
+    if (key === discriminator) {
+      if (options.tagAllowed) {
+        continue;
+      }
+
+      throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
+    }
+
+    if (REFERENCE_METADATA_NAMES.has(key)) {
+      throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
+    }
+
+    if (key === "$values") {
+      throw new JsonException(VALUES_METADATA_MESSAGE);
+    }
+
+    if (key.startsWith("$")) {
+      throw new JsonException(DOLLAR_PROPERTY_MESSAGE);
+    }
+  }
+}
+
+/** The contract a present tag selects (FR-007). */
+function targetOfTag(value: unknown, spec: TypeSpec, polymorphism: PolymorphismSpec): TypeSpec {
+  const tag = readTag(value, spec);
   const derived = dispatchIndexOf(polymorphism).byTag.get(tag);
 
   if (derived) {
@@ -248,36 +344,6 @@ export function resolveDeserializeTarget(
   }
 
   throw new JsonException(`Read unrecognized type discriminator id '${tag}'.`);
-}
-
-/**
- * The tag counts only under its exact (case-sensitive) name, and only as the
- * first key unless the context allows out-of-order metadata: a later tag is a
- * missing tag, as in System.Text.Json.
- */
-function hasReadableTag(
-  raw: Record<string, unknown>,
-  spec: TypeSpec,
-  polymorphism: PolymorphismSpec,
-): boolean {
-  const { discriminator } = polymorphism;
-
-  if (!Object.hasOwn(raw, discriminator)) {
-    return false;
-  }
-
-  return (
-    spec.readOptions?.allowOutOfOrderMetadataProperties === true ||
-    firstKeyOf(raw) === discriminator
-  );
-}
-
-function firstKeyOf(raw: Record<string, unknown>): string | undefined {
-  for (const key in raw) {
-    return key;
-  }
-
-  return undefined;
 }
 
 /**
@@ -313,11 +379,15 @@ function readTag(value: unknown, spec: TypeSpec): TypeDiscriminator {
   }
 
   if (!isInt32(value)) {
-    throw new JsonException(`The JSON value could not be converted to ${contractNameOf(spec)}.`);
+    throw cannotConvertTo(spec);
   }
 
   return value;
 }
+
+const INT32_MIN = -2_147_483_648;
+
+const INT32_MAX = 2_147_483_647;
 
 function isInt32(value: number): boolean {
   return Number.isInteger(value) && value >= INT32_MIN && value <= INT32_MAX;
