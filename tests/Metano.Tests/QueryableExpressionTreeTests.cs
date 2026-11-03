@@ -333,9 +333,13 @@ public class QueryableExpressionTreeTests
                 model,
                 originResolver: null,
                 target: null,
-                valueExtractor: new Metano.Compiler.Extraction.IrExpressionExtractor(model),
+                valueExtractor: new Metano.Compiler.Extraction.IrExpressionExtractor(
+                    model,
+                    Metano.Compiler.Extraction.IrExtractionContext.Empty
+                ),
                 isExplicitOptIn: true
             );
+
             var meta = walker.TryExtract(lambda);
             await Assert.That(meta).IsNull();
         }
@@ -587,9 +591,13 @@ public class QueryableExpressionTreeTests
                 model,
                 originResolver: null,
                 target: null,
-                valueExtractor: new Metano.Compiler.Extraction.IrExpressionExtractor(model),
+                valueExtractor: new Metano.Compiler.Extraction.IrExpressionExtractor(
+                    model,
+                    Metano.Compiler.Extraction.IrExtractionContext.Empty
+                ),
                 isExplicitOptIn: false
             );
+
             walker.TryExtract(lambda);
         }
 

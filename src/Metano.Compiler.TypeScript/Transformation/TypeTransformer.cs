@@ -1580,7 +1580,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         var functions = IrModuleFunctionExtractor
-            .Extract(type, Context.OriginResolver, Context.Compilation, TargetLanguage.TypeScript)
+            .Extract(type, Context.Extraction)
             .Select(OutParameterLowering.Lower)
             // IrModuleFunctionExtractor emits every public method. Strip the
             // entry point — its body is unwrapped separately below.
@@ -1617,7 +1617,28 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             }
             else
             {
-                entryBody = ExtractMethodBody(entryPoint);
+                var export = SymbolHelper.GetExportVarFromBody(entryPoint);
+
+                (entryBody, var pinnedCollisions) = ExtractMethodBody(entryPoint, export?.Name);
+
+                // A local promoted by [ExportVarFromBody] is the module's
+                // surface, so it keeps its name and the colliding binding is
+                // renamed instead. Only a collision the rename cannot resolve
+                // (the other binding is not renamable either) is reported,
+                // against the attribute's C# argument (#398); a collision
+                // between two other bindings is MS0003, reported by the
+                // disambiguator itself.
+                if (pinnedCollisions.Count > 0 && export is { } pinned)
+                {
+                    ReportInvalidEntryPoint(
+                        entryPoint,
+                        $"[ExportVarFromBody(\"{pinned.Name}\")] on '{entryPoint.Name}' names a "
+                            + $"local whose emitted name collides with another binding that "
+                            + "cannot be renamed; rename one of them so the exported name is "
+                            + "unambiguous."
+                    );
+                }
+
                 if (entryBody is null || !IrBodyCoverageProbe.IsFullyCovered(entryBody))
                 {
                     ReportUnsupportedBody(
@@ -1781,12 +1802,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (!type.IsContainerless())
             return [];
 
-        var members = IrModuleVariableExtractor.Extract(
-            type,
-            Context.OriginResolver,
-            Context.Compilation,
-            TargetLanguage.TypeScript
-        );
+        var members = IrModuleVariableExtractor.Extract(type, Context.Extraction);
 
         var variables = new List<IrMemberDeclaration>(members.Count);
 
@@ -1897,10 +1913,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var tree = syntaxRef.SyntaxTree;
         var semanticModel = Context.Compilation.GetSemanticModel(tree);
-        var stmtExtractor = new IrStatementExtractor(
-            semanticModel,
-            target: TargetLanguage.TypeScript
-        );
+        var stmtExtractor = new IrStatementExtractor(semanticModel, Context.Extraction);
 
         // GlobalStatementSyntax is always a direct child of CompilationUnitSyntax —
         // walking ChildNodes avoids descending into the bodies of nested types,
@@ -1910,7 +1923,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .Select(g => g.Statement)
             .ToList();
 
-        var irBody = stmtExtractor.ExtractStatements(globalStatements);
+        var irBody = stmtExtractor.ExtractStatements(globalStatements).Statements;
         foreach (
             var ts in IrToTsStatementBridge.MapBody(
                 irBody,
@@ -1920,19 +1933,75 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             sink.Add(new TsTopLevelStatement(ts));
     }
 
-    private IReadOnlyList<IrStatement>? ExtractMethodBody(IMethodSymbol method)
+    /// <summary>
+    /// The extraction context for a method body, with the pinned locals of a
+    /// <c>[ExportVarFromBody]</c> export folded into the local-naming
+    /// decision so the export is never renamed (#398).
+    /// </summary>
+    private IrExtractionContext ExtractionContextFor(IReadOnlySet<ISymbol> pinnedLocals) =>
+        pinnedLocals.Count == 0
+            ? Context.Extraction
+            : Context.Extraction with
+            {
+                LocalNaming = IrToTsNamingPolicy.LocalNaming with { PinnedLocals = pinnedLocals },
+            };
+
+    /// <summary>
+    /// Extracts a method body with the TypeScript local-naming policy, so
+    /// camelCase collisions inside the body are renamed (#398).
+    /// <paramref name="exportedLocalName"/> names the <c>[ExportVarFromBody]</c>
+    /// export, whose local keeps its emitted name; the returned collision set
+    /// names the emitted names of the pinned locals no rename could free.
+    /// </summary>
+    private (
+        IReadOnlyList<IrStatement>? Body,
+        IReadOnlySet<string> PinnedCollisions
+    ) ExtractMethodBody(IMethodSymbol method, string? exportedLocalName)
     {
         var syntax =
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as MethodDeclarationSyntax;
+
         if (syntax is null || (syntax.Body is null && syntax.ExpressionBody is null))
-            return null;
+            return (null, new HashSet<string>());
+
         var model = Context.Compilation.GetSemanticModel(syntax.SyntaxTree);
-        return new IrStatementExtractor(model, target: TargetLanguage.TypeScript).ExtractBody(
-            syntax.Body,
-            syntax.ExpressionBody,
-            isVoid: method.ReturnsVoid
-        );
+        var pinnedLocals = ExportedLocalsOf(syntax.Body, exportedLocalName, model);
+        var extractor = new IrStatementExtractor(model, ExtractionContextFor(pinnedLocals));
+        var body = extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, method.ReturnsVoid);
+
+        return (body.Statements, body.LocalNames.PinnedCollisions);
+    }
+
+    /// <summary>
+    /// The local an <c>[ExportVarFromBody]</c> export promotes: the one
+    /// declared directly in the entry point's own body block under the
+    /// exported name. A same-named local of a nested scope (a lambda, an
+    /// inner block) is a different symbol and stays renamable.
+    /// </summary>
+    private static IReadOnlySet<ISymbol> ExportedLocalsOf(
+        BlockSyntax? body,
+        string? exportedLocalName,
+        SemanticModel model
+    )
+    {
+        var pinned = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+
+        if (body is null || exportedLocalName is null)
+            return pinned;
+
+        var declarators = body
+            .Statements.OfType<LocalDeclarationStatementSyntax>()
+            .SelectMany(statement => statement.Declaration.Variables)
+            .Where(declarator => declarator.Identifier.ValueText == exportedLocalName);
+
+        foreach (var declarator in declarators)
+        {
+            if (model.GetDeclaredSymbol(declarator) is { } local)
+                pinned.Add(local);
+        }
+
+        return pinned;
     }
 
     private static bool IsValidEntryPointReturn(ITypeSymbol returnType)
@@ -2047,23 +2116,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return cached;
         IrTypeDeclaration? ir = type.TypeKind switch
         {
-            TypeKind.Enum => IrEnumExtractor.Extract(type),
-            TypeKind.Interface => IrInterfaceExtractor.Extract(
-                type,
-                Context.OriginResolver,
-                TargetLanguage.TypeScript
-            ),
-            TypeKind.Class or TypeKind.Struct => IrClassExtractor.Extract(
-                type,
-                Context.OriginResolver,
-                Context.Compilation,
-                TargetLanguage.TypeScript
-            ),
-            TypeKind.Delegate => IrDelegateExtractor.Extract(
-                type,
-                Context.OriginResolver,
-                TargetLanguage.TypeScript
-            ),
+            TypeKind.Enum => IrEnumExtractor.Extract(type, Context.Extraction),
+            TypeKind.Interface => IrInterfaceExtractor.Extract(type, Context.Extraction),
+            TypeKind.Class or TypeKind.Struct => IrClassExtractor.Extract(type, Context.Extraction),
+            TypeKind.Delegate => IrDelegateExtractor.Extract(type, Context.Extraction),
             _ => null,
         };
         if (ir is not null)

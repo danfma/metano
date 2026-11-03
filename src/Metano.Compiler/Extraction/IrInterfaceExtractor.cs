@@ -11,10 +11,11 @@ public static class IrInterfaceExtractor
 {
     public static IrInterfaceDeclaration Extract(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver = null,
-        Metano.Annotations.TargetLanguage? target = null
+        IrExtractionContext? context = null
     )
     {
+        var originResolver = context?.OriginResolver;
+        var target = context?.Target;
         var members = new List<IrMemberDeclaration>();
 
         foreach (var member in type.GetMembers())

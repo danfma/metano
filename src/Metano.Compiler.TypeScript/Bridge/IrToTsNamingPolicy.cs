@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.Transformation;
@@ -55,6 +56,14 @@ public static class IrToTsNamingPolicy
     /// <see cref="ToLocalName"/> — one decision for declarations and reads.
     /// </summary>
     public static string ToParameterName(string irName) => ToLocalName(irName);
+
+    /// <summary>
+    /// The TypeScript local-naming decision as the core extractors receive
+    /// it (#398): <see cref="ToLocalName"/> itself, defined once here so the
+    /// transform context, the transformer and every bridge hand the same
+    /// function to the extractors.
+    /// </summary>
+    public static LocalNaming LocalNaming { get; } = new(ToLocalName);
 
     /// <summary>
     /// The emitted name of a local binding — a local (a <c>const</c> included), a

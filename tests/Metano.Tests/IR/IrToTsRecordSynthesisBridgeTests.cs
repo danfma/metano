@@ -126,7 +126,7 @@ public class IrToTsRecordSynthesisBridgeTests
         var model = compilation.GetSemanticModel(tree);
         var symbol = (INamedTypeSymbol)model.GetDeclaredSymbol(typeDecl)!;
 
-        return IrClassExtractor.Extract(symbol, compilation: compilation);
+        return IrClassExtractor.Extract(symbol, new IrExtractionContext(Compilation: compilation));
     }
 
     private static string PrintMembers(IReadOnlyList<TsClassMember> members)

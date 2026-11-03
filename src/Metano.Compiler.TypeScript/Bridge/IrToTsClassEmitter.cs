@@ -47,14 +47,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         // helpers do all the filtering. Inherited primary-ctor params still
         // need a Roslyn round-trip (the IR constructor on the base type isn't
         // in scope here).
-        var ir = OutParameterLowering.Lower(
-            IrClassExtractor.Extract(
-                type,
-                originResolver: _context.OriginResolver,
-                compilation: _context.Compilation,
-                target: TargetLanguage.TypeScript
-            )
-        );
+        var ir = OutParameterLowering.Lower(IrClassExtractor.Extract(type, _context.Extraction));
 
         // A class overriding `Message` keeps its base message in a private
         // field; its `base.Message` reads lower to that field for the whole

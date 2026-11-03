@@ -19,28 +19,26 @@ public static class IrConstructorExtractor
 {
     public static IrConstructorDeclaration? Extract(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
-    ) =>
-        Extract(
+        IrExtractionContext? context = null
+    )
+    {
+        context ??= IrExtractionContext.Empty;
+
+        return Extract(
             type,
-            originResolver,
-            compilation,
-            target,
-            PrimaryConstructorPromotion.For(type, compilation, target)
+            context,
+            PrimaryConstructorPromotion.For(type, context.Compilation, context.Target)
         );
+    }
 
     /// <summary>
-    /// <see cref="Extract(INamedTypeSymbol, IrTypeOriginResolver?, Compilation?, Metano.Annotations.TargetLanguage?)"/>
-    /// with the type's primary-constructor <paramref name="promotion"/>
-    /// already decided, so a caller that also scans captures shares it.
+    /// <see cref="Extract(INamedTypeSymbol, IrExtractionContext?)"/> with the
+    /// type's primary-constructor <paramref name="promotion"/> already
+    /// decided, so a caller that also scans captures shares it.
     /// </summary>
     internal static IrConstructorDeclaration? Extract(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target,
+        IrExtractionContext context,
         PrimaryConstructorPromotion promotion
     )
     {
@@ -48,15 +46,15 @@ public static class IrConstructorExtractor
         var primary = FindPrimaryConstructor(type);
 
         if (primary is null)
-            return ImplicitConstructorWithObservableBaseCall(type, target);
+            return ImplicitConstructorWithObservableBaseCall(type, context.Target);
 
-        var context = new PromotionContext(type, compilation, target, promotion);
-        var primaryDecl = BuildFromMethod(primary, originResolver, context);
+        var promotionContext = new PromotionContext(type, context, promotion);
+        var primaryDecl = BuildFromMethod(primary, context.OriginResolver, promotionContext);
 
         // Other constructors become overloads (without nested Overloads of their own).
         var overloads = explicitCtors
             .Where(c => !SymbolEqualityComparer.Default.Equals(c, primary))
-            .Select(c => BuildFromMethod(c, originResolver, context))
+            .Select(c => BuildFromMethod(c, context.OriginResolver, promotionContext))
             .ToList();
 
         return overloads.Count > 0 ? primaryDecl with { Overloads = overloads } : primaryDecl;
@@ -134,15 +132,19 @@ public static class IrConstructorExtractor
 
     /// <summary>
     /// What deciding a parameter's promotion needs: the type, the active
-    /// compilation and target, and the type's primary-constructor decision.
+    /// compilation and target, the type's primary-constructor decision, and
+    /// the target's local-naming policy for constructor-body bindings (#398).
     /// </summary>
     private sealed record PromotionContext(
         INamedTypeSymbol Type,
-        Compilation? Compilation,
-        Metano.Annotations.TargetLanguage? Target,
+        IrExtractionContext Extraction,
         PrimaryConstructorPromotion Promotion
     )
     {
+        public Compilation? Compilation => Extraction.Compilation;
+
+        public Metano.Annotations.TargetLanguage? Target => Extraction.Target;
+
         /// <summary>
         /// The property <paramref name="parameter"/> is promoted to. A
         /// primary-constructor parameter follows the decision the capture scan
@@ -184,6 +186,7 @@ public static class IrConstructorExtractor
             .Parameters.Select(p =>
             {
                 var (promotion, promotedVisibility, emittedName) = ResolvePromotionInfo(p, context);
+
                 return new IrConstructorParameter(
                     new IrParameter(
                         p.Name,
@@ -204,11 +207,22 @@ public static class IrConstructorExtractor
         if (compilation is null)
             return new IrConstructorDeclaration(Parameters: parameters);
 
-        var baseArguments = TryExtractBaseArguments(ctor, compilation, originResolver, target);
+        // One map per constructor declaration (#398): the walk's root is the
+        // whole declaration, so the `: base(...)` / `: this(...)` argument
+        // lambdas and the body share it — a collision renames one name every
+        // half agrees on.
+        var localNames = LocalBindingDisambiguator.ForMember(ctor, context.Extraction);
+
+        var baseArguments = TryExtractBaseArguments(
+            ctor,
+            compilation,
+            context.Extraction,
+            localNames
+        );
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
-            Body: TryExtractBody(ctor, compilation, originResolver),
+            Body: TryExtractBody(ctor, compilation, context.Extraction, localNames),
             BaseArguments: baseArguments,
             BaseExceptionConstruction: TryExtractBaseExceptionConstruction(
                 ctor,
@@ -216,7 +230,7 @@ public static class IrConstructorExtractor
                 compilation,
                 target
             ),
-            ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context)
+            ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context, localNames)
         );
     }
 
@@ -269,7 +283,8 @@ public static class IrConstructorExtractor
         IMethodSymbol ctor,
         IrTypeOriginResolver? originResolver,
         Compilation compilation,
-        PromotionContext context
+        PromotionContext context,
+        LocalBindingNames localNames
     )
     {
         if (FindThisCallSyntax(ctor) is not { } thisCall)
@@ -280,11 +295,8 @@ public static class IrConstructorExtractor
         if (model.GetSymbolInfo(thisCall).Symbol is not IMethodSymbol chainedCtor)
             return null;
 
-        var arguments = new IrExpressionExtractor(
-            model,
-            originResolver,
-            context.Target
-        ).ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
+        var extractor = new IrExpressionExtractor(model, context.Extraction, localNames);
+        var arguments = extractor.ExtractInitializerArguments(thisCall.ArgumentList, callee: null);
 
         var chainedDecl = BuildFromMethod(chainedCtor, originResolver, context);
 
@@ -334,7 +346,8 @@ public static class IrConstructorExtractor
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol ctor,
         Compilation compilation,
-        IrTypeOriginResolver? originResolver
+        IrExtractionContext context,
+        LocalBindingNames localNames
     )
     {
         var syntax =
@@ -344,8 +357,9 @@ public static class IrConstructorExtractor
             return null;
 
         var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, originResolver);
-        return extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, isVoid: true);
+        var extractor = new IrStatementExtractor(model, context, inheritedLocalNames: localNames);
+
+        return extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, isVoid: true).Statements;
     }
 
     /// <summary>
@@ -356,16 +370,17 @@ public static class IrConstructorExtractor
     private static IReadOnlyList<IrArgument>? TryExtractBaseArguments(
         IMethodSymbol ctor,
         Compilation compilation,
-        IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target
+        IrExtractionContext context,
+        LocalBindingNames localNames
     )
     {
         if (FindBaseCallSyntax(ctor) is not { } baseCall)
             return null;
 
         var model = compilation.GetSemanticModel(baseCall.SyntaxTree);
+        var extractor = new IrExpressionExtractor(model, context, localNames);
 
-        return new IrExpressionExtractor(model, originResolver, target).ExtractInitializerArguments(
+        return extractor.ExtractInitializerArguments(
             ArgumentListOf(baseCall),
             model.GetSymbolInfo(baseCall).Symbol as IMethodSymbol
         );
@@ -389,13 +404,19 @@ public static class IrConstructorExtractor
     {
         if (!parameter.HasExplicitDefaultValue || compilation is null)
             return null;
+
         var syntax =
             parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax;
         var defaultExpression = syntax?.Default?.Value;
+
         if (defaultExpression is null)
             return null;
+
         var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-        return new IrExpressionExtractor(model, originResolver).Extract(defaultExpression);
+
+        return new IrExpressionExtractor(model, new IrExtractionContext(originResolver)).Extract(
+            defaultExpression
+        );
     }
 
     /// <summary>

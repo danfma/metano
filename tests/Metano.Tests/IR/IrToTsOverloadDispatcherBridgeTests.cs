@@ -317,7 +317,9 @@ public class IrToTsOverloadDispatcherBridgeTests
             .OfType<IMethodSymbol>()
             .Where(m => m.MethodKind == MethodKind.Ordinary)
             .OrderByDescending(m => m.Parameters.Length)
-            .Select(m => IrMethodExtractor.Extract(m, originResolver: null, compilation))
+            .Select(m =>
+                IrMethodExtractor.Extract(m, new IrExtractionContext(Compilation: compilation))
+            )
             .ToList();
         var primary = overloads[0] with { Overloads = overloads.Skip(1).ToList() };
         return (primary, typeSymbol.Name);

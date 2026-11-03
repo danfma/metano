@@ -15,40 +15,111 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public sealed class IrStatementExtractor(
     SemanticModel semanticModel,
-    IrTypeOriginResolver? originResolver = null,
-    Metano.Annotations.TargetLanguage? target = null
+    IrExtractionContext context,
+    LocalBindingNames? inheritedLocalNames = null
 )
 {
     private readonly SemanticModel _semantic = semanticModel;
-    private readonly IrTypeOriginResolver? _originResolver = originResolver;
-    private readonly IrExpressionExtractor _expressions = new(
-        semanticModel,
-        originResolver,
-        target
-    );
+    private readonly IrExtractionContext _context = context;
+    private readonly IrTypeOriginResolver? _originResolver = context.OriginResolver;
+    private readonly IrExpressionExtractor _expressions = new(semanticModel, context);
+    private readonly LocalBindingNames? _inheritedLocalNames = inheritedLocalNames;
+
+    /// <summary>
+    /// The renames of the body being extracted. Recomputed per body — a
+    /// property's getter and setter share one extractor but own their scopes —
+    /// except for a lambda-block body, which inherits its member's map so
+    /// nested reads see the member's renames (#398).
+    /// </summary>
+    private LocalBindingNames _localNames = LocalBindingNames.Empty;
+
+    /// <summary>
+    /// The body's local-binding renames, computed once before any statement
+    /// is extracted so every declaration site and every read in the
+    /// expression extractor names the same symbol the same way (#398). The
+    /// root is the member declaration the body belongs to, so the member's
+    /// own parameters join the walk; a lambda-block body without a member
+    /// ancestor (a field initializer) disambiguates against the lambda alone.
+    /// An inherited map (a lambda block inside a member body, or a member
+    /// whose map was computed by its extractor) is used as-is, and a body
+    /// with no disambiguable root gets the empty map.
+    /// </summary>
+    private LocalBindingNames DisambiguateLocalNames(
+        SyntaxNode? block,
+        ArrowExpressionClauseSyntax? arrow
+    )
+    {
+        if (_inheritedLocalNames is not null)
+            return _inheritedLocalNames;
+
+        if (_context.LocalNaming is null || MemberRootOf(block ?? arrow) is not { } root)
+            return LocalBindingNames.Empty;
+
+        return LocalBindingDisambiguator.ForRoot(root, _context);
+    }
+
+    /// <summary>
+    /// Makes <paramref name="names"/> the map of the body about to be
+    /// extracted, here and in the shared expression extractor.
+    /// </summary>
+    private LocalBindingNames Adopt(LocalBindingNames names)
+    {
+        _localNames = names;
+        _expressions.AdoptLocalNames(names);
+
+        return names;
+    }
+
+    private static SyntaxNode? MemberRootOf(SyntaxNode? body) =>
+        body
+            ?.AncestorsAndSelf()
+            .FirstOrDefault(a =>
+                a
+                    is BaseMethodDeclarationSyntax
+                        or AccessorDeclarationSyntax
+                        or PropertyDeclarationSyntax
+                        or LambdaExpressionSyntax
+                        or CompilationUnitSyntax
+            );
+
+    /// <summary>
+    /// The IR name of a local binding's declaration: its disambiguated name
+    /// when the body's map renamed it (#398), otherwise its C# spelling.
+    /// </summary>
+    private string LocalIrName(ISymbol? symbol, string identifier) =>
+        _localNames.NameOf(symbol, identifier);
 
     /// <summary>
     /// Extracts a method/constructor/property body from a block or
     /// expression-bodied arrow. Returns the statements that should appear
-    /// inside the target-language body (empty for bodiless declarations).
+    /// inside the target-language body (empty for bodiless declarations)
+    /// with the body's local-binding names (#398).
     /// </summary>
-    public IReadOnlyList<IrStatement> ExtractBody(
+    public ExtractedBody ExtractBody(
         BlockSyntax? block,
         ArrowExpressionClauseSyntax? arrow,
         bool isVoid = false
     )
     {
+        var localNames = Adopt(DisambiguateLocalNames(block, arrow));
+
         if (arrow is not null)
         {
             var expr = _expressions.Extract(arrow.Expression);
 
-            return _expressions.LowerExpressionVariables(ArrowStatement(expr, isVoid));
+            return new ExtractedBody(
+                _expressions.LowerExpressionVariables(ArrowStatement(expr, isVoid)),
+                localNames
+            );
         }
 
         if (block is null)
-            return [];
+            return new ExtractedBody([], localNames);
 
-        return ExtractStatements(block.Statements);
+        return new ExtractedBody(
+            PromoteEffectiveConsts(ExtractStatementSequence(block.Statements)),
+            localNames
+        );
     }
 
     private static IrStatement ArrowStatement(IrExpression expr, bool isVoid) =>
@@ -62,8 +133,22 @@ public sealed class IrStatementExtractor(
     /// lowering and effective-const promotion passes apply, since they only
     /// need a contiguous statement sequence.
     /// </summary>
-    public IReadOnlyList<IrStatement> ExtractStatements(IReadOnlyList<StatementSyntax> source) =>
-        PromoteEffectiveConsts(ExtractStatementSequence(source));
+    public ExtractedBody ExtractStatements(IReadOnlyList<StatementSyntax> source)
+    {
+        var localNames = Adopt(
+            _inheritedLocalNames
+                ?? (
+                    _context.LocalNaming is { } naming
+                        ? LocalBindingDisambiguator.ForStatements(source, _semantic, naming)
+                        : LocalBindingNames.Empty
+                )
+        );
+
+        return new ExtractedBody(
+            PromoteEffectiveConsts(ExtractStatementSequence(source)),
+            localNames
+        );
+    }
 
     /// <summary>
     /// Extracts a statement list that forms one C# scope (a block, a switch
@@ -279,7 +364,7 @@ public sealed class IrStatementExtractor(
 
     private IrStatement ExtractForEach(ForEachStatementSyntax fe)
     {
-        var variable = fe.Identifier.ValueText;
+        var variable = LocalIrName(_semantic.GetDeclaredSymbol(fe), fe.Identifier.ValueText);
         var typeSymbol = _semantic.GetTypeInfo(fe.Type).Type;
         var variableType =
             typeSymbol is not null
@@ -311,7 +396,10 @@ public sealed class IrStatementExtractor(
             if (sym is not null)
                 exType = IrTypeRefMapper.Map(sym, _originResolver);
             if (cc.Declaration.Identifier.ValueText.Length > 0)
-                varName = cc.Declaration.Identifier.ValueText;
+                varName = LocalIrName(
+                    _semantic.GetDeclaredSymbol(cc.Declaration),
+                    cc.Declaration.Identifier.ValueText
+                );
         }
         var body = ExtractStatementSequence(cc.Block.Statements);
         return new IrCatchClause(exType, varName, body);
@@ -359,7 +447,7 @@ public sealed class IrStatementExtractor(
             : null;
 
         return new IrVariableDeclaration(
-            variable.Identifier.ValueText,
+            LocalIrName(_semantic.GetDeclaredSymbol(variable), variable.Identifier.ValueText),
             DeclaredLocalType(declaration, variable),
             initializer,
             IsConst: isConst,
@@ -437,7 +525,14 @@ public sealed class IrStatementExtractor(
             switch (variable)
             {
                 case SingleVariableDesignationSyntax single:
-                    elements.Add(new IrDeconstructionElement(single.Identifier.ValueText));
+                    elements.Add(
+                        new IrDeconstructionElement(
+                            LocalIrName(
+                                _semantic.GetDeclaredSymbol(single),
+                                single.Identifier.ValueText
+                            )
+                        )
+                    );
                     break;
                 case DiscardDesignationSyntax:
                     elements.Add(new IrDeconstructionElement(Name: null));

@@ -22,34 +22,23 @@ public static class IrModuleVariableExtractor
 {
     public static IReadOnlyList<IrMemberDeclaration> Extract(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        TargetLanguage? target = null
+        IrExtractionContext? context = null
     )
     {
+        context ??= IrExtractionContext.Empty;
         var variables = new List<IrMemberDeclaration>();
 
         foreach (var member in type.GetMembers())
         {
-            if (!IsModuleState(member, target))
+            if (!IsModuleState(member, context.Target))
             {
                 continue;
             }
 
             var variable = member switch
             {
-                IFieldSymbol field => IrFieldExtractor.TryExtract(
-                    field,
-                    originResolver,
-                    compilation,
-                    target
-                ),
-                IPropertySymbol property => IrPropertyExtractor.Extract(
-                    property,
-                    originResolver,
-                    compilation,
-                    target
-                ),
+                IFieldSymbol field => IrFieldExtractor.TryExtract(field, context),
+                IPropertySymbol property => IrPropertyExtractor.Extract(property, context),
                 _ => (IrMemberDeclaration?)null,
             };
 

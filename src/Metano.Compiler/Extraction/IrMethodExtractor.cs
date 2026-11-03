@@ -14,11 +14,14 @@ public static class IrMethodExtractor
 {
     public static IrMethodDeclaration Extract(
         IMethodSymbol method,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        IrExtractionContext? context = null
     )
     {
+        context ??= IrExtractionContext.Empty;
+        var originResolver = context.OriginResolver;
+        var compilation = context.Compilation;
+        var target = context.Target;
+
         var hasYield = DetectYield(method);
 
         OutParameterFlow.ReportOverloadCollision(method);
@@ -27,11 +30,16 @@ public static class IrMethodExtractor
             ? IrTypeRefMapper.MapForGeneratorReturn(method.ReturnType, originResolver, target)
             : IrTypeRefMapper.Map(method.ReturnType, originResolver, target);
 
+        // One map covers the parameters and the body: the walk's root is the
+        // whole method declaration, so a collision between a parameter and a
+        // body local renames one name both halves agree on (#398).
+        var localNames = LocalBindingDisambiguator.ForMember(method, context);
+
         var parameters = method
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        IrParameterNaming.IrNameOf(p, compilation),
+                        localNames.NameOf(p, IrParameterNaming.IrNameOf(p, compilation)),
                         IrTypeRefMapper.Map(p.Type, originResolver, target),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
@@ -75,9 +83,7 @@ public static class IrMethodExtractor
             IsEmitTemplate: SymbolHelper.HasEmit(method)
         );
 
-        var body = compilation is not null
-            ? TryExtractBody(method, compilation, originResolver, target)
-            : null;
+        var body = compilation is not null ? TryExtractBody(method, context, localNames) : null;
 
         return new IrMethodDeclaration(
             method.Name,
@@ -96,9 +102,8 @@ public static class IrMethodExtractor
 
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol method,
-        Compilation compilation,
-        IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target
+        IrExtractionContext context,
+        LocalBindingNames? localNames
     )
     {
         var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
@@ -116,9 +121,10 @@ public static class IrMethodExtractor
         if (body is null && expressionBody is null)
             return null;
 
-        var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, originResolver, target);
-        return extractor.ExtractBody(body, expressionBody, method.ReturnsVoid);
+        var model = context.Compilation!.GetSemanticModel(syntax!.SyntaxTree);
+        var extractor = new IrStatementExtractor(model, context, inheritedLocalNames: localNames);
+
+        return extractor.ExtractBody(body, expressionBody, method.ReturnsVoid).Statements;
     }
 
     /// <summary>
@@ -135,13 +141,19 @@ public static class IrMethodExtractor
     {
         if (!parameter.HasExplicitDefaultValue || compilation is null)
             return null;
+
         var syntax =
             parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax;
         var defaultExpression = syntax?.Default?.Value;
+
         if (defaultExpression is null)
             return null;
+
         var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-        return new IrExpressionExtractor(model, originResolver).Extract(defaultExpression);
+
+        return new IrExpressionExtractor(model, new IrExtractionContext(originResolver)).Extract(
+            defaultExpression
+        );
     }
 
     private static bool DetectYield(IMethodSymbol method)

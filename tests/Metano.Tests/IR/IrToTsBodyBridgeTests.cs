@@ -364,12 +364,10 @@ public class IrToTsBodyBridgeTests
             .Last();
 
         var methodSymbol = (IMethodSymbol)model.GetDeclaredSymbol(methodSyntax)!;
-        var stmtExtractor = new IrStatementExtractor(model);
-        var irBody = stmtExtractor.ExtractBody(
-            methodSyntax.Body,
-            methodSyntax.ExpressionBody,
-            methodSymbol.ReturnsVoid
-        );
+        var stmtExtractor = new IrStatementExtractor(model, IrExtractionContext.Empty);
+        var irBody = stmtExtractor
+            .ExtractBody(methodSyntax.Body, methodSyntax.ExpressionBody, methodSymbol.ReturnsVoid)
+            .Statements;
 
         var tsBody = IrToTsStatementBridge.MapBody(irBody, IrToTsBridgeContext.For(bclRegistry));
 

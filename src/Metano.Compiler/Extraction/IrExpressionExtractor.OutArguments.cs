@@ -43,6 +43,13 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     public IrExpression ExtractStandalone(ExpressionSyntax expression)
     {
+        // A field or property initializer has no member body that computed
+        // a map for it, so it computes its own (#398) — shared with the
+        // primary constructor when it runs inside it. A constructor
+        // initializer's arguments arrive with the constructor's map.
+        if (_localNames is null && InitializerOwnerOf(expression) is { } owner)
+            _localNames = LocalBindingDisambiguator.ForInitializer(owner, _context);
+
         var lowered = LowerExpressionVariables(new IrReturnStatement(Extract(expression)));
 
         if (lowered is [IrReturnStatement { Value: { } value }])
@@ -50,6 +57,11 @@ public sealed partial class IrExpressionExtractor
 
         return new IrCallExpression(new IrLambdaExpression([], ReturnType: null, lowered), []);
     }
+
+    private static SyntaxNode? InitializerOwnerOf(ExpressionSyntax expression) =>
+        expression
+            .Ancestors()
+            .FirstOrDefault(a => a is VariableDeclaratorSyntax or PropertyDeclarationSyntax);
 
     /// <summary>
     /// The statements that replace <paramref name="statement"/> once the
@@ -185,7 +197,10 @@ public sealed partial class IrExpressionExtractor
             {
                 Designation: SingleVariableDesignationSyntax designation
             } declaration => new IrOutLocalDeclaration(
-                designation.Identifier.ValueText,
+                LocalIrNameOf(
+                    _semantic.GetDeclaredSymbol(designation),
+                    designation.Identifier.ValueText
+                ),
                 IrTypeRefMapper.Map(
                     DeclaredLocalType(declaration, designation, parameter),
                     _originResolver,

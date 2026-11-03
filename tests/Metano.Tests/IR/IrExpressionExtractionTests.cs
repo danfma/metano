@@ -545,8 +545,9 @@ public class IrExpressionExtractionTests
         var target = methods.Last();
 
         var isVoid = target.ReturnType is PredefinedTypeSyntax { Keyword.ValueText: "void" };
-        var extractor = new IrStatementExtractor(model);
-        return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid);
+        var extractor = new IrStatementExtractor(model, IrExtractionContext.Empty);
+
+        return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid).Statements;
     }
 
     private static T GetAt<T>(IReadOnlyList<IrStatement> statements, int index)

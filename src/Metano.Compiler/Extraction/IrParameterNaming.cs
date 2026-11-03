@@ -28,13 +28,25 @@ internal static class IrParameterNaming
             : parameter.Name;
 
     /// <summary>
-    /// Only the parameters of an ordinary method, a module function or a
-    /// lambda are renamed: those declare their parameters under the IR name
-    /// and bind them as bare identifiers. A constructor parameter may be
-    /// promoted to a member or captured, an accessor's <c>value</c> and an
-    /// operator's parameters are declared elsewhere, and an <c>[ObjectArgs]</c>
-    /// method's parameters are the keys of its public argument object, so they
-    /// keep their name.
+    /// Whether the local-name disambiguator (#398) may rename the parameter
+    /// in a camelCase collision: a parameter of an owner that takes the
+    /// shadow suffix (<see cref="IsRenamableOwner"/>), or an operator's — an
+    /// operator is dispatched through the IR, never by a target caller naming
+    /// a parameter, and its declaration reads the disambiguated name.
+    /// </summary>
+    public static bool IsRenamable(IParameterSymbol parameter) =>
+        IsRenamableOwner(parameter.ContainingSymbol) || IsOperator(parameter.ContainingSymbol);
+
+    /// <summary>
+    /// The owners whose parameters take the shadow suffix: an ordinary
+    /// method, a module function and a lambda, which declare their parameters
+    /// under the IR name and bind them as bare identifiers. A constructor
+    /// parameter may be promoted to a member or captured, an accessor's
+    /// <c>value</c> is implicit, and an <c>[ObjectArgs]</c> method's
+    /// parameters are the keys of its public argument object, so they keep
+    /// their name. An operator's parameters never take the shadow suffix,
+    /// though the local-name disambiguator may rename them
+    /// (<see cref="IsRenamable"/>).
     /// </summary>
     private static bool IsRenamableOwner(ISymbol owner) =>
         owner
@@ -44,6 +56,13 @@ internal static class IrParameterNaming
             } method
         && !method.IsExtensionBlockMember()
         && !method.HasObjectArgs();
+
+    private static bool IsOperator(ISymbol owner) =>
+        owner
+            is IMethodSymbol
+            {
+                MethodKind: MethodKind.UserDefinedOperator or MethodKind.Conversion
+            };
 
     private static HashSet<string> CollidingNamesOf(ISymbol owner, Compilation compilation) =>
         CollidingNamesByOwner.GetValue(owner, key => FindCollidingNames(key, compilation));

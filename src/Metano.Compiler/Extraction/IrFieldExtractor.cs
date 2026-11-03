@@ -19,11 +19,14 @@ public static class IrFieldExtractor
     /// </summary>
     public static IrFieldDeclaration? TryExtract(
         IFieldSymbol field,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        IrExtractionContext? context = null
     )
     {
+        context ??= IrExtractionContext.Empty;
+        var originResolver = context.OriginResolver;
+        var compilation = context.Compilation;
+        var target = context.Target;
+
         if (field.AssociatedSymbol is IPropertySymbol)
             return null;
 
@@ -31,7 +34,7 @@ public static class IrFieldExtractor
             return null;
 
         var initializer = compilation is not null
-            ? TryExtractInitializer(field, compilation, originResolver, target)
+            ? TryExtractInitializer(field, compilation, context)
             : null;
 
         return new IrFieldDeclaration(
@@ -60,8 +63,7 @@ public static class IrFieldExtractor
     private static IrExpression? TryExtractInitializer(
         IFieldSymbol field,
         Compilation compilation,
-        IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target
+        IrExtractionContext context
     )
     {
         var declarator =
@@ -72,7 +74,7 @@ public static class IrFieldExtractor
             return null;
 
         var model = compilation.GetSemanticModel(declarator.SyntaxTree);
-        var expr = new IrExpressionExtractor(model, originResolver, target);
+        var expr = new IrExpressionExtractor(model, context);
 
         return expr.ExtractStandalone(declarator.Initializer.Value);
     }

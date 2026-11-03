@@ -16,11 +16,13 @@ public static class IrPropertyExtractor
 {
     public static IrPropertyDeclaration Extract(
         IPropertySymbol prop,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        IrExtractionContext? context = null
     )
     {
+        context ??= IrExtractionContext.Empty;
+        var originResolver = context.OriginResolver;
+        var target = context.Target;
+
         var accessors = ResolveAccessors(prop);
 
         var setterVisibility =
@@ -33,28 +35,31 @@ public static class IrPropertyExtractor
             prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as PropertyDeclarationSyntax;
 
-        var semantics = BuildSemantics(prop, syntax, compilation, target);
+        var semantics = BuildSemantics(prop, syntax, context);
 
         IReadOnlyList<IrStatement>? getterBody = null;
         IReadOnlyList<IrStatement>? setterBody = null;
         IrExpression? initializer = null;
 
-        if (compilation is not null && syntax is not null)
+        if (context.Compilation is { } compilation && syntax is not null)
         {
             var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-            var stmtExtractor = new IrStatementExtractor(model, originResolver, target);
-            var exprExtractor = new IrExpressionExtractor(model, originResolver, target);
+            var stmtExtractor = new IrStatementExtractor(model, context);
+            var exprExtractor = new IrExpressionExtractor(model, context);
 
             // Expression-bodied property: the whole `=> expr;` is the getter.
             if (syntax.ExpressionBody is not null)
             {
-                getterBody = stmtExtractor.ExtractBody(null, syntax.ExpressionBody, isVoid: false);
+                getterBody = stmtExtractor
+                    .ExtractBody(null, syntax.ExpressionBody, isVoid: false)
+                    .Statements;
             }
             else if (syntax.AccessorList is not null)
             {
                 var getter = syntax.AccessorList.Accessors.FirstOrDefault(a =>
                     a.IsKind(SyntaxKind.GetAccessorDeclaration)
                 );
+
                 var setter = SetterBodySyntax(prop, syntax.AccessorList);
 
                 if (
@@ -62,19 +67,16 @@ public static class IrPropertyExtractor
                     && (getter.Body is not null || getter.ExpressionBody is not null)
                 )
                 {
-                    getterBody = stmtExtractor.ExtractBody(
-                        getter.Body,
-                        getter.ExpressionBody,
-                        isVoid: false
-                    );
+                    getterBody = stmtExtractor
+                        .ExtractBody(getter.Body, getter.ExpressionBody, isVoid: false)
+                        .Statements;
                 }
+
                 if (setter is not null)
                 {
-                    setterBody = stmtExtractor.ExtractBody(
-                        setter.Body,
-                        setter.ExpressionBody,
-                        isVoid: true
-                    );
+                    setterBody = stmtExtractor
+                        .ExtractBody(setter.Body, setter.ExpressionBody, isVoid: true)
+                        .Statements;
                 }
             }
 
@@ -112,8 +114,7 @@ public static class IrPropertyExtractor
     private static IrPropertySemantics BuildSemantics(
         IPropertySymbol prop,
         PropertyDeclarationSyntax? syntax,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
+        IrExtractionContext context
     )
     {
         var hasGetterBody = DetectGetterBody(syntax);
@@ -130,8 +131,8 @@ public static class IrPropertyExtractor
             IsSealed: prop.IsSealed,
             IsRequired: prop.IsRequired,
             OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop),
-            EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, target),
-            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, compilation)
+            EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, context.Target),
+            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, context.Compilation)
         );
     }
 

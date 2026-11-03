@@ -480,6 +480,17 @@ public sealed class TypeScriptTransformContext(
     /// </summary>
     public bool UseIrBodiesWhenCovered { get; init; } = true;
 
+    /// <summary>
+    /// The extraction context the core extractors receive, built once here:
+    /// the cross-package origin resolver, this compilation, the TypeScript
+    /// target and its local-naming decision
+    /// (<see cref="Bridge.IrToTsNamingPolicy.LocalNaming"/>) for the
+    /// local-name disambiguator (#398). Emitters, bridges and the transformer
+    /// pass this object instead of re-threading the individual inputs.
+    /// </summary>
+    public IrExtractionContext Extraction =>
+        new(OriginResolver, Compilation, TargetLanguage.TypeScript, IrToTsNamingPolicy.LocalNaming);
+
     private BclExportTypeOverrides? _bclOverrides;
 
     /// <summary>

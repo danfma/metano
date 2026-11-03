@@ -211,8 +211,7 @@ public class IrToTsModuleBridgeTests
 
         var functions = IrModuleFunctionExtractor.Extract(
             typeSymbol,
-            originResolver: null,
-            compilation: compilation
+            new IrExtractionContext(Compilation: compilation)
         );
 
         var statements = new List<TsTopLevel>();
