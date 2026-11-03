@@ -361,7 +361,11 @@ describe("objectEquals / tupleEquals (C# object.Equals and ValueTuple.Equals)", 
     test("a length mismatch is unequal, outer or nested", () => {
       expect(tupleEquals([[1, 2], 3], [[1, 2], 3, 4], [[], null])).toBe(false);
       expect(tupleEquals([[1, 2], 3], [[1], 3], [[], null])).toBe(false);
-      expect(tupleEquals([[1, 2], 3], [[[1, 9], 3], 4], [[[], null], null])).toBe(false);
+    });
+
+    test("a differing nested element is unequal, at any depth", () => {
+      expect(tupleEquals([[[1, 2], 3], 4], [[[1, 9], 3], 4], [[[], null], null])).toBe(false);
+      expect(tupleEquals([[[1, 2], 3], 4], [[[1, 2], 9], 4], [[[], null], null])).toBe(false);
     });
 
     test("an element the shape marks as non-tuple compares by reference", () => {

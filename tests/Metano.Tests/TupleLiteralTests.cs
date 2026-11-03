@@ -180,7 +180,15 @@ public class TupleLiteralTests
                 public static bool NullableBoth(((int, int), int)? a, ((int, int), int)? b) =>
                     object.Equals(a, b);
 
+                public static bool NullableElement(((int, int)?, int) a, ((int, int)?, int) b) =>
+                    object.Equals(a, b);
+
+                public static bool NullableReceiver((int, int)? a, (int, int)? b) => a.Equals(b);
+
                 public static bool? Guarded(((int, int), int)? a, ((int, int), int) b) =>
+                    a?.Equals(b);
+
+                public static bool? ConditionalMismatched(((int, int), int)? a, (int, long) b) =>
                     a?.Equals(b);
 
                 public static bool NullableArgument(((int, int), int) a, ((int, int), int)? b) =>
@@ -199,9 +207,17 @@ public class TupleLiteralTests
 
                 public static bool NullableMismatched((int, int)? a, (int, long) b) => a.Equals(b);
 
+                public static bool NullableMismatchedObject((int, int)? a, object b) =>
+                    a.Equals(b);
+
                 public static bool ThroughObject(((int, int), int) a, object b) => a.Equals(b);
 
                 public static bool Boxed(object a, object b) => object.Equals(a, b);
+
+                public static bool Eight(
+                    (int, int, int, int, int, int, int, int) a,
+                    (int, int, int, int, int, int, int, int) b
+                ) => a.Equals(b);
             }
             """
         );
@@ -211,8 +227,15 @@ public class TupleLiteralTests
             .IsEqualTo(TranspileHelper.ReadExpected("tuple-equality.ts"));
     }
 
+    /// <summary>
+    /// Flat tuples lower to the element-wise call. This differs from main's
+    /// unmapped instance form (a crashing <c>a.equals(b)</c> — Dart
+    /// <c>a.equals(b)</c> — becomes <c>tupleEquals(a, b)</c> / Dart
+    /// <c>a == b</c>); the static form keeps main's <c>tupleEquals</c> via
+    /// the retarget byte for byte.
+    /// </summary>
     [Test]
-    public async Task FlatTuples_KeepTheMainLowering()
+    public async Task FlatTuples_LowerToTheElementWiseCall()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -241,148 +264,64 @@ public class TupleLiteralTests
     }
 
     /// <summary>
-    /// A tuple element that is itself a tuple compares element-wise at any
-    /// depth (#331): the call carries the static element shape so the runtime
-    /// <c>tupleEquals</c> can tell a nested tuple (compare by value) from a
-    /// C# array (compare by reference) — at runtime both are JS arrays.
+    /// A conditional <c>?.Equals</c> whose receiver is not a tuple keeps
+    /// the general lowering — the receiver's own <c>equals</c> must still be
+    /// the call that runs, including a <c>[Name]</c>-renamed override. This
+    /// pins that the recognizer declines rather than hijacking the override
+    /// chain root.
     /// </summary>
     [Test]
-    public async Task ObjectEqualsOverNestedTuples_PassesTheElementShape()
+    public async Task NonTupleConditionalEquals_KeepTheGeneralLowering()
     {
         var result = TranspileHelper.Transpile(
             """
+            #nullable enable
+
+            [Transpile]
+            public sealed record Session(string Id);
+
+            [Transpile]
+            public sealed class User
+            {
+                public string Name { get; }
+
+                public User(string name) => Name = name;
+
+                [Name("isSame")]
+                public bool Equals(User? other) => Name == other?.Name;
+            }
+
             [Transpile]
             public static class Comparisons
             {
-                public static bool Nested(((int, int), int) a, ((int, int), int) b) =>
-                    object.Equals(a, b);
+                public static bool? Record(Session? a, Session b) => a?.Equals(b);
+
+                public static bool? Renamed(User? a, User b) => a?.Equals(b);
+
+                public static bool? Stringy(string? a, string b) => a?.Equals(b);
+
+                public static bool? Generic<T>(T? a, T b)
+                    where T : class => a?.Equals(b);
             }
             """
         );
 
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    [Test]
-    public async Task ObjectEqualsOverThreeLevelNesting_PassesTheElementShape()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Deeper(
-                    (((int, int), int), int) a,
-                    (((int, int), int), int) b
-                ) => object.Equals(a, b);
-            }
-            """
-        );
+        var output = result["comparisons.ts"];
 
         await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [\n      [[], null],\n      null,\n    ]);");
+            .That(output)
+            .Contains("static record(a: Session | null, b: Session): boolean | null {");
+        await Assert.That(output).Contains("return a?.equals(b) ?? null;");
+        await Assert.That(output).Contains("return a?.isSame(b) ?? null;");
     }
 
     /// <summary>
-    /// The instance <c>.Equals</c> over nested tuples carries the same
-    /// element shape as the <c>object.Equals</c> lowering.
+    /// A nullable tuple element is a different element type than the plain
+    /// tuple, so the two are not one instantiation and keep
+    /// <c>objectEquals</c> (C#: never equal).
     /// </summary>
     [Test]
-    public async Task InstanceEqualsOverNestedTuples_PassesTheElementShape()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Nested(((int, int), int) a, ((int, int), int) b) => a.Equals(b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    [Test]
-    public async Task InstanceEqualsOverThreeLevelNesting_PassesTheElementShape()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Deeper(
-                    (((int, int), int), int) a,
-                    (((int, int), int), int) b
-                ) => a.Equals(b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [\n      [[], null],\n      null,\n    ]);");
-    }
-
-    /// <summary>
-    /// Element names are compile-time only, so named and unnamed elements of
-    /// one instantiation lower to the same shape.
-    /// </summary>
-    [Test]
-    public async Task NamedTupleElements_IgnoreNamesInTheShape()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Named(
-                    ((int first, int second), int tag) a,
-                    ((int, int), int) b
-                ) => object.Equals(a, b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    /// <summary>
-    /// Only tuple elements are marked in the shape: an array element keeps
-    /// comparing by reference, as C# compares an array.
-    /// </summary>
-    [Test]
-    public async Task NestedTupleWithAnArrayElement_MarksOnlyTheTuple()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Mixed(((int, int), int[]) a, ((int, int), int[]) b) =>
-                    object.Equals(a, b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    /// <summary>
-    /// A nullable tuple element is the tuple or <c>null</c>; the shape marks
-    /// it as a tuple and the runtime guards the null cases.
-    /// </summary>
-    [Test]
-    public async Task NullableTupleElement_IsMarkedInTheShape()
+    public async Task NullableTupleElementVersusPlainTuple_KeepObjectEquals()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -391,26 +330,24 @@ public class TupleLiteralTests
             [Transpile]
             public static class Comparisons
             {
-                public static bool WithNullableElement(((int, int)?, int) a, ((int, int)?, int) b) =>
+                public static bool Mixed(((int, int)?, int) a, ((int, int), int) b) =>
                     object.Equals(a, b);
             }
             """
         );
 
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
+        await Assert.That(result["comparisons.ts"]).Contains("return objectEquals(a, b);");
     }
 
     /// <summary>
     /// Tuples of different <c>ValueTuple</c> instantiations are different
-    /// types, never equal in C#, while their arrays could compare equal
-    /// element by element, so they keep <c>objectEquals</c>. A nullable-tuple
-    /// receiver over such an argument retargets to the static form — the
-    /// instance lowering would crash on a positional array.
+    /// types, never equal in C#. The static form keeps <c>objectEquals</c>;
+    /// a nullable-tuple receiver lowers to C#'s answer — <c>false</c>,
+    /// unless both operands can be <c>null</c> and are — because the
+    /// instance form would crash on a positional array.
     /// </summary>
     [Test]
-    public async Task MismatchedInstantiations_KeepObjectEquals()
+    public async Task MismatchedInstantiations_KeepTheirLowerings()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -421,7 +358,7 @@ public class TupleLiteralTests
             {
                 public static bool Widened((int, int) a, (int, long) b) => object.Equals(a, b);
 
-                public static bool NullableReceiver((int, int)? a, (int, long) b) => a.Equals(b);
+                public static bool NullableReceiver((int, int)? c, (int, long) d) => c.Equals(d);
             }
             """
         );
@@ -429,35 +366,13 @@ public class TupleLiteralTests
         var output = result["comparisons.ts"];
 
         await Assert.That(output).Contains("return objectEquals(a, b);");
-        await Assert.That(output).Contains("return objectEquals(a, b);");
-    }
-
-    /// <summary>
-    /// An <c>Equals(object)</c> call whose argument is not the receiver's
-    /// tuple instantiation keeps the plain declarative mapping — the flat
-    /// <c>tupleEquals</c> — so its nested elements compare by reference, a
-    /// documented limitation (the mapping cannot see static types).
-    /// </summary>
-    [Test]
-    public async Task NestedTupleEqualsWithAnObjectArgument_KeepsTheFlatCall()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool ThroughObject(((int, int), int) a, object b) => a.Equals(b);
-            }
-            """
-        );
-
-        await Assert.That(result["comparisons.ts"]).Contains("return tupleEquals(a, b);");
+        await Assert.That(output).Contains("return false;");
     }
 
     /// <summary>
     /// A generic type parameter is never a tuple here, so <c>T.Equals</c>
-    /// keeps the general lowering — the limitation C# generics have no
-    /// runtime element shape to lower to.
+    /// keeps the general lowering — C# generics have no runtime element
+    /// shape to lower to.
     /// </summary>
     [Test]
     public async Task GenericOperands_KeepTheGeneralLowering()
@@ -473,60 +388,6 @@ public class TupleLiteralTests
         );
 
         await Assert.That(result["comparisons.ts"]).Contains("return objectEquals(a, b);");
-    }
-
-    /// <summary>
-    /// A tuple whose element is an array next to a nested tuple: only the
-    /// tuple element is marked, and a tuple with no tuple element at all
-    /// keeps the byte-identical flat call.
-    /// </summary>
-    [Test]
-    public async Task TupleWithOnlyArrayElements_EmitsTheFlatCall()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool ArrayElement((int[], int) a, (int[], int) b) =>
-                    object.Equals(a, b);
-            }
-            """
-        );
-
-        await Assert.That(result["comparisons.ts"]).Contains("return tupleEquals(a, b);");
-    }
-
-    /// <summary>
-    /// <c>object.Equals</c> over nullable tuples of the same instantiation
-    /// lowers to the same element-wise call: the runtime guards the null
-    /// cases C# answers (both null <c>true</c>, one null <c>false</c>, else
-    /// element-wise). A <c>null</c> literal operand is never the
-    /// instantiation, so it keeps <c>objectEquals</c>, which agrees.
-    /// </summary>
-    [Test]
-    public async Task ObjectEqualsOverNullableTuples_RetargetsToTupleEquals()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            #nullable enable
-
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool BothNullable((int, int)? a, (int, int)? b) =>
-                    object.Equals(a, b);
-
-                public static bool OneNullable((int, int)? c, (int, int) d) =>
-                    object.Equals(c, d);
-            }
-            """
-        );
-
-        var output = result["comparisons.ts"];
-
-        await Assert.That(output).Contains("return tupleEquals(a, b);");
-        await Assert.That(output).Contains("return tupleEquals(c, d);");
     }
 
     [Test]
@@ -545,158 +406,6 @@ public class TupleLiteralTests
         );
 
         await Assert.That(result["comparisons.ts"]).Contains("return objectEquals(a, null);");
-    }
-
-    /// <summary>
-    /// <c>t.Equals(u)</c> over nullable tuples is <c>Nullable&lt;T&gt;.Equals</c>:
-    /// both null <c>true</c>, one null <c>false</c>, else element-wise — the
-    /// same guarded call. Through <c>.Value</c> the receiver is proven
-    /// non-null first, so the underlying tuple's own <c>Equals</c> applies.
-    /// </summary>
-    [Test]
-    public async Task NullableTupleInstanceEquals_RetargetsToTupleEquals()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            #nullable enable
-
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Receiver((int, int)? a, (int, int)? b) => a.Equals(b);
-
-                public static bool ThroughValue(((int, int), int)? a, ((int, int), int) b) =>
-                    a!.Value.Equals(b);
-            }
-            """
-        );
-
-        var output = result["comparisons.ts"];
-
-        await Assert.That(output).Contains("return tupleEquals(a, b);");
-        await Assert.That(output).Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    /// <summary>
-    /// <c>t?.Equals(u)</c> yields <c>null</c> for a null receiver (a nullable
-    /// boolean in C#), so the lowering keeps the null-conditional guard and
-    /// the comparison runs only on a value — reading the receiver through
-    /// the guard, never evaluating it twice.
-    /// </summary>
-    [Test]
-    public async Task ConditionalAccessEquals_LowersNullSafe()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            #nullable enable
-
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool? Guarded(((int, int), int)? a, ((int, int), int) b) =>
-                    a?.Equals(b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return a == null ? null : tupleEquals(a, b, [[], null]);");
-    }
-
-    /// <summary>
-    /// A nullable argument boxes to <c>object</c>, so the call binds
-    /// <c>Equals(object)</c> — the recognizer sees through the boxing to the
-    /// same instantiation.
-    /// </summary>
-    [Test]
-    public async Task EqualsWithANullableArgument_RetargetsToTupleEquals()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            #nullable enable
-
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool NullableArgument(((int, int), int) a, ((int, int), int)? b) =>
-                    a.Equals(b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    /// <summary>
-    /// A named argument on the instance form names the only parameter; the
-    /// operands keep their source order.
-    /// </summary>
-    [Test]
-    public async Task NamedArgumentOnInstanceEquals_KeepsTheCall()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Named(((int, int), int) a, ((int, int), int) b) =>
-                    a.Equals(other: b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    /// <summary>
-    /// Named static arguments in either order keep the source evaluation
-    /// order — the operand written first is lowered first (tuple equality is
-    /// symmetric).
-    /// </summary>
-    [Test]
-    public async Task StaticEqualsNamedArguments_KeepSourceOrder()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Reversed(((int, int), int) a, ((int, int), int) b) =>
-                    object.Equals(objB: a, objA: b);
-            }
-            """
-        );
-
-        await Assert
-            .That(result["comparisons.ts"])
-            .Contains("return tupleEquals(a, b, [[], null]);");
-    }
-
-    /// <summary>
-    /// A boxed tuple (an operand statically <c>object</c>) cannot be told
-    /// apart from a C# array at runtime — both are JS arrays — so it keeps
-    /// the reference comparison of the general <c>objectEquals</c> lowering.
-    /// This pins the limitation rather than the C# answer (value equality).
-    /// </summary>
-    [Test]
-    public async Task BoxedTuples_CompareByReference_KeepObjectEquals()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Boxed(object a, object b) => object.Equals(a, b);
-            }
-            """
-        );
-
-        await Assert.That(result["comparisons.ts"]).Contains("return objectEquals(a, b);");
     }
 
     /// <summary>
@@ -727,5 +436,88 @@ public class TupleLiteralTests
         await Assert.That(output).Contains("return objectEquals(a, [1, 2] as [number, number]);");
 
         await Assert.That(output).Contains("return objectEquals(c, d);");
+    }
+
+    /// <summary>
+    /// A side-effecting conditional receiver is evaluated once: the guard
+    /// and the comparison both read the bound value (#331 — the node is
+    /// registered with the null-conditional walker).
+    /// </summary>
+    [Test]
+    public async Task ConditionalTupleReceiver_IsEvaluatedOnce()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public class Holder
+            {
+                public ((int, int), int)? Pair { get; set; }
+            }
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool? Guarded(Holder h, ((int, int), int) b) => h.Pair?.Equals(b);
+            }
+            """
+        );
+
+        var output = result["comparisons.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("h.pair == null ? null : tupleEquals(h.pair, b, [[], null]);");
+    }
+
+    /// <summary>
+    /// The node lowers inside an async body — an awaited operand stays an
+    /// awaited operand of the comparison.
+    /// </summary>
+    [Test]
+    public async Task AwaitedTupleEqualityOperand_StaysAwaited()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static async Task<bool> Awaited(Task<((int, int), int)> a, ((int, int), int) b) =>
+                    object.Equals(await a, b);
+            }
+            """
+        );
+
+        await Assert
+            .That(result["comparisons.ts"])
+            .Contains("return tupleEquals(await a, b, [[], null]);");
+    }
+
+    /// <summary>
+    /// A <c>[PlainObject]</c> instance method lowers through the IR path,
+    /// so a tuple equality inside it rewrites <c>this</c> reads like any
+    /// other expression.
+    /// </summary>
+    [Test]
+    public async Task PlainObjectTupleEquality_RewritesThisReads()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile, PlainObject]
+            public record Line(int X, int Y)
+            {
+                public bool SameOrigin((int, int) other) => object.Equals((X, Y), other);
+            }
+            """
+        );
+
+        await Assert
+            .That(result["line.ts"])
+            .Contains("tupleEquals([self.x, self.y] as [number, number], other)");
     }
 }

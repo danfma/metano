@@ -30,8 +30,20 @@ export class Comparisons {
     return tupleEquals(a, b, [[], null]);
   }
 
+  static nullableElement(a: [[number, number] | null, number], b: [[number, number] | null, number]): boolean {
+    return tupleEquals(a, b, [[], null]);
+  }
+
+  static nullableReceiver(a: [number, number] | null, b: [number, number] | null): boolean {
+    return tupleEquals(a, b);
+  }
+
   static guarded(a: [[number, number], number] | null, b: [[number, number], number]): boolean | null {
     return a == null ? null : tupleEquals(a, b, [[], null]);
+  }
+
+  static conditionalMismatched(a: [[number, number], number] | null, b: [number, number]): boolean | null {
+    return a == null ? null : false;
   }
 
   static nullableArgument(a: [[number, number], number], b: [[number, number], number] | null): boolean {
@@ -55,7 +67,11 @@ export class Comparisons {
   }
 
   static nullableMismatched(a: [number, number] | null, b: [number, number]): boolean {
-    return objectEquals(a, b);
+    return false;
+  }
+
+  static nullableMismatchedObject(a: [number, number] | null, b: Object): boolean {
+    return a == null ? b == null : false;
   }
 
   static throughObject(a: [[number, number], number], b: Object): boolean {
@@ -64,5 +80,9 @@ export class Comparisons {
 
   static boxed(a: Object, b: Object): boolean {
     return objectEquals(a, b);
+  }
+
+  static eight(a: [number, number, number, number, number, number, number, [number]], b: [number, number, number, number, number, number, number, [number]]): boolean {
+    return tupleEquals(a, b, [null, null, null, null, null, null, null, []]);
   }
 }

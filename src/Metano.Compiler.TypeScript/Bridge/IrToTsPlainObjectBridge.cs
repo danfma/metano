@@ -299,6 +299,11 @@ public static class IrToTsPlainObjectBridge
             {
                 Elements = tuple.Elements.Select(e => RewriteThis(e, identifierName)).ToList(),
             },
+            IrTupleEqualityExpression tupleEquality => tupleEquality with
+            {
+                Left = RewriteThis(tupleEquality.Left, identifierName),
+                Right = RewriteThis(tupleEquality.Right, identifierName),
+            },
             IrSliceExpression slice => slice with
             {
                 Target = RewriteThis(slice.Target, identifierName),

@@ -1601,4 +1601,77 @@ public class DartBackendTests
             .That(output)
             .Contains("=> (($receiver) => $receiver == null ? null : $receiver == b)(a) == true;");
     }
+
+    /// <summary>
+    /// A conditional <c>?.Equals</c> whose receiver is not a tuple keeps the
+    /// general lowering — the receiver's own <c>equals</c> runs (the Dart
+    /// target does not apply <c>[Name]</c> to methods yet; the rename itself
+    /// is pinned on the TypeScript side). The tuple recognizer must not
+    /// hijack the override-chain root (#331).
+    /// </summary>
+    [Test]
+    public async Task NonTupleConditionalEquals_KeepTheGeneralLowering()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public sealed class User
+            {
+                public string Name { get; }
+
+                public User(string name) => Name = name;
+
+                [Name("isSame")]
+                public bool Equals(User? other) => Name == other?.Name;
+            }
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool? Renamed(User? a, User b) => a?.Equals(b);
+
+                public static bool? Stringy(string? a, string b) => a?.Equals(b);
+            }
+            """
+        );
+
+        var output = files["comparisons.dart"];
+
+        await Assert.That(output).Contains("static bool? renamed(User? a, User b) => a?.equals(b);");
+
+        await Assert
+            .That(output)
+            .Contains("static bool? stringy(String? a, String b) => a?.equals(b);");
+    }
+
+    /// <summary>
+    /// A nullable-tuple receiver over a different instantiation lowers to
+    /// C#'s answer — <c>false</c>, unless both operands can be <c>null</c>
+    /// and are — never to an instance call that does not exist on a Dart
+    /// record (#331).
+    /// </summary>
+    [Test]
+    public async Task MismatchedNullableTupleReceiver_LowersToFalseUnlessBothNull()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool ValueArgument((int, int)? c, (int, long) d) => c.Equals(d);
+
+                public static bool ObjectArgument((int, int)? e, object f) => e.Equals(f);
+            }
+            """
+        );
+
+        var output = files["comparisons.dart"];
+
+        await Assert.That(output).Contains("=> false;");
+        await Assert.That(output).Contains("=> e == null ? f == null : false;");
+    }
 }

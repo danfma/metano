@@ -456,6 +456,11 @@ public static class IrToTsJsxComponentBridge
             {
                 Elements = tuple.Elements.Select(e => Rewrite(e, propNames, referenced)).ToList(),
             },
+            IrTupleEqualityExpression tupleEquality => tupleEquality with
+            {
+                Left = Rewrite(tupleEquality.Left, propNames, referenced),
+                Right = Rewrite(tupleEquality.Right, propNames, referenced),
+            },
             IrSpreadExpression spread => spread with
             {
                 Expression = Rewrite(spread.Expression, propNames, referenced),

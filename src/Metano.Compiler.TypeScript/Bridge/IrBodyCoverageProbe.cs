@@ -106,6 +106,8 @@ public static class IrBodyCoverageProbe
                 && tpl.Arguments.All(IsCoveredExpression),
             IrArrayLiteral arr => arr.Elements.All(IsCoveredExpression),
             IrTupleLiteral tuple => tuple.Elements.All(IsCoveredExpression),
+            IrTupleEqualityExpression tupleEquality => IsCoveredExpression(tupleEquality.Left)
+                && IsCoveredExpression(tupleEquality.Right),
             IrSpreadExpression spread => IsCoveredExpression(spread.Expression),
             IrYieldExpression ye => ye.Value is null || IsCoveredExpression(ye.Value),
             IrConditionalReceiver => true,

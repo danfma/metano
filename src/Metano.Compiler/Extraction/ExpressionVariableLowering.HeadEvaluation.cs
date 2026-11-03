@@ -69,6 +69,13 @@ internal sealed partial class ExpressionVariableLowering
                 case IrTupleLiteral tuple:
                     return tuple with { Elements = tuple.Elements.Select(Bind).ToList() };
 
+                case IrTupleEqualityExpression tupleEquality:
+                    return tupleEquality with
+                    {
+                        Left = Bind(tupleEquality.Left),
+                        Right = Bind(tupleEquality.Right),
+                    };
+
                 case IrCallExpression call:
                     return StopAfter(BindCallParts(call));
 

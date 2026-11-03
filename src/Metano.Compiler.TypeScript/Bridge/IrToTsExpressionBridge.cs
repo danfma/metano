@@ -349,22 +349,18 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var left = Map(equality.Left, context);
-        var right = Map(equality.Right, context);
-
-        if (ShapeOf(equality.TupleType) is not { } shape)
+        var operands = new List<TsExpression>
         {
-            return new TsTemplate($"{TupleEqualityHelper}($0, $1)", Receiver: null, [left, right])
-            {
-                RuntimeImports = [TupleEqualityHelper],
-            };
-        }
+            Map(equality.Left, context),
+            Map(equality.Right, context),
+        };
 
-        return new TsTemplate(
-            $"{TupleEqualityHelper}($0, $1, $2)",
-            Receiver: null,
-            [left, right, shape]
-        )
+        if (ShapeOf(equality.TupleType) is { } shape)
+            operands.Add(shape);
+
+        var placeholders = string.Join(", ", operands.Select((_, index) => $"${index}"));
+
+        return new TsTemplate($"{TupleEqualityHelper}({placeholders})", Receiver: null, operands)
         {
             RuntimeImports = [TupleEqualityHelper],
         };
