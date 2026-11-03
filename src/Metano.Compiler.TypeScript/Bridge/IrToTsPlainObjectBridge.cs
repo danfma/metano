@@ -167,7 +167,7 @@ public static class IrToTsPlainObjectBridge
         var parameters = new List<TsParameter> { new("self", new TsNamedType(ownerTsName)) };
         parameters.AddRange(
             method.Parameters.Select(p => new TsParameter(
-                TypeScriptNaming.ToCamelCase(p.Name),
+                IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
                 Rest: p.IsParams

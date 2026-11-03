@@ -292,11 +292,11 @@ public static class IrToTsOverloadDispatcherBridge
             TypeParameters: MapTypeParameters(method.TypeParameters)
         );
 
-    /// <summary>Maps a method's parameters to TS parameters (camelCase names, rest for <c>params</c>).</summary>
+    /// <summary>Maps a method's parameters to TS parameters (local-binding names, rest for <c>params</c>).</summary>
     internal static List<TsParameter> MapParameters(IrMethodDeclaration method) =>
         method
             .Parameters.Select(p => new TsParameter(
-                TypeScriptNaming.ToCamelCase(p.Name),
+                IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.MapParameterType(p),
                 Rest: p.IsParams
             ))

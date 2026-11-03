@@ -62,9 +62,10 @@ public sealed record IrPropertyDeclaration(
 /// <param name="IsCompileTimeConstant">Declared with the C# <c>const</c> modifier
 /// (Roslyn's <c>IFieldSymbol.IsConst</c>): implies <see cref="IsReadonly"/> (a C#
 /// <c>const</c> is read-only). Distinct from <see cref="IsConstant"/>, which is the
-/// <c>[Constant]</c> attribute, and from <see cref="IrStatement"/> locals'
-/// <c>IsConst</c>, which only means "never reassigned"; a backend may keep such a
-/// field's source name (a module-scope constant is the module's public shape, #390).</param>
+/// <c>[Constant]</c> attribute, and from
+/// <see cref="IrVariableDeclaration.IsConst"/>, which only means "never
+/// reassigned"; a backend may keep such a field's source name (a module-scope
+/// constant is the module's public shape, #390).</param>
 public sealed record IrFieldDeclaration(
     string Name,
     IrVisibility Visibility,

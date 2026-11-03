@@ -97,7 +97,7 @@ public static class IrToTsNamingPolicy
     /// The module bridge's declaration and the collision report both resolve
     /// through here so they name what is declared.
     /// </summary>
-    public static string ToModuleVariableName(IrMemberDeclaration variable) =>
+    public static string ToDeclaredModuleVariableName(IrMemberDeclaration variable) =>
         variable is IrFieldDeclaration { IsCompileTimeConstant: true }
             ? ToModuleConstantName(variable.Name, FindNameOverride(variable.Attributes))
             : ToModuleVariableName(variable.Name, FindNameOverride(variable.Attributes));

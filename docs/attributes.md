@@ -396,7 +396,9 @@ app.get("/", (c) => c.text("hello"));
 ### `[ExportVarFromBody("name", AsDefault = true)]`
 
 Combines with `[ModuleEntryPoint]` to promote a local variable to a module
-export (optionally `export default`).
+export (optionally `export default`). The attribute names the C# local; the
+export uses the local's emitted name, so a PascalCase local is exported under
+its camelCased form (`var App` → `export default app;`).
 
 ```csharp
 [NoContainer]

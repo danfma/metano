@@ -445,14 +445,15 @@ public class ConstNamingConsistencyTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("total");
+        // The destructured binding and the read of it name the same local.
+        await Assert.That(output).Contains("? total : 0");
         await Assert.That(output).DoesNotContain("Total");
     }
 
     [Test]
     public async Task ExportVarFromBody_PascalCaseLocal_ExportsInPlaceUnderEmittedName()
     {
-        var output = TranspileHelper.Transpile(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             [Transpile, NoContainer]
             public static class Program
@@ -467,23 +468,10 @@ public class ConstNamingConsistencyTests
             """
         );
 
-        var program = output["program.ts"];
+        var program = files["program.ts"];
         await Assert.That(program).Contains("export const app = 1 + 2;");
         await Assert.That(program).Contains("console.log(app)");
 
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
-            [Transpile, NoContainer]
-            public static class Program
-            {
-                [ModuleEntryPoint, ExportVarFromBody("App", InPlace = true)]
-                public static void Main()
-                {
-                    var App = 1 + 2;
-                }
-            }
-            """
-        );
         await Assert
             .That(diagnostics.Any(d => d.Message.Contains("did not find a local variable")))
             .IsFalse();
@@ -643,6 +631,7 @@ public class ConstNamingConsistencyTests
 
         await Assert.That(files).ContainsKey("counter.ts");
         await Assert.That(files["counter.ts"]).Contains("export const Cap: number = 1;");
+
         await Assert
             .That(
                 diagnostics.Any(d =>
@@ -679,6 +668,205 @@ public class ConstNamingConsistencyTests
         await Assert.That(files["limits.ts"]).Contains("const max = 3;");
         await Assert.That(files["limits.ts"]).Contains("return Max + max;");
         await Assert.That(diagnostics.Any(d => d.Message.Contains("shadows"))).IsFalse();
+    }
+
+    [Test]
+    public async Task ModuleStaticReadOnlyNamedLikeReservedWord_EscapesAtDeclarationAndReads()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Globals
+            {
+                public static readonly int @new = 9;
+
+                public static int F(int x) => @new + x;
+            }
+
+            [Transpile]
+            public class Reader
+            {
+                public int Read() => Globals.@new;
+            }
+            """
+        );
+
+        var globals = output["globals.ts"];
+        await Assert.That(globals).Contains("export const new_: number = 9;");
+        await Assert.That(globals).Contains("return new_ + x;");
+
+        var reader = output["reader.ts"];
+        await Assert.That(reader).Contains("import { new_ } from \"./globals\";");
+        await Assert.That(reader).Contains("return new_;");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtConstructorDeclarationAndRead()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                private readonly int _v;
+
+                public Sample(int of)
+                {
+                    _v = of + 1;
+                }
+
+                public int Value => _v;
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("constructor(of_: number)");
+        await Assert.That(output).Contains("this._v = of_ + 1;");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtLambdaDeclarationAndRead()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static Func<int, int> F() => of => of + 3;
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("(of_: number)");
+        await Assert.That(output).Contains("of_ + 3");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtOverloadImplAndDispatcher()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static int F(int of) => of + 1;
+
+                public static int F(int of, int by) => of + by;
+            }
+            """
+        )["sample.ts"];
+
+        // Every overload's fast-path signature and its body reads escape.
+        await Assert.That(output).Contains("(of_: number)");
+        await Assert.That(output).Contains("of_ + 1");
+        await Assert.That(output).Contains("of_ + by");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtModuleFunctionDeclarationAndRead()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Math
+            {
+                public static int Twice(int of) => of * 2;
+            }
+            """
+        )["math.ts"];
+
+        await Assert.That(output).Contains("export function twice(of_: number): number");
+        await Assert.That(output).Contains("return of_ * 2;");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_ObjectArgsFunctionKeepsWireKeyAndAliasesBinding()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class UI
+            {
+                [ObjectArgs]
+                public static int Column(int of = 0, int width = 100) => of + width;
+            }
+            """
+        )["ui.ts"];
+
+        // The wire key stays `of`; the local binding the body reads is aliased.
+        await Assert
+            .That(output)
+            .Contains("function column(args: { of?: number; width?: number })");
+        await Assert.That(output).Contains("const { of: of_ = 0, width = 100 } = args;");
+        await Assert.That(output).Contains("return of_ + width;");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_ObjectArgsConstructorAliasesBindingInDestructure()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Panel
+            {
+                [ObjectArgs]
+                public Panel(int of, int width)
+                {
+                    Gap = of;
+                    Width = width;
+                }
+
+                public int Gap { get; }
+                public int Width { get; }
+            }
+            """
+        )["panel.ts"];
+
+        await Assert.That(output).Contains("const { of: of_, width } = args;");
+        await Assert.That(output).Contains("this.gap = of_;");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtPlainObjectMethodDeclarationAndRead()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, PlainObject]
+            public record Line
+            {
+                public int Shift(int of) => of + 1;
+            }
+            """
+        )["line.ts"];
+
+        await Assert.That(output).Contains("of_");
+        await Assert.That(output).DoesNotContain("(of:");
+        await Assert.That(output).DoesNotContain("of + 1");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtPrimaryConstructorPromotion()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record Range
+            {
+                public Range(int Of)
+                {
+                    Length = Of;
+                }
+
+                public int Length { get; }
+            }
+            """
+        )["range.ts"];
+
+        // The promoted parameter declares its property under the member rule
+        // (which escapes `of`), and the capture assignment reads the same name.
+        await Assert.That(output).Contains("of_");
+        await Assert.That(output).DoesNotContain("of:");
+        await Assert.That(output).DoesNotContain("of;");
     }
 
     [Test]

@@ -119,14 +119,22 @@ public sealed record IrMemberOrigin(
     public bool IsTupleElement => TupleElement is not IrTupleElementKind.None;
 
     /// <summary>
-    /// The access reads a module variable that is a compile-time constant: a C#
-    /// <c>const</c> field of a containerless static class whose declaration the
-    /// toolchain emits. That is the one read the module-constant naming rule
-    /// (kept C# name, see #390) applies to — a const of a foreign or
-    /// non-containerless declaring type is an ordinary member read.
+    /// The access reads a module variable the toolchain declares: a static
+    /// field or property of a containerless static class. That read lowers to
+    /// a bare identifier (or an import of one), so it names what the module
+    /// declared (see #390); a member of a foreign or non-containerless
+    /// declaring type is an ordinary member read.
     /// </summary>
-    public bool IsModuleConstant =>
-        IsDeclaringTypeNoContainer && IsCompileTimeConstant && IsTranspiledDataMember;
+    public bool IsModuleVariable =>
+        IsStatic && IsDeclaringTypeNoContainer && IsTranspiledDataMember;
+
+    /// <summary>
+    /// The access reads a module variable that is a compile-time constant: a
+    /// C# <c>const</c> field of a containerless static class whose declaration
+    /// the toolchain emits. That is the one read the module-constant naming
+    /// rule (kept C# name, see #390) applies to.
+    /// </summary>
+    public bool IsModuleConstant => IsModuleVariable && IsCompileTimeConstant;
 }
 
 /// <summary>

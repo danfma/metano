@@ -121,7 +121,7 @@ internal static partial class IrToTsClassBridge
         IrToTsBridgeContext context
     ) =>
         new(
-            TypeScriptNaming.ToCamelCase(p.Parameter.Name),
+            IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
             resolveType(p),
             Accessibility: TsAccessibility.None,
             DefaultValue: ResolveCtorParamDefault(p, context),
@@ -238,7 +238,10 @@ internal static partial class IrToTsClassBridge
             {
                 if (p.CapturedFieldName is null)
                     continue;
-                var paramName = TypeScriptNaming.ToCamelCase(p.Parameter.Name);
+
+                // The parameter binding uses the local policy; the captured
+                // field it writes is a member and keeps member naming.
+                var paramName = IrToTsNamingPolicy.ToParameterName(p.Parameter.Name);
                 var fieldName = TypeScriptNaming.ToCamelCase(p.CapturedFieldName);
                 body.Add(
                     new TsExpressionStatement(
