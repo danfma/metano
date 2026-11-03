@@ -34,9 +34,7 @@ public static class IrEvaluationTraits
 
     /// <summary>
     /// Shape-based: literals, <see cref="IsReusableReceiver">reusable
-    /// receivers</see>, non-assigning operators over those, and tuple
-    /// literals of such elements (each evaluation builds a fresh copy, as
-    /// a C# value tuple is copied anyway). Property
+    /// receivers</see> and non-assigning operators over those. Property
     /// getters are assumed side-effect free, as in
     /// <see cref="IsReusableReceiver"/>.
     /// </summary>
@@ -44,7 +42,6 @@ public static class IrEvaluationTraits
         expression switch
         {
             IrLiteral => true,
-            IrTupleLiteral tuple => tuple.Elements.All(IsSideEffectFree),
             IrUnaryExpression
             {
                 Operator: not (IrUnaryOp.Increment or IrUnaryOp.Decrement)
