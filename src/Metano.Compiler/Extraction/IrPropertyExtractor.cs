@@ -33,7 +33,7 @@ public static class IrPropertyExtractor
             prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as PropertyDeclarationSyntax;
 
-        var semantics = BuildSemantics(prop, syntax, compilation);
+        var semantics = BuildSemantics(prop, syntax, compilation, target);
 
         IReadOnlyList<IrStatement>? getterBody = null;
         IReadOnlyList<IrStatement>? setterBody = null;
@@ -112,7 +112,8 @@ public static class IrPropertyExtractor
     private static IrPropertySemantics BuildSemantics(
         IPropertySymbol prop,
         PropertyDeclarationSyntax? syntax,
-        Compilation? compilation
+        Compilation? compilation,
+        Metano.Annotations.TargetLanguage? target
     )
     {
         var hasGetterBody = DetectGetterBody(syntax);
@@ -129,6 +130,7 @@ public static class IrPropertyExtractor
             IsSealed: prop.IsSealed,
             IsRequired: prop.IsRequired,
             OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop),
+            EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, target),
             InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, compilation)
         );
     }

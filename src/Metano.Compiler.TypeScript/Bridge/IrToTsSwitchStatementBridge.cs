@@ -37,28 +37,38 @@ internal static class IrToTsSwitchStatementBridge
     /// </summary>
     private const string SubjectLocalName = "$subject";
 
-    public static TsStatement Map(IrSwitchStatement sw, DeclarativeMappingRegistry? bclRegistry)
+    public static TsStatement Map(
+        IrSwitchStatement sw,
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
+    )
     {
-        var subject = IrToTsExpressionBridge.Map(sw.Expression, bclRegistry);
+        var subject = IrToTsExpressionBridge.Map(sw.Expression, bclRegistry, classFields);
 
         if (!NeedsBooleanCaseTests(sw))
         {
             return new TsSwitchStatement(
                 subject,
-                [.. sw.Cases.SelectMany(section => MapConstantSection(section, bclRegistry))]
+                [
+                    .. sw.Cases.SelectMany(section =>
+                        MapConstantSection(section, bclRegistry, classFields)
+                    ),
+                ]
             );
         }
 
         var (sharedLocals, hoistedSwitch) = SwitchSharedLocals.Hoist(sw);
 
-        var subjectAndTests = SubjectAndCaseTests(hoistedSwitch, subject, bclRegistry);
+        var subjectAndTests = SubjectAndCaseTests(hoistedSwitch, subject, bclRegistry, classFields);
         var needsEnclosingBlock = sharedLocals.Count > 0 || subjectAndTests.Count > 1;
 
         if (!needsEnclosingBlock)
             return subjectAndTests[0];
 
         return new TsBlockStatement([
-            .. sharedLocals.Select(local => IrToTsStatementBridge.Map(local, bclRegistry)),
+            .. sharedLocals.Select(local =>
+                IrToTsStatementBridge.Map(local, bclRegistry, classFields)
+            ),
             .. subjectAndTests,
         ]);
     }
@@ -70,16 +80,22 @@ internal static class IrToTsSwitchStatementBridge
     private static IReadOnlyList<TsStatement> SubjectAndCaseTests(
         IrSwitchStatement sw,
         TsExpression subject,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         if (CanReadSubjectPerTest(sw))
-            return [LowerToBooleanCaseTests(sw, subject, bclRegistry)];
+            return [LowerToBooleanCaseTests(sw, subject, bclRegistry, classFields)];
 
         return
         [
             new TsVariableDeclaration(SubjectLocalName, HoistedSubjectValue(subject)),
-            LowerToBooleanCaseTests(sw, new TsIdentifier(SubjectLocalName), bclRegistry),
+            LowerToBooleanCaseTests(
+                sw,
+                new TsIdentifier(SubjectLocalName),
+                bclRegistry,
+                classFields
+            ),
         ];
     }
 
@@ -136,13 +152,14 @@ internal static class IrToTsSwitchStatementBridge
     private static TsSwitchStatement LowerToBooleanCaseTests(
         IrSwitchStatement sw,
         TsExpression subject,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var promoteCatchAllToDefault = !sw.Cases.SelectMany(c => c.Labels).Any(IsDefaultLabel);
 
         var cases = sw.Cases.SelectMany(section =>
-            MapTestedSection(section, subject, promoteCatchAllToDefault, bclRegistry)
+            MapTestedSection(section, subject, promoteCatchAllToDefault, bclRegistry, classFields)
         );
 
         return new TsSwitchStatement(new TsLiteral("true"), [.. cases]);
@@ -156,49 +173,54 @@ internal static class IrToTsSwitchStatementBridge
 
     private static IEnumerable<TsSwitchCase> MapConstantSection(
         IrSwitchCase section,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         AttachBody(
             section.Labels.Select(label =>
                 label is IrConstantCaseLabel constant
-                    ? IrToTsExpressionBridge.Map(constant.Value, bclRegistry)
+                    ? IrToTsExpressionBridge.Map(constant.Value, bclRegistry, classFields)
                     : null
             ),
-            IrToTsStatementBridge.MapBody(section.Body, bclRegistry)
+            IrToTsStatementBridge.MapBody(section.Body, bclRegistry, classFields)
         );
 
     private static IEnumerable<TsSwitchCase> MapTestedSection(
         IrSwitchCase section,
         TsExpression subject,
         bool promoteCatchAllToDefault,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         AttachBody(
             section.Labels.Select(label =>
                 promoteCatchAllToDefault && IsCatchAllLabel(label)
                     ? null
-                    : BuildLabelTest(label, subject, bclRegistry)
+                    : BuildLabelTest(label, subject, bclRegistry, classFields)
             ),
-            BuildTestedSectionBody(section, subject, bclRegistry)
+            BuildTestedSectionBody(section, subject, bclRegistry, classFields)
         );
 
     /// <summary>The label's case test; <c>null</c> for <c>default</c>.</summary>
     private static TsExpression? BuildLabelTest(
         IrCaseLabel label,
         TsExpression subject,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         label switch
         {
             IrConstantCaseLabel constant => IrToTsExpressionBridge.BuildCaseLabelTest(
                 subject,
                 constant.Value,
-                bclRegistry
+                bclRegistry,
+                classFields
             ),
             IrPatternCaseLabel pattern => IrToTsExpressionBridge.BuildCasePatternTest(
                 subject,
                 pattern,
-                bclRegistry
+                bclRegistry,
+                classFields
             ),
             _ => null,
         };
@@ -212,10 +234,11 @@ internal static class IrToTsSwitchStatementBridge
     private static IReadOnlyList<TsStatement> BuildTestedSectionBody(
         IrSwitchCase section,
         TsExpression subject,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var body = IrToTsStatementBridge.MapBody(section.Body, bclRegistry);
+        var body = IrToTsStatementBridge.MapBody(section.Body, bclRegistry, classFields);
 
         if (!SwitchSharedLocals.BindsDesignators(section))
             return body;

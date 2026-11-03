@@ -218,7 +218,8 @@ internal static partial class IrToTsClassBridge
         IrConstructorDeclaration? ir,
         IReadOnlyList<TsConstructorParam> tsCtorParams,
         TsBaseConstructorCall? baseCall,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields = null
     )
     {
         var body = new List<TsStatement>();
@@ -276,7 +277,9 @@ internal static partial class IrToTsClassBridge
             // synthesized super + captured assignments so the resulting body
             // matches the source order.
             if (ir.Body is { Count: > 0 } explicitBody)
-                body.AddRange(IrToTsStatementBridge.MapBody(explicitBody, bclRegistry));
+                body.AddRange(
+                    IrToTsStatementBridge.MapBody(explicitBody, bclRegistry, classFields)
+                );
         }
 
         return new TsConstructor(tsCtorParams, body);

@@ -37,7 +37,8 @@ public static class IrToTsConstructorDispatcherBridge
     public static TsConstructor? Build(
         IrConstructorDeclaration primary,
         DeclarativeMappingRegistry? bclRegistry = null,
-        bool keepsBaseMessage = false
+        bool keepsBaseMessage = false,
+        PerClassBackingFieldScope? classFields = null
     )
     {
         if (primary.Overloads is not { Count: > 0 })
@@ -69,7 +70,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         var body = new List<TsStatement>();
         foreach (var ctor in sorted)
-            body.Add(BuildBranch(ctor, keepsBaseMessage, bclRegistry));
+            body.Add(BuildBranch(ctor, keepsBaseMessage, bclRegistry, classFields));
 
         // Unmatched — match the legacy behavior: the bare TS `throw` so a
         // caller that passes an unsupported signature fails loudly at runtime.
@@ -99,7 +100,8 @@ public static class IrToTsConstructorDispatcherBridge
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
         bool keepsBaseMessage,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         TsExpression condition = new TsBinaryExpression(
@@ -140,7 +142,13 @@ public static class IrToTsConstructorDispatcherBridge
         }
 
         branch.AddRange(
-            LowerConstructorInvocation(ctor, chainDepth: 0, keepsBaseMessage, bclRegistry)
+            LowerConstructorInvocation(
+                ctor,
+                chainDepth: 0,
+                keepsBaseMessage,
+                bclRegistry,
+                classFields
+            )
         );
 
         // Return so subsequent branches don't re-execute on the same call.
@@ -160,13 +168,16 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorDeclaration ctor,
         int chainDepth,
         bool keepsBaseMessage,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var statements = new List<TsStatement>();
 
         if (ctor.ThisChain is { } chain)
-            statements.AddRange(LowerThisChain(chain, chainDepth, keepsBaseMessage, bclRegistry));
+            statements.AddRange(
+                LowerThisChain(chain, chainDepth, keepsBaseMessage, bclRegistry, classFields)
+            );
         else if (
             IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, bclRegistry) is { } baseCall
         )
@@ -175,7 +186,7 @@ public static class IrToTsConstructorDispatcherBridge
         // The body references the original parameter names, which the caller
         // already brought into scope.
         foreach (var statement in ctor.Body ?? [])
-            statements.Add(IrToTsStatementBridge.Map(statement, bclRegistry));
+            statements.Add(IrToTsStatementBridge.Map(statement, bclRegistry, classFields));
 
         return statements;
     }
@@ -193,7 +204,8 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorChain chain,
         int chainDepth,
         bool keepsBaseMessage,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var temporaries = chain
@@ -201,7 +213,7 @@ public static class IrToTsConstructorDispatcherBridge
                 (argument, index) =>
                     new TsVariableDeclaration(
                         $"__chain{chainDepth}Arg{index}",
-                        IrToTsExpressionBridge.Map(argument.Value, bclRegistry)
+                        IrToTsExpressionBridge.Map(argument.Value, bclRegistry, classFields)
                     )
             )
             .ToList();
@@ -222,7 +234,13 @@ public static class IrToTsConstructorDispatcherBridge
         }
 
         targetScope.AddRange(
-            LowerConstructorInvocation(target, chainDepth + 1, keepsBaseMessage, bclRegistry)
+            LowerConstructorInvocation(
+                target,
+                chainDepth + 1,
+                keepsBaseMessage,
+                bclRegistry,
+                classFields
+            )
         );
 
         return [.. temporaries, new TsBlockStatement(targetScope)];

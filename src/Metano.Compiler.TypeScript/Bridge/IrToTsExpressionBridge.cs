@@ -37,7 +37,8 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     public static TsExpression Map(
         IrExpression expression,
-        DeclarativeMappingRegistry? bclRegistry = null
+        DeclarativeMappingRegistry? bclRegistry = null,
+        PerClassBackingFieldScope? classFields = null
     )
     {
         // JSX-producing expressions (a JSX-renderable `new`, a `Solid.For(...)`
@@ -45,7 +46,7 @@ public static partial class IrToTsExpressionBridge
         // entry point regardless of position. This catches a bare
         // `Render() => Solid.For(items, …)` return that never passes through
         // LowerChild — without it the call would emit as a raw function call.
-        if (IrToTsJsxBridge.TryLowerJsxProducer(expression, bclRegistry) is { } jsx)
+        if (IrToTsJsxBridge.TryLowerJsxProducer(expression, bclRegistry, classFields) is { } jsx)
             return jsx;
 
         return expression switch
@@ -55,52 +56,59 @@ public static partial class IrToTsExpressionBridge
             IrTypeReference tr => MapTypeReference(tr),
             IrThisExpression => new TsIdentifier("this"),
             IrBaseExpression => new TsIdentifier("super"),
-            IrMemberAccess ma => MapMemberAccess(ma, bclRegistry),
-            IrElementAccess ea => MapElementAccess(ea, bclRegistry),
-            IrSliceExpression slice => MapSlice(slice, bclRegistry),
+            IrMemberAccess ma => MapMemberAccess(ma, bclRegistry, classFields),
+            IrElementAccess ea => MapElementAccess(ea, bclRegistry, classFields),
+            IrSliceExpression slice => MapSlice(slice, bclRegistry, classFields),
             // An optional call (`handler?.(x)`) yields `undefined` for a null
             // delegate; read as a value it becomes the C# `null`.
             IrCallExpression { IsOptional: true } call => NormalizedToNull(
-                MapCall(call, bclRegistry)
+                MapCall(call, bclRegistry, classFields)
             ),
-            IrCallExpression call => MapCall(call, bclRegistry),
-            IrNewExpression ne => MapNewExpression(ne, bclRegistry),
-            IrBinaryExpression bin => MapBinary(bin, bclRegistry),
+            IrCallExpression call => MapCall(call, bclRegistry, classFields),
+            IrNewExpression ne => MapNewExpression(ne, bclRegistry, classFields),
+            IrBinaryExpression bin => MapBinary(bin, bclRegistry, classFields),
             IrUnaryExpression un when un.IsPrefix => new TsUnaryExpression(
                 PrefixOperatorToken(un.Operator),
-                MapMutatedOperand(un, bclRegistry)
+                MapMutatedOperand(un, bclRegistry, classFields)
             ),
             IrUnaryExpression un => new TsPostfixUnaryExpression(
-                MapMutatedOperand(un, bclRegistry),
+                MapMutatedOperand(un, bclRegistry, classFields),
                 PostfixOperatorToken(un.Operator)
             ),
             IrConditionalExpression cond => new TsConditionalExpression(
-                Map(cond.Condition, bclRegistry),
-                Map(cond.WhenTrue, bclRegistry),
-                Map(cond.WhenFalse, bclRegistry)
+                Map(cond.Condition, bclRegistry, classFields),
+                Map(cond.WhenTrue, bclRegistry, classFields),
+                Map(cond.WhenFalse, bclRegistry, classFields)
             ),
-            IrAwaitExpression aw => new TsAwaitExpression(Map(aw.Expression, bclRegistry)),
+            IrAwaitExpression aw => new TsAwaitExpression(
+                Map(aw.Expression, bclRegistry, classFields)
+            ),
             IrCastExpression { TargetType: OutResultTypeRef } cast => MapOutResultAssertion(
                 cast,
-                bclRegistry
+                bclRegistry,
+                classFields
             ),
-            IrCastExpression cast => MapCast(cast, bclRegistry),
-            IrLambdaExpression lambda => MapLambda(lambda, bclRegistry),
-            IrStringInterpolation interp => MapStringInterpolation(interp, bclRegistry),
-            IrIsPatternExpression isPattern => MapIsPattern(isPattern, bclRegistry),
-            IrSwitchExpression sw => MapSwitchExpression(sw, bclRegistry),
-            IrWithExpression w => MapWithExpression(w, bclRegistry),
+            IrCastExpression cast => MapCast(cast, bclRegistry, classFields),
+            IrLambdaExpression lambda => MapLambda(lambda, bclRegistry, classFields),
+            IrStringInterpolation interp => MapStringInterpolation(
+                interp,
+                bclRegistry,
+                classFields
+            ),
+            IrIsPatternExpression isPattern => MapIsPattern(isPattern, bclRegistry, classFields),
+            IrSwitchExpression sw => MapSwitchExpression(sw, bclRegistry, classFields),
+            IrWithExpression w => MapWithExpression(w, bclRegistry, classFields),
             IrArrayLiteral arr => new TsArrayLiteral(
-                arr.Elements.Select(e => Map(e, bclRegistry)).ToList()
+                arr.Elements.Select(e => Map(e, bclRegistry, classFields)).ToList()
             ),
-            IrTupleLiteral tuple => MapTupleLiteral(tuple, bclRegistry),
+            IrTupleLiteral tuple => MapTupleLiteral(tuple, bclRegistry, classFields),
             IrSpreadExpression spread => new TsSpreadExpression(
-                Map(spread.Expression, bclRegistry)
+                Map(spread.Expression, bclRegistry, classFields)
             ),
             IrTemplateExpression tpl => new TsTemplate(
                 tpl.Template,
-                tpl.Receiver is null ? null : Map(tpl.Receiver, bclRegistry),
-                tpl.Arguments.Select(a => Map(a, bclRegistry)).ToList()
+                tpl.Receiver is null ? null : Map(tpl.Receiver, bclRegistry, classFields),
+                tpl.Arguments.Select(a => Map(a, bclRegistry, classFields)).ToList()
             )
             {
                 TypeArgumentNames = tpl.TypeArguments is { Count: > 0 } tArgs
@@ -113,18 +121,28 @@ public static partial class IrToTsExpressionBridge
                 ye.Value is not null ? $"yield {FormatInner(ye.Value)}" : "yield"
             ),
             IrObjectLiteral obj => new TsObjectLiteral(
-                obj.Properties.Select(p => new TsObjectProperty(p.Name, Map(p.Value, bclRegistry)))
+                obj.Properties.Select(p => new TsObjectProperty(
+                        p.Name,
+                        Map(p.Value, bclRegistry, classFields)
+                    ))
                     .ToList()
             ),
             IrThrowExpression th => new TsCallExpression(
-                new TsArrowFunction([], [new TsThrowStatement(Map(th.Expression, bclRegistry))]),
+                new TsArrowFunction(
+                    [],
+                    [new TsThrowStatement(Map(th.Expression, bclRegistry, classFields))]
+                ),
                 Array.Empty<TsExpression>()
             ),
-            IrLinqChain chain => MapLinqChain(chain, bclRegistry),
-            IrLetExpression let => MapLetExpression(let, bclRegistry),
-            IrSequenceExpression sequence => MapSequence(sequence, bclRegistry),
-            IrOutArgumentCall outCall => MapOutArgumentCall(outCall, bclRegistry),
-            IrNullConditionalAccess access => MapNullConditionalAccess(access, bclRegistry),
+            IrLinqChain chain => MapLinqChain(chain, bclRegistry, classFields),
+            IrLetExpression let => MapLetExpression(let, bclRegistry, classFields),
+            IrSequenceExpression sequence => MapSequence(sequence, bclRegistry, classFields),
+            IrOutArgumentCall outCall => MapOutArgumentCall(outCall, bclRegistry, classFields),
+            IrNullConditionalAccess access => MapNullConditionalAccess(
+                access,
+                bclRegistry,
+                classFields
+            ),
             IrConditionalReceiver => CurrentConditionalReceiver(),
             IrUnsupportedExpression u => MapUnsupported(u),
             _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
@@ -141,7 +159,8 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapBinary(
         IrBinaryExpression bin,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         if (
@@ -149,25 +168,25 @@ public static partial class IrToTsExpressionBridge
             && bin.Left is IrElementAccess { TargetType: IrMapTypeRef } ea
         )
         {
-            var target = Map(ea.Target, bclRegistry);
-            var key = Map(ea.Index, bclRegistry);
-            var value = Map(bin.Right, bclRegistry);
+            var target = Map(ea.Target, bclRegistry, classFields);
+            var key = Map(ea.Index, bclRegistry, classFields);
+            var value = Map(bin.Right, bclRegistry, classFields);
             return new TsCallExpression(new TsPropertyAccess(target, "set"), [key, value]);
         }
 
         if (bin.Operator is IrBinaryOp.IntegerDivide)
-            return MapIntegerDivision(bin, bclRegistry);
+            return MapIntegerDivision(bin, bclRegistry, classFields);
 
         if (
             bin is { Left: IrMemberAccess backedMember }
-            && IsAssignment(bin.Operator)
-            && PerClassBackingFields.TryBackingFieldWrite(backedMember) is { } backingField
+            && bin.Operator.IsAssignment()
+            && classFields?.TryBackingFieldWrite(backedMember) is { } backingField
         )
         {
             return new TsBinaryExpression(
                 PerClassBackingFields.StorageAccess(backingField),
                 BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
-                Map(bin.Right, bclRegistry)
+                Map(bin.Right, bclRegistry, classFields)
             );
         }
 
@@ -175,41 +194,22 @@ public static partial class IrToTsExpressionBridge
             bin is { Operator: IrBinaryOp.Assign, Left: IrMemberAccess initOnlyMember }
             && IsInitOnlyInitializerWrite(initOnlyMember)
         )
-            return MapInitOnlyInitializerWrite(initOnlyMember, bin.Right, bclRegistry);
+            return MapInitOnlyInitializerWrite(initOnlyMember, bin.Right, bclRegistry, classFields);
 
         if (bin.Operator is IrBinaryOp.ValueEqual or IrBinaryOp.ValueNotEqual)
-            return MapValueEquality(bin, bclRegistry);
+            return MapValueEquality(bin, bclRegistry, classFields);
 
         if (bin.Operator is IrBinaryOp.NullCoalescing)
-            return MapNullCoalescing(bin, rightToleratesUndefined: false, bclRegistry);
+            return MapNullCoalescing(bin, rightToleratesUndefined: false, bclRegistry, classFields);
 
         var comparesWithLiteral = ComparesWithLiteral(bin);
 
         return new TsBinaryExpression(
-            MapOperand(bin.Left, comparesWithLiteral, bclRegistry),
+            MapOperand(bin.Left, comparesWithLiteral, bclRegistry, classFields),
             BinaryOperatorToken(bin.Operator, bin.Left, bin.Right),
-            MapOperand(bin.Right, comparesWithLiteral, bclRegistry)
+            MapOperand(bin.Right, comparesWithLiteral, bclRegistry, classFields)
         );
     }
-
-    /// <summary>
-    /// <c>=</c> and every compound assignment (<c>+=</c> ... <c>??=</c>).
-    /// </summary>
-    private static bool IsAssignment(IrBinaryOp op) =>
-        op
-            is IrBinaryOp.Assign
-                or IrBinaryOp.AddAssign
-                or IrBinaryOp.SubtractAssign
-                or IrBinaryOp.MultiplyAssign
-                or IrBinaryOp.DivideAssign
-                or IrBinaryOp.ModuloAssign
-                or IrBinaryOp.BitwiseAndAssign
-                or IrBinaryOp.BitwiseOrAssign
-                or IrBinaryOp.BitwiseXorAssign
-                or IrBinaryOp.LeftShiftAssign
-                or IrBinaryOp.RightShiftAssign
-                or IrBinaryOp.UnsignedRightShiftAssign
-                or IrBinaryOp.NullCoalescingAssign;
 
     /// <summary>
     /// The operand of <c>++</c> / <c>--</c>; a get-only per-class property assigned inside
@@ -218,16 +218,17 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapMutatedOperand(
         IrUnaryExpression unary,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         unary
             is {
                 Operator: IrUnaryOp.Increment or IrUnaryOp.Decrement,
                 Operand: IrMemberAccess member
             }
-        && PerClassBackingFields.TryBackingFieldWrite(member) is { } backingField
+        && classFields?.TryBackingFieldWrite(member) is { } backingField
             ? PerClassBackingFields.StorageAccess(backingField)
-            : Map(unary.Operand, bclRegistry);
+            : Map(unary.Operand, bclRegistry, classFields);
 
     /// <summary>
     /// A write to an <c>init</c>-only property through a receiver other than
@@ -247,14 +248,18 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapInitOnlyInitializerWrite(
         IrMemberAccess member,
         IrExpression value,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("Object"), "assign"),
             [
-                Map(member.Target, bclRegistry),
+                Map(member.Target, bclRegistry, classFields),
                 new TsObjectLiteral([
-                    new TsObjectProperty(AccessedMemberName(member), Map(value, bclRegistry)),
+                    new TsObjectProperty(
+                        AccessedMemberName(member),
+                        Map(value, bclRegistry, classFields)
+                    ),
                 ]),
             ]
         );
@@ -276,12 +281,13 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapIntegerDivision(
         IrBinaryExpression bin,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         new TsTemplate(
             $"{IntegerDivisionHelper}($0, $1)",
             Receiver: null,
-            [Map(bin.Left, bclRegistry), Map(bin.Right, bclRegistry)]
+            [Map(bin.Left, bclRegistry, classFields), Map(bin.Right, bclRegistry, classFields)]
         )
         {
             RuntimeImports = [IntegerDivisionHelper],
@@ -295,13 +301,14 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapValueEquality(
         IrBinaryExpression bin,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var equality = new TsTemplate(
             $"{ValueEqualityHelper}($0, $1)",
             Receiver: null,
-            [Map(bin.Left, bclRegistry), Map(bin.Right, bclRegistry)]
+            [Map(bin.Left, bclRegistry, classFields), Map(bin.Right, bclRegistry, classFields)]
         )
         {
             RuntimeImports = [ValueEqualityHelper],
@@ -319,10 +326,13 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapTupleLiteral(
         IrTupleLiteral tuple,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var array = new TsArrayLiteral(tuple.Elements.Select(e => Map(e, bclRegistry)).ToList());
+        var array = new TsArrayLiteral(
+            tuple.Elements.Select(e => Map(e, bclRegistry, classFields)).ToList()
+        );
 
         return tuple.Type is { } type
             ? new TsCastExpression(array, IrToTsTypeMapper.Map(type))
@@ -331,11 +341,12 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapElementAccess(
         IrElementAccess ea,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var target = MapNullTolerant(ea.Target, bclRegistry);
-        var index = Map(ea.Index, bclRegistry);
+        var target = MapNullTolerant(ea.Target, bclRegistry, classFields);
+        var index = Map(ea.Index, bclRegistry, classFields);
         if (ea.TargetType is IrMapTypeRef)
             return new TsCallExpression(new TsPropertyAccess(target, "get"), [index]);
         return new TsElementAccess(target, index);
@@ -348,23 +359,29 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapSlice(
         IrSliceExpression slice,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         new TsCallExpression(
-            new TsPropertyAccess(MapNullTolerant(slice.Target, bclRegistry), "slice"),
-            MapSliceBounds(slice, bclRegistry)
+            new TsPropertyAccess(MapNullTolerant(slice.Target, bclRegistry, classFields), "slice"),
+            MapSliceBounds(slice, bclRegistry, classFields)
         );
 
     private static IReadOnlyList<TsExpression> MapSliceBounds(
         IrSliceExpression slice,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         (slice.Start, slice.End) switch
         {
             (null, null) => [],
-            ({ } start, null) => [Map(start, bclRegistry)],
-            (null, { } end) => [new TsLiteral("0"), Map(end, bclRegistry)],
-            ({ } start, { } end) => [Map(start, bclRegistry), Map(end, bclRegistry)],
+            ({ } start, null) => [Map(start, bclRegistry, classFields)],
+            (null, { } end) => [new TsLiteral("0"), Map(end, bclRegistry, classFields)],
+            ({ } start, { } end) =>
+            [
+                Map(start, bclRegistry, classFields),
+                Map(end, bclRegistry, classFields),
+            ],
         };
 
     /// <summary>
@@ -390,7 +407,8 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapMemberAccess(
         IrMemberAccess ma,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         if (IrToTsExceptionConstructionBridge.TryMapKeptBaseMessageRead(ma) is { } keptBaseMessage)
@@ -402,9 +420,9 @@ public static partial class IrToTsExpressionBridge
         // (ADR-0005). The receiver is the value read, so it is not
         // null-tolerant.
         if (ma.Origin is { IsBrandedValueMember: true })
-            return Map(ma.Target, bclRegistry);
+            return Map(ma.Target, bclRegistry, classFields);
 
-        var loweredTarget = MapNullTolerant(ma.Target, bclRegistry);
+        var loweredTarget = MapNullTolerant(ma.Target, bclRegistry, classFields);
 
         // `[JsTuple]` positional member read: `value.First` / `value.Second`
         // lowers to array-index access `value[0]` / `value[1]`. The element
@@ -549,7 +567,8 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapCall(
         IrCallExpression call,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         // TS doesn't support named arguments at the call site — the receiver's
@@ -557,7 +576,9 @@ public static partial class IrToTsExpressionBridge
         // argument names and lower each value; reordering / default-filling
         // for call sites using `Name: value` is handled earlier (at the
         // dispatcher or object-literal pass).
-        var loweredArgs = call.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
+        var loweredArgs = call
+            .Arguments.Select(a => MapArgument(a, bclRegistry, classFields))
+            .ToList();
 
         if (IsBaseIdentityHash(call))
             return new TsLiteral("0");
@@ -573,7 +594,7 @@ public static partial class IrToTsExpressionBridge
             && call.Target is IrMemberAccess invokeAccess
         )
         {
-            var receiver = Map(invokeAccess.Target, bclRegistry);
+            var receiver = Map(invokeAccess.Target, bclRegistry, classFields);
             return new TsCallExpression(
                 receiver,
                 WithoutNullRestArray(call.Arguments, loweredArgs),
@@ -593,7 +614,8 @@ public static partial class IrToTsExpressionBridge
                 pooMeta,
                 pooAccess.Target,
                 WithoutNullRestArray(call.Arguments, loweredArgs),
-                bclRegistry
+                bclRegistry,
+                classFields
             );
 
         if (bclRegistry is not null && call.Origin is not null)
@@ -602,7 +624,7 @@ public static partial class IrToTsExpressionBridge
             // value (no .methodName suffix applied yet). For unqualified calls the
             // target is an IrIdentifier — pass no receiver.
             TsExpression? loweredReceiver = call.Target is IrMemberAccess memberTarget
-                ? MapNullTolerant(memberTarget.Target, bclRegistry)
+                ? MapNullTolerant(memberTarget.Target, bclRegistry, classFields)
                 : null;
             var typeArgNames = call
                 .TypeArguments?.Select(TsTypeArgName)
@@ -624,7 +646,7 @@ public static partial class IrToTsExpressionBridge
         }
 
         return new TsCallExpression(
-            MapNullTolerant(call.Target, bclRegistry),
+            MapNullTolerant(call.Target, bclRegistry, classFields),
             WithoutNullRestArray(call.Arguments, loweredArgs),
             call.IsOptional
         );
@@ -690,14 +712,15 @@ public static partial class IrToTsExpressionBridge
         IrMemberOrigin method,
         IrExpression receiver,
         IReadOnlyList<TsExpression> loweredArgs,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var helperName = method.EmittedName ?? TypeScriptNaming.ToCamelCase(method.MemberName);
 
         return new TsCallExpression(
             ModuleExportReference(helperName, method.CompanionOwner),
-            [Map(receiver, bclRegistry), .. loweredArgs]
+            [Map(receiver, bclRegistry, classFields), .. loweredArgs]
         );
     }
 
@@ -730,9 +753,13 @@ public static partial class IrToTsExpressionBridge
     private static string? TsTypeArgName(IrTypeRef type) =>
         IrToTsTypeMapper.Map(type) is TsNamedType n ? n.Name : null;
 
-    public static TsExpression MapArgument(IrArgument arg, DeclarativeMappingRegistry? bclRegistry)
+    public static TsExpression MapArgument(
+        IrArgument arg,
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields = null
+    )
     {
-        var value = Map(arg.Value, bclRegistry);
+        var value = Map(arg.Value, bclRegistry, classFields);
         return arg.IsSpread ? new TsSpreadExpression(value) : value;
     }
 
@@ -773,19 +800,20 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapLinqChain(
         IrLinqChain chain,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var args = new List<TsExpression> { Map(chain.Source, bclRegistry) };
+        var args = new List<TsExpression> { Map(chain.Source, bclRegistry, classFields) };
         var importedHelpers = new HashSet<string>(StringComparer.Ordinal) { "linq" };
 
         foreach (var stage in chain.Stages)
         {
             var emittedName = IrLinqMapping.EmittedName(stage.Operator);
             importedHelpers.Add(emittedName);
-            var stageArgs = stage.Arguments.Select(a => Map(a, bclRegistry)).ToList();
+            var stageArgs = stage.Arguments.Select(a => Map(a, bclRegistry, classFields)).ToList();
             if (stage.Queryable is { } queryable)
-                stageArgs.Add(MapQueryableMeta(queryable, bclRegistry));
+                stageArgs.Add(MapQueryableMeta(queryable, bclRegistry, classFields));
             args.Add(new TsCallExpression(new TsIdentifier(emittedName), stageArgs));
         }
 
@@ -802,14 +830,15 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapQueryableMeta(
         IrQueryableMeta meta,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         var props = new List<TsObjectProperty> { new("tree", MapExprTree(meta.Tree)) };
         if (meta.Captures is { Count: > 0 } captures)
         {
             var captureProps = captures
-                .Select(c => new TsObjectProperty(c.Name, Map(c.Value, bclRegistry)))
+                .Select(c => new TsObjectProperty(c.Name, Map(c.Value, bclRegistry, classFields)))
                 .ToList();
             props.Add(new TsObjectProperty("captures", new TsObjectLiteral(captureProps)));
         }
@@ -1058,7 +1087,8 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapLambda(
         IrLambdaExpression lambda,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         // Lambda params drop the annotation when the inferred type is
@@ -1075,7 +1105,7 @@ public static partial class IrToTsExpressionBridge
         var parameters = DeduplicateParameterNames(
             DropTrailingErasedDiscards(lambda.Parameters, mappedParameters)
         );
-        var body = MapLambdaBody(lambda, bclRegistry);
+        var body = MapLambdaBody(lambda, bclRegistry, classFields);
         // Named function expression: emitted when the lambda is the
         // lowered body of a directly-recursive [Inline] method (#194).
         // The internal name lets the body call itself without relying
@@ -1116,15 +1146,16 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static IReadOnlyList<TsStatement> MapLambdaBody(
         IrLambdaExpression lambda,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         lambda
             is {
                 ReturnType: IrPrimitiveTypeRef { Primitive: IrPrimitive.Void },
                 Body: [IrReturnStatement { Value: { } discarded }],
             }
-            ? [new TsReturnStatement(MapNullTolerant(discarded, bclRegistry))]
-            : IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry);
+            ? [new TsReturnStatement(MapNullTolerant(discarded, bclRegistry, classFields))]
+            : IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry, classFields);
 
     /// <summary>
     /// Drops a trailing C# discard parameter (named <c>_</c>) ONLY when its TS type
@@ -1204,14 +1235,15 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapWithExpression(
         IrWithExpression w,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var source = Map(w.Source, bclRegistry);
+        var source = Map(w.Source, bclRegistry, classFields);
         var properties = w
             .Assignments.Select(a => new TsObjectProperty(
                 IrToTsNamingPolicy.ToDataMemberName(a.MemberName, a.EmittedName),
-                Map(a.Value, bclRegistry)
+                Map(a.Value, bclRegistry, classFields)
             ))
             .ToList();
 
@@ -1243,15 +1275,16 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapLetExpression(
         IrLetExpression let,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
-        var value = Map(let.Value, bclRegistry);
+        var value = Map(let.Value, bclRegistry, classFields);
 
-        return TryFoldPlainObjectInitializer(let, value, bclRegistry)
+        return TryFoldPlainObjectInitializer(let, value, bclRegistry, classFields)
             ?? TsImmediateInvocation.Of(
                 [new TsImmediateBinding(let.Name, value)],
-                ReturningBody(let.Body, bclRegistry),
+                ReturningBody(let.Body, bclRegistry, classFields),
                 isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
             );
     }
@@ -1268,7 +1301,8 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression? TryFoldPlainObjectInitializer(
         IrLetExpression let,
         TsExpression mappedValue,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         if (
@@ -1301,7 +1335,8 @@ public static partial class IrToTsExpressionBridge
         return new TsObjectLiteral([
             .. literal.Properties,
             .. members.Select(
-                (write, index) => new TsObjectProperty(keys[index], Map(write.Value, bclRegistry))
+                (write, index) =>
+                    new TsObjectProperty(keys[index], Map(write.Value, bclRegistry, classFields))
             ),
         ]);
     }
@@ -1332,11 +1367,12 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapSequence(
         IrSequenceExpression sequence,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         TsImmediateInvocation.Of(
             [],
-            ReturningBody(sequence, bclRegistry),
+            ReturningBody(sequence, bclRegistry, classFields),
             isAsync: IrEvaluationTraits.ContainsAwait(sequence)
         );
 
@@ -1348,21 +1384,23 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static IReadOnlyList<TsStatement> ReturningBody(
         IrExpression body,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         body is IrSequenceExpression sequence
             ?
             [
                 .. sequence.Effects.Select(effect => new TsExpressionStatement(
-                    Map(effect, bclRegistry)
+                    Map(effect, bclRegistry, classFields)
                 )),
-                new TsReturnStatement(Map(sequence.Result, bclRegistry)),
+                new TsReturnStatement(Map(sequence.Result, bclRegistry, classFields)),
             ]
-            : [new TsReturnStatement(Map(body, bclRegistry))];
+            : [new TsReturnStatement(Map(body, bclRegistry, classFields))];
 
     private static TsExpression MapStringInterpolation(
         IrStringInterpolation interp,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         // Template literals alternate quasis (string text) with expressions; TS allows
@@ -1383,7 +1421,7 @@ public static partial class IrToTsExpressionBridge
                     pendingText.Clear();
                     // A template-literal hole accepts any expression, so the
                     // hole needs no grouping of its own.
-                    expressions.Add(Map(expr.Expression, bclRegistry));
+                    expressions.Add(Map(expr.Expression, bclRegistry, classFields));
                     break;
             }
         }
@@ -1422,7 +1460,8 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapNewExpression(
         IrNewExpression ne,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         // JSX-renderable constructions (native elements + component composition)
@@ -1430,9 +1469,9 @@ public static partial class IrToTsExpressionBridge
         // the constructed value's type semantics (FR-012), so this must run
         // before the plain-object / branded / exception branches below.
         if (ne.Type is IrNamedTypeRef { Semantics.RendersAsJsxElement: true })
-            return IrToTsJsxBridge.Convert(ne, bclRegistry);
+            return IrToTsJsxBridge.Convert(ne, bclRegistry, classFields);
 
-        var args = ne.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
+        var args = ne.Arguments.Select(a => MapArgument(a, bclRegistry, classFields)).ToList();
         if (ne.IsObjectArgsCtor && ne.Type is IrNamedTypeRef objectArgsTarget)
         {
             IReadOnlyList<TsType>? typeArguments = objectArgsTarget.TypeArguments
@@ -1480,7 +1519,7 @@ public static partial class IrToTsExpressionBridge
             // keep their generated identity.
             if (IrToTsTypeMapper.IsBclException(named))
             {
-                return MapBclExceptionCreation(ne, args, bclRegistry);
+                return MapBclExceptionCreation(ne, args, bclRegistry, classFields);
             }
 
             // [Branded] structs compile to companion objects with a
@@ -1600,10 +1639,16 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapBclExceptionCreation(
         IrNewExpression ne,
         IReadOnlyList<TsExpression> positionalArgs,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     ) =>
         ne.ExceptionConstruction is { } construction
-            ? IrToTsExceptionConstructionBridge.MapNewError(ne, construction, bclRegistry)
+            ? IrToTsExceptionConstructionBridge.MapNewError(
+                ne,
+                construction,
+                bclRegistry,
+                classFields
+            )
             : new TsNewExpression(new TsIdentifier("Error"), positionalArgs);
 
     private static TsExpression MapLiteral(IrLiteral lit) =>

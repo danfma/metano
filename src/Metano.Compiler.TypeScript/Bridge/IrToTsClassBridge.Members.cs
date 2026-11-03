@@ -39,7 +39,7 @@ internal static partial class IrToTsClassBridge
         IrPropertyDeclaration prop,
         TsType tsType,
         DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFields backingFields
+        PerClassBackingFieldScope classFields
     )
     {
         if (prop.Visibility is IrVisibility.PrivateProtected)
@@ -52,7 +52,7 @@ internal static partial class IrToTsClassBridge
 
         if (PerClassBackingFields.DeclaresBackingField(prop))
             return WithInheritedAccessor(
-                BuildPerClassStorageProperty(prop, name, tsType, backingFields, bclRegistry),
+                BuildPerClassStorageProperty(prop, name, tsType, classFields, bclRegistry),
                 prop,
                 name,
                 tsType
@@ -87,7 +87,7 @@ internal static partial class IrToTsClassBridge
         {
             var body = prop.GetterBody is null
                 ? new List<TsStatement>()
-                : IrToTsStatementBridge.MapBody(prop.GetterBody, bclRegistry).ToList();
+                : IrToTsStatementBridge.MapBody(prop.GetterBody, bclRegistry, classFields).ToList();
             members.Add(new TsGetterMember(name, tsType, body, Static: prop.IsStatic));
         }
 
@@ -95,7 +95,7 @@ internal static partial class IrToTsClassBridge
         {
             var body = prop.SetterBody is null
                 ? new List<TsStatement>()
-                : IrToTsStatementBridge.MapBody(prop.SetterBody, bclRegistry).ToList();
+                : IrToTsStatementBridge.MapBody(prop.SetterBody, bclRegistry, classFields).ToList();
 
             members.Add(
                 new TsSetterMember(
@@ -171,11 +171,11 @@ internal static partial class IrToTsClassBridge
         IrPropertyDeclaration prop,
         string name,
         TsType tsType,
-        PerClassBackingFields backingFields,
+        PerClassBackingFieldScope classFields,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var fieldName = backingFields.FieldOf(prop);
+        var fieldName = classFields.FieldOf(prop);
         var accessibility = MapAccessibility(prop.Visibility);
         var storage = PerClassBackingFields.StorageAccess(fieldName);
         var writable = prop.Accessors is not IrPropertyAccessors.GetOnly;
@@ -256,7 +256,8 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<TsParameter> parameters,
         TsType returnType,
         IReadOnlyList<TsTypeParameter>? typeParameters,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields = null
     )
     {
         var name = IrToTsNamingPolicy.ToMethodName(method);
@@ -265,7 +266,12 @@ internal static partial class IrToTsClassBridge
         // that would otherwise replace a missing body.
         IReadOnlyList<TsStatement> body = method.Semantics.IsAbstract
             ? []
-            : IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry);
+            : IrToTsBodyHelpers.LowerOrNotImplemented(
+                method.Body,
+                method.Name,
+                bclRegistry,
+                classFields
+            );
         return new TsMethodMember(
             name,
             parameters,

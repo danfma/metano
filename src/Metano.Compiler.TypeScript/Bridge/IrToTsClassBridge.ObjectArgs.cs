@@ -25,7 +25,8 @@ internal static partial class IrToTsClassBridge
         IrMethodDeclaration method,
         TsType returnType,
         IReadOnlyList<TsTypeParameter>? typeParameters,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields = null
     )
     {
         var name = IrToTsNamingPolicy.ToMethodName(method);
@@ -36,7 +37,12 @@ internal static partial class IrToTsClassBridge
 
         var body = new List<TsStatement> { destructureHeader };
         body.AddRange(
-            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry)
+            IrToTsBodyHelpers.LowerOrNotImplemented(
+                method.Body,
+                method.Name,
+                bclRegistry,
+                classFields
+            )
         );
 
         return new TsMethodMember(

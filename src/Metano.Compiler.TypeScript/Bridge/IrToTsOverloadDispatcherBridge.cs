@@ -40,7 +40,8 @@ public static class IrToTsOverloadDispatcherBridge
     public static IReadOnlyList<TsClassMember> BuildMethod(
         IrMethodDeclaration primary,
         string containingTypeName,
-        DeclarativeMappingRegistry? bclRegistry = null
+        DeclarativeMappingRegistry? bclRegistry = null,
+        PerClassBackingFieldScope? classFields = null
     )
     {
         var primaryName = TypeScriptNaming.ToCamelCaseMember(primary.Name);
@@ -58,7 +59,8 @@ public static class IrToTsOverloadDispatcherBridge
                 plan.Sorted[i],
                 plan.FastPathNames[i],
                 isStatic,
-                bclRegistry
+                bclRegistry,
+                classFields
             );
 
             if (fastPath is not null)
@@ -245,7 +247,8 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         string fastPathName,
         bool isStatic,
-        DeclarativeMappingRegistry? bclRegistry
+        DeclarativeMappingRegistry? bclRegistry,
+        PerClassBackingFieldScope? classFields
     )
     {
         if (method.Body is null)
@@ -255,7 +258,7 @@ public static class IrToTsOverloadDispatcherBridge
             fastPathName,
             MapParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
-            IrToTsStatementBridge.MapBody(method.Body, bclRegistry),
+            IrToTsStatementBridge.MapBody(method.Body, bclRegistry, classFields),
             Static: isStatic,
             Async: method.Semantics.IsAsync,
             // Fast paths are private — the dispatcher is the public entry point.

@@ -23,6 +23,10 @@ namespace Metano.Compiler.IR;
 /// that lowers an auto-property to one field named after it must keep the storage apart
 /// per class instead (the shared field would hide a derived accessor and a
 /// <c>base.P</c> read).</param>
+/// <param name="EmitsPerClassStorage">The property owns per-class storage and is a member
+/// the target emits — not <c>private protected</c> and not <c>[Ignore]</c>d for it —
+/// so the backend declares the backing field. The core-computed single source of that
+/// decision (<c>OverrideChains.EmitsPerClassStorage</c>).</param>
 /// <param name="InheritedAccessor">The accessor of the nearest overridden property up the chain, declared by a class the toolchain emits (this compilation or a transpiled package), that this override leaves to its base.</param>
 public sealed record IrPropertySemantics(
     bool HasGetterBody = false,
@@ -34,6 +38,7 @@ public sealed record IrPropertySemantics(
     bool IsSealed = false,
     bool IsRequired = false,
     bool OwnsPerClassStorage = false,
+    bool EmitsPerClassStorage = false,
     IrInheritedAccessor InheritedAccessor = IrInheritedAccessor.None
 );
 
