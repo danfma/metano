@@ -329,7 +329,7 @@ public class JsonValueRootTests
     [Arguments("typeof(Hidden)", "not a transpiled class or struct")]
     [Arguments("typeof(Native)", "not a transpiled class or struct")]
     [Arguments("typeof(System.Version)", "not a transpiled class or struct")]
-    [Arguments("typeof(Page<Leaf>)", "closed generic object types")]
+    [Arguments("typeof(Page<>)", "open generic")]
     [Arguments("typeof(Dictionary<int, Leaf>)", "dictionary keys other than 'string'")]
     [Arguments("typeof(List<Dictionary<Guid, Leaf>>)", "dictionary keys other than 'string'")]
     [Arguments("typeof(List<System.Version>)", "'System.Version' has no TypeScript contract")]
@@ -464,22 +464,6 @@ public class JsonValueRootTests
         await Assert.That(ts).Contains("get listTag(): ValueSpec<Tag[] | null>");
         await Assert.That(ts).Contains("spec: () => this.tag");
         await Assert.That(ts).Contains("import { Tag } from \"shared/shared\"");
-    }
-
-    [Test]
-    public async Task PackageElementTypeWithoutItsOwnRoot_ReportsMs0035()
-    {
-        var consumer = PackageConsumer("[JsonSerializable(typeof(List<Tag>))]");
-
-        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
-            PackageLibrary,
-            consumer
-        );
-
-        var ms0035 = DiagnosticsWithCode(diagnostics, DiagnosticCodes.InvalidJsonSerializableRoot);
-
-        await Assert.That(ms0035).Count().IsEqualTo(1);
-        await Assert.That(ms0035[0].Message).Contains("'Shared.Tag' has no TypeScript contract");
     }
 
     [Test]

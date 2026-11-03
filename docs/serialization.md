@@ -127,11 +127,15 @@ When it sees a class that inherits from `JsonSerializerContext`:
    breadth-first order; each type is emitted once, and cycles (`A → B → A`)
    terminate. The element, dictionary value and nullable inner types of a
    collection root are discovered the same way, so `typeof(ShotTiming[])`
-   also emits `shotTiming`. Only non-generic classes and structs transpiled by the current
-   project (nested ones included) are discovered through properties —
-   interfaces, generic types, and types from referenced packages are not.
-   Base types
-   are included whenever the spec links to them through `base`.
+   also emits `shotTiming`. Classes and structs are discovered when they are
+   transpiled in their declaring assembly: this project (nested ones
+   included) or a referenced `[TranspileAssembly]` + `[EmitPackage]` library,
+   whose types the context imports from the package (and adds to
+   `package.json#dependencies`). Closed generic types are discovered under
+   their constructed name (`Page<EpisodeSummary>` → `pageEpisodeSummary`, with
+   `TypeSpec<Page<EpisodeSummary>>`). Interfaces are not discovered. Base
+   types, including a base declared in a referenced library, are included
+   whenever the spec links to them through `base`.
    `[JsonDerivedType]` targets are not walked yet; polymorphic JSON is tracked
    in [#268](https://github.com/danfma/metano/issues/268).
 
@@ -192,10 +196,10 @@ generic types that use it as an argument. Type arguments use the same rule, so
   `object`, a non-collection interface, a type that is not a transpiled class
   or struct (`KeyValuePair<,>`, tuples, `[Ignore]` / `[External]` types, types
   of non-Metano assemblies, and the dictionary types that are not recognized as
-  dictionaries yet: `SortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary`), a closed generic object type (not supported yet),
+  dictionaries yet: `SortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary`),
   an array of rank > 1, a dictionary with non-`string` keys (not supported
-  yet), or a collection whose element type has no spec in the context (a type
-  from a referenced package must be listed as its own root).
+  yet), or a collection whose element type has no spec in the context (an
+  interface or a type that is not transpiled).
 - `MS0036` reports two types that map to one getter (a warning that drops an
   unreferenced root, an error when the losing type is referenced by another
   spec), a getter that would shadow a `SerializerContext` member (`options`,
@@ -328,8 +332,9 @@ strings for safety.
 
 ## Inheritance
 
-When a record extends another transpilable record, the child's `TypeSpec`
-references the parent's spec via a `base` field:
+When a record extends another transpilable record (of this project or of a
+referenced Metano package), the child's `TypeSpec` references the parent's
+spec via a `base` field:
 
 ```typescript
 get dog(): TypeSpec<Dog> {

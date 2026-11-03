@@ -46,20 +46,8 @@ internal sealed class JsonContractRoots(
             .DistinctBy(root => root.Type, SymbolEqualityComparer.Default)
             .ToList();
 
-        var structurallyValid = AdmitReportingRejections(distinctRoots, StructureRejectionReasonOf);
-
-        var objectRoots = new HashSet<ITypeSymbol>(
-            structurallyValid.Where(IsObjectRoot).Select(root => root.Type),
-            SymbolEqualityComparer.Default
-        );
-
-        var admitted = AdmitReportingRejections(
-            structurallyValid,
-            root => ContentsRejectionReasonOf(root, objectRoots)
-        );
-
         var admittedTypes = new HashSet<ITypeSymbol>(
-            admitted.Select(root => root.Type),
+            AdmitReportingRejections(distinctRoots).Select(root => root.Type),
             SymbolEqualityComparer.Default
         );
 
@@ -97,16 +85,13 @@ internal sealed class JsonContractRoots(
     /// Reports <c>MS0035</c> for every root that has a rejection reason and
     /// returns the others, in order.
     /// </summary>
-    private List<JsonContractRoot> AdmitReportingRejections(
-        IEnumerable<JsonContractRoot> roots,
-        Func<JsonContractRoot, string?> rejectionReasonOf
-    )
+    private List<JsonContractRoot> AdmitReportingRejections(IEnumerable<JsonContractRoot> roots)
     {
         var admitted = new List<JsonContractRoot>();
 
         foreach (var root in roots)
         {
-            if (rejectionReasonOf(root) is { } reason)
+            if (RejectionReasonOf(root) is { } reason)
             {
                 Report(root, reason);
                 continue;
@@ -118,10 +103,13 @@ internal sealed class JsonContractRoots(
         return admitted;
     }
 
+    private string? RejectionReasonOf(JsonContractRoot root) =>
+        StructureRejectionReasonOf(root) ?? ContentsRejectionReasonOf(root);
+
     /// <summary>
     /// The FR-035 rules that depend only on the root type itself. The
     /// contents of a value root (its elements, keys and values) are checked
-    /// by <see cref="ContentsRejectionReasonOf"/> once every object root is known.
+    /// by <see cref="ContentsRejectionReasonOf"/>.
     /// </summary>
     private string? StructureRejectionReasonOf(JsonContractRoot root) =>
         root.Type switch
@@ -141,20 +129,14 @@ internal sealed class JsonContractRoots(
     /// <summary>
     /// Why a value root is not describable, or <c>null</c> when every type its
     /// descriptor nests is: arrays have rank 1, dictionary keys are strings,
-    /// and every object element, value or nullable inner has a spec in the
-    /// context (it is discovered by the closure or listed as a root itself).
-    /// Object roots pass: their properties follow the property rules.
+    /// and every object element, value or nullable inner is an object
+    /// contract the closure discovers. Object roots pass: their properties
+    /// follow the property rules.
     /// </summary>
-    private string? ContentsRejectionReasonOf(
-        JsonContractRoot root,
-        IReadOnlySet<ITypeSymbol> objectRoots
-    ) => IsObjectRoot(root) ? null : NestedRejectionReasonOf(root.Type, root.Kind, objectRoots);
+    private string? ContentsRejectionReasonOf(JsonContractRoot root) =>
+        IsObjectRoot(root) ? null : NestedRejectionReasonOf(root.Type, root.Kind);
 
-    private string? NestedRejectionReasonOf(
-        ITypeSymbol type,
-        JsonPropertyKind kind,
-        IReadOnlySet<ITypeSymbol> objectRoots
-    )
+    private string? NestedRejectionReasonOf(ITypeSymbol type, JsonPropertyKind kind)
     {
         if (type is IArrayTypeSymbol { Rank: > 1 })
             return "multi-dimensional arrays are not supported by System.Text.Json";
@@ -164,25 +146,20 @@ internal sealed class JsonContractRoots(
                 + "context yet";
 
         if (kind == JsonPropertyKind.Ref)
-            return NestedObjectRejectionReasonOf(type, objectRoots);
+            return NestedObjectRejectionReasonOf(type);
 
         return JsonTypeClassifier
             .ChildTypesOf(type, kind)
-            .Select(child =>
-                NestedRejectionReasonOf(child, JsonTypeClassifier.Classify(child), objectRoots)
-            )
+            .Select(child => NestedRejectionReasonOf(child, JsonTypeClassifier.Classify(child)))
             .FirstOrDefault(reason => reason is not null);
     }
 
-    private string? NestedObjectRejectionReasonOf(
-        ITypeSymbol type,
-        IReadOnlySet<ITypeSymbol> objectRoots
-    ) =>
-        _admission.IsDiscoverable(type) || objectRoots.Contains(type)
+    private string? NestedObjectRejectionReasonOf(ITypeSymbol type) =>
+        _admission.IsDiscoverable(type)
             ? null
             : $"'{type.ToDisplayString()}' has no TypeScript contract in this context "
-                + "(only transpiled, non-generic classes and structs of this project are "
-                + "discovered; list a referenced package type as its own root)";
+                + "(it is not a transpiled class or struct of this project or of a referenced "
+                + "Metano package)";
 
     private static bool HasStringKey(ITypeSymbol mapType) =>
         JsonTypeClassifier.KeyTypeOf(mapType).SpecialType == SpecialType.System_String;

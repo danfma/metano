@@ -70,8 +70,7 @@ When `MS0034` is raised the descriptor keeps `create: <TsType>.create`.
 | Object-kind root that is not a transpilable class/struct | `typeof(KeyValuePair<string, int>)`, `typeof((int, string))`, a `[NoTranspile]` type, a type from a non-Metano assembly |
 | Array of rank > 1 | `typeof(int[,])` |
 | Dictionary with a non-`string` key anywhere in a value root (until S4 fixes key conversion, #270) | `typeof(Dictionary<int, Leaf>)`, `typeof(List<Dictionary<Guid, Leaf>>)` |
-| Closed generic object root whose definition is transpiled (until S1, FR-033); a BCL generic (`KeyValuePair<,>`, `ValueTuple`, `SortedDictionary<,>`, `ReadOnlyDictionary<,>`, `FrozenDictionary<,>`) is reported as not transpiled instead | `typeof(Page<Leaf>)` |
-| Value root whose element / value / nullable-inner object type has no spec in the context (not discovered by the closure and not listed as its own root; until S1, FR-047) | `typeof(List<Shared.Tag>)` without `typeof(Shared.Tag)` |
+| Value root whose element / value / nullable-inner object type has no object contract (an interface, or a type that is not transpiled in its declaring assembly) | `typeof(List<System.Version>)`, `typeof(List<IShape>)` |
 
 Message shape: `'<type>' cannot be a [JsonSerializable] root: <reason>.` The root is not emitted.
 

@@ -85,8 +85,8 @@ Rules:
   `{ tag: "b", spec: () => this.sBase }`.
 - A closed generic polymorphic base (FR-015) uses the constructed name everywhere:
   `get gBaseInt32(): TypeSpec<GBase<number>>`, and `GDer`'s spec links `base: this.gBaseInt32`.
-- Property lists are deduplicated by final JSON name; an overridden property appears only in the
-  most-derived spec (FR-009).
+- Property lists are deduplicated by final JSON name; on the wire an overridden property appears
+  once, from the most-derived spec (FR-009, DECIDED-19 c).
 - A C# `struct` contract adds `valueType: true` after `properties` (FR-037).
 
 ### 1a. Interface base (FR-018)
@@ -270,11 +270,24 @@ public partial class FeedJsonContext : JsonSerializerContext;
 ```ts
 get feed(): TypeSpec<Feed> { /* latest: { kind: "ref", spec: () => this.pageEpisodeSummary } */ }
 
-// Added by the closure; today this getter is missing and `this.page` fails with TS2339.
-get pageEpisodeSummary(): TypeSpec<Page<EpisodeSummary>> { /* items: array of ref → this.episodeSummary */ }
+// Added by the closure (before S1 this getter was missing and `this.page` failed with TS2339).
+get pageEpisodeSummary(): TypeSpec<Page<EpisodeSummary>> {
+  return this._pageEpisodeSummary ??= this.createSpec<Page<EpisodeSummary>>({
+    type: Page,
+    factory: (p: Record<string, unknown>) => new Page(p.items as EpisodeSummary[]),
+    properties: [/* items: array of ref → this.episodeSummary */],
+  });
+}
 
 get episodeSummary(): TypeSpec<EpisodeSummary> { /* … */ }
 ```
+
+- A closed generic contract passes its type explicitly to `createSpec<…>`: `type: Page` alone makes
+  TypeScript infer `Page<unknown>`, which the getter's `TypeSpec<Page<EpisodeSummary>>` rejects
+  under `tsgo --strict`. Non-generic contracts keep the bare `createSpec({…})` call.
+- The same rule admits a closed generic as a root (`typeof(Page<Leaf>)` → `pageLeaf`), as the
+  element of a value root (`List<Page<Leaf>>`) and as a `base` link (`IntBox : Box<int>` →
+  `base: this.boxInt32`). Golden: `tests/Metano.Tests/Expected/json-closure-generic-context.ts`.
 
 ## 3. Branded factory (#269)
 

@@ -928,11 +928,31 @@ the former `OPEN-N`.
     Bun), so a type named `Default` maps to `default` and compiles. `constructor` and the
     `SerializerContext` instance members of FR-036 stay reserved.
   - Until S4 fixes dictionary key conversion, a value root whose descriptor contains a `map` with a
-    non-`string` key is `MS0035`. Until S1 admits closed generic object types and referenced
-    package types into the closure (FR-033, FR-047), an object root that is a closed generic is
-    `MS0035`, and a value root whose element / value / nullable inner object type is neither
-    discovered by the closure nor listed as its own root is `MS0035` instead of a dangling `ref`.
+    non-`string` key is `MS0035`. A value root whose element / value / nullable inner object type
+    has no object contract (an interface, or a type that is not transpiled in its declaring
+    assembly) is `MS0035` instead of a dangling `ref`. S1 lifted the interim S3a rules for closed
+    generic object roots and for referenced package types that were not listed as their own root
+    (FR-033, FR-047).
   - S3a emits no `valueType` flag and keeps the `TypeSpec` overloads typed `T`; both land with S3b.
+
+- **DECIDED-19 — Slice S1 decisions (#268).** Taken while implementing FR-009 (generator half),
+  FR-010, FR-033 and FR-047:
+  - (a) One admission rule decides an object contract for roots, the closure and `base` links: a
+    class or struct (closed generics included) transpiled in its declaring assembly — this
+    project's `[Transpile]` / `[assembly: TranspileAssembly]` rule, or a type the frontend resolved
+    to a referenced `[TranspileAssembly]` + `[EmitPackage]` library. A base outside that rule
+    (`[Ignore]`, BCL) keeps having its properties inlined. The current-assembly half of FR-010
+    (`base:` under `TranspileAssembly`) was already fixed by #253; S1 adds library bases.
+  - (b) A closed generic contract passes its mapped type to `createSpec<…>` explicitly, because
+    `type: Page` alone infers `Page<unknown>` (checked with `tsgo --strict`).
+  - (c) FR-009 generator half: an inlined (unlinked) property list is deduplicated by final JSON
+    name, keeping the most-derived declaration at the base-most position; a redeclaration under a
+    different JSON name is written under both names, as System.Text.Json does (measured on .NET 10:
+    an override renamed `n` writes `{"X":2,"n":"d","Name":"d","Base":1}`). With a linked base, the
+    base spec must keep its own declaration for its own instances, so an override appears once in
+    each spec of the chain; the cross-spec duplicate is removed on the wire by
+    `collectWireProperties` (S4). The FR-009 phrase "appears only in the most-derived spec" applies
+    to the wire, not to the emitted lists.
 
 ## Open questions
 

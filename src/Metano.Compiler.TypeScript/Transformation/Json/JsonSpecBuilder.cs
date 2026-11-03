@@ -39,7 +39,7 @@ internal sealed class JsonSpecBuilder(
     {
         var getterName = _names.GetterOf(entry.Type);
         var fieldName = JsonTypeInfoNames.FieldOf(getterName);
-        var (specType, factoryName, spec) = BuildSpec(entry);
+        var (specType, factory) = BuildSpec(entry);
 
         yield return new TsFieldMember(
             fieldName,
@@ -56,40 +56,61 @@ internal sealed class JsonSpecBuilder(
                     new TsBinaryExpression(
                         new TsPropertyAccess(new TsIdentifier("this"), fieldName),
                         "??=",
-                        new TsCallExpression(
-                            new TsPropertyAccess(new TsIdentifier("this"), factoryName),
-                            [spec]
-                        )
+                        factory
                     )
                 ),
             ]
         );
     }
 
-    private (TsType SpecType, string FactoryName, TsObjectLiteral Spec) BuildSpec(
-        JsonContractEntry entry
-    )
+    private (TsType SpecType, TsCallExpression Factory) BuildSpec(JsonContractEntry entry)
     {
         if (entry.Kind == JsonPropertyKind.Ref)
-        {
-            var objectType = (INamedTypeSymbol)entry.Type;
-            var tsTypeName = SpecTypeReferenceName(objectType);
+            return BuildTypeSpec((INamedTypeSymbol)entry.Type);
 
-            return (
-                new TsNamedType("TypeSpec", [new TsNamedType(tsTypeName)], RuntimeJsonOrigin),
-                "createSpec",
-                BuildTypeSpecObject(objectType, tsTypeName)
-            );
-        }
+        var descriptor = _descriptors.Build(entry.Type, entry.Kind);
 
         return (
             new TsNamedType("ValueSpec", [ValueSpecTypeArgument(entry.Type)], RuntimeJsonOrigin),
-            "createValueSpec",
-            new TsObjectLiteral([
-                new TsObjectProperty("descriptor", _descriptors.Build(entry.Type, entry.Kind)),
-            ])
+            ContextCall(
+                "createValueSpec",
+                new TsObjectLiteral([new TsObjectProperty("descriptor", descriptor)])
+            )
         );
     }
+
+    /// <summary>
+    /// <c>TypeSpec&lt;T&gt;</c> and its <c>createSpec</c> call, where <c>T</c> is
+    /// the full mapped type of the contract (FR-032). A closed generic
+    /// contract names <c>T</c> explicitly (<c>createSpec&lt;Page&lt;EpisodeSummary&gt;&gt;</c>):
+    /// <c>type: Page</c> alone makes TypeScript infer <c>Page&lt;unknown&gt;</c>,
+    /// which the getter's type rejects (FR-033). Other contracts keep the bare
+    /// call.
+    /// </summary>
+    private (TsType SpecType, TsCallExpression Factory) BuildTypeSpec(INamedTypeSymbol objectType)
+    {
+        var contractType = JsonTsTypes.Map(_context, objectType);
+        var spec = BuildTypeSpecObject(objectType, SpecTypeReferenceName(objectType));
+
+        return (
+            new TsNamedType("TypeSpec", [contractType], RuntimeJsonOrigin),
+            ContextCall("createSpec", spec, ExplicitTypeArgumentsOf(contractType))
+        );
+    }
+
+    private static IReadOnlyList<TsType>? ExplicitTypeArgumentsOf(TsType contractType) =>
+        contractType is TsNamedType { TypeArguments.Count: > 0 } ? [contractType] : null;
+
+    private static TsCallExpression ContextCall(
+        string factoryName,
+        TsObjectLiteral spec,
+        IReadOnlyList<TsType>? typeArguments = null
+    ) =>
+        new(
+            new TsPropertyAccess(new TsIdentifier("this"), factoryName),
+            [spec],
+            TypeArguments: typeArguments
+        );
 
     /// <summary>
     /// The <c>T</c> of a value root's <c>ValueSpec&lt;T&gt;</c>: the root's
@@ -105,10 +126,11 @@ internal sealed class JsonSpecBuilder(
     }
 
     /// <summary>
-    /// The TS type reference a spec names in <c>TypeSpec&lt;T&gt;</c>,
-    /// <c>type: T</c> and <c>new T(...)</c>: the mapped type name, which is
-    /// qualified for a nested type (<c>Outer.Inner</c>) exactly as property
-    /// types reference it.
+    /// The TS value a spec names in <c>type: T</c> and <c>new T(...)</c>: the
+    /// mapped type name without type arguments, which is qualified for a
+    /// nested type (<c>Outer.Inner</c>) exactly as property types reference
+    /// it. <c>TypeSpec&lt;T&gt;</c> carries the full mapped type instead
+    /// (<c>TypeSpec&lt;Page&lt;EpisodeSummary&gt;&gt;</c>, FR-032).
     /// </summary>
     private string SpecTypeReferenceName(INamedTypeSymbol type) =>
         JsonTsTypes.Map(_context, type) is TsNamedType namedTs
