@@ -1067,6 +1067,9 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(varDecl.Const ? "const " : "let ");
                 _sb.Write(varDecl.Name);
 
+                if (varDecl.DefinitelyAssigned)
+                    _sb.Write("!");
+
                 if (varDecl.Type is not null)
                 {
                     _sb.Write(": ");

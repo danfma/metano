@@ -652,7 +652,7 @@ public sealed record IrSequenceExpression(IReadOnlyList<IrExpression> Effects, I
 /// <para>
 /// In statement position the extractor binds the values with an
 /// <see cref="IrTupleDeconstruction"/> whose initializer is this node (see
-/// <c>OutArgumentCallLowering</c>); anywhere else (a short-circuit operand, a
+/// <c>ExpressionVariableLowering</c>); anywhere else (a short-circuit operand, a
 /// conditional branch, a loop condition the extractor could not restructure)
 /// the node stays in place, its value is the callee's result, and the
 /// <c>out</c> values are stored into each target as a side effect.

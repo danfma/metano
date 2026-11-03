@@ -2,7 +2,7 @@ using Metano.Compiler.IR;
 
 namespace Metano.Compiler.Extraction;
 
-internal sealed partial class OutArgumentCallLowering
+internal sealed partial class ExpressionVariableLowering
 {
     /// <summary>
     /// Walks one statement's head expression in C# evaluation order, binding
@@ -14,9 +14,12 @@ internal sealed partial class OutArgumentCallLowering
     /// the expression; the calls after it stay in place. Member reads are
     /// treated as order-sensitive even when they are plain fields.
     /// </summary>
-    private sealed class HeadEvaluation(OutArgumentCallLowering lowering, List<IrStatement> prelude)
+    private sealed class HeadEvaluation(
+        ExpressionVariableLowering lowering,
+        List<IrStatement> prelude
+    )
     {
-        private readonly OutArgumentCallLowering _lowering = lowering;
+        private readonly ExpressionVariableLowering _lowering = lowering;
         private readonly List<IrStatement> _prelude = prelude;
         private readonly HashSet<string> _localsRead = new(StringComparer.Ordinal);
         private bool _stopped;

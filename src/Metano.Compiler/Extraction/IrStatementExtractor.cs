@@ -68,7 +68,7 @@ public sealed class IrStatementExtractor(
     /// <summary>
     /// Extracts a statement list that forms one C# scope (a block, a switch
     /// section, an embedded statement). Each statement goes through
-    /// <see cref="OutArgumentCallLowering"/>, which places the results of its
+    /// <see cref="ExpressionVariableLowering"/>, which places the results of its
     /// <c>out</c>-argument calls in this same list — the scope C# gives an
     /// <c>out var</c> declared in an expression statement, a declaration, a
     /// <c>return</c>, an <c>if</c> condition — or, for a loop, inside the loop.

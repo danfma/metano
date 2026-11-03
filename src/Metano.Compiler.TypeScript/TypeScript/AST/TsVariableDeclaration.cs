@@ -11,10 +11,14 @@ namespace Metano.Compiler.TypeScript.AST;
 /// export into a top-level variable declaration site.</param>
 /// <param name="Type">An explicit type annotation (<c>let x: T</c>); <c>null</c>
 /// lets TypeScript infer it from the initializer.</param>
+/// <param name="DefinitelyAssigned">Prints the definite-assignment assertion
+/// (<c>let x!: T</c>) for a local without an initializer that is assigned where
+/// TypeScript's flow analysis cannot see it (inside a closure).</param>
 public sealed record TsVariableDeclaration(
     string Name,
     TsExpression? Initializer,
     bool Const = true,
     bool Exported = false,
-    TsType? Type = null
+    TsType? Type = null,
+    bool DefinitelyAssigned = false
 ) : TsStatement;
