@@ -105,10 +105,13 @@ abstract class SerializerContext {
 10a. A polymorphic read rejects misplaced metadata in document order: on a concrete base, a tag
     that is not the first key (the out-of-order option off) throws `JsonException` "The metadata
     property is either not supported by the type or is not the first property in the deserialized
-    JSON object." (an abstract or interface base reports a missing tag instead); `$id` / `$ref`
-    throw the same message, `$values` its own, and any other `$`-prefixed key "Properties that
-    start with '$' are not allowed in types that support metadata. …". Array-index keys are not
-    positioned (JS enumerates them first) (DECIDED-21 h–j).
+    JSON object." (an abstract or interface base reports a missing tag instead, unless its first
+    key is `$id`, `$ref` or `$values`); `$id` / `$ref`, and `$values` after the first key, throw
+    the same message, `$values` as the first key its own, and any other `$`-prefixed key
+    "Properties that start with '$' are not allowed in types that support metadata. …". With
+    `allowOutOfOrderMetadataProperties`, the tag's JSON kind is checked where it appears, `$values`
+    gets STJ's two-reason message, and the contract is chosen after the walk. Array-index keys are
+    not positioned (JS enumerates them first) (DECIDED-21 h–j).
 11. With `readOptions.propertyNameCaseInsensitive`, JSON keys match properties case-insensitively,
     in document order (the last match wins); the discriminator is still matched case-sensitively
     (FR-048).

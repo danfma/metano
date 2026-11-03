@@ -10,6 +10,7 @@ import {
 import {
   cannotConvertMessage,
   DOLLAR_PROPERTY_MESSAGE,
+  LEADING_VALUES_MESSAGE,
   expectJsonException,
   expectNotSupportedException,
   METADATA_NOT_FIRST_MESSAGE,
@@ -1037,11 +1038,39 @@ describe("polymorphism — '$'-prefixed keys", () => {
     expectJsonException(() => read('{"$ref":"1"}', cBaseSpec), METADATA_NOT_FIRST_MESSAGE);
   });
 
-  test("$values must follow other metadata", () => {
+  test("$values as the first key must follow other metadata", () => {
+    expectJsonException(() => read('{"$values":[],"V":1}', cBaseSpec), LEADING_VALUES_MESSAGE);
+  });
+
+  const laterValues: readonly string[] = [
+    '{"$type":"d","$values":[]}',
+    '{"$type":"d","V":1,"$values":[]}',
+    '{"V":1,"$values":[]}',
+  ];
+
+  for (const json of laterValues) {
+    test(`$values in a later position is misplaced metadata: ${json}`, () => {
+      expectJsonException(() => read(json, cBaseSpec), METADATA_NOT_FIRST_MESSAGE);
+    });
+  }
+
+  test("an abstract base reports leading $id / $values before the missing tag", () => {
     expectJsonException(
-      () => read('{"$values":[],"V":1}', cBaseSpec),
-      "A '$values' metadata property must always be preceded by other metadata properties, " +
-        "such as '$id' or '$type'.",
+      () => read('{"$id":"1","Seconds":1}', studio.clip),
+      METADATA_NOT_FIRST_MESSAGE,
+    );
+    expectJsonException(() => read('{"$values":[]}', studio.clip), LEADING_VALUES_MESSAGE);
+  });
+
+  test("a leading tag is resolved before later keys are checked", () => {
+    expectJsonException(
+      () => read('{"$type":"zz","$x":1}', cBaseSpec),
+      unrecognizedDiscriminatorMessage("zz"),
+    );
+
+    expectJsonException(
+      () => read('{"$type":null,"$x":1}', cBaseSpec),
+      metadataTokenMessage("Null"),
     );
   });
 
@@ -1062,6 +1091,44 @@ describe("polymorphism — '$'-prefixed keys", () => {
       () => read('{"Seconds":1,"$x":2,"kind":"image","Path":"a"}', clipAnywhere),
       DOLLAR_PROPERTY_MESSAGE,
     );
+  });
+
+  describe("with out-of-order metadata", () => {
+    const cBaseAnywhere: TypeSpec<CBase> = {
+      ...cBaseSpec,
+      readOptions: { allowOutOfOrderMetadataProperties: true },
+    };
+
+    test("errors follow document order: a null tag before a $ key", () => {
+      expectJsonException(
+        () => read('{"V":1,"$type":null,"$x":1}', cBaseAnywhere),
+        metadataTokenMessage("Null"),
+      );
+    });
+
+    test("an unknown tag is resolved after the walk, so a later $ key wins", () => {
+      expectJsonException(
+        () => read('{"$type":"zz","$x":1}', cBaseAnywhere),
+        DOLLAR_PROPERTY_MESSAGE,
+      );
+    });
+
+    test("$id after the tag is misplaced metadata", () => {
+      expectJsonException(
+        () => read('{"V":1,"$type":"d","$id":"1"}', cBaseAnywhere),
+        METADATA_NOT_FIRST_MESSAGE,
+      );
+    });
+
+    test("$values gets the two-reason message", () => {
+      expectJsonException(
+        () => read('{"V":1,"$values":[]}', cBaseAnywhere),
+        "Deserialization failed for one of these reasons:\n" +
+          "1. A JSON object containing metadata for a nested array includes a non-metadata " +
+          "property '$values'.\n" +
+          "2. The JSON value could not be converted to CBase.",
+      );
+    });
   });
 
   test("a non-polymorphic spec reads past a $ key", () => {

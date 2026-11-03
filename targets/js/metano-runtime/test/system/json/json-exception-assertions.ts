@@ -72,3 +72,8 @@ export const METADATA_NOT_FIRST_MESSAGE =
 export const DOLLAR_PROPERTY_MESSAGE =
   "Properties that start with '$' are not allowed in types that support metadata. Either " +
   "replace the character or disable reference preservation and polymorphic deserialization.";
+
+/** `$values` as the first key of a polymorphic payload. */
+export const LEADING_VALUES_MESSAGE =
+  "A '$values' metadata property must always be preceded by other metadata properties, such " +
+  "as '$id' or '$type'.";

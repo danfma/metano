@@ -173,6 +173,7 @@ function unknownDerivedTypeTarget(
 
     case "fallBackToBaseType":
       return { spec };
+
     case "fallBackToNearestAncestor":
       return nearestRegisteredAncestorOf(value, index) ?? { spec };
   }
@@ -227,54 +228,124 @@ function runtimeTypeNameOf(value: unknown): string {
 
 // ─── Deserialize ─────────────────────────────────────────────────────────────
 
-/** A data key in a polymorphic payload that System.Text.Json reads as a metadata property. */
+/** The prefix System.Text.Json reserves for metadata property names. */
+const METADATA_PREFIX = "$";
+
+/** The metadata property of a preserved array. */
+const VALUES_KEY = "$values";
+
+/** Metadata names System.Text.Json knows besides the discriminator, unsupported here. */
+const REFERENCE_METADATA_NAMES: ReadonlySet<string> = new Set(["$id", "$ref"]);
+
+/** A metadata property that is unsupported, or not the first key of the payload. */
 const NOT_FIRST_METADATA_MESSAGE =
   "The metadata property is either not supported by the type or is not the first property in " +
   "the deserialized JSON object.";
 
+/** Any other key that starts with `$` in a polymorphic payload. */
 const DOLLAR_PROPERTY_MESSAGE =
   "Properties that start with '$' are not allowed in types that support metadata. Either " +
   "replace the character or disable reference preservation and polymorphic deserialization.";
 
-const VALUES_METADATA_MESSAGE =
+/** `$values` as the first key of a polymorphic payload. */
+const LEADING_VALUES_MESSAGE =
   "A '$values' metadata property must always be preceded by other metadata properties, such " +
   "as '$id' or '$type'.";
 
-/** Metadata names System.Text.Json knows besides the discriminator, unsupported here. */
-const REFERENCE_METADATA_NAMES: ReadonlySet<string> = new Set(["$id", "$ref"]);
+const ARRAY_INDEX_PATTERN = /^(?:0|[1-9]\d*)$/;
+
+const MAX_ARRAY_INDEX = 4_294_967_294;
+
+const INT32_MIN = -2_147_483_648;
+
+const INT32_MAX = 2_147_483_647;
 
 /**
  * Chooses the contract a polymorphic base reads `raw` with (FR-007): the
  * contract of a known tag, the base for a missing tag (or an ignored unknown
  * one) of a concrete base. Throws System.Text.Json's exceptions otherwise,
- * including for a later discriminator or `$`-prefixed key, which STJ reads
- * as misplaced metadata.
+ * including for misplaced metadata: a later discriminator, `$id` / `$ref` /
+ * `$values`, or any other `$`-prefixed key.
  */
 export function resolveDeserializeTarget(
   raw: Record<string, unknown>,
   spec: TypeSpec,
   polymorphism: PolymorphismSpec,
 ): TypeSpec {
-  const { discriminator } = polymorphism;
   const keys = documentOrderKeysOf(raw);
+  const allowsOutOfOrderTag = spec.readOptions?.allowOutOfOrderMetadataProperties ?? false;
 
-  if (spec.readOptions?.allowOutOfOrderMetadataProperties === true) {
-    rejectMetadataKeys(keys, discriminator, { tagAllowed: true });
+  return allowsOutOfOrderTag
+    ? resolveWithTagAnywhere(raw, keys, spec, polymorphism)
+    : resolveWithLeadingTag(raw, keys, spec, polymorphism);
+}
 
-    return Object.hasOwn(raw, discriminator)
-      ? targetOfTag(raw[discriminator], spec, polymorphism)
-      : contractWithoutTag(spec, polymorphism);
+/**
+ * The default: the tag counts only as the first key. Metadata in the first
+ * position is checked before a missing tag is reported; every later key is
+ * checked after the contract is chosen.
+ */
+function resolveWithLeadingTag(
+  raw: Record<string, unknown>,
+  keys: readonly string[],
+  spec: TypeSpec,
+  polymorphism: PolymorphismSpec,
+): TypeSpec {
+  const { discriminator } = polymorphism;
+  const [firstKey] = keys;
+  const hasLeadingTag = firstKey === discriminator;
+
+  if (!hasLeadingTag && firstKey !== undefined) {
+    throwIfLeadingMetadata(firstKey);
   }
 
-  const hasLeadingTag = keys[0] === discriminator;
+  const tag = hasLeadingTag ? readTag(raw[discriminator], spec) : undefined;
+  const target = contractOfTag(tag, spec, polymorphism);
+  const laterKeys = hasLeadingTag ? keys.slice(1) : keys;
 
-  const target = hasLeadingTag
-    ? targetOfTag(raw[discriminator], spec, polymorphism)
-    : contractWithoutTag(spec, polymorphism);
-
-  rejectMetadataKeys(hasLeadingTag ? keys.slice(1) : keys, discriminator, { tagAllowed: false });
+  for (const key of laterKeys) {
+    throwIfMetadata(key, discriminator, NOT_FIRST_METADATA_MESSAGE);
+  }
 
   return target;
+}
+
+/**
+ * `allowOutOfOrderMetadataProperties`: every key is checked in document
+ * order, the tag's JSON kind included, and the contract is chosen after the
+ * walk.
+ */
+function resolveWithTagAnywhere(
+  raw: Record<string, unknown>,
+  keys: readonly string[],
+  spec: TypeSpec,
+  polymorphism: PolymorphismSpec,
+): TypeSpec {
+  const { discriminator } = polymorphism;
+  const valuesMessage = outOfOrderValuesMessage(spec);
+
+  for (const key of keys) {
+    if (key === discriminator) {
+      readTag(raw[discriminator], spec);
+      continue;
+    }
+
+    throwIfMetadata(key, discriminator, valuesMessage);
+  }
+
+  const tag = Object.hasOwn(raw, discriminator) ? readTag(raw[discriminator], spec) : undefined;
+
+  return contractOfTag(tag, spec, polymorphism);
+}
+
+/** STJ's two-reason message for `$values` when out-of-order metadata is allowed. */
+function outOfOrderValuesMessage(spec: TypeSpec): string {
+  return (
+    "Deserialization failed for one of these reasons:\n" +
+    "1. A JSON object containing metadata for a nested array includes a non-metadata property " +
+    "'$values'.\n" +
+    `2. The JSON value could not be converted to ${contractNameOf(spec)}.`
+  );
 }
 
 /**
@@ -288,51 +359,63 @@ function documentOrderKeysOf(raw: Record<string, unknown>): readonly string[] {
   return Object.keys(raw).filter((key) => !isArrayIndex(key));
 }
 
-const ARRAY_INDEX_PATTERN = /^(?:0|[1-9]\d*)$/;
-
-const MAX_ARRAY_INDEX = 4_294_967_294;
-
 function isArrayIndex(key: string): boolean {
   return ARRAY_INDEX_PATTERN.test(key) && Number(key) <= MAX_ARRAY_INDEX;
 }
 
-/**
- * Rejects the keys System.Text.Json reads as metadata in a polymorphic
- * payload, in document order: the discriminator anywhere but first (unless
- * out-of-order metadata is allowed), `$id` / `$ref`, `$values`, and any other
- * key that starts with `$`.
- */
-function rejectMetadataKeys(
-  keys: readonly string[],
-  discriminator: string,
-  options: { readonly tagAllowed: boolean },
-): void {
-  for (const key of keys) {
-    if (key === discriminator) {
-      if (options.tagAllowed) {
-        continue;
-      }
+/** `$id` / `$ref` / `$values` as the first key fail before a missing tag is reported. */
+function throwIfLeadingMetadata(key: string): void {
+  if (key === VALUES_KEY) {
+    throw new JsonException(LEADING_VALUES_MESSAGE);
+  }
 
-      throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
-    }
-
-    if (REFERENCE_METADATA_NAMES.has(key)) {
-      throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
-    }
-
-    if (key === "$values") {
-      throw new JsonException(VALUES_METADATA_MESSAGE);
-    }
-
-    if (key.startsWith("$")) {
-      throw new JsonException(DOLLAR_PROPERTY_MESSAGE);
-    }
+  if (REFERENCE_METADATA_NAMES.has(key)) {
+    throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
   }
 }
 
-/** The contract a present tag selects (FR-007). */
-function targetOfTag(value: unknown, spec: TypeSpec, polymorphism: PolymorphismSpec): TypeSpec {
-  const tag = readTag(value, spec);
+/**
+ * Rejects a key System.Text.Json reads as misplaced metadata: the
+ * discriminator, `$id` / `$ref` (unsupported or not first), `$values` (with
+ * `valuesMessage`), or any other key that starts with `$`.
+ */
+function throwIfMetadata(key: string, discriminator: string, valuesMessage: string): void {
+  const message = metadataErrorMessageOf(key, discriminator, valuesMessage);
+
+  if (message !== undefined) {
+    throw new JsonException(message);
+  }
+}
+
+function metadataErrorMessageOf(
+  key: string,
+  discriminator: string,
+  valuesMessage: string,
+): string | undefined {
+  if (key === discriminator || REFERENCE_METADATA_NAMES.has(key)) {
+    return NOT_FIRST_METADATA_MESSAGE;
+  }
+
+  if (key === VALUES_KEY) {
+    return valuesMessage;
+  }
+
+  return key.startsWith(METADATA_PREFIX) ? DOLLAR_PROPERTY_MESSAGE : undefined;
+}
+
+/**
+ * The contract a tag selects (FR-007); `undefined` is a missing tag. An
+ * unknown tag reads like a missing one under `ignoreUnrecognizedTags`.
+ */
+function contractOfTag(
+  tag: TypeDiscriminator | undefined,
+  spec: TypeSpec,
+  polymorphism: PolymorphismSpec,
+): TypeSpec {
+  if (tag === undefined) {
+    return contractWithoutTag(spec, polymorphism);
+  }
+
   const derived = dispatchIndexOf(polymorphism).byTag.get(tag);
 
   if (derived) {
@@ -384,10 +467,6 @@ function readTag(value: unknown, spec: TypeSpec): TypeDiscriminator {
 
   return value;
 }
-
-const INT32_MIN = -2_147_483_648;
-
-const INT32_MAX = 2_147_483_647;
 
 function isInt32(value: number): boolean {
   return Number.isInteger(value) && value >= INT32_MIN && value <= INT32_MAX;

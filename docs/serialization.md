@@ -416,7 +416,8 @@ polymorphism: {
 - **Misplaced metadata.** A later tag on a concrete base throws `JsonException`
   `The metadata property is either not supported by the type or is not the
   first property in the deserialized JSON object.` (on an abstract base it is a
-  missing tag), and so do `$id` / `$ref`. Any other key that starts with `$`
+  missing tag), and so do `$id` / `$ref` and a later `$values` (a leading
+  `$values` has its own message). Any other key that starts with `$`
   throws `Properties that start with '$' are not allowed in types that support
   metadata. …`. These checks apply only to polymorphic specs. JS enumerates
   array-index keys (`"0"`) first, so an index key written before the tag goes
