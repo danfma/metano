@@ -136,14 +136,15 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["holder.ts"];
-        await Assert.That(output).Contains("private readonly _item: Holder.Item;");
-        await Assert.That(output).Contains("this._item = new Holder.Item(value);");
-        await Assert.That(output).Contains("export namespace Holder {");
-        await Assert.That(output).Contains("export class Item {");
+        await Assert.That(output).Contains("private readonly _item: Holder$Item;");
+        await Assert.That(output).Contains("this._item = new Holder$Item(value);");
+        await Assert.That(output).Contains("\nclass Holder$Item {");
+        await Assert.That(output).DoesNotContain("export class Holder$Item");
+        await Assert.That(output).DoesNotContain("namespace Holder");
     }
 
     [Test]
-    public async Task ModuleShapedStaticClass_KeepsPrivateOnlyCompanionModuleLocal()
+    public async Task ModuleShapedStaticClass_DeclaresPrivateNestedTypeModuleLocal()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -166,9 +167,10 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["pairs.ts"];
-        await Assert.That(output).Contains("const pair = new Pairs.Pair(a, b);");
-        await Assert.That(output).Contains("\nnamespace Pairs {");
-        await Assert.That(output).DoesNotContain("export namespace Pairs");
+        await Assert.That(output).Contains("const pair = new Pairs$Pair(a, b);");
+        await Assert.That(output).Contains("\nclass Pairs$Pair {");
+        await Assert.That(output).DoesNotContain("export class Pairs$Pair");
+        await Assert.That(output).DoesNotContain("namespace Pairs");
         var barrel = result["index.ts"];
         await Assert.That(barrel).Contains("export { Marker } from \"./marker\"");
         await Assert.That(barrel).DoesNotContain("Pairs");
@@ -224,8 +226,9 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["palette.ts"];
-        await Assert.That(output).Contains("export enum Tone {");
-        await Assert.That(output).Contains("return Palette.Tone.Dark;");
+        await Assert.That(output).Contains("\nenum Palette$Tone {");
+        await Assert.That(output).DoesNotContain("export enum");
+        await Assert.That(output).Contains("return Palette$Tone.Dark;");
     }
 
     [Test]
@@ -279,7 +282,120 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["svc.ts"];
-        await Assert.That(output).Contains("export class Kept {");
+        await Assert.That(output).Contains("\nclass Svc$Kept {");
+        await Assert.That(output).DoesNotContain("export class Svc$Kept");
         await Assert.That(output).DoesNotContain("NativeOnly");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_UsedByOwnerAndSiblingNestedType_ResolvesToModuleLocalName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Planner
+            {
+                private sealed record Step(int Frames);
+
+                private sealed class Track
+                {
+                    public Step First { get; } = new Step(1);
+
+                    public int Total(Step extra) => First.Frames + extra.Frames;
+                }
+
+                public static int Run() => new Track().Total(new Step(2));
+            }
+            """
+        );
+
+        var output = result["planner.ts"];
+        await Assert.That(output).Contains("new Planner$Track().total(new Planner$Step(2))");
+        await Assert.That(output).Contains("\nclass Planner$Track {");
+        await Assert.That(output).Contains("\nclass Planner$Step {");
+        await Assert.That(output).Contains("total(extra: Planner$Step): number {");
+        await Assert.That(output).DoesNotContain("namespace Planner");
+        await Assert.That(output).DoesNotContain("export class Planner$");
+        await Assert.That(result["index.ts"]).DoesNotContain("Planner$");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_NextToPublicOne_LeavesOnlyThePublicOneInTheNamespace()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Catalog
+            {
+                public sealed record Entry(int Id);
+
+                private sealed record Cursor(int Position);
+
+                public int Next() => new Cursor(1).Position + new Entry(2).Id;
+            }
+            """
+        );
+
+        var output = result["catalog.ts"];
+        await Assert.That(output).Contains("export namespace Catalog {");
+        await Assert.That(output).Contains("export class Entry {");
+        await Assert.That(output).Contains("\nclass Catalog$Cursor {");
+        await Assert.That(output).DoesNotContain("export class Catalog$Cursor");
+        await Assert.That(output).DoesNotContain("Catalog.Cursor");
+    }
+
+    [Test]
+    public async Task ProtectedNestedTypes_StayExportedForDerivedTypesInOtherFiles()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class Base
+            {
+                protected sealed record Token(int Id);
+
+                private protected sealed record Secret(int Id);
+
+                protected static Token Make() => new Token(1);
+            }
+
+            public sealed class Derived : Base
+            {
+                public int Id() => Make().Id;
+            }
+            """
+        );
+
+        var output = result["base.ts"];
+        await Assert.That(output).Contains("export namespace Base {");
+        await Assert.That(output).Contains("export class Token {");
+        await Assert.That(output).Contains("export class Secret {");
+        await Assert.That(output).DoesNotContain("Base$");
+    }
+
+    [Test]
+    public async Task InternalNestedType_StaysExportedForTheRestOfTheAssembly()
+    {
+        var result = TranspileHelper.Transpile(ShotScheduleSource);
+
+        var output = result["shot-schedule.ts"];
+        await Assert.That(output).Contains("export enum Kind {");
+        await Assert.That(output).DoesNotContain("ShotSchedule$Kind");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_IsAbsentFromTheDeclarationSurface()
+    {
+        var result = TranspileHelper.Transpile(ShotScheduleSource);
+
+        var output = result["shot-schedule.ts"];
+        await Assert.That(output).Contains("\nclass ShotSchedule$ShotEntry {");
+        await Assert.That(output).Contains("\nclass ShotSchedule$Deep {");
+        await Assert.That(output).Contains("\nnamespace ShotSchedule$Deep {");
+        await Assert.That(output).DoesNotContain("export class ShotSchedule$");
+        await Assert.That(output).DoesNotContain("export namespace ShotSchedule$");
     }
 }

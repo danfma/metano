@@ -1370,6 +1370,18 @@ public static class SymbolHelper
     }
 
     /// <summary>
+    /// True for a named <c>private</c> nested type: C# makes it reachable only from its
+    /// declaring type, so a target that can hide declarations keeps it out of the
+    /// container's exported surface (#412). <c>internal</c> and the protected family
+    /// stay on the surface — other files of the assembly (and derived types) reach them
+    /// as <c>Outer.Inner</c>, and the targets have no package-internal level.
+    /// </summary>
+    public static bool IsContainerPrivateNestedType(INamedTypeSymbol type) =>
+        type.ContainingType is not null
+        && type.DeclaredAccessibility == Accessibility.Private
+        && !string.IsNullOrEmpty(type.Name);
+
+    /// <summary>
     /// The <c>[assembly: TranspileAssembly]</c> inclusion rule: the type lives in the
     /// current compilation's assembly (not BCL / referenced assemblies) and is either
     /// public, or a named nested type whose container is itself opted in. A nested type
