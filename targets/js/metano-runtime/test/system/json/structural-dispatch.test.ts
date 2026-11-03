@@ -1,11 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
   JsonSerializer,
   type PolymorphismSpec,
   type TypeSpec,
   type UnknownDerivedTypeHandling,
 } from "#/system/json/index.ts";
-import { expectNotSupportedException } from "./json-exception-assertions.ts";
+import {
+  expectNotSupportedException,
+  unsupportedRuntimeTypeMessage,
+} from "./json-exception-assertions.ts";
+import { abstractFactory } from "./spec-fixtures.ts";
 
 // Hand-written specs shaped like contracts/context-codegen.md §1b: `[PlainObject]` variants have
 // no constructor, so a write selects them with their synthesized guards (FR-019), in `testOrder`.
@@ -139,7 +143,7 @@ describe("structural dispatch — unmatched plain objects", () => {
   test("failSerialization names the runtime type Object (E15)", () => {
     expectNotSupportedException(
       () => write(unmatched, plainShape),
-      "Runtime type 'Object' is not supported by polymorphic type 'Shape'.",
+      unsupportedRuntimeTypeMessage("Object", "Shape"),
     );
   });
 
@@ -211,11 +215,13 @@ const circleSpec: TypeSpec<Circle> = {
 describe("structural dispatch — mixed class and [PlainObject] variants", () => {
   const guardCalls: unknown[] = [];
 
+  beforeEach(() => {
+    guardCalls.length = 0;
+  });
+
   const figureSpec: TypeSpec<Figure | Point> = {
     type: Figure,
-    factory: () => {
-      throw new Error("abstract");
-    },
+    factory: abstractFactory,
     properties: [],
     polymorphism: {
       discriminator: "$type",
@@ -236,18 +242,14 @@ describe("structural dispatch — mixed class and [PlainObject] variants", () =>
   };
 
   test("a class instance is dispatched by constructor and never reaches a guard", () => {
-    guardCalls.length = 0;
-
     expect(write(new Circle(1), figureSpec)).toBe('{"$type":"circle","X":1}');
     expect(guardCalls).toEqual([]);
   });
 
   test("an unregistered class instance with a variant's shape still fails", () => {
-    guardCalls.length = 0;
-
     expectNotSupportedException(
       () => write(new Square(1), figureSpec),
-      "Runtime type 'Square' is not supported by polymorphic type 'Figure'.",
+      unsupportedRuntimeTypeMessage("Square", "Figure"),
     );
 
     expect(guardCalls).toEqual([]);

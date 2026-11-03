@@ -16,7 +16,7 @@ import type {
 } from "./types.ts";
 import { HashSet } from "../collections/hash-set.ts";
 import { readContainer, writeContainer } from "./container-depth.ts";
-import { contractNameOf } from "./contract-name.ts";
+import { cannotConvertTo } from "./contract-name.ts";
 import { JsonException } from "./errors.ts";
 import { resolveDeserializeTarget, resolveSerializeTarget } from "./polymorphism.ts";
 
@@ -431,7 +431,7 @@ export function deserializeWithSpec<T>(
   spec: TypeSpec<T>,
   customConverters?: readonly JsonConverter[],
 ): T {
-  const raw = jsonObjectFor(data, spec);
+  const raw = requireJsonObject(data, spec);
   const { polymorphism } = spec;
 
   if (!polymorphism) {
@@ -440,13 +440,14 @@ export function deserializeWithSpec<T>(
 
   const target = resolveDeserializeTarget(raw, spec, polymorphism);
 
+  // The target is `spec` or one of its registered derived contracts, so it builds a `T`.
   return deserializeContract(raw, target, customConverters) as T;
 }
 
 /** `data` as a JSON object; any other JSON value cannot be converted to the contract. */
-function jsonObjectFor(data: unknown, spec: TypeSpec): Record<string, unknown> {
+function requireJsonObject(data: unknown, spec: TypeSpec): Record<string, unknown> {
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
-    throw new JsonException(`The JSON value could not be converted to ${contractNameOf(spec)}.`);
+    throw cannotConvertTo(spec);
   }
 
   return data as Record<string, unknown>;

@@ -182,7 +182,7 @@ specs/001-project-baseline-evolution/baseline/{attribute-catalog,diagnostic-cata
 | S4 | Derived-first wire order (`collectWireProperties`, FR-009; generator reorders inlined property lists, DECIDED-19 f), `Array.from` iterables (FR-038), `JsonException` for existing errors (FR-045), depth limit (FR-016) | #268 #270 | `fix:` | — |
 | S5 | Runtime polymorphism (types, errors, dispatch) with bun tests | #268 | `feat:` | S4 |
 | S6 | Generator polymorphism for class hierarchies (reader, closure, descriptor, constructed generic bases, `MS0032`/`MS0033`) + golden; first probe DECIDED-12 | #268 | `feat:` | S1, S3, S5 |
-| S6c | Interface bases (FR-018) and `[PlainObject]` variants with synthesized guards, `testOrder` and the indistinguishability rule (FR-019) + goldens | #268 | `feat:` | S6 |
+| S6c | Interface bases (FR-018) and `[PlainObject]` variants with synthesized guards, `testOrder` and the indistinguishability rule (FR-019) + goldens; a base-guard member on `PolymorphismSpec` for a concrete, non-self-registered `[PlainObject]` base and the runtime FR-019 rule 5 check, replacing the S5 interim behavior (DECIDED-21 e) | #268 | `feat:` | S6 |
 | S6b | `MS0037` unmirrored options / `[JsonInclude]` / `byte[]` / `[JsonPropertyOrder]` (FR-046) | #268 #270 | `feat:` | S3 |
 | S7 | `[JsonFactory]` (FR-020–FR-026, `MS0034`) + golden | #269 | `feat:` | — |
 | S8 | Conformance sample + STJ fixtures on both sides + CI step (includes Web, interface, `[PlainObject]` and null-root rows; pins the read-depth message, DECIDED-15) | #268 #269 #270 | `test:` | S2b, S3b, S6c, S7 |
