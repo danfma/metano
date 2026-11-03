@@ -394,6 +394,92 @@ public class PerClassBackingFieldTests
     }
 
     [Test]
+    public async Task BackingFieldName_MatchesTheRuntimePublicJsonShapePattern()
+    {
+        // The runtime `publicJsonShape` (targets/js/metano-runtime/src/system/
+        // json/public-json-shape.ts) recognizes an emitted backing field by
+        // /^([^$]+)\$[^$]+_[0-9a-z]{6}$/ — keep this test and that pattern in
+        // sync: the group must be the public camelCase member name.
+        const string source = """
+            namespace App;
+
+            [Transpile]
+            public class Shape
+            {
+                public virtual int K { get; } = 1;
+            }
+            """;
+
+        var field = FieldOf(TranspileHelper.Transpile(source)["app/shape.ts"], "k", "Shape");
+        var match = Regex.Match(field, "^([^$]+)\\$[^$]+_[0-9a-z]{6}$");
+
+        await Assert.That(match.Success).IsTrue();
+        await Assert.That(match.Groups[1].Value).IsEqualTo("k");
+    }
+
+    [Test]
+    public async Task PrivateProtectedAndIgnoredVirtualProperties_GetNoBackingField()
+    {
+        // The core predicate (OverrideChains.EmitsPerClassStorage) drops
+        // `private protected` and `[Ignore]`d overridable auto-properties;
+        // only the emitted members declare a backing field.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class FBase
+            {
+                public virtual int P { get; set; } = 1;
+
+                private protected virtual int Q { get; set; } = 2;
+
+                [Ignore]
+                public virtual int R { get; set; } = 3;
+            }
+            """
+        );
+
+        var field = FieldOf(result["app/f-base.ts"], "p", "FBase");
+
+        await Assert.That(result["app/f-base.ts"]).Contains($"private {field}: number = 1;");
+        await Assert.That(result["app/f-base.ts"]).DoesNotContain("q$");
+        await Assert.That(result["app/f-base.ts"]).DoesNotContain("r$");
+    }
+
+    [Test]
+    public async Task LambdaWrite_InConstructor_ToWritableProperty_StaysOnTheVirtualSetter()
+    {
+        // C# rejects assigning a get-only auto-property inside a lambda
+        // (CS0200), so the only write a lambda in a constructor can make to a
+        // per-class-backed property goes through its setter — the virtual
+        // call C# itself would make. Pin that the lowering keeps such a write
+        // off the backing field.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class LBase
+            {
+                public virtual int P { get; set; } = 1;
+
+                public LBase()
+                {
+                    System.Action assign = () => P = 5;
+                    assign();
+                }
+            }
+            """
+        );
+
+        var field = FieldOf(result["app/l-base.ts"], "p", "LBase");
+
+        await Assert.That(result["app/l-base.ts"]).Contains("this.p = 5;");
+        await Assert.That(result["app/l-base.ts"]).DoesNotContain($"this.{field} = 5");
+    }
+
+    [Test]
     public async Task ClassWithBackingFields_EmitsToJsonOverThePublicShape()
     {
         var result = TranspileHelper.Transpile(

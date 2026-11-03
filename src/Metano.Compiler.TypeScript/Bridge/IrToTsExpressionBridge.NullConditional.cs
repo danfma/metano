@@ -49,12 +49,11 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapNullConditionalAccess(
         IrNullConditionalAccess access,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields,
+        IrToTsBridgeContext context,
         bool toleratesUndefined = false
     )
     {
-        var lowered = LowerNullConditional(access, bclRegistry, classFields);
+        var lowered = LowerNullConditional(access, context);
 
         if (lowered.OptionalChain is { } chain)
         {
@@ -81,13 +80,12 @@ public static partial class IrToTsExpressionBridge
     /// <c>if (a != null) step(a);</c>, with a receiver that must evaluate
     /// once bound first (<c>{ const t = a; if (t != null) step(t); }</c>).
     /// </summary>
-    public static TsStatement MapNullConditionalStatement(
+    internal static TsStatement MapNullConditionalStatement(
         IrNullConditionalAccess access,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var lowered = LowerNullConditional(access, bclRegistry, classFields);
+        var lowered = LowerNullConditional(access, context);
 
         if (lowered.OptionalChain is { } chain)
             return new TsExpressionStatement(chain);
@@ -112,11 +110,10 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static LoweredNullConditional LowerNullConditional(
         IrNullConditionalAccess access,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
-        var loweredReceiver = MapNullTolerant(access.Receiver, bclRegistry, classFields);
+        var loweredReceiver = MapNullTolerant(access.Receiver, context);
         var repeatsReceiver = IrEvaluationTraits.IsReusableNullConditionalReceiver(access.Receiver);
 
         var receiverReference = repeatsReceiver
@@ -126,8 +123,7 @@ public static partial class IrToTsExpressionBridge
         var whenNotNull = MapWithConditionalReceiver(
             access.WhenNotNull,
             receiverReference,
-            bclRegistry,
-            classFields
+            context
         );
 
         // A step that lowers to the receiver itself (a `[Branded]` value read,
@@ -163,8 +159,7 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapWithConditionalReceiver(
         IrExpression whenNotNull,
         TsExpression receiverReference,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var receivers = _conditionalReceivers ??= new Stack<TsExpression>();
@@ -172,7 +167,7 @@ public static partial class IrToTsExpressionBridge
 
         try
         {
-            return Map(whenNotNull, bclRegistry, classFields);
+            return Map(whenNotNull, context);
         }
         finally
         {
@@ -297,28 +292,21 @@ public static partial class IrToTsExpressionBridge
     ///   expression body of a <c>void</c> lambda.</item>
     /// </list>
     /// </summary>
-    public static TsExpression MapNullTolerant(
+    internal static TsExpression MapNullTolerant(
         IrExpression expression,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     ) =>
         expression switch
         {
             IrNullConditionalAccess access => MapNullConditionalAccess(
                 access,
-                bclRegistry,
-                classFields,
+                context,
                 toleratesUndefined: true
             ),
-            IrCallExpression { IsOptional: true } call => MapCall(call, bclRegistry, classFields),
+            IrCallExpression { IsOptional: true } call => MapCall(call, context),
             IrBinaryExpression { Operator: IrBinaryOp.NullCoalescing } coalesce =>
-                MapNullCoalescing(
-                    coalesce,
-                    rightToleratesUndefined: true,
-                    bclRegistry,
-                    classFields
-                ),
-            _ => Map(expression, bclRegistry, classFields),
+                MapNullCoalescing(coalesce, rightToleratesUndefined: true, context),
+            _ => Map(expression, context),
         };
 
     /// <summary>
@@ -329,24 +317,19 @@ public static partial class IrToTsExpressionBridge
     private static TsBinaryExpression MapNullCoalescing(
         IrBinaryExpression coalesce,
         bool rightToleratesUndefined,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     ) =>
         new(
-            MapNullTolerant(coalesce.Left, bclRegistry, classFields),
+            MapNullTolerant(coalesce.Left, context),
             "??",
-            MapOperand(coalesce.Right, rightToleratesUndefined, bclRegistry, classFields)
+            MapOperand(coalesce.Right, rightToleratesUndefined, context)
         );
 
     private static TsExpression MapOperand(
         IrExpression operand,
         bool toleratesUndefined,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    ) =>
-        toleratesUndefined
-            ? MapNullTolerant(operand, bclRegistry, classFields)
-            : Map(operand, bclRegistry, classFields);
+        IrToTsBridgeContext context
+    ) => toleratesUndefined ? MapNullTolerant(operand, context) : Map(operand, context);
 
     /// <summary>
     /// Whether <paramref name="expression"/> lowers to a native optional

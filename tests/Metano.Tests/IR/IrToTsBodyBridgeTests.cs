@@ -371,7 +371,7 @@ public class IrToTsBodyBridgeTests
             methodSymbol.ReturnsVoid
         );
 
-        var tsBody = IrToTsStatementBridge.MapBody(irBody, bclRegistry);
+        var tsBody = IrToTsStatementBridge.MapBody(irBody, IrToTsBridgeContext.For(bclRegistry));
 
         var methodMember = new TsMethodMember(
             methodSymbol.Name[0..1].ToLowerInvariant() + methodSymbol.Name[1..],

@@ -288,7 +288,7 @@ public static class IrClassExtractor
                 originResolver,
                 target
             ),
-            InheritsPerClassStorage: OverrideChains.AncestorOwnsPerClassStorage(
+            InheritsPerClassStorage: OverrideChains.AncestorEmitsPerClassStorage(
                 type,
                 compilation,
                 target

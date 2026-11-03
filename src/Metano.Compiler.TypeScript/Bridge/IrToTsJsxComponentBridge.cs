@@ -73,7 +73,9 @@ public static class IrToTsJsxComponentBridge
                 continue;
             statements.Add(BuildHoist(prop, bclRegistry));
         }
-        statements.AddRange(IrToTsStatementBridge.MapBody(rewrittenBody, bclRegistry));
+        statements.AddRange(
+            IrToTsStatementBridge.MapBody(rewrittenBody, IrToTsBridgeContext.For(bclRegistry))
+        );
 
         sink.Add(
             new TsFunction(
@@ -182,7 +184,7 @@ public static class IrToTsJsxComponentBridge
         var local = HoistPrefix + camel;
         var propsAccess = new TsPropertyAccess(new TsIdentifier("props"), camel);
         var defaultValue = prop.Initializer is not null
-            ? IrToTsExpressionBridge.Map(prop.Initializer, bclRegistry)
+            ? IrToTsExpressionBridge.Map(prop.Initializer, IrToTsBridgeContext.For(bclRegistry))
             : DefaultForType(prop.Type);
         var initializer = new TsBinaryExpression(propsAccess, "??", defaultValue);
         return new TsVariableDeclaration(local, initializer, Const: true);

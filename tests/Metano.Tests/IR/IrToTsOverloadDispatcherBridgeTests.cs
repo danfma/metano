@@ -31,7 +31,11 @@ public class IrToTsOverloadDispatcherBridgeTests
             methodName: "Sum"
         );
 
-        var members = IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName);
+        var members = IrToTsOverloadDispatcherBridge.BuildMethod(
+            primary,
+            containingTypeName,
+            IrToTsBridgeContext.For(null)
+        );
 
         var printed = PrintMembers(members, containingTypeName);
         // Public dispatcher with ...args: unknown[].
@@ -69,7 +73,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         );
 
         var printed = PrintMembers(
-            IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName),
+            IrToTsOverloadDispatcherBridge.BuildMethod(
+                primary,
+                containingTypeName,
+                IrToTsBridgeContext.For(null)
+            ),
             containingTypeName
         );
         await Assert.That(printed).Contains("isInt32(args[0])");
@@ -94,7 +102,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         );
 
         var printed = PrintMembers(
-            IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName),
+            IrToTsOverloadDispatcherBridge.BuildMethod(
+                primary,
+                containingTypeName,
+                IrToTsBridgeContext.For(null)
+            ),
             containingTypeName
         );
         await Assert.That(printed).Contains("isFloat64(args[0])");
@@ -119,7 +131,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         );
 
         var printed = PrintMembers(
-            IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName),
+            IrToTsOverloadDispatcherBridge.BuildMethod(
+                primary,
+                containingTypeName,
+                IrToTsBridgeContext.For(null)
+            ),
             containingTypeName
         );
         // Both overloads share the same parameter name (`value`), so the bridge
@@ -143,7 +159,11 @@ public class IrToTsOverloadDispatcherBridgeTests
             methodName: "Abs"
         );
 
-        var members = IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName);
+        var members = IrToTsOverloadDispatcherBridge.BuildMethod(
+            primary,
+            containingTypeName,
+            IrToTsBridgeContext.For(null)
+        );
         var printed = PrintMembers(members, containingTypeName);
         await Assert.That(printed).Contains("static abs(...args: unknown[])");
         // Static overloads delegate through the class name, not `this`. Both
@@ -176,7 +196,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         );
 
         var printed = PrintMembers(
-            IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName),
+            IrToTsOverloadDispatcherBridge.BuildMethod(
+                primary,
+                containingTypeName,
+                IrToTsBridgeContext.For(null)
+            ),
             containingTypeName
         );
         await Assert.That(printed).Contains("args[0] === \"Low\"");
@@ -204,7 +228,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         );
 
         var printed = PrintMembers(
-            IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName),
+            IrToTsOverloadDispatcherBridge.BuildMethod(
+                primary,
+                containingTypeName,
+                IrToTsBridgeContext.For(null)
+            ),
             containingTypeName
         );
         await Assert.That(printed).Contains("isInt32(args[0])");
@@ -231,7 +259,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         );
 
         var printed = PrintMembers(
-            IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName),
+            IrToTsOverloadDispatcherBridge.BuildMethod(
+                primary,
+                containingTypeName,
+                IrToTsBridgeContext.For(null)
+            ),
             containingTypeName
         );
         await Assert.That(printed).Contains("typeof args[0] === \"object\"");
@@ -252,7 +284,11 @@ public class IrToTsOverloadDispatcherBridgeTests
             """,
             methodName: "Sum"
         );
-        var members = IrToTsOverloadDispatcherBridge.BuildMethod(primary, containingTypeName);
+        var members = IrToTsOverloadDispatcherBridge.BuildMethod(
+            primary,
+            containingTypeName,
+            IrToTsBridgeContext.For(null)
+        );
         await Assert.That(members).IsEmpty();
     }
 

@@ -176,7 +176,11 @@ public static class IrToTsBrandedBridge
             FunctionName(method),
             IrToTsOverloadDispatcherBridge.MapParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
-            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry),
+            IrToTsBodyHelpers.LowerOrNotImplemented(
+                method.Body,
+                method.Name,
+                IrToTsBridgeContext.For(bclRegistry)
+            ),
             Exported: true,
             Async: method.Semantics.IsAsync
         );

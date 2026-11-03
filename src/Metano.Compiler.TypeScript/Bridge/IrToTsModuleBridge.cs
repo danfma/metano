@@ -103,7 +103,7 @@ public static class IrToTsModuleBridge
     )
     {
         var value = initializer is not null
-            ? IrToTsExpressionBridge.Map(initializer, bclRegistry)
+            ? IrToTsExpressionBridge.Map(initializer, IrToTsBridgeContext.For(bclRegistry))
             : IrToTsClassBridge.ComputeDefaultInitializer(type);
 
         return new TsVariableDeclaration(
@@ -132,12 +132,19 @@ public static class IrToTsModuleBridge
                 IrToTsTypeMapper.MapParameterType(p),
                 Optional: p.IsOptional,
                 DefaultValue: p.HasDefaultValue && p.DefaultValue is not null
-                    ? IrToTsExpressionBridge.Map(p.DefaultValue, bclRegistry)
+                    ? IrToTsExpressionBridge.Map(
+                        p.DefaultValue,
+                        IrToTsBridgeContext.For(bclRegistry)
+                    )
                     : null,
                 Rest: p.IsParams
             ))
             .ToList();
-        var body = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry);
+        var body = IrToTsBodyHelpers.LowerOrNotImplemented(
+            fn.Body,
+            fn.Name,
+            IrToTsBridgeContext.For(bclRegistry)
+        );
 
         return new TsFunction(
             name,
@@ -165,7 +172,13 @@ public static class IrToTsModuleBridge
         );
 
         var body = new List<TsStatement> { destructure };
-        body.AddRange(IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry));
+        body.AddRange(
+            IrToTsBodyHelpers.LowerOrNotImplemented(
+                fn.Body,
+                fn.Name,
+                IrToTsBridgeContext.For(bclRegistry)
+            )
+        );
 
         return new TsFunction(
             name,

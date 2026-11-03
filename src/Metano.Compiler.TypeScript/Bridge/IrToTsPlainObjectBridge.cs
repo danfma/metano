@@ -123,7 +123,10 @@ public static class IrToTsPlainObjectBridge
         var name = TypeScriptNaming.EscapeIfReserved(
             IrToTsNamingPolicy.ToDeclaredDataMemberName(field.Name, field.Attributes)
         );
-        var initializer = IrToTsExpressionBridge.Map(field.Initializer, bclRegistry);
+        var initializer = IrToTsExpressionBridge.Map(
+            field.Initializer,
+            IrToTsBridgeContext.For(bclRegistry)
+        );
         // `readonly` C# fields lower to a `const` declaration; the
         // rare mutable-static case (a top-level cache or counter)
         // emits as a `let` so call sites can still rebind it. Both
@@ -157,7 +160,7 @@ public static class IrToTsPlainObjectBridge
         var loweredBody = IrToTsBodyHelpers.LowerOrNotImplemented(
             rewrittenBody,
             method.Name,
-            bclRegistry
+            IrToTsBridgeContext.For(bclRegistry)
         );
 
         // First parameter is always `self: T`; the rest are the C# parameters.

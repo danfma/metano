@@ -153,7 +153,10 @@ internal static partial class IrToTsClassBridge
         }
 
         if (type is IrNamedTypeRef { Semantics.IsDefaultConstructible: true })
-            return IrToTsExpressionBridge.Map(new IrNewExpression(type, []));
+            return IrToTsExpressionBridge.Map(
+                new IrNewExpression(type, []),
+                IrToTsBridgeContext.For(null)
+            );
 
         return null;
     }

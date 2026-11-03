@@ -22,21 +22,16 @@ public static class IrToTsStatementBridge
     /// <c>let</c>/<c>const</c> bindings it declares keep their C# scope (a bare
     /// C# block, or a loop wrapped with its hoisted <c>out var</c> locals).
     /// </summary>
-    public static IReadOnlyList<TsStatement> MapBody(
+    internal static IReadOnlyList<TsStatement> MapBody(
         IReadOnlyList<IrStatement> body,
-        DeclarativeMappingRegistry? bclRegistry = null,
-        PerClassBackingFieldScope? classFields = null
-    ) => body.Select(stmt => Map(stmt, bclRegistry, classFields)).ToList();
+        IrToTsBridgeContext context
+    ) => body.Select(stmt => Map(stmt, context)).ToList();
 
-    private static TsStatement MapForEach(
-        IrForEachStatement fe,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    private static TsStatement MapForEach(IrForEachStatement fe, IrToTsBridgeContext context)
     {
         // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`
-        var collection = IrToTsExpressionBridge.Map(fe.Collection, bclRegistry, classFields);
-        var body = MapBody(fe.Body, bclRegistry, classFields);
+        var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
+        var body = MapBody(fe.Body, context);
         var header = $"for (const {fe.Variable} of {PrintExpression(collection)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
@@ -46,25 +41,19 @@ public static class IrToTsStatementBridge
         };
     }
 
-    private static TsStatement MapFor(
-        IrForStatement fs,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    private static TsStatement MapFor(IrForStatement fs, IrToTsBridgeContext context)
     {
-        var initializers = fs
-            .Initializers.Select(i => MapForInitializer(i, bclRegistry, classFields))
-            .ToList();
+        var initializers = fs.Initializers.Select(i => MapForInitializer(i, context)).ToList();
 
         var condition = fs.Condition is null
             ? null
-            : IrToTsExpressionBridge.Map(fs.Condition, bclRegistry, classFields);
+            : IrToTsExpressionBridge.Map(fs.Condition, context);
 
         var incrementors = fs
-            .Incrementors.Select(i => IrToTsExpressionBridge.Map(i, bclRegistry, classFields))
+            .Incrementors.Select(i => IrToTsExpressionBridge.Map(i, context))
             .ToList();
 
-        var body = MapBody(fs.Body, bclRegistry, classFields);
+        var body = MapBody(fs.Body, context);
         var conditionText = condition is null ? string.Empty : PrintExpression(condition);
 
         var header =
@@ -91,14 +80,11 @@ public static class IrToTsStatementBridge
     /// </summary>
     private static TsStatement MapForInitializer(
         IrStatement initializer,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     ) =>
         initializer is IrExpressionStatement expression
-            ? new TsExpressionStatement(
-                IrToTsExpressionBridge.Map(expression.Expression, bclRegistry, classFields)
-            )
-            : Map(initializer, bclRegistry, classFields);
+            ? new TsExpressionStatement(IrToTsExpressionBridge.Map(expression.Expression, context))
+            : Map(initializer, context);
 
     /// <summary>
     /// The initializer section of a <c>for</c> header: the declarators of
@@ -158,14 +144,10 @@ public static class IrToTsStatementBridge
     private static string RenderCommaList(IReadOnlyList<TsExpression> expressions) =>
         string.Join(", ", expressions.Select(PrintExpression));
 
-    private static TsStatement MapWhile(
-        IrWhileStatement ws,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    private static TsStatement MapWhile(IrWhileStatement ws, IrToTsBridgeContext context)
     {
-        var condition = IrToTsExpressionBridge.Map(ws.Condition, bclRegistry, classFields);
-        var body = MapBody(ws.Body, bclRegistry, classFields);
+        var condition = IrToTsExpressionBridge.Map(ws.Condition, context);
+        var body = MapBody(ws.Body, context);
 
         return new TsRawStatement(WrapLoop($"while ({PrintExpression(condition)}) {{", body))
         {
@@ -174,14 +156,10 @@ public static class IrToTsStatementBridge
         };
     }
 
-    private static TsStatement MapDoWhile(
-        IrDoWhileStatement dw,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    private static TsStatement MapDoWhile(IrDoWhileStatement dw, IrToTsBridgeContext context)
     {
-        var condition = IrToTsExpressionBridge.Map(dw.Condition, bclRegistry, classFields);
-        var body = MapBody(dw.Body, bclRegistry, classFields);
+        var condition = IrToTsExpressionBridge.Map(dw.Condition, context);
+        var body = MapBody(dw.Body, context);
         var inner = RenderIndentedBody(body);
 
         return new TsRawStatement($"do {{\n{inner}}} while ({PrintExpression(condition)});")
@@ -191,24 +169,15 @@ public static class IrToTsStatementBridge
         };
     }
 
-    private static TsStatement MapTry(
-        IrTryStatement ts,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    private static TsStatement MapTry(IrTryStatement ts, IrToTsBridgeContext context)
     {
-        var body = MapBody(ts.Body, bclRegistry, classFields);
+        var body = MapBody(ts.Body, context);
 
         var catches = (ts.Catches ?? [])
-            .Select(c =>
-                (
-                    Variable: c.VariableName ?? "_err",
-                    Body: MapBody(c.Body, bclRegistry, classFields)
-                )
-            )
+            .Select(c => (Variable: c.VariableName ?? "_err", Body: MapBody(c.Body, context)))
             .ToList();
 
-        var finallyBody = ts.Finally is null ? null : MapBody(ts.Finally, bclRegistry, classFields);
+        var finallyBody = ts.Finally is null ? null : MapBody(ts.Finally, context);
         var catchText = catches.Select(c =>
             $" catch ({c.Variable}) {{\n{RenderIndentedBody(c.Body)}}}"
         );
@@ -275,33 +244,23 @@ public static class IrToTsStatementBridge
         return inner.TrimEnd(';');
     }
 
-    public static TsStatement Map(
-        IrStatement statement,
-        DeclarativeMappingRegistry? bclRegistry = null,
-        PerClassBackingFieldScope? classFields = null
-    ) =>
+    internal static TsStatement Map(IrStatement statement, IrToTsBridgeContext context) =>
         statement switch
         {
             // Yield return surfaces as IrExpressionStatement(IrYieldExpression) —
             // peel it out and emit the dedicated TsYieldStatement.
             IrExpressionStatement { Expression: IrYieldExpression ye } => new TsYieldStatement(
                 ye.Value is not null
-                    ? IrToTsExpressionBridge.Map(ye.Value, bclRegistry, classFields)
+                    ? IrToTsExpressionBridge.Map(ye.Value, context)
                     : new TsIdentifier("undefined")
             ),
             IrExpressionStatement { Expression: IrNullConditionalAccess access } =>
-                IrToTsExpressionBridge.MapNullConditionalStatement(
-                    access,
-                    bclRegistry,
-                    classFields
-                ),
+                IrToTsExpressionBridge.MapNullConditionalStatement(access, context),
             IrExpressionStatement es => new TsExpressionStatement(
-                IrToTsExpressionBridge.MapNullTolerant(es.Expression, bclRegistry, classFields)
+                IrToTsExpressionBridge.MapNullTolerant(es.Expression, context)
             ),
             IrReturnStatement ret => new TsReturnStatement(
-                ret.Value is not null
-                    ? IrToTsExpressionBridge.Map(ret.Value, bclRegistry, classFields)
-                    : null
+                ret.Value is not null ? IrToTsExpressionBridge.Map(ret.Value, context) : null
             ),
             // Declared ahead of its first assignment (an `out var` local, or
             // `T x;`): a typed, uninitialized `let x: T;` keeps TypeScript's
@@ -337,41 +296,35 @@ public static class IrToTsStatementBridge
             IrVariableDeclaration vd => new TsVariableDeclaration(
                 vd.Name,
                 vd.Initializer is not null
-                    ? IrToTsExpressionBridge.Map(vd.Initializer, bclRegistry, classFields)
+                    ? IrToTsExpressionBridge.Map(vd.Initializer, context)
                     : new TsIdentifier("undefined"),
                 Const: vd.IsConst
             ),
             IrTupleDeconstruction td => new TsDestructuringDeclaration(
                 td.Elements.Select(e => e.Name).ToList(),
                 td.Initializer is IrOutArgumentCall outCall
-                    ? IrToTsExpressionBridge.MapOutArgumentCallValue(
-                        outCall,
-                        bclRegistry,
-                        classFields
-                    )
-                    : IrToTsExpressionBridge.Map(td.Initializer, bclRegistry, classFields),
+                    ? IrToTsExpressionBridge.MapOutArgumentCallValue(outCall, context)
+                    : IrToTsExpressionBridge.Map(td.Initializer, context),
                 Const: td.IsConst
             ),
             IrIfStatement ifs => new TsIfStatement(
-                IrToTsExpressionBridge.Map(ifs.Condition, bclRegistry, classFields),
-                MapBody(ifs.Then, bclRegistry, classFields),
-                ifs.Else is not null ? MapBody(ifs.Else, bclRegistry, classFields) : null
+                IrToTsExpressionBridge.Map(ifs.Condition, context),
+                MapBody(ifs.Then, context),
+                ifs.Else is not null ? MapBody(ifs.Else, context) : null
             ),
             IrThrowStatement th => new TsThrowStatement(
-                IrToTsExpressionBridge.Map(th.Expression, bclRegistry, classFields)
+                IrToTsExpressionBridge.Map(th.Expression, context)
             ),
-            IrBlockStatement block => new TsBlockStatement(
-                MapBody(block.Statements, bclRegistry, classFields)
-            ),
+            IrBlockStatement block => new TsBlockStatement(MapBody(block.Statements, context)),
             IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
             IrContinueStatement => new TsExpressionStatement(new TsIdentifier("continue")),
-            IrSwitchStatement sw => IrToTsSwitchStatementBridge.Map(sw, bclRegistry, classFields),
+            IrSwitchStatement sw => IrToTsSwitchStatementBridge.Map(sw, context),
             IrYieldBreakStatement => new TsYieldBreakStatement(),
-            IrForEachStatement fe => MapForEach(fe, bclRegistry, classFields),
-            IrForStatement fs => MapFor(fs, bclRegistry, classFields),
-            IrWhileStatement ws => MapWhile(ws, bclRegistry, classFields),
-            IrDoWhileStatement dw => MapDoWhile(dw, bclRegistry, classFields),
-            IrTryStatement ts => MapTry(ts, bclRegistry, classFields),
+            IrForEachStatement fe => MapForEach(fe, context),
+            IrForStatement fs => MapFor(fs, context),
+            IrWhileStatement ws => MapWhile(ws, context),
+            IrDoWhileStatement dw => MapDoWhile(dw, context),
+            IrTryStatement ts => MapTry(ts, context),
             IrUnsupportedStatement u => new TsExpressionStatement(
                 new TsIdentifier($"/* TODO: unsupported IR statement {u.Kind} */")
             ),

@@ -59,11 +59,7 @@ public static class IrToTsJsxBridge
     /// <see cref="IrNamedTypeSemantics.RendersAsJsxElement"/> before routing
     /// here.
     /// </summary>
-    public static TsJsxElement Convert(
-        IrNewExpression ne,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    internal static TsJsxElement Convert(IrNewExpression ne, IrToTsBridgeContext context)
     {
         var tag = ResolveTag(ne);
 
@@ -79,9 +75,9 @@ public static class IrToTsJsxBridge
                 // JsxElement[]-typed collection), never on the literal member
                 // name — so any binding's children slot works regardless of name.
                 if (init.IsChildrenSlot)
-                    children.AddRange(LowerChildren(init.Value, bclRegistry, classFields));
+                    children.AddRange(LowerChildren(init.Value, context));
                 else
-                    attributes.Add(LowerAttribute(init, bclRegistry, classFields));
+                    attributes.Add(LowerAttribute(init, context));
             }
         }
 
@@ -128,10 +124,9 @@ public static class IrToTsJsxBridge
     /// the expression bridge (so a bare <c>Render() =&gt; Solid.For(...)</c> return
     /// lowers to JSX instead of a raw call) and by <see cref="LowerChild"/>.
     /// </summary>
-    public static TsExpression? TryLowerJsxProducer(
+    internal static TsExpression? TryLowerJsxProducer(
         IrExpression expression,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         if (
@@ -140,13 +135,13 @@ public static class IrToTsJsxBridge
                 Type: IrNamedTypeRef { Semantics.RendersAsJsxElement: true }
             } ne
         )
-            return Convert(ne, bclRegistry, classFields);
+            return Convert(ne, context);
 
-        if (TryLowerForHelper(expression, bclRegistry, classFields) is { } forElement)
+        if (TryLowerForHelper(expression, context) is { } forElement)
             return forElement;
 
         if (IsTextBuilderCall(expression, out var textArg))
-            return IrToTsExpressionBridge.Map(textArg!, bclRegistry, classFields);
+            return IrToTsExpressionBridge.Map(textArg!, context);
 
         return null;
     }
@@ -176,14 +171,10 @@ public static class IrToTsJsxBridge
     /// string-literal value emits as <c>name="literal"</c>; every other lowered
     /// expression (handlers, numbers, identifiers) emits as <c>name={expr}</c>.
     /// </summary>
-    private static TsJsxAttribute LowerAttribute(
-        IrMemberInit init,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    private static TsJsxAttribute LowerAttribute(IrMemberInit init, IrToTsBridgeContext context)
     {
         var name = init.EmittedName ?? TypeScriptNaming.ToCamelCaseMember(init.MemberName);
-        var value = IrToTsExpressionBridge.Map(init.Value, bclRegistry, classFields);
+        var value = IrToTsExpressionBridge.Map(init.Value, context);
         TsJsxAttributeValue attrValue = value switch
         {
             TsStringLiteral str => new TsJsxAttributeStringValue(str.Value),
@@ -200,18 +191,17 @@ public static class IrToTsJsxBridge
     /// </summary>
     private static IEnumerable<TsJsxChild> LowerChildren(
         IrExpression childrenValue,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         if (childrenValue is IrArrayLiteral array)
         {
             foreach (var element in array.Elements)
-                yield return LowerChild(element, bclRegistry, classFields);
+                yield return LowerChild(element, context);
         }
         else
         {
-            yield return LowerChild(childrenValue, bclRegistry, classFields);
+            yield return LowerChild(childrenValue, context);
         }
     }
 
@@ -225,11 +215,7 @@ public static class IrToTsJsxBridge
     ///   <see cref="TsJsxExpressionChild"/>.</item>
     /// </list>
     /// </summary>
-    private static TsJsxChild LowerChild(
-        IrExpression child,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
-    )
+    private static TsJsxChild LowerChild(IrExpression child, IrToTsBridgeContext context)
     {
         // A spread child (`..common` in `Children = [..common, …]`) renders the
         // spread source as a JSX expression child — SolidJS/JSX renders an array
@@ -237,9 +223,7 @@ public static class IrToTsJsxBridge
         // `.OfType<ExpressionElementSyntax>()` behavior) silently truncated the
         // list, so we surface it as an expression child here.
         if (child is IrSpreadExpression spread)
-            return new TsJsxExpressionChild(
-                IrToTsExpressionBridge.Map(spread.Expression, bclRegistry, classFields)
-            );
+            return new TsJsxExpressionChild(IrToTsExpressionBridge.Map(spread.Expression, context));
 
         // A `Text("literal")` child becomes a JSX text node; `Text(expr)` becomes
         // an expression child. Handled here (not via TryLowerJsxProducer) because
@@ -247,19 +231,17 @@ public static class IrToTsJsxBridge
         // distinction that selects TsJsxText.
         if (IsTextBuilderCall(child, out var textArg))
         {
-            var loweredArg = IrToTsExpressionBridge.Map(textArg!, bclRegistry, classFields);
+            var loweredArg = IrToTsExpressionBridge.Map(textArg!, context);
             return loweredArg is TsStringLiteral str
                 ? new TsJsxText(str.Value)
                 : new TsJsxExpressionChild(loweredArg);
         }
 
         // JSX-renderable `new` and `Solid.For(...)` lower to nested elements.
-        if (TryLowerJsxProducer(child, bclRegistry, classFields) is TsJsxElement element)
+        if (TryLowerJsxProducer(child, context) is TsJsxElement element)
             return new TsJsxElementChild(element);
 
-        return new TsJsxExpressionChild(
-            IrToTsExpressionBridge.Map(child, bclRegistry, classFields)
-        );
+        return new TsJsxExpressionChild(IrToTsExpressionBridge.Map(child, context));
     }
 
     /// <summary>
@@ -274,8 +256,7 @@ public static class IrToTsJsxBridge
     /// </summary>
     private static TsJsxElement? TryLowerForHelper(
         IrExpression expression,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         if (
@@ -293,9 +274,9 @@ public static class IrToTsJsxBridge
         )
             return null;
 
-        var each = IrToTsExpressionBridge.Map(args[0].Value, bclRegistry, classFields);
+        var each = IrToTsExpressionBridge.Map(args[0].Value, context);
         var renderProp = StripRenderPropParameterTypes(
-            IrToTsExpressionBridge.Map(args[1].Value, bclRegistry, classFields)
+            IrToTsExpressionBridge.Map(args[1].Value, context)
         );
         return new TsJsxElement(
             "For",

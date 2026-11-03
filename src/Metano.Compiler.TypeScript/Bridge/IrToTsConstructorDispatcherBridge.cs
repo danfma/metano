@@ -34,11 +34,10 @@ public static class IrToTsConstructorDispatcherBridge
     /// <param name="keepsBaseMessage">Whether the class overrides
     /// <c>Message</c>, so every <c>super(...)</c> is followed by the
     /// base-message capture.</param>
-    public static TsConstructor? Build(
+    internal static TsConstructor? Build(
         IrConstructorDeclaration primary,
-        DeclarativeMappingRegistry? bclRegistry = null,
-        bool keepsBaseMessage = false,
-        PerClassBackingFieldScope? classFields = null
+        bool keepsBaseMessage,
+        IrToTsBridgeContext context
     )
     {
         if (primary.Overloads is not { Count: > 0 })
@@ -70,7 +69,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         var body = new List<TsStatement>();
         foreach (var ctor in sorted)
-            body.Add(BuildBranch(ctor, keepsBaseMessage, bclRegistry, classFields));
+            body.Add(BuildBranch(ctor, keepsBaseMessage, context));
 
         // Unmatched — match the legacy behavior: the bare TS `throw` so a
         // caller that passes an unsupported signature fails loudly at runtime.
@@ -100,8 +99,7 @@ public static class IrToTsConstructorDispatcherBridge
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
         bool keepsBaseMessage,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         TsExpression condition = new TsBinaryExpression(
@@ -141,15 +139,7 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        branch.AddRange(
-            LowerConstructorInvocation(
-                ctor,
-                chainDepth: 0,
-                keepsBaseMessage,
-                bclRegistry,
-                classFields
-            )
-        );
+        branch.AddRange(LowerConstructorInvocation(ctor, chainDepth: 0, keepsBaseMessage, context));
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
@@ -168,25 +158,20 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorDeclaration ctor,
         int chainDepth,
         bool keepsBaseMessage,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var statements = new List<TsStatement>();
 
         if (ctor.ThisChain is { } chain)
-            statements.AddRange(
-                LowerThisChain(chain, chainDepth, keepsBaseMessage, bclRegistry, classFields)
-            );
-        else if (
-            IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, bclRegistry) is { } baseCall
-        )
+            statements.AddRange(LowerThisChain(chain, chainDepth, keepsBaseMessage, context));
+        else if (IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, context) is { } baseCall)
             statements.AddRange(baseCall.ToStatements());
 
         // The body references the original parameter names, which the caller
         // already brought into scope.
         foreach (var statement in ctor.Body ?? [])
-            statements.Add(IrToTsStatementBridge.Map(statement, bclRegistry, classFields));
+            statements.Add(IrToTsStatementBridge.Map(statement, context));
 
         return statements;
     }
@@ -204,8 +189,7 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorChain chain,
         int chainDepth,
         bool keepsBaseMessage,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields
+        IrToTsBridgeContext context
     )
     {
         var temporaries = chain
@@ -213,7 +197,7 @@ public static class IrToTsConstructorDispatcherBridge
                 (argument, index) =>
                     new TsVariableDeclaration(
                         $"__chain{chainDepth}Arg{index}",
-                        IrToTsExpressionBridge.Map(argument.Value, bclRegistry, classFields)
+                        IrToTsExpressionBridge.Map(argument.Value, context)
                     )
             )
             .ToList();
@@ -228,19 +212,13 @@ public static class IrToTsConstructorDispatcherBridge
             targetScope.Add(
                 new TsVariableDeclaration(
                     TypeScriptNaming.ToCamelCase(parameter.Name),
-                    BindChainedParameter(chain, temporaries, parameter, index, bclRegistry)
+                    BindChainedParameter(chain, temporaries, parameter, index, context)
                 )
             );
         }
 
         targetScope.AddRange(
-            LowerConstructorInvocation(
-                target,
-                chainDepth + 1,
-                keepsBaseMessage,
-                bclRegistry,
-                classFields
-            )
+            LowerConstructorInvocation(target, chainDepth + 1, keepsBaseMessage, context)
         );
 
         return [.. temporaries, new TsBlockStatement(targetScope)];
@@ -251,7 +229,7 @@ public static class IrToTsConstructorDispatcherBridge
         IReadOnlyList<TsVariableDeclaration> temporaries,
         IrParameter parameter,
         int parameterIndex,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         var argumentIndex = ChainedArgumentIndex(chain.Arguments, parameter.Name, parameterIndex);
@@ -260,7 +238,7 @@ public static class IrToTsConstructorDispatcherBridge
             return new TsIdentifier(temporaries[argumentIndex].Name);
 
         return parameter.DefaultValue is { } defaultValue
-            ? IrToTsExpressionBridge.Map(defaultValue, bclRegistry)
+            ? IrToTsExpressionBridge.Map(defaultValue, context)
             : new TsIdentifier("undefined");
     }
 

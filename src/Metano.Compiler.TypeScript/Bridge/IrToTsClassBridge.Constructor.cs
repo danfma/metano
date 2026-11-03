@@ -37,7 +37,7 @@ internal static partial class IrToTsClassBridge
     public static IReadOnlyList<TsConstructorParam> BuildPrimaryCtorParams(
         IrConstructorDeclaration? ctor,
         Func<IrConstructorParameter, TsType> resolveType,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         if (ctor is null)
@@ -46,8 +46,8 @@ internal static partial class IrToTsClassBridge
         return ctor
             .Parameters.Select(p =>
                 IsPromoted(p)
-                    ? BuildPromotedCtorParam(p, resolveType, bclRegistry)
-                    : BuildPlainCtorParam(p, resolveType, bclRegistry)
+                    ? BuildPromotedCtorParam(p, resolveType, context)
+                    : BuildPlainCtorParam(p, resolveType, context)
             )
             .ToList();
     }
@@ -78,12 +78,12 @@ internal static partial class IrToTsClassBridge
     private static TsConstructorParam BuildPromotedCtorParam(
         IrConstructorParameter p,
         Func<IrConstructorParameter, TsType> resolveType,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         var name = PromotedName(p);
         var tsType = resolveType(p);
-        var defaultValue = ResolveCtorParamDefault(p, bclRegistry);
+        var defaultValue = ResolveCtorParamDefault(p, context);
 
         // TypeScript forbids combining a parameter-property modifier
         // (`readonly` / `public`) with the rest prefix (`...`). For a
@@ -118,13 +118,13 @@ internal static partial class IrToTsClassBridge
     private static TsConstructorParam BuildPlainCtorParam(
         IrConstructorParameter p,
         Func<IrConstructorParameter, TsType> resolveType,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     ) =>
         new(
             TypeScriptNaming.ToCamelCase(p.Parameter.Name),
             resolveType(p),
             Accessibility: TsAccessibility.None,
-            DefaultValue: ResolveCtorParamDefault(p, bclRegistry),
+            DefaultValue: ResolveCtorParamDefault(p, context),
             Rest: p.Parameter.IsParams
         );
 
@@ -140,7 +140,7 @@ internal static partial class IrToTsClassBridge
     /// </summary>
     private static TsExpression? ResolveCtorParamDefault(
         IrConstructorParameter p,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         if (p.Parameter.DefaultValue is not { } d)
@@ -150,7 +150,7 @@ internal static partial class IrToTsClassBridge
             && d is IrMemberAccess { Origin.EmittedName: { } literal }
         )
             return new TsStringLiteral(literal);
-        return IrToTsExpressionBridge.Map(d, bclRegistry);
+        return IrToTsExpressionBridge.Map(d, context);
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ internal static partial class IrToTsClassBridge
     public static TsBaseConstructorCall? BuildBaseCall(
         IrConstructorDeclaration ctor,
         bool keepsBaseMessage,
-        DeclarativeMappingRegistry? bclRegistry
+        IrToTsBridgeContext context
     )
     {
         if (ctor.BaseExceptionConstruction is { } construction)
@@ -191,7 +191,7 @@ internal static partial class IrToTsClassBridge
             return IrToTsExceptionConstructionBridge.MapBaseExceptionCall(
                 ctor,
                 construction,
-                bclRegistry
+                context
             ) with
             {
                 KeepsBaseMessage = keepsBaseMessage,
@@ -204,7 +204,7 @@ internal static partial class IrToTsClassBridge
             return null;
 
         var loweredArguments = baseArguments
-            .Select(argument => IrToTsExpressionBridge.MapArgument(argument, bclRegistry))
+            .Select(argument => IrToTsExpressionBridge.MapArgument(argument, context))
             .ToList();
 
         return new TsBaseConstructorCall(
@@ -218,8 +218,7 @@ internal static partial class IrToTsClassBridge
         IrConstructorDeclaration? ir,
         IReadOnlyList<TsConstructorParam> tsCtorParams,
         TsBaseConstructorCall? baseCall,
-        DeclarativeMappingRegistry? bclRegistry,
-        PerClassBackingFieldScope? classFields = null
+        IrToTsBridgeContext context
     )
     {
         var body = new List<TsStatement>();
@@ -277,9 +276,7 @@ internal static partial class IrToTsClassBridge
             // synthesized super + captured assignments so the resulting body
             // matches the source order.
             if (ir.Body is { Count: > 0 } explicitBody)
-                body.AddRange(
-                    IrToTsStatementBridge.MapBody(explicitBody, bclRegistry, classFields)
-                );
+                body.AddRange(IrToTsStatementBridge.MapBody(explicitBody, context));
         }
 
         return new TsConstructor(tsCtorParams, body);
