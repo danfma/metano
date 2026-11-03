@@ -111,10 +111,14 @@ public enum IrLogicalOp
 /// match). The slice entry is represented implicitly by <see cref="SliceIndex"/>;
 /// <see cref="Elements"/> contains only the positional sub-patterns around it.
 /// </summary>
+/// <param name="InputMayBeNull">Whether the matched value's static type admits
+/// <c>null</c>. C# list patterns fail on <c>null</c>, so backends test for it
+/// before reading the length.</param>
 public sealed record IrListPattern(
     IReadOnlyList<IrPattern> Elements,
     int? SliceIndex = null,
-    IrPattern? SlicePattern = null
+    IrPattern? SlicePattern = null,
+    bool InputMayBeNull = false
 ) : IrPattern;
 
 /// <summary>

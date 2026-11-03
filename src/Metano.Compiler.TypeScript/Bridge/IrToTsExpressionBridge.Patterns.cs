@@ -320,14 +320,21 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// <c>value.length === n</c>, or <c>&gt;= n</c> when a <c>..</c> slice
-    /// absorbs any further elements.
+    /// absorbs any further elements; preceded by a non-null test when the
+    /// value may be <c>null</c>.
     /// </summary>
-    private static TsExpression ListLengthCheck(TsExpression value, IrListPattern pattern) =>
-        new TsBinaryExpression(
+    private static TsExpression ListLengthCheck(TsExpression value, IrListPattern pattern)
+    {
+        var lengthCheck = new TsBinaryExpression(
             new TsPropertyAccess(value, "length"),
             pattern.SliceIndex is null ? "===" : ">=",
             new TsLiteral(pattern.Elements.Count.ToString())
         );
+
+        return pattern.InputMayBeNull
+            ? new TsBinaryExpression(NonNullTest(value), "&&", lengthCheck)
+            : lengthCheck;
+    }
 
     /// <summary>
     /// The element a list sub-pattern inspects: <c>arr[i]</c> before the

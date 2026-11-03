@@ -18,11 +18,17 @@ public sealed record IrReturnStatement(IrExpression? Value = null) : IrStatement
 /// <summary>
 /// A local variable declaration.
 /// </summary>
+/// <param name="AssignedInClosure">The declaration has no initializer and the
+/// local is assigned from inside a closure (a <c>when</c> guard lowered to an
+/// immediately invoked function), so a backend's definite-assignment analysis
+/// cannot follow the assignment and must be told the local is assigned before
+/// it is read.</param>
 public sealed record IrVariableDeclaration(
     string Name,
     IrTypeRef? Type,
     IrExpression? Initializer,
-    bool IsConst = false
+    bool IsConst = false,
+    bool AssignedInClosure = false
 ) : IrStatement;
 
 /// <summary>

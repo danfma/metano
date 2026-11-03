@@ -408,8 +408,10 @@ public class SwitchStatementPatternTests
     }
 
     [Test]
-    public async Task ForLoopWithContinue_KeepsTheIncrementInTheHeader()
+    public async Task ForLoopWithContinue_KeepsTheIncrementInTheHeaderAndDeclaresTheDesignatorThere()
     {
+        // The designator joins the header's `let` list, which JS copies for
+        // each iteration: a closure made in the body sees its own `n` (#317).
         var output = TranspileDescriber(
             """
             public static int Count(Node? head)
@@ -430,11 +432,99 @@ public class SwitchStatementPatternTests
             .That(output)
             .Contains(
                 """
-                    {
-                      let n: Node;
-                      for (let cursor = head; cursor instanceof Node && (n = cursor, true); cursor = n.next) {
+                    for (let cursor = head, n: Node; cursor instanceof Node && (n = cursor, true); cursor = n.next) {
                 """
             );
+    }
+
+    [Test]
+    public async Task DesignatorOfAGuard_ReadInTheSectionBody_IsDefinitelyAssigned()
+    {
+        // The guard runs in a closure, which TypeScript's flow analysis cannot
+        // follow: the local carries a definite-assignment assertion (#317).
+        var output = TranspileDescriber(
+            """
+            public static string Describe(object? o)
+            {
+                switch (o)
+                {
+                    case Shape s when s is Circle c && c.R > 1:
+                        return "big " + c.R;
+                    default:
+                        return "other";
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("let c!: Circle;");
+    }
+
+    [Test]
+    public async Task LocalDeclaredInOneSection_UsedInAnother_IsDeclaredBeforeTheSwitch()
+    {
+        var output = TranspileDescriber(
+            """
+            public static double Measure(object? o)
+            {
+                switch (o)
+                {
+                    case Circle c:
+                        var total = c.R;
+                        return total;
+                    case Square s:
+                        total = s.Side;
+                        return total;
+                    default:
+                        return 0;
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("let total;");
+        await Assert.That(output).Contains("total = c.r;");
+        await Assert.That(output).Contains("total = s.side;");
+        await Assert.That(output).DoesNotContain("let total = c.r;");
+    }
+
+    [Test]
+    public async Task ComputedGetterInANestedPropertyPattern_IsReadOnce()
+    {
+        var output = TranspileDescriber(
+            """
+            public static bool IsRound(Holder h) => h is { Inner: Circle { R: > 0 } };
+
+            public static bool Stored(Node n) => n is { Next: Node { Value: > 0 } };
+            """,
+            """
+            [Transpile]
+            public sealed class Holder
+            {
+                public Shape Inner => new Circle(1);
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("($subject0 = h.inner, true)");
+        await Assert.That(output).Contains("$subject0 instanceof Circle && $subject0.r > 0");
+        await Assert.That(output).Contains("n.next instanceof Node && n.next.value > 0");
+    }
+
+    [Test]
+    public async Task ListPattern_ChecksANullableSubjectForNull()
+    {
+        var output = TranspileDescriber(
+            """
+            public static bool StartsWithOne(int[]? values) => values is [1, ..];
+
+            public static bool StartsWithTwo(int[] values) => values is [2, ..];
+            """,
+            "#nullable enable"
+        );
+
+        await Assert.That(output).Contains("return values != null && values.length >= 1");
+        await Assert.That(output).Contains("return values.length >= 1 && values[0] === 2");
     }
 
     [Test]
@@ -619,9 +709,11 @@ public class SwitchStatementPatternTests
         await Assert.That(output).Contains("      default:\n        return 'other';");
     }
 
-    private static string TranspileDescriber(string members) =>
+    private static string TranspileDescriber(string members, string extraTypes = "") =>
         TranspileHelper.Transpile(
             Shapes
+                + "\n"
+                + extraTypes
                 + $$"""
 
                 [Transpile]

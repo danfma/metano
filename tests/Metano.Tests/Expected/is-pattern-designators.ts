@@ -108,6 +108,6 @@ export class Geometry {
     let first: number;
     let rest: number[] | null;
 
-    return values.length >= 1 && (first = values[0]!, true) && (rest = values.slice(1), true) ? first + rest.length : -1;
+    return values != null && values.length >= 1 && (first = values[0]!, true) && (rest = values.slice(1), true) ? first + rest.length : -1;
   }
 }

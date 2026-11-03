@@ -120,10 +120,13 @@ public static class IrToTsStatementBridge
         declaration switch
         {
             { Type: { } type, Initializer: null } =>
-                $"{declaration.Name}: {Printer.RenderType(type)}",
+                $"{declaration.Name}{DefiniteAssignmentMark(declaration)}: {Printer.RenderType(type)}",
             { Initializer: { } value } => $"{declaration.Name} = {PrintExpression(value)}",
             _ => declaration.Name,
         };
+
+    private static string DefiniteAssignmentMark(TsVariableDeclaration declaration) =>
+        declaration.DefinitelyAssigned ? "!" : string.Empty;
 
     /// <summary>
     /// An initializer expression of a <c>for</c> header. Any other statement
@@ -281,8 +284,17 @@ public static class IrToTsStatementBridge
                     vd.Name,
                     Initializer: null,
                     Const: false,
-                    Type: IrToTsTypeMapper.Map(type)
+                    Type: IrToTsTypeMapper.Map(type),
+                    DefinitelyAssigned: vd.AssignedInClosure
                 ),
+            // Declared ahead of its first assignment with no known type (a `var`
+            // local a switch section shares): a bare `let x;` takes the type of
+            // its assignments.
+            IrVariableDeclaration { Initializer: null, Type: null } vd => new TsVariableDeclaration(
+                vd.Name,
+                Initializer: null,
+                Const: false
+            ),
             // A bare `null` initializer narrows the local to `null` even under an
             // explicit annotation, so later member access resolves on `never`.
             // Casting the literal to the declared type keeps the full union.

@@ -30,7 +30,7 @@ public sealed partial class IrExpressionExtractor
     /// Places the results of <c>out</c>-argument calls; shared with the
     /// statement extractor so temporaries stay unique across one body.
     /// </summary>
-    internal OutArgumentCallLowering OutArgumentCalls { get; } = new();
+    internal ExpressionVariableLowering OutArgumentCalls { get; } = new();
 
     /// <summary>
     /// Extracts an expression that has no enclosing statement list (a field or

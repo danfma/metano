@@ -49,14 +49,26 @@ internal static class IrToTsSwitchStatementBridge
             );
         }
 
-        if (CanReadSubjectPerTest(sw))
-            return LowerToBooleanCaseTests(sw, subject, bclRegistry);
+        var (sharedLocals, hoistedSwitch) = SwitchSharedLocals.Hoist(sw);
 
-        var hoisted = new TsIdentifier(SubjectLocalName);
+        var tested = CanReadSubjectPerTest(sw)
+            ? new TsStatement[] { LowerToBooleanCaseTests(hoistedSwitch, subject, bclRegistry) }
+            :
+            [
+                new TsVariableDeclaration(SubjectLocalName, HoistedSubjectValue(subject)),
+                LowerToBooleanCaseTests(
+                    hoistedSwitch,
+                    new TsIdentifier(SubjectLocalName),
+                    bclRegistry
+                ),
+            ];
+
+        if (sharedLocals.Count == 0 && tested.Length == 1)
+            return tested[0];
 
         return new TsBlockStatement([
-            new TsVariableDeclaration(SubjectLocalName, HoistedSubjectValue(subject)),
-            LowerToBooleanCaseTests(sw, hoisted, bclRegistry),
+            .. sharedLocals.Select(local => IrToTsStatementBridge.Map(local, bclRegistry)),
+            .. tested,
         ]);
     }
 

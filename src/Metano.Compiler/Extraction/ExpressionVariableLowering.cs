@@ -30,15 +30,16 @@ namespace Metano.Compiler.Extraction;
 ///   C# scope, so they are declared the same way as an <c>out var</c> local
 ///   left in place, and the pattern test assigns them. A loop condition that
 ///   declares one is restructured like one that makes a call, so each
-///   iteration gets a fresh local — except in a <c>for</c> loop whose
-///   increment reads the local and whose body has a <c>continue</c>, where it
-///   is declared once around the loop.</item>
+///   iteration gets a fresh local — and in a <c>for</c> loop whose
+///   increment reads the local and whose body has a <c>continue</c>, the
+///   local joins the loop header's declarations, which a backend with
+///   per-iteration header bindings (JS <c>let</c>) copies each iteration.</item>
 /// </list>
 /// A loop that gains declarations is wrapped in an
 /// <see cref="IrBlockStatement"/>, since C# scopes its header variables to
 /// the loop.
 /// </summary>
-internal sealed partial class OutArgumentCallLowering
+internal sealed partial class ExpressionVariableLowering
 {
     private int _nextTemporary;
 
@@ -335,18 +336,28 @@ internal sealed partial class OutArgumentCallLowering
 
     /// <summary>
     /// A <c>for</c> loop whose condition cannot move into the body, and whose
-    /// increment cannot either (the body has a <c>continue</c>): its
-    /// initializer is bound ahead as in <see cref="LowerFor"/>, and the
-    /// condition and increment calls stay in place, all in one block.
+    /// increment cannot either (the body has a <c>continue</c>): the condition
+    /// and increment calls stay in place. When the initializer fits the loop
+    /// header, the locals they declare join it
+    /// (<c>for (let cursor = head, n: Node; …)</c>), so each iteration keeps
+    /// its own copy, as in C#; otherwise the initializer is bound ahead as in
+    /// <see cref="LowerFor"/> and everything shares one block.
     /// </summary>
-    private IrBlockStatement LowerForInPlace(IrForStatement loop)
+    private IrStatement LowerForInPlace(IrForStatement loop)
     {
         var (header, ahead) = SplitLoweredInitializers(loop);
+        var lowered = LowerInPlace(loop with { Initializers = header });
 
-        return new IrBlockStatement([
-            .. ahead,
-            .. LowerInPlace(loop with { Initializers = header }),
-        ]);
+        if (ahead is not [])
+            return new IrBlockStatement([.. ahead, .. lowered]);
+
+        var declarations = lowered.Take(lowered.Count - 1);
+        var inPlace = (IrForStatement)lowered[^1];
+
+        return inPlace with
+        {
+            Initializers = [.. header, .. declarations],
+        };
     }
 
     /// <summary>
@@ -420,12 +431,38 @@ internal sealed partial class OutArgumentCallLowering
     /// that stays in place and every <c>is</c>-pattern designator.
     /// </summary>
     private static IEnumerable<IrStatement> DeclarationsForExpressionVariablesLeftInPlace(
-        IEnumerable<IrStatement> statements
-    ) =>
-        ExpressionVariablesDeclaredIn(statements.SelectMany(IrNodeChildren.ExpressionsOf))
+        IReadOnlyList<IrStatement> statements
+    )
+    {
+        var assignedInGuards = GuardDesignatorNames(statements);
+
+        return ExpressionVariablesDeclaredIn(statements.SelectMany(IrNodeChildren.ExpressionsOf))
             .Where(local => !statements.Any(s => BindsName(s, local.Name)))
             .DistinctBy(local => local.Name)
-            .Select(local => new IrVariableDeclaration(local.Name, local.Type, Initializer: null));
+            .Select(local => new IrVariableDeclaration(
+                local.Name,
+                local.Type,
+                Initializer: null,
+                AssignedInClosure: assignedInGuards.Contains(local.Name)
+            ));
+    }
+
+    /// <summary>
+    /// The designators declared in the <c>when</c> guards of the switch
+    /// statements among <paramref name="statements"/>. A backend may run a
+    /// guard in a closure, where it assigns them for the section body to read.
+    /// </summary>
+    private static HashSet<string> GuardDesignatorNames(IEnumerable<IrStatement> statements) =>
+        statements
+            .OfType<IrSwitchStatement>()
+            .SelectMany(sw => sw.Cases)
+            .SelectMany(section => section.Labels)
+            .OfType<IrPatternCaseLabel>()
+            .Select(label => label.WhenClause)
+            .OfType<IrExpression>()
+            .SelectMany(IrPatternDesignators.DeclaredIn)
+            .Select(designator => designator.Name)
+            .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// <c>const [result, out1, …] = call;</c> plus one assignment per existing
@@ -564,13 +601,16 @@ internal sealed partial class OutArgumentCallLowering
 
         public static ResultSlot Named(string name) => new NamedSlot(name);
 
-        public abstract string? NameFor(IrOutArgumentCall call, OutArgumentCallLowering lowering);
+        public abstract string? NameFor(
+            IrOutArgumentCall call,
+            ExpressionVariableLowering lowering
+        );
 
         private sealed record DroppedSlot : ResultSlot
         {
             public override string? NameFor(
                 IrOutArgumentCall call,
-                OutArgumentCallLowering lowering
+                ExpressionVariableLowering lowering
             ) => null;
         }
 
@@ -578,7 +618,7 @@ internal sealed partial class OutArgumentCallLowering
         {
             public override string NameFor(
                 IrOutArgumentCall call,
-                OutArgumentCallLowering lowering
+                ExpressionVariableLowering lowering
             ) =>
                 // `$` keeps the name clear of every C# identifier; the
                 // TypeScript result-type labels (OutResultTypeRef.For) use
@@ -594,7 +634,7 @@ internal sealed partial class OutArgumentCallLowering
         {
             public override string NameFor(
                 IrOutArgumentCall call,
-                OutArgumentCallLowering lowering
+                ExpressionVariableLowering lowering
             ) => Name;
         }
     }

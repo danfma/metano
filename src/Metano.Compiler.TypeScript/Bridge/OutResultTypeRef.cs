@@ -35,7 +35,7 @@ internal sealed record OutResultTypeRef(
     public static OutResultTypeRef For(IrTypeRef? result, IReadOnlyList<IrParameter> outs)
     {
         // The core names its result temporaries `$found` / `$result` after the
-        // same rule (OutArgumentCallLowering.ResultSlot); a `$` prefix here keeps
+        // same rule (ExpressionVariableLowering.ResultSlot); a `$` prefix here keeps
         // the label clear of an out parameter with the same name.
         var label = result is IrPrimitiveTypeRef { Primitive: IrPrimitive.Boolean }
             ? "found"

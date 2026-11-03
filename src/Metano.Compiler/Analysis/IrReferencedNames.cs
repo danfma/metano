@@ -21,6 +21,19 @@ public static class IrReferencedNames
     }
 
     /// <summary>
+    /// Whether any of <paramref name="statements"/> — nested statements and
+    /// lambda bodies included — reads an identifier named in
+    /// <paramref name="names"/>.
+    /// </summary>
+    public static bool AnyIn(IEnumerable<IrStatement> statements, IEnumerable<string> names)
+    {
+        var wanted = names.ToHashSet(StringComparer.Ordinal);
+
+        return wanted.Count > 0
+            && statements.Any(statement => Reads(statement, node => IsIdentifierIn(node, wanted)));
+    }
+
+    /// <summary>
     /// Whether <paramref name="expression"/> — nested lambda bodies included —
     /// reads a name in <paramref name="names"/>, either as an identifier or as
     /// a member of <c>this</c> (<c>this.name</c>).

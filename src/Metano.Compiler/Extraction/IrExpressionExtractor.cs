@@ -849,7 +849,15 @@ public sealed partial class IrExpressionExtractor
             }
             elements.Add(ExtractPattern(p));
         }
-        return new IrListPattern(elements, sliceIndex, slicePattern);
+
+        var operation = _semantic.GetOperation(list) as IListPatternOperation;
+
+        return new IrListPattern(
+            elements,
+            sliceIndex,
+            slicePattern,
+            ListSubjectMayBeNull(list, operation?.InputType)
+        );
     }
 
     /// <summary>
@@ -977,13 +985,58 @@ public sealed partial class IrExpressionExtractor
         return current;
     }
 
-    private IrPropertySubpattern PropertySubpattern(SimpleNameSyntax member, IrPattern pattern) =>
-        new(
+    private IrPropertySubpattern PropertySubpattern(SimpleNameSyntax member, IrPattern pattern)
+    {
+        var symbol = _semantic.GetSymbolInfo(member).Symbol;
+
+        return new IrPropertySubpattern(
             member.Identifier.ValueText,
-            pattern,
+            CaptureComputedRead(symbol, pattern),
             ResolveMemberNameOverride(member),
-            IsTranspiledDataMember(_semantic.GetSymbolInfo(member).Symbol)
+            IsTranspiledDataMember(symbol)
         );
+    }
+
+    /// <summary>
+    /// A property pattern reads the member's value once in C#, but a backend
+    /// reads it once per test and designator. When the member may compute its
+    /// value (see <see cref="IsStableSymbol"/>) and the pattern reads the value
+    /// more than once, the value is captured first by a synthesized
+    /// <c>var</c> designator, as for an unstable <c>is</c> subject:
+    /// <c>Inner: Circle { R: &gt; 0 }</c> becomes
+    /// <c>Inner: var $subject0 and Circle { R: &gt; 0 }</c>.
+    /// </summary>
+    private IrPattern CaptureComputedRead(ISymbol? member, IrPattern pattern)
+    {
+        if (
+            member is not IPropertySymbol property
+            || IsStableSymbol(property)
+            || ReadsValueOnce(pattern)
+        )
+            return pattern;
+
+        var capture = new IrVarPattern(
+            new IrPatternDesignator(
+                $"$subject{_patternSubjectCounter++}",
+                IrTypeRefMapper.Map(property.Type, _originResolver, _target)
+            )
+        );
+
+        return new IrLogicalPattern(IrLogicalOp.And, capture, pattern);
+    }
+
+    /// <summary>
+    /// Whether testing <paramref name="pattern"/> reads the matched value a
+    /// single time: a constant, relational, <c>var</c> or discard pattern, or
+    /// a type test that binds nothing.
+    /// </summary>
+    private static bool ReadsValueOnce(IrPattern pattern) =>
+        pattern
+            is IrConstantPattern
+                or IrRelationalPattern
+                or IrVarPattern
+                or IrDiscardPattern
+                or IrTypePattern { Designator: null };
 
     /// <summary>
     /// The simple names of a member path, outermost first:
@@ -1052,6 +1105,43 @@ public sealed partial class IrExpressionExtractor
         || IrTypeRefMapper.Map(type, _originResolver, _target)
             is IrTupleTypeRef
                 or IrKeyValuePairTypeRef;
+
+    /// <summary>
+    /// Whether a list pattern's subject may be <c>null</c>. Where the subject
+    /// is an expression of the statement (<c>x is [..]</c>, a <c>switch</c>
+    /// governing expression), the compiler's null-state analysis decides, so a
+    /// non-nullable array needs no test. A list pattern nested in another
+    /// pattern falls back to its input type, which admits <c>null</c> for any
+    /// reference type.
+    /// </summary>
+    private bool ListSubjectMayBeNull(ListPatternSyntax list, ITypeSymbol? inputType) =>
+        PatternSubject(list) is { } subject
+            ? _semantic.GetTypeInfo(subject).Nullability.FlowState != NullableFlowState.NotNull
+                && InputMayBeNull(inputType)
+            : InputMayBeNull(inputType);
+
+    /// <summary>
+    /// The expression a top-level pattern is matched against, or <c>null</c>
+    /// when <paramref name="pattern"/> is nested in a recursive or list
+    /// pattern.
+    /// </summary>
+    private static ExpressionSyntax? PatternSubject(PatternSyntax pattern)
+    {
+        SyntaxNode? parent = pattern.Parent;
+
+        while (parent is BinaryPatternSyntax or ParenthesizedPatternSyntax or UnaryPatternSyntax)
+            parent = parent.Parent;
+
+        return parent switch
+        {
+            IsPatternExpressionSyntax isPattern => isPattern.Expression,
+            CasePatternSwitchLabelSyntax { Parent.Parent: SwitchStatementSyntax sw } =>
+                sw.Expression,
+            SwitchExpressionArmSyntax { Parent: SwitchExpressionSyntax sw } =>
+                sw.GoverningExpression,
+            _ => null,
+        };
+    }
 
     private static bool InputMayBeNull(ITypeSymbol? type) =>
         type switch
