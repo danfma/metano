@@ -473,7 +473,7 @@ public class ConstNamingConsistencyTests
         await Assert.That(program).Contains("console.log(app)");
 
         await Assert
-            .That(diagnostics.Any(d => d.Message.Contains("did not find a local variable")))
+            .That(diagnostics.Any(d => d.Message.Contains("could not export the local variable")))
             .IsFalse();
     }
 
@@ -890,6 +890,27 @@ public class ConstNamingConsistencyTests
         await Assert.That(output).Contains("private readonly _of: number;");
         await Assert.That(output).Contains("constructor(of_: number) {");
         await Assert.That(output).Contains("this._of = of_;");
+    }
+
+    [Test]
+    public async Task CapturedFieldNamedLikeReservedWord_KeepsOneNameAtDeclarationAndCapture()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Range(int of)
+            {
+                private readonly int @default = of;
+
+                public int Length => @default;
+            }
+            """
+        )["range.ts"];
+
+        // A reserved word is a valid TS property name, so the data-member rule
+        // keeps it; the declaration and the capture assignment agree.
+        await Assert.That(output).Contains("private readonly default: number;");
+        await Assert.That(output).Contains("this.default = of_;");
     }
 
     [Test]
