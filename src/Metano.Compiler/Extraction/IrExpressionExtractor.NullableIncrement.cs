@@ -1,4 +1,6 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -31,7 +33,7 @@ public sealed partial class IrExpressionExtractor
         IrExpression Increment(IrExpression current) =>
             LiftBinary(
                 new OperatorOperand(current, MayBeNull: true, operandSyntax),
-                new OperatorOperand(OneLiteral, MayBeNull: false, operandSyntax),
+                new OperatorOperand(OneOf(operandSyntax), MayBeNull: false, operandSyntax),
                 lifted
             );
 
@@ -44,6 +46,17 @@ public sealed partial class IrExpressionExtractor
                     : WriteAndYieldPrevious(readTarget, Increment)
         );
     }
+
+    /// <summary>
+    /// The step <c>1</c> in the operand's numeric representation: a
+    /// <c>BigInteger</c> is a <c>bigint</c>, which JS does not mix with a
+    /// <c>number</c>.
+    /// </summary>
+    private IrExpression OneOf(ExpressionSyntax operand) =>
+        _semantic.GetTypeInfo(operand).Type.UnderlyingValueType()?.ToDisplayString()
+        == "System.Numerics.BigInteger"
+            ? new IrCallExpression(new IrTypeReference("BigInt"), [new IrArgument(OneLiteral)])
+            : OneLiteral;
 
     /// <summary>
     /// <c>(previous = target, target = compute(previous), previous)</c>: the

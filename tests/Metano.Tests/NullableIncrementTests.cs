@@ -154,6 +154,39 @@ public class NullableIncrementTests
     }
 
     [Test]
+    public async Task Increment_OnNullableBigInteger_StepsByABigInt()
+    {
+        var output = Transpile(
+            """
+            public static System.Numerics.BigInteger? Bump(System.Numerics.BigInteger? a) => ++a;
+            """
+        );
+
+        await Assert.That(output).Contains("receiver$temp$0 + receiver$temp$1)(BigInt(1))");
+    }
+
+    [Test]
+    public async Task ExplicitConversion_ThroughAUserDefinedOperator_DoesNotThrow()
+    {
+        var output = Transpile(
+            """
+            public static Foo Make(int? n) => (Foo)n;
+            """,
+            declarations: "public class Foo { public static explicit operator Foo(int? x) => new Foo(); }"
+        );
+
+        await Assert.That(output).DoesNotContain("Nullable object must have a value.");
+    }
+
+    [Test]
+    public async Task NullForgiving_OverANonNullableReference_PassesThrough()
+    {
+        var output = Transpile("public static string Same(string s) => s!;");
+
+        await Assert.That(output).Contains("return s;");
+    }
+
+    [Test]
     public async Task NullForgiving_OverNullableValueOrLiteral_PassesThrough()
     {
         var output = Transpile(
@@ -167,7 +200,11 @@ public class NullableIncrementTests
         await Assert.That(output).Contains("return null;");
     }
 
-    private static string Transpile(string members, bool asInstance = false)
+    private static string Transpile(
+        string members,
+        bool asInstance = false,
+        string declarations = ""
+    )
     {
         var modifier = asInstance ? "" : "static ";
 
@@ -177,6 +214,8 @@ public class NullableIncrementTests
             using System;
             using System.Collections.Generic;
             using Metano.Annotations;
+
+            {{declarations}}
 
             [Transpile]
             public {{modifier}}class Counter

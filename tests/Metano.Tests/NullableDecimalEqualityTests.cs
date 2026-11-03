@@ -25,6 +25,20 @@ public class NullableDecimalEqualityTests
     }
 
     [Test]
+    public async Task Equality_WithAConvertedNumericOperand_ComparesDecimals()
+    {
+        var output = Transpile(
+            """
+            public static bool IsZero(decimal? d) => d == 0;
+            public static bool Differs(decimal? d, int i) => d != i;
+            """
+        );
+
+        await Assert.That(output).Contains("return valueEquals(d, new Decimal(0));");
+        await Assert.That(output).Contains("return !valueEquals(d, new Decimal(i));");
+    }
+
+    [Test]
     public async Task Equality_WithTheNullLiteral_StaysANullCheck()
     {
         var output = Transpile(

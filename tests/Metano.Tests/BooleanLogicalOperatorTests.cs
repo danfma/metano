@@ -174,6 +174,21 @@ public class BooleanLogicalOperatorTests
     }
 
     [Test]
+    public async Task Compound_OnNullConditionalNullableBool_UsesThreeValuedLogic()
+    {
+        var output = Transpile(
+            """
+            public class Box { public bool? Flag; }
+            public void AndWith(Box? box, bool? b) { box?.Flag &= b; }
+            """,
+            asInstance: true
+        );
+
+        await Assert.That(output).DoesNotContain("&=");
+        await Assert.That(output).Contains("=== false");
+    }
+
+    [Test]
     public async Task Compound_OnSideEffectingElement_EvaluatesTheIndexOnce()
     {
         var output = Transpile(

@@ -464,6 +464,8 @@ public sealed partial class IrExpressionExtractor
         // surrounding null check stays exactly as the legacy form.
         var memberWrite =
             TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
+            ?? TryExtractNullableBooleanCompoundAssignment(assign, rebound)
+            ?? TryExtractLiftedCompoundAssignment(assign, rebound)
             ?? BuildCompoundAssignment(rebound, assign);
         return new IrBinaryExpression(
             new IrBinaryExpression(
@@ -1988,12 +1990,33 @@ public sealed partial class IrExpressionExtractor
         return
             value is not IrLiteral
             && !IsUnsupportedPlaceholder(value)
-            && _semantic.GetTypeInfo(operand).Type
-                is { IsReferenceType: true }
-                    or ITypeParameterSymbol
+            && MayBeNullReference(operand)
             ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, value, IsPrefix: false)
             : value;
     }
+
+    /// <summary>
+    /// Whether the assertion changes what the target sees: the operand is a
+    /// reference or type-parameter value, other than a variable, parameter,
+    /// field or property declared non-nullable (<c>string s; s!</c>), which
+    /// the target already reads as non-null.
+    /// </summary>
+    private bool MayBeNullReference(ExpressionSyntax operand) =>
+        _semantic.GetTypeInfo(operand).Type is { IsReferenceType: true } or ITypeParameterSymbol
+        && !IsDeclaredNonNullable(_semantic.GetSymbolInfo(operand).Symbol);
+
+    private static bool IsDeclaredNonNullable(ISymbol? symbol) =>
+        symbol switch
+        {
+            IParameterSymbol parameter => IsNonNullableReference(parameter.Type),
+            ILocalSymbol local => IsNonNullableReference(local.Type),
+            IFieldSymbol field => IsNonNullableReference(field.Type),
+            IPropertySymbol property => IsNonNullableReference(property.Type),
+            _ => false,
+        };
+
+    private static bool IsNonNullableReference(ITypeSymbol type) =>
+        type is { IsReferenceType: true, NullableAnnotation: NullableAnnotation.NotAnnotated };
 
     /// <summary>
     /// The ordinary lowering of a prefix <c>-x</c>, <c>!x</c> or <c>~x</c>
@@ -4475,7 +4498,11 @@ public sealed partial class IrExpressionExtractor
         if (sourceType is null || targetType is null)
             return new IrCastExpression(inner, ExtractTargetType(cast));
 
-        if (UnwrapsNullableValue(sourceType, targetType))
+        if (
+            UnwrapsNullableValue(sourceType, targetType)
+            && _semantic.GetOperation(cast)
+                is not IConversionOperation { Conversion.IsUserDefined: true }
+        )
         {
             inner = ValueOrThrowWhenMissing(cast.Expression, inner);
             sourceType = UnwrapNullable(sourceType);
