@@ -249,11 +249,17 @@ public static class TranspilerHost
     private static bool ShouldAttemptCache(TranspileOptions options) =>
         !options.NoCache && !options.DryRun && !options.Clean;
 
+    /// <summary>
+    /// The run-wide configuration fingerprint pinned into the incremental cache key
+    /// (ADR-0021). It leads with the compiler release: a Metano upgrade with unchanged
+    /// sources must regenerate the output, since the new compiler may emit different code
+    /// and target a different <c>metano-runtime</c> (#433).
+    /// </summary>
     private static string BuildConfigFingerprint(
         ITranspilerTarget target,
         TranspileOptions options
     ) =>
-        $"target={target.ConfigurationFingerprint};filePrefix={options.FilePrefix ?? string.Empty}";
+        $"compiler={CompilerRelease.Version};target={target.ConfigurationFingerprint};filePrefix={options.FilePrefix ?? string.Empty}";
 
     private static void WriteCacheIfEnabled(
         TranspileOptions options,

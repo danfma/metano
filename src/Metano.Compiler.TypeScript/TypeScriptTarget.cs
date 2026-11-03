@@ -91,13 +91,15 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// <summary>
     /// Builds the cache-fingerprint composite consumed by
     /// <see cref="TypeTransformer.CacheConfigurationFingerprint"/>:
-    /// target flags + the host's file prefix. Both call sites
+    /// compiler release + target flags + the host's file prefix. Both call sites
     /// (read at construction here and read by the host when
     /// validating an on-disk cache entry) must share this format
-    /// verbatim or a flag-flip never invalidates the cache.
+    /// verbatim or a flag-flip never invalidates the cache. The
+    /// compiler release keeps a Metano upgrade from reusing the groups
+    /// the previous compiler emitted (#433).
     /// </summary>
     private static string BuildCacheFingerprint(string targetFingerprint, string? filePrefix) =>
-        $"{targetFingerprint};filePrefix={filePrefix ?? string.Empty}";
+        $"compiler={CompilerRelease.Version};{targetFingerprint};filePrefix={filePrefix ?? string.Empty}";
 
     public TargetOutput Transform(
         IrCompilation ir,

@@ -1,7 +1,5 @@
 using System.Text.Json.Nodes;
-using Metano.Annotations;
 using Metano.Compiler;
-using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -505,59 +503,4 @@ public class PackageJsonCacheReuseTests
     }
 
     private sealed record PipelineRun(bool ServedFromCache);
-
-    /// <summary>
-    /// Forwards to the real target and records whether the host took the full
-    /// cache-hit path (<see cref="ITranspilerTarget.AdoptCachedOutput"/>) instead of
-    /// <see cref="ITranspilerTarget.Transform"/>.
-    /// </summary>
-    private sealed class CacheAdoptionRecorder(TypeScriptTarget inner) : ITranspilerTarget
-    {
-        public bool AdoptedCachedOutput { get; private set; }
-
-        public string Name => inner.Name;
-
-        public TargetLanguage Language => inner.Language;
-
-        public string ConfigurationFingerprint => inner.ConfigurationFingerprint;
-
-        public TargetOutput Transform(
-            IrCompilation ir,
-            Compilation? compilation,
-            string? outputDir = null,
-            string? filePrefix = null
-        ) => inner.Transform(ir, compilation, outputDir, filePrefix);
-
-        public void AdoptCachedOutput(
-            IrCompilation ir,
-            Compilation? compilation,
-            IReadOnlyList<GeneratedFile> files,
-            IReadOnlyDictionary<string, string> packageDependencies
-        )
-        {
-            AdoptedCachedOutput = true;
-            inner.AdoptCachedOutput(ir, compilation, files, packageDependencies);
-        }
-    }
-
-    /// <summary>
-    /// Serves a prebuilt in-memory compilation through the production C# extraction, so
-    /// the host runs its real cache and emit path without loading an MSBuild project.
-    /// </summary>
-    private sealed class InMemorySourceFrontend(Compilation compilation) : ISourceFrontend
-    {
-        private readonly CSharpSourceFrontend _extractor = new();
-
-        public string Name => "in-memory";
-
-        public Compilation? LoadedCompilation => compilation;
-
-        public int LoadErrorCount => 0;
-
-        public Task<IrCompilation> ExtractAsync(
-            string projectPath,
-            CancellationToken ct = default,
-            TargetLanguage target = TargetLanguage.TypeScript
-        ) => Task.FromResult(_extractor.ExtractFromCompilation(compilation, target));
-    }
 }

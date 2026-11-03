@@ -16,10 +16,12 @@ namespace Metano.Compiler.Caching;
 /// </para>
 /// <list type="bullet">
 ///   <item><b>Configuration fingerprint</b>: a stable string mixing the
-///   shared <c>--file-prefix</c> with each target's per-run flags
+///   compiler release (<see cref="CompilerRelease.Version"/>), the
+///   shared <c>--file-prefix</c> and each target's per-run flags
 ///   (e.g., the TypeScript target's <c>NamespaceBarrels</c>,
-///   <c>StripInterfacePrefix</c>). Flag flips invalidate the cache even
-///   when sources and references are byte-identical.</item>
+///   <c>StripInterfacePrefix</c>). A Metano upgrade or a flag flip
+///   invalidates the cache even when sources and references are
+///   byte-identical (#433).</item>
 ///   <item><b>Source hashes</b>: SHA-256 of every C# syntax tree the
 ///   compilation parsed. Catches body edits the type-level dependency
 ///   graph alone would miss (ADR-0018 leaves bodies out of the

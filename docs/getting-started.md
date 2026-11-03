@@ -132,6 +132,16 @@ same instructions instead of a generic "command not found" message. Set
 `<MetanoSkipToolCheck>true</MetanoSkipToolCheck>` to bypass the check (for
 example, when a wrapper script provides the tool another way).
 
+**Upgrading Metano.** Bump the `Metano` and `Metano.Build` packages and the
+tool (`dotnet tool update Metano.Compiler.TypeScript`) to the same version.
+The next `dotnet build` regenerates the output and the `metano-runtime` range
+in `package.json` even when no C# source changed: the build target tracks the
+package versions, the tool manifest and the global tool, and the compiler's
+incremental cache is keyed on the compiler release. A tool installed with
+`--tool-path` is not tracked; after updating one, delete
+`<MetanoOutputDir>/.metano-stamp` (`dotnet build --no-incremental` does not
+remove it).
+
 **Key property: `MetanoOutputDir`**
 
 This tells Metano where to write the generated TypeScript. It's a path

@@ -45,6 +45,18 @@ target has no flags today and returns the empty string). Flag flips
 invalidate the cache even when sources and references are
 byte-identical.
 
+> **Amendment (#433).** The fingerprint now leads with the compiler
+> release, `compiler=<informational version>;target=…;filePrefix=…`
+> (`CompilerRelease.Version`, the version MinVer stamps on the
+> assembly), and the TypeScript per-group cache (ADR-0024) pins the
+> same value. A Metano upgrade with unchanged sources is therefore a
+> miss for both caches. The JSON shape is unchanged, so
+> `formatVersion` stays as it was: a cache written before the
+> amendment carries no `compiler=` segment and simply misses once.
+> The `Metano.Build` target reruns on an upgrade through a toolchain
+> key file in its `Inputs`; see the header of
+> `src/Metano.Build/build/Metano.Build.targets`.
+
 `TranspilerHost.RunAsync` short-circuits the pipeline when **all** of
 the following match the cached fingerprint:
 
