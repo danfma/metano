@@ -163,6 +163,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// Processes nested types of <paramref name="parent"/> and adds them as a companion
     /// namespace declaration to <paramref name="statements"/>. This leverages TS declaration
     /// merging so that `Outer.Inner` access syntax works just like in C#.
+    /// <para>
+    /// A <c>private</c> nested type is not part of the container's surface (#412): it
+    /// is declared module-local under a flattened name (<c>Outer$Inner</c>, matching
+    /// what every reference spells) after the namespace, so the exported namespace —
+    /// and with it the barrel and the package — never exposes it.
+    /// </para>
     /// </summary>
     private void TransformNestedTypes(INamedTypeSymbol parent, List<TsTopLevel> statements)
     {
@@ -172,13 +178,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return;
 
         var members = new List<TsTopLevel>();
+        var moduleLocal = new List<TsTopLevel>();
         foreach (var nestedType in nested)
         {
             // Use BuildTypeStatements directly so the nested type's declarations are
             // emitted without going through the file-grouping pipeline. Imports and
             // path computation are the parent file's responsibility (the parent's
             // ImportCollector already walks these statements).
-            BuildTypeStatements(nestedType, members);
+            if (SymbolHelper.IsContainerPrivateNestedType(nestedType))
+                BuildModuleLocalTypeStatements(nestedType, moduleLocal);
+            else
+                BuildTypeStatements(nestedType, members);
         }
 
         if (members.Count > 0)
@@ -187,12 +197,55 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 new TsNamespaceDeclaration(
                     Context.ResolveTsName(parent),
                     Functions: [],
-                    Exported: IsCompanionNamespaceExported(parent, nested),
+                    // A companion merged with an emitted class must share its `export`
+                    // modifier (TS2395); a module-local container is itself unexported.
+                    Exported: !SymbolHelper.IsContainerPrivateNestedType(parent),
                     Members: members
                 )
             );
         }
+
+        statements.AddRange(moduleLocal);
     }
+
+    private static void RegisterModuleLocalNestedNames(
+        IEnumerable<INamedTypeSymbol> types,
+        Dictionary<string, string> typeNamesBySymbol
+    )
+    {
+        foreach (var type in types)
+        {
+            var moduleLocalName = IrTypeRefMapper.GetModuleLocalName(
+                type,
+                TargetLanguage.TypeScript
+            );
+
+            if (moduleLocalName is not null)
+                typeNamesBySymbol[type.GetCrossAssemblyOriginKey()] = moduleLocalName;
+
+            RegisterModuleLocalNestedNames(type.GetTypeMembers(), typeNamesBySymbol);
+        }
+    }
+
+    private void BuildModuleLocalTypeStatements(INamedTypeSymbol type, List<TsTopLevel> sink)
+    {
+        var declarations = new List<TsTopLevel>();
+        BuildTypeStatements(type, declarations);
+        sink.AddRange(declarations.Select(WithoutExport));
+    }
+
+    private static TsTopLevel WithoutExport(TsTopLevel statement) =>
+        statement switch
+        {
+            TsClass declaration => declaration with { Exported = false },
+            TsEnum declaration => declaration with { Exported = false },
+            TsInterface declaration => declaration with { Exported = false },
+            TsTypeAlias declaration => declaration with { Exported = false },
+            TsFunction declaration => declaration with { Exported = false },
+            TsConstObject declaration => declaration with { Exported = false },
+            TsNamespaceDeclaration declaration => declaration with { Exported = false },
+            _ => statement,
+        };
 
     /// <summary>
     /// A nested type is emitted into its parent's companion namespace whenever it is
@@ -200,6 +253,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <c>internal</c>, other files) reference it as <c>Outer.Inner</c>, which only
     /// resolves through an exported namespace member. The barrel re-exports only the
     /// top-level parent, so a non-public nested type never gets its own barrel entry.
+    /// A <c>private</c> one is the exception to the namespace placement: it is declared
+    /// module-local (<see cref="TransformNestedTypes"/>).
     /// </summary>
     private bool ShouldEmitInCompanionNamespace(INamedTypeSymbol type) =>
         // Assembly-wide opt-in already rejects implicit nested types; this guard
@@ -263,6 +318,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 ir.TranspilableTypes,
                 StringComparer.Ordinal
             );
+
+        // Private nested types are declared module-local under a flattened name
+        // (#412); publish it through the same map every declaration site reads.
+        RegisterModuleLocalNestedNames(transpilableTypes, typeNamesBySymbol);
 
         // Opt-in `I`-prefix strip runs once per transform, mutating
         // both name dictionaries so every downstream consumer
@@ -727,26 +786,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             || SymbolHelper.HasNoContainer(type)
             || HasExtensionMembers(type)
         );
-
-    /// <summary>
-    /// A companion namespace merged with an emitted class must share its
-    /// <c>export</c> modifier (TS2395), so it is always exported. A module-shaped
-    /// static class (<c>[NoContainer]</c>, <c>[ExportedAsModule]</c>, extension
-    /// holder) emits no declaration of its own: its companion namespace stands
-    /// alone and is exported only when some nested type is reachable outside the
-    /// container. Holding only <c>private</c> nested types, it stays module-local so
-    /// neither the module nor the barrel exposes them (#264).
-    /// </summary>
-    private static bool IsCompanionNamespaceExported(
-        INamedTypeSymbol parent,
-        IReadOnlyList<INamedTypeSymbol> nested
-    )
-    {
-        var parentEmitsNoDeclaration = IsModuleShapedStaticClass(parent);
-
-        return !parentEmitsNoDeclaration
-            || nested.Any(type => type.DeclaredAccessibility != Accessibility.Private);
-    }
 
     /// <summary>
     /// Class / struct / record fallback: prefer the <c>[PlainObject]</c>
@@ -2126,7 +2165,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _ => null,
         };
         if (ir is not null)
-            ir = OutParameterLowering.Lower(ir);
+            ir = ModuleLocalDeclarationNaming.Apply(OutParameterLowering.Lower(ir), type);
         if (ir is not null && irCache is not null)
             irCache[type] = ir;
         return ir;
