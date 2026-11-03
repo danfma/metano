@@ -4,6 +4,65 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.8.0
+
+_2026-11-03_
+
+
+### ✨ Features
+
+* deserialize branded values through their [JsonFactory] ([#269](https://github.com/danfma/metano/issues/269)) ([0069938](https://github.com/danfma/metano/commit/0069938dbf5baaf6c0f5ba4a586af3ab8fb99eb3))
+* emit value roots in the generated SerializerContext ([#270](https://github.com/danfma/metano/issues/270)) ([a6485d8](https://github.com/danfma/metano/commit/a6485d838e504419c33ac6c01bf989f547842600))
+
+### 🐛 Bug Fixes
+
+* address review findings on the operator lowering ([#323](https://github.com/danfma/metano/issues/323)) ([63c6092](https://github.com/danfma/metano/commit/63c6092b4707c29d7114e546fbc5ac90e3ff10da))
+* apply review notes to the SerializerContext value roots ([#270](https://github.com/danfma/metano/issues/270)) ([5154e97](https://github.com/danfma/metano/commit/5154e97894cdbfd2e1fcfbb6976cf92937c562dd))
+* clarify the body-export diagnostic and pin captured field naming ([#390](https://github.com/danfma/metano/issues/390)) ([2da05e1](https://github.com/danfma/metano/commit/2da05e196d848e23aa914c8ac953c68ddb591f2d))
+* close switch-statement and is-designator scoping gaps ([#317](https://github.com/danfma/metano/issues/317)) ([de60f35](https://github.com/danfma/metano/commit/de60f35f08102cc1c0d263bacae1e2679101e8cd))
+* compare nested and nullable tuples by value ([#331](https://github.com/danfma/metano/issues/331)) ([08c42f0](https://github.com/danfma/metano/commit/08c42f0ba03867c87755a63909af415c5ee0f787))
+* confine tuple equality lowering to tuple receivers ([#331](https://github.com/danfma/metano/issues/331)) ([0752195](https://github.com/danfma/metano/commit/07521950132215c12ea0adaf8f6f81d9da0c8d2e))
+* decide per-class storage from the property alone and lower compound writes ([#341](https://github.com/danfma/metano/issues/341)) ([9dfe8ad](https://github.com/danfma/metano/commit/9dfe8ad976d80306e773de01e04bb8c791271b8a)), closes [#363](https://github.com/danfma/metano/issues/363)
+* declare metano-runtime as a peer dependency of generated packages ([#411](https://github.com/danfma/metano/issues/411)) ([b1adb3f](https://github.com/danfma/metano/commit/b1adb3f7244b5221856b9b5cd51d8499e93dc29d))
+* detect library auto-properties from compiled accessors and cover hiding properties ([#341](https://github.com/danfma/metano/issues/341)) ([01bfcd4](https://github.com/danfma/metano/commit/01bfcd424ee23b914ad58ce3d07454293e0c648d)), closes [#363](https://github.com/danfma/metano/issues/363)
+* fold tuple equality only for arguments that cannot hold the tuple ([#331](https://github.com/danfma/metano/issues/331)) ([a582f88](https://github.com/danfma/metano/commit/a582f88fa6bf3b330a4bbff57dac4b8d97712ca0))
+* forward inherited accessors across override chains and respect an ancestor ToJSON ([#341](https://github.com/danfma/metano/issues/341)) ([f1a1c62](https://github.com/danfma/metano/commit/f1a1c6226374d32a1381c4920b38eff510405b12)), closes [#363](https://github.com/danfma/metano/issues/363)
+* give overridden auto-properties per-class backing fields ([#341](https://github.com/danfma/metano/issues/341)) ([0fb3913](https://github.com/danfma/metano/commit/0fb39137f68cd3133d4d322a83609bb506612852)), closes [#363](https://github.com/danfma/metano/issues/363)
+* ignore non-emitted siblings when checking the factory's TS name ([#269](https://github.com/danfma/metano/issues/269)) ([28786e0](https://github.com/danfma/metano/commit/28786e0c9d51fa959cc32634f7d8e7f1989b263b))
+* ignore skipped ToJSON methods when deciding toJSON synthesis ([#341](https://github.com/danfma/metano/issues/341)) ([368c495](https://github.com/danfma/metano/commit/368c49556b5be0a83871702210fba61b5c757984)), closes [#363](https://github.com/danfma/metano/issues/363)
+* keep ObjectArgs keys and null-safe decimal conversion in the operator lowering ([#323](https://github.com/danfma/metano/issues/323)) ([e0710c8](https://github.com/danfma/metano/commit/e0710c870a42589838b0cd93277caeef6aa1152a))
+* keep tuple equality for convertible and generic arguments ([#331](https://github.com/danfma/metano/issues/331)) ([221fd5f](https://github.com/danfma/metano/commit/221fd5f2b5ba744c9e5fac39a3d706f36bf736ca))
+* limit the computed-read capture to is expressions and type hoisted locals ([#317](https://github.com/danfma/metano/issues/317)) ([af8bce6](https://github.com/danfma/metano/commit/af8bce674e184da68160c8555bfce90e7ee86c7d))
+* lower boolean logic, nullable increments and related operators ([#323](https://github.com/danfma/metano/issues/323)) ([23b4a7c](https://github.com/danfma/metano/commit/23b4a7c8cb0683250e4fa0f0f1a15ef6993ac1cf))
+* name parameters and module variable reads through the same policy ([#390](https://github.com/danfma/metano/issues/390)) ([e1f7ba4](https://github.com/danfma/metano/commit/e1f7ba4dcb5316ee0630173338eb6f3809de6a7f))
+* read hash-set JSON as an array like the array converter ([#270](https://github.com/danfma/metano/issues/270)) ([5a7570e](https://github.com/danfma/metano/commit/5a7570eae8acd6bd41accb25eee164ebe070404a))
+* refresh the generated runtime peer and pin the release version ([#411](https://github.com/danfma/metano/issues/411)) ([fdffc21](https://github.com/danfma/metano/commit/fdffc21e8b4f47442af708edd95703d7067826d1))
+* regenerate every sample in the local targets gate ([4d3c5fd](https://github.com/danfma/metano/commit/4d3c5fd426bd8ac3fb251df83b8e2812582b1208))
+* rename locals whose emitted names collide ([#398](https://github.com/danfma/metano/issues/398)) ([b49c46e](https://github.com/danfma/metano/commit/b49c46e2691c4dec197de5bc85292a4ce1d716e4))
+* require public package factories and apply review notes ([#269](https://github.com/danfma/metano/issues/269)) ([f9feb93](https://github.com/danfma/metano/commit/f9feb93c59a570465feeac9bfbe429b3e0d1dccd))
+* route every local binding through one naming decision ([#390](https://github.com/danfma/metano/issues/390)) ([d51f613](https://github.com/danfma/metano/commit/d51f613232872ec9ab2908e7c91e84fe6296104b))
+* store moved initializers to the backing field and forward inherited accessors ([#341](https://github.com/danfma/metano/issues/341)) ([127aeee](https://github.com/danfma/metano/commit/127aeee19e1d71ef185a10aa97e174b3d364c775)), closes [#363](https://github.com/danfma/metano/issues/363)
+* thread the bridge context through boolean logic lowering ([#323](https://github.com/danfma/metano/issues/323)) ([8a5e728](https://github.com/danfma/metano/commit/8a5e728dfa7314ccbb7bf10f92866b7efdb9fa81))
+* use one emitted name for const locals and their reads ([#390](https://github.com/danfma/metano/issues/390)) ([e44ad16](https://github.com/danfma/metano/commit/e44ad1683e4eafdf7c8f49e9ca43a0cc368dec6e))
+
+### ♻️ Refactor
+
+* apply review feedback to the designator scoping fix ([#317](https://github.com/danfma/metano/issues/317)) ([e8c61dd](https://github.com/danfma/metano/commit/e8c61dde73c32d26eacadd2aeff5fe091c732895))
+* apply review feedback to the operator lowering ([#323](https://github.com/danfma/metano/issues/323)) ([bd33234](https://github.com/danfma/metano/commit/bd33234b8aa9f3e4ecc4d8a9478616f6dbcd2c8c))
+* apply review notes to the capture-scan tidy ([#332](https://github.com/danfma/metano/issues/332)) ([0b6a167](https://github.com/danfma/metano/commit/0b6a16735878aa62f84c66e28bdc595e71963b20))
+* keep tuple-literal purity local to the tuple equality fold ([#331](https://github.com/danfma/metano/issues/331)) ([074d980](https://github.com/danfma/metano/commit/074d98072b1243a00ff118a8ccf0bc988f69bc28))
+* lower tuple value equality through a dedicated IR node ([#331](https://github.com/danfma/metano/issues/331)) ([54bd246](https://github.com/danfma/metano/commit/54bd2468f1fb4c4fbade744754f2d97d7ef4136d))
+* order the runtime peer helpers and drop an unused fallback ([#411](https://github.com/danfma/metano/issues/411)) ([d5a5088](https://github.com/danfma/metano/commit/d5a508804496f035369228485389cc4e9f28ee24))
+* pin parameter naming at every binding site ([#390](https://github.com/danfma/metano/issues/390)) ([261688d](https://github.com/danfma/metano/commit/261688d583d9fc1342a297a5a77fa961b4bfdbf6))
+* share the subject capture and finish the lowering rename ([#317](https://github.com/danfma/metano/issues/317)) ([d727f0d](https://github.com/danfma/metano/commit/d727f0d2ae0740090fe9a4d6771ccdb9940cd263))
+* thread one bridge context through the TS lowering ([#388](https://github.com/danfma/metano/issues/388)) ([03aa053](https://github.com/danfma/metano/commit/03aa05377ea0e6a3a8e23024abd33610e230f69a))
+* tidy the per-class backing field implementation ([#388](https://github.com/danfma/metano/issues/388)) ([56e4934](https://github.com/danfma/metano/commit/56e49348c4710101143984fb5b263682f10a9895)), closes [#383](https://github.com/danfma/metano/issues/383)
+* tidy the primary-constructor capture scan and converge the write-target checks ([#332](https://github.com/danfma/metano/issues/332)) ([6eced8c](https://github.com/danfma/metano/commit/6eced8c33142ceacfc709af48b1335df6b884943))
+
+### 📝 Documentation
+
+* specify value-to-string formatting parity for bool and floating point ([#308](https://github.com/danfma/metano/issues/308)) ([7512957](https://github.com/danfma/metano/commit/7512957d2baa722f40389174533df8042dbca030)), closes [#323](https://github.com/danfma/metano/issues/323)
+
 ## 2.7.2
 
 _2026-11-02_
