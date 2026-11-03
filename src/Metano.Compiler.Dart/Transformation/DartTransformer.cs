@@ -34,6 +34,14 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
         ContainerlessTypeNames(ir)
     );
 
+    /// <summary>
+    /// The extraction options the core extractors receive: this compilation
+    /// and the Dart target, no local-naming decision — local-name collision
+    /// renaming is TypeScript-only until #402 lands it for Dart.
+    /// </summary>
+    private IrExtractionContext Extraction =>
+        new(Compilation: _compilation, Target: TargetLanguage.Dart);
+
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
 
     /// <summary>
@@ -121,16 +129,13 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
             switch (type.TypeKind)
             {
                 case TypeKind.Enum:
-                    var enumIr = IrEnumExtractor.Extract(type);
+                    var enumIr = IrEnumExtractor.Extract(type, Extraction);
                     IrToDartEnumBridge.Convert(enumIr, statements);
                     ScanInto(runtimeRequirements, enumIr);
                     break;
 
                 case TypeKind.Interface:
-                    var interfaceIr = IrInterfaceExtractor.Extract(
-                        type,
-                        target: TargetLanguage.Dart
-                    );
+                    var interfaceIr = IrInterfaceExtractor.Extract(type, Extraction);
                     IrToDartInterfaceBridge.Convert(interfaceIr, statements);
                     ScanInto(runtimeRequirements, interfaceIr);
                     break;
@@ -143,29 +148,19 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     // utility-module shape) instead of a class of static methods.
                     if (LowersToTopLevelFunctions(type))
                     {
-                        var functions = IrModuleFunctionExtractor.Extract(
-                            type,
-                            originResolver: null,
-                            compilation: _compilation,
-                            target: TargetLanguage.Dart
-                        );
+                        var functions = IrModuleFunctionExtractor.Extract(type, Extraction);
                         IrToDartModuleBridge.Convert(functions, statements, _rewriter);
                         ScanFunctionsInto(runtimeRequirements, functions);
                         break;
                     }
-                    var classIr = IrClassExtractor.Extract(
-                        type,
-                        originResolver: null,
-                        compilation: _compilation,
-                        target: TargetLanguage.Dart
-                    );
+                    var classIr = IrClassExtractor.Extract(type, Extraction);
                     ReportOverloadDiagnostics(classIr, type.Name);
                     IrToDartClassBridge.Convert(classIr, statements, _rewriter);
                     ScanInto(runtimeRequirements, classIr);
                     break;
 
                 case TypeKind.Delegate:
-                    var delegateIr = IrDelegateExtractor.Extract(type, target: TargetLanguage.Dart);
+                    var delegateIr = IrDelegateExtractor.Extract(type, Extraction);
                     if (delegateIr is null)
                     {
                         ReportDiagnostic(

@@ -27,12 +27,14 @@ public static class IrModuleFunctionExtractor
     /// </summary>
     public static IReadOnlyList<IrModuleFunction> Extract(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null,
-        LocalNaming? localNaming = null
+        IrExtractionContext? options = null
     )
     {
+        var context = options ?? IrExtractionContext.Empty;
+        var originResolver = context.OriginResolver;
+        var compilation = context.Compilation;
+        var target = context.Target;
+
         var functions = new List<IrModuleFunction>();
         foreach (var member in type.GetMembers())
         {
@@ -75,7 +77,7 @@ public static class IrModuleFunctionExtractor
                     || method.Name.StartsWith("set_", StringComparison.Ordinal)
                 )
                     continue;
-                functions.Add(ConvertMethod(method, originResolver, compilation, localNaming));
+                functions.Add(ConvertMethod(method, context));
                 continue;
             }
 
@@ -91,12 +93,7 @@ public static class IrModuleFunctionExtractor
                 && compilation is not null
             )
             {
-                var propFn = ConvertClassicExtensionProperty(
-                    prop,
-                    originResolver,
-                    compilation,
-                    localNaming
-                );
+                var propFn = ConvertClassicExtensionProperty(prop, context);
                 if (propFn is not null)
                     functions.Add(propFn);
             }
@@ -116,13 +113,7 @@ public static class IrModuleFunctionExtractor
                 {
                     if (node.Kind().ToString() != "ExtensionBlockDeclaration")
                         continue;
-                    ExtractFromExtensionBlock(
-                        node,
-                        compilation,
-                        originResolver,
-                        localNaming,
-                        functions
-                    );
+                    ExtractFromExtensionBlock(node, context, functions);
                 }
             }
         }
@@ -139,19 +130,19 @@ public static class IrModuleFunctionExtractor
     /// </summary>
     private static IrModuleFunction? ConvertClassicExtensionProperty(
         IPropertySymbol prop,
-        IrTypeOriginResolver? originResolver,
-        Compilation compilation,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
+        var originResolver = context.OriginResolver;
         var getter = prop.GetMethod;
         if (getter is null)
             return null;
         var syntax = getter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
         if (syntax is null)
             return null;
-        var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
+
+        var model = context.Compilation!.GetSemanticModel(syntax.SyntaxTree);
+        var extractor = new IrStatementExtractor(model, context);
 
         IReadOnlyList<IrStatement>? body = syntax switch
         {
@@ -160,11 +151,7 @@ public static class IrModuleFunctionExtractor
             {
                 (IrStatement)
                     new IrReturnStatement(
-                        new IrExpressionExtractor(
-                            model,
-                            originResolver,
-                            localNaming: localNaming
-                        ).Extract(arrow.Expression)
+                        new IrExpressionExtractor(model, context).Extract(arrow.Expression)
                     ),
             },
             _ => null,
@@ -191,33 +178,36 @@ public static class IrModuleFunctionExtractor
 
     private static void ExtractFromExtensionBlock(
         SyntaxNode extensionBlock,
-        Compilation compilation,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming,
+        IrExtractionContext context,
         List<IrModuleFunction> acc
     )
     {
         var paramListProp = extensionBlock.GetType().GetProperty("ParameterList");
         var membersProp = extensionBlock.GetType().GetProperty("Members");
+
         if (paramListProp?.GetValue(extensionBlock) is not ParameterListSyntax paramList)
             return;
+
         if (
             membersProp?.GetValue(extensionBlock) is not SyntaxList<MemberDeclarationSyntax> members
         )
             return;
+
         if (paramList.Parameters.Count == 0)
             return;
 
         var receiverSyntax = paramList.Parameters[0];
-        var model = compilation.GetSemanticModel(extensionBlock.SyntaxTree);
+        var model = context.Compilation!.GetSemanticModel(extensionBlock.SyntaxTree);
         var receiverTypeSymbol = receiverSyntax.Type is null
             ? null
             : model.GetTypeInfo(receiverSyntax.Type).Type;
+
         if (receiverTypeSymbol is null)
             return;
+
         var receiver = new IrParameter(
             receiverSyntax.Identifier.ValueText,
-            IrTypeRefMapper.Map(receiverTypeSymbol, originResolver)
+            IrTypeRefMapper.Map(receiverTypeSymbol, context.OriginResolver)
         );
 
         foreach (var member in members)
@@ -230,32 +220,18 @@ public static class IrModuleFunctionExtractor
                         continue;
                     if (methodSymbol.DeclaredAccessibility != Accessibility.Public)
                         continue;
+
                     // Static extension members ignore the receiver entirely —
                     // emit them as plain module functions so call sites can
                     // dispatch via `Type.Member(args)` without a phantom
                     // first argument.
                     if (methodSymbol.IsStatic)
                     {
-                        acc.Add(
-                            ConvertStaticExtensionMethod(
-                                methodSymbol,
-                                originResolver,
-                                compilation,
-                                localNaming
-                            )
-                        );
+                        acc.Add(ConvertStaticExtensionMethod(methodSymbol, context));
                     }
                     else
                     {
-                        acc.Add(
-                            ConvertExtensionMethod(
-                                methodSymbol,
-                                receiver,
-                                originResolver,
-                                compilation,
-                                localNaming
-                            )
-                        );
+                        acc.Add(ConvertExtensionMethod(methodSymbol, receiver, context));
                     }
                     break;
 
@@ -265,14 +241,14 @@ public static class IrModuleFunctionExtractor
                         continue;
                     if (propSymbol.DeclaredAccessibility != Accessibility.Public)
                         continue;
+
                     if (propSymbol.IsStatic)
                     {
                         var staticGetterFn = ConvertStaticExtensionProperty(
                             propSymbol,
                             propSyntax,
                             model,
-                            originResolver,
-                            localNaming
+                            context
                         );
                         if (staticGetterFn is not null)
                             acc.Add(staticGetterFn);
@@ -280,20 +256,19 @@ public static class IrModuleFunctionExtractor
                             propSymbol,
                             propSyntax,
                             model,
-                            originResolver,
-                            localNaming
+                            context
                         );
                         if (staticSetterFn is not null)
                             acc.Add(staticSetterFn);
                         break;
                     }
+
                     var propFn = ConvertExtensionProperty(
                         propSymbol,
                         propSyntax,
                         receiver,
                         model,
-                        originResolver,
-                        localNaming
+                        context
                     );
                     if (propFn is not null)
                         acc.Add(propFn);
@@ -302,8 +277,7 @@ public static class IrModuleFunctionExtractor
                         propSyntax,
                         receiver,
                         model,
-                        originResolver,
-                        localNaming
+                        context
                     );
                     if (setterFn is not null)
                         acc.Add(setterFn);
@@ -315,13 +289,13 @@ public static class IrModuleFunctionExtractor
                         continue;
                     if (indexerSymbol.DeclaredAccessibility != Accessibility.Public)
                         continue;
+
                     var indexerGetter = ConvertExtensionIndexerGetter(
                         indexerSymbol,
                         indexerSyntax,
                         receiver,
                         model,
-                        originResolver,
-                        localNaming
+                        context
                     );
                     if (indexerGetter is not null)
                         acc.Add(indexerGetter);
@@ -330,8 +304,7 @@ public static class IrModuleFunctionExtractor
                         indexerSyntax,
                         receiver,
                         model,
-                        originResolver,
-                        localNaming
+                        context
                     );
                     if (indexerSetter is not null)
                         acc.Add(indexerSetter);
@@ -353,10 +326,10 @@ public static class IrModuleFunctionExtractor
         IndexerDeclarationSyntax syntax,
         IrParameter receiver,
         SemanticModel model,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
+        var originResolver = context.OriginResolver;
         var getter = indexer.GetMethod;
         if (getter is null)
             return null;
@@ -364,7 +337,7 @@ public static class IrModuleFunctionExtractor
             a.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration)
         );
 
-        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
+        var extractor = new IrStatementExtractor(model, context);
         IReadOnlyList<IrStatement>? body;
         if (syntax.ExpressionBody is not null)
         {
@@ -416,10 +389,10 @@ public static class IrModuleFunctionExtractor
         IndexerDeclarationSyntax syntax,
         IrParameter receiver,
         SemanticModel model,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
+        var originResolver = context.OriginResolver;
         if (indexer.SetMethod is null)
             return null;
         var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
@@ -430,7 +403,7 @@ public static class IrModuleFunctionExtractor
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
             return null;
 
-        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
+        var extractor = new IrStatementExtractor(model, context);
         var body = extractor.ExtractBody(
             setterSyntax.Body,
             setterSyntax.ExpressionBody,
@@ -461,22 +434,25 @@ public static class IrModuleFunctionExtractor
     private static IrModuleFunction ConvertExtensionMethod(
         IMethodSymbol method,
         IrParameter receiver,
-        IrTypeOriginResolver? originResolver,
-        Compilation compilation,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
-        var localNames = LocalNamesOf(method, compilation, localNaming);
+        var originResolver = context.OriginResolver;
+        var localNames = LocalNamesOf(method, context);
 
         var parameters = new List<IrParameter> { receiver };
         parameters.AddRange(
             method.Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        LocalIrNameOf(localNames, p, IrParameterNaming.IrNameOf(p, compilation)),
+                        LocalIrNameOf(
+                            localNames,
+                            p,
+                            IrParameterNaming.IrNameOf(p, context.Compilation)
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
-                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        DefaultValue: ExtractDefaultValue(p, context),
                         IsParams: p.IsParams,
                         IsConstant: p.HasConstant()
                     ),
@@ -513,7 +489,7 @@ public static class IrModuleFunctionExtractor
                     .ToList()
                 : null;
 
-        var body = TryExtractBody(method, compilation, originResolver, localNaming, localNames);
+        var body = TryExtractBody(method, context, localNames);
 
         return new IrModuleFunction(
             Name: method.Name,
@@ -531,11 +507,11 @@ public static class IrModuleFunctionExtractor
         PropertyDeclarationSyntax syntax,
         IrParameter receiver,
         SemanticModel model,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
-        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
+        var originResolver = context.OriginResolver;
+        var extractor = new IrStatementExtractor(model, context);
         IReadOnlyList<IrStatement>? body;
         if (syntax.ExpressionBody is not null)
         {
@@ -580,10 +556,10 @@ public static class IrModuleFunctionExtractor
         PropertyDeclarationSyntax syntax,
         IrParameter receiver,
         SemanticModel model,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
+        var originResolver = context.OriginResolver;
         if (prop.SetMethod is null)
             return null;
         var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
@@ -595,7 +571,7 @@ public static class IrModuleFunctionExtractor
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
             return null;
 
-        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
+        var extractor = new IrStatementExtractor(model, context);
         var body = extractor.ExtractBody(
             setterSyntax.Body,
             setterSyntax.ExpressionBody,
@@ -627,21 +603,24 @@ public static class IrModuleFunctionExtractor
     /// </summary>
     private static IrModuleFunction ConvertStaticExtensionMethod(
         IMethodSymbol method,
-        IrTypeOriginResolver? originResolver,
-        Compilation compilation,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
-        var localNames = LocalNamesOf(method, compilation, localNaming);
+        var originResolver = context.OriginResolver;
+        var localNames = LocalNamesOf(method, context);
 
         var parameters = method
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        LocalIrNameOf(localNames, p, IrParameterNaming.IrNameOf(p, compilation)),
+                        LocalIrNameOf(
+                            localNames,
+                            p,
+                            IrParameterNaming.IrNameOf(p, context.Compilation)
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
-                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        DefaultValue: ExtractDefaultValue(p, context),
                         IsParams: p.IsParams,
                         IsConstant: p.HasConstant()
                     ),
@@ -678,7 +657,7 @@ public static class IrModuleFunctionExtractor
                     .ToList()
                 : null;
 
-        var body = TryExtractBody(method, compilation, originResolver, localNaming, localNames);
+        var body = TryExtractBody(method, context, localNames);
 
         return new IrModuleFunction(
             Name: method.Name,
@@ -701,11 +680,11 @@ public static class IrModuleFunctionExtractor
         IPropertySymbol prop,
         PropertyDeclarationSyntax syntax,
         SemanticModel model,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
-        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
+        var originResolver = context.OriginResolver;
+        var extractor = new IrStatementExtractor(model, context);
         IReadOnlyList<IrStatement>? body;
         if (syntax.ExpressionBody is not null)
         {
@@ -748,10 +727,10 @@ public static class IrModuleFunctionExtractor
         IPropertySymbol prop,
         PropertyDeclarationSyntax syntax,
         SemanticModel model,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
+        var originResolver = context.OriginResolver;
         if (prop.SetMethod is null)
             return null;
         var setterSyntax = syntax.AccessorList?.Accessors.FirstOrDefault(a =>
@@ -762,7 +741,7 @@ public static class IrModuleFunctionExtractor
         if (setterSyntax.Body is null && setterSyntax.ExpressionBody is null)
             return null;
 
-        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
+        var extractor = new IrStatementExtractor(model, context);
         var body = extractor.ExtractBody(
             setterSyntax.Body,
             setterSyntax.ExpressionBody,
@@ -785,23 +764,23 @@ public static class IrModuleFunctionExtractor
         );
     }
 
-    private static IrModuleFunction ConvertMethod(
-        IMethodSymbol method,
-        IrTypeOriginResolver? originResolver,
-        Compilation? compilation,
-        LocalNaming? localNaming
-    )
+    private static IrModuleFunction ConvertMethod(IMethodSymbol method, IrExtractionContext context)
     {
-        var localNames = LocalNamesOf(method, compilation, localNaming);
+        var originResolver = context.OriginResolver;
+        var localNames = LocalNamesOf(method, context);
 
         var parameters = method
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        LocalIrNameOf(localNames, p, IrParameterNaming.IrNameOf(p, compilation)),
+                        LocalIrNameOf(
+                            localNames,
+                            p,
+                            IrParameterNaming.IrNameOf(p, context.Compilation)
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
-                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        DefaultValue: ExtractDefaultValue(p, context),
                         IsParams: p.IsParams,
                         IsConstant: p.HasConstant()
                     ),
@@ -842,8 +821,8 @@ public static class IrModuleFunctionExtractor
                     .ToList()
                 : null;
 
-        var body = compilation is not null
-            ? TryExtractBody(method, compilation, originResolver, localNaming, localNames)
+        var body = context.Compilation is { } compilation
+            ? TryExtractBody(method, context, localNames)
             : null;
 
         return new IrModuleFunction(
@@ -886,11 +865,10 @@ public static class IrModuleFunctionExtractor
     /// </summary>
     private static LocalBindingNames? LocalNamesOf(
         IMethodSymbol method,
-        Compilation? compilation,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
-        if (localNaming is null || compilation is null)
+        if (context.LocalNaming is null || context.Compilation is null)
             return null;
 
         var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
@@ -899,8 +877,8 @@ public static class IrModuleFunctionExtractor
 
         return LocalBindingDisambiguator.Disambiguate(
             syntax,
-            compilation.GetSemanticModel(syntax.SyntaxTree),
-            localNaming
+            context.Compilation.GetSemanticModel(syntax.SyntaxTree),
+            context.LocalNaming
         );
     }
 
@@ -915,9 +893,7 @@ public static class IrModuleFunctionExtractor
 
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol method,
-        Compilation compilation,
-        IrTypeOriginResolver? originResolver,
-        LocalNaming? localNaming,
+        IrExtractionContext context,
         LocalBindingNames? localNames
     )
     {
@@ -926,11 +902,11 @@ public static class IrModuleFunctionExtractor
             as MethodDeclarationSyntax;
         if (syntax is null || (syntax.Body is null && syntax.ExpressionBody is null))
             return null;
-        var model = compilation.GetSemanticModel(syntax.SyntaxTree);
+
+        var model = context.Compilation!.GetSemanticModel(syntax.SyntaxTree);
         var extractor = new IrStatementExtractor(
             model,
-            originResolver,
-            localNaming: localNaming,
+            context,
             inheritedLocalNames: localNames?.RenamedBySymbol
         );
         return extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, method.ReturnsVoid);
@@ -943,18 +919,21 @@ public static class IrModuleFunctionExtractor
     /// </summary>
     private static IrExpression? ExtractDefaultValue(
         IParameterSymbol parameter,
-        Compilation? compilation,
-        IrTypeOriginResolver? originResolver
+        IrExtractionContext context
     )
     {
-        if (!parameter.HasExplicitDefaultValue || compilation is null)
+        if (!parameter.HasExplicitDefaultValue || context.Compilation is null)
             return null;
+
         var syntax =
             parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax;
         var defaultExpression = syntax?.Default?.Value;
+
         if (defaultExpression is null)
             return null;
-        var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-        return new IrExpressionExtractor(model, originResolver).Extract(defaultExpression);
+
+        var model = context.Compilation.GetSemanticModel(syntax!.SyntaxTree);
+
+        return new IrExpressionExtractor(model, context).Extract(defaultExpression);
     }
 }

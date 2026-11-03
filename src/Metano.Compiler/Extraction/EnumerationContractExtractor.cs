@@ -23,8 +23,7 @@ internal static class EnumerationContractExtractor
 
     public static IrEnumerableContract? ExtractEnumerable(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver,
-        TargetLanguage? target
+        IrExtractionContext? options
     )
     {
         if (!TakesOnContract(type, SpecialType.System_Collections_IEnumerable))
@@ -33,16 +32,21 @@ internal static class EnumerationContractExtractor
         var generic = GenericInterface(type, SpecialType.System_Collections_Generic_IEnumerable_T);
         var contract = generic ?? Interface(type, SpecialType.System_Collections_IEnumerable);
 
-        if (Implementation(type, contract, GetEnumeratorName, target) is not { } getEnumerator)
+        if (
+            Implementation(type, contract, GetEnumeratorName, options?.Target)
+            is not { } getEnumerator
+        )
             return null;
 
-        return new IrEnumerableContract(ElementType(generic, originResolver), getEnumerator);
+        return new IrEnumerableContract(
+            ElementType(generic, options?.OriginResolver),
+            getEnumerator
+        );
     }
 
     public static IrEnumeratorContract? ExtractEnumerator(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver,
-        TargetLanguage? target
+        IrExtractionContext? options
     )
     {
         if (!TakesOnContract(type, SpecialType.System_Collections_IEnumerator))
@@ -50,13 +54,17 @@ internal static class EnumerationContractExtractor
 
         var nonGeneric = Interface(type, SpecialType.System_Collections_IEnumerator);
         var generic = GenericInterface(type, SpecialType.System_Collections_Generic_IEnumerator_T);
-        var current = Implementation(type, generic ?? nonGeneric, CurrentName, target);
-        var moveNext = Implementation(type, nonGeneric, MoveNextName, target);
+        var current = Implementation(type, generic ?? nonGeneric, CurrentName, options?.Target);
+        var moveNext = Implementation(type, nonGeneric, MoveNextName, options?.Target);
 
         if (current is null || moveNext is null)
             return null;
 
-        return new IrEnumeratorContract(ElementType(generic, originResolver), current, moveNext);
+        return new IrEnumeratorContract(
+            ElementType(generic, options?.OriginResolver),
+            current,
+            moveNext
+        );
     }
 
     private static bool TakesOnContract(INamedTypeSymbol type, SpecialType contract)

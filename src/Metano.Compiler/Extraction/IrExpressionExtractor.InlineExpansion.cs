@@ -130,8 +130,7 @@ public sealed partial class IrExpressionExtractor
 
         var extractor = new IrExpressionExtractor(
             semanticModel,
-            _originResolver,
-            _target,
+            _options,
             _inlineExpanding,
             inlineParameterSubs: subs
         );
@@ -247,8 +246,7 @@ public sealed partial class IrExpressionExtractor
 
         var bodyExtractor = new IrExpressionExtractor(
             semanticModel,
-            _originResolver,
-            _target,
+            _options,
             _inlineExpanding,
             inlineParameterSubs: bodySubs
         );

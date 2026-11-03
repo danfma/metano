@@ -26,13 +26,6 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 {
-    /// <summary>
-    /// The TypeScript local-naming decision the core extractors disambiguate
-    /// local-binding collisions against (#398): the same camelCase-with-
-    /// reserved-escape rule every declaration and read already goes through.
-    /// </summary>
-    private static readonly LocalNaming TsLocalNaming = new(IrToTsNamingPolicy.ToLocalName);
-
     private readonly List<MetanoDiagnostic> _diagnostics = [];
 
     /// <summary>
@@ -332,7 +325,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             TypeMapping = typeMappingContext,
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
-            LocalNaming = TsLocalNaming,
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
         };
@@ -1588,13 +1580,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         var functions = IrModuleFunctionExtractor
-            .Extract(
-                type,
-                Context.OriginResolver,
-                Context.Compilation,
-                TargetLanguage.TypeScript,
-                TsLocalNaming
-            )
+            .Extract(type, Context.Extraction)
             .Select(OutParameterLowering.Lower)
             // IrModuleFunctionExtractor emits every public method. Strip the
             // entry point — its body is unwrapped separately below.
@@ -1814,12 +1800,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (!type.IsContainerless())
             return [];
 
-        var members = IrModuleVariableExtractor.Extract(
-            type,
-            Context.OriginResolver,
-            Context.Compilation,
-            TargetLanguage.TypeScript
-        );
+        var members = IrModuleVariableExtractor.Extract(type, Context.Extraction);
 
         var variables = new List<IrMemberDeclaration>(members.Count);
 
@@ -1930,11 +1911,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var tree = syntaxRef.SyntaxTree;
         var semanticModel = Context.Compilation.GetSemanticModel(tree);
-        var stmtExtractor = new IrStatementExtractor(
-            semanticModel,
-            target: TargetLanguage.TypeScript,
-            localNaming: TsLocalNaming
-        );
+        var stmtExtractor = new IrStatementExtractor(semanticModel, Context.Extraction);
 
         // GlobalStatementSyntax is always a direct child of CompilationUnitSyntax —
         // walking ChildNodes avoids descending into the bodies of nested types,
@@ -1955,6 +1932,22 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
+    /// The extraction options for a method body, with the pinned local names
+    /// of a <c>[ExportVarFromBody]</c> export folded into the local-naming
+    /// decision so the export is never renamed (#398).
+    /// </summary>
+    private IrExtractionContext ExtractionOptionsFor(IReadOnlySet<string>? pinnedLocalNames) =>
+        pinnedLocalNames is null
+            ? Context.Extraction
+            : Context.Extraction with
+            {
+                LocalNaming = IrToTsNamingPolicy.LocalNaming with
+                {
+                    PinnedNames = pinnedLocalNames,
+                },
+            };
+
+    /// <summary>
     /// Extracts a method body with the TypeScript local-naming policy, so
     /// camelCase collisions inside the body are renamed (#398).
     /// <paramref name="pinnedLocalNames"/> names locals that must keep their
@@ -1973,16 +1966,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return (null, new HashSet<string>());
 
         var model = Context.Compilation.GetSemanticModel(syntax.SyntaxTree);
-        var extractor = new IrStatementExtractor(
-            model,
-            target: TargetLanguage.TypeScript,
-            localNaming: pinnedLocalNames is null
-                ? TsLocalNaming
-                : TsLocalNaming with
-                {
-                    PinnedNames = pinnedLocalNames,
-                }
-        );
+        var extractor = new IrStatementExtractor(model, ExtractionOptionsFor(pinnedLocalNames));
         var body = extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, method.ReturnsVoid);
 
         return (body, extractor.PinnedCollisions);
@@ -2100,24 +2084,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return cached;
         IrTypeDeclaration? ir = type.TypeKind switch
         {
-            TypeKind.Enum => IrEnumExtractor.Extract(type),
-            TypeKind.Interface => IrInterfaceExtractor.Extract(
-                type,
-                Context.OriginResolver,
-                TargetLanguage.TypeScript
-            ),
-            TypeKind.Class or TypeKind.Struct => IrClassExtractor.Extract(
-                type,
-                Context.OriginResolver,
-                Context.Compilation,
-                TargetLanguage.TypeScript,
-                TsLocalNaming
-            ),
-            TypeKind.Delegate => IrDelegateExtractor.Extract(
-                type,
-                Context.OriginResolver,
-                TargetLanguage.TypeScript
-            ),
+            TypeKind.Enum => IrEnumExtractor.Extract(type, Context.Extraction),
+            TypeKind.Interface => IrInterfaceExtractor.Extract(type, Context.Extraction),
+            TypeKind.Class or TypeKind.Struct => IrClassExtractor.Extract(type, Context.Extraction),
+            TypeKind.Delegate => IrDelegateExtractor.Extract(type, Context.Extraction),
             _ => null,
         };
         if (ir is not null)

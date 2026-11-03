@@ -15,20 +15,14 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public sealed class IrStatementExtractor(
     SemanticModel semanticModel,
-    IrTypeOriginResolver? originResolver = null,
-    Metano.Annotations.TargetLanguage? target = null,
-    LocalNaming? localNaming = null,
+    IrExtractionContext? options = null,
     IReadOnlyDictionary<ISymbol, string>? inheritedLocalNames = null
 )
 {
     private readonly SemanticModel _semantic = semanticModel;
-    private readonly IrTypeOriginResolver? _originResolver = originResolver;
-    private readonly IrExpressionExtractor _expressions = new(
-        semanticModel,
-        originResolver,
-        target
-    );
-    private readonly LocalNaming? _localNaming = localNaming;
+    private readonly IrTypeOriginResolver? _originResolver = options?.OriginResolver;
+    private readonly LocalNaming? _localNaming = options?.LocalNaming;
+    private readonly IrExpressionExtractor _expressions = new(semanticModel, options);
     private readonly bool _inheritsLocalNames = inheritedLocalNames is not null;
 
     /// <summary>

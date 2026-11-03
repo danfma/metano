@@ -119,7 +119,10 @@ public class IrToTsConstructorDispatcherBridgeTests
                 : typeDecls.First(t => t.Identifier.ValueText == typeName);
         var model = compilation.GetSemanticModel(tree);
         var typeSymbol = (INamedTypeSymbol)model.GetDeclaredSymbol(typeDecl)!;
-        return IrConstructorExtractor.Extract(typeSymbol, compilation: compilation)!;
+        return IrConstructorExtractor.Extract(
+            typeSymbol,
+            new IrExtractionContext(Compilation: compilation)
+        )!;
     }
 
     private static string PrintConstructor(TsConstructor ctor)

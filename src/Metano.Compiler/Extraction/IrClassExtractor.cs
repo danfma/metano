@@ -21,13 +21,15 @@ public static class IrClassExtractor
 {
     public static IrClassDeclaration Extract(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null,
-        LocalNaming? localNaming = null
+        IrExtractionContext? options = null
     )
     {
-        var semantics = ExtractSemantics(type, originResolver, compilation, target);
+        var context = options ?? IrExtractionContext.Empty;
+        var originResolver = context.OriginResolver;
+        var compilation = context.Compilation;
+        var target = context.Target;
+
+        var semantics = ExtractSemantics(type, context);
 
         var baseType =
             type.BaseType is not null && IsMeaningfulBase(type.BaseType)
@@ -75,18 +77,11 @@ public static class IrClassExtractor
         var members = ExtractWithCaptureContext(
             captureScan,
             deferInitializers,
-            () => ExtractMembers(type, originResolver, compilation, target, localNaming)
+            () => ExtractMembers(type, context)
         );
         members.AddRange(captureScan.SynthesizedFields);
 
-        var constructor = IrConstructorExtractor.Extract(
-            type,
-            originResolver,
-            compilation,
-            target,
-            promotion,
-            localNaming
-        );
+        var constructor = IrConstructorExtractor.Extract(type, context, promotion);
 
         // Mark constructor parameters that are captured by a field
         // initializer (DI-style: `private readonly IFoo _foo = foo;`). The
@@ -262,11 +257,13 @@ public static class IrClassExtractor
 
     private static IrTypeSemantics ExtractSemantics(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
-        new(
+        IrExtractionContext context
+    )
+    {
+        var originResolver = context.OriginResolver;
+        var target = context.Target;
+
+        return new(
             IsRecord: type.IsRecord,
             IsValueType: type.IsValueType,
             IsStatic: type.IsStatic,
@@ -280,23 +277,16 @@ public static class IrClassExtractor
             IsJsxComponent: SymbolHelper.IsJsxComponent(type),
             JsxNativeElementTag: SymbolHelper.GetJsxNativeElementTag(type),
             RendersAsJsxElement: SymbolHelper.IsJsxRenderable(type),
-            Enumerable: EnumerationContractExtractor.ExtractEnumerable(
-                type,
-                originResolver,
-                target
-            ),
-            Enumerator: EnumerationContractExtractor.ExtractEnumerator(
-                type,
-                originResolver,
-                target
-            ),
+            Enumerable: EnumerationContractExtractor.ExtractEnumerable(type, context),
+            Enumerator: EnumerationContractExtractor.ExtractEnumerator(type, context),
             InheritsPerClassStorage: OverrideChains.AncestorEmitsPerClassStorage(
                 type,
-                compilation,
+                context.Compilation,
                 target
             ),
-            DeclaresToJson: OverrideChains.DeclaresToJson(type, compilation, target)
+            DeclaresToJson: OverrideChains.DeclaresToJson(type, context.Compilation, target)
         );
+    }
 
     /// <summary>
     /// Extracts the underlying primitive of an <c>[Branded]</c> struct: the
@@ -346,12 +336,11 @@ public static class IrClassExtractor
 
     private static List<IrMemberDeclaration> ExtractMembers(
         INamedTypeSymbol type,
-        IrTypeOriginResolver? originResolver,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
+        var target = context.Target;
+
         // Collect methods first, grouped by name, so we can fold sibling
         // overloads onto a single primary IrMethodDeclaration. Backends that
         // don't support overloading (Dart) rely on the Overloads slot to drive
@@ -373,27 +362,13 @@ public static class IrClassExtractor
 
             switch (member)
             {
-                case IFieldSymbol field
-                    when IrFieldExtractor.TryExtract(
-                        field,
-                        originResolver,
-                        compilation,
-                        target,
-                        localNaming
-                    )
-                        is { } f:
+                case IFieldSymbol field when IrFieldExtractor.TryExtract(field, context) is { } f:
                     InheritedDataMemberHiding.ReportIfHiding(field, target);
                     result.Add(f);
                     break;
 
                 case IPropertySymbol prop:
-                    var property = IrPropertyExtractor.Extract(
-                        prop,
-                        originResolver,
-                        compilation,
-                        target,
-                        localNaming
-                    );
+                    var property = IrPropertyExtractor.Extract(prop, context);
 
                     InheritedDataMemberHiding.ReportIfHiding(prop, target);
 
@@ -414,7 +389,9 @@ public static class IrClassExtractor
                     break;
 
                 case IEventSymbol evt:
-                    result.Add(DeclareUnderInterfaceName(ExtractEvent(evt, originResolver), evt));
+                    result.Add(
+                        DeclareUnderInterfaceName(ExtractEvent(evt, context.OriginResolver), evt)
+                    );
                     break;
             }
         }
@@ -425,13 +402,7 @@ public static class IrClassExtractor
             // convention (most specific arity first); siblings become the
             // Overloads payload.
             var ordered = group.OrderByDescending(m => m.Parameters.Length).ToList();
-            var primary = ExtractMethod(
-                ordered[0],
-                originResolver,
-                compilation,
-                target,
-                localNaming
-            );
+            var primary = ExtractMethod(ordered[0], context);
 
             if (ordered.Count == 1)
             {
@@ -439,10 +410,7 @@ public static class IrClassExtractor
                 continue;
             }
 
-            var siblings = ordered
-                .Skip(1)
-                .Select(m => ExtractMethod(m, originResolver, compilation, target, localNaming))
-                .ToList();
+            var siblings = ordered.Skip(1).Select(m => ExtractMethod(m, context)).ToList();
             result.Add(primary with { Overloads = siblings });
         }
 
@@ -498,19 +466,10 @@ public static class IrClassExtractor
 
     private static IrMethodDeclaration ExtractMethod(
         IMethodSymbol method,
-        IrTypeOriginResolver? originResolver,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target,
-        LocalNaming? localNaming
+        IrExtractionContext context
     )
     {
-        var declaration = IrMethodExtractor.Extract(
-            method,
-            originResolver,
-            compilation,
-            target,
-            localNaming
-        );
+        var declaration = IrMethodExtractor.Extract(method, context);
 
         return DeclareUnderInterfaceName(declaration, method);
     }

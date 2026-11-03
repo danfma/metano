@@ -14,12 +14,14 @@ public static class IrMethodExtractor
 {
     public static IrMethodDeclaration Extract(
         IMethodSymbol method,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null,
-        LocalNaming? localNaming = null
+        IrExtractionContext? options = null
     )
     {
+        var context = options ?? IrExtractionContext.Empty;
+        var originResolver = context.OriginResolver;
+        var compilation = context.Compilation;
+        var target = context.Target;
+
         var hasYield = DetectYield(method);
 
         OutParameterFlow.ReportOverloadCollision(method);
@@ -31,7 +33,7 @@ public static class IrMethodExtractor
         // One map covers the parameters and the body: the walk's root is the
         // whole method declaration, so a collision between a parameter and a
         // body local renames one name both halves agree on (#398).
-        var localNames = LocalNamesOf(method, compilation, localNaming);
+        var localNames = LocalNamesOf(method, compilation, context.LocalNaming);
 
         var parameters = method
             .Parameters.Select(p =>
@@ -81,9 +83,7 @@ public static class IrMethodExtractor
             IsEmitTemplate: SymbolHelper.HasEmit(method)
         );
 
-        var body = compilation is not null
-            ? TryExtractBody(method, compilation, originResolver, target, localNaming, localNames)
-            : null;
+        var body = compilation is not null ? TryExtractBody(method, context, localNames) : null;
 
         return new IrMethodDeclaration(
             method.Name,
@@ -102,10 +102,7 @@ public static class IrMethodExtractor
 
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol method,
-        Compilation compilation,
-        IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target,
-        LocalNaming? localNaming,
+        IrExtractionContext context,
         LocalBindingNames? localNames
     )
     {
@@ -124,12 +121,10 @@ public static class IrMethodExtractor
         if (body is null && expressionBody is null)
             return null;
 
-        var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
+        var model = context.Compilation!.GetSemanticModel(syntax!.SyntaxTree);
         var extractor = new IrStatementExtractor(
             model,
-            originResolver,
-            target,
-            localNaming,
+            context,
             inheritedLocalNames: localNames?.RenamedBySymbol
         );
         return extractor.ExtractBody(body, expressionBody, method.ReturnsVoid);
@@ -184,13 +179,20 @@ public static class IrMethodExtractor
     {
         if (!parameter.HasExplicitDefaultValue || compilation is null)
             return null;
+
         var syntax =
             parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax;
         var defaultExpression = syntax?.Default?.Value;
+
         if (defaultExpression is null)
             return null;
+
         var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-        return new IrExpressionExtractor(model, originResolver).Extract(defaultExpression);
+
+        return new IrExpressionExtractor(
+            model,
+            options: new IrExtractionContext(originResolver)
+        ).Extract(defaultExpression);
     }
 
     private static bool DetectYield(IMethodSymbol method)

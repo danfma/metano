@@ -30,8 +30,10 @@ public sealed partial class IrExpressionExtractor
     );
 
     private readonly SemanticModel _semantic;
+    private readonly IrExtractionContext _options;
     private readonly IrTypeOriginResolver? _originResolver;
     private readonly Metano.Annotations.TargetLanguage? _target;
+    private readonly LocalNaming? _localNaming;
 
     /// <summary>
     /// The local-binding renames of the body being extracted (#398),
@@ -41,14 +43,6 @@ public sealed partial class IrExpressionExtractor
     /// naming policy was supplied (shape-only extraction).
     /// </summary>
     private IReadOnlyDictionary<ISymbol, string>? _localNames;
-
-    /// <summary>
-    /// The target's local-naming decision (#398), handed to the statement
-    /// extractor a lambda block body spawns when the lambda is not inside a
-    /// member body (a field initializer): that block then disambiguates its
-    /// own bindings instead of inheriting a member map.
-    /// </summary>
-    private LocalNaming? _localNaming;
 
     /// <summary>Adopts the body's local-binding renames (#398).</summary>
     internal void AdoptLocalNames(IReadOnlyDictionary<ISymbol, string> renames) =>
@@ -135,34 +129,21 @@ public sealed partial class IrExpressionExtractor
     /// <summary>A fresh temporary holding one operand value of a tuple comparison.</summary>
     private string NextTupleOperandTempName() => $"tuple$temp${_temporaryCounter++}";
 
-    public IrExpressionExtractor(
-        SemanticModel semanticModel,
-        IrTypeOriginResolver? originResolver = null,
-        Metano.Annotations.TargetLanguage? target = null,
-        LocalNaming? localNaming = null
-    )
-        : this(
-            semanticModel,
-            originResolver,
-            target,
-            inlineExpanding: null,
-            inlineParameterSubs: null
-        )
-    {
-        _localNaming = localNaming;
-    }
+    public IrExpressionExtractor(SemanticModel semanticModel, IrExtractionContext? options = null)
+        : this(semanticModel, options, inlineExpanding: null, inlineParameterSubs: null) { }
 
     internal IrExpressionExtractor(
         SemanticModel semanticModel,
-        IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target,
+        IrExtractionContext? options,
         HashSet<ISymbol>? inlineExpanding,
         IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs
     )
     {
         _semantic = semanticModel;
-        _originResolver = originResolver;
-        _target = target;
+        _options = options ?? IrExtractionContext.Empty;
+        _originResolver = _options.OriginResolver;
+        _target = _options.Target;
+        _localNaming = _options.LocalNaming;
         _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         _inlineParameterSubs = inlineParameterSubs;
 
@@ -2519,8 +2500,7 @@ public sealed partial class IrExpressionExtractor
             // to the original member bails out instead of recursing.
             var extractor = new IrExpressionExtractor(
                 semanticModel,
-                _originResolver,
-                _target,
+                _options,
                 _inlineExpanding,
                 inlineParameterSubs: null
             );
@@ -3164,8 +3144,7 @@ public sealed partial class IrExpressionExtractor
             // must resolve through the same map.
             BlockSyntax block => new IrStatementExtractor(
                 _semantic,
-                _originResolver,
-                localNaming: _localNaming,
+                _options,
                 inheritedLocalNames: _localNames
             ).ExtractBody(block, arrow: null, isVoid: false),
             ExpressionSyntax expr => LowerExpressionVariables(new IrReturnStatement(Extract(expr))),

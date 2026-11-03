@@ -16,12 +16,13 @@ public static class IrPropertyExtractor
 {
     public static IrPropertyDeclaration Extract(
         IPropertySymbol prop,
-        IrTypeOriginResolver? originResolver = null,
-        Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null,
-        LocalNaming? localNaming = null
+        IrExtractionContext? options = null
     )
     {
+        var context = options ?? IrExtractionContext.Empty;
+        var originResolver = context.OriginResolver;
+        var target = context.Target;
+
         var accessors = ResolveAccessors(prop);
 
         var setterVisibility =
@@ -34,27 +35,17 @@ public static class IrPropertyExtractor
             prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as PropertyDeclarationSyntax;
 
-        var semantics = BuildSemantics(prop, syntax, compilation, target);
+        var semantics = BuildSemantics(prop, syntax, options);
 
         IReadOnlyList<IrStatement>? getterBody = null;
         IReadOnlyList<IrStatement>? setterBody = null;
         IrExpression? initializer = null;
 
-        if (compilation is not null && syntax is not null)
+        if (options?.Compilation is { } compilation && syntax is not null)
         {
             var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-            var stmtExtractor = new IrStatementExtractor(
-                model,
-                originResolver,
-                target,
-                localNaming
-            );
-            var exprExtractor = new IrExpressionExtractor(
-                model,
-                originResolver,
-                target,
-                localNaming
-            );
+            var stmtExtractor = new IrStatementExtractor(model, options);
+            var exprExtractor = new IrExpressionExtractor(model, options);
 
             // Expression-bodied property: the whole `=> expr;` is the getter.
             if (syntax.ExpressionBody is not null)
@@ -123,8 +114,7 @@ public static class IrPropertyExtractor
     private static IrPropertySemantics BuildSemantics(
         IPropertySymbol prop,
         PropertyDeclarationSyntax? syntax,
-        Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
+        IrExtractionContext? options
     )
     {
         var hasGetterBody = DetectGetterBody(syntax);
@@ -141,8 +131,8 @@ public static class IrPropertyExtractor
             IsSealed: prop.IsSealed,
             IsRequired: prop.IsRequired,
             OwnsPerClassStorage: OverrideChains.OwnsPerClassStorage(prop),
-            EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, target),
-            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, compilation)
+            EmitsPerClassStorage: OverrideChains.EmitsPerClassStorage(prop, options?.Target),
+            InheritedAccessor: OverrideChains.InheritedAccessorOf(prop, options?.Compilation)
         );
     }
 
