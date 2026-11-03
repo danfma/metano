@@ -310,10 +310,21 @@ function resolveWithLeadingTag(
   return target;
 }
 
+/** What the out-of-order walk has seen so far. */
+interface OutOfOrderWalk {
+  tag: TypeDiscriminator | undefined;
+  sawDataKey: boolean;
+  valuesPending: boolean;
+}
+
 /**
  * `allowOutOfOrderMetadataProperties`: every key is checked in document
- * order, the tag's JSON kind included, and the contract is chosen after the
- * walk.
+ * order (the tag's JSON kind where it appears), and the contract is chosen
+ * after the walk. A `$values` key makes System.Text.Json expect a preserved
+ * array: a data key before it, or any non-metadata key after it, fails with
+ * its two-reason message; an object that ends with `$values` pending fails
+ * after its tag is resolved, or with the leading-`$values` message when it
+ * has no tag (measured on .NET 10).
  */
 function resolveWithTagAnywhere(
   raw: Record<string, unknown>,
@@ -321,29 +332,67 @@ function resolveWithTagAnywhere(
   spec: TypeSpec,
   polymorphism: PolymorphismSpec,
 ): TypeSpec {
-  const { discriminator } = polymorphism;
-  const valuesMessage = outOfOrderValuesMessage(spec);
+  const walk: OutOfOrderWalk = { tag: undefined, sawDataKey: false, valuesPending: false };
 
   for (const key of keys) {
-    if (key === discriminator) {
-      readTag(raw[discriminator], spec);
-      continue;
-    }
-
-    throwIfMetadata(key, discriminator, valuesMessage);
+    visitOutOfOrderKey(key, raw, spec, polymorphism.discriminator, walk);
   }
 
-  const tag = Object.hasOwn(raw, discriminator) ? readTag(raw[discriminator], spec) : undefined;
+  if (!walk.valuesPending) {
+    return contractOfTag(walk.tag, spec, polymorphism);
+  }
 
-  return contractOfTag(tag, spec, polymorphism);
+  if (walk.tag === undefined) {
+    throw new JsonException(LEADING_VALUES_MESSAGE);
+  }
+
+  contractOfTag(walk.tag, spec, polymorphism);
+
+  throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
 }
 
-/** STJ's two-reason message for `$values` when out-of-order metadata is allowed. */
-function outOfOrderValuesMessage(spec: TypeSpec): string {
+function visitOutOfOrderKey(
+  key: string,
+  raw: Record<string, unknown>,
+  spec: TypeSpec,
+  discriminator: string,
+  walk: OutOfOrderWalk,
+): void {
+  if (key === discriminator) {
+    walk.tag = readTag(raw[discriminator], spec);
+    return;
+  }
+
+  if (REFERENCE_METADATA_NAMES.has(key)) {
+    throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
+  }
+
+  if (key === VALUES_KEY) {
+    if (walk.sawDataKey) {
+      throw new JsonException(outOfOrderValuesMessage(key, spec));
+    }
+
+    walk.valuesPending = true;
+    return;
+  }
+
+  if (walk.valuesPending) {
+    throw new JsonException(outOfOrderValuesMessage(key, spec));
+  }
+
+  throwIfMetadata(key, discriminator, NOT_FIRST_METADATA_MESSAGE);
+  walk.sawDataKey = true;
+}
+
+/**
+ * STJ's two-reason message when `$values` and a non-metadata `propertyName`
+ * share an object read with out-of-order metadata allowed.
+ */
+function outOfOrderValuesMessage(propertyName: string, spec: TypeSpec): string {
   return (
     "Deserialization failed for one of these reasons:\n" +
     "1. A JSON object containing metadata for a nested array includes a non-metadata property " +
-    "'$values'.\n" +
+    `'${propertyName}'.\n` +
     `2. The JSON value could not be converted to ${contractNameOf(spec)}.`
   );
 }
