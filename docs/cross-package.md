@@ -270,6 +270,74 @@ Avoid `bun add file:../generated/domain-ts`: it installs per-file symlinks, so
 files generated later do not show up until you reinstall. `workspace:*` links the
 whole directory.
 
+`generated/` is normally gitignored and only exists after `dotnet build`, so on
+a fresh clone build the C# project **before** `bun install`; otherwise Bun finds
+no `generated/domain-ts/package.json` to link. (Alternatively, commit a
+placeholder `package.json` there; the writer merges into it.)
+
+#### Resolving the generated sources: a package-specific condition
+
+Every managed `exports` and `imports` entry lists a source condition first (the
+`.ts` sources), then `types` / `import` (the compiled `dist`). By default the
+condition is called `source`. That name is generic: a consumer that enables
+`source` for its bundler or type checker also opts every third-party package that
+exports `source` (for example `@internationalized/date`) into raw-source
+resolution, and their `.ts` is then type-checked under the app's strict settings
+(`TS6133`, `TS7053`). Neither Vite nor TypeScript can scope a condition to one
+package, so name the condition after the package instead. The recommended name is
+`metano-source`:
+
+```xml
+<MetanoSourceCondition>metano-source</MetanoSourceCondition>
+```
+
+(CLI: `--source-condition metano-source`.) Then enable exactly that name in the
+app:
+
+```ts
+// vite.config.ts
+import { defaultClientConditions, defaultServerConditions, defineConfig } from "vite";
+
+export default defineConfig({
+  resolve: { conditions: ["metano-source", ...defaultClientConditions] },
+  ssr: { resolve: { conditions: ["metano-source", ...defaultServerConditions] } },
+});
+```
+
+```jsonc
+// tsconfig.json
+{ "compilerOptions": { "customConditions": ["metano-source"] } }
+```
+
+Only the Metano package resolves to sources; packages that export `source` keep
+resolving to their built output. The default stays `source`, so existing
+consumers are unaffected until they set the property.
+
+The name may contain letters, digits, `-`, `_`, `.` and `:`, and must not be a
+built-in condition (`import`, `require`, `default`, `types`, `node`, `browser`,
+`node-addons`, `module-sync`); otherwise the run fails with
+[`MS0059`](#ms0059--invalid-source-condition).
+
+Changing the name is safe. On the next build the writer replaces the condition
+it wrote before (`source` or a former custom name) in `exports` and `imports`
+and leaves your own conditions alone. A condition counts as the writer's own only
+when it sits before `types`, is not the new name, and points at exactly the `.ts`
+file the writer would emit now. A condition you retargeted elsewhere, or added
+after `types` (`require`, `bun`, ...), is never removed.
+
+Two requirements of this layout:
+
+- **TypeScript 6.0 or newer.** The generated sources import each other through the
+  package's `#/...` subpath imports, and resolving those from a consuming
+  project needs TypeScript 6.0+; with 5.9.3 the consumer reported `TS2307`
+  (cannot find module) on every `#/...` import. This minimum comes from that
+  report, not from a version bisect.
+- **A fresh-clone order**, described above: `dotnet build` first, then
+  `bun install`.
+
+After a release, if NuGet's cache reports the new compiler version as missing,
+run `dotnet tool restore --no-http-cache`.
+
 **2. Emitting inside the app's source tree, with no separate package.** Point
 `MetanoOutputDir` at a folder in the app and set `MetanoImportAlias` so generated
 imports use their own `#<alias>` key instead of the app's `#`:
@@ -306,6 +374,15 @@ from. Move them into the same namespace or use different file names.
 Reported (error, fails the producer's build) when `[EmitPackage(SubpathRoot = …)]`
 is not a dotted C# namespace. Consumers of such a package keep full-namespace
 subpaths.
+
+### `MS0059` — Invalid source condition
+
+Reported (error, fails the run before transpiling) when
+`MetanoSourceCondition` / `--source-condition` is not a usable condition name:
+it contains a character other than letters, digits, `-`, `_`, `.` and `:`, or it
+is a built-in condition such as `import`, `require`, `default`, `types`, `node`
+or `browser`. Pick a package-specific name such as `metano-source`; see
+[Resolving the generated sources](#resolving-the-generated-sources-a-package-specific-condition).
 
 ### `MS0030` — Two barrels claim one `exports` key
 
