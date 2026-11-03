@@ -13,6 +13,14 @@ cd "$repo_root"
 # invocations) cannot intermittently bomb out under high parallelism.
 # The hook trades runtime for correctness — a transient race here used
 # to bypass the gate by leaving the user staring at a misleading error.
+# The sample transpile target is incremental on the sample's own sources
+# (Outputs = $(MetanoOutputDir)/.metano-stamp), not on the compiler that
+# produces them. A compiler-only change would otherwise skip regeneration
+# locally and pass here while CI, which builds from a fresh checkout,
+# regenerates and fails. Drop the stamps so every sample is transpiled with
+# the compiler being verified.
+find targets -name .metano-stamp -type f -delete
+
 if ! dotnet build Metano.slnx --nologo -v q -m:1; then
   echo "verify-targets-clean: dotnet build failed — fix the build before pushing." >&2
   exit 1
