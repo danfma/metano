@@ -800,6 +800,8 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | `TimeSpan` | `"01:02:03"` | `Temporal.Duration` string `PT1H2M3S` | Manifest row `divergent`; follow-up issue (DECIDED-16) |
 | `DateTimeOffset` offset text | `+00:00` | per temporal converter | Manifest row; `divergent` if the bytes differ (DECIDED-16) |
 | `Dictionary<int, …>` key order | insertion order | JS enumerates integer-like keys first | Manifest row `divergent` |
+| `Stack<T>` root/property | written top-first, read back reversed (STJ pushes in order) | written and read in array order | DECIDED-18 (d); no code |
+| `[Name]` inside a generic member name | `ListUserDto` (CLR name) | `ListUser` (TS name) | DECIDED-18 (a) |
 | `[StringEnum]` root/property | number unless `JsonStringEnumConverter` | string | Pre-existing type-mapping contract, unchanged |
 | `[JsonPropertyOrder]` | reorders properties | declaration order | `MS0037` (DECIDED-3) |
 | Missing non-required property | default value | `JsonException` | FR-045 |
@@ -898,6 +900,28 @@ the former `OPEN-N`.
 - **DECIDED-17 — Runtime version skew.** The minimum `metano-runtime` version is stated in
   `docs/serialization.md` and the changelog only. FR-049 makes the release a major version, so a
   consumer that upgrades the tools also sees the runtime's major bump.
+
+- **DECIDED-18 — Slice S3a decisions (#270).** Taken while implementing the value roots ahead of
+  S1 / S3b / S4:
+  - (a) A type argument is named with the same FR-031 function, recursively, so `[Name("User")]` on
+    `UserDto` makes `List<UserDto>` → `ListUser` (STJ says `ListUserDto`; a documented divergence)
+    and a `TypeInfoPropertyName` override of `Leaf` makes `List<Leaf>` → `List<override>`.
+  - (b) `TypeInfoPropertyName` names its type context-wide before the closure is deduplicated, so
+    `ref` descriptors and `base` links use it. When one type is listed more than once, the first
+    `TypeInfoPropertyName` written for it wins; a later, different one is an `MS0036` Warning at
+    that attribute. A repeated root without an override is emitted once, silently.
+  - (c) `ImmutableDictionary<K,V>` / `IImmutableDictionary<K,V>` are dictionary-like (a `map`
+    descriptor and a TS `Map<K,V>`), matched by name up to a generic boundary (`<` or `` ` ``).
+  - (d) `Stack<T>` round-trips in reverse order, as a documented divergence, with no code change.
+  - (e) The reserved member list of FR-036 also contains `default` and `_default`, the static
+    singleton members every generated context declares. Getters use the member camelCase (no
+    reserved-word escape), so a type named `Default` maps to `default` and is reported.
+  - Until S4 fixes dictionary key conversion, a value root whose descriptor contains a `map` with a
+    non-`string` key is `MS0035`. Until S1 admits closed generic object types and referenced
+    package types into the closure (FR-033, FR-047), an object root that is a closed generic is
+    `MS0035`, and a value root whose element / value / nullable inner object type is neither
+    discovered by the closure nor listed as its own root is `MS0035` instead of a dangling `ref`.
+  - S3a emits no `valueType` flag and keeps the `TypeSpec` overloads typed `T`; both land with S3b.
 
 ## Open questions
 

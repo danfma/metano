@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
-import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
+import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import type { Decimal } from "decimal.js";
 import { Comment } from "#/sample-issue-tracker/issues/domain/comment";
 import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
@@ -16,6 +16,8 @@ export class JsonContext extends SerializerContext {
   private _issueSnapshot?: TypeSpec<IssueSnapshot>;
 
   private _comment?: TypeSpec<Comment>;
+
+  private _iReadOnlyListComment?: ValueSpec<Comment[] | null>;
 
   static get default(): JsonContext {
     return JsonContext._default;
@@ -150,6 +152,18 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive" },
         },
       ],
+    }));
+  }
+
+  get iReadOnlyListComment(): ValueSpec<Comment[] | null> {
+    return (this._iReadOnlyListComment ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: {
+          kind: "ref",
+          spec: () => this.comment,
+        },
+      },
     }));
   }
 }

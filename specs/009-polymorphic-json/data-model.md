@@ -159,8 +159,8 @@ export interface ValueSpec<T = unknown> {
   readonly valueType?: boolean;
   /** Attached by createValueSpec when the context has non-default read options. */
   readonly readOptions?: JsonReadOptions;
-  /** Phantom member that keeps T in the type. */
-  readonly __type?: (value: T) => void;
+  /** Phantom member that keeps T in the type; covariant like TypeSpec<T> (#270). */
+  readonly __type?: () => T;
 }
 
 export type JsonTypeInfo<T = unknown> = TypeSpec<T> | ValueSpec<T>;

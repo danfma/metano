@@ -10,6 +10,16 @@ namespace Metano.Compiler;
 /// </summary>
 public static class RoslynTypeQueries
 {
+    private static readonly string[] DictionaryTypeNames =
+    [
+        "System.Collections.Generic.Dictionary",
+        "System.Collections.Generic.IDictionary",
+        "System.Collections.Generic.IReadOnlyDictionary",
+        "System.Collections.Concurrent.ConcurrentDictionary",
+        "System.Collections.Immutable.ImmutableDictionary",
+        "System.Collections.Immutable.IImmutableDictionary",
+    ];
+
     /// <summary>
     /// Formats an assembly's version as an npm-compatible specifier.
     /// Assemblies that don't declare a version (Roslyn defaults to
@@ -41,14 +51,23 @@ public static class RoslynTypeQueries
             ? underlying
             : type;
 
+    /// <summary>
+    /// True for the BCL dictionary types (and their nested types, such as
+    /// <c>Dictionary&lt;K,V&gt;.KeyCollection</c>, which callers check first). A
+    /// name matches only up to a generic boundary (<c>&lt;</c> or <c>`</c>), so
+    /// <c>ImmutableDictionary</c> does not also match a type that merely starts with
+    /// the same characters.
+    /// </summary>
     public static bool IsDictionaryLike(this INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
-        return fullName.StartsWith("System.Collections.Generic.Dictionary")
-            || fullName.StartsWith("System.Collections.Generic.IDictionary")
-            || fullName.StartsWith("System.Collections.Generic.IReadOnlyDictionary")
-            || fullName.StartsWith("System.Collections.Concurrent.ConcurrentDictionary");
+
+        return DictionaryTypeNames.Any(name => HasGenericNamePrefix(fullName, name));
     }
+
+    private static bool HasGenericNamePrefix(string fullName, string name) =>
+        fullName.StartsWith(name, StringComparison.Ordinal)
+        && (fullName.Length == name.Length || fullName[name.Length] is '<' or '`');
 
     /// <summary>
     /// True for <c>Dictionary&lt;K,V&gt;</c>, <c>IDictionary&lt;K,V&gt;</c> and

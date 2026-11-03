@@ -22,6 +22,18 @@ public static class IrRuntimeRequirementScanner
         return acc;
     }
 
+    /// <summary>
+    /// The helpers a single type reference needs (e.g. <c>HashSet</c> for a set,
+    /// <c>Temporal</c> for a date type), for a backend that emits a type reference
+    /// outside any declaration it scans.
+    /// </summary>
+    public static IReadOnlySet<IrRuntimeRequirement> Scan(IrTypeRef type)
+    {
+        var acc = new HashSet<IrRuntimeRequirement>();
+        ScanTypeRef(type, acc);
+        return acc;
+    }
+
     public static IReadOnlySet<IrRuntimeRequirement> Scan(IrModule module)
     {
         var acc = new HashSet<IrRuntimeRequirement>();

@@ -315,6 +315,26 @@ public static class DiagnosticCodes
     /// <c>[Ignore]</c>.</summary>
     public const string ExplicitImplementationConflict = "MS0031";
 
+    /// <summary>MS0035 — a <c>[JsonSerializable]</c> root the generated TypeScript
+    /// context cannot describe: an open generic or type parameter, an error type,
+    /// <c>object</c> / <c>dynamic</c>, a non-collection interface, an object-kind type
+    /// that is not a transpiled class or struct (BCL types, <c>[Ignore]</c> /
+    /// <c>[External]</c> types, closed generics, types of non-Metano assemblies), an
+    /// array of rank &gt; 1, a dictionary with non-<c>string</c> keys, or a value root
+    /// whose element / value type has no spec in the context. An error, reported at
+    /// the attribute; the root is not emitted (spec 009 FR-035, #270).</summary>
+    public const string InvalidJsonSerializableRoot = "MS0035";
+
+    /// <summary>MS0036 — two context members collide: two distinct types map to one
+    /// <c>JsonTypeInfo</c> member name, a name equals a <c>SerializerContext</c> member
+    /// (or the generated <c>default</c> / <c>_default</c>), or one type is listed
+    /// twice with different <c>TypeInfoPropertyName</c> values. An error when the
+    /// losing type is referenced by a <c>ref</c> / <c>base</c> link or the name is
+    /// reserved; a warning when the loser is an unreferenced root (which is dropped)
+    /// or for the repeated override (the first one is kept). See spec 009 FR-036,
+    /// #270.</summary>
+    public const string JsonTypeInfoNameCollision = "MS0036";
+
     /// <summary>MS0044 — without <c>--package-root</c>, the TypeScript CLI found no
     /// <c>package.json</c> inside the output's workspace, and the default root (the
     /// parent of the output directory) lies outside it. An error: the generated files

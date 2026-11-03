@@ -1,4 +1,4 @@
-import type { TypeSpec, SerializerContextOptions, JsonConverter } from "./types.ts";
+import type { TypeSpec, ValueSpec, SerializerContextOptions, JsonConverter } from "./types.ts";
 
 /**
  * Base class for generated serializer contexts. Each context holds options
@@ -36,6 +36,23 @@ export abstract class SerializerContext {
     if (spec.type) {
       this._registry.set(spec.type, spec as TypeSpec);
     }
+    return spec;
+  }
+
+  /**
+   * Returns the spec of a non-object root (a collection, dictionary, set,
+   * primitive, enum, branded or nullable type). Intended to be called from
+   * lazy getters in generated subclasses:
+   *
+   * ```ts
+   * get listEpisode(): ValueSpec<Episode[] | null> {
+   *     return this._listEpisode ??= this.createValueSpec({ descriptor: { kind: "array", ... } });
+   * }
+   * ```
+   *
+   * Nothing is registered: a value spec has no constructor to resolve.
+   */
+  protected createValueSpec<T>(spec: ValueSpec<T>): ValueSpec<T> {
     return spec;
   }
 

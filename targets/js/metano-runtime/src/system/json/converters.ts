@@ -146,7 +146,8 @@ function arrayConverter(descriptor: ArrayDescriptor, customConverters?: readonly
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
-      return (value as unknown[]).map((item) => elemConv.serialize(item));
+      // Any iterable (a Set, a generator, a LINQ pipe for IEnumerable<T>), not only arrays.
+      return Array.from(value as Iterable<unknown>, (item) => elemConv.serialize(item));
     },
     deserialize: (value: unknown) => {
       if (value == null) return null;
@@ -166,12 +167,7 @@ function hashSetConverter(
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
-      const set = value as HashSet<unknown>;
-      const result: unknown[] = [];
-      for (const item of set) {
-        result.push(elemConv.serialize(item));
-      }
-      return result;
+      return Array.from(value as Iterable<unknown>, (item) => elemConv.serialize(item));
     },
     deserialize: (value: unknown) => {
       if (value == null) return null;
@@ -212,7 +208,9 @@ function enumConverter(descriptor: EnumDescriptor) {
 // ─── Enum (Numeric) ──────────────────────────────────────────────────────────
 
 function numericEnumConverter(descriptor: NumericEnumDescriptor) {
-  const validValues = new Set(Object.values(descriptor.values));
+  const validValues = new Set(
+    Object.values(descriptor.values).filter((value) => typeof value === "number"),
+  );
 
   return {
     serialize: (value: unknown) => value, // already a number
