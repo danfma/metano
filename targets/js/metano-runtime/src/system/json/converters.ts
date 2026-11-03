@@ -177,7 +177,7 @@ function hashSetConverter(
     deserialize: (value: unknown) => {
       if (value == null) return null;
 
-      const items = Array.from(value as Iterable<unknown>, (item) => elemConv.deserialize(item));
+      const items = (value as unknown[]).map((item) => elemConv.deserialize(item));
 
       return new HashSet(items);
     },

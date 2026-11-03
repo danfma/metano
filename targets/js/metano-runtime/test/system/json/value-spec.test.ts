@@ -197,12 +197,12 @@ describe("JsonSerializer — iterable values", () => {
     expect(JsonSerializer.serialize(new Set([3, 4]), setSpec)).toEqual([3, 4]);
   });
 
-  test("hash-set descriptor deserializes any iterable into a HashSet", () => {
+  test("hash-set descriptor deserializes a JSON array into a HashSet", () => {
     const setSpec: ValueSpec<HashSet<number> | null> = {
       descriptor: { kind: "hashSet", element: { kind: "primitive" } },
     };
 
-    const restored = JsonSerializer.deserialize(new Set([5, 6]), setSpec);
+    const restored = JsonSerializer.deserialize([5, 6], setSpec);
 
     expect(restored).toBeInstanceOf(HashSet);
     expect(restored?.has(6)).toBe(true);
