@@ -917,6 +917,18 @@ describe("polymorphism — ignoreUnrecognizedTags", () => {
   test("a non-scalar tag is still rejected", () => {
     expectJsonException(() => read('{"k":null,"V":1}', ignBaseSpec), metadataTokenMessage("Null"));
   });
+
+  test("with out-of-order metadata, a pending $values and an unknown tag is misplaced metadata (V4)", () => {
+    const ignAbsAnywhere: TypeSpec<IgnAbs> = {
+      ...ignAbsSpec,
+      readOptions: { allowOutOfOrderMetadataProperties: true },
+    };
+
+    expectJsonException(
+      () => read('{"$values":[],"k":"zz"}', ignAbsAnywhere),
+      METADATA_NOT_FIRST_MESSAGE,
+    );
+  });
 });
 
 // ─── Misplaced metadata ──────────────────────────────────────────────────────

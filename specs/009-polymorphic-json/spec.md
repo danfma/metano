@@ -1132,9 +1132,9 @@ the former `OPEN-N`.
     throws "not the first property" (`{"$type":"d","$values":[]}`, `{"$values":[],"$type":"d"}`,
     `{"kind":"image","$values":[]}`, `{"$values":[],"kind":"image"}` on `Clip`); without a tag
     it throws the leading-`$values` message, on an abstract base too, ahead of the missing tag
-    (`{"$values":[]}`). Not measured: a pending `$values` with an unknown tag under
-    `IgnoreUnrecognizedTypeDiscriminators` (the runtime reads the base, then throws "not the first
-    property").
+    (`{"$values":[]}`). Under `IgnoreUnrecognizedTypeDiscriminators`, a pending `$values` with an
+    unknown tag throws "not the first property" on a concrete and on an abstract base alike
+    (`{"$values":[],"$type":"zz"}`; measured, the abstract base does not report the missing tag).
 
 ## Open questions
 

@@ -346,7 +346,7 @@ function resolveWithTagAnywhere(
     throw new JsonException(LEADING_VALUES_MESSAGE);
   }
 
-  contractOfTag(walk.tag, spec, polymorphism);
+  throwIfUnrecognizedTag(walk.tag, polymorphism);
 
   throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
 }
@@ -471,8 +471,22 @@ function contractOfTag(
     return derived;
   }
 
-  if (polymorphism.ignoreUnrecognizedTags) {
-    return contractWithoutTag(spec, polymorphism);
+  throwIfUnrecognizedTag(tag, polymorphism);
+
+  return contractWithoutTag(spec, polymorphism);
+}
+
+/**
+ * Rejects a tag no derived type registers, unless `ignoreUnrecognizedTags`
+ * lets it through. Only the tag itself is checked: an object that ends with
+ * `$values` pending fails as misplaced metadata even on an abstract base
+ * (measured on .NET 10), so the missing-tag rule must not run there.
+ */
+function throwIfUnrecognizedTag(tag: TypeDiscriminator, polymorphism: PolymorphismSpec): void {
+  const isRegistered = dispatchIndexOf(polymorphism).byTag.has(tag);
+
+  if (isRegistered || polymorphism.ignoreUnrecognizedTags) {
+    return;
   }
 
   throw new JsonException(`Read unrecognized type discriminator id '${tag}'.`);
