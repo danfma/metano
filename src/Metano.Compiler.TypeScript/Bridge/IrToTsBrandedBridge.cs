@@ -23,6 +23,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsBrandedBridge
 {
+    /// <summary>The non-validating factory every branded companion synthesizes.</summary>
+    internal const string CreateMember = "create";
+
+    /// <summary>The string conversion a non-string branded companion synthesizes.</summary>
+    internal const string ToStringMember = "toString";
+
     public static bool Convert(
         IrClassDeclaration ir,
         List<TsTopLevel> sink,
@@ -47,7 +53,7 @@ public static class IrToTsBrandedBridge
         {
             // create(value: T): TypeName  →  return value as TypeName;
             new(
-                "create",
+                CreateMember,
                 [new TsParameter("value", primitiveType)],
                 new TsNamedType(tsTypeName),
                 [
@@ -65,7 +71,7 @@ public static class IrToTsBrandedBridge
         {
             functions.Add(
                 new TsFunction(
-                    "toString",
+                    ToStringMember,
                     [new TsParameter("value", new TsNamedType(tsTypeName))],
                     new TsStringType(),
                     [

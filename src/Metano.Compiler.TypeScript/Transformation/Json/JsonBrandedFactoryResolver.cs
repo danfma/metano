@@ -17,10 +17,9 @@ internal sealed record JsonBrandedFactory(IMethodSymbol Method, string TsName);
 
 /// <summary>
 /// Finds and validates the <c>[JsonFactory]</c> methods of one type (spec 009 FR-021
-/// to FR-023). One evaluation serves both consumers: the descriptor builder reads the
-/// factory, and <see cref="JsonBrandedFactoryValidator"/> reports the diagnostics, so
-/// what is reported and what is emitted cannot disagree. A type whose factory is
-/// invalid keeps the non-validating <c>create</c>.
+/// to FR-023). <see cref="Resolve"/> and <see cref="DiagnosticsFor"/> both go through
+/// the same evaluation, so what is reported and what is emitted cannot disagree. A
+/// type whose factory is invalid keeps the non-validating <c>create</c>.
 /// </summary>
 internal static class JsonBrandedFactoryResolver
 {
@@ -28,11 +27,15 @@ internal static class JsonBrandedFactoryResolver
     /// Members the branded companion synthesizes; a factory emitted under one of
     /// these names would collide with it.
     /// </summary>
-    private static readonly string[] SynthesizedCompanionMembers = ["create", "toString"];
+    private static readonly string[] SynthesizedCompanionMembers =
+    [
+        IrToTsBrandedBridge.CreateMember,
+        IrToTsBrandedBridge.ToStringMember,
+    ];
 
     public static JsonBrandedFactory? Resolve(INamedTypeSymbol type) => Evaluate(type).Factory;
 
-    public static IReadOnlyList<MetanoDiagnostic> Validate(INamedTypeSymbol type) =>
+    public static IReadOnlyList<MetanoDiagnostic> DiagnosticsFor(INamedTypeSymbol type) =>
         Evaluate(type).Diagnostics;
 
     private static Evaluation Evaluate(INamedTypeSymbol type)
@@ -47,35 +50,18 @@ internal static class JsonBrandedFactoryResolver
             return Evaluation.None;
         }
 
-        var underlying = SymbolHelper.GetBrandedValueType(type);
-        var diagnostics = new List<MetanoDiagnostic>();
+        var underlyingType = SymbolHelper.GetBrandedValueType(type);
 
-        if (underlying is null)
+        if (underlyingType is null)
         {
-            diagnostics.AddRange(
-                candidates.Select(method =>
-                    Error(
-                        method,
-                        $"[JsonFactory] is only valid on a [Branded] type; '{type.Name}' is not branded."
-                    )
-                )
-            );
-
-            return new Evaluation(null, diagnostics);
+            return new Evaluation(null, NotBrandedErrors(type, candidates));
         }
 
-        diagnostics.AddRange(
-            candidates
-                .Select(method => ShapeError(type, method, underlying))
-                .OfType<MetanoDiagnostic>()
-        );
-        diagnostics.AddRange(
-            candidates
-                .Skip(1)
-                .Select(method =>
-                    Error(method, $"'{type.Name}' declares more than one [JsonFactory] method.")
-                )
-        );
+        var diagnostics = candidates
+            .Select(method => InvalidFactoryError(type, method, underlyingType))
+            .OfType<MetanoDiagnostic>()
+            .Concat(DuplicateFactoryErrors(type, candidates))
+            .ToList();
 
         var factory =
             diagnostics.Count == 0
@@ -88,45 +74,80 @@ internal static class JsonBrandedFactoryResolver
     private static bool IsFactoryCandidate(IMethodSymbol method) =>
         !method.IsImplicitlyDeclared && method.HasJsonFactory();
 
-    private static MetanoDiagnostic? ShapeError(
+    private static List<MetanoDiagnostic> NotBrandedErrors(
+        INamedTypeSymbol type,
+        IEnumerable<IMethodSymbol> candidates
+    ) =>
+        candidates
+            .Select(method =>
+                Error(
+                    method,
+                    $"[JsonFactory] is only valid on a [Branded] type; '{type.Name}' is not branded."
+                )
+            )
+            .ToList();
+
+    private static IEnumerable<MetanoDiagnostic> DuplicateFactoryErrors(
+        INamedTypeSymbol type,
+        IEnumerable<IMethodSymbol> candidates
+    ) =>
+        candidates
+            .Skip(1)
+            .Select(method =>
+                Error(method, $"'{type.Name}' declares more than one [JsonFactory] method.")
+            );
+
+    private static MetanoDiagnostic? InvalidFactoryError(
         INamedTypeSymbol type,
         IMethodSymbol method,
-        ITypeSymbol underlying
+        ITypeSymbol underlyingType
     )
     {
-        var name = $"{type.Name}.{method.Name}";
+        var qualifiedName = $"{type.Name}.{method.Name}";
         var tsName = TsNameOf(method);
+        var sibling = SiblingSharingTsName(type, method, tsName);
 
         return method switch
         {
             { MethodKind: not MethodKind.Ordinary } => Error(
                 method,
-                $"[JsonFactory] cannot be applied to operator '{name}'; use a named static method."
+                $"[JsonFactory] cannot be applied to operator '{qualifiedName}'; use a named static method."
             ),
-            { IsStatic: false } => Error(method, $"[JsonFactory] method '{name}' must be static."),
+            { IsStatic: false } => Error(
+                method,
+                $"[JsonFactory] method '{qualifiedName}' must be static."
+            ),
             { IsGenericMethod: true } => Error(
                 method,
-                $"[JsonFactory] '{name}' must not be generic."
+                $"[JsonFactory] '{qualifiedName}' must not be generic."
             ),
             _ when IsNotEmitted(method) => Error(
                 method,
-                $"[JsonFactory] '{name}' is not emitted to TypeScript."
+                $"[JsonFactory] '{qualifiedName}' is not emitted to TypeScript."
             ),
-            _ when !TakesOnly(method, underlying) => Error(
+            _ when IsHiddenFromPackageConsumers(method) => Error(
                 method,
-                $"[JsonFactory] '{name}' must take exactly one '{underlying.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' parameter."
+                $"[JsonFactory] '{qualifiedName}' must be public in a package library; consumers compiled against its metadata cannot see it."
+            ),
+            _ when !TakesSingleParameterOf(method, underlyingType) => Error(
+                method,
+                $"[JsonFactory] '{qualifiedName}' must take exactly one '{underlyingType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}' parameter."
             ),
             _ when !SameType(method.ReturnType, type) => Error(
                 method,
-                $"[JsonFactory] '{name}' must return '{type.Name}'."
+                $"[JsonFactory] '{qualifiedName}' must return '{type.Name}'."
             ),
-            _ when IsOverloaded(type, method) => Error(
+            _ when sibling is not null && sibling.Name == method.Name => Error(
                 method,
-                $"[JsonFactory] '{name}' is overloaded; the TypeScript dispatcher could call a different overload."
+                $"[JsonFactory] '{qualifiedName}' is overloaded; the TypeScript dispatcher could call a different overload."
+            ),
+            _ when sibling is not null => Error(
+                method,
+                $"[JsonFactory] '{qualifiedName}' emits as '{tsName}', which '{type.Name}.{sibling.Name}' also uses; rename one or add [Name]."
             ),
             _ when SynthesizedCompanionMembers.Contains(tsName) => Error(
                 method,
-                $"[JsonFactory] '{name}' emits as '{tsName}', which the branded companion already declares; rename it or add [Name]."
+                $"[JsonFactory] '{qualifiedName}' emits as '{tsName}', which the branded companion already declares; rename it or add [Name]."
             ),
             _ => null,
         };
@@ -135,14 +156,35 @@ internal static class JsonBrandedFactoryResolver
     private static bool IsNotEmitted(IMethodSymbol method) =>
         method.HasIgnore(TargetLanguage.TypeScript) || method.IsInlinedAtCallSite();
 
-    private static bool IsOverloaded(INamedTypeSymbol type, IMethodSymbol method) =>
-        type.GetMembers(method.Name).OfType<IMethodSymbol>().Count(IsOrdinary) > 1;
+    /// <summary>
+    /// A non-public member of a package library is absent from the reference
+    /// assembly a consumer compiles against, so the consumer's context would silently
+    /// fall back to <c>create</c>. Rejecting it where it is declared keeps the
+    /// descriptor the same for every consumer.
+    /// </summary>
+    private static bool IsHiddenFromPackageConsumers(IMethodSymbol method) =>
+        method.DeclaredAccessibility != Accessibility.Public
+        && method.ContainingAssembly is { } assembly
+        && SymbolHelper.GetEmitPackageInfo(assembly, (int)TargetLanguage.TypeScript) is not null;
 
-    private static bool IsOrdinary(IMethodSymbol method) =>
-        method.MethodKind == MethodKind.Ordinary;
+    /// <summary>
+    /// Another method of the type the companion declares under the factory's
+    /// TypeScript name: an overload, or a method renamed onto it with <c>[Name]</c>.
+    /// </summary>
+    private static IMethodSymbol? SiblingSharingTsName(
+        INamedTypeSymbol type,
+        IMethodSymbol method,
+        string tsName
+    ) =>
+        type.GetMembers()
+            .OfType<IMethodSymbol>()
+            .Where(other => other.MethodKind == MethodKind.Ordinary)
+            .FirstOrDefault(other =>
+                !SymbolEqualityComparer.Default.Equals(other, method) && TsNameOf(other) == tsName
+            );
 
-    private static bool TakesOnly(IMethodSymbol method, ITypeSymbol underlying) =>
-        method.Parameters is [var parameter] && SameType(parameter.Type, underlying);
+    private static bool TakesSingleParameterOf(IMethodSymbol method, ITypeSymbol underlyingType) =>
+        method.Parameters is [var parameter] && SameType(parameter.Type, underlyingType);
 
     private static bool SameType(ITypeSymbol left, ITypeSymbol right) =>
         SymbolEqualityComparer.Default.Equals(left, right);

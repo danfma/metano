@@ -215,7 +215,8 @@ This story is **TypeScript-only** (FR-026): its manifest rows run on the Bun sid
 3. **Given** `[JsonFactory, Name("parse")]`, **Then** the descriptor is `create: Title.parse`, and
    the companion namespace declares `parse`.
 4. **Given** a **private** `[JsonFactory]` static method, **Then** it is accepted (private statics
-   are emitted into the companion namespace).
+   are emitted into the companion namespace), except in an `[EmitPackage]` library, where it is
+   `MS0034` (consumers compiled against the library's metadata cannot see it).
 5. **Given** the branded type in a referenced `[EmitPackage]` library, **Then** the consumer's
    context still emits `create: Title.from` and imports `Title` from the library package.
 6. **Given** a `Title` nested in a nullable, array, map-value or **map-key** position, **Then** the
@@ -575,10 +576,14 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   `System.Guid` (`UUID.create`) is unchanged. This applies to branded map keys as well.
 - **FR-022**: A `[JsonFactory]` method is valid when it is an ordinary static method (not an
   operator or conversion operator), emitted for the target (not `[Ignore]`, `[Emit]`, `[Import]`,
-  `[Inline]`), has exactly one parameter whose type is the wrapper's underlying primitive, returns
-  the containing type, is the only `[JsonFactory]` of its type, has no same-named static overload,
-  and has a TS name that differs from every member the companion synthesizes (`create`,
-  `toString`). Any accessibility is valid. Otherwise the generator MUST report `MS0034`
+  `[Inline]`), is not generic, has exactly one parameter whose type is the wrapper's underlying
+  primitive, returns the containing type, is the only `[JsonFactory]` of its type, has no
+  same-named method and no other method of the type that the companion declares under the same TS
+  name (for example a `[Name("from")]` rename), and has a TS name that differs from every member
+  the companion synthesizes (`create`, `toString`). Any accessibility is valid, except in an
+  `[EmitPackage]` library, where the method MUST be `public`: a consumer compiled against the
+  library's metadata cannot see a non-public method, so its descriptor would silently fall back to
+  `create`. Otherwise the generator MUST report `MS0034`
   (`InvalidJsonFactory`, Error) at the method and keep `create`.
 - **FR-023**: `[JsonFactory]` on a method of a type that is not `[Branded]` / `[InlineWrapper]` MUST
   report `MS0034`.

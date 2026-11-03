@@ -12,6 +12,8 @@ public class JsonFactoryTests
 {
     private const string ContextPath = "test-app/json-context.ts";
 
+    private const string LibraryConsumerContextPath = "app/json-context.ts";
+
     private const string ContextBoilerplate = """
         public partial class JsonContext : JsonSerializerContext
         {
@@ -38,60 +40,48 @@ public class JsonFactoryTests
         }
         """;
 
-    private const string GoldenDeclarations = """
-        [Transpile, Branded]
-        public readonly record struct Title(string Value)
-        {
-            [JsonFactory]
-            public static Title From(string value)
-            {
-                if (value.Trim().Length == 0)
-                {
-                    throw new InvalidOperationException("blank");
-                }
+    private const string GoldenDeclarations =
+        TitleWithFactory
+        + """
 
-                return new Title(value.Trim());
-            }
-        }
-
-        [Transpile, Branded]
-        public readonly record struct Slug(string Value)
-        {
-            [JsonFactory, Name("parse")]
-            private static Slug Normalize(string value) => new(value.ToLowerInvariant());
-        }
-
-        [Transpile, Branded]
-        public readonly record struct Plain(string Value);
-
-        [Transpile]
-        public static class Episode
-        {
             [Transpile, Branded]
-            public readonly record struct Code(int Value)
+            public readonly record struct Slug(string Value)
             {
-                [JsonFactory]
-                public static Code From(int value) => new(value);
+                [JsonFactory, Name("parse")]
+                private static Slug Normalize(string value) => new(value.ToLowerInvariant());
             }
-        }
 
-        [Transpile]
-        public sealed record Video(
-            Title Title,
-            Slug Slug,
-            Plain Note,
-            Title? Subtitle,
-            Title[] Aliases,
-            Dictionary<Title, Episode.Code> Codes
-        );
+            [Transpile, Branded]
+            public readonly record struct Plain(string Value);
 
-        [Transpile]
-        [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-        [JsonSerializable(typeof(Video))]
-        [JsonSerializable(typeof(Title))]
-        [JsonSerializable(typeof(List<Slug>))]
-        [JsonSerializable(typeof(Episode.Code))]
-        """;
+            [Transpile]
+            public static class Episode
+            {
+                [Transpile, Branded]
+                public readonly record struct Code(int Value)
+                {
+                    [JsonFactory]
+                    public static Code From(int value) => new(value);
+                }
+            }
+
+            [Transpile]
+            public sealed record Video(
+                Title Title,
+                Slug Slug,
+                Plain Note,
+                Title? Subtitle,
+                Title[] Aliases,
+                Dictionary<Title, Episode.Code> Codes
+            );
+
+            [Transpile]
+            [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+            [JsonSerializable(typeof(Video))]
+            [JsonSerializable(typeof(Title))]
+            [JsonSerializable(typeof(List<Slug>))]
+            [JsonSerializable(typeof(Episode.Code))]
+            """;
 
     [Test]
     public async Task Factory_MatchesGolden()
@@ -216,11 +206,92 @@ public class JsonFactoryTests
         await Assert.That(ts).Contains("create: UUID.create");
     }
 
+    private const string PackageLibrary = """
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("shared")]
+
+        namespace Shared;
+
+        [Branded]
+        public readonly record struct Title(string Value)
+        {
+            [JsonFactory]
+            public static Title From(string value) => new(value.Trim());
+        }
+
+        public static class Outer
+        {
+            [Branded]
+            public readonly record struct Code(int Value)
+            {
+                [JsonFactory]
+                public static Code From(int value) => new(value);
+            }
+        }
+        """;
+
+    private const string PackageConsumer = """
+        using System.Text.Json.Serialization;
+        using Shared;
+
+        namespace App;
+
+        [Transpile]
+        public sealed record Video(Title Title, Outer.Code Code);
+
+        [Transpile]
+        [JsonSerializable(typeof(Video))]
+        """;
+
     [Test]
     public async Task BrandedTypeFromAReferencedPackage_CallsTheFactoryAndIsImported()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            PackageLibrary,
+            PackageConsumer + ContextBoilerplate
+        );
+
+        var ts = files[LibraryConsumerContextPath];
+
+        await Assert.That(JsonFactoryDiagnostics(diagnostics)).IsEmpty();
+        await Assert.That(ts).Contains("create: Title.from");
+        await Assert.That(ts).Contains("import { Outer, Title } from \"shared/shared\"");
+    }
+
+    [Test]
+    public async Task NestedBrandedTypeFromAReferencedPackage_ValueImportsTheOuterType()
+    {
+        var (files, _) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            PackageLibrary,
+            PackageConsumer + ContextBoilerplate
+        );
+
+        var ts = files[LibraryConsumerContextPath];
+
+        await Assert.That(ts).Contains("create: Outer.Code.from");
+        await Assert.That(ts).Contains("import { Outer, Title } from \"shared/shared\"");
+        await Assert.That(ts).DoesNotContain("import type { Outer }");
+    }
+
+    [Test]
+    public async Task PackageFactoryInTheReferenceAssembly_StillResolves()
+    {
+        var files = TranspileHelper.TranspileWithLibraryImage(
+            PackageLibrary,
+            PackageConsumer + ContextBoilerplate,
+            referenceAssembly: true
+        );
+
+        await Assert.That(files[LibraryConsumerContextPath]).Contains("create: Title.from");
+    }
+
+    [Test]
+    public async Task NonPublicFactoryInAPackageLibrary_ReportsMs0034()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
+            using System.Text.Json.Serialization;
+
             [assembly: TranspileAssembly]
             [assembly: EmitPackage("shared")]
 
@@ -230,34 +301,26 @@ public class JsonFactoryTests
             public readonly record struct Title(string Value)
             {
                 [JsonFactory]
-                public static Title From(string value) => new(value.Trim());
+                internal static Title From(string value) => new(value.Trim());
             }
-            """,
-            $$"""
-            using System.Text.Json.Serialization;
-            using Shared;
-
-            namespace App;
-
-            [Transpile]
-            public sealed record Video(Title Title);
-
-            [Transpile]
-            [JsonSerializable(typeof(Video))]
-            {{ContextBoilerplate}}
             """
         );
 
-        await Assert.That(JsonFactoryDiagnostics(diagnostics)).IsEmpty();
+        var errors = JsonFactoryDiagnostics(diagnostics);
+
+        await Assert.That(errors).Count().IsEqualTo(1);
+
         await Assert
-            .That(files[ContextPath.Replace("test-app", "app")])
-            .Contains("create: Title.from");
+            .That(errors[0].Message)
+            .IsEqualTo(
+                "[JsonFactory] 'Title.From' must be public in a package library; consumers compiled against its metadata cannot see it."
+            );
     }
 
     [Test]
     public async Task InstanceMethod_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public Title From(string value) => new(value);
             """
@@ -269,7 +332,7 @@ public class JsonFactoryTests
     [Test]
     public async Task ConversionOperator_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public static explicit operator Title(string value) => new(value);
             """
@@ -285,7 +348,7 @@ public class JsonFactoryTests
     [Test]
     public async Task WrongParameterCount_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public static Title From(string value, int extra) => new(value);
             """
@@ -299,7 +362,7 @@ public class JsonFactoryTests
     [Test]
     public async Task WrongParameterType_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public static Title From(int value) => new(value.ToString());
             """
@@ -313,7 +376,7 @@ public class JsonFactoryTests
     [Test]
     public async Task WrongReturnType_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public static string From(string value) => value;
             """
@@ -325,7 +388,7 @@ public class JsonFactoryTests
     [Test]
     public async Task OverloadedFactory_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public static Title From(string value) => new(value);
 
@@ -341,9 +404,28 @@ public class JsonFactoryTests
     }
 
     [Test]
+    public async Task MethodRenamedOntoTheFactoryName_ReportsMs0034()
+    {
+        var message = await SingleJsonFactoryErrorMessage(
+            """
+            public static Title From(string value) => new(value);
+
+            [Name("from")]
+            public static Title Other(string value) => new(value);
+            """
+        );
+
+        await Assert
+            .That(message)
+            .IsEqualTo(
+                "[JsonFactory] 'Title.From' emits as 'from', which 'Title.Other' also uses; rename one or add [Name]."
+            );
+    }
+
+    [Test]
     public async Task GenericFactory_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public static Title From<T>(string value) => new(value);
             """
@@ -355,7 +437,7 @@ public class JsonFactoryTests
     [Test]
     public async Task NotEmittedFactory_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             [Ignore]
             public static Title From(string value) => new(value);
@@ -370,7 +452,7 @@ public class JsonFactoryTests
     [Test]
     public async Task FactoryNamedLikeASynthesizedMember_ReportsMs0034()
     {
-        var message = await SingleMessage(
+        var message = await SingleJsonFactoryErrorMessage(
             """
             public static Title Create(string value) => new(value);
             """
@@ -403,9 +485,12 @@ public class JsonFactoryTests
         var errors = JsonFactoryDiagnostics(diagnostics);
 
         await Assert.That(errors).Count().IsEqualTo(1);
+
         await Assert
             .That(errors[0].Message)
             .IsEqualTo("'Title' declares more than one [JsonFactory] method.");
+
+        // Line 17, column 25: the name of `Parse`, the second factory, in the wrapped source.
         await Assert.That(errors[0].Format()).Contains("(17,25)");
     }
 
@@ -426,9 +511,57 @@ public class JsonFactoryTests
         var errors = JsonFactoryDiagnostics(diagnostics);
 
         await Assert.That(errors).Count().IsEqualTo(1);
+
         await Assert
             .That(errors[0].Message)
             .IsEqualTo("[JsonFactory] is only valid on a [Branded] type; 'Foo' is not branded.");
+    }
+
+    [Test]
+    public async Task InvalidFactoryOnNestedBrandedType_ReportsMs0034()
+    {
+        var (files, diagnostics) = Transpile(
+            """
+            [Transpile]
+            public static class Episode
+            {
+                [Transpile, Branded]
+                public readonly record struct Code(int Value)
+                {
+                    [JsonFactory]
+                    public Code From(int value) => new(value);
+                }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Episode.Code))]
+            """
+        );
+
+        var errors = JsonFactoryDiagnostics(diagnostics);
+
+        await Assert.That(errors).Count().IsEqualTo(1);
+        await Assert.That(files[ContextPath]).Contains("create: Episode.Code.create");
+    }
+
+    [Test]
+    public async Task InlineWrapperType_CallsTheFactory()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile, InlineWrapper]
+            public readonly record struct Title(string Value)
+            {
+                [JsonFactory]
+                public static Title From(string value) => new(value.Trim());
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Title))]
+            """
+        );
+
+        await Assert.That(ts).Contains("create: Title.from");
     }
 
     [Test]
@@ -452,11 +585,12 @@ public class JsonFactoryTests
 
         await Assert.That(errors).Count().IsEqualTo(1);
         await Assert.That(errors[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        // Line 14, column 18: the name of the instance `From` in the wrapped source.
         await Assert.That(errors[0].Format()).Contains("(14,18)");
         await Assert.That(files[ContextPath]).Contains("create: Title.create");
     }
 
-    private static async Task<string> SingleMessage(string members)
+    private static async Task<string> SingleJsonFactoryErrorMessage(string members)
     {
         var (_, diagnostics) = Transpile(
             $$"""
@@ -479,7 +613,10 @@ public class JsonFactoryTests
 
     private static List<MetanoDiagnostic> JsonFactoryDiagnostics(
         IReadOnlyList<MetanoDiagnostic> diagnostics
-    ) => diagnostics.Where(x => x.Code == DiagnosticCodes.InvalidJsonFactory).ToList();
+    ) =>
+        diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.InvalidJsonFactory)
+            .ToList();
 
     private static string WrapInNamespace(string declarations) =>
         $$"""
@@ -504,9 +641,10 @@ public class JsonFactoryTests
     {
         var (files, diagnostics) = Transpile(declarations);
 
-        if (diagnostics.Any(x => x.Severity == MetanoDiagnosticSeverity.Error))
+        if (diagnostics.Any(diagnostic => diagnostic.Severity == MetanoDiagnosticSeverity.Error))
             throw new InvalidOperationException(
-                "Unexpected diagnostics: " + string.Join("; ", diagnostics.Select(x => x.Format()))
+                "Unexpected diagnostics: "
+                    + string.Join("; ", diagnostics.Select(diagnostic => diagnostic.Format()))
             );
 
         return files[ContextPath];

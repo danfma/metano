@@ -261,13 +261,19 @@ type: { kind: "branded", create: Title.from },   // was: create: Title.create
 `JsonSerializer.deserialize` then throws the factory's own error for `"   "` and returns `"ok"` for
 `"  ok "`. Exceptions propagate unchanged, at any nesting depth (nullable, array, map value and map
 key positions, and branded value roots). The member name is the one the companion declares, so
-`[Name("parse")]` gives `create: Title.parse`, and a nested type gives `create: Episode.Title.from`.
+`[Name("parse")]` gives `create: Title.parse`, and a nested type gives `create: Episode.Code.from`.
 
 A valid factory is a named static method (any accessibility) with exactly one parameter of the
 wrapper's underlying type, returning the containing type; it is neither generic nor overloaded, is
 emitted for TypeScript, is the type's only `[JsonFactory]`, and its TypeScript name is not `create`
-or `toString`. Anything else, or `[JsonFactory]` on a non-branded type, is error `MS0034` and the
+or `toString` nor used by another method of the type. Anything else, or `[JsonFactory]` on a non-branded type, is error `MS0034` and the
 descriptor keeps `create`. Without the attribute nothing changes.
+
+In a library that declares `[EmitPackage]` the factory must be `public`: consumers compile against
+the library's metadata, which omits non-public members, so a private factory would be dropped
+there without notice and is reported as `MS0034` instead. Changing a library's factory without a
+version bump can leave a consumer's cached context stale (the per-group cache does not track
+referenced packages).
 
 This is TypeScript-only: Metano ships no `System.Text.Json` converter that calls the factory, so
 on the C# side `System.Text.Json` still writes the record struct as an object unless you supply
