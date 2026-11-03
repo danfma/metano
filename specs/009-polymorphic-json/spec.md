@@ -338,8 +338,11 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   '$type'."; any other key that starts with `$` (`$x`, `$Type` beside a `$type` discriminator,
   `$type` beside a custom one) throws `JsonException` "Properties that start with '$' are not
   allowed in types that support metadata. Either replace the character or disable reference
-  preservation and polymorphic deserialization.". An abstract base without a leading tag reports
-  the missing tag first. A spec without `polymorphism` reads past such keys.
+  preservation and polymorphic deserialization.". In a later position `$values` throws the
+  "metadata property … not the first property" message too. An abstract base whose first key is
+  `$id`, `$ref` or `$values` throws those `JsonException`s; with any other first key that is not
+  the tag it reports the missing tag first. With `allowOutOfOrderMetadataProperties` the keys are
+  checked in document order (DECIDED-21 j). A spec without `polymorphism` reads past such keys.
 - **Null / non-scalar tag**: a tag value that is neither a JSON string nor a JSON number throws
   `JsonException` "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current
   token type is '<Token>'." where `<Token>` follows the FR-007 mapping (`Null`, `True`, `False`,
@@ -1102,15 +1105,21 @@ the former `OPEN-N`.
     object, so the "first key" is the first key that is not an array index. An index key after the
     tag reads as in STJ (measured: `{"$type":"d","0":5,…}` reads `CDer`); one written before the
     tag is undetectable (documented divergence).
-  - (j) Polymorphic payloads only (the base and the contract reached by dispatch): in document
-    order, a later discriminator (option off), `$id` / `$ref` → the "metadata property … not the
-    first property" `JsonException`; `$values` → "A '$values' metadata property must always be
-    preceded by other metadata properties, such as '$id' or '$type'."; any other `$`-prefixed key →
-    "Properties that start with '$' are not allowed in types that support metadata. …" (all
-    measured; the `$values` text measured as the first key only). An abstract base without a
-    leading tag throws the missing-tag `NotSupportedException` first. With
-    `allowOutOfOrderMetadataProperties`, the `$` keys are rejected before the tag is read
-    (measured with `$x` before the tag).
+  - (j) Polymorphic payloads only (the base and the contract reached by dispatch), all measured.
+    Default options: a first key `$id` / `$ref` throws the "metadata property … not the first
+    property" `JsonException` and a first key `$values` throws "A '$values' metadata property must
+    always be preceded by other metadata properties, such as '$id' or '$type'.", both before an
+    abstract base reports a missing tag; any other first key (`$x` included) leaves the
+    missing-tag `NotSupportedException` of an abstract base first. A leading tag is then resolved
+    (its JSON kind, an unknown id), and the remaining keys are checked in document order: a later
+    discriminator, `$id`, `$ref` or `$values` → "metadata property … not the first property"; any
+    other `$`-prefixed key → "Properties that start with '$' are not allowed in types that support
+    metadata. …". With `allowOutOfOrderMetadataProperties`, every key is checked in document
+    order, the tag's JSON kind when the walk reaches it (`{"V":1,"$type":null,"$x":1}` → the
+    `Null` token message), `$values` → "Deserialization failed for one of these reasons: 1. A JSON
+    object containing metadata for a nested array includes a non-metadata property '$values'. 2.
+    The JSON value could not be converted to <Base>." (lines separated by `\n`); the contract is
+    chosen after the walk, so `{"$type":"zz","$x":1}` throws the `$` message.
 
 ## Open questions
 
