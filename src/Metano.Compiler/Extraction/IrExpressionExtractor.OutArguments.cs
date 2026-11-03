@@ -185,7 +185,10 @@ public sealed partial class IrExpressionExtractor
             {
                 Designation: SingleVariableDesignationSyntax designation
             } declaration => new IrOutLocalDeclaration(
-                designation.Identifier.ValueText,
+                LocalIrNameOf(
+                    _semantic.GetDeclaredSymbol(designation),
+                    designation.Identifier.ValueText
+                ),
                 IrTypeRefMapper.Map(
                     DeclaredLocalType(declaration, designation, parameter),
                     _originResolver,

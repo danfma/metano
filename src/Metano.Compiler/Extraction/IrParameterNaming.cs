@@ -34,8 +34,12 @@ internal static class IrParameterNaming
     /// promoted to a member or captured, an accessor's <c>value</c> and an
     /// operator's parameters are declared elsewhere, and an <c>[ObjectArgs]</c>
     /// method's parameters are the keys of its public argument object, so they
-    /// keep their name.
+    /// keep their name. The local-name disambiguator (#398) renames the same
+    /// parameter set, so both renames stay on one policy.
     /// </summary>
+    public static bool IsRenamable(IParameterSymbol parameter) =>
+        IsRenamableOwner(parameter.ContainingSymbol);
+
     private static bool IsRenamableOwner(ISymbol owner) =>
         owner
             is IMethodSymbol

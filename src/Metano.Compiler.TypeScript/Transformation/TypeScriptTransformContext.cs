@@ -480,6 +480,15 @@ public sealed class TypeScriptTransformContext(
     /// </summary>
     public bool UseIrBodiesWhenCovered { get; init; } = true;
 
+    /// <summary>
+    /// The TypeScript local-naming decision the core extractors disambiguate
+    /// local-binding collisions against (#398): camelCase with reserved-word
+    /// escaping — the same rule every declaration and read already goes
+    /// through. Emitters and bridges that re-extract member bodies hand it to
+    /// the core extractors so the emitted TS names the disambiguated IR names.
+    /// </summary>
+    public LocalNaming? LocalNaming { get; init; }
+
     private BclExportTypeOverrides? _bclOverrides;
 
     /// <summary>

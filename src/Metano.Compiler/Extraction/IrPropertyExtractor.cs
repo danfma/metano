@@ -18,7 +18,8 @@ public static class IrPropertyExtractor
         IPropertySymbol prop,
         IrTypeOriginResolver? originResolver = null,
         Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        Metano.Annotations.TargetLanguage? target = null,
+        LocalNaming? localNaming = null
     )
     {
         var accessors = ResolveAccessors(prop);
@@ -42,8 +43,18 @@ public static class IrPropertyExtractor
         if (compilation is not null && syntax is not null)
         {
             var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-            var stmtExtractor = new IrStatementExtractor(model, originResolver, target);
-            var exprExtractor = new IrExpressionExtractor(model, originResolver, target);
+            var stmtExtractor = new IrStatementExtractor(
+                model,
+                originResolver,
+                target,
+                localNaming
+            );
+            var exprExtractor = new IrExpressionExtractor(
+                model,
+                originResolver,
+                target,
+                localNaming
+            );
 
             // Expression-bodied property: the whole `=> expr;` is the getter.
             if (syntax.ExpressionBody is not null)

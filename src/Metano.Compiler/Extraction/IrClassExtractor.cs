@@ -23,7 +23,8 @@ public static class IrClassExtractor
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver = null,
         Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        Metano.Annotations.TargetLanguage? target = null,
+        LocalNaming? localNaming = null
     )
     {
         var semantics = ExtractSemantics(type, originResolver, compilation, target);
@@ -74,7 +75,7 @@ public static class IrClassExtractor
         var members = ExtractWithCaptureContext(
             captureScan,
             deferInitializers,
-            () => ExtractMembers(type, originResolver, compilation, target)
+            () => ExtractMembers(type, originResolver, compilation, target, localNaming)
         );
         members.AddRange(captureScan.SynthesizedFields);
 
@@ -83,7 +84,8 @@ public static class IrClassExtractor
             originResolver,
             compilation,
             target,
-            promotion
+            promotion,
+            localNaming
         );
 
         // Mark constructor parameters that are captured by a field
@@ -346,7 +348,8 @@ public static class IrClassExtractor
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver,
         Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
+        Metano.Annotations.TargetLanguage? target,
+        LocalNaming? localNaming
     )
     {
         // Collect methods first, grouped by name, so we can fold sibling
@@ -371,7 +374,13 @@ public static class IrClassExtractor
             switch (member)
             {
                 case IFieldSymbol field
-                    when IrFieldExtractor.TryExtract(field, originResolver, compilation, target)
+                    when IrFieldExtractor.TryExtract(
+                        field,
+                        originResolver,
+                        compilation,
+                        target,
+                        localNaming
+                    )
                         is { } f:
                     InheritedDataMemberHiding.ReportIfHiding(field, target);
                     result.Add(f);
@@ -382,7 +391,8 @@ public static class IrClassExtractor
                         prop,
                         originResolver,
                         compilation,
-                        target
+                        target,
+                        localNaming
                     );
 
                     InheritedDataMemberHiding.ReportIfHiding(prop, target);
@@ -415,7 +425,13 @@ public static class IrClassExtractor
             // convention (most specific arity first); siblings become the
             // Overloads payload.
             var ordered = group.OrderByDescending(m => m.Parameters.Length).ToList();
-            var primary = ExtractMethod(ordered[0], originResolver, compilation, target);
+            var primary = ExtractMethod(
+                ordered[0],
+                originResolver,
+                compilation,
+                target,
+                localNaming
+            );
 
             if (ordered.Count == 1)
             {
@@ -425,7 +441,7 @@ public static class IrClassExtractor
 
             var siblings = ordered
                 .Skip(1)
-                .Select(m => ExtractMethod(m, originResolver, compilation, target))
+                .Select(m => ExtractMethod(m, originResolver, compilation, target, localNaming))
                 .ToList();
             result.Add(primary with { Overloads = siblings });
         }
@@ -484,10 +500,17 @@ public static class IrClassExtractor
         IMethodSymbol method,
         IrTypeOriginResolver? originResolver,
         Compilation? compilation,
-        Metano.Annotations.TargetLanguage? target
+        Metano.Annotations.TargetLanguage? target,
+        LocalNaming? localNaming
     )
     {
-        var declaration = IrMethodExtractor.Extract(method, originResolver, compilation, target);
+        var declaration = IrMethodExtractor.Extract(
+            method,
+            originResolver,
+            compilation,
+            target,
+            localNaming
+        );
 
         return DeclareUnderInterfaceName(declaration, method);
     }

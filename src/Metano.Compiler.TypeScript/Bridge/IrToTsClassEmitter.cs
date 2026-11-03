@@ -52,7 +52,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 type,
                 originResolver: _context.OriginResolver,
                 compilation: _context.Compilation,
-                target: TargetLanguage.TypeScript
+                target: TargetLanguage.TypeScript,
+                localNaming: _context.LocalNaming
             )
         );
 

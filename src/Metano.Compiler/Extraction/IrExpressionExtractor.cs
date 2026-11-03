@@ -34,6 +34,36 @@ public sealed partial class IrExpressionExtractor
     private readonly Metano.Annotations.TargetLanguage? _target;
 
     /// <summary>
+    /// The local-binding renames of the body being extracted (#398),
+    /// adopted from the statement extractor that computed them per body so
+    /// identifier reads, lambda parameters, pattern designators and out-vars
+    /// name the same symbol the declarations named. Null when no target
+    /// naming policy was supplied (shape-only extraction).
+    /// </summary>
+    private IReadOnlyDictionary<ISymbol, string>? _localNames;
+
+    /// <summary>
+    /// The target's local-naming decision (#398), handed to the statement
+    /// extractor a lambda block body spawns when the lambda is not inside a
+    /// member body (a field initializer): that block then disambiguates its
+    /// own bindings instead of inheriting a member map.
+    /// </summary>
+    private LocalNaming? _localNaming;
+
+    /// <summary>Adopts the body's local-binding renames (#398).</summary>
+    internal void AdoptLocalNames(IReadOnlyDictionary<ISymbol, string> renames) =>
+        _localNames = renames;
+
+    /// <summary>
+    /// The IR name of a local binding's declaration site: its disambiguated
+    /// name when the body's map renamed it (#398), otherwise the fallback.
+    /// </summary>
+    private string LocalIrNameOf(ISymbol? symbol, string identifier) =>
+        symbol is not null && _localNames?.TryGetValue(symbol, out var renamed) is true
+            ? renamed
+            : identifier;
+
+    /// <summary>
     /// Tracks the set of <c>[Inline]</c> members currently being
     /// expanded so cyclic references (<c>[Inline] A =&gt; B</c>,
     /// <c>[Inline] B =&gt; A</c>) bail out rather than recurse
@@ -108,7 +138,8 @@ public sealed partial class IrExpressionExtractor
     public IrExpressionExtractor(
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver = null,
-        Metano.Annotations.TargetLanguage? target = null
+        Metano.Annotations.TargetLanguage? target = null,
+        LocalNaming? localNaming = null
     )
         : this(
             semanticModel,
@@ -116,7 +147,10 @@ public sealed partial class IrExpressionExtractor
             target,
             inlineExpanding: null,
             inlineParameterSubs: null
-        ) { }
+        )
+    {
+        _localNaming = localNaming;
+    }
 
     internal IrExpressionExtractor(
         SemanticModel semanticModel,
@@ -1295,11 +1329,16 @@ public sealed partial class IrExpressionExtractor
 
     private IrPatternDesignator ResolveDesignator(SingleVariableDesignationSyntax designation)
     {
-        IrTypeRef type = _semantic.GetDeclaredSymbol(designation) is ILocalSymbol local
+        var symbol = _semantic.GetDeclaredSymbol(designation);
+
+        IrTypeRef type = symbol is ILocalSymbol local
             ? IrTypeRefMapper.Map(local.Type, _originResolver, _target)
             : new IrUnknownTypeRef();
 
-        return new IrPatternDesignator(designation.Identifier.ValueText, type);
+        return new IrPatternDesignator(
+            LocalIrNameOf(symbol, designation.Identifier.ValueText),
+            type
+        );
     }
 
     /// <summary>
@@ -1444,13 +1483,15 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// The IR name of a local or parameter read; a parameter that a flattened
-    /// static member would shadow is renamed (see <see cref="IrParameterNaming"/>).
+    /// The IR name of a local or parameter read: its disambiguated name when
+    /// the body's map renamed it (#398); a parameter that a flattened static
+    /// member would shadow is renamed (see <see cref="IrParameterNaming"/>).
     /// </summary>
     private string IdentifierNameOf(IdentifierNameSyntax id, ISymbol? symbol) =>
-        symbol is IParameterSymbol parameter
+        symbol is not null && _localNames?.TryGetValue(symbol, out var renamed) is true ? renamed
+        : symbol is IParameterSymbol parameter
             ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation)
-            : id.Identifier.ValueText;
+        : id.Identifier.ValueText;
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
         symbol is ILocalSymbol or IParameterSymbol or IRangeVariableSymbol;
@@ -3021,7 +3062,7 @@ public sealed partial class IrExpressionExtractor
     private IrParameter BuildLambdaParameter(ParameterSyntax parameter) =>
         new(
             _semantic.GetDeclaredSymbol(parameter) is { } symbol
-                ? IrParameterNaming.IrNameOf(symbol, _semantic.Compilation)
+                ? LocalIrNameOf(symbol, IrParameterNaming.IrNameOf(symbol, _semantic.Compilation))
                 : parameter.Identifier.ValueText,
             ResolveParameterType(parameter),
             HasExplicitType: parameter.Type is not null
@@ -3117,11 +3158,16 @@ public sealed partial class IrExpressionExtractor
     private IReadOnlyList<IrStatement> ExtractLambdaBody(CSharpSyntaxNode body) =>
         body switch
         {
-            BlockSyntax block => new IrStatementExtractor(_semantic, _originResolver).ExtractBody(
-                block,
-                arrow: null,
-                isVoid: false
-            ),
+            // The lambda's block inherits the member's local-binding renames
+            // (#398): the member-level walk already covers the lambda's own
+            // bindings, and reads of outer renamed bindings inside the block
+            // must resolve through the same map.
+            BlockSyntax block => new IrStatementExtractor(
+                _semantic,
+                _originResolver,
+                localNaming: _localNaming,
+                inheritedLocalNames: _localNames
+            ).ExtractBody(block, arrow: null, isVoid: false),
             ExpressionSyntax expr => LowerExpressionVariables(new IrReturnStatement(Extract(expr))),
             _ => [new IrUnsupportedStatement(body.Kind().ToString())],
         };

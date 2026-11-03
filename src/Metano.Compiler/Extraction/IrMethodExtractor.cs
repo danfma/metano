@@ -16,7 +16,8 @@ public static class IrMethodExtractor
         IMethodSymbol method,
         IrTypeOriginResolver? originResolver = null,
         Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        Metano.Annotations.TargetLanguage? target = null,
+        LocalNaming? localNaming = null
     )
     {
         var hasYield = DetectYield(method);
@@ -27,11 +28,16 @@ public static class IrMethodExtractor
             ? IrTypeRefMapper.MapForGeneratorReturn(method.ReturnType, originResolver, target)
             : IrTypeRefMapper.Map(method.ReturnType, originResolver, target);
 
+        // One map covers the parameters and the body: the walk's root is the
+        // whole method declaration, so a collision between a parameter and a
+        // body local renames one name both halves agree on (#398).
+        var localNames = LocalNamesOf(method, compilation, localNaming);
+
         var parameters = method
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        IrParameterNaming.IrNameOf(p, compilation),
+                        LocalIrNameOf(localNames, p, IrParameterNaming.IrNameOf(p, compilation)),
                         IrTypeRefMapper.Map(p.Type, originResolver, target),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
@@ -76,7 +82,7 @@ public static class IrMethodExtractor
         );
 
         var body = compilation is not null
-            ? TryExtractBody(method, compilation, originResolver, target)
+            ? TryExtractBody(method, compilation, originResolver, target, localNaming, localNames)
             : null;
 
         return new IrMethodDeclaration(
@@ -98,7 +104,9 @@ public static class IrMethodExtractor
         IMethodSymbol method,
         Compilation compilation,
         IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target
+        Metano.Annotations.TargetLanguage? target,
+        LocalNaming? localNaming,
+        LocalBindingNames? localNames
     )
     {
         var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
@@ -117,9 +125,50 @@ public static class IrMethodExtractor
             return null;
 
         var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, originResolver, target);
+        var extractor = new IrStatementExtractor(
+            model,
+            originResolver,
+            target,
+            localNaming,
+            inheritedLocalNames: localNames?.RenamedBySymbol
+        );
         return extractor.ExtractBody(body, expressionBody, method.ReturnsVoid);
     }
+
+    /// <summary>
+    /// The method's local-binding renames (#398), computed from the whole
+    /// method declaration so the parameter list and the body share one map.
+    /// Null when there is nothing to disambiguate against (no naming policy,
+    /// no compilation, or no reachable declaration syntax).
+    /// </summary>
+    private static LocalBindingNames? LocalNamesOf(
+        IMethodSymbol method,
+        Compilation? compilation,
+        LocalNaming? localNaming
+    )
+    {
+        if (localNaming is null || compilation is null)
+            return null;
+
+        var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntax is null)
+            return null;
+
+        return LocalBindingDisambiguator.Disambiguate(
+            syntax,
+            compilation.GetSemanticModel(syntax.SyntaxTree),
+            localNaming
+        );
+    }
+
+    private static string LocalIrNameOf(
+        LocalBindingNames? localNames,
+        IParameterSymbol parameter,
+        string fallback
+    ) =>
+        localNames?.RenamedBySymbol.TryGetValue(parameter, out var renamed) is true
+            ? renamed
+            : fallback;
 
     /// <summary>
     /// Parses a parameter's default-value syntax into IR so backends that render

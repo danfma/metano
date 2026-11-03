@@ -21,18 +21,20 @@ public static class IrConstructorExtractor
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver = null,
         Compilation? compilation = null,
-        Metano.Annotations.TargetLanguage? target = null
+        Metano.Annotations.TargetLanguage? target = null,
+        LocalNaming? localNaming = null
     ) =>
         Extract(
             type,
             originResolver,
             compilation,
             target,
-            PrimaryConstructorPromotion.For(type, compilation, target)
+            PrimaryConstructorPromotion.For(type, compilation, target),
+            localNaming
         );
 
     /// <summary>
-    /// <see cref="Extract(INamedTypeSymbol, IrTypeOriginResolver?, Compilation?, Metano.Annotations.TargetLanguage?)"/>
+    /// <see cref="Extract(INamedTypeSymbol, IrTypeOriginResolver?, Compilation?, Metano.Annotations.TargetLanguage?, LocalNaming?)"/>
     /// with the type's primary-constructor <paramref name="promotion"/>
     /// already decided, so a caller that also scans captures shares it.
     /// </summary>
@@ -41,7 +43,8 @@ public static class IrConstructorExtractor
         IrTypeOriginResolver? originResolver,
         Compilation? compilation,
         Metano.Annotations.TargetLanguage? target,
-        PrimaryConstructorPromotion promotion
+        PrimaryConstructorPromotion promotion,
+        LocalNaming? localNaming = null
     )
     {
         var explicitCtors = ExplicitConstructors(type);
@@ -50,7 +53,7 @@ public static class IrConstructorExtractor
         if (primary is null)
             return ImplicitConstructorWithObservableBaseCall(type, target);
 
-        var context = new PromotionContext(type, compilation, target, promotion);
+        var context = new PromotionContext(type, compilation, target, promotion, localNaming);
         var primaryDecl = BuildFromMethod(primary, originResolver, context);
 
         // Other constructors become overloads (without nested Overloads of their own).
@@ -134,13 +137,15 @@ public static class IrConstructorExtractor
 
     /// <summary>
     /// What deciding a parameter's promotion needs: the type, the active
-    /// compilation and target, and the type's primary-constructor decision.
+    /// compilation and target, the type's primary-constructor decision, and
+    /// the target's local-naming policy for constructor-body bindings (#398).
     /// </summary>
     private sealed record PromotionContext(
         INamedTypeSymbol Type,
         Compilation? Compilation,
         Metano.Annotations.TargetLanguage? Target,
-        PrimaryConstructorPromotion Promotion
+        PrimaryConstructorPromotion Promotion,
+        LocalNaming? LocalNaming = null
     )
     {
         /// <summary>
@@ -208,7 +213,7 @@ public static class IrConstructorExtractor
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
-            Body: TryExtractBody(ctor, compilation, originResolver),
+            Body: TryExtractBody(ctor, compilation, originResolver, context.LocalNaming),
             BaseArguments: baseArguments,
             BaseExceptionConstruction: TryExtractBaseExceptionConstruction(
                 ctor,
@@ -334,7 +339,8 @@ public static class IrConstructorExtractor
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol ctor,
         Compilation compilation,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        LocalNaming? localNaming
     )
     {
         var syntax =
@@ -344,7 +350,7 @@ public static class IrConstructorExtractor
             return null;
 
         var model = compilation.GetSemanticModel(syntax.SyntaxTree);
-        var extractor = new IrStatementExtractor(model, originResolver);
+        var extractor = new IrStatementExtractor(model, originResolver, localNaming: localNaming);
         return extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, isVoid: true);
     }
 

@@ -26,6 +26,13 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 {
+    /// <summary>
+    /// The TypeScript local-naming decision the core extractors disambiguate
+    /// local-binding collisions against (#398): the same camelCase-with-
+    /// reserved-escape rule every declaration and read already goes through.
+    /// </summary>
+    private static readonly LocalNaming TsLocalNaming = new(IrToTsNamingPolicy.ToLocalName);
+
     private readonly List<MetanoDiagnostic> _diagnostics = [];
 
     /// <summary>
@@ -325,6 +332,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             TypeMapping = typeMappingContext,
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
+            LocalNaming = TsLocalNaming,
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
         };
@@ -1580,7 +1588,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         var functions = IrModuleFunctionExtractor
-            .Extract(type, Context.OriginResolver, Context.Compilation, TargetLanguage.TypeScript)
+            .Extract(
+                type,
+                Context.OriginResolver,
+                Context.Compilation,
+                TargetLanguage.TypeScript,
+                TsLocalNaming
+            )
             .Select(OutParameterLowering.Lower)
             // IrModuleFunctionExtractor emits every public method. Strip the
             // entry point — its body is unwrapped separately below.
@@ -1617,7 +1631,26 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             }
             else
             {
-                entryBody = ExtractMethodBody(entryPoint);
+                var export = SymbolHelper.GetExportVarFromBody(entryPoint);
+                (entryBody, var pinnedCollisions) = ExtractMethodBody(
+                    entryPoint,
+                    export is null ? null : new HashSet<string> { export.Name }
+                );
+
+                // A local promoted by [ExportVarFromBody] is the module's
+                // surface, so it keeps its name and the colliding binding is
+                // renamed instead; the collision itself is reported (#398).
+                foreach (var emittedName in pinnedCollisions)
+                {
+                    ReportInvalidEntryPoint(
+                        entryPoint,
+                        $"[ExportVarFromBody(\"{emittedName}\")] on '{entryPoint.Name}' names a "
+                            + $"local whose emitted name '{emittedName}' collides with another "
+                            + "binding in the entry point body; rename one of them so the "
+                            + "exported name is unambiguous."
+                    );
+                }
+
                 if (entryBody is null || !IrBodyCoverageProbe.IsFullyCovered(entryBody))
                 {
                     ReportUnsupportedBody(
@@ -1899,7 +1932,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var semanticModel = Context.Compilation.GetSemanticModel(tree);
         var stmtExtractor = new IrStatementExtractor(
             semanticModel,
-            target: TargetLanguage.TypeScript
+            target: TargetLanguage.TypeScript,
+            localNaming: TsLocalNaming
         );
 
         // GlobalStatementSyntax is always a direct child of CompilationUnitSyntax —
@@ -1920,19 +1954,38 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             sink.Add(new TsTopLevelStatement(ts));
     }
 
-    private IReadOnlyList<IrStatement>? ExtractMethodBody(IMethodSymbol method)
+    /// <summary>
+    /// Extracts a method body with the TypeScript local-naming policy, so
+    /// camelCase collisions inside the body are renamed (#398).
+    /// <paramref name="pinnedLocalNames"/> names locals that must keep their
+    /// emitted name (a <c>[ExportVarFromBody]</c> export); the returned
+    /// collision set names the pinned names that collided anyway.
+    /// </summary>
+    private (
+        IReadOnlyList<IrStatement>? Body,
+        IReadOnlySet<string> PinnedCollisions
+    ) ExtractMethodBody(IMethodSymbol method, IReadOnlySet<string>? pinnedLocalNames = null)
     {
         var syntax =
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             as MethodDeclarationSyntax;
         if (syntax is null || (syntax.Body is null && syntax.ExpressionBody is null))
-            return null;
+            return (null, new HashSet<string>());
+
         var model = Context.Compilation.GetSemanticModel(syntax.SyntaxTree);
-        return new IrStatementExtractor(model, target: TargetLanguage.TypeScript).ExtractBody(
-            syntax.Body,
-            syntax.ExpressionBody,
-            isVoid: method.ReturnsVoid
+        var extractor = new IrStatementExtractor(
+            model,
+            target: TargetLanguage.TypeScript,
+            localNaming: pinnedLocalNames is null
+                ? TsLocalNaming
+                : TsLocalNaming with
+                {
+                    PinnedNames = pinnedLocalNames,
+                }
         );
+        var body = extractor.ExtractBody(syntax.Body, syntax.ExpressionBody, method.ReturnsVoid);
+
+        return (body, extractor.PinnedCollisions);
     }
 
     private static bool IsValidEntryPointReturn(ITypeSymbol returnType)
@@ -2057,7 +2110,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 type,
                 Context.OriginResolver,
                 Context.Compilation,
-                TargetLanguage.TypeScript
+                TargetLanguage.TypeScript,
+                TsLocalNaming
             ),
             TypeKind.Delegate => IrDelegateExtractor.Extract(
                 type,
