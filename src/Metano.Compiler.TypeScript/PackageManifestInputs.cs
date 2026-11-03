@@ -20,6 +20,9 @@ namespace Metano;
 /// <param name="CrossPackageDependencies">Each referenced npm package name mapped to its
 /// version specifier (e.g. <c>^1.2.3</c> or <c>workspace:*</c>), merged into
 /// <c>package.json#dependencies</c>.</param>
+/// <param name="ImportsRuntime">Whether any generated file imports <c>metano-runtime</c>,
+/// in which case the writer declares it as a peer dependency (see
+/// <see cref="RuntimePeerDependency"/>).</param>
 /// <param name="IsExecutable">Whether the source project is an executable
 /// (ConsoleApplication). Executables are not consumed by other packages, so they get no
 /// <c>exports</c>, only <c>imports</c>.</param>
@@ -28,7 +31,8 @@ public sealed record PackageManifestInputs(
     string? PackageName,
     PackageSubpathRoot SubpathRoot,
     IReadOnlyDictionary<string, string> CrossPackageDependencies,
-    bool IsExecutable
+    bool IsExecutable,
+    bool ImportsRuntime = false
 )
 {
     /// <summary>The inputs before any run: nothing to write.</summary>

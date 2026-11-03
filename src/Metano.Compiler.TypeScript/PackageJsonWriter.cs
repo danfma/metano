@@ -63,6 +63,12 @@ public static class PackageJsonWriter
     /// <param name="subpathRoot">The package's <c>[EmitPackage(SubpathRoot = …)]</c>: a
     /// namespace prefix stripped from the <c>exports</c> keys only (spec 008). On-disk
     /// targets and <c>imports</c> are unaffected. Default: none.</param>
+    /// <param name="runtimeVersionSpecifier">Version specifier written for the
+    /// <c>metano-runtime</c> peer dependency. Default: the running compiler's release
+    /// version (<see cref="RuntimePeerDependency.CurrentSpecifier"/>).</param>
+    /// <param name="importsRuntime">Whether any emitted file imports <c>metano-runtime</c>
+    /// (see <see cref="RuntimePeerDependency.IsImportedBy"/>); when true the runtime is
+    /// declared as a peer dependency unless the consumer already declares it.</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -74,7 +80,9 @@ public static class PackageJsonWriter
         bool isExecutable = false,
         string? srcRoot = null,
         string? importAlias = null,
-        PackageSubpathRoot subpathRoot = default
+        PackageSubpathRoot subpathRoot = default,
+        string? runtimeVersionSpecifier = null,
+        bool importsRuntime = false
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -177,9 +185,45 @@ public static class PackageJsonWriter
             root["dependencies"] = deps;
         }
 
+        if (importsRuntime)
+        {
+            DeclareRuntimePeerDependency(
+                root,
+                runtimeVersionSpecifier ?? RuntimePeerDependency.CurrentSpecifier
+            );
+        }
+
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
         return diagnostics;
+    }
+
+    /// <summary>
+    /// Adds <c>metano-runtime</c> to <c>peerDependencies</c> unless the consumer already
+    /// declares it in any dependency section (e.g. <c>workspace:*</c> in a monorepo), in
+    /// which case their entry is left exactly as written.
+    /// </summary>
+    private static void DeclareRuntimePeerDependency(JsonObject root, string versionSpecifier)
+    {
+        string[] dependencySections =
+        [
+            "dependencies",
+            "devDependencies",
+            "peerDependencies",
+            "optionalDependencies",
+        ];
+
+        var alreadyDeclared = dependencySections.Any(section =>
+            root[section] is JsonObject declared
+            && declared.ContainsKey(RuntimePeerDependency.PackageName)
+        );
+
+        if (alreadyDeclared)
+            return;
+
+        var peers = root["peerDependencies"] as JsonObject ?? new JsonObject();
+        peers[RuntimePeerDependency.PackageName] = versionSpecifier;
+        root["peerDependencies"] = peers;
     }
 
     /// <summary>
