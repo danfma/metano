@@ -33,12 +33,16 @@ public sealed record IrPrimitiveTypeRef(IrPrimitive Primitive) : IrTypeRef;
 /// <param name="Namespace">The C# namespace, if known.</param>
 /// <param name="TypeArguments">Generic type arguments (empty for non-generic types).</param>
 /// <param name="Origin">Cross-assembly origin, if this type comes from another package.</param>
+/// <param name="ModuleLocalSegments">How many leading segments of a dotted
+/// <paramref name="Name"/> form a <c>private</c> nested declaration a target may keep
+/// out of its container's exported surface (<c>0</c> when none is private).</param>
 public sealed record IrNamedTypeRef(
     string Name,
     string? Namespace = null,
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
     IrTypeOrigin? Origin = null,
-    IrNamedTypeSemantics? Semantics = null
+    IrNamedTypeSemantics? Semantics = null,
+    int ModuleLocalSegments = 0
 ) : IrTypeRef;
 
 /// <summary>

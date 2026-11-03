@@ -52,7 +52,11 @@ public sealed record IrIdentifier(string Name) : IrExpression;
 /// BCL and synthesized references.
 /// </para>
 /// </summary>
-public sealed record IrTypeReference(string Name, IrTypeOrigin? Origin = null) : IrExpression;
+public sealed record IrTypeReference(
+    string Name,
+    IrTypeOrigin? Origin = null,
+    int ModuleLocalSegments = 0
+) : IrExpression;
 
 /// <summary>
 /// A reference to <c>this</c> (the current instance).

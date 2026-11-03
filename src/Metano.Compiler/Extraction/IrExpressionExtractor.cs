@@ -1500,7 +1500,11 @@ public sealed partial class IrExpressionExtractor
     /// origin so the backend can import it from a value position.
     /// </summary>
     private IrTypeReference TypeReferenceTo(INamedTypeSymbol type) =>
-        new(QualifiedNestedName(type) ?? type.Name, CrossAssemblyOriginOf(type));
+        new(
+            QualifiedNestedName(type) ?? type.Name,
+            CrossAssemblyOriginOf(type),
+            IrTypeRefMapper.ModuleLocalSegmentCount(type)
+        );
 
     /// <summary>
     /// Overload for identifier positions: a nested named type is qualified, anything
@@ -1512,7 +1516,11 @@ public sealed partial class IrExpressionExtractor
         if (symbol is not INamedTypeSymbol type)
             return new(spelling);
 
-        return new(QualifiedNestedName(type) ?? spelling, CrossAssemblyOriginOf(type));
+        return new(
+            QualifiedNestedName(type) ?? spelling,
+            CrossAssemblyOriginOf(type),
+            IrTypeRefMapper.ModuleLocalSegmentCount(type)
+        );
     }
 
     /// <summary>

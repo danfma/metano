@@ -99,7 +99,7 @@ internal sealed class JsonTypeInfoNames
             IArrayTypeSymbol array => NameOf(array.ElementType) + "Array",
             INamedTypeSymbol { TypeArguments.Length: > 0 } generic => generic.Name
                 + string.Concat(generic.TypeArguments.Select(NameOf)),
-            INamedTypeSymbol named => _context.ResolveTsName(named),
+            INamedTypeSymbol named => _context.ResolveSimpleTsName(named),
             _ => type.Name,
         };
     }

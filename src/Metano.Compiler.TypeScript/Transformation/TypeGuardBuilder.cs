@@ -57,7 +57,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             return [];
 
         var tsName = _context.ResolveTsName(type);
-        var guardName = $"is{tsName}";
+        var guardName = $"is{_context.ResolveSimpleTsName(type)}";
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
 
         TsFunction? guard = null;
@@ -241,7 +241,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             .Select<INamedTypeSymbol, TsExpression>(v => new TsBinaryExpression(
                 new TsPropertyAccess(new TsIdentifier("v"), discriminatorTsName),
                 "===",
-                new TsStringLiteral(_context.ResolveTsName(v))
+                new TsStringLiteral(_context.ResolveSimpleTsName(v))
             ))
             .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
 
@@ -324,7 +324,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (strictBase is null)
             return null;
 
-        var variantTsName = _context.ResolveTsName(type);
+        var variantTsName = _context.ResolveSimpleTsName(type);
         var guardName = $"is{variantTsName}";
 
         // The discriminator value the registry keys on is the variant's

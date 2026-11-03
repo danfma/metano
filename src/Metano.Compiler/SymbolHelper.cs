@@ -1386,8 +1386,9 @@ public static class SymbolHelper
     /// current compilation's assembly (not BCL / referenced assemblies) and is either
     /// public, or a named nested type whose container is itself opted in. A nested type
     /// of any accessibility (<c>private</c>, <c>internal</c>, <c>protected</c>) is part
-    /// of its emitted container's surface — the container's members reference it as
-    /// <c>Outer.Inner</c>, so it must be emitted into the companion namespace (#264).
+    /// of its emitted container's surface — the container's members reference it, so it
+    /// must be emitted alongside the container (#264); where a target declares it
+    /// (companion namespace or module-local) is its own policy (#412).
     /// <c>[Ignore]</c> on a nested type opts it out.
     /// </summary>
     private static bool IsAssemblyWideOptIn(ISymbol symbol, IAssemblySymbol? currentAssembly)

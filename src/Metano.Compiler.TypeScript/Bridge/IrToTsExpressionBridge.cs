@@ -586,7 +586,11 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapTypeReference(IrTypeReference reference)
     {
-        var segments = IrToTsTypeMapper.ResolveAliasedName(reference.Name).Split('.');
+        var segments = IrToTsTypeMapper
+            .ResolveAliasedName(
+                ModuleLocalNaming.Flatten(reference.Name, reference.ModuleLocalSegments)
+            )
+            .Split('.');
         var root = TypeValueReference(segments[0], IrToTsTypeMapper.TryResolveOrigin(reference));
 
         return segments
@@ -782,7 +786,16 @@ public static partial class IrToTsExpressionBridge
 
         if (containerLength > 0)
             return new TsPropertyAccess(
-                MapTypeReference(owner with { Name = owner.Name[..containerLength] }),
+                MapTypeReference(
+                    owner with
+                    {
+                        Name = owner.Name[..containerLength],
+                        ModuleLocalSegments = Math.Min(
+                            owner.ModuleLocalSegments,
+                            owner.Name[..containerLength].Count(c => c == '.') + 1
+                        ),
+                    }
+                ),
                 exportName
             );
 
