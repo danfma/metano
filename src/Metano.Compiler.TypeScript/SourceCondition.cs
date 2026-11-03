@@ -19,8 +19,8 @@ public readonly record struct SourceCondition
     public const string DefaultName = "source";
 
     /// <summary>
-    /// Conditions with a defined meaning to Node or the common bundlers. Reusing one as the
-    /// source condition would hijack ordinary resolution, so they are rejected.
+    /// Conditions Node itself defines. Reusing one as the source condition would hijack
+    /// ordinary resolution, so they are rejected.
     /// </summary>
     private static readonly HashSet<string> BuiltInConditions =
     [
@@ -34,6 +34,17 @@ public readonly record struct SourceCondition
         "module-sync",
     ];
 
+    /// <summary>
+    /// Conditions bundlers enable by default (Vite, webpack, esbuild). Choosing one would
+    /// route this package to its <c>.ts</c> sources in ordinary (e.g. production) builds.
+    /// </summary>
+    private static readonly HashSet<string> BundlerDefaultConditions =
+    [
+        "module",
+        "development",
+        "production",
+    ];
+
     private readonly string? _name;
 
     private SourceCondition(string name) => _name = name;
@@ -43,10 +54,13 @@ public readonly record struct SourceCondition
 
     public string Name => _name ?? DefaultName;
 
+    public bool IsDefault => Name == DefaultName;
+
     /// <summary>
     /// Parses a raw <c>--source-condition</c> value. Blank means unset and yields
     /// <see cref="Default"/>. A name is valid when it is made of letters, digits, <c>-</c>,
-    /// <c>_</c>, <c>.</c> and <c>:</c> and is not a built-in condition. An invalid value
+    /// <c>_</c>, <c>.</c> and <c>:</c>, is not all digits (Node rejects numeric export keys),
+    /// and is neither a Node built-in nor a bundler-default condition. An invalid value
     /// yields <see cref="Default"/>, fails, and carries the error diagnostic.
     /// </summary>
     public static bool TryFrom(
@@ -88,8 +102,14 @@ public readonly record struct SourceCondition
         if (!name.All(IsConditionCharacter))
             return "only letters, digits, '-', '_', '.' and ':' are allowed";
 
+        if (name.All(char.IsAsciiDigit))
+            return "a name made only of digits is rejected by Node (invalid exports key)";
+
         if (BuiltInConditions.Contains(name))
-            return "it is a built-in resolution condition";
+            return "it is a built-in Node resolution condition";
+
+        if (BundlerDefaultConditions.Contains(name))
+            return "it is a condition bundlers enable by default, so it would route the package to its sources in ordinary builds";
 
         return null;
     }

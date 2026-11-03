@@ -71,7 +71,7 @@ public static class PackageJsonWriter
     /// <param name="sourceCondition">Name of the export condition that resolves to the
     /// <c>.ts</c> sources (default <c>source</c>, see <see cref="SourceCondition"/>). A
     /// previously written source condition under another name is replaced, see
-    /// <see cref="DropStaleSourceConditions"/>.</param>
+    /// <see cref="DropReplacedDefaultSourceCondition"/>.</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -374,7 +374,7 @@ public static class PackageJsonWriter
                 && entryValue is JsonObject generatedEntry
             )
             {
-                DropStaleSourceConditions(existingEntry, generatedEntry, sourceCondition);
+                DropReplacedDefaultSourceCondition(existingEntry, generatedEntry, sourceCondition);
                 MergeConditions(existingEntry, generatedEntry);
             }
             else
@@ -385,37 +385,31 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Removes the source condition an earlier run wrote under another name (the default
-    /// <c>source</c>, or a former custom name), so renaming the condition does not leave
-    /// the old one resolving to the sources. Ownership rule: a condition of
-    /// <paramref name="existingEntry"/> is a stale writer-managed one when it sits before
-    /// <c>types</c> (the writer always emits the source condition first), is not itself a
-    /// generated condition, and points exactly at the source target the writer would emit
-    /// now. A user condition at that position that points elsewhere (e.g. a retargeted
-    /// <c>source</c>), and any condition after <c>types</c>, is never touched.
+    /// On a rename away from the default, removes the <c>source</c> condition the previous
+    /// run wrote, so the old name does not keep resolving to the sources. It acts only on
+    /// an actual rename: nothing is removed when the entry already carries the configured
+    /// condition (the steady state, identical to builds before the name was configurable),
+    /// nor when the configured name is the default itself. Ownership rule: the removed
+    /// condition is exactly <c>source</c>, and only when it points at the very <c>.ts</c>
+    /// target the writer emits now, so a retargeted <c>source</c> and every other user
+    /// condition (<c>bun</c>, <c>development</c>, ...) are never touched. The writer
+    /// persists no earlier name, so after a custom-to-custom rename, or a return to the
+    /// default, the previous custom key stays for the consumer to delete.
     /// </summary>
-    private static void DropStaleSourceConditions(
+    private static void DropReplacedDefaultSourceCondition(
         JsonObject existingEntry,
         JsonObject generatedEntry,
         SourceCondition sourceCondition
     )
     {
-        if (generatedEntry[sourceCondition.Name] is not { } sourceTarget)
+        if (sourceCondition.IsDefault || existingEntry.ContainsKey(sourceCondition.Name))
             return;
 
-        var typesIndex = existingEntry.IndexOf("types");
+        if (!existingEntry.TryGetPropertyValue(SourceCondition.DefaultName, out var previous))
+            return;
 
-        var stale = existingEntry
-            .Take(Math.Max(typesIndex, 0))
-            .Where(condition =>
-                !generatedEntry.ContainsKey(condition.Key)
-                && JsonNode.DeepEquals(condition.Value, sourceTarget)
-            )
-            .Select(condition => condition.Key)
-            .ToList();
-
-        foreach (var condition in stale)
-            existingEntry.Remove(condition);
+        if (JsonNode.DeepEquals(previous, generatedEntry[sourceCondition.Name]))
+            existingEntry.Remove(SourceCondition.DefaultName);
     }
 
     /// <summary>
@@ -543,15 +537,15 @@ public static class PackageJsonWriter
         if (!HoldsTranspilerMapping(existingEntry, generatedEntry, sourceCondition))
             return;
 
-        DropStaleSourceConditions(existingEntry, generatedEntry, sourceCondition);
+        DropReplacedDefaultSourceCondition(existingEntry, generatedEntry, sourceCondition);
         MergeConditions(existingEntry, generatedEntry);
     }
 
     /// <summary>
     /// True when <paramref name="existingEntry"/> still carries the full
     /// mapping an earlier transpiler seeded: every generated condition
-    /// except the source condition (introduced after seeding, and renamable) is present and points
-    /// where the transpiler would point it (a late condition is compared
+    /// except the source condition (introduced after seeding, and renamable) is present
+    /// and points where the transpiler would point it (the source condition is compared
     /// once the entry declares it). A host-authored alias that
     /// merely overlaps (e.g. only <c>default</c>), a retargeted one, or one
     /// the consumer trimmed is left untouched. Extra consumer conditions
