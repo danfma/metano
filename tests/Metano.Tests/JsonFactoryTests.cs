@@ -423,6 +423,26 @@ public class JsonFactoryTests
     }
 
     [Test]
+    public async Task IgnoredMethodRenamedOntoTheFactoryName_IsNotAClash()
+    {
+        var (_, diagnostics) = Transpile(
+            """
+            [Transpile, Branded]
+            public readonly record struct Title(string Value)
+            {
+                [JsonFactory]
+                public static Title From(string value) => new(value);
+
+                [Ignore, Name("from")]
+                public static Title Other(string value) => new(value);
+            }
+            """
+        );
+
+        await Assert.That(JsonFactoryDiagnostics(diagnostics)).IsEmpty();
+    }
+
+    [Test]
     public async Task GenericFactory_ReportsMs0034()
     {
         var message = await SingleJsonFactoryErrorMessage(
