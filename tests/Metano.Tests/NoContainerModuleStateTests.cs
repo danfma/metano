@@ -151,6 +151,7 @@ public class NoContainerModuleStateTests
                 d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("'hits'")
             )
             .ToList();
+
         await Assert.That(writes.Count).IsEqualTo(2);
         await Assert.That(writes.All(d => d.Location is not null)).IsTrue();
         await Assert.That(files["counters.ts"]).Contains("export let hits: number = 0;");
@@ -199,6 +200,7 @@ public class NoContainerModuleStateTests
                 )
             )
             .IsTrue();
+
         await Assert.That(files["limits.ts"]).Contains("export const max: number = 10;");
         await Assert.That(files["limits.ts"]).DoesNotContain("twice:");
     }
