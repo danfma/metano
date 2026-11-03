@@ -27,6 +27,8 @@ public static class IrEvaluationTraits
             IrBaseExpression => true,
             IrTypeReference => true,
             IrMemberAccess access => IsReusableReceiver(access.Target),
+            IrUnaryExpression { Operator: IrUnaryOp.NonNullAssertion } assertion =>
+                IsReusableReceiver(assertion.Operand),
             _ => false,
         };
 

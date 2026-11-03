@@ -61,9 +61,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// <c>==</c> / <c>!=</c> between two <c>decimal</c> operands, at least
     /// one of them <c>decimal?</c>, and neither the <c>null</c> literal
-    /// (which stays a plain null check). A Decimal is an object, so the plain
-    /// operator would compare references; value equality is null-safe and
-    /// compares by value.
+    /// (which stays a plain null check). C# compares the values, and a
+    /// target that represents a decimal as an object would compare references
+    /// with the plain operator; value equality is null-safe.
     /// </summary>
     private bool IsNullableDecimalComparison(BinaryExpressionSyntax bin) =>
         !IsNullLiteral(bin.Left)

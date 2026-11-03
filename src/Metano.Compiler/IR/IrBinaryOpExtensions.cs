@@ -38,4 +38,11 @@ public static class IrBinaryOpExtensions
     /// <summary>Whether the operator is <c>&amp;</c>, <c>|</c> or <c>^</c>.</summary>
     public static bool IsBitwise(this IrBinaryOp op) =>
         op is IrBinaryOp.BitwiseAnd or IrBinaryOp.BitwiseOr or IrBinaryOp.BitwiseXor;
+
+    /// <summary>
+    /// Whether the operator is <see cref="IrBinaryOp.BooleanAnd"/>,
+    /// <see cref="IrBinaryOp.BooleanOr"/> or <see cref="IrBinaryOp.BooleanXor"/>.
+    /// </summary>
+    public static bool IsBooleanLogic(this IrBinaryOp op) =>
+        op is IrBinaryOp.BooleanAnd or IrBinaryOp.BooleanOr or IrBinaryOp.BooleanXor;
 }

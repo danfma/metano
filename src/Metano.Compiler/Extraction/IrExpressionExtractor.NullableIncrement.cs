@@ -14,7 +14,7 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
-    private static readonly IrLiteral One = new(1, IrLiteralKind.Int32);
+    private static readonly IrLiteral OneLiteral = new(1, IrLiteralKind.Int32);
 
     private IrExpression LiftIncrement(
         ExpressionSyntax node,
@@ -31,7 +31,7 @@ public sealed partial class IrExpressionExtractor
         IrExpression Increment(IrExpression current) =>
             LiftBinary(
                 new OperatorOperand(current, MayBeNull: true, operandSyntax),
-                new OperatorOperand(One, MayBeNull: false, operandSyntax),
+                new OperatorOperand(OneLiteral, MayBeNull: false, operandSyntax),
                 lifted
             );
 

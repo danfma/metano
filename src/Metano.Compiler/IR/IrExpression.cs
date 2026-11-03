@@ -439,8 +439,10 @@ public enum IrUnaryOp
 
     /// <summary>
     /// C#'s null-forgiving <c>x!</c> over a reference or type-parameter
-    /// value, always postfix: no runtime effect, but a target that checks
-    /// nullability statically needs it to read the value as non-null.
+    /// value, always postfix: C# attaches no runtime check, but a target that
+    /// checks nullability statically needs it to read the value as non-null.
+    /// A target whose own assertion checks at runtime (Dart's <c>x!</c>) may
+    /// throw where C# lets the <c>null</c> through.
     /// </summary>
     NonNullAssertion,
 }

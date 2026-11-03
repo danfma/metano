@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
@@ -26,14 +27,6 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// <paramref name="op"/> narrowed to its integer-division or boolean-logic
-    /// form when <paramref name="operation"/> binds to one; unchanged
-    /// otherwise.
-    /// </summary>
-    private IrBinaryOp NarrowBuiltinOperator(IrBinaryOp op, ExpressionSyntax operation) =>
-        NarrowToBooleanLogic(NarrowToIntegerDivision(op, operation), operation);
-
-    /// <summary>
     /// The boolean form of a bitwise <paramref name="op"/> when
     /// <paramref name="operation"/> is a built-in operator over non-nullable
     /// <c>bool</c> operands; a lifted <c>bool?</c> operation keeps
@@ -48,7 +41,8 @@ public sealed partial class IrExpressionExtractor
             {
                 IrBinaryOp.BitwiseAnd => IrBinaryOp.BooleanAnd,
                 IrBinaryOp.BitwiseOr => IrBinaryOp.BooleanOr,
-                _ => IrBinaryOp.BooleanXor,
+                IrBinaryOp.BitwiseXor => IrBinaryOp.BooleanXor,
+                _ => throw new UnreachableException($"'{op}' is not a bitwise operator."),
             }
             : op;
 
@@ -67,10 +61,15 @@ public sealed partial class IrExpressionExtractor
         };
 
         return isOperator
-            && method is null or { MethodKind: MethodKind.BuiltinOperator }
+            && (method is null or { MethodKind: MethodKind.BuiltinOperator })
             && operation.Type.UnderlyingValueType()?.SpecialType == SpecialType.System_Boolean;
     }
 
+    /// <summary>
+    /// Whether <paramref name="operation"/> is a built-in <c>bool?</c>
+    /// <c>&amp;</c>, <c>|</c> or <c>^</c> (lifted), which follows
+    /// three-valued logic.
+    /// </summary>
     private static bool IsNullableBooleanLogic(IOperation? operation, IrBinaryOp op) =>
         op.IsBitwise()
         && operation is not null
@@ -144,18 +143,18 @@ public sealed partial class IrExpressionExtractor
         IrBinaryOp op
     )
     {
-        var known = new[] { left, right }
+        var nonNullLiteralOperands = new[] { left, right }
             .Where(operand => operand.Value is not IrLiteral { Kind: IrLiteralKind.Null })
             .ToList();
 
-        if (known.Count == 0)
+        if (nonNullLiteralOperands.Count == 0)
             return NullLiteral;
 
-        var hasNullLiteral = known.Count < 2;
+        var hasNullLiteral = nonNullLiteralOperands.Count < 2;
 
         if (op is IrBinaryOp.BitwiseXor)
             return NullUnless(
-                known,
+                nonNullLiteralOperands,
                 hasNullLiteral,
                 new IrBinaryExpression(left.Value, IrBinaryOp.BooleanXor, right.Value)
             );
@@ -164,14 +163,14 @@ public sealed partial class IrExpressionExtractor
         var decisive = isAnd ? FalseLiteral : TrueLiteral;
         var undecided = isAnd ? TrueLiteral : FalseLiteral;
 
-        var anyDecisive = known
+        var anyDecisive = nonNullLiteralOperands
             .Select(operand => Decides(operand, decisive))
             .Aggregate(Combining(IrBinaryOp.LogicalOr));
 
         return new IrConditionalExpression(
             anyDecisive,
             decisive,
-            NullUnless(known, hasNullLiteral, undecided)
+            NullUnless(nonNullLiteralOperands, hasNullLiteral, undecided)
         );
     }
 
@@ -181,7 +180,7 @@ public sealed partial class IrExpressionExtractor
     /// and an operand that cannot be <c>null</c> needs no test.
     /// </summary>
     private static IrExpression NullUnless(
-        IReadOnlyList<OperatorOperand> known,
+        IReadOnlyList<OperatorOperand> nonNullLiteralOperands,
         bool hasNullLiteral,
         IrExpression result
     )
@@ -189,7 +188,7 @@ public sealed partial class IrExpressionExtractor
         if (hasNullLiteral)
             return NullLiteral;
 
-        var nullTests = known
+        var nullTests = nonNullLiteralOperands
             .Where(operand => operand.MayBeNull)
             .Select(operand => IsNull(operand.Value))
             .ToList();
