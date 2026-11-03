@@ -42,7 +42,7 @@ public sealed class IrStatementExtractor(
         {
             var expr = _expressions.Extract(arrow.Expression);
 
-            return _expressions.LowerOutArgumentCalls(ArrowStatement(expr, isVoid));
+            return _expressions.LowerExpressionVariables(ArrowStatement(expr, isVoid));
         }
 
         if (block is null)

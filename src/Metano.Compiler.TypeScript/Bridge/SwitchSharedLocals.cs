@@ -29,9 +29,9 @@ internal static class SwitchSharedLocals
         if (declarations.Count == 0)
             return ([], sw);
 
-        var names = declarations.Select(declaration => declaration.Name).ToHashSet();
+        var hoistedNames = declarations.Select(declaration => declaration.Name).ToHashSet();
 
-        var cases = sw.Cases.Select(section => AssignHoisted(section, names)).ToList();
+        var cases = sw.Cases.Select(section => AssignHoisted(section, hoistedNames)).ToList();
 
         return ([.. declarations.Select(Uninitialized)], sw with { Cases = cases });
     }
@@ -40,7 +40,7 @@ internal static class SwitchSharedLocals
     /// Whether the section's body is emitted in a block of its own: a single
     /// pattern label that declares locals.
     /// </summary>
-    public static bool BindsDesignators(IrSwitchCase section) =>
+    internal static bool BindsDesignators(IrSwitchCase section) =>
         section.Labels is [IrPatternCaseLabel label]
         && IrPatternDesignators.Declares(label.Pattern);
 
@@ -58,16 +58,21 @@ internal static class SwitchSharedLocals
         IrSwitchStatement sw
     ) =>
         sw
-            .Cases.Where(section => section != owner)
+            .Cases.Where(section => !ReferenceEquals(section, owner))
             .Any(section => IrReferencedNames.AnyIn(section.Body, [name]));
 
     private static IrSwitchCase AssignHoisted(IrSwitchCase section, HashSet<string> names) =>
         section with
         {
-            Body = [.. section.Body.SelectMany(statement => AssignmentFor(statement, names))],
+            Body =
+            [
+                .. section.Body.SelectMany(statement =>
+                    RewriteHoistedDeclaration(statement, names)
+                ),
+            ],
         };
 
-    private static IEnumerable<IrStatement> AssignmentFor(
+    private static IEnumerable<IrStatement> RewriteHoistedDeclaration(
         IrStatement statement,
         HashSet<string> names
     )

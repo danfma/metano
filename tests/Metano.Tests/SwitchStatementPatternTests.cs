@@ -494,8 +494,6 @@ public class SwitchStatementPatternTests
         var output = TranspileDescriber(
             """
             public static bool IsRound(Holder h) => h is { Inner: Circle { R: > 0 } };
-
-            public static bool Stored(Node n) => n is { Next: Node { Value: > 0 } };
             """,
             """
             [Transpile]
@@ -508,6 +506,15 @@ public class SwitchStatementPatternTests
 
         await Assert.That(output).Contains("($subject0 = h.inner, true)");
         await Assert.That(output).Contains("$subject0 instanceof Circle && $subject0.r > 0");
+    }
+
+    [Test]
+    public async Task StoredPropertyInANestedPropertyPattern_IsReadInline()
+    {
+        var output = TranspileDescriber(
+            "public static bool Stored(Node n) => n is { Next: Node { Value: > 0 } };"
+        );
+
         await Assert.That(output).Contains("n.next instanceof Node && n.next.value > 0");
     }
 
@@ -524,7 +531,39 @@ public class SwitchStatementPatternTests
         );
 
         await Assert.That(output).Contains("return values != null && values.length >= 1");
+    }
+
+    [Test]
+    public async Task ListPattern_SkipsTheNullCheckForANonNullableSubject()
+    {
+        var output = TranspileDescriber(
+            "public static bool StartsWithTwo(int[] values) => values is [2, ..];",
+            "#nullable enable"
+        );
+
         await Assert.That(output).Contains("return values.length >= 1 && values[0] === 2");
+    }
+
+    [Test]
+    public async Task DesignatorOfALabel_WithoutAGuard_IsNotAssertedAssigned()
+    {
+        var output = TranspileDescriber(
+            """
+            public static double Radius(object? o)
+            {
+                switch (o)
+                {
+                    case Circle c:
+                        return c.R;
+                    default:
+                        return 0;
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("const c = o;");
+        await Assert.That(output).DoesNotContain("let c!:");
     }
 
     [Test]
@@ -709,11 +748,11 @@ public class SwitchStatementPatternTests
         await Assert.That(output).Contains("      default:\n        return 'other';");
     }
 
-    private static string TranspileDescriber(string members, string extraTypes = "") =>
+    private static string TranspileDescriber(string members, string extraSource = "") =>
         TranspileHelper.Transpile(
             Shapes
                 + "\n"
-                + extraTypes
+                + extraSource
                 + $$"""
 
                 [Transpile]

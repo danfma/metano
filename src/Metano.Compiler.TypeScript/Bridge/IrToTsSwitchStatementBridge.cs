@@ -51,25 +51,36 @@ internal static class IrToTsSwitchStatementBridge
 
         var (sharedLocals, hoistedSwitch) = SwitchSharedLocals.Hoist(sw);
 
-        var tested = CanReadSubjectPerTest(sw)
-            ? new TsStatement[] { LowerToBooleanCaseTests(hoistedSwitch, subject, bclRegistry) }
-            :
-            [
-                new TsVariableDeclaration(SubjectLocalName, HoistedSubjectValue(subject)),
-                LowerToBooleanCaseTests(
-                    hoistedSwitch,
-                    new TsIdentifier(SubjectLocalName),
-                    bclRegistry
-                ),
-            ];
+        var subjectAndTests = SubjectAndCaseTests(hoistedSwitch, subject, bclRegistry);
+        var needsEnclosingBlock = sharedLocals.Count > 0 || subjectAndTests.Count > 1;
 
-        if (sharedLocals.Count == 0 && tested.Length == 1)
-            return tested[0];
+        if (!needsEnclosingBlock)
+            return subjectAndTests[0];
 
         return new TsBlockStatement([
             .. sharedLocals.Select(local => IrToTsStatementBridge.Map(local, bclRegistry)),
-            .. tested,
+            .. subjectAndTests,
         ]);
+    }
+
+    /// <summary>
+    /// The boolean case tests, preceded by the hoisted subject when the
+    /// tests cannot read it directly.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> SubjectAndCaseTests(
+        IrSwitchStatement sw,
+        TsExpression subject,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        if (CanReadSubjectPerTest(sw))
+            return [LowerToBooleanCaseTests(sw, subject, bclRegistry)];
+
+        return
+        [
+            new TsVariableDeclaration(SubjectLocalName, HoistedSubjectValue(subject)),
+            LowerToBooleanCaseTests(sw, new TsIdentifier(SubjectLocalName), bclRegistry),
+        ];
     }
 
     /// <summary>
@@ -206,13 +217,14 @@ internal static class IrToTsSwitchStatementBridge
     {
         var body = IrToTsStatementBridge.MapBody(section.Body, bclRegistry);
 
-        if (section.Labels is not [IrPatternCaseLabel label])
+        if (!SwitchSharedLocals.BindsDesignators(section))
             return body;
 
+        var label = (IrPatternCaseLabel)section.Labels[0];
         var reassigned = IrLocalReassignmentCollector.CollectFromStatements(section.Body);
         var bindings = IrToTsExpressionBridge.BuildCaseLabelBindings(subject, label, reassigned);
 
-        return bindings.Count == 0 ? body : [new TsBlockStatement([.. bindings, .. body])];
+        return [new TsBlockStatement([.. bindings, .. body])];
     }
 
     /// <summary>

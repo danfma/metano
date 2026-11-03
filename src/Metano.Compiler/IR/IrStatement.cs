@@ -18,17 +18,17 @@ public sealed record IrReturnStatement(IrExpression? Value = null) : IrStatement
 /// <summary>
 /// A local variable declaration.
 /// </summary>
-/// <param name="AssignedInClosure">The declaration has no initializer and the
-/// local is assigned from inside a closure (a <c>when</c> guard lowered to an
-/// immediately invoked function), so a backend's definite-assignment analysis
-/// cannot follow the assignment and must be told the local is assigned before
-/// it is read.</param>
+/// <param name="AssignedInWhenGuard">The declaration has no initializer and the
+/// local is assigned by an <c>is</c> pattern in a <c>when</c> guard of a
+/// <c>switch</c> section that reads it. A backend that runs guards outside the
+/// section's control flow (as a closure) must assert the local is definitely
+/// assigned before the body reads it.</param>
 public sealed record IrVariableDeclaration(
     string Name,
     IrTypeRef? Type,
     IrExpression? Initializer,
     bool IsConst = false,
-    bool AssignedInClosure = false
+    bool AssignedInWhenGuard = false
 ) : IrStatement;
 
 /// <summary>
@@ -105,7 +105,10 @@ public sealed record IrForEachStatement(
 /// <param name="Initializers">The header's initializer section, in source
 /// order: one <see cref="IrVariableDeclaration"/> per declarator of
 /// <c>for (int i = 0, j = n; …)</c>, or one <see cref="IrExpressionStatement"/>
-/// per expression of <c>for (i = 0, j = n; …)</c>. Empty when the section is.</param>
+/// per expression of <c>for (i = 0, j = n; …)</c>. Empty when the section is.
+/// A declaration is per-iteration, as in C#: a closure made in the body keeps
+/// the value its own iteration saw, so a backend must not share one variable
+/// across iterations.</param>
 /// <param name="Condition">The loop condition, or null when omitted.</param>
 /// <param name="Incrementors">The header's iterator expressions, in source
 /// order (<c>i++, j--</c>). Empty when the section is.</param>
