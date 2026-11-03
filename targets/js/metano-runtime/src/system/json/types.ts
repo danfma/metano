@@ -134,6 +134,62 @@ export interface TypeSpec<T = unknown> {
    * contract (System.Text.Json writes none of them).
    */
   readonly ignoredProperties?: readonly string[];
+  /**
+   * Present on a polymorphic base (`[JsonDerivedType]`): serializing and
+   * deserializing through this spec dispatch to a derived contract. A
+   * derived contract reached by dispatch is never dispatched again.
+   */
+  readonly polymorphism?: PolymorphismSpec;
+  /** The context's read behavior; absent when it is System.Text.Json's default. */
+  readonly readOptions?: JsonReadOptions;
+}
+
+// ─── Polymorphism ────────────────────────────────────────────────────────────
+
+/** A `[JsonDerivedType]` tag: a JSON string or a JSON number, never equal to each other. */
+export type TypeDiscriminator = string | number;
+
+/** `JsonUnknownDerivedTypeHandling`: what a write does with an unregistered runtime type. */
+export type UnknownDerivedTypeHandling =
+  | "failSerialization"
+  | "fallBackToBaseType"
+  | "fallBackToNearestAncestor";
+
+/** One `[JsonDerivedType]` registration of a polymorphic base (possibly the base itself). */
+export interface DerivedTypeSpec {
+  /** Absent for an untagged registration. */
+  readonly tag?: TypeDiscriminator;
+  /** Lazy: base and derived getters reference each other. */
+  readonly spec: () => TypeSpec;
+  /** `[PlainObject]` variants only: the guard that selects this variant on write. */
+  readonly test?: (value: unknown) => boolean;
+}
+
+/** The data-only `[JsonPolymorphic]` / `[JsonDerivedType]` description of a base. */
+export interface PolymorphismSpec {
+  /** The discriminator property name, verbatim (never passed through a naming policy). */
+  readonly discriminator: string;
+  /** The C# base is abstract or an interface: a missing or ignored tag cannot read the base. */
+  readonly abstract?: boolean;
+  /** The C# simple name for messages, when the base has no constructor (interface, `[PlainObject]`). */
+  readonly typeName?: string;
+  /** The registrations, in attribute order. */
+  readonly derived: readonly DerivedTypeSpec[];
+  /** Indices into `derived` in guard test order; absent when it is attribute order. */
+  readonly testOrder?: readonly number[];
+  /** Default `"failSerialization"`. */
+  readonly unknownDerivedType?: UnknownDerivedTypeHandling;
+  /** An unknown tag reads the base (a concrete base) instead of throwing. */
+  readonly ignoreUnrecognizedTags?: boolean;
+}
+
+/**
+ * Context-level read behavior mirrored from `[JsonSourceGenerationOptions]`.
+ * Every member is optional; an absent member is System.Text.Json's default.
+ */
+export interface JsonReadOptions {
+  /** The type discriminator may appear after other properties (FR-002). */
+  readonly allowOutOfOrderMetadataProperties?: boolean;
 }
 
 // ─── Value Spec ──────────────────────────────────────────────────────────────

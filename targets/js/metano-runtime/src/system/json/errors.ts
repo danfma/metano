@@ -8,3 +8,14 @@
 export class JsonException extends Error {
   override readonly name = "JsonException";
 }
+
+/**
+ * Thrown for a polymorphic contract that cannot handle a payload or a value,
+ * mirroring `System.NotSupportedException` as System.Text.Json throws it: a
+ * payload without a type discriminator for an abstract or interface base, or
+ * a runtime type the base does not register. Messages carry no `Path` /
+ * `LineNumber` suffix (DECIDED-5).
+ */
+export class NotSupportedException extends Error {
+  override readonly name = "NotSupportedException";
+}

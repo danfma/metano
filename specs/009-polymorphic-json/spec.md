@@ -1034,6 +1034,39 @@ the former `OPEN-N`.
     divergences from STJ.
     `NotSupportedException` lands with the polymorphism runtime (S5).
 
+- **DECIDED-21 — Slice S5 decisions (#268).** Taken while implementing the polymorphism runtime
+  (FR-005–FR-008, FR-017 write side, FR-018 and FR-019 runtime halves) with hand-written specs,
+  measured against a source-generated `JsonSerializerContext` on .NET 10:
+  - (a) `serializeWithSpec` / `deserializeWithSpec` dispatch over the module-internal
+    `serializeContract` / `deserializeContract` in `converters.ts`; the dispatch index and the
+    rules live in `polymorphism.ts`. Error type names come from `contractNameOf`
+    (`constructor.name`, then `polymorphism.typeName`, then `Object`), which also names a
+    polymorphic base in the existing non-object error.
+  - (b) Number tags. STJ reads a number tag as an `Int32`: `{"$type":2}` and `{"$type":-1}` throw
+    `Read unrecognized type discriminator id '2'.` / `'-1'`, a number tag on a base with only
+    string tags is an unrecognized id (`'1'`), and a number that is not an `Int32` (`1.5`,
+    `3000000000`) throws `JsonException` `The JSON value could not be converted to <Base>.`
+    (measured). The runtime mirrors all of them; `1.0` / `1e0` stay a documented divergence (they
+    parse to `1`).
+  - (c) `FallBackToNearestAncestor` reaches the base when the base registers itself: an
+    unregistered `NSelfZ : NSelf` writes `{"$type":"b","V":1}` (measured). Without a registered
+    ancestor the base contract is written with no tag (`{"V":1}`, measured).
+  - (d) Untagged registrations write their own contract with no tag (`{"A":2,"V":1}`) and read back
+    as the base (measured).
+  - (e) A concrete `[PlainObject]` base that does not register itself has no slot for its guard in
+    `PolymorphismSpec`, so the runtime writes **every** plain object that matches no variant guard
+    as the base (no tag) when the base is concrete and has no constructor, instead of testing the
+    base guard first (FR-019 rule 5). A self-registered base is an entry with a `test` and is
+    checked like any variant. S6c adds a base-guard member only if the generator needs the
+    stricter rule.
+  - (f) FR-017 read side (the tag of an abstract derived entry) is **not** implemented: no member
+    of the descriptor marks an entry as abstract, so its tag reads through the entry's throwing
+    factory (a plain `Error`). S6 probes DECIDED-12 and adds the rule with the marker it needs.
+  - (g) `JsonReadOptions` lands with `allowOutOfOrderMetadataProperties` only, read from the
+    polymorphic spec's `readOptions`; the other two members, the `SerializerContext.readOptions`
+    getter and `createSpec` attaching it stay in S2b (FR-002 plumbing). Null roots through a
+    polymorphic spec keep today's behavior until S3b (FR-037).
+
 ## Open questions
 
 These came up while applying the decisions. Each has a recommended default that the spec assumes
