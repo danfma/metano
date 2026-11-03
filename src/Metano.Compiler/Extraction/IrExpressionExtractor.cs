@@ -2910,7 +2910,8 @@ public sealed partial class IrExpressionExtractor
             CompanionOwner: isPlainObjectInstanceMethod
                 ? TypeReferenceTo(symbol.ContainingType)
                 : null,
-            IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation)
+            IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation),
+            IsConst: symbol is IFieldSymbol { IsConst: true }
         );
     }
 

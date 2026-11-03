@@ -1,7 +1,7 @@
 import { Decimal } from "decimal.js";
 
 export const max: number = 10;
-export const min: number = 1;
+export const Min: number = 1;
 export let hits: number = 5;
 export let total: Decimal = new Decimal("0");
 export let label: string | null = null;
@@ -17,5 +17,5 @@ export function hit(): void {
 }
 
 export function clamp(v: number): number {
-  return v > max ? max : v < min ? min : v + secret + ceiling;
+  return v > max ? max : v < Min ? Min : v + secret + ceiling;
 }

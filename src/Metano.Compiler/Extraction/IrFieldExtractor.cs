@@ -44,7 +44,8 @@ public static class IrFieldExtractor
             Initializer: initializer,
             IsConstant: field.HasConstant(),
             IsRequired: field.IsRequired,
-            IsAssignedByInitAccessor: IsAssignedByInitAccessor(field, compilation)
+            IsAssignedByInitAccessor: IsAssignedByInitAccessor(field, compilation),
+            IsConst: field.IsConst
         )
         {
             Attributes = IrAttributeExtractor.Extract(field),

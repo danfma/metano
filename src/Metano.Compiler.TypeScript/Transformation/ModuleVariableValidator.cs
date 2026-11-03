@@ -220,9 +220,10 @@ public sealed class ModuleVariableValidator(
         && IsModuleState(symbol.OriginalDefinition);
 
     private static string EmittedName(ISymbol member) =>
-        IrToTsNamingPolicy.ToDataMemberName(
+        IrToTsNamingPolicy.ToModuleVariableName(
             member.Name,
-            member.GetNameOverride(TargetLanguage.TypeScript)
+            member.GetNameOverride(TargetLanguage.TypeScript),
+            member is IFieldSymbol { IsConst: true }
         );
 
     private static bool IsLocalBinding(ISymbol symbol) =>
