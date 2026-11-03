@@ -137,11 +137,7 @@ public sealed partial class IrExpressionExtractor
         if (!isLifted || op.IsEquality())
             return false;
 
-        var isThreeValuedLogic =
-            op.IsBitwise()
-            && operation?.Type.UnderlyingValueType()?.SpecialType == SpecialType.System_Boolean;
-
-        return !isThreeValuedLogic;
+        return !IsNullableBooleanLogic(operation, op);
     }
 
     private OperatorOperand OperandOf(ExpressionSyntax syntax) =>

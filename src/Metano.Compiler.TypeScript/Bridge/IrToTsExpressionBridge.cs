@@ -148,7 +148,7 @@ public static partial class IrToTsExpressionBridge
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, context);
 
-        if (bin.Operator is IrBinaryOp.BooleanAnd or IrBinaryOp.BooleanOr or IrBinaryOp.BooleanXor)
+        if (bin.Operator.IsBooleanLogic())
             return MapBooleanLogic(bin, bclRegistry);
 
         if (
@@ -280,13 +280,13 @@ public static partial class IrToTsExpressionBridge
         if (bin.Operator is IrBinaryOp.BooleanXor)
             return new TsBinaryExpression(left, "!==", right);
 
-        var token = bin.Operator is IrBinaryOp.BooleanAnd ? "&" : "|";
+        var numericOperator = bin.Operator is IrBinaryOp.BooleanAnd ? "&" : "|";
 
         return new TsUnaryExpression(
             "!!",
             new TsBinaryExpression(
                 new TsUnaryExpression("+", left),
-                token,
+                numericOperator,
                 new TsUnaryExpression("+", right)
             )
         );
