@@ -344,9 +344,16 @@ Two requirements of this layout:
   report, not from a version bisect.
 - **A fresh-clone order**, described above: `dotnet build` first, then
   `bun install`.
+- **Every consumer needs the condition.** The generated `exports` have no
+  `default` target and the package has no built `dist/`, so any tool that
+  resolves the package (Vite, `tsc`, Vitest, a plain Node or Bun script) must
+  enable the source condition.
 
-After a release, if NuGet's cache reports the new compiler version as missing,
-run `dotnet tool restore --no-http-cache`.
+Right after a release, NuGet may report the new compiler version as missing even
+though the package is already listed: the flat container is updated first, and
+`dotnet tool restore` resolves the version only once NuGet's registration index
+lists it, a few minutes later. Wait for that (`dotnet tool restore
+--no-http-cache` alone is not always enough), then restore again.
 
 **2. Emitting inside the app's source tree, with no separate package.** Point
 `MetanoOutputDir` at a folder in the app and set `MetanoImportAlias` so generated
