@@ -464,7 +464,7 @@ public sealed partial class IrExpressionExtractor
         // surrounding null check stays exactly as the legacy form.
         var memberWrite =
             TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
-            ?? BuildAssignmentWithIntegerDivision(rebound, assign);
+            ?? BuildCompoundAssignment(rebound, assign);
         return new IrBinaryExpression(
             new IrBinaryExpression(
                 receiver,
@@ -882,10 +882,30 @@ public sealed partial class IrExpressionExtractor
 
         var relational = new IrRelationalPattern(op, Extract(rel.Expression));
 
+        if (RelationalTypeTest(rel) is { } typeTest)
+            return new IrLogicalPattern(IrLogicalOp.And, typeTest, relational);
+
         return MatchesNullableValue(rel)
             ? new IrLogicalPattern(IrLogicalOp.And, NotNullPattern, relational)
             : relational;
     }
+
+    /// <summary>
+    /// The type test a relational pattern over a reference input implies:
+    /// <c>object? o; o is &lt; 3</c> matches only an <c>int</c> below 3, so a
+    /// backend must not compare the raw value (<c>null &lt; 3</c> is true in
+    /// JS). The test of the constant's type also rejects <c>null</c>. Null
+    /// when the input is a value type, handled by the nullable test.
+    /// </summary>
+    private IrPattern? RelationalTypeTest(RelationalPatternSyntax rel) =>
+        _semantic.GetOperation(rel)
+            is IRelationalPatternOperation
+            {
+                InputType.IsValueType: false,
+                NarrowedType: var narrowed
+            }
+            ? ExtractTypePattern(rel, IrTypeRefMapper.Map(narrowed, _originResolver, _target))
+            : null;
 
     private bool MatchesNullableValue(PatternSyntax pattern) =>
         _semantic.GetOperation(pattern) is IPatternOperation { InputType: var input }
@@ -1414,8 +1434,21 @@ public sealed partial class IrExpressionExtractor
             return WrapMethodGroupForDelegate(id, symbol, staticAccess);
         }
 
-        return WrapMethodGroupForDelegate(id, symbol, new IrIdentifier(id.Identifier.ValueText));
+        return WrapMethodGroupForDelegate(
+            id,
+            symbol,
+            new IrIdentifier(IdentifierNameOf(id, symbol))
+        );
     }
+
+    /// <summary>
+    /// The IR name of a local or parameter read; a parameter that a flattened
+    /// static member would shadow is renamed (see <see cref="IrParameterNaming"/>).
+    /// </summary>
+    private string IdentifierNameOf(IdentifierNameSyntax id, ISymbol? symbol) =>
+        symbol is IParameterSymbol parameter
+            ? IrParameterNaming.IrNameOf(parameter, _semantic.Compilation)
+            : id.Identifier.ValueText;
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
         symbol is ILocalSymbol or IParameterSymbol or IRangeVariableSymbol;
@@ -1610,9 +1643,10 @@ public sealed partial class IrExpressionExtractor
         if (MapBinaryOp(bin.Kind()) is not { } mappedOp)
             return ReportUnsupported(bin, bin.Kind().ToString());
 
-        var op = NarrowToIntegerDivision(mappedOp, bin);
+        var op = NarrowBuiltinOperator(mappedOp, bin);
 
         return TryExtractValueEquality(bin)
+            ?? TryExtractNullableBooleanLogic(bin, op)
             ?? TryExtractLiftedBinary(bin, op)
             ?? TryExtractStringConcatenation(bin)
             ?? BuildBinary(op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false);
@@ -1852,9 +1886,10 @@ public sealed partial class IrExpressionExtractor
         if (IsUnsupportedPlaceholder(target))
             return target;
 
-        return TryExtractLiftedCompoundAssignment(assign, target)
+        return TryExtractNullableBooleanCompoundAssignment(assign, target)
+            ?? TryExtractLiftedCompoundAssignment(assign, target)
             ?? TryExtractStringCompoundConcatenation(assign, target)
-            ?? BuildAssignmentWithIntegerDivision(target, assign);
+            ?? BuildCompoundAssignment(target, assign);
     }
 
     private IrExpression ExtractUnary(ExpressionSyntax node, bool isPrefix)
@@ -1867,7 +1902,7 @@ public sealed partial class IrExpressionExtractor
             node is PostfixUnaryExpressionSyntax suppress
             && suppress.IsKind(SyntaxKind.SuppressNullableWarningExpression)
         )
-            return Extract(suppress.Operand);
+            return AssertNonNull(suppress.Operand);
         if (node is PrefixUnaryExpressionSyntax plus && plus.IsKind(SyntaxKind.UnaryPlusExpression))
             return Extract(plus.Operand);
 
@@ -1933,7 +1968,31 @@ public sealed partial class IrExpressionExtractor
         if (IsUnsupportedPlaceholder(extractedOperand))
             return extractedOperand;
 
+        if (IsNullableValueOperand(operand))
+            return LiftIncrement(node, operand, op, extractedOperand, isPrefix);
+
         return new IrUnaryExpression(op, extractedOperand, isPrefix);
+    }
+
+    /// <summary>
+    /// <c>x!</c>: a reference or type-parameter value keeps the assertion so a
+    /// target that checks nullability statically reads it as non-null. A
+    /// nullable value type keeps its nullable type in C#, a literal
+    /// (<c>null!</c>) has no value to assert on, and any other operand has
+    /// nothing to assert, so those pass through.
+    /// </summary>
+    private IrExpression AssertNonNull(ExpressionSyntax operand)
+    {
+        var value = Extract(operand);
+
+        return
+            value is not IrLiteral
+            && !IsUnsupportedPlaceholder(value)
+            && _semantic.GetTypeInfo(operand).Type
+                is { IsReferenceType: true }
+                    or ITypeParameterSymbol
+            ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, value, IsPrefix: false)
+            : value;
     }
 
     /// <summary>
@@ -2937,7 +2996,9 @@ public sealed partial class IrExpressionExtractor
 
     private IrParameter BuildLambdaParameter(ParameterSyntax parameter) =>
         new(
-            parameter.Identifier.ValueText,
+            _semantic.GetDeclaredSymbol(parameter) is { } symbol
+                ? IrParameterNaming.IrNameOf(symbol, _semantic.Compilation)
+                : parameter.Identifier.ValueText,
             ResolveParameterType(parameter),
             HasExplicitType: parameter.Type is not null
         );
@@ -3663,12 +3724,13 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <see cref="TryMapCompoundAssignmentToBinary"/> narrowed by
-    /// <see cref="NarrowToIntegerDivision"/>: an integer <c>/=</c> maps to
-    /// <see cref="IrBinaryOp.IntegerDivide"/>.
+    /// <see cref="NarrowBuiltinOperator"/>: an integer <c>/=</c> maps to
+    /// <see cref="IrBinaryOp.IntegerDivide"/> and a boolean <c>&amp;=</c> to
+    /// <see cref="IrBinaryOp.BooleanAnd"/>.
     /// </summary>
     private IrBinaryOp? MapCompoundAssignmentOperator(AssignmentExpressionSyntax assign) =>
         TryMapCompoundAssignmentToBinary(assign.Kind()) is { } op
-            ? NarrowToIntegerDivision(op, assign)
+            ? NarrowBuiltinOperator(op, assign)
             : null;
 
     /// <summary>
@@ -4412,6 +4474,12 @@ public sealed partial class IrExpressionExtractor
         var targetType = _semantic.GetTypeInfo(cast).Type;
         if (sourceType is null || targetType is null)
             return new IrCastExpression(inner, ExtractTargetType(cast));
+
+        if (UnwrapsNullableValue(sourceType, targetType))
+        {
+            inner = ValueOrThrowWhenMissing(cast.Expression, inner);
+            sourceType = UnwrapNullable(sourceType);
+        }
 
         var sourceSpecial = sourceType.SpecialType;
         var targetSpecial = targetType.SpecialType;

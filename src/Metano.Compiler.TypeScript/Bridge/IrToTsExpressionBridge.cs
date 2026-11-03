@@ -148,6 +148,9 @@ public static partial class IrToTsExpressionBridge
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, context);
 
+        if (bin.Operator is IrBinaryOp.BooleanAnd or IrBinaryOp.BooleanOr or IrBinaryOp.BooleanXor)
+            return MapBooleanLogic(bin, bclRegistry);
+
         if (
             bin is { Left: IrMemberAccess backedMember }
             && bin.Operator.IsAssignment()
@@ -257,6 +260,37 @@ public static partial class IrToTsExpressionBridge
         {
             RuntimeImports = [IntegerDivisionHelper],
         };
+
+    /// <summary>
+    /// C#'s <c>&amp;</c>, <c>|</c> and <c>^</c> over <c>bool</c> operands.
+    /// JS applies them to numbers, and TS rejects them on booleans (TS2447),
+    /// while <c>&amp;&amp;</c> / <c>||</c> would skip the right operand. Each
+    /// form evaluates both operands exactly once, left to right: <c>^</c> is
+    /// inequality, and <c>&amp;</c> / <c>|</c> run the numeric operator over
+    /// the operands' 0 / 1 values and convert the result back.
+    /// </summary>
+    private static TsExpression MapBooleanLogic(
+        IrBinaryExpression bin,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var left = Map(bin.Left, bclRegistry);
+        var right = Map(bin.Right, bclRegistry);
+
+        if (bin.Operator is IrBinaryOp.BooleanXor)
+            return new TsBinaryExpression(left, "!==", right);
+
+        var token = bin.Operator is IrBinaryOp.BooleanAnd ? "&" : "|";
+
+        return new TsUnaryExpression(
+            "!!",
+            new TsBinaryExpression(
+                new TsUnaryExpression("+", left),
+                token,
+                new TsUnaryExpression("+", right)
+            )
+        );
+    }
 
     /// <summary>
     /// JS <c>===</c> compares references, where C# compares records by value.
@@ -1636,6 +1670,10 @@ public static partial class IrToTsExpressionBridge
             IrBinaryOp.IntegerDivide => throw new System.Diagnostics.UnreachableException(
                 "Integer division has no JS operator; it lowers through MapIntegerDivision."
             ),
+            IrBinaryOp.BooleanAnd or IrBinaryOp.BooleanOr or IrBinaryOp.BooleanXor =>
+                throw new System.Diagnostics.UnreachableException(
+                    "Boolean logic has no JS operator; it lowers through MapBooleanLogic."
+                ),
             IrBinaryOp.ValueEqual or IrBinaryOp.ValueNotEqual =>
                 throw new System.Diagnostics.UnreachableException(
                     "Value equality has no JS operator; it lowers through MapValueEquality."
@@ -1659,6 +1697,7 @@ public static partial class IrToTsExpressionBridge
         {
             IrUnaryOp.Increment => "++",
             IrUnaryOp.Decrement => "--",
+            IrUnaryOp.NonNullAssertion => "!",
             _ => "",
         };
 

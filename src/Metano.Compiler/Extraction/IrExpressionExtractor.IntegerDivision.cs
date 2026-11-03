@@ -38,82 +38,99 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Builds <paramref name="target"/> <c>op=</c> <c>right</c>. An integer
-    /// <c>/=</c> has no operator in the targets that keeps C# semantics, so it
-    /// becomes the read-modify-write <c>target = target IntegerDivide right</c>
-    /// (see <see cref="BuildIntegerDivisionAssignment"/>).
+    /// <c>/=</c> and a boolean <c>&amp;=</c> / <c>|=</c> / <c>^=</c> have no
+    /// compound operator in the targets that keeps C# semantics, so each
+    /// becomes the read-modify-write <c>target = target op right</c> (see
+    /// <see cref="BuildReadModifyWrite"/>).
     /// </summary>
-    private IrExpression BuildAssignmentWithIntegerDivision(
+    private IrExpression BuildCompoundAssignment(
         IrExpression target,
         AssignmentExpressionSyntax assign
     )
     {
         var right = Extract(assign.Right);
 
-        if (IsIntegerDivisionAssignment(assign))
-            return BuildIntegerDivisionAssignment(target, right, assign);
+        if (MapCompoundAssignmentOperator(assign) is { } op && HasNoCompoundForm(op))
+            return BuildReadModifyWrite(
+                target,
+                assign,
+                readTarget => new IrBinaryExpression(readTarget, op, right)
+            );
 
         return new IrBinaryExpression(target, MapAssignmentOp(assign.Kind()), right);
     }
 
-    private bool IsIntegerDivisionAssignment(AssignmentExpressionSyntax assign) =>
-        assign.IsKind(SyntaxKind.DivideAssignmentExpression) && IsIntegerDivision(assign);
+    private static bool HasNoCompoundForm(IrBinaryOp op) =>
+        op
+            is IrBinaryOp.IntegerDivide
+                or IrBinaryOp.BooleanAnd
+                or IrBinaryOp.BooleanOr
+                or IrBinaryOp.BooleanXor;
 
     /// <summary>
-    /// <c>target = target IntegerDivide divisor</c>, reading the target twice.
-    /// The receiver of a member access and the receiver and index of an
-    /// element access are evaluated once, in source order, as C# does for a
-    /// compound assignment: a reusable one is repeated, anything else is
-    /// let-bound first. Any other assignable shape is reported as unsupported
-    /// rather than evaluated twice, and so is a dictionary entry: the read
-    /// of a missing key would divide <c>undefined</c> where C# throws
-    /// <c>KeyNotFoundException</c>.
+    /// <c>target = compute(target)</c>, reading the target twice (see
+    /// <see cref="BindTargetOnce"/>).
     /// </summary>
-    private IrExpression BuildIntegerDivisionAssignment(
+    private IrExpression BuildReadModifyWrite(
         IrExpression target,
-        IrExpression divisor,
-        AssignmentExpressionSyntax assign
+        ExpressionSyntax operation,
+        Func<IrExpression, IrExpression> compute
+    ) => BindTargetOnce(target, operation, readTarget => WriteInPlace(readTarget, compute));
+
+    /// <summary>
+    /// Builds an expression that reads and writes <paramref name="target"/>
+    /// through the reusable form <paramref name="build"/> receives. The
+    /// receiver of a member access and the receiver and index of an element
+    /// access are evaluated once, in source order, as C# does for a compound
+    /// assignment or an increment: a reusable one is repeated, anything else
+    /// is let-bound first. Any other assignable shape is reported as
+    /// unsupported rather than evaluated twice, and so is a dictionary
+    /// entry: the read of a missing key would yield <c>undefined</c> where C#
+    /// throws <c>KeyNotFoundException</c>.
+    /// </summary>
+    private IrExpression BindTargetOnce(
+        IrExpression target,
+        ExpressionSyntax operation,
+        Func<IrExpression, IrExpression> build
     ) =>
         target switch
         {
             IrElementAccess { TargetType: IrMapTypeRef } => ReportUnsupported(
-                assign,
-                assign.Kind().ToString(),
-                $"Integer division assignment '{assign}' on a dictionary entry is not supported."
+                operation,
+                operation.Kind().ToString(),
+                $"'{operation}' on a dictionary entry is not supported."
             ),
-            _ when IrEvaluationTraits.IsReusableReceiver(target) => DivideInPlace(target, divisor),
-            IrMemberAccess member => DivideMemberInPlace(member, divisor),
-            IrElementAccess element => DivideElementInPlace(element, divisor),
+            _ when IrEvaluationTraits.IsReusableReceiver(target) => build(target),
+            IrMemberAccess member => BindReceiverOnce(
+                member.Target,
+                receiver => build(member with { Target = receiver })
+            ),
+            IrElementAccess element => BindElementOnce(element, build),
             _ => ReportUnsupported(
-                assign,
-                assign.Kind().ToString(),
-                $"Integer division assignment '{assign}' is not supported: its target cannot be "
-                    + "read and written without evaluating it twice."
+                operation,
+                operation.Kind().ToString(),
+                $"'{operation}' is not supported: its target cannot be read and written "
+                    + "without evaluating it twice."
             ),
         };
 
-    private IrExpression DivideMemberInPlace(IrMemberAccess member, IrExpression divisor) =>
-        BindReceiverOnce(
-            member.Target,
-            receiver => DivideInPlace(member with { Target = receiver }, divisor)
-        );
-
-    private IrExpression DivideElementInPlace(IrElementAccess element, IrExpression divisor) =>
+    private IrExpression BindElementOnce(
+        IrElementAccess element,
+        Func<IrExpression, IrExpression> build
+    ) =>
         BindReceiverOnce(
             element.Target,
             receiver =>
                 BindValueOnce(
                     element.Index,
-                    index =>
-                        DivideInPlace(element with { Target = receiver, Index = index }, divisor)
+                    index => build(element with { Target = receiver, Index = index })
                 )
         );
 
-    private static IrBinaryExpression DivideInPlace(IrExpression target, IrExpression divisor) =>
-        new(
-            target,
-            IrBinaryOp.Assign,
-            new IrBinaryExpression(target, IrBinaryOp.IntegerDivide, divisor)
-        );
+    private static IrBinaryExpression WriteInPlace(
+        IrExpression target,
+        Func<IrExpression, IrExpression> compute
+    ) => new(target, IrBinaryOp.Assign, compute(target));
 
     private static ITypeSymbol UnwrapNullable(ITypeSymbol type) =>
         type

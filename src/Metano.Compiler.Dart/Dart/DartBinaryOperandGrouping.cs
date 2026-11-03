@@ -112,9 +112,9 @@ internal static class DartBinaryOperandGrouping
             or IrBinaryOp.Modulo => 13,
             IrBinaryOp.Add or IrBinaryOp.Subtract => 12,
             IrBinaryOp.LeftShift or IrBinaryOp.RightShift or IrBinaryOp.UnsignedRightShift => 11,
-            IrBinaryOp.BitwiseAnd => 10,
-            IrBinaryOp.BitwiseXor => 9,
-            IrBinaryOp.BitwiseOr => 8,
+            IrBinaryOp.BitwiseAnd or IrBinaryOp.BooleanAnd => 10,
+            IrBinaryOp.BitwiseXor or IrBinaryOp.BooleanXor => 9,
+            IrBinaryOp.BitwiseOr or IrBinaryOp.BooleanOr => 8,
             IrBinaryOp.LessThan
             or IrBinaryOp.LessThanOrEqual
             or IrBinaryOp.GreaterThan

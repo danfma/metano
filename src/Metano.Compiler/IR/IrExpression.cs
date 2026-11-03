@@ -404,6 +404,26 @@ public enum IrBinaryOp
     /// The negation of <see cref="ValueEqual"/>: C#'s <c>!=</c> over a record.
     /// </summary>
     ValueNotEqual,
+
+    /// <summary>
+    /// C#'s non-short-circuit <c>&amp;</c> over <c>bool</c> operands: both
+    /// operands are evaluated, left to right, then conjoined. A <c>bool?</c>
+    /// operand never reaches it, since the extractor lowers the three-valued
+    /// form first. <see cref="BitwiseAnd"/> keeps the integral and enum forms.
+    /// </summary>
+    BooleanAnd,
+
+    /// <summary>
+    /// C#'s non-short-circuit <c>|</c> over <c>bool</c> operands; see
+    /// <see cref="BooleanAnd"/>.
+    /// </summary>
+    BooleanOr,
+
+    /// <summary>
+    /// C#'s <c>^</c> over <c>bool</c> operands: true when exactly one operand
+    /// is; see <see cref="BooleanAnd"/>.
+    /// </summary>
+    BooleanXor,
 }
 
 /// <summary>
@@ -416,6 +436,13 @@ public enum IrUnaryOp
     BitwiseNot,
     Increment,
     Decrement,
+
+    /// <summary>
+    /// C#'s null-forgiving <c>x!</c> over a reference or type-parameter
+    /// value, always postfix: no runtime effect, but a target that checks
+    /// nullability statically needs it to read the value as non-null.
+    /// </summary>
+    NonNullAssertion,
 }
 
 // -- Conversions and checks --

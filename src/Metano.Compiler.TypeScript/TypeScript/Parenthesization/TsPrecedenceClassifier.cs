@@ -32,7 +32,10 @@ internal static class TsPrecedenceClassifier
             or TsElementAccess
             or TsCallExpression
             or TsNewExpression
-            or TsLinqCall => TsPrecedence.Member,
+            or TsLinqCall
+            // The non-null assertion `x!` is a left-hand-side form like a
+            // member access: `x!.y` and `x!()` need no grouping.
+            or TsPostfixUnaryExpression { Operator: "!" } => TsPrecedence.Member,
             TsPostfixUnaryExpression => TsPrecedence.Postfix,
             TsUnaryExpression or TsAwaitExpression => TsPrecedence.Unary,
             TsBinaryExpression binary => OfOperator(binary.Operator),

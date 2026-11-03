@@ -438,7 +438,7 @@ public static class IrModuleFunctionExtractor
             method.Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        p.Name,
+                        IrParameterNaming.IrNameOf(p, compilation),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
@@ -598,7 +598,7 @@ public static class IrModuleFunctionExtractor
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        p.Name,
+                        IrParameterNaming.IrNameOf(p, compilation),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
@@ -753,7 +753,7 @@ public static class IrModuleFunctionExtractor
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        p.Name,
+                        IrParameterNaming.IrNameOf(p, compilation),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, compilation, originResolver),

@@ -1153,9 +1153,9 @@ public static class IrBodyPrinter
             IrBinaryOp.GreaterThanOrEqual => ">=",
             IrBinaryOp.LogicalAnd => "&&",
             IrBinaryOp.LogicalOr => "||",
-            IrBinaryOp.BitwiseAnd => "&",
-            IrBinaryOp.BitwiseOr => "|",
-            IrBinaryOp.BitwiseXor => "^",
+            IrBinaryOp.BitwiseAnd or IrBinaryOp.BooleanAnd => "&",
+            IrBinaryOp.BitwiseOr or IrBinaryOp.BooleanOr => "|",
+            IrBinaryOp.BitwiseXor or IrBinaryOp.BooleanXor => "^",
             IrBinaryOp.LeftShift => "<<",
             IrBinaryOp.RightShift => ">>",
             IrBinaryOp.UnsignedRightShift => ">>>",
@@ -1184,6 +1184,7 @@ public static class IrBodyPrinter
             IrUnaryOp.BitwiseNot => "~",
             IrUnaryOp.Increment => "++",
             IrUnaryOp.Decrement => "--",
+            IrUnaryOp.NonNullAssertion => "!",
             _ => "",
         };
 
