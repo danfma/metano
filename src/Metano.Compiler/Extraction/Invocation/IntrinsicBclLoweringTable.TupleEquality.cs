@@ -276,10 +276,25 @@ public sealed partial class IntrinsicBclLoweringTable
     /// <c>false</c> after every operand's evaluation, in order — the flat
     /// literal when all the operands are side-effect free.
     /// </summary>
-    private static IrExpression FalseAfter(params IrExpression[] operands) =>
-        operands.All(IrEvaluationTraits.IsSideEffectFree)
+    private static IrExpression FalseAfter(params IrExpression[] operands)
+    {
+        var effectful = operands.Where(operand => !IsSideEffectFreeOperand(operand)).ToList();
+
+        return effectful.Count == 0
             ? FalseLiteral()
-            : new IrSequenceExpression(operands, FalseLiteral());
+            : new IrSequenceExpression(effectful, FalseLiteral());
+    }
+
+    /// <summary>
+    /// <see cref="IrEvaluationTraits.IsSideEffectFree"/>, extended to tuple
+    /// literals of side-effect-free elements. Kept local: a folded equality
+    /// may drop or repeat such a literal, while the shared trait's other
+    /// consumers would repeat it (one allocation per read) instead of binding it.
+    /// </summary>
+    private static bool IsSideEffectFreeOperand(IrExpression operand) =>
+        operand is IrTupleLiteral tuple
+            ? tuple.Elements.All(IsSideEffectFreeOperand)
+            : IrEvaluationTraits.IsSideEffectFree(operand);
 
     /// <summary>
     /// <c>false</c>, unless both operands are <c>null</c>. The operands are
@@ -288,7 +303,7 @@ public sealed partial class IntrinsicBclLoweringTable
     /// </summary>
     private static IrExpression FalseUnlessBothNull(IrExpression left, IrExpression right)
     {
-        if (IrEvaluationTraits.IsSideEffectFree(left) && IrEvaluationTraits.IsSideEffectFree(right))
+        if (IsSideEffectFreeOperand(left) && IsSideEffectFreeOperand(right))
         {
             return new IrConditionalExpression(IsNull(left), IsNull(right), FalseLiteral());
         }
