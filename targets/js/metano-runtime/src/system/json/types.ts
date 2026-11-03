@@ -122,7 +122,11 @@ export interface TypeSpec<T = unknown> {
   readonly base?: TypeSpec;
   /** Constructs T from a Record<ts-field-name, deserialized-value> */
   readonly factory: (props: Record<string, unknown>) => T;
-  /** Own properties only (base properties come from base spec) */
+  /**
+   * Own properties, in wire order (base properties come from the base spec).
+   * For a spec without `base` whose C# base has no spec, the inlined
+   * properties of the ancestors follow, nearest first (FR-009).
+   */
   readonly properties: readonly PropertySpec[];
   /**
    * TS names of base properties this contract hides with a `[JsonIgnore]`

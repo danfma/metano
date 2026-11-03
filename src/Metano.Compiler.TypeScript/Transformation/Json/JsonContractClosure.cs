@@ -103,7 +103,7 @@ internal sealed class JsonContractClosure(
             return RefTargetsOfKind(entry.Type, entry.Kind);
 
         return _properties
-            .PropertiesOf((INamedTypeSymbol)entry.Type)
+            .DeclarationOrderPropertiesOf((INamedTypeSymbol)entry.Type)
             .SelectMany(property => RefTargetsWithin(property.Property.Type));
     }
 

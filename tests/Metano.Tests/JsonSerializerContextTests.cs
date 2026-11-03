@@ -706,7 +706,7 @@ public class JsonSerializerContextTests
     // The marker names the TS member of every overridden declaration, up
     // the whole linked chain.
     [Test]
-    public async Task IgnoredOverrideOfALinkedChain_ListsTheBaseTsName()
+    public async Task IgnoredOverrideOfALinkedChain_ListsEveryOverriddenTsName()
     {
         var ts = TranspileContext(
             """
@@ -738,6 +738,7 @@ public class JsonSerializerContextTests
         await Assert
             .That(SpecBodyOf(ts, "photo"))
             .Contains("ignoredProperties: [\"name\", \"label\"]");
+
         await Assert.That(SpecBodyOf(ts, "picture")).DoesNotContain("ignoredProperties");
     }
 
@@ -765,7 +766,45 @@ public class JsonSerializerContextTests
             """
         );
 
+        var photoSpec = SpecBodyOf(ts, "photo");
+
+        await Assert.That(photoSpec).Contains("type: Photo,");
+        await Assert.That(photoSpec).DoesNotContain("json: \"Name\"");
         await Assert.That(ts).DoesNotContain("ignoredProperties");
+    }
+
+    // A constructor parameter bound to an ignored base property still gets a
+    // factory argument; the payload carries no key for it, so it arrives as
+    // undefined where System.Text.Json passes default(T) (a documented
+    // divergence, DECIDED-20 a).
+    [Test]
+    public async Task IgnoredOverrideOfLinkedBase_FactoryStillReadsTheParameter()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public class Media(string Name)
+            {
+                public virtual string Name { get; init; } = Name;
+            }
+
+            [Transpile]
+            public sealed class Photo(string Name, string Path) : Media(Name)
+            {
+                [JsonIgnore]
+                public override string Name { get; init; } = Name;
+                public string Path { get; init; } = Path;
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Photo))]
+            """
+        );
+
+        var photoSpec = SpecBodyOf(ts, "photo");
+
+        await Assert.That(photoSpec).Contains("ignoredProperties: [\"name\"]");
+        await Assert.That(photoSpec).Contains("new Photo(p.name as string, p.path as string)");
     }
 
     // The spec's `ts:` name and the factory read name the escaped property

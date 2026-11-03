@@ -144,7 +144,7 @@ internal sealed class JsonSpecBuilder(
     /// </summary>
     private TsObjectLiteral BuildTypeSpecObject(INamedTypeSymbol targetType, string tsTypeName)
     {
-        var properties = _properties.PropertiesOf(targetType);
+        var properties = _properties.DeclarationOrderPropertiesOf(targetType);
         var isPlainObject = SymbolHelper.HasPlainObject(targetType);
 
         var factoryParameter = new TsParameter(

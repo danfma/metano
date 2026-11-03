@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { HashSet } from "#/system/collections/hash-set.ts";
 import {
+  type JsonConverter,
   JsonSerializer,
   SerializerContext,
-  JsonException,
   collectProperties,
   type TypeSpec,
   type ValueSpec,
-  type JsonConverter,
 } from "#/system/json/index.ts";
-import { HashSet } from "#/system/collections/hash-set.ts";
+import { expectJsonException } from "./json-exception-assertions.ts";
 
 // ─── Test Domain ─────────────────────────────────────────────────────────────
 
@@ -715,27 +715,31 @@ describe("SerializerContext", () => {
 
 describe("JsonSerializer — error cases", () => {
   test("deserialize null throws", () => {
-    expect(() => {
-      JsonSerializer.deserialize(null, personSpec);
-    }).toThrow(new JsonException("The JSON value could not be converted to Person."));
+    expectJsonException(
+      () => JsonSerializer.deserialize(null, personSpec),
+      "The JSON value could not be converted to Person.",
+    );
   });
 
   test("deserialize non-object throws", () => {
-    expect(() => {
-      JsonSerializer.deserialize("not an object", personSpec);
-    }).toThrow(new JsonException("The JSON value could not be converted to Person."));
+    expectJsonException(
+      () => JsonSerializer.deserialize("not an object", personSpec),
+      "The JSON value could not be converted to Person.",
+    );
   });
 
   test("deserialize an array for an object contract throws", () => {
-    expect(() => {
-      JsonSerializer.deserialize([], personSpec);
-    }).toThrow(new JsonException("The JSON value could not be converted to Person."));
+    expectJsonException(
+      () => JsonSerializer.deserialize([], personSpec),
+      "The JSON value could not be converted to Person.",
+    );
   });
 
   test("missing required property throws", () => {
-    expect(() => {
-      JsonSerializer.deserialize({ first_name: "Alice" }, personSpec);
-    }).toThrow(new JsonException('Missing required property: "age"'));
+    expectJsonException(
+      () => JsonSerializer.deserialize({ first_name: "Alice" }, personSpec),
+      'Missing required property: "age"',
+    );
   });
 });
 

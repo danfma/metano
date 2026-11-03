@@ -136,11 +136,14 @@ function mapConverter(descriptor: MapDescriptor, customConverters?: readonly Jso
     deserialize: (value: unknown) => {
       if (value == null) return null;
 
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw unexpectedJsonKind("object", value);
+      }
+
       return readContainer("object", () => {
-        const obj = value as Record<string, unknown>;
         const map = new Map<unknown, unknown>();
 
-        for (const [k, v] of Object.entries(obj)) {
+        for (const [k, v] of Object.entries(value)) {
           map.set(keyConv.deserialize(k), valueConv.deserialize(v));
         }
 
@@ -148,6 +151,19 @@ function mapConverter(descriptor: MapDescriptor, customConverters?: readonly Jso
       });
     },
   };
+}
+
+// ─── Collection input ────────────────────────────────────────────────────────
+
+/**
+ * The error for a non-null JSON value of the wrong kind for a collection or
+ * dictionary (#425). STJ names the CLR collection type, which a descriptor
+ * does not carry.
+ */
+function unexpectedJsonKind(expected: "array" | "object", value: unknown): JsonException {
+  const actual = Array.isArray(value) ? "array" : typeof value;
+
+  return new JsonException(`Expected ${expected} for deserialization, got ${actual}`);
 }
 
 // ─── Array ───────────────────────────────────────────────────────────────────
@@ -177,7 +193,7 @@ function deserializeArray(value: unknown, elemConv: ElementConverter): unknown[]
   if (value == null) return null;
 
   if (!Array.isArray(value)) {
-    throw new JsonException(`Expected array for deserialization, got ${jsonKindOf(value)}`);
+    throw unexpectedJsonKind("array", value);
   }
 
   return readContainer("array", () => value.map((item) => elemConv.deserialize(item)));
@@ -292,7 +308,9 @@ function refConverter(descriptor: RefDescriptor, customConverters?: readonly Jso
 
 /**
  * Collects all properties from a spec chain, walking the base hierarchy.
- * Base properties come first, own properties last.
+ * Base properties come first, own properties last: the declaration order a
+ * factory reads, **not** the wire order (see `collectWireProperties`). An
+ * override appears once per spec that declares it.
  */
 export function collectProperties(spec: TypeSpec): readonly PropertySpec[] {
   const base = spec.base ? collectProperties(spec.base) : [];
@@ -336,14 +354,6 @@ function* specChainOf(spec: TypeSpec): Generator<TypeSpec> {
   if (spec.base) {
     yield* specChainOf(spec.base);
   }
-}
-
-/** The JSON kind of a parsed value, for error messages. */
-function jsonKindOf(value: unknown): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return "array";
-
-  return typeof value;
 }
 
 /**
