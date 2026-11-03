@@ -37,14 +37,6 @@ public static class PackageJsonWriter
     };
 
     /// <summary>
-    /// Conditions the transpiler started emitting after its first <c>imports</c>
-    /// seeding. A manifest written by an older version lacks them, so they are
-    /// ignored when deciding whether an existing entry still holds the
-    /// transpiler's own mapping.
-    /// </summary>
-    private static readonly HashSet<string> ConditionsIntroducedAfterSeeding = ["source"];
-
-    /// <summary>
     /// Updates (or creates) the package.json at <paramref name="packageRoot"/> with imports/exports
     /// derived from the generated TS files. Paths are emitted relative to the package root and
     /// point to the dist directory (compiled JS) with a fallback to the source TS files.
@@ -76,6 +68,10 @@ public static class PackageJsonWriter
     /// <param name="runtimePeerSpecifier">Version specifier for the <c>metano-runtime</c> peer
     /// dependency (see <see cref="RuntimePeerDependency"/>); <c>null</c> when no emitted file
     /// imports the runtime, in which case nothing is added.</param>
+    /// <param name="sourceCondition">Name of the export condition that resolves to the
+    /// <c>.ts</c> sources (default <c>source</c>, see <see cref="SourceCondition"/>). A
+    /// previously written source condition under another name is replaced, see
+    /// <see cref="DropStaleSourceConditions"/>.</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -88,7 +84,8 @@ public static class PackageJsonWriter
         string? srcRoot = null,
         string? importAlias = null,
         PackageSubpathRoot subpathRoot = default,
-        string? runtimePeerSpecifier = null
+        string? runtimePeerSpecifier = null,
+        SourceCondition sourceCondition = default
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -107,7 +104,8 @@ public static class PackageJsonWriter
                 srcRelative,
                 distDirRelativeToPackageRoot,
                 outputPrefix,
-                subpathRoot
+                subpathRoot,
+                sourceCondition
             );
 
         // Check for a root barrel from the file list — executables skip exports
@@ -123,7 +121,8 @@ public static class PackageJsonWriter
             distDirRelativeToPackageRoot,
             hasRootIndex,
             outputPrefix,
-            importAlias
+            importAlias,
+            sourceCondition
         );
 
         JsonObject root;
@@ -160,7 +159,7 @@ public static class PackageJsonWriter
         // existing object are added; an existing key is only touched
         // when it still holds the transpiler's own mapping, which then
         // gains any condition introduced since (e.g. `source`).
-        SeedOrUpgradeImports(root, imports);
+        SeedOrUpgradeImports(root, imports, sourceCondition);
 
         // Exports merge additively — see `MergeTranspilerManagedExports`
         // for the shape-detection rule and the deep-merge contract. Run
@@ -169,7 +168,12 @@ public static class PackageJsonWriter
         // run still get pruned while user-added subpaths survive.
         if (exports is not null)
         {
-            MergeTranspilerManagedExports(root, exports, distDirRelativeToPackageRoot);
+            MergeTranspilerManagedExports(
+                root,
+                exports,
+                distDirRelativeToPackageRoot,
+                sourceCondition
+            );
         }
 
         // Merge auto-generated cross-package dependencies into the existing
@@ -320,7 +324,8 @@ public static class PackageJsonWriter
     private static void MergeTranspilerManagedExports(
         JsonObject root,
         JsonObject generated,
-        string distRelative
+        string distRelative,
+        SourceCondition sourceCondition
     )
     {
         // Trailing slash is mandatory: with a bare `./dist` prefix,
@@ -338,7 +343,7 @@ public static class PackageJsonWriter
         }
 
         DropStaleTranspilerEntries(existing, generated, transpilerDistPrefix);
-        MergeGeneratedEntries(existing, generated);
+        MergeGeneratedEntries(existing, generated, sourceCondition);
     }
 
     private static void DropStaleTranspilerEntries(
@@ -356,7 +361,11 @@ public static class PackageJsonWriter
         }
     }
 
-    private static void MergeGeneratedEntries(JsonObject existing, JsonObject generated)
+    private static void MergeGeneratedEntries(
+        JsonObject existing,
+        JsonObject generated,
+        SourceCondition sourceCondition
+    )
     {
         foreach (var (entryKey, entryValue) in generated)
         {
@@ -365,6 +374,7 @@ public static class PackageJsonWriter
                 && entryValue is JsonObject generatedEntry
             )
             {
+                DropStaleSourceConditions(existingEntry, generatedEntry, sourceCondition);
                 MergeConditions(existingEntry, generatedEntry);
             }
             else
@@ -372,6 +382,40 @@ public static class PackageJsonWriter
                 existing[entryKey] = entryValue?.DeepClone();
             }
         }
+    }
+
+    /// <summary>
+    /// Removes the source condition an earlier run wrote under another name (the default
+    /// <c>source</c>, or a former custom name), so renaming the condition does not leave
+    /// the old one resolving to the sources. Ownership rule: a condition of
+    /// <paramref name="existingEntry"/> is a stale writer-managed one when it sits before
+    /// <c>types</c> (the writer always emits the source condition first), is not itself a
+    /// generated condition, and points exactly at the source target the writer would emit
+    /// now. A user condition at that position that points elsewhere (e.g. a retargeted
+    /// <c>source</c>), and any condition after <c>types</c>, is never touched.
+    /// </summary>
+    private static void DropStaleSourceConditions(
+        JsonObject existingEntry,
+        JsonObject generatedEntry,
+        SourceCondition sourceCondition
+    )
+    {
+        if (generatedEntry[sourceCondition.Name] is not { } sourceTarget)
+            return;
+
+        var typesIndex = existingEntry.IndexOf("types");
+
+        var stale = existingEntry
+            .Take(Math.Max(typesIndex, 0))
+            .Where(condition =>
+                !generatedEntry.ContainsKey(condition.Key)
+                && JsonNode.DeepEquals(condition.Value, sourceTarget)
+            )
+            .Select(condition => condition.Key)
+            .ToList();
+
+        foreach (var condition in stale)
+            existingEntry.Remove(condition);
     }
 
     /// <summary>
@@ -454,7 +498,11 @@ public static class PackageJsonWriter
     /// manifests written by an older version gain new conditions such
     /// as <c>source</c>.
     /// </summary>
-    private static void SeedOrUpgradeImports(JsonObject root, JsonObject generated)
+    private static void SeedOrUpgradeImports(
+        JsonObject root,
+        JsonObject generated,
+        SourceCondition sourceCondition
+    )
     {
         if (root["imports"] is not JsonObject existing)
         {
@@ -470,7 +518,7 @@ public static class PackageJsonWriter
                 continue;
             }
 
-            UpgradeTranspilerMapping(existing[entryKey], entryValue);
+            UpgradeTranspilerMapping(existing[entryKey], entryValue, sourceCondition);
         }
     }
 
@@ -480,7 +528,11 @@ public static class PackageJsonWriter
     /// retargeted or non-object entry is left exactly as the consumer
     /// wrote it.
     /// </summary>
-    private static void UpgradeTranspilerMapping(JsonNode? existingValue, JsonNode? generatedValue)
+    private static void UpgradeTranspilerMapping(
+        JsonNode? existingValue,
+        JsonNode? generatedValue,
+        SourceCondition sourceCondition
+    )
     {
         if (existingValue is not JsonObject existingEntry)
             return;
@@ -488,27 +540,34 @@ public static class PackageJsonWriter
         if (generatedValue is not JsonObject generatedEntry)
             return;
 
-        if (HoldsTranspilerMapping(existingEntry, generatedEntry))
-            MergeConditions(existingEntry, generatedEntry);
+        if (!HoldsTranspilerMapping(existingEntry, generatedEntry, sourceCondition))
+            return;
+
+        DropStaleSourceConditions(existingEntry, generatedEntry, sourceCondition);
+        MergeConditions(existingEntry, generatedEntry);
     }
 
     /// <summary>
     /// True when <paramref name="existingEntry"/> still carries the full
     /// mapping an earlier transpiler seeded: every generated condition
-    /// except the ones introduced after seeding is present and points
+    /// except the source condition (introduced after seeding, and renamable) is present and points
     /// where the transpiler would point it (a late condition is compared
     /// once the entry declares it). A host-authored alias that
     /// merely overlaps (e.g. only <c>default</c>), a retargeted one, or one
     /// the consumer trimmed is left untouched. Extra consumer conditions
     /// do not count as divergence.
     /// </summary>
-    private static bool HoldsTranspilerMapping(JsonObject existingEntry, JsonObject generatedEntry)
+    private static bool HoldsTranspilerMapping(
+        JsonObject existingEntry,
+        JsonObject generatedEntry,
+        SourceCondition sourceCondition
+    )
     {
-        // A late condition counts only once present, so a consumer who
-        // retargeted `source` keeps that mapping.
+        // The source condition counts only once present, so a consumer who
+        // retargeted it keeps that mapping, and a manifest written under another
+        // condition name (or by an older version) still holds the mapping.
         var seededConditions = generatedEntry.Where(condition =>
-            !ConditionsIntroducedAfterSeeding.Contains(condition.Key)
-            || existingEntry.ContainsKey(condition.Key)
+            condition.Key != sourceCondition.Name || existingEntry.ContainsKey(condition.Key)
         );
 
         return seededConditions.All(condition =>
@@ -529,7 +588,8 @@ public static class PackageJsonWriter
         string distRelative,
         bool hasRootIndex,
         string outputPrefix,
-        string? importAlias
+        string? importAlias,
+        SourceCondition sourceCondition
     )
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
@@ -547,7 +607,7 @@ public static class PackageJsonWriter
         {
             [starKey] = new JsonObject
             {
-                ["source"] = SourceTarget(src, "*.ts"),
+                [sourceCondition.Name] = SourceTarget(src, "*.ts"),
                 ["types"] = $"./{distBase}/*.d.ts",
                 ["import"] = $"./{distBase}/*.js",
                 ["default"] = SourceTarget(src, "*.ts"),
@@ -558,7 +618,7 @@ public static class PackageJsonWriter
         {
             imports[aliasPrefix] = new JsonObject
             {
-                ["source"] = SourceTarget(src, "index.ts"),
+                [sourceCondition.Name] = SourceTarget(src, "index.ts"),
                 ["types"] = $"./{distBase}/index.d.ts",
                 ["import"] = $"./{distBase}/index.js",
                 ["default"] = SourceTarget(src, "index.ts"),
@@ -586,7 +646,8 @@ public static class PackageJsonWriter
         string srcRelative,
         string distRelative,
         string outputPrefix,
-        PackageSubpathRoot subpathRoot
+        PackageSubpathRoot subpathRoot,
+        SourceCondition sourceCondition
     )
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
@@ -603,7 +664,7 @@ public static class PackageJsonWriter
 
             exports[ExportKey(prefix, barrel.ExportedDirectory)] = new JsonObject
             {
-                ["source"] = SourceTarget(src, $"{withoutExt}.ts"),
+                [sourceCondition.Name] = SourceTarget(src, $"{withoutExt}.ts"),
                 ["types"] = $"./{distBase}/{withoutExt}.d.ts",
                 ["import"] = $"./{distBase}/{withoutExt}.js",
             };

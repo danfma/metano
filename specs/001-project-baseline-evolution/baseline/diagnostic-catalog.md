@@ -14,7 +14,7 @@ Metano's stable diagnostic contract. Source of truth: the diagnostic-code consta
 Each diagnostic carries: severity, stable code, message, optional source location. Stable codes are
 part of the transpiler contract (ADR-0010) and are searchable across docs, tests, issues, and ADRs.
 
-## Stable codes (`MS0001`–`MS0031`, `MS0035`, `MS0036`, `MS0044`)
+## Stable codes (`MS0001`–`MS0031`, `MS0035`, `MS0036`, `MS0044`, `MS0059`)
 
 | Code | Symbolic name | Meaning |
 | --- | --- | --- |
@@ -53,10 +53,11 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0035` | `InvalidJsonSerializableRoot` | A `[JsonSerializable]` root the generated TypeScript context cannot describe: an open generic or type parameter, an error type, `object` / `dynamic`, a non-collection interface, an object-kind type that is not a transpiled class or struct (BCL types such as `KeyValuePair<,>` / `ValueTuple`, `[Ignore]` / `[External]` types, types of non-Metano assemblies), an array of rank > 1, a dictionary with non-`string` keys anywhere in a value root (until S4), or a value root whose element / value type has no spec in the context. An error at the attribute; the root is not emitted (spec 009 FR-035, #270). |
 | `MS0036` | `JsonTypeInfoNameCollision` | Two distinct types map to one context member name (an error when the losing type is referenced by a `ref` / `base` link, a warning when it is an unreferenced root, which is dropped), a name equals a `SerializerContext` instance member such as `options`, `createSpec` or `_registry` (error), or one type is listed twice with different `TypeInfoPropertyName` values (warning; the first is kept). Spec 009 FR-036, #270. |
 | `MS0044` | `PackageRootOutsideWorkspace` | The TypeScript CLI cannot pick a `package.json` root without leaving the workspace: no `--package-root` (`MetanoPackageRoot`), no `package.json` between the output directory and the topmost directory of its workspace (a `.git` repository root, else a solution directory, else the C# project directory, else the child of the directory shared with the project; see `docs/cross-package.md`), and the default root, the parent of the output directory, lies above it. An error: the `.ts` files are written, `package.json` is not, the MSBuild stamp is removed and the run fails; pass `--package-root` or `--skip-package-json` (FR-030, #334). |
+| `MS0059` | `InvalidSourceCondition` | `--source-condition` (`MetanoSourceCondition`) is not a usable export condition name: a character outside letters, digits, `-`, `_`, `.`, `:`, or a built-in condition (`import`, `require`, `default`, `types`, `node`, `browser`, `node-addons`, `module-sync`). An error: the run fails before transpiling (FR-030, #424). |
 
 ## Reserved codes (specified, not yet implemented)
 
-Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0059`: `MS0038`–`MS0043` are reserved by the C# unions specification, PR #333, `MS0044` is taken by the package-root fix #334 / PR #355, and `MS0045`–`MS0058` by the runtime collections and type descriptors specification, issue #335; `MS0057` and `MS0058` were added after the maintainer decisions of 2026-11-02), so the next free code is `MS0059`.
+Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0059`: `MS0038`–`MS0043` are reserved by the C# unions specification, PR #333, `MS0044` is taken by the package-root fix #334 / PR #355, and `MS0045`–`MS0058` by the runtime collections and type descriptors specification, issue #335; `MS0057` and `MS0058` were added after the maintainer decisions of 2026-11-02), so the next free code was `MS0059`; #424 took it for `InvalidSourceCondition`, so the next free code is `MS0060`.
 
 | Code | Symbolic name | Severity | Meaning | Spec |
 | --- | --- | --- | --- | --- |

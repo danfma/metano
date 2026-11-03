@@ -18,6 +18,7 @@ public class Commands
     /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
     /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
     /// <param name="importAlias">Isolated Node.js subpath-imports alias for internal imports in the generated TypeScript (e.g. `contracts` → `#contracts/...`). When set, generated internal imports and the package.json `#&lt;alias&gt;`/`#&lt;alias&gt;/*` entries use this key instead of the default `#`, so generated code can live in a subfolder of a host project without colliding with that project's own `#` alias. A leading `#` is optional; use a simple identifier (letters, digits, `-`, `_`); blank means unset (default `#`). Does not affect cross-package imports, which use the referenced package's npm name.</param>
+    /// <param name="sourceCondition">Name of the package.json export condition that resolves the package's `exports` and `imports` to the generated `.ts` sources (default: `source`). Use a package-specific name such as `metano-source` so a consumer can enable it for this package alone (Vite `resolve.conditions`, TypeScript `customConditions`) without also opting third-party packages that export `source` into raw-source resolution. Letters, digits, `-`, `_`, `.` and `:`; built-in conditions (`import`, `require`, `default`, `types`, `node`, `browser`, ...) are rejected with MS0059. Changing it replaces the condition written by an earlier run.</param>
     /// <param name="skipPackageJson">Skip generating/updating package.json</param>
     /// <param name="namespaceBarrels">Emit an additional src/index.ts root barrel mirroring the C# namespace hierarchy via `export namespace` blocks (opt-in; see ADR-0006).</param>
     /// <param name="stripInterfacePrefix">Drop the C# `I` prefix from generated interface names when it is followed by another uppercase letter (opt-in). Collisions with sibling types in the same namespace keep the prefix and emit MS0017.</param>
@@ -36,6 +37,7 @@ public class Commands
         string dist = "./dist",
         string? srcRoot = null,
         string? importAlias = null,
+        string? sourceCondition = null,
         bool skipPackageJson = false,
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
@@ -46,6 +48,14 @@ public class Commands
         string[]? asset = null
     )
     {
+        if (!SourceCondition.TryFrom(sourceCondition, out var sourceConditionName, out var invalid))
+        {
+            ReportDiagnostics([invalid!]);
+            Environment.Exit(1);
+
+            return;
+        }
+
         var target = new TypeScriptTarget
         {
             NamespaceBarrels = namespaceBarrels,
@@ -98,7 +108,8 @@ public class Commands
                 outputDir,
                 dist,
                 srcRoot,
-                importAlias
+                importAlias,
+                sourceConditionName
             );
 
             ReportDiagnostics(reconciliation.Diagnostics);

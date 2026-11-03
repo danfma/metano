@@ -29,7 +29,8 @@ public static class PackageJsonReconciler
         string outputDir,
         string dist,
         string? srcRoot,
-        string? importAlias
+        string? importAlias,
+        SourceCondition sourceCondition = default
     )
     {
         var hasFilesToExpose = inputs.SourceFiles.Count > 0;
@@ -57,7 +58,8 @@ public static class PackageJsonReconciler
             srcRoot: srcRoot,
             importAlias: importAlias,
             subpathRoot: inputs.SubpathRoot,
-            runtimePeerSpecifier: inputs.RuntimePeerSpecifier
+            runtimePeerSpecifier: inputs.RuntimePeerSpecifier,
+            sourceCondition: sourceCondition
         );
 
         return PackageJsonReconciliation.Written(packageJsonPath, diagnostics);
