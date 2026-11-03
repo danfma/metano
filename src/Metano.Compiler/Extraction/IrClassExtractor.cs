@@ -99,7 +99,7 @@ public static class IrClassExtractor
         // field name; surface that on the IR so the backend's ctor body
         // emitter assigns the field the same way it does for explicit
         // captures.
-        constructor = AnnotateImplicitCaptures(constructor, captureScan.ParamFieldMap);
+        constructor = AnnotateImplicitCaptures(constructor, captureScan.CapturedParams);
 
         // Initializers that read a primary-constructor parameter move into
         // the constructor body, where the parameter is in scope. Runs after
@@ -138,14 +138,14 @@ public static class IrClassExtractor
         Func<T> extract
     )
     {
-        if (captureScan.HasNoRewrites)
+        if (!captureScan.HasRewrites)
             return extract();
 
         var previous = IrExpressionExtractor.PrimaryCtorScope;
 
         IrExpressionExtractor.PrimaryCtorScope = new PrimaryCtorExtractionScope(
-            captureScan.ParamFieldMap,
-            captureScan.PromotedParams,
+            captureScan.CapturedParams,
+            captureScan.AliasedParams,
             initializersRunInConstructor
         );
 
@@ -170,15 +170,15 @@ public static class IrClassExtractor
     /// </summary>
     private static IrConstructorDeclaration? AnnotateImplicitCaptures(
         IrConstructorDeclaration? ctor,
-        IReadOnlyDictionary<ISymbol, string>? captureMap
+        IReadOnlyDictionary<ISymbol, string>? capturedParams
     )
     {
-        if (ctor is null || captureMap is null || captureMap.Count == 0)
+        if (ctor is null || capturedParams is null || capturedParams.Count == 0)
             return ctor;
 
-        var byParamName = captureMap
+        var byParamName = capturedParams
             .Keys.OfType<IParameterSymbol>()
-            .ToDictionary(p => p.Name, p => captureMap[p], StringComparer.Ordinal);
+            .ToDictionary(p => p.Name, p => capturedParams[p], StringComparer.Ordinal);
 
         var annotated = ctor
             .Parameters.Select(p =>

@@ -752,4 +752,37 @@ public class PrimaryConstructorCaptureTests
         await Assert.That(output).Contains("this._logger.log(\"start\")");
         await Assert.That(output).Contains("this._logger.log(\"stop\")");
     }
+
+    [Test]
+    public async Task ExplicitCtorWithMoreParameters_DoesNotStealTheCaptureScan()
+    {
+        // The capture scan and the constructor extraction share one decision
+        // of which constructor is primary (`IrConstructorExtractor.IsPrimaryConstructor`):
+        // the C# 12 constructor the type header declares, never the widest
+        // explicit overload — even one with more parameters. So only the
+        // header's `view` parameter is captured, and the explicit
+        // constructor's own parameters never are.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface ICounterView
+            {
+                void ShowCounter(int value);
+            }
+
+            [Transpile]
+            public sealed class Presenter(ICounterView view)
+            {
+                public Presenter(ICounterView fallback, int unused) : this(fallback) { }
+
+                public void Refresh() => view.ShowCounter(0);
+            }
+            """
+        );
+
+        var output = result["presenter.ts"];
+        await Assert.That(output).Contains("private readonly _view: ICounterView");
+        await Assert.That(output).Contains("this._view.showCounter(0)");
+        await Assert.That(output).DoesNotContain("_fallback");
+    }
 }

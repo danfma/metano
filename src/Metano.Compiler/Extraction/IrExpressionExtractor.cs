@@ -1360,28 +1360,11 @@ public sealed partial class IrExpressionExtractor
             return sub;
 
         // Captured primary-constructor parameter referenced from a
-        // member body. Roslyn synthesizes a backing field on the
-        // class for the param; the transpiler does the same and
-        // rewrites the bare reference into `this._field` so the
-        // emitted code reads from the auto-synthesized field instead
-        // of an out-of-scope parameter binding. The map is set by
-        // `IrClassExtractor` around member-body extraction; outside
-        // that scope the lookup is a no-op.
-        //
-        // Field / property initializers are exempt from the rewrite
-        // unless they run in the constructor body after the captured
-        // fields are assigned (`InitializersRunInConstructor`): a class
-        // field initializer executes BEFORE the ctor body assigns the
-        // synthesized field, so reading `this._view` there would
-        // observe `undefined`. Keep the bare param reference in those
-        // positions.
-        if (
-            symbol is IParameterSymbol paramSymbol
-            && PrimaryCtorScope is { } scope
-            && scope.CapturedParams.TryGetValue(paramSymbol, out var capturedFieldName)
-            && (scope.InitializersRunInConstructor || !IsInsideInitializer(id))
-        )
-            return new IrMemberAccess(new IrThisExpression(), capturedFieldName);
+        // member body: the bare reference becomes `this._field`, the
+        // auto-synthesized storage. Paired with the promoted-parameter
+        // read right after it.
+        if (TryReadCapturedParameter(symbol, id) is { } capturedRead)
+            return capturedRead;
 
         if (TryReadPromotedParameter(symbol, id) is { } promotedRead)
             return promotedRead;
@@ -1489,6 +1472,31 @@ public sealed partial class IrExpressionExtractor
         MemberInitializerSyntax.Contains(node, stopAtExecutableBodies: true);
 
     /// <summary>
+    /// A member-body read of a primary-constructor parameter captured into a
+    /// synthesized backing field (Roslyn synthesizes the same field on the C#
+    /// side): the read becomes <c>this._field</c>, so the emitted code goes
+    /// through the field instead of an out-of-scope parameter binding.
+    /// <c>null</c> for any other identifier, and inside an initializer, which
+    /// keeps the bare parameter: a field initializer executes before the
+    /// constructor body assigns the synthesized field, so reading
+    /// <c>this._field</c> there would observe <c>undefined</c> — unless the
+    /// initializer is deferred into the constructor body after the assignment
+    /// (<see cref="PrimaryCtorExtractionScope.InitializersRunInConstructor"/>).
+    /// </summary>
+    private IrMemberAccess? TryReadCapturedParameter(ISymbol? symbol, SyntaxNode id)
+    {
+        if (symbol is not IParameterSymbol parameter || PrimaryCtorScope is not { } scope)
+            return null;
+
+        if (!scope.CapturedParams.TryGetValue(parameter, out var fieldName))
+            return null;
+
+        return scope.InitializersRunInConstructor || !IsInsideInitializer(id)
+            ? new IrMemberAccess(new IrThisExpression(), fieldName)
+            : null;
+    }
+
+    /// <summary>
     /// A member-body read of a primary-constructor parameter folded into the
     /// property that only exposes it (<c>A { get; } = a</c>): the property
     /// the backends emit as a parameter property is the parameter's only
@@ -1505,7 +1513,7 @@ public sealed partial class IrExpressionExtractor
         if (symbol is not IParameterSymbol parameter || PrimaryCtorScope is not { } scope)
             return null;
 
-        if (!scope.PromotedParams.TryGetValue(parameter, out var property))
+        if (!scope.AliasedParams.TryGetValue(parameter, out var property))
             return null;
 
         return IsInsideInitializer(id)
