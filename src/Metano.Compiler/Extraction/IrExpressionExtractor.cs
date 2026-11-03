@@ -2534,12 +2534,6 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractNullableGetValueOrDefault(inv, symbol) is { } valueOrDefault)
             return valueOrDefault;
 
-        // `Nullable<T>.Equals` over a tuple roots at `object.Equals` (the
-        // override chain the table dispatches on), so the retarget to the
-        // tuple's own equality lives here too (#331).
-        if (TryExtractNullableTupleEquals(inv, symbol) is { } nullableTupleEquals)
-            return nullableTupleEquals;
-
         // LINQ chain detection (#20 pipe lowering). When this invocation
         // is the OUTERMOST stage of a System.Linq.Enumerable / Queryable
         // call chain whose every step has a pipe-runtime counterpart,

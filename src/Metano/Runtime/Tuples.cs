@@ -8,10 +8,11 @@
 // literals and positional element reads); its instance `Equals` compares element-wise
 // with each element's own equality (EqualityComparer<T>.Default), the contract of the
 // runtime `tupleEquals`: a class element without an Equals override compares by
-// reference, never by structure. A nested tuple element is an array too, so when the
-// static tuple type has tuple elements the compiler appends the element shape as a
-// trailing `tupleEquals` argument and those elements compare by value (#331); flat
-// tuples emit the bare two-argument call.
+// reference, never by structure. Calls the compiler recognizes as tuple value
+// equality lower to that helper with the element shape appended when the static
+// tuple type has tuple elements (#331); this flat mapping still serves the calls it
+// does not (an `Equals` with an object-typed argument), comparing a nested tuple
+// element by reference there.
 
 using Metano.Annotations;
 

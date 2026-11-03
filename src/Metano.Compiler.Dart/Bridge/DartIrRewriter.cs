@@ -180,6 +180,11 @@ public sealed class DartIrRewriter
             IrLambdaExpression l => l with { Body = l.Body.Select(RewriteStatement).ToList() },
             IrArrayLiteral a => a with { Elements = a.Elements.Select(RewriteExpression).ToList() },
             IrTupleLiteral t => t with { Elements = t.Elements.Select(RewriteExpression).ToList() },
+            IrTupleEqualityExpression te => te with
+            {
+                Left = RewriteExpression(te.Left),
+                Right = RewriteExpression(te.Right),
+            },
             IrObjectLiteral o => o with
             {
                 Properties = o

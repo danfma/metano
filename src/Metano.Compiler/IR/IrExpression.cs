@@ -232,22 +232,13 @@ public sealed record IrConditionalReceiver : IrExpression;
 /// <c>myList.Add(x)</c> has target <c>myList</c> but origin declaring type
 /// <c>List&lt;T&gt;</c>). Backends consult it to dispatch BCL mappings.
 /// </para>
-/// <para>
-/// <see cref="TupleType"/> is set on a <c>ValueTuple</c> element-wise equality
-/// call (its own <c>Equals</c>, or an <c>object.Equals</c> retargeted to it,
-/// over a nullable tuple included): the receiver's static tuple type, so a
-/// backend that lowers tuples to positional arrays — where a nested tuple and
-/// a C# array are indistinguishable — can compare the tuple elements by
-/// value. It stays <c>null</c> for every other call.
-/// </para>
 /// </summary>
 public sealed record IrCallExpression(
     IrExpression Target,
     IReadOnlyList<IrArgument> Arguments,
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
     IrMemberOrigin? Origin = null,
-    bool IsOptional = false,
-    IrTupleTypeRef? TupleType = null
+    bool IsOptional = false
 ) : IrExpression;
 
 /// <summary>
@@ -562,6 +553,24 @@ public sealed record IrArrayLiteral(IReadOnlyList<IrExpression> Elements) : IrEx
 /// </summary>
 public sealed record IrTupleLiteral(IReadOnlyList<IrExpression> Elements, IrTupleTypeRef? Type)
     : IrExpression;
+
+/// <summary>
+/// C# value equality of two values of the same <c>ValueTuple</c> instantiation
+/// (element names aside): the lowering of <c>object.Equals(a, b)</c>, a
+/// tuple's own <c>Equals</c> — through <c>Nullable&lt;T&gt;</c>, a conditional
+/// access (<c>t?.Equals(u)</c>) or named arguments — over operands whose
+/// static types unwrap to that tuple. Either operand may be a nullable tuple:
+/// <c>null</c> equals <c>null</c> and nothing else, otherwise the comparison
+/// is element-wise. <see cref="TupleType"/> carries the instantiation, so a
+/// backend whose tuples are positional arrays — where a nested tuple and a C#
+/// array are indistinguishable — can compare the tuple elements by value.
+/// Each operand is evaluated exactly once, <see cref="Left"/> first.
+/// </summary>
+public sealed record IrTupleEqualityExpression(
+    IrExpression Left,
+    IrExpression Right,
+    IrTupleTypeRef TupleType
+) : IrExpression;
 
 /// <summary>
 /// Object literal / anonymous object: <c>{ prop1 = a, prop2 = b }</c>.
