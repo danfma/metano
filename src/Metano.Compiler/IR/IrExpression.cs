@@ -232,13 +232,22 @@ public sealed record IrConditionalReceiver : IrExpression;
 /// <c>myList.Add(x)</c> has target <c>myList</c> but origin declaring type
 /// <c>List&lt;T&gt;</c>). Backends consult it to dispatch BCL mappings.
 /// </para>
+/// <para>
+/// <see cref="TupleType"/> is set on a <c>ValueTuple</c> element-wise equality
+/// call (its own <c>Equals</c>, or an <c>object.Equals</c> retargeted to it,
+/// over a nullable tuple included): the receiver's static tuple type, so a
+/// backend that lowers tuples to positional arrays — where a nested tuple and
+/// a C# array are indistinguishable — can compare the tuple elements by
+/// value. It stays <c>null</c> for every other call.
+/// </para>
 /// </summary>
 public sealed record IrCallExpression(
     IrExpression Target,
     IReadOnlyList<IrArgument> Arguments,
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
     IrMemberOrigin? Origin = null,
-    bool IsOptional = false
+    bool IsOptional = false,
+    IrTupleTypeRef? TupleType = null
 ) : IrExpression;
 
 /// <summary>
