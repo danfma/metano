@@ -97,9 +97,10 @@ internal sealed class JsonPropertyCollector(
 
     /// <summary>
     /// Whether a type below <paramref name="depth"/> in the base-first
-    /// <paramref name="chain"/> redeclares the property with
-    /// <c>[JsonIgnore]</c>, which hides the base declarations as in
-    /// System.Text.Json.
+    /// <paramref name="chain"/> overrides the property with <c>[JsonIgnore]</c>,
+    /// which hides the base declarations as in System.Text.Json. Only an
+    /// override counts: STJ hides a base declaration under a non-virtual
+    /// <c>new</c> redeclaration only when their JSON names collide.
     /// </summary>
     private static bool IsIgnoredBelow(
         IReadOnlyList<INamedTypeSymbol> chain,
@@ -109,7 +110,9 @@ internal sealed class JsonPropertyCollector(
         chain
             .Skip(depth + 1)
             .SelectMany(derived => derived.GetMembers(propertyName).OfType<IPropertySymbol>())
-            .Any(redeclaration => SymbolHelper.HasAttribute(redeclaration, "JsonIgnore"));
+            .Any(redeclaration =>
+                redeclaration.IsOverride && SymbolHelper.HasAttribute(redeclaration, "JsonIgnore")
+            );
 
     private static bool IsSerializable(IPropertySymbol property) =>
         !property.IsStatic
