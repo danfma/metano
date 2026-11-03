@@ -543,6 +543,8 @@ public class SwitchStatementPatternTests
         );
 
         await Assert.That(output).DoesNotContain("$subject0");
+        await Assert.That(output).Contains("case h != null && h.inner instanceof Circle:");
+        await Assert.That(output).Contains("h.inner instanceof Circle && h.inner.r > 0");
     }
 
     [Test]
@@ -592,7 +594,8 @@ public class SwitchStatementPatternTests
         );
 
         await Assert.That(output).Contains("const scale = 2;");
-        await Assert.That(output).DoesNotContain("scale = 2;\n          return");
+        await Assert.That(output).Contains("return c.r * scale;");
+        await Assert.That(output.Split("scale = 2").Length - 1).IsEqualTo(1);
     }
 
     [Test]
@@ -611,8 +614,6 @@ public class SwitchStatementPatternTests
         var output = TranspileDescriber(
             """
             public static bool StartsWithOne(int[]? values) => values is [1, ..];
-
-            public static bool StartsWithTwo(int[] values) => values is [2, ..];
             """,
             "#nullable enable"
         );
@@ -835,11 +836,11 @@ public class SwitchStatementPatternTests
         await Assert.That(output).Contains("      default:\n        return 'other';");
     }
 
-    private static string TranspileDescriber(string members, string extraSource = "") =>
+    private static string TranspileDescriber(string members, string preamble = "") =>
         TranspileHelper.Transpile(
             Shapes
                 + "\n"
-                + extraSource
+                + preamble
                 + $$"""
 
                 [Transpile]

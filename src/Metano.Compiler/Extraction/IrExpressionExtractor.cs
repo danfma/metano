@@ -1034,8 +1034,8 @@ public sealed partial class IrExpressionExtractor
     /// and arms of a <c>switch</c> rebind designators from the subject path,
     /// so a capture would be one more read.
     /// </summary>
-    private static bool IsInIsExpression(SyntaxNode pattern) =>
-        pattern.FirstAncestorOrSelf<SyntaxNode>(node =>
+    private static bool IsInIsExpression(SyntaxNode node) =>
+        node.FirstAncestorOrSelf<SyntaxNode>(node =>
             node
                 is IsPatternExpressionSyntax
                     or CasePatternSwitchLabelSyntax

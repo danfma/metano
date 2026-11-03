@@ -27,10 +27,11 @@ public sealed partial class IrExpressionExtractor
     private readonly HashSet<ArgumentSyntax> _slottedOutArguments = [];
 
     /// <summary>
-    /// Places the results of <c>out</c>-argument calls; shared with the
+    /// Places the results of <c>out</c>-argument calls and the <c>is</c>-pattern
+    /// designators of a statement; shared with the
     /// statement extractor so temporaries stay unique across one body.
     /// </summary>
-    internal ExpressionVariableLowering OutArgumentCalls { get; } = new();
+    internal ExpressionVariableLowering ExpressionVariables { get; } = new();
 
     /// <summary>
     /// Extracts an expression that has no enclosing statement list (a field or
@@ -56,7 +57,7 @@ public sealed partial class IrExpressionExtractor
     /// promoted to <c>const</c> when nothing reassigns them.
     /// </summary>
     internal IReadOnlyList<IrStatement> LowerExpressionVariables(IrStatement statement) =>
-        IrStatementExtractor.PromoteEffectiveConsts(OutArgumentCalls.Lower(statement));
+        IrStatementExtractor.PromoteEffectiveConsts(ExpressionVariables.Lower(statement));
 
     private IrExpression ExtractInvocation(InvocationExpressionSyntax inv)
     {
