@@ -33,7 +33,7 @@ internal static class SwitchSharedLocals
 
         var cases = sw.Cases.Select(section => AssignHoisted(section, hoistedNames)).ToList();
 
-        return ([.. declarations.Select(Uninitialized)], sw with { Cases = cases });
+        return ([.. declarations.Select(BeforeSwitch)], sw with { Cases = cases });
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ internal static class SwitchSharedLocals
         if (statement is not IrVariableDeclaration declaration || !names.Contains(declaration.Name))
             return [statement];
 
-        if (declaration.Initializer is null)
+        if (declaration.Initializer is null || declaration.IsConst)
             return [];
 
         return
@@ -95,9 +95,18 @@ internal static class SwitchSharedLocals
         ];
     }
 
+    /// <summary>
+    /// A constant keeps its initializer, since C# needs no assignment to run
+    /// before another section reads it. Any other local is declared
+    /// uninitialized, with the type the compiler inferred for a <c>var</c>.
+    /// </summary>
+    private static IrVariableDeclaration BeforeSwitch(IrVariableDeclaration declaration) =>
+        declaration.IsConst ? declaration : Uninitialized(declaration);
+
     private static IrVariableDeclaration Uninitialized(IrVariableDeclaration declaration) =>
         declaration with
         {
+            Type = declaration.Type ?? declaration.InferredType,
             Initializer = null,
             IsConst = false,
         };

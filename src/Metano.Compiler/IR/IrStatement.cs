@@ -18,6 +18,9 @@ public sealed record IrReturnStatement(IrExpression? Value = null) : IrStatement
 /// <summary>
 /// A local variable declaration.
 /// </summary>
+/// <param name="InferredType">The compiler-inferred type of a <c>var</c> local,
+/// whose <see cref="Type"/> stays <c>null</c>; used when a backend must
+/// declare the local ahead of its initializer.</param>
 /// <param name="AssignedInWhenGuard">The declaration has no initializer and the
 /// local is assigned by an <c>is</c> pattern in a <c>when</c> guard of a
 /// <c>switch</c> section that reads it. A backend that runs guards outside the
@@ -28,7 +31,8 @@ public sealed record IrVariableDeclaration(
     IrTypeRef? Type,
     IrExpression? Initializer,
     bool IsConst = false,
-    bool AssignedInWhenGuard = false
+    bool AssignedInWhenGuard = false,
+    IrTypeRef? InferredType = null
 ) : IrStatement;
 
 /// <summary>

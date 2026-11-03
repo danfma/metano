@@ -992,7 +992,7 @@ public sealed partial class IrExpressionExtractor
 
         return new IrPropertySubpattern(
             member.Identifier.ValueText,
-            CaptureComputedRead(symbol, pattern),
+            CaptureComputedRead(member, symbol, pattern),
             ResolveMemberNameOverride(member),
             IsTranspiledDataMember(symbol)
         );
@@ -1007,12 +1007,14 @@ public sealed partial class IrExpressionExtractor
     /// <c>Inner: Circle { R: &gt; 0 }</c> becomes
     /// <c>Inner: var $subject0 and Circle { R: &gt; 0 }</c>.
     /// </summary>
-    private IrPattern CaptureComputedRead(ISymbol? member, IrPattern pattern)
+    private IrPattern CaptureComputedRead(
+        SyntaxNode memberSyntax,
+        ISymbol? member,
+        IrPattern pattern
+    )
     {
         if (
-            member is not IPropertySymbol property
-            || IsStableSymbol(property)
-            || ReadsValueOnce(pattern)
+            !NeedsCapturedRead(member, pattern, out var property) || !IsInIsExpression(memberSyntax)
         )
             return pattern;
 
@@ -1025,6 +1027,20 @@ public sealed partial class IrExpressionExtractor
 
         return new IrLogicalPattern(IrLogicalOp.And, capture, pattern);
     }
+
+    /// <summary>
+    /// Whether the pattern belongs to an <c>is</c> expression. Only there does
+    /// the lowering assign a captured designator as the test runs; the labels
+    /// and arms of a <c>switch</c> rebind designators from the subject path,
+    /// so a capture would be one more read.
+    /// </summary>
+    private static bool IsInIsExpression(SyntaxNode pattern) =>
+        pattern.FirstAncestorOrSelf<SyntaxNode>(node =>
+            node
+                is IsPatternExpressionSyntax
+                    or CasePatternSwitchLabelSyntax
+                    or SwitchExpressionArmSyntax
+        ) is IsPatternExpressionSyntax;
 
     private static bool NeedsCapturedRead(
         ISymbol? member,
