@@ -443,7 +443,18 @@ public sealed class TypeScriptTransformContext(
     /// not precompute (mirrors the legacy <c>TypeTransformer.GetTsTypeName</c>
     /// contract that this helper replaces).
     /// </summary>
-    public string ResolveTsName(INamedTypeSymbol type) => ResolveTsName(TypeNamesBySymbol, type);
+    public string ResolveTsName(INamedTypeSymbol type) =>
+        ModuleLocalNaming.DeclaredName(type) ?? ResolveSimpleTsName(type);
+
+    /// <summary>
+    /// The target-facing name of <paramref name="type"/> itself — what names derived
+    /// from the type read (JSON TypeInfo getters, <c>is{Name}</c> guards, discriminator
+    /// literals) — never the module-local identifier of a <c>private</c> nested type
+    /// (<see cref="ResolveTsName(INamedTypeSymbol)"/>), which only declarations and
+    /// references spell.
+    /// </summary>
+    public string ResolveSimpleTsName(INamedTypeSymbol type) =>
+        ResolveTsName(TypeNamesBySymbol, type);
 
     /// <summary>
     /// Reports MS0001 (UnsupportedFeature) for an IR-pipeline body the bridge

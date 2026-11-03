@@ -46,7 +46,7 @@ public static class IrAttributeExtractor
                     && attr.ConstructorArguments[0].Value is string untargetedName
                 )
                 {
-                    (nameArgs ??= new())["Value"] = untargetedName;
+                    (nameArgs ??= new())[IrAttribute.NameOverrideValueArgument] = untargetedName;
                     continue;
                 }
 
@@ -78,7 +78,7 @@ public static class IrAttributeExtractor
 
         var result = new List<IrAttribute>();
         if (nameArgs is not null)
-            result.Add(new IrAttribute("Name", nameArgs));
+            result.Add(new IrAttribute(IrAttribute.NameOverrideAttribute, nameArgs));
         result.AddRange(others);
         return result.Count == 0 ? null : result;
     }

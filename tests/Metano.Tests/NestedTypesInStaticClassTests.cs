@@ -138,7 +138,7 @@ public class NestedTypesInStaticClassTests
         var output = result["holder.ts"];
         await Assert.That(output).Contains("private readonly _item: Holder$Item;");
         await Assert.That(output).Contains("this._item = new Holder$Item(value);");
-        await Assert.That(output).Contains("\nclass Holder$Item {");
+        await Assert.That(output).Contains("class Holder$Item {");
         await Assert.That(output).DoesNotContain("export class Holder$Item");
         await Assert.That(output).DoesNotContain("namespace Holder");
     }
@@ -168,7 +168,7 @@ public class NestedTypesInStaticClassTests
 
         var output = result["pairs.ts"];
         await Assert.That(output).Contains("const pair = new Pairs$Pair(a, b);");
-        await Assert.That(output).Contains("\nclass Pairs$Pair {");
+        await Assert.That(output).Contains("class Pairs$Pair {");
         await Assert.That(output).DoesNotContain("export class Pairs$Pair");
         await Assert.That(output).DoesNotContain("namespace Pairs");
         var barrel = result["index.ts"];
@@ -226,8 +226,8 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["palette.ts"];
-        await Assert.That(output).Contains("\nenum Palette$Tone {");
-        await Assert.That(output).DoesNotContain("export enum");
+        await Assert.That(output).Contains("enum Palette$Tone {");
+        await Assert.That(output).DoesNotContain("export enum Palette$Tone");
         await Assert.That(output).Contains("return Palette$Tone.Dark;");
     }
 
@@ -282,7 +282,7 @@ public class NestedTypesInStaticClassTests
         );
 
         var output = result["svc.ts"];
-        await Assert.That(output).Contains("\nclass Svc$Kept {");
+        await Assert.That(output).Contains("class Svc$Kept {");
         await Assert.That(output).DoesNotContain("export class Svc$Kept");
         await Assert.That(output).DoesNotContain("NativeOnly");
     }
@@ -312,8 +312,8 @@ public class NestedTypesInStaticClassTests
 
         var output = result["planner.ts"];
         await Assert.That(output).Contains("new Planner$Track().total(new Planner$Step(2))");
-        await Assert.That(output).Contains("\nclass Planner$Track {");
-        await Assert.That(output).Contains("\nclass Planner$Step {");
+        await Assert.That(output).Contains("class Planner$Track {");
+        await Assert.That(output).Contains("class Planner$Step {");
         await Assert.That(output).Contains("total(extra: Planner$Step): number {");
         await Assert.That(output).DoesNotContain("namespace Planner");
         await Assert.That(output).DoesNotContain("export class Planner$");
@@ -341,7 +341,7 @@ public class NestedTypesInStaticClassTests
         var output = result["catalog.ts"];
         await Assert.That(output).Contains("export namespace Catalog {");
         await Assert.That(output).Contains("export class Entry {");
-        await Assert.That(output).Contains("\nclass Catalog$Cursor {");
+        await Assert.That(output).Contains("class Catalog$Cursor {");
         await Assert.That(output).DoesNotContain("export class Catalog$Cursor");
         await Assert.That(output).DoesNotContain("Catalog.Cursor");
     }
@@ -392,10 +392,203 @@ public class NestedTypesInStaticClassTests
         var result = TranspileHelper.Transpile(ShotScheduleSource);
 
         var output = result["shot-schedule.ts"];
-        await Assert.That(output).Contains("\nclass ShotSchedule$ShotEntry {");
-        await Assert.That(output).Contains("\nclass ShotSchedule$Deep {");
-        await Assert.That(output).Contains("\nnamespace ShotSchedule$Deep {");
+        await Assert.That(output).Contains("class ShotSchedule$ShotEntry {");
+        await Assert.That(output).Contains("class ShotSchedule$Deep {");
+        await Assert.That(output).Contains("namespace ShotSchedule$Deep {");
         await Assert.That(output).DoesNotContain("export class ShotSchedule$");
         await Assert.That(output).DoesNotContain("export namespace ShotSchedule$");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_IsDeclaredBeforeTheOwnerStaticInitializersThatConstructIt()
+    {
+        // The `Pub.Zero` initializer runs at load time inside the namespace: the private
+        // record must already be declared (TS2449 / ReferenceError otherwise).
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Holder
+            {
+                private sealed record P(int V);
+
+                public sealed record Pub(int V)
+                {
+                    public static readonly Pub Zero = new Pub(new P(0).V);
+                }
+            }
+            """
+        );
+
+        var output = result["holder.ts"];
+        await Assert
+            .That(output.IndexOf("class Holder$P {"))
+            .IsLessThan(output.IndexOf("export class Holder {"));
+        await Assert.That(output).Contains("new Holder.Pub(new Holder$P(0).v)");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_IsDeclaredBeforeTheOwnerStaticFieldThatConstructsIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed class Registry
+            {
+                private sealed record Entry(int Id);
+
+                private static readonly Entry Default = new Entry(1);
+
+                public int Id() => Default.Id;
+            }
+            """
+        );
+
+        var output = result["registry.ts"];
+        await Assert
+            .That(output.IndexOf("class Registry$Entry {"))
+            .IsLessThan(output.IndexOf("export class Registry {"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_IsDeclaredBeforeTheModuleConstantThatConstructsIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            [NoContainer]
+            public static class Grid
+            {
+                private sealed record Cell(int X);
+
+                private static readonly Cell Origin = new Cell(0);
+
+                public static int OriginX() => Origin.X;
+            }
+            """
+        );
+
+        var output = result["grid.ts"];
+        await Assert
+            .That(output.IndexOf("class Grid$Cell {"))
+            .IsLessThan(output.IndexOf("const origin: Grid$Cell = new Grid$Cell(0);"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_ExtendingAMemberOfTheOwnerNamespace_FollowsIt()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Outer
+            {
+                public abstract class PublicBase
+                {
+                    public int V => 1;
+                }
+
+                private sealed class Impl : PublicBase { }
+
+                public static int Run() => new Impl().V;
+            }
+            """
+        );
+
+        var output = result["outer.ts"];
+        await Assert
+            .That(output.IndexOf("class Outer$Impl extends Outer.PublicBase"))
+            .IsGreaterThan(output.IndexOf("export class PublicBase"));
+    }
+
+    [Test]
+    public async Task PrivateNestedType_WithNameOverride_FlattensTheOverriddenName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Palette
+            {
+                [Name("Tone")]
+                private sealed record Shade(int V);
+
+                public static int Go() => new Shade(1).V;
+            }
+            """
+        );
+
+        var output = result["palette.ts"];
+        await Assert.That(output).Contains("class Palette$Tone {");
+        await Assert.That(output).Contains("new Palette$Tone(1)");
+        await Assert.That(output).DoesNotContain("Shade");
+    }
+
+    [Test]
+    public async Task PrivateNestedType_InsideAPublicNestedType_IsDeclaredModuleLocal()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public static class Outer
+            {
+                public sealed class Mid
+                {
+                    private sealed record Leaf(int N);
+
+                    public int Run() => new Leaf(1).N;
+                }
+
+                public static int Go() => new Mid().Run();
+            }
+            """
+        );
+
+        var output = result["outer.ts"];
+        await Assert.That(output).Contains("\nclass Outer$Mid$Leaf {");
+        await Assert.That(output).DoesNotContain("export class Outer$Mid$Leaf");
+        await Assert.That(output).Contains("return new Outer$Mid$Leaf(1).n;");
+        await Assert.That(output).Contains("export class Mid {");
+    }
+
+    [Test]
+    public async Task PrivateNestedJsonContext_DeclaresAndReferencesTheSameModuleLocalName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Text.Json.Serialization;
+
+            [assembly: TranspileAssembly]
+
+            public partial class Api
+            {
+                private record Payload(int Id);
+
+                [JsonSerializable(typeof(Payload))]
+                private partial class Ctx : JsonSerializerContext
+                {
+                    public Ctx() : base(new System.Text.Json.JsonSerializerOptions()) { }
+
+                    protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+
+                public object Make() => new Ctx();
+            }
+            """
+        );
+
+        var output = result["api.ts"];
+        await Assert.That(output).Contains("class Api$Ctx extends SerializerContext {");
+        await Assert.That(output).DoesNotContain("export class Api$Ctx");
+        await Assert
+            .That(output)
+            .Contains("private static readonly _default: Api$Ctx = new Api$Ctx();");
+        await Assert.That(output).Contains("get payload(): TypeSpec<Api$Payload>");
+        await Assert.That(output).DoesNotContain("api$Payload");
     }
 }

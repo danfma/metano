@@ -263,7 +263,8 @@ public static class IrTypeRefMapper
                                 .ToList()
                             : null,
                         originResolver?.Invoke(named),
-                        BuildNamedTypeSemantics(named, target)
+                        BuildNamedTypeSemantics(named, target),
+                        ModuleLocalSegmentCount(named)
                     );
                 }
                 return MapDelegateType(named, originResolver, target);
@@ -282,7 +283,8 @@ public static class IrTypeRefMapper
                     GetNamespace(named),
                     args,
                     origin,
-                    semantics
+                    semantics,
+                    ModuleLocalSegmentCount(named)
                 );
             }
 
@@ -290,7 +292,8 @@ public static class IrTypeRefMapper
                 BuildQualifiedName(named, target),
                 GetNamespace(named),
                 Origin: origin,
-                Semantics: semantics
+                Semantics: semantics,
+                ModuleLocalSegments: ModuleLocalSegmentCount(named)
             );
         }
 
@@ -674,13 +677,6 @@ public static class IrTypeRefMapper
     /// <c>[Name]</c> override resolved against <paramref name="target"/>,
     /// so a class `User` tagged `[Name("ApiUser")]` surfaces as `ApiUser`
     /// in the resulting IR reference.
-    /// <para>
-    /// A <c>private</c> nested type is declared module-local rather than in the
-    /// container's exported companion namespace (#412), so its path up to the deepest
-    /// private segment collapses into one <see cref="ModuleLocalSeparator"/>-joined
-    /// identifier (<c>Outer$Inner</c>); segments below it stay dotted. The Dart
-    /// target flattens nested types itself and keeps the plain dotted path.
-    /// </para>
     /// </summary>
     internal static string BuildQualifiedName(
         INamedTypeSymbol type,
@@ -689,41 +685,30 @@ public static class IrTypeRefMapper
     {
         string Part(INamedTypeSymbol sym) => SymbolHelper.GetNameOverride(sym, target) ?? sym.Name;
 
-        var path = new List<INamedTypeSymbol>();
-        for (var current = type; current is not null; current = current.ContainingType)
-            path.Insert(0, current);
-
-        var moduleLocalEnd =
-            target == Metano.Annotations.TargetLanguage.Dart
-                ? -1
-                : path.FindLastIndex(SymbolHelper.IsContainerPrivateNestedType);
-
-        if (moduleLocalEnd < 0)
-            return string.Join(".", path.Select(Part));
-
-        var flattened = string.Join(
-            ModuleLocalSeparator,
-            path.Take(moduleLocalEnd + 1).Select(Part)
-        );
-
-        return string.Join(".", path.Skip(moduleLocalEnd + 1).Select(Part).Prepend(flattened));
+        return string.Join(".", ContainmentPath(type).Select(Part));
     }
 
     /// <summary>
-    /// Joins the segments of a module-local nested type's name (<c>Outer$Inner</c>);
-    /// <c>$</c> is a legal TypeScript identifier character no C# type name contains.
+    /// How many leading segments of <see cref="BuildQualifiedName"/> form a
+    /// module-local declaration (#412): the path up to and including the deepest
+    /// <c>private</c> nested segment, which a target that hides private nested types
+    /// declares outside the container's exported surface. <c>0</c> when no segment is
+    /// private. Only the fact is recorded; how a target spells the collapsed prefix is
+    /// its own naming policy.
     /// </summary>
-    internal const string ModuleLocalSeparator = "$";
+    internal static int ModuleLocalSegmentCount(INamedTypeSymbol type) =>
+        ContainmentPath(type).FindLastIndex(SymbolHelper.IsContainerPrivateNestedType) + 1;
 
-    /// <summary>
-    /// The module-local identifier a <c>private</c> nested type is declared under, or
-    /// <c>null</c> when <paramref name="type"/> is not itself a private nested type.
-    /// Always agrees with the reference <see cref="BuildQualifiedName"/> produces.
-    /// </summary>
-    public static string? GetModuleLocalName(
-        INamedTypeSymbol type,
-        Metano.Annotations.TargetLanguage? target = null
-    ) => SymbolHelper.IsContainerPrivateNestedType(type) ? BuildQualifiedName(type, target) : null;
+    /// <summary>The containers of <paramref name="type"/>, outermost first, ending with it.</summary>
+    private static List<INamedTypeSymbol> ContainmentPath(INamedTypeSymbol type)
+    {
+        var path = new List<INamedTypeSymbol>();
+
+        for (var current = type; current is not null; current = current.ContainingType)
+            path.Insert(0, current);
+
+        return path;
+    }
 
     private static string? GetNamespace(INamedTypeSymbol type)
     {

@@ -91,14 +91,17 @@ public static class IrToDartNamingPolicy
         var targetKey = nameof(TargetLanguage.Dart);
         foreach (var attr in attributes)
         {
-            if (attr.Name != "Name" || attr.Arguments is null)
+            if (attr.Name != IrAttribute.NameOverrideAttribute || attr.Arguments is null)
                 continue;
             if (
                 attr.Arguments.TryGetValue(targetKey, out var perTargetV)
                 && perTargetV is string perTargetS
             )
                 return perTargetS;
-            if (attr.Arguments.TryGetValue("Value", out var v) && v is string s)
+            if (
+                attr.Arguments.TryGetValue(IrAttribute.NameOverrideValueArgument, out var v)
+                && v is string s
+            )
                 return s;
         }
         return null;

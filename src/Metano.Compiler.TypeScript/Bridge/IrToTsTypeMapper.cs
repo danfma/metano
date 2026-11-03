@@ -109,7 +109,7 @@ public static class IrToTsTypeMapper
         if (IsBclException(named))
             return new TsNamedType("Error");
 
-        var name = named.Name;
+        var name = ModuleLocalNaming.Flatten(named.Name, named.ModuleLocalSegments);
         if (NamedTypeRenames is { } renames && renames.TryGetValue(name, out var renamed))
             name = renamed;
 
