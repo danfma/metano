@@ -4,6 +4,16 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.10.1
+
+_2026-11-03_
+
+
+### 🐛 Bug Fixes
+
+* apply review notes to the compiler-version cache key ([#433](https://github.com/danfma/metano/issues/433)) ([33d4dc8](https://github.com/danfma/metano/commit/33d4dc8e26bb8c0a2e4c16ff4ba2e7d09f89e9d6))
+* regenerate output when the Metano version changes ([#433](https://github.com/danfma/metano/issues/433)) ([dac736e](https://github.com/danfma/metano/commit/dac736e0efb2f31022f5b398450ea418766768c4))
+
 ## 2.10.0
 
 _2026-11-03_
