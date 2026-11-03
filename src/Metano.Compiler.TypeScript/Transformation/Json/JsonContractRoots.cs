@@ -21,36 +21,50 @@ internal sealed record JsonContractRoot(
 /// Reads the <c>[JsonSerializable]</c> roots of a context (FR-030) and
 /// rejects, with <c>MS0035</c>, every root the TypeScript context cannot
 /// describe (FR-035) instead of dropping it or emitting an invalid spec.
+/// Diagnostics go to <paramref name="report"/>, so a caller that only needs
+/// the admitted roots can read them silently.
 /// </summary>
 internal sealed class JsonContractRoots(
-    TypeScriptTransformContext context,
-    JsonContractAdmission admission
+    JsonContractAdmission admission,
+    Action<MetanoDiagnostic> report
 )
 {
-    private readonly TypeScriptTransformContext _context = context;
     private readonly JsonContractAdmission _admission = admission;
+    private readonly Action<MetanoDiagnostic> _report = report;
 
     /// <summary>
-    /// The valid roots in attribute order. A type listed twice appears twice;
-    /// the closure keeps its first occurrence.
+    /// The admitted roots in attribute order. A type listed twice appears
+    /// twice (its <c>TypeInfoPropertyName</c> values are compared by
+    /// <see cref="JsonTypeInfoNames"/>); the closure keeps its first
+    /// occurrence. A rejected type is reported once, at its first attribute.
     /// </summary>
     public IReadOnlyList<JsonContractRoot> Read(INamedTypeSymbol contextType)
     {
-        var structurallyValid = CandidatesOf(contextType).Where(IsStructurallyValid).ToList();
+        var candidates = CandidatesOf(contextType).ToList();
+
+        var distinctRoots = candidates
+            .DistinctBy(root => root.Type, SymbolEqualityComparer.Default)
+            .ToList();
+
+        var structurallyValid = AdmitReportingRejections(distinctRoots, StructureRejectionReasonOf);
 
         var objectRoots = new HashSet<ITypeSymbol>(
-            structurallyValid.Where(root => root.Kind == JsonPropertyKind.Ref).Select(x => x.Type),
+            structurallyValid.Where(IsObjectRoot).Select(root => root.Type),
             SymbolEqualityComparer.Default
         );
 
-        return structurallyValid.Where(root => HasDescribableContents(root, objectRoots)).ToList();
-    }
+        var admitted = AdmitReportingRejections(
+            structurallyValid,
+            root => ContentsRejectionReasonOf(root, objectRoots)
+        );
 
-    /// <summary>
-    /// Every type a <c>[JsonSerializable]</c> attribute names, unvalidated.
-    /// </summary>
-    public static IEnumerable<ITypeSymbol> DeclaredTypesOf(INamedTypeSymbol contextType) =>
-        CandidatesOf(contextType).Select(root => root.Type);
+        var admittedTypes = new HashSet<ITypeSymbol>(
+            admitted.Select(root => root.Type),
+            SymbolEqualityComparer.Default
+        );
+
+        return candidates.Where(root => admittedTypes.Contains(root.Type)).ToList();
+    }
 
     private static IEnumerable<JsonContractRoot> CandidatesOf(INamedTypeSymbol contextType) =>
         contextType
@@ -61,6 +75,8 @@ internal sealed class JsonContractRoots(
 
     private static bool IsJsonSerializable(AttributeData attribute) =>
         attribute.AttributeClass?.Name is "JsonSerializableAttribute" or "JsonSerializable";
+
+    private static bool IsObjectRoot(JsonContractRoot root) => root.Kind == JsonPropertyKind.Ref;
 
     private static JsonContractRoot? ToCandidate(AttributeData attribute)
     {
@@ -77,24 +93,37 @@ internal sealed class JsonContractRoots(
         return new JsonContractRoot(type, typeInfoPropertyName, location);
     }
 
-    private bool IsStructurallyValid(JsonContractRoot root)
+    /// <summary>
+    /// Reports <c>MS0035</c> for every root that has a rejection reason and
+    /// returns the others, in order.
+    /// </summary>
+    private List<JsonContractRoot> AdmitReportingRejections(
+        IEnumerable<JsonContractRoot> roots,
+        Func<JsonContractRoot, string?> rejectionReasonOf
+    )
     {
-        var reason = RejectStructure(root);
+        var admitted = new List<JsonContractRoot>();
 
-        if (reason is null)
-            return true;
+        foreach (var root in roots)
+        {
+            if (rejectionReasonOf(root) is { } reason)
+            {
+                Report(root, reason);
+                continue;
+            }
 
-        Report(root, reason);
+            admitted.Add(root);
+        }
 
-        return false;
+        return admitted;
     }
 
     /// <summary>
     /// The FR-035 rules that depend only on the root type itself. The
     /// contents of a value root (its elements, keys and values) are checked
-    /// by <see cref="HasDescribableContents"/> once every object root is known.
+    /// by <see cref="ContentsRejectionReasonOf"/> once every object root is known.
     /// </summary>
-    private string? RejectStructure(JsonContractRoot root) =>
+    private string? StructureRejectionReasonOf(JsonContractRoot root) =>
         root.Type switch
         {
             { TypeKind: TypeKind.Error } => "the type could not be resolved",
@@ -103,41 +132,25 @@ internal sealed class JsonContractRoots(
                 "an open generic type has no fixed JSON contract",
             { SpecialType: SpecialType.System_Object } or IDynamicTypeSymbol =>
                 "'object' and 'dynamic' have no fixed JSON contract",
-            _ when root.Kind == JsonPropertyKind.Ref => RejectObjectRoot(root.Type),
+            INamedTypeSymbol named when IsObjectRoot(root) =>
+                _admission.ObjectRootRejectionReasonOf(named),
+            _ when IsObjectRoot(root) => "it has no JSON object contract",
             _ => null,
         };
 
-    private string? RejectObjectRoot(ITypeSymbol type) =>
-        type is INamedTypeSymbol named
-            ? _admission.RejectObjectRoot(named)
-            : "it has no JSON object contract";
-
     /// <summary>
-    /// A value root is describable when every type its descriptor nests is
-    /// too: arrays have rank 1, dictionary keys are strings, and every object
-    /// element, value or nullable inner has a spec in the context (it is
-    /// discovered by the closure or listed as a root itself). Object roots
-    /// pass trivially: their properties follow the property rules.
+    /// Why a value root is not describable, or <c>null</c> when every type its
+    /// descriptor nests is: arrays have rank 1, dictionary keys are strings,
+    /// and every object element, value or nullable inner has a spec in the
+    /// context (it is discovered by the closure or listed as a root itself).
+    /// Object roots pass: their properties follow the property rules.
     /// </summary>
-    private bool HasDescribableContents(
+    private string? ContentsRejectionReasonOf(
         JsonContractRoot root,
         IReadOnlySet<ITypeSymbol> objectRoots
-    )
-    {
-        if (root.Kind == JsonPropertyKind.Ref)
-            return true;
+    ) => IsObjectRoot(root) ? null : NestedRejectionReasonOf(root.Type, root.Kind, objectRoots);
 
-        var reason = RejectContents(root.Type, root.Kind, objectRoots);
-
-        if (reason is null)
-            return true;
-
-        Report(root, reason);
-
-        return false;
-    }
-
-    private string? RejectContents(
+    private string? NestedRejectionReasonOf(
         ITypeSymbol type,
         JsonPropertyKind kind,
         IReadOnlySet<ITypeSymbol> objectRoots
@@ -151,15 +164,20 @@ internal sealed class JsonContractRoots(
                 + "context yet";
 
         if (kind == JsonPropertyKind.Ref)
-            return RejectNestedObject(type, objectRoots);
+            return NestedObjectRejectionReasonOf(type, objectRoots);
 
         return JsonTypeClassifier
             .ChildTypesOf(type, kind)
-            .Select(child => RejectContents(child, JsonTypeClassifier.Classify(child), objectRoots))
+            .Select(child =>
+                NestedRejectionReasonOf(child, JsonTypeClassifier.Classify(child), objectRoots)
+            )
             .FirstOrDefault(reason => reason is not null);
     }
 
-    private string? RejectNestedObject(ITypeSymbol type, IReadOnlySet<ITypeSymbol> objectRoots) =>
+    private string? NestedObjectRejectionReasonOf(
+        ITypeSymbol type,
+        IReadOnlySet<ITypeSymbol> objectRoots
+    ) =>
         _admission.IsDiscoverable(type) || objectRoots.Contains(type)
             ? null
             : $"'{type.ToDisplayString()}' has no TypeScript contract in this context "
@@ -167,11 +185,10 @@ internal sealed class JsonContractRoots(
                 + "discovered; list a referenced package type as its own root)";
 
     private static bool HasStringKey(ITypeSymbol mapType) =>
-        mapType
-            is INamedTypeSymbol { TypeArguments: [{ SpecialType: SpecialType.System_String }, ..] };
+        JsonTypeClassifier.KeyTypeOf(mapType).SpecialType == SpecialType.System_String;
 
     private void Report(JsonContractRoot root, string reason) =>
-        _context.ReportDiagnostic(
+        _report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.InvalidJsonSerializableRoot,

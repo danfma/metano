@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
@@ -27,17 +28,11 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
-        var contextName = type.Name;
-        var admission = new JsonContractAdmission(_context);
-        var roots = new JsonContractRoots(_context, admission).Read(type);
-
-        if (roots.Count == 0)
+        if (Plan(type, _context.ReportDiagnostic) is not { } plan)
             return;
 
-        var properties = new JsonPropertyCollector(_context, ReadNamingPolicy(type));
-        var names = JsonTypeInfoNames.Create(_context, roots);
-        var contract = new JsonContractClosure(properties, admission).Collect(roots);
-        var specs = new JsonSpecBuilder(_context, names, properties);
+        var contextName = type.Name;
+        var specs = new JsonSpecBuilder(_context, plan.Names, plan.Properties);
         var members = new List<TsClassMember>();
 
         // private static readonly _default = new XxxContext();
@@ -62,7 +57,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             )
         );
 
-        foreach (var entry in names.Claim(contract))
+        foreach (var entry in plan.Entries)
             members.AddRange(specs.BuildEntryMembers(entry));
 
         statements.Add(
@@ -80,24 +75,49 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
-    /// The runtime helpers the context's root getters need for the types they
+    /// The runtime helpers the emitted root getters need for the types they
     /// name in <c>ValueSpec&lt;T&gt;</c> / <c>TypeSpec&lt;T&gt;</c> (<c>HashSet</c>,
-    /// <c>UUID</c>, <c>Temporal</c>, …; FR-041). The System.Text.Json source
-    /// generator declares a <c>JsonTypeInfo&lt;T&gt;</c> member per root, whose
-    /// scan yields the same helpers, but the context must not depend on the
-    /// generator having run.
+    /// <c>UUID</c>, <c>Temporal</c>, …; FR-041). Only roots that are emitted
+    /// count: rejected (<c>MS0035</c>) and dropped (<c>MS0036</c>) ones do not.
+    /// The plan is computed silently; <see cref="Transform"/> reports its
+    /// diagnostics. The System.Text.Json source generator declares a
+    /// <c>JsonTypeInfo&lt;T&gt;</c> member per root, whose scan yields the same
+    /// helpers, but the context must not depend on the generator having run.
     /// </summary>
-    public static IReadOnlySet<IrRuntimeRequirement> RuntimeRequirementsOf(
-        INamedTypeSymbol contextType
-    ) =>
-        JsonContractRoots
-            .DeclaredTypesOf(contextType)
-            .SelectMany(root =>
+    public IReadOnlySet<IrRuntimeRequirement> RuntimeRequirementsOf(INamedTypeSymbol contextType)
+    {
+        if (Plan(contextType, report: _ => { }) is not { } plan)
+            return new HashSet<IrRuntimeRequirement>();
+
+        return plan
+            .Entries.Where(entry => entry.Root is not null)
+            .SelectMany(entry =>
                 IrRuntimeRequirementScanner.Scan(
-                    IrTypeRefMapper.Map(root, target: TargetLanguage.TypeScript)
+                    IrTypeRefMapper.Map(entry.Type, target: TargetLanguage.TypeScript)
                 )
             )
             .ToHashSet();
+    }
+
+    /// <summary>
+    /// Reads the roots, names them and computes their closure, reporting every
+    /// <c>MS0035</c> / <c>MS0036</c> to <paramref name="report"/>. <c>null</c>
+    /// when the context has no admitted root (nothing is emitted).
+    /// </summary>
+    private JsonContextPlan? Plan(INamedTypeSymbol contextType, Action<MetanoDiagnostic> report)
+    {
+        var admission = new JsonContractAdmission(_context);
+        var roots = new JsonContractRoots(admission, report).Read(contextType);
+
+        if (roots.Count == 0)
+            return null;
+
+        var properties = new JsonPropertyCollector(_context, ReadNamingPolicy(contextType));
+        var names = JsonTypeInfoNames.Create(_context, roots, report);
+        var contract = new JsonContractClosure(properties, admission).Collect(roots);
+
+        return new JsonContextPlan(names, properties, names.Claim(contract));
+    }
 
     /// <summary>
     /// Reads the PropertyNamingPolicy from [JsonSourceGenerationOptions] if present.

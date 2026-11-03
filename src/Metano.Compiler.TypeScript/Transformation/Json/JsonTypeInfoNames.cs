@@ -20,9 +20,9 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 internal sealed class JsonTypeInfoNames
 {
     /// <summary>
-    /// Instance members of the runtime <c>SerializerContext</c>, plus the
-    /// static <c>default</c> / <c>_default</c> singleton members every
-    /// generated context declares (FR-036, #270 decision (e)).
+    /// Instance members of the runtime <c>SerializerContext</c> (FR-036). The
+    /// generated static <c>default</c> / <c>_default</c> are not reserved: an
+    /// instance getter or field of the same name does not clash with them.
     /// </summary>
     private static readonly HashSet<string> ReservedMembers = new(StringComparer.Ordinal)
     {
@@ -34,20 +34,21 @@ internal sealed class JsonTypeInfoNames
         "resolve",
         "_registry",
         "constructor",
-        "default",
-        "_default",
     };
 
     private readonly TypeScriptTransformContext _context;
     private readonly IReadOnlyDictionary<ITypeSymbol, string> _overrides;
+    private readonly Action<MetanoDiagnostic> _report;
 
     private JsonTypeInfoNames(
         TypeScriptTransformContext context,
-        IReadOnlyDictionary<ITypeSymbol, string> overrides
+        IReadOnlyDictionary<ITypeSymbol, string> overrides,
+        Action<MetanoDiagnostic> report
     )
     {
         _context = context;
         _overrides = overrides;
+        _report = report;
     }
 
     /// <summary>
@@ -58,7 +59,8 @@ internal sealed class JsonTypeInfoNames
     /// </summary>
     public static JsonTypeInfoNames Create(
         TypeScriptTransformContext context,
-        IReadOnlyList<JsonContractRoot> roots
+        IReadOnlyList<JsonContractRoot> roots,
+        Action<MetanoDiagnostic> report
     )
     {
         var overrides = new Dictionary<ITypeSymbol, string>(SymbolEqualityComparer.Default);
@@ -71,7 +73,7 @@ internal sealed class JsonTypeInfoNames
             if (overrides.TryAdd(root.Type, name) || overrides[root.Type] == name)
                 continue;
 
-            context.ReportDiagnostic(
+            report(
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Warning,
                     DiagnosticCodes.JsonTypeInfoNameCollision,
@@ -83,7 +85,7 @@ internal sealed class JsonTypeInfoNames
             );
         }
 
-        return new JsonTypeInfoNames(context, overrides);
+        return new JsonTypeInfoNames(context, overrides, report);
     }
 
     /// <summary>The FR-031 name of <paramref name="type"/> (PascalCase).</summary>
@@ -127,8 +129,11 @@ internal sealed class JsonTypeInfoNames
         {
             var getter = GetterOf(entry.Type);
 
-            if (IsReserved(entry, getter, contract))
+            if (ReservedMemberOf(getter) is { } reserved)
+            {
+                ReportReservedMember(entry, getter, reserved, contract);
                 continue;
+            }
 
             if (owners.TryAdd(getter, entry.Type))
             {
@@ -142,24 +147,27 @@ internal sealed class JsonTypeInfoNames
         return claimed;
     }
 
-    private bool IsReserved(JsonContractEntry entry, string getter, JsonContract contract)
+    /// <summary>The <c>SerializerContext</c> member a getter or its field
+    /// would shadow, or <c>null</c>.</summary>
+    private static string? ReservedMemberOf(string getter) =>
+        new[] { getter, FieldOf(getter) }.FirstOrDefault(ReservedMembers.Contains);
+
+    private void ReportReservedMember(
+        JsonContractEntry entry,
+        string getter,
+        string reserved,
+        JsonContract contract
+    )
     {
-        var member = new[] { getter, FieldOf(getter) }.FirstOrDefault(ReservedMembers.Contains);
-
-        if (member is null)
-            return false;
-
-        var kind = member == getter ? "member" : "field";
+        var kind = reserved == getter ? "member" : "field";
 
         Report(
             MetanoDiagnosticSeverity.Error,
-            $"'{DisplayOf(entry.Type)}' maps to context {kind} '{member}', which "
+            $"'{DisplayOf(entry.Type)}' maps to context {kind} '{reserved}', which "
                 + "SerializerContext already declares. Use TypeInfoPropertyName.",
             entry,
             contract
         );
-
-        return true;
     }
 
     private void ReportCollision(
@@ -206,7 +214,7 @@ internal sealed class JsonTypeInfoNames
         JsonContractEntry entry,
         JsonContract contract
     ) =>
-        _context.ReportDiagnostic(
+        _report(
             new MetanoDiagnostic(
                 severity,
                 DiagnosticCodes.JsonTypeInfoNameCollision,

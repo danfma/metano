@@ -66,7 +66,7 @@ When `MS0034` is raised the descriptor keeps `create: <TsType>.create`.
 | Object-kind root that is not a transpilable class/struct | `typeof(KeyValuePair<string, int>)`, `typeof((int, string))`, a `[NoTranspile]` type, a type from a non-Metano assembly |
 | Array of rank > 1 | `typeof(int[,])` |
 | Dictionary with a non-`string` key anywhere in a value root (until S4 fixes key conversion, #270) | `typeof(Dictionary<int, Leaf>)`, `typeof(List<Dictionary<Guid, Leaf>>)` |
-| Closed generic object root (until S1, FR-033) | `typeof(Page<Leaf>)` |
+| Closed generic object root whose definition is transpiled (until S1, FR-033); a BCL generic (`KeyValuePair<,>`, `ValueTuple`, `SortedDictionary<,>`, `ReadOnlyDictionary<,>`, `FrozenDictionary<,>`) is reported as not transpiled instead | `typeof(Page<Leaf>)` |
 | Value root whose element / value / nullable-inner object type has no spec in the context (not discovered by the closure and not listed as its own root; until S1, FR-047) | `typeof(List<Shared.Tag>)` without `typeof(Shared.Tag)` |
 
 Message shape: `'<type>' cannot be a [JsonSerializable] root: <reason>.` The root is not emitted.
@@ -76,7 +76,7 @@ Message shape: `'<type>' cannot be a [JsonSerializable] root: <reason>.` The roo
 | Rule | Severity | Message shape |
 |---|---|---|
 | Two distinct types map to one member name; the loser is the target of a `ref`, `base` or derived link | Error | `'Anchor.Image' and 'Clip.Image' both map to context member 'image'; 'Anchor.Image' is referenced by 'Anchor.Overlay', so it cannot be dropped. Use TypeInfoPropertyName to resolve the collision.` |
-| A member name equals a `SerializerContext` member (`options`, `converters`, `createSpec`, `createValueSpec`, `readOptions`, `resolve`, `_registry`, `constructor`) or the generated static `default` / `_default` (#270 decision (e)) | Error | `'Registry' maps to context field '_registry', which SerializerContext already declares. Use TypeInfoPropertyName.` |
+| A member name equals a `SerializerContext` member (`options`, `converters`, `createSpec`, `createValueSpec`, `readOptions`, `resolve`, `_registry`, `constructor`); the generated static `default` / `_default` do not clash with instance members and are not reserved (#270 decision (e)) | Error | `'Registry' maps to context field '_registry', which SerializerContext already declares. Use TypeInfoPropertyName.` |
 | Two distinct roots map to one member name; the loser is not referenced | Warning | `'N2.Dup' and 'N1.Dup' both map to context member 'dup'; 'N1.Dup' was kept. Use TypeInfoPropertyName to resolve the collision.` |
 | One type listed twice with different `TypeInfoPropertyName` values (#270) | Warning | `'System.Collections.Generic.List<string>' is listed again with TypeInfoPropertyName 'Labels'; the first TypeInfoPropertyName 'Names' was kept.` |
 

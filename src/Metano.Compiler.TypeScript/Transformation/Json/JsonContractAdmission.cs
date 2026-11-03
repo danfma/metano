@@ -30,9 +30,12 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
     /// <summary>
     /// Why an object-kind root cannot get a <c>TypeSpec</c>, or <c>null</c>
     /// when it can. A root may also name a transpiled type of a referenced
-    /// Metano package, which the context imports.
+    /// Metano package, which the context imports. A closed generic is reported
+    /// as not supported yet only when its definition is transpiled; a BCL
+    /// generic (<c>KeyValuePair</c>, <c>ValueTuple</c>, <c>SortedDictionary</c>,
+    /// …) is not transpiled at all.
     /// </summary>
-    public string? RejectObjectRoot(INamedTypeSymbol type)
+    public string? ObjectRootRejectionReasonOf(INamedTypeSymbol type)
     {
         if (type.TypeKind == TypeKind.Interface)
             return "interfaces other than the recognized collection, dictionary and set "
@@ -42,15 +45,26 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
         if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
             return "it is not a class or struct, so it has no JSON object contract";
 
-        if (type.IsGenericType)
+        if (type.IsGenericType && IsTranspiledContract(type.OriginalDefinition))
             return "closed generic object types are not supported by the TypeScript context yet";
 
-        if (IsDiscoverable(type) || IsPackageContract(type))
+        if (!type.IsGenericType && (IsDiscoverable(type) || IsPackageContract(type)))
             return null;
 
         return "it is not a transpiled class or struct of this project or of a referenced "
             + "Metano package, so it has no TypeScript contract";
     }
+
+    private bool IsTranspiledContract(INamedTypeSymbol definition) =>
+        IsPackageContract(definition)
+        || (
+            IsInCurrentAssembly(definition)
+            && SymbolHelper.IsTranspilable(
+                definition,
+                _context.AssemblyWideTranspile,
+                _context.CurrentAssembly
+            )
+        );
 
     private static bool IsNonGenericClassOrStruct(INamedTypeSymbol type) =>
         type is { TypeKind: TypeKind.Class or TypeKind.Struct, IsGenericType: false }
