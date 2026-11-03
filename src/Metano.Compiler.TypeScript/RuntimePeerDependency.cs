@@ -10,10 +10,11 @@ namespace Metano;
 /// app supplies a single shared copy (the runtime's classes rely on <c>instanceof</c>).
 /// </summary>
 /// <remarks>
-/// <c>metano-runtime</c> is published with the same version as the compiler release
-/// (<c>.releaserc.json</c> packs the compiler with <c>-p:Version=X</c> and
-/// <c>scripts/sync-npm-version.sh</c> publishes the runtime as <c>X</c> from the same
-/// tag), so the compiler's own informational version is the runtime version it targets.
+/// <c>metano-runtime</c> is published with the same version as the compiler release: the
+/// release pipeline packs the compiler with <c>-p:MinVerVersionOverride=X</c> (MinVer is what
+/// sets the assembly's informational version; <c>-p:Version</c> alone does not reach it) and
+/// <c>scripts/sync-npm-version.sh</c> publishes the runtime as <c>X</c> from the same tag. So
+/// the compiler's own informational version is the runtime version it targets.
 /// </remarks>
 public static partial class RuntimePeerDependency
 {
@@ -24,6 +25,17 @@ public static partial class RuntimePeerDependency
     /// prerelease or <c>0.0.0</c> version no registry has): any runtime satisfies it.
     /// </summary>
     public const string UnpublishedBuildSpecifier = "*";
+
+    private static readonly Regex StableCaretSpecifier = new(@"^\^\d+\.\d+\.\d+$");
+
+    /// <summary>
+    /// True when <paramref name="specifier"/> has the shape this class writes
+    /// (<c>*</c> or <c>^Major.Minor.Patch</c>), so a stored value of that shape is the
+    /// writer's own and may be refreshed; any other shape is the consumer's.
+    /// </summary>
+    public static bool IsOwnSpecifier(string? specifier) =>
+        specifier == UnpublishedBuildSpecifier
+        || (specifier is not null && StableCaretSpecifier.IsMatch(specifier));
 
     /// <summary>The specifier for the running compiler's own release version.</summary>
     public static string CurrentSpecifier { get; } = SpecifierFor(ReadCompilerVersion());
@@ -45,8 +57,11 @@ public static partial class RuntimePeerDependency
 
     /// <summary>
     /// True when any generated file imports <c>metano-runtime</c> (or one of its subpaths).
-    /// Reads the printed contents rather than the AST: files reused from the incremental
-    /// cache are statement-less stubs, but their content is always available.
+    /// Reads the printed contents because they are the one input available on every path:
+    /// cold, per-group cache hit and full cache hit (only the full-hit path has
+    /// statement-less <c>TsSourceFile</c> stubs, so the AST cannot be walked there). It relies
+    /// on the printer's single-line <c>import … from "…";</c> format
+    /// (<c>Printer.PrintImport</c>); the compiler emits no re-export of the runtime.
     /// </summary>
     public static bool IsImportedBy(IEnumerable<GeneratedFile> files) =>
         files.Any(file => RuntimeImport().IsMatch(file.Content));

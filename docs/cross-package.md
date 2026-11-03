@@ -236,10 +236,15 @@ the generated `package.json` lists `metano-runtime` under `peerDependencies`
 (`^X.Y.Z`, the compiler's own release version; builds without a published
 version, such as local preview builds, write `*`), so the app supplies the one
 shared copy. A single copy matters: runtime classes such as `HashSet` and
-`Grouping` are checked with `instanceof`, which fails across duplicates. If your
-`package.json` already declares `metano-runtime` in `dependencies`,
-`devDependencies` or `peerDependencies` (for example `workspace:*`), it is left
-untouched; nothing is added when no emitted file imports the runtime.
+`Grouping` are checked with `instanceof`, which fails across duplicates.
+
+The writer never overrides your choice. If your `package.json` already declares
+`metano-runtime` in `dependencies`, `devDependencies` or `optionalDependencies`,
+or in `peerDependencies` with a value of your own (`workspace:*`, `~2.7`,
+`>=2`, ...), it is left untouched. A `peerDependencies` entry that has the
+writer's own shape (`*` or `^X.Y.Z`) is treated as the writer's and refreshed to
+the current compiler version on regeneration. Nothing is added when no emitted
+file imports the runtime, nor to a package that is itself `metano-runtime`.
 
 Two layouts are supported.
 
@@ -247,7 +252,7 @@ Two layouts are supported.
 a package under `generated/` (its own `package.json`, see
 [Getting Started](getting-started.md)) and link it from the root:
 
-```json
+```jsonc
 // package.json (workspace root)
 { "private": true, "workspaces": ["web", "generated/*"] }
 
@@ -274,8 +279,10 @@ imports use their own `#<alias>` key instead of the app's `#`:
 <MetanoImportAlias>domain</MetanoImportAlias>
 ```
 
-The generated entries are merged into the app's own `package.json`; declare
-`metano-runtime` in its `dependencies` as usual (the writer then leaves it alone).
+The generated entries are merged into the app's own `package.json`. If the app
+does not declare `metano-runtime`, the writer adds the `peerDependencies` entry
+described above; an app should replace it with a regular `dependency` on
+`metano-runtime`, after which the writer leaves it alone.
 
 ## Diagnostics you might hit
 
