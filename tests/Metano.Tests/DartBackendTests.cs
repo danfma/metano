@@ -1652,7 +1652,8 @@ public class DartBackendTests
     /// A nullable-tuple receiver over a different instantiation lowers to
     /// C#'s answer — <c>false</c>, unless both operands can be <c>null</c>
     /// and are — never to an instance call that does not exist on a Dart
-    /// record (#331).
+    /// record. An argument that may hold the tuple (an <c>object</c>)
+    /// compares with the record <c>==</c> instead (#331).
     /// </summary>
     [Test]
     public async Task MismatchedNullableTupleReceiver_LowersToFalseUnlessBothNull()
@@ -1673,7 +1674,37 @@ public class DartBackendTests
 
         var output = files["comparisons.dart"];
 
-        await Assert.That(output).Contains("=> false;");
-        await Assert.That(output).Contains("=> e == null ? f == null : false;");
+        await Assert
+            .That(output)
+            .Contains("static bool valueArgument((int, int)? c, (int, int) d) => false;");
+
+        await Assert
+            .That(output)
+            .Contains("static bool objectArgument((int, int)? e, Object f) => e == f;");
+    }
+
+    /// <summary>
+    /// A non-nullable tuple receiver over a different instantiation folds
+    /// to C#'s answer — <c>false</c> — instead of an instance call that
+    /// does not exist on a Dart record (#331).
+    /// </summary>
+    [Test]
+    public async Task MismatchedTupleReceiver_LowersToFalse()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool ValueMismatched((int, int) a, (int, long) b) => a.Equals(b);
+            }
+            """
+        );
+
+        await Assert
+            .That(files["comparisons.dart"])
+            .Contains("static bool valueMismatched((int, int) a, (int, int) b) => false;");
     }
 }

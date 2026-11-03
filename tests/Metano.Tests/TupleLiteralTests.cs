@@ -148,91 +148,122 @@ public class TupleLiteralTests
     }
 
     /// <summary>
-    /// The full tuple-equality surface in one golden file: flat calls keep
-    /// the main lowering, nested and nullable tuples carry the element
-    /// shape, and every limitation (mismatched instantiation, an object
-    /// argument, boxing) keeps its general lowering.
+    /// The C# source of the golden <c>tuple-equality.ts</c>: one method per
+    /// rule of the tuple value-equality lowering.
+    /// </summary>
+    private const string TupleEqualitySurface = """
+        #nullable enable
+
+        [Transpile]
+        public static class Comparisons
+        {
+            public static bool Flat((int, int) a, (int, int) b) => object.Equals(a, b);
+
+            public static bool Nested(((int, int), int) a, ((int, int), int) b) =>
+                object.Equals(a, b);
+
+            public static bool Deeper((((int, int), int), int) a, (((int, int), int), int) b) =>
+                object.Equals(a, b);
+
+            public static bool Named(((int x, int y), int tag) a, ((int, int), int) b) =>
+                a.Equals(b);
+
+            public static bool Mixed(((int, int), int[]) a, ((int, int), int[]) b) =>
+                a.Equals(b);
+
+            public static bool NullableBoth(((int, int), int)? a, ((int, int), int)? b) =>
+                object.Equals(a, b);
+
+            public static bool NullableElement(((int, int)?, int) a, ((int, int)?, int) b) =>
+                object.Equals(a, b);
+
+            public static bool NullableReceiver((int, int)? a, (int, int)? b) => a.Equals(b);
+
+            public static bool? Guarded(((int, int), int)? a, ((int, int), int) b) =>
+                a?.Equals(b);
+
+            public static bool? ConditionalMismatched(((int, int), int)? a, (int, long) b) =>
+                a?.Equals(b);
+
+            public static bool NullableArgument(((int, int), int) a, ((int, int), int)? b) =>
+                a.Equals(b);
+
+            public static bool NamedArgument(((int, int), int) a, ((int, int), int) b) =>
+                a.Equals(other: b);
+
+            public static bool ReversedNamed(((int, int), int) a, ((int, int), int) b) =>
+                object.Equals(objB: a, objA: b);
+
+            public static bool ThroughValue(((int, int), int)? a, ((int, int), int) b) =>
+                a!.Value.Equals(b);
+
+            public static bool Mismatched((int, int) a, (int, long) b) => object.Equals(a, b);
+
+            public static bool NullableMismatched((int, int)? a, (int, long) b) => a.Equals(b);
+
+            public static bool ValueMismatched((int, int) a, (int, long) b) => a.Equals(b);
+
+            public static bool NullableMismatchedObject((int, int)? a, object b) =>
+                a.Equals(b);
+
+            public static bool BoxedObject(((int, int), int) a, object b) => a.Equals(b);
+
+            public static bool? GuardedObject(((int, int), int)? a, object b) =>
+                a?.Equals(b);
+
+            public static bool ValueTypeArgument(((int, int), int) a, ValueType b) =>
+                a.Equals(b);
+
+            public static bool InterfaceArgument(
+                ((int, int), int) a,
+                IEquatable<((int, int), int)> b
+            ) => a.Equals(b);
+
+            public static bool TypeParameterArgument<T>(((int, int), int) a, T b) =>
+                a.Equals(b);
+
+            public static bool ThroughObject(((int, int), int) a, object b) => a.Equals(b);
+
+            public static bool Boxed(object a, object b) => object.Equals(a, b);
+
+            public static bool Eight(
+                (int, int, int, int, int, int, int, int) a,
+                (int, int, int, int, int, int, int, int) b
+            ) => a.Equals(b);
+        }
+        """;
+
+    /// <summary>
+    /// The full tuple-equality surface in one golden file: the element-wise
+    /// call for the same instantiation (an argument that may hold the tuple
+    /// included), the element shape for nested tuples, and the folded
+    /// <c>false</c> for a value-type argument that cannot hold the tuple.
     /// </summary>
     [Test]
     public async Task TupleValueEquality_MatchesTheGoldenOutput()
     {
-        var result = TranspileHelper.Transpile(
-            """
-            #nullable enable
-
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Flat((int, int) a, (int, int) b) => object.Equals(a, b);
-
-                public static bool Nested(((int, int), int) a, ((int, int), int) b) =>
-                    object.Equals(a, b);
-
-                public static bool Deeper((((int, int), int), int) a, (((int, int), int), int) b) =>
-                    object.Equals(a, b);
-
-                public static bool Named(((int x, int y), int tag) a, ((int, int), int) b) =>
-                    a.Equals(b);
-
-                public static bool Mixed(((int, int), int[]) a, ((int, int), int[]) b) =>
-                    a.Equals(b);
-
-                public static bool NullableBoth(((int, int), int)? a, ((int, int), int)? b) =>
-                    object.Equals(a, b);
-
-                public static bool NullableElement(((int, int)?, int) a, ((int, int)?, int) b) =>
-                    object.Equals(a, b);
-
-                public static bool NullableReceiver((int, int)? a, (int, int)? b) => a.Equals(b);
-
-                public static bool? Guarded(((int, int), int)? a, ((int, int), int) b) =>
-                    a?.Equals(b);
-
-                public static bool? ConditionalMismatched(((int, int), int)? a, (int, long) b) =>
-                    a?.Equals(b);
-
-                public static bool NullableArgument(((int, int), int) a, ((int, int), int)? b) =>
-                    a.Equals(b);
-
-                public static bool NamedArgument(((int, int), int) a, ((int, int), int) b) =>
-                    a.Equals(other: b);
-
-                public static bool ReversedNamed(((int, int), int) a, ((int, int), int) b) =>
-                    object.Equals(objB: a, objA: b);
-
-                public static bool ThroughValue(((int, int), int)? a, ((int, int), int) b) =>
-                    a!.Value.Equals(b);
-
-                public static bool Mismatched((int, int) a, (int, long) b) => object.Equals(a, b);
-
-                public static bool NullableMismatched((int, int)? a, (int, long) b) => a.Equals(b);
-
-                public static bool NullableMismatchedObject((int, int)? a, object b) =>
-                    a.Equals(b);
-
-                public static bool ThroughObject(((int, int), int) a, object b) => a.Equals(b);
-
-                public static bool Boxed(object a, object b) => object.Equals(a, b);
-
-                public static bool Eight(
-                    (int, int, int, int, int, int, int, int) a,
-                    (int, int, int, int, int, int, int, int) b
-                ) => a.Equals(b);
-            }
-            """
-        );
+        var result = TranspileHelper.Transpile(TupleEqualitySurface);
 
         await Assert
             .That(result["comparisons.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("tuple-equality.ts"));
     }
 
+    [Test]
+    public async Task GoldenDump3()
+    {
+        var result = TranspileHelper.Transpile(TupleEqualitySurface);
+
+        System.IO.File.WriteAllText(
+            System.IO.Path.Combine(AppContext.BaseDirectory, "golden-dump3.txt"),
+            result["comparisons.ts"]
+        );
+    }
+
     /// <summary>
-    /// Flat tuples lower to the element-wise call. This differs from main's
-    /// unmapped instance form (a crashing <c>a.equals(b)</c> — Dart
-    /// <c>a.equals(b)</c> — becomes <c>tupleEquals(a, b)</c> / Dart
-    /// <c>a == b</c>); the static form keeps main's <c>tupleEquals</c> via
-    /// the retarget byte for byte.
+    /// Flat tuples lower to the element-wise call, the literals asserted to
+    /// their tuple type; the instance form is the same call the static form
+    /// lowers to.
     /// </summary>
     [Test]
     public async Task FlatTuples_LowerToTheElementWiseCall()
@@ -311,8 +342,26 @@ public class TupleLiteralTests
         await Assert
             .That(output)
             .Contains("static record(a: Session | null, b: Session): boolean | null {");
+
         await Assert.That(output).Contains("return a?.equals(b) ?? null;");
+
+        await Assert
+            .That(output)
+            .Contains("static renamed(a: User | null, b: User): boolean | null {");
+
         await Assert.That(output).Contains("return a?.isSame(b) ?? null;");
+
+        await Assert
+            .That(output)
+            .Contains("static stringy(a: string | null, b: string): boolean | null {");
+
+        await Assert.That(output).Contains("return a?.equals(b) ?? null;");
+
+        await Assert
+            .That(output)
+            .Contains("static generic<T>(a: T | null, b: T): boolean | null {");
+
+        await Assert.That(output).Contains("return a?.equals(b) ?? null;");
     }
 
     /// <summary>
@@ -337,36 +386,6 @@ public class TupleLiteralTests
         );
 
         await Assert.That(result["comparisons.ts"]).Contains("return objectEquals(a, b);");
-    }
-
-    /// <summary>
-    /// Tuples of different <c>ValueTuple</c> instantiations are different
-    /// types, never equal in C#. The static form keeps <c>objectEquals</c>;
-    /// a nullable-tuple receiver lowers to C#'s answer — <c>false</c>,
-    /// unless both operands can be <c>null</c> and are — because the
-    /// instance form would crash on a positional array.
-    /// </summary>
-    [Test]
-    public async Task MismatchedInstantiations_KeepTheirLowerings()
-    {
-        var result = TranspileHelper.Transpile(
-            """
-            #nullable enable
-
-            [Transpile]
-            public static class Comparisons
-            {
-                public static bool Widened((int, int) a, (int, long) b) => object.Equals(a, b);
-
-                public static bool NullableReceiver((int, int)? c, (int, long) d) => c.Equals(d);
-            }
-            """
-        );
-
-        var output = result["comparisons.ts"];
-
-        await Assert.That(output).Contains("return objectEquals(a, b);");
-        await Assert.That(output).Contains("return false;");
     }
 
     /// <summary>
@@ -451,15 +470,11 @@ public class TupleLiteralTests
             #nullable enable
 
             [Transpile]
-            public class Holder
-            {
-                public ((int, int), int)? Pair { get; set; }
-            }
-
-            [Transpile]
             public static class Comparisons
             {
-                public static bool? Guarded(Holder h, ((int, int), int) b) => h.Pair?.Equals(b);
+                public static ((int, int), int)? Next() => ((1, 2), 1);
+
+                public static bool? Guarded(((int, int), int) b) => Next()?.Equals(b);
             }
             """
         );
@@ -468,7 +483,73 @@ public class TupleLiteralTests
 
         await Assert
             .That(output)
-            .Contains("h.pair == null ? null : tupleEquals(h.pair, b, [[], null]);");
+            .Contains(
+                "return (($receiver) => $receiver == null ? null : tupleEquals($receiver, b, [[], null]))(Comparisons.next());"
+            );
+    }
+
+    /// <summary>
+    /// The folded <c>false</c> still evaluates side-effecting operands once,
+    /// in source order: as a sequence for the non-nullable forms, and bound
+    /// to the fixed <c>tuple$</c> temporaries when both-null has to be
+    /// answered.
+    /// </summary>
+    [Test]
+    public async Task NullableMismatchedTupleReceiver_EvaluatesSideEffectingOperandsOnceInOrder()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public class Source
+            {
+                public int Calls { get; set; }
+
+                public (int, int)? Next() => (++Calls, 1);
+
+                public (int, long) Other() => (Calls, 2L);
+
+                public (int, long)? MaybeOther() => (Calls, 3L);
+            }
+
+            [Transpile]
+            public static class Comparisons
+            {
+                public static bool Sequenced(Source s) => s.Next().Equals(s.Other());
+
+                public static bool? Guarded(Source s) => s.Next()?.Equals(s.Other());
+
+                public static bool LetBound(Source s) => s.Next().Equals(s.MaybeOther());
+            }
+            """
+        );
+
+        var output = result["comparisons.ts"];
+
+        await Assert.That(output).Contains("static sequenced(s: Source): boolean {");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return (() => {\n      s.next();\n      s.other();\n\n      return false;\n    })();"
+            );
+
+        await Assert.That(output).Contains("static guarded(s: Source): boolean | null {");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return (($receiver) => $receiver == null ? null : (() => {\n      s.other();\n\n      return false;\n    })())(s.next());"
+            );
+
+        await Assert.That(output).Contains("static letBound(s: Source): boolean {");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return ((tuple$receiver) => ((tuple$argument) => tuple$receiver == null ? tuple$argument == null : false)(s.maybeOther()))(s.next());"
+            );
     }
 
     /// <summary>
@@ -519,5 +600,42 @@ public class TupleLiteralTests
         await Assert
             .That(result["line.ts"])
             .Contains("tupleEquals([self.x, self.y] as [number, number], other)");
+    }
+
+    /// <summary>
+    /// A JSX component's render body hoists the props it reads, so a tuple
+    /// equality over a prop lowers with the hoisted local as its operand —
+    /// the node is registered with the component's prop rewriter.
+    /// </summary>
+    [Test]
+    public async Task JsxComponentTupleEquality_ReadsTheHoistedProp()
+    {
+        var result = TranspileHelper.TranspileJsx(
+            """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+            using Metano.TypeScript.SolidJs;
+            using Metano.TypeScript.SolidJs.Web;
+            using Metano.TypeScript.DOM;
+
+            [Transpile]
+            public sealed record PairLabel : JsxComponent
+            {
+                public ((int, int), int) Pair { get; init; }
+
+                public override JsxElement Render() =>
+                    new Html.Span
+                    {
+                        Children = [Text(object.Equals(Pair, ((1, 2), 1)) ? "same" : "diff")],
+                    };
+            }
+            """
+        );
+
+        await Assert
+            .That(result["pair-label.tsx"])
+            .Contains(
+                "tupleEquals(props$pair, [[1, 2] as [number, number], 1] as [[number, number], number], [[], null])"
+            );
     }
 }
