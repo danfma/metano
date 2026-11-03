@@ -1591,4 +1591,20 @@ public static class SymbolHelper
 
         return null;
     }
+
+    /// <summary>
+    /// A tuple type's own <c>Equals(object)</c> override, the call the
+    /// element-wise equality lowerings retarget to. <c>null</c> when the type
+    /// declares none.
+    /// </summary>
+    public static IMethodSymbol? InstanceEqualsOverObject(INamedTypeSymbol type) =>
+        type.GetMembers(nameof(object.Equals))
+            .OfType<IMethodSymbol>()
+            .FirstOrDefault(m =>
+                m
+                    is {
+                        IsStatic: false,
+                        Parameters: [{ Type.SpecialType: SpecialType.System_Object }],
+                    }
+            );
 }

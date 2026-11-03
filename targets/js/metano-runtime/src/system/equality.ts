@@ -213,15 +213,43 @@ export function objectEquals(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * The element structure of a C# tuple, as the compiler emits it for
+ * {@link tupleEquals}'s `shape` argument: one entry per positional element, `null`
+ * for an element that is not a tuple, a nested `TupleShape` for an element that is
+ * itself a tuple (possibly nullable — `null` elements compare equal there). An
+ * empty array marks a nested tuple without tuple elements of its own.
+ */
+export type TupleShape = readonly (TupleShape | null)[];
+
+/**
  * C#'s `ValueTuple.Equals(other)` over the positional arrays C# tuples lower to: same
  * length, and each element pair equal under {@link objectEquals} (C# compares each
  * element with `EqualityComparer<T>.Default`, so a class element compares by reference).
- * A nested tuple element is an array too, so it compares by reference.
+ *
+ * At runtime a nested tuple and a C# array are both JS arrays, which `objectEquals`
+ * cannot tell apart — so a call whose static tuple type has tuple elements passes the
+ * compiler-computed `shape`, and those elements compare element-wise (recursively)
+ * instead of by reference. A nullable tuple (or nullable tuple element) is the value
+ * or `null` here, so both operands are null-guarded: both `null` equal, one `null`
+ * unequal, otherwise element-wise — C#'s `Nullable<T>.Equals` and `object.Equals`
+ * answers for nullable tuples.
  */
-export function tupleEquals(tuple: readonly unknown[], other: unknown): boolean {
-  if (!Array.isArray(other) || other.length !== tuple.length) return false;
+export function tupleEquals(tuple: unknown, other: unknown, shape?: TupleShape): boolean {
+  if (tuple == null || other == null) {
+    return tuple == null && other == null;
+  }
 
-  return tuple.every((element, index) => objectEquals(element, other[index]));
+  if (!Array.isArray(tuple) || !Array.isArray(other) || tuple.length !== other.length) {
+    return false;
+  }
+
+  return tuple.every((element, index) => {
+    const nested = shape?.[index];
+
+    return nested == null
+      ? objectEquals(element, other[index])
+      : tupleEquals(element, other[index], nested);
+  });
 }
 
 function hasEqualsMethod(value: object): value is { equals(other: unknown): boolean } {

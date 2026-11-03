@@ -9,30 +9,33 @@ namespace Metano.Compiler.Extraction.Invocation;
 /// <c>a.Equals(b)</c>. The general lowering cannot tell a boxed tuple from any
 /// other object at runtime (in TypeScript both are arrays, and a C# array
 /// compares by reference), so it compares the tuples by reference. When both
-/// operands are statically (non-nullable) tuples of the same
-/// <c>ValueTuple</c> instantiation (element names aside), the call is
-/// retargeted to the first one's own <c>Equals(object)</c>, so the backend's
-/// <c>ValueTuple.Equals</c> mapping applies (TypeScript's element-wise
-/// <c>tupleEquals</c>; Dart maps neither call yet). The two calls agree: a
-/// tuple is never <c>null</c>, and <c>object.Equals(a, b)</c> is
-/// <c>a.Equals(b)</c> once <c>a</c> is not <c>null</c>. Operands keep their
-/// source order.
+/// operands are statically tuples of the same <c>ValueTuple</c> instantiation
+/// (element names aside), the call is retargeted to the first one's own
+/// <c>Equals(object)</c>, so the backend's <c>ValueTuple.Equals</c> mapping
+/// applies (TypeScript's element-wise <c>tupleEquals</c>; Dart maps neither
+/// call yet). Operands keep their source order.
+/// <para>
+/// A nullable tuple operand (<c>(int, int)?</c>, one or both) unwraps to the
+/// same instantiation, so it retargets too: the runtime <c>tupleEquals</c>
+/// guards the null cases C# answers — both null <c>true</c>, one null
+/// <c>false</c>, else element-wise — and each operand is still evaluated
+/// once. (A tuple is never <c>null</c> itself, so the non-nullable retarget
+/// keeps agreeing with <c>object.Equals</c>.)
+/// </para>
+/// <para>
+/// The retargeted call carries the receiver's tuple type, so a backend whose
+/// tuples are positional arrays — where a nested tuple and a C# array are
+/// indistinguishable — can compare nested tuple elements by value (#331).
+/// </para>
 /// <para>
 /// Any other pair keeps the general lowering, where the element-wise
 /// comparison could answer <c>true</c> while C# answers <c>false</c>: an
 /// operand of another static type (an array, a class, or <c>object</c>, which
 /// may hold an array of equal elements), or a tuple of another instantiation
 /// (<c>(int, int)</c> against <c>(int, long)</c>: a different type, never
-/// equal). So a boxed tuple (typed <c>object</c>) and a nullable tuple
-/// (<c>(int, int)?</c>, which may be <c>null</c> and has no receiver to
-/// retarget to) still compare by reference.
-/// </para>
-/// <para>
-/// Known gap: <c>tupleEquals</c> compares a nested tuple element by
-/// reference, so <c>object.Equals(((1, 2), 3), ((1, 2), 3))</c> is
-/// <c>false</c> in TypeScript and <c>true</c> in C#. At runtime a nested tuple
-/// and a C# array are both arrays, so a fix needs the element types from the
-/// compiler (#331).
+/// equal). So a boxed tuple (typed <c>object</c>) still compares by
+/// reference: at runtime it cannot be told apart from a C# array, a
+/// limitation the runtime keeps by design.
 /// </para>
 /// </summary>
 public sealed partial class IntrinsicBclLoweringTable
@@ -67,30 +70,44 @@ public sealed partial class IntrinsicBclLoweringTable
         if (!AreSameTupleType(first, second))
             return null;
 
-        if (InstanceEqualsOverObject(first!) is not { } tupleEquals)
+        if (SymbolHelper.InstanceEqualsOverObject(first!) is not { } tupleEquals)
             return null;
 
         return new IrCallExpression(
             new IrMemberAccess(ctx.Recurse(arguments[0].Expression), tupleEquals.Name),
             [new IrArgument(ctx.Recurse(arguments[1].Expression))],
-            Origin: _helpers.BuildOrigin(tupleEquals)
+            Origin: _helpers.BuildOrigin(tupleEquals),
+            TupleType: _helpers.MapTypeRef(first!) as IrTupleTypeRef
         );
     }
 
     /// <summary>
     /// <paramref name="operand"/>'s tuple type, before the conversion to
-    /// <c>object</c>; <c>null</c> when the operand is not a tuple, or is a
-    /// nullable one (which may be <c>null</c>).
+    /// <c>object</c>, unwrapping a nullable tuple (<c>(int, int)?</c>, which
+    /// may be <c>null</c> at runtime) to the tuple itself; <c>null</c> when
+    /// the operand is not a tuple.
     /// </summary>
-    private static INamedTypeSymbol? TupleTypeOf(ExpressionSyntax operand, SemanticModel model) =>
-        model.GetTypeInfo(operand).Type is INamedTypeSymbol { IsTupleType: true } tuple
-            ? tuple
-            : null;
+    private static INamedTypeSymbol? TupleTypeOf(ExpressionSyntax operand, SemanticModel model)
+    {
+        var type = model.GetTypeInfo(operand).Type;
+
+        if (
+            type is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+            } nullable
+        )
+        {
+            type = nullable.TypeArguments[0];
+        }
+
+        return type is INamedTypeSymbol { IsTupleType: true } tuple ? tuple : null;
+    }
 
     /// <summary>
-    /// Two tuples (neither <c>null</c>) of the same <c>ValueTuple</c>
-    /// instantiation: element names are compile-time only, so
-    /// <c>(int x, int y)</c> and <c>(int p, int q)</c> are one type.
+    /// Two tuples of the same <c>ValueTuple</c> instantiation: element names
+    /// are compile-time only, so <c>(int x, int y)</c> and <c>(int p, int
+    /// q)</c> are one type.
     /// </summary>
     private static bool AreSameTupleType(INamedTypeSymbol? first, INamedTypeSymbol? second) =>
         first is not null
@@ -99,15 +116,4 @@ public sealed partial class IntrinsicBclLoweringTable
             first.TupleUnderlyingType ?? first,
             second.TupleUnderlyingType ?? second
         );
-
-    private static IMethodSymbol? InstanceEqualsOverObject(INamedTypeSymbol type) =>
-        type.GetMembers(nameof(object.Equals))
-            .OfType<IMethodSymbol>()
-            .FirstOrDefault(m =>
-                m
-                    is {
-                        IsStatic: false,
-                        Parameters: [{ Type.SpecialType: SpecialType.System_Object }]
-                    }
-            );
 }

@@ -70,6 +70,7 @@ public sealed partial class IntrinsicBclLoweringTable : IInvocationRewriter
         SeedStringJoin(compilation);
         SeedHashCode(compilation);
         SeedObjectEquals(compilation);
+        SeedValueTupleEquals(compilation);
     }
 
     /// <summary>

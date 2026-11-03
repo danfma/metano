@@ -348,4 +348,40 @@ describe("objectEquals / tupleEquals (C# object.Equals and ValueTuple.Equals)", 
     expect(tupleEquals([1, 2], [1, 2, 3])).toBe(false);
     expect(tupleEquals([1, 2], null)).toBe(false);
   });
+
+  describe("tupleEquals with a shape (nested tuple elements, #331)", () => {
+    test("nested tuples compare element-wise, at any depth", () => {
+      // Distinct array instances with equal content: equal only through the shape.
+      expect(tupleEquals([[1, 2], 3], [[1, 2], 3], [[], null])).toBe(true);
+      expect(tupleEquals([[[1, 2], 3], 4], [[[1, 2], 3], 4], [[[], null], null])).toBe(true);
+      expect(tupleEquals([[1, 2], 3], [[1, 9], 3], [[], null])).toBe(false);
+      expect(tupleEquals([[1, 2], 3], [[1, 2], 4], [[], null])).toBe(false);
+      expect(tupleEquals([[1, 2], 3], [[[1, 9], 3], 4], [[[], null], null])).toBe(false);
+    });
+
+    test("a length mismatch is unequal, outer or nested", () => {
+      expect(tupleEquals([[1, 2], 3], [[1, 2], 3, 4], [[], null])).toBe(false);
+      expect(tupleEquals([[1, 2], 3], [[1], 3], [[], null])).toBe(false);
+    });
+
+    test("an element the shape marks as non-tuple compares by reference", () => {
+      const array = [1, 2];
+
+      expect(tupleEquals([array, 3], [array, 3], [null, null])).toBe(true);
+      expect(tupleEquals([array, 3], [[1, 2], 3], [null, null])).toBe(false);
+      // A tuple element next to an array element: value vs reference per position.
+      expect(tupleEquals([[1, 2], array], [[1, 2], array], [[], null])).toBe(true);
+      expect(tupleEquals([[1, 2], array], [[1, 2], [1, 2]], [[], null])).toBe(false);
+    });
+
+    test("null operands follow Nullable<T>.Equals", () => {
+      expect(tupleEquals(null, null)).toBe(true);
+      expect(tupleEquals(null, [1, 2])).toBe(false);
+      expect(tupleEquals([1, 2], null)).toBe(false);
+      // A nullable tuple element: both null equal, one null unequal.
+      expect(tupleEquals([null, 3], [null, 3], [[], null])).toBe(true);
+      expect(tupleEquals([null, 3], [[1, 2], 3], [[], null])).toBe(false);
+      expect(tupleEquals([[1, 2], 3], [null, 3], [[], null])).toBe(false);
+    });
+  });
 });

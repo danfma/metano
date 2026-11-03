@@ -92,8 +92,80 @@ public static class IrToTsBclMapper
                 )
                 : loweredReceiver;
 
+        if (
+            TryMapTupleEqualsWithShape(call, match, receiver, loweredArgs, typeArgumentNames) is
+            { } shaped
+        )
+            return shaped;
+
         return ApplyMethodMapping(match, receiver, loweredArgs, typeArgumentNames);
     }
+
+    /// <summary>The runtime import the <c>ValueTuple.Equals</c> mappings declare.</summary>
+    private const string TupleEqualsImport = "tupleEquals";
+
+    /// <summary>
+    /// A <c>ValueTuple.Equals</c> call whose receiver's static tuple type has
+    /// tuple elements: the runtime <c>tupleEquals</c> cannot tell a nested
+    /// tuple from a C# array (both are JS arrays), so the call carries the
+    /// compiler-computed element shape as a trailing argument. The shape is a
+    /// nested array literal — one entry per element, <c>null</c> for a
+    /// non-tuple element, the nested shape for a tuple element (a nullable
+    /// tuple element included; <c>[]</c> marks a nested tuple without tuple
+    /// elements of its own). A flat tuple keeps the declarative template
+    /// verbatim, so its output is byte-identical.
+    /// </summary>
+    private static TsExpression? TryMapTupleEqualsWithShape(
+        IrCallExpression call,
+        DeclarativeMappingEntry mapping,
+        TsExpression? receiver,
+        IReadOnlyList<TsExpression> loweredArgs,
+        IReadOnlyList<string> typeArgumentNames
+    )
+    {
+        if (call.TupleType is not { } tupleType)
+            return null;
+
+        if (!mapping.HasTemplate || !mapping.RuntimeImportsList.Contains(TupleEqualsImport))
+            return null;
+
+        if (TupleShapeText(tupleType) is not { } shape)
+            return null;
+
+        return new TsTemplate(
+            "tupleEquals($this, $0, $1)",
+            receiver,
+            [.. loweredArgs, new TsLiteral(shape)]
+        )
+        {
+            TypeArgumentNames = typeArgumentNames,
+            RuntimeImports = mapping.RuntimeImportsList,
+        };
+    }
+
+    /// <summary>
+    /// The shape literal for <paramref name="tuple"/>'s elements, or
+    /// <c>null</c> when no element (unwrapping nullable) is a tuple.
+    /// </summary>
+    private static string? TupleShapeText(IrTupleTypeRef tuple)
+    {
+        if (!tuple.Elements.Any(HasTupleElement))
+            return null;
+
+        var entries = tuple.Elements.Select(element =>
+            UnderlyingTupleOf(element) is IrTupleTypeRef nested
+                ? TupleShapeText(nested) ?? "[]"
+                : "null"
+        );
+
+        return $"[{string.Join(", ", entries)}]";
+    }
+
+    private static bool HasTupleElement(IrTypeRef element) =>
+        UnderlyingTupleOf(element) is IrTupleTypeRef;
+
+    private static IrTypeRef UnderlyingTupleOf(IrTypeRef element) =>
+        element is IrNullableTypeRef { Inner: var inner } ? inner : element;
 
     /// <summary>
     /// Tries to map <c>new T(args)</c> through a declarative constructor
