@@ -229,6 +229,54 @@ For monorepo development, use `Version = "workspace:*"` (or omit `Version`
 entirely to let it fall back automatically) so Bun/pnpm/Yarn workspaces link
 the packages symbolically.
 
+## Consuming a generated package from an app
+
+Generated code imports helpers from `metano-runtime`. When any emitted file does,
+the generated `package.json` lists `metano-runtime` under `peerDependencies`
+(`^X.Y.Z`, the compiler's own release version; builds without a published
+version, such as local preview builds, write `*`), so the app supplies the one
+shared copy. A single copy matters: runtime classes such as `HashSet` and
+`Grouping` are checked with `instanceof`, which fails across duplicates. If your
+`package.json` already declares `metano-runtime` in `dependencies`,
+`devDependencies` or `peerDependencies` (for example `workspace:*`), it is left
+untouched; nothing is added when no emitted file imports the runtime.
+
+Two layouts are supported.
+
+**1. A Bun workspace with the generated package next to the app.** Generate into
+a package under `generated/` (its own `package.json`, see
+[Getting Started](getting-started.md)) and link it from the root:
+
+```json
+// package.json (workspace root)
+{ "private": true, "workspaces": ["web", "generated/*"] }
+
+// web/package.json
+{
+  "dependencies": {
+    "domain-ts": "workspace:*",
+    "metano-runtime": "^X.Y.Z"
+  }
+}
+```
+
+The app's `metano-runtime` dependency satisfies the generated package's peer.
+Avoid `bun add file:../generated/domain-ts`: it installs per-file symlinks, so
+files generated later do not show up until you reinstall. `workspace:*` links the
+whole directory.
+
+**2. Emitting inside the app's source tree, with no separate package.** Point
+`MetanoOutputDir` at a folder in the app and set `MetanoImportAlias` so generated
+imports use their own `#<alias>` key instead of the app's `#`:
+
+```xml
+<MetanoOutputDir>../web/src/domain</MetanoOutputDir>
+<MetanoImportAlias>domain</MetanoImportAlias>
+```
+
+The generated entries are merged into the app's own `package.json`; declare
+`metano-runtime` in its `dependencies` as usual (the writer then leaves it alone).
+
 ## Diagnostics you might hit
 
 ### `MS0007` — Cross-package type without `[EmitPackage]`

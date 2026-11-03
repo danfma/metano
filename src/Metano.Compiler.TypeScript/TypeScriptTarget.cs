@@ -124,13 +124,6 @@ public sealed class TypeScriptTarget : ITranspilerTarget
 
         var crossPackageDependencies = transformer.CrossPackageDependencies;
 
-        LastPackageManifestInputs = CapturePackageManifestInputs(
-            ir,
-            roslynCompilation,
-            sourceFiles,
-            crossPackageDependencies
-        );
-
         var printer = new Printer();
         var generated = new List<GeneratedFile>(sourceFiles.Count);
         foreach (var file in sourceFiles)
@@ -146,6 +139,14 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             else
                 generated.Add(new GeneratedFile(file.FileName, printer.Print(file)));
         }
+
+        LastPackageManifestInputs = CapturePackageManifestInputs(
+            ir,
+            roslynCompilation,
+            sourceFiles,
+            crossPackageDependencies,
+            generated
+        );
 
         return new TargetOutput(generated, transformer.Diagnostics)
         {
@@ -180,7 +181,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             ir,
             roslynCompilation,
             reusedFiles,
-            packageDependencies
+            packageDependencies,
+            files
         );
     }
 
@@ -188,7 +190,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         IrCompilation ir,
         Compilation compilation,
         IReadOnlyList<TsSourceFile> sourceFiles,
-        IReadOnlyDictionary<string, string> crossPackageDependencies
+        IReadOnlyDictionary<string, string> crossPackageDependencies,
+        IReadOnlyList<GeneratedFile> generatedFiles
     ) =>
         new(
             sourceFiles,
@@ -201,7 +204,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
                 ),
             SubpathRoot: ir.PackageSubpathRoot,
             CrossPackageDependencies: crossPackageDependencies,
-            IsExecutable: compilation.Options.OutputKind == OutputKind.ConsoleApplication
+            IsExecutable: compilation.Options.OutputKind == OutputKind.ConsoleApplication,
+            ImportsRuntime: RuntimePeerDependency.IsImportedBy(generatedFiles)
         );
 
     private static Compilation RequireRoslynCompilation(Compilation? compilation) =>
