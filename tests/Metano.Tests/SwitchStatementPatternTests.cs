@@ -832,7 +832,7 @@ public class SwitchStatementPatternTests
         var output = files["describer.dart"];
 
         await Assert.That(output).Contains("case Circle c when c.r > 10:");
-        await Assert.That(output).Contains("case > 5:");
+        await Assert.That(output).Contains("case int && > 5:");
         await Assert.That(output).Contains("      default:\n        return 'other';");
     }
 

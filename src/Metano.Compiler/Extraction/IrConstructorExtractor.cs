@@ -186,7 +186,7 @@ public static class IrConstructorExtractor
                 var (promotion, promotedVisibility, emittedName) = ResolvePromotionInfo(p, context);
                 return new IrConstructorParameter(
                     new IrParameter(
-                        p.Name,
+                        IrParameterNaming.IrNameOf(p, compilation),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         p.HasExplicitDefaultValue,
                         ExtractDefaultValue(p, compilation, originResolver),

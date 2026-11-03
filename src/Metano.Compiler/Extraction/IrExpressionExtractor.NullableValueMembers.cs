@@ -50,6 +50,16 @@ public sealed partial class IrExpressionExtractor
                 ContainingType.OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
             };
 
+    /// <summary>
+    /// An explicit conversion from a nullable value to a non-nullable value
+    /// type (<c>(int)n</c>, <c>(long)n</c>), which throws like
+    /// <c>n.Value</c> when the value is missing.
+    /// </summary>
+    private static bool UnwrapsNullableValue(ITypeSymbol sourceType, ITypeSymbol targetType) =>
+        sourceType.IsNullableValueType()
+        && targetType.IsValueType
+        && !targetType.IsNullableValueType();
+
     private IrExpression ValueOrThrowWhenMissing(
         ExpressionSyntax receiverSyntax,
         IrExpression receiver

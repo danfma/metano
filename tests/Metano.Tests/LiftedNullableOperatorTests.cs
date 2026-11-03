@@ -202,7 +202,7 @@ public class LiftedNullableOperatorTests
     }
 
     [Test]
-    public async Task CompoundOnSideEffectingTarget_IsNotLifted()
+    public async Task CompoundOnSideEffectingTarget_IsLiftedWithTheReceiverEvaluatedOnce()
     {
         var output = TranspileInHelperClass(
             """
@@ -213,15 +213,23 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("o.self().qty += 1;");
+        await Assert.That(output).Contains("(receiver$temp$0) => receiver$temp$0.qty = ");
+        await Assert
+            .That(output)
+            .Contains("receiver$temp$0.qty == null ? null : receiver$temp$0.qty + 1");
+        await Assert.That(output).Contains("(o.self())");
     }
 
     [Test]
-    public async Task BooleanLogicalOperators_KeepThreeValuedLowering()
+    public async Task BooleanLogicalOperators_FollowThreeValuedLogic()
     {
         var output = TranspileInHelperClass("public static bool? Both(bool? a, bool? b) => a & b;");
 
-        await Assert.That(output).Contains("return a & b;");
+        await Assert
+            .That(output)
+            .Contains(
+                "return a === false || b === false ? false : a == null || b == null ? null : true;"
+            );
     }
 
     [Test]

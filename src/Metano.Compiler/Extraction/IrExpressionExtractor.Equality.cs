@@ -48,9 +48,29 @@ public sealed partial class IrExpressionExtractor
                 EqualityOperator(byValue: true, negated),
                 Extract(bin.Right)
             ),
+            IBinaryOperation { IsLifted: true } when IsNullableDecimalComparison(bin) =>
+                new IrBinaryExpression(
+                    Extract(bin.Left),
+                    EqualityOperator(byValue: true, negated),
+                    Extract(bin.Right)
+                ),
             _ => null,
         };
     }
+
+    /// <summary>
+    /// <c>==</c> / <c>!=</c> between two <c>decimal</c> operands, at least
+    /// one of them <c>decimal?</c>, and neither the <c>null</c> literal
+    /// (which stays a plain null check). A Decimal is an object, so the plain
+    /// operator would compare references; value equality is null-safe and
+    /// compares by value.
+    /// </summary>
+    private bool IsNullableDecimalComparison(BinaryExpressionSyntax bin) =>
+        !IsNullLiteral(bin.Left)
+        && !IsNullLiteral(bin.Right)
+        && IsDecimalOrNullableDecimalOperand(bin.Left)
+        && IsDecimalOrNullableDecimalOperand(bin.Right)
+        && (IsNullableValueOperand(bin.Left) || IsNullableValueOperand(bin.Right));
 
     /// <summary>
     /// The record's synthesized <c>==</c> / <c>!=</c> (a record cannot

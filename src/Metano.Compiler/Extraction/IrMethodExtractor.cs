@@ -31,7 +31,7 @@ public static class IrMethodExtractor
             .Parameters.Select(p =>
                 OutParameterFlow.Annotate(
                     new IrParameter(
-                        p.Name,
+                        IrParameterNaming.IrNameOf(p, compilation),
                         IrTypeRefMapper.Map(p.Type, originResolver, target),
                         HasDefaultValue: p.HasExplicitDefaultValue,
                         DefaultValue: ExtractDefaultValue(p, compilation, originResolver),

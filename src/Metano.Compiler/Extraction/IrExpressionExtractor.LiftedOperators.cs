@@ -23,6 +23,7 @@ public sealed partial class IrExpressionExtractor
 {
     private static readonly IrLiteral NullLiteral = new(null, IrLiteralKind.Null);
     private static readonly IrLiteral FalseLiteral = new(false, IrLiteralKind.Boolean);
+    private static readonly IrLiteral TrueLiteral = new(true, IrLiteralKind.Boolean);
 
     /// <summary>
     /// One operand of an operator: the extracted value, whether it can be
@@ -82,9 +83,9 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>target op= value</c> when the compound operator is lifted:
-    /// <c>target = target op value</c> with the lifted operator. Only for a
-    /// target that can be read twice without side effects; any other target
-    /// keeps the ordinary compound lowering.
+    /// <c>target = target op value</c> with the lifted operator, evaluating
+    /// the target's receiver and index once (see
+    /// <see cref="BuildReadModifyWrite"/>).
     /// </summary>
     private IrExpression? TryExtractLiftedCompoundAssignment(
         AssignmentExpressionSyntax assign,
@@ -94,21 +95,25 @@ public sealed partial class IrExpressionExtractor
         if (TryMapCompoundAssignmentToBinary(assign.Kind()) is not { } mappedOp)
             return null;
 
-        var op = NarrowToIntegerDivision(mappedOp, assign);
+        var op = NarrowBuiltinOperator(mappedOp, assign);
 
-        if (
-            !PropagatesNullThroughLift(_semantic.GetOperation(assign), op)
-            || !IrEvaluationTraits.IsReusableReceiver(target)
-        )
+        if (!PropagatesNullThroughLift(_semantic.GetOperation(assign), op))
             return null;
 
-        var lifted = LiftBinary(
-            new OperatorOperand(target, IsNullableValueOperand(assign.Left), assign.Left),
-            OperandOf(assign.Right),
-            LiftedOperatorFor(op)
+        return BuildReadModifyWrite(
+            target,
+            assign,
+            readTarget =>
+                LiftBinary(
+                    new OperatorOperand(
+                        readTarget,
+                        IsNullableValueOperand(assign.Left),
+                        assign.Left
+                    ),
+                    OperandOf(assign.Right),
+                    LiftedOperatorFor(op)
+                )
         );
-
-        return new IrBinaryExpression(target, IrBinaryOp.Assign, lifted);
     }
 
     private LiftedOperator LiftedOperatorFor(IrBinaryOp op) =>
@@ -288,6 +293,24 @@ public sealed partial class IrExpressionExtractor
         if (right.Value is IrLiteral { Kind: IrLiteralKind.Null })
             return BindValueOnce(left.Value, _ => NullResultOf(op));
 
+        return BindOperandsInOrder(
+            left,
+            right,
+            (boundLeft, boundRight) => GuardLiftedOperator(boundLeft, boundRight, op)
+        );
+    }
+
+    /// <summary>
+    /// Binds the operands once, in source order — the left operand too when
+    /// the right one has side effects that could change what it reads — and
+    /// builds the result over the bound operands.
+    /// </summary>
+    private IrExpression BindOperandsInOrder(
+        OperatorOperand left,
+        OperatorOperand right,
+        Func<OperatorOperand, OperatorOperand, IrExpression> build
+    )
+    {
         var leftIsReusable =
             IrEvaluationTraits.IsSideEffectFree(left.Value) && CanBeReadAfter(left, right.Value);
 
@@ -297,12 +320,7 @@ public sealed partial class IrExpressionExtractor
             boundLeft =>
                 BindValueOnce(
                     right.Value,
-                    boundRight =>
-                        GuardLiftedOperator(
-                            left.WithValue(boundLeft),
-                            right.WithValue(boundRight),
-                            op
-                        )
+                    boundRight => build(left.WithValue(boundLeft), right.WithValue(boundRight))
                 )
         );
     }
