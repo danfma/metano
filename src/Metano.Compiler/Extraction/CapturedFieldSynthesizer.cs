@@ -12,9 +12,13 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class CapturedFieldSynthesizer
 {
-    /// <param name="CapturedParams">The captured parameters, keyed to their synthesized field's name — the map the identifier rewrite and the constructor annotation consume.</param>
-    /// <param name="Fields">The synthesized fields, in capture order, to append to the class's members.</param>
     /// <param name="isWritten">Decides whether something in the type writes the parameter (<see cref="PrimaryConstructorPromotion.IsWritten"/>): a written parameter's field is mutable.</param>
+    /// <returns>
+    /// <c>CapturedParams</c>: the captured parameters, keyed to their synthesized
+    /// field's name — the map the identifier rewrite and the constructor annotation
+    /// consume. <c>Fields</c>: the synthesized fields, in capture order, to append to
+    /// the class's members.
+    /// </returns>
     public static (
         IReadOnlyDictionary<ISymbol, string> CapturedParams,
         IReadOnlyList<IrFieldDeclaration> Fields
