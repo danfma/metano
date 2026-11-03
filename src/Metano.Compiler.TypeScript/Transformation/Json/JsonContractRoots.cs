@@ -168,7 +168,9 @@ internal sealed class JsonContractRoots(
 
     /// <summary>
     /// The first nested rejection among the type arguments of a closed
-    /// generic object contract, or <c>null</c>.
+    /// generic object contract, or <c>null</c>. Every type argument is
+    /// checked, used by a property or not: the spec's TS type names them all
+    /// (<c>TypeSpec&lt;Tagged&lt;Version&gt;&gt;</c>).
     /// </summary>
     private string? TypeArgumentsRejectionReasonOf(ITypeSymbol type) =>
         type is INamedTypeSymbol named
