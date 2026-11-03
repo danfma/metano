@@ -65,7 +65,7 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var rightValue = left is IrVarPattern capture
-            ? new TsIdentifier(capture.Designator.Name)
+            ? new TsIdentifier(IrToTsNamingPolicy.ToLocalName(capture.Designator.Name))
             : value;
 
         return new TsBinaryExpression(
@@ -179,7 +179,11 @@ public static partial class IrToTsExpressionBridge
         var assigned = value is TsElementAccess ? new TsPostfixUnaryExpression(value, "!") : value;
 
         return new TsBinaryExpression(
-            new TsBinaryExpression(new TsIdentifier(designator.Name), "=", assigned),
+            new TsBinaryExpression(
+                new TsIdentifier(IrToTsNamingPolicy.ToLocalName(designator.Name)),
+                "=",
+                assigned
+            ),
             ",",
             new TsLiteral("true")
         );
@@ -222,7 +226,12 @@ public static partial class IrToTsExpressionBridge
             return lowered;
 
         return TsImmediateInvocation.Of(
-            [.. bindings.Select(binding => new TsImmediateBinding(binding.Name, binding.Value))],
+            [
+                .. bindings.Select(binding => new TsImmediateBinding(
+                    IrToTsNamingPolicy.ToLocalName(binding.Name),
+                    binding.Value
+                )),
+            ],
             [new TsReturnStatement(lowered)],
             isAsync: IrEvaluationTraits.ContainsAwait(guard)
         );

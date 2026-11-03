@@ -72,8 +72,7 @@ public static class IrToTsModuleBridge
                     field.Initializer,
                     field.IsReadonly,
                     typeOverrides,
-                    bclRegistry,
-                    field.IsConst
+                    bclRegistry
                 ),
                 IrPropertyDeclaration property => ConvertVariable(
                     property,
@@ -83,8 +82,7 @@ public static class IrToTsModuleBridge
                         is IrPropertyAccessors.GetOnly
                             or IrPropertyAccessors.GetInit,
                     typeOverrides,
-                    bclRegistry,
-                    isConst: false
+                    bclRegistry
                 ),
                 _ => throw new UnreachableException(
                     $"Unexpected module variable {variable.GetType().Name}."
@@ -101,8 +99,7 @@ public static class IrToTsModuleBridge
         IrExpression? initializer,
         bool isReadonly,
         IrToTsTypeOverrides? typeOverrides,
-        DeclarativeMappingRegistry? bclRegistry,
-        bool isConst
+        DeclarativeMappingRegistry? bclRegistry
     )
     {
         var value = initializer is not null
@@ -110,11 +107,7 @@ public static class IrToTsModuleBridge
             : IrToTsClassBridge.ComputeDefaultInitializer(type);
 
         return new TsVariableDeclaration(
-            IrToTsNamingPolicy.ToModuleVariableName(
-                member.Name,
-                IrToTsNamingPolicy.FindNameOverride(member.Attributes),
-                isConst
-            ),
+            IrToTsNamingPolicy.ToModuleVariableName(member),
             value,
             // A `const` needs an initializer; a member with no literal default is a `let`.
             Const: isReadonly && value is not null,

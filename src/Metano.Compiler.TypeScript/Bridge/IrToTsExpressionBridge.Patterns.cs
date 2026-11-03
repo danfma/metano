@@ -482,8 +482,10 @@ public static partial class IrToTsExpressionBridge
     /// <c>$s[i]</c>). Inside the matched <c>if</c> TypeScript narrows those
     /// paths by the <c>instanceof</c> test, so a type-pattern designator gets
     /// the tested type. A designator the arm reassigns
-    /// (<paramref name="reassigned"/>) is a <c>let</c>, every other one a
-    /// <c>const</c>.
+    /// (<paramref name="reassigned"/> — IR names, like the
+    /// <see cref="PatternBinding"/> names it checks) is a <c>let</c>, every
+    /// other one a <c>const</c>; the declaration carries the emitted local
+    /// name, so it matches the reads (#390).
     /// </summary>
     private static IReadOnlyList<TsStatement> BuildPatternBindings(
         TsExpression value,
@@ -494,7 +496,7 @@ public static partial class IrToTsExpressionBridge
             .Select(binding =>
                 (TsStatement)
                     new TsVariableDeclaration(
-                        binding.Name,
+                        IrToTsNamingPolicy.ToLocalName(binding.Name),
                         binding.Value,
                         Const: !reassigned.Contains(binding.Name)
                     )

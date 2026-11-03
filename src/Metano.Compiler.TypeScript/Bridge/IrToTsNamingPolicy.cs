@@ -50,32 +50,57 @@ public static class IrToTsNamingPolicy
 
     /// <summary>
     /// Resolves the parameter name: camelCase with reserved-word escaping
-    /// (<c>delete</c> → <c>delete_</c>) since parameters are used as bare identifiers.
+    /// (<c>delete</c> → <c>delete_</c>) since parameters are used as bare
+    /// identifiers. A parameter is a local binding, so this is
+    /// <see cref="ToLocalName"/> — one decision for declarations and reads.
     /// </summary>
-    public static string ToParameterName(string irName) => TypeScriptNaming.ToCamelCase(irName);
+    public static string ToParameterName(string irName) => ToLocalName(irName);
 
     /// <summary>
-    /// The emitted name of a local binding — a local (a <c>const</c> included),
-    /// a foreach or catch variable, or a deconstruction element: camelCase with
-    /// reserved-word escaping, the same policy parameters use. Every declaration
-    /// site (the statement bridge) and every read (the expression bridge's
-    /// <c>IrIdentifier</c> arm) routes through here so the two name the same
+    /// The emitted name of a local binding — a local (a <c>const</c> included), a
+    /// parameter, a foreach or catch variable, a pattern designator, an out-var
+    /// or a deconstruction element: camelCase with reserved-word escaping
+    /// (<c>@default</c> → <c>default_</c>). The statement bridge's declaration
+    /// sites, the expression bridge's <c>IrIdentifier</c> reads and the pattern
+    /// binding emissions all route through here so every half names the same
     /// symbol whatever the C# casing was (#390).
     /// </summary>
-    public static string ToLocalName(string irName) => TypeScriptNaming.ToCamelCase(irName);
+    public static string ToLocalName(string irName) =>
+        TypeScriptNaming.EscapeIfReserved(TypeScriptNaming.ToCamelCase(irName));
+
+    /// <summary>
+    /// The emitted name of a module-scope compile-time constant — a C#
+    /// <c>const</c> field of a containerless static class: the <c>[Name]</c>
+    /// override verbatim, otherwise the C# name (module scope makes it the
+    /// module's public shape, and C# spells constants in PascalCase) with JS
+    /// reserved words escaped, since a top-level binding cannot carry one (#390).
+    /// </summary>
+    public static string ToModuleConstantName(string irName, string? emittedName) =>
+        emittedName ?? TypeScriptNaming.EscapeIfReserved(irName);
 
     /// <summary>
     /// The emitted name of a module variable — a static field or property of a
     /// containerless static class declared as a top-level variable: the
-    /// <c>[Name]</c> override verbatim, otherwise a C# compile-time constant
-    /// (<c>const</c>) keeps its C# name — module scope makes it the module's
-    /// public shape, and C# spells constants in PascalCase — while anything else
-    /// is camelCased like any data member. The declaration (module bridge), the
-    /// read (member-access bridge) and the shadow validation all resolve through
-    /// here so they agree on one name (#390).
+    /// <c>[Name]</c> override verbatim, otherwise the data-member rule
+    /// (camelCase, reserved words escaped — a top-level binding is a bare
+    /// identifier). Compile-time constants take
+    /// <see cref="ToModuleConstantName"/> instead; this overload is the
+    /// non-<c>const</c> member rule (#390).
     /// </summary>
-    public static string ToModuleVariableName(string irName, string? emittedName, bool isConst) =>
-        emittedName ?? (isConst ? irName : TypeScriptNaming.ToCamelCase(irName));
+    public static string ToModuleVariableName(string irName, string? emittedName) =>
+        emittedName ?? TypeScriptNaming.EscapeIfReserved(TypeScriptNaming.ToCamelCase(irName));
+
+    /// <summary>
+    /// The emitted name of <paramref name="variable"/> as a module variable,
+    /// picking the constant or the member rule from the IR node: a C#
+    /// <c>const</c> field keeps its C# name, anything else is camelCased (#390).
+    /// The module bridge's declaration and the collision report both resolve
+    /// through here so they name what is declared.
+    /// </summary>
+    public static string ToModuleVariableName(IrMemberDeclaration variable) =>
+        variable is IrFieldDeclaration { IsCompileTimeConstant: true }
+            ? ToModuleConstantName(variable.Name, FindNameOverride(variable.Attributes))
+            : ToModuleVariableName(variable.Name, FindNameOverride(variable.Attributes));
 
     /// <summary>
     /// Resolves the emitted type name from the IR's <see cref="IrAttribute"/>

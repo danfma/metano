@@ -1,16 +1,19 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
-/// Naming policy for <c>const</c> bindings (#390): a local — a <c>const</c> local
-/// included — is camelCased at its declaration and at every read, escaping JS
-/// reserved words like any other local; a module-scope compile-time constant
-/// (a C# <c>const</c> field of a containerless static class) keeps its C# name
-/// verbatim, at the declaration and at every read (same file, cross-file and
-/// cross-package); a <c>const</c> field of a regular class is a data member and
-/// stays camelCase; a <c>[Name]</c> override always wins verbatim. Whatever the
-/// rule, the declaration and every reference must resolve to the same emitted
-/// name — the bug these tests pin was a declaration under the C# name and reads
-/// under the camelCased one.
+/// Naming policy for <c>const</c> bindings (#390): every local binding — a
+/// local (a <c>const</c> local included), a parameter, a foreach or catch
+/// variable, a pattern designator, an out-var — is camelCased with JS
+/// reserved-word escaping at its declaration and at every read; a
+/// module-scope compile-time constant (a C# <c>const</c> field of a
+/// containerless static class the toolchain declares) keeps its C# name
+/// verbatim at the declaration and at every read (same file, cross-file and
+/// cross-package); a <c>const</c> field of a regular class is a data member
+/// and stays camelCase; a <c>[Name]</c> override always wins verbatim.
+/// Whatever the rule, the declaration and every reference must resolve to the
+/// same emitted name.
 /// </summary>
 public class ConstNamingConsistencyTests
 {
@@ -40,7 +43,8 @@ public class ConstNamingConsistencyTests
         await Assert.That(output).Contains("const k = 3;");
         await Assert.That(output).Contains("return k + x;");
         await Assert.That(output).Contains("return k + x + k;");
-        await Assert.That(output).DoesNotContain("K");
+        await Assert.That(output).DoesNotContain("const K =");
+        await Assert.That(output).DoesNotContain("return K");
     }
 
     [Test]
@@ -66,7 +70,8 @@ public class ConstNamingConsistencyTests
 
         await Assert.That(output).Contains("const factor = 3;");
         await Assert.That(output).Contains("return factor * n + x;");
-        await Assert.That(output).DoesNotContain("Factor");
+        await Assert.That(output).DoesNotContain("const Factor =");
+        await Assert.That(output).DoesNotContain("return Factor");
     }
 
     [Test]
@@ -94,11 +99,12 @@ public class ConstNamingConsistencyTests
 
         await Assert.That(output).Contains("const bonus = 10;");
         await Assert.That(output).Contains("return bonus + x;");
-        await Assert.That(output).DoesNotContain("Bonus");
+        await Assert.That(output).DoesNotContain("const Bonus =");
+        await Assert.That(output).DoesNotContain("return Bonus");
     }
 
     [Test]
-    public async Task ConstLocalInsideConstructorAccessorAndEntryPoint_MatchesCamelCaseDeclaration()
+    public async Task ConstLocalInsideConstructor_MatchesCamelCaseDeclaration()
     {
         var output = TranspileHelper.Transpile(
             """
@@ -106,13 +112,33 @@ public class ConstNamingConsistencyTests
             public class Sample
             {
                 private readonly int _seed;
-                private int _total;
 
                 public Sample()
                 {
                     const int Base = 1;
                     _seed = Base * 2;
                 }
+
+                public int Seed => _seed;
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("const base = 1;");
+        await Assert.That(output).Contains("this._seed = base * 2;");
+        await Assert.That(output).DoesNotContain("const Base =");
+        await Assert.That(output).DoesNotContain("= Base");
+    }
+
+    [Test]
+    public async Task ConstLocalInsideAccessor_MatchesCamelCaseDeclarationAndRead()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                private int _total;
 
                 public int Total
                 {
@@ -123,15 +149,21 @@ public class ConstNamingConsistencyTests
                     }
                     set { _total = value; }
                 }
-
-                public int F(int x)
-                {
-                    const int Step = 2;
-                    _total = x;
-                    return Total + Step;
-                }
             }
+            """
+        )["sample.ts"];
 
+        await Assert.That(output).Contains("const rounding = 1;");
+        await Assert.That(output).Contains("return this._total + rounding;");
+        await Assert.That(output).DoesNotContain("const Rounding =");
+        await Assert.That(output).DoesNotContain("+ Rounding");
+    }
+
+    [Test]
+    public async Task ConstLocalInsideModuleEntryPoint_MatchesCamelCaseDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
             [Transpile, NoContainer]
             public static class Program
             {
@@ -143,18 +175,35 @@ public class ConstNamingConsistencyTests
                 }
             }
             """
-        );
+        )["program.ts"];
 
-        var sample = output["sample.ts"];
-        await Assert.That(sample).Contains("const base = 1;");
-        await Assert.That(sample).Contains("this._seed = base * 2;");
-        await Assert.That(sample).Contains("const rounding = 1;");
-        await Assert.That(sample).Contains("const step = 2;");
-        await Assert.That(sample).Contains("return this.total + step;");
+        await Assert.That(output).Contains("const count = 3;");
+        await Assert.That(output).Contains("console.log(count)");
+        await Assert.That(output).DoesNotContain("const Count =");
+        await Assert.That(output).DoesNotContain("log(Count)");
+    }
 
-        var program = output["program.ts"];
-        await Assert.That(program).Contains("const count = 3;");
-        await Assert.That(program).Contains("console.log(count)");
+    [Test]
+    public async Task LocalNamedLikeReservedWord_EscapesWhenAlreadyLowerCase()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static int F()
+                {
+                    var @default = 2;
+                    var @new = @default + 1;
+                    return @new;
+                }
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("const default_ = 2;");
+        await Assert.That(output).Contains("const new_ = default_ + 1;");
+        await Assert.That(output).Contains("return new_;");
     }
 
     [Test]
@@ -203,7 +252,262 @@ public class ConstNamingConsistencyTests
         await Assert.That(output).Contains("let total = x * 2;");
         await Assert.That(output).Contains("total += 1;");
         await Assert.That(output).Contains("return total;");
+        await Assert.That(output).DoesNotContain("let Total =");
+        await Assert.That(output).DoesNotContain("return Total");
+    }
+
+    [Test]
+    public async Task PascalCaseForEachVariable_MatchesCamelCaseDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static int F(int[] xs)
+                {
+                    var sum = 0;
+                    foreach (var Item in xs)
+                    {
+                        sum += Item;
+                    }
+                    return sum;
+                }
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("for (const item of xs)");
+        await Assert.That(output).Contains("sum += item;");
+        await Assert.That(output).DoesNotContain("of Item");
+        await Assert.That(output).DoesNotContain("+ Item");
+    }
+
+    [Test]
+    public async Task PascalCaseCatchVariable_MatchesCamelCaseDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static string F()
+                {
+                    try
+                    {
+                        return Risky();
+                    }
+                    catch (System.Exception Ex)
+                    {
+                        return Ex.Message;
+                    }
+                }
+
+                private static string Risky() => throw new System.Exception("boom");
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("catch (ex)");
+        await Assert.That(output).Contains("return ex.message;");
+        await Assert.That(output).DoesNotContain("(Ex)");
+        await Assert.That(output).DoesNotContain("Ex.message");
+    }
+
+    [Test]
+    public async Task PascalCaseIsPatternDesignator_MatchesCamelCaseDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static string F(object o)
+                {
+                    if (o is int Num)
+                    {
+                        return (Num + 1).ToString();
+                    }
+                    return "no";
+                }
+            }
+            """
+        )["sample.ts"];
+
+        // The declaration is the typed `let` extraction hoists; the test
+        // assigns and the body reads the same emitted name.
+        await Assert.That(output).Contains("let num:");
+        await Assert.That(output).Contains("num = o");
+        await Assert.That(output).Contains("(num + 1)");
+    }
+
+    [Test]
+    public async Task PascalCaseListPatternDesignators_MatchCamelCaseDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static int F(int[] xs)
+                {
+                    if (xs is [var First, .. var Rest])
+                    {
+                        return First + Rest.Length;
+                    }
+                    return 0;
+                }
+            }
+            """
+        )["sample.ts"];
+
+        // The hoisted `let`s, the in-test assignments and the body reads all
+        // name the same emitted identifiers.
+        await Assert.That(output).Contains("let first: number;");
+        await Assert.That(output).Contains("let rest: number[] | null;");
+        await Assert.That(output).Contains("(first = xs[0]!, true)");
+        await Assert.That(output).Contains("(rest = xs.slice(1), true)");
+        await Assert.That(output).Contains("return first + rest.length;");
+        await Assert.That(output).DoesNotContain("First");
+        await Assert.That(output).DoesNotContain("Rest");
+    }
+
+    [Test]
+    public async Task PascalCaseSwitchExpressionDesignator_MatchesCamelCaseDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static int F(object o) =>
+                    o switch
+                    {
+                        int N when N > 0 => N,
+                        string S => S.Length,
+                        _ => 0,
+                    };
+            }
+            """
+        )["sample.ts"];
+
+        // The arm binds the designator (`const n = $s;`) and both the `when`
+        // guard and the outcome read the emitted name.
+        await Assert.That(output).Contains("const n =");
+        await Assert.That(output).Contains("n > 0");
+        await Assert.That(output).Contains("const s =");
+        await Assert.That(output).Contains("return s.length;");
+    }
+
+    [Test]
+    public async Task PascalCaseSwitchStatementCaseDesignator_MatchesCamelCaseDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public static int F(object o)
+                {
+                    switch (o)
+                    {
+                        case int N:
+                            return N * 2;
+                        default:
+                            return 0;
+                    }
+                }
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("const n =");
+        await Assert.That(output).Contains("return n * 2;");
+        await Assert.That(output).DoesNotContain("return N");
+    }
+
+    [Test]
+    public async Task PascalCaseOutVar_MatchesDestructuredDeclaration()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                private readonly System.Collections.Generic.Dictionary<string, int> _counts = new()
+                {
+                    { "a", 1 },
+                };
+
+                public int Fetch(string key) =>
+                    _counts.TryGetValue(key, out var Total) ? Total : 0;
+            }
+            """
+        )["sample.ts"];
+
+        await Assert.That(output).Contains("total");
         await Assert.That(output).DoesNotContain("Total");
+    }
+
+    [Test]
+    public async Task ExportVarFromBody_PascalCaseLocal_ExportsInPlaceUnderEmittedName()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Program
+            {
+                [ModuleEntryPoint, ExportVarFromBody("App", InPlace = true)]
+                public static void Main()
+                {
+                    var App = 1 + 2;
+                    System.Console.WriteLine(App);
+                }
+            }
+            """
+        );
+
+        var program = output["program.ts"];
+        await Assert.That(program).Contains("export const app = 1 + 2;");
+        await Assert.That(program).Contains("console.log(app)");
+
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Program
+            {
+                [ModuleEntryPoint, ExportVarFromBody("App", InPlace = true)]
+                public static void Main()
+                {
+                    var App = 1 + 2;
+                }
+            }
+            """
+        );
+        await Assert
+            .That(diagnostics.Any(d => d.Message.Contains("did not find a local variable")))
+            .IsFalse();
+    }
+
+    [Test]
+    public async Task ExportVarFromBody_PascalCaseLocal_ExportsTrailingUnderEmittedName()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Program
+            {
+                [ModuleEntryPoint, ExportVarFromBody("App", AsDefault = true)]
+                public static void Main()
+                {
+                    var App = new System.Text.StringBuilder();
+                }
+            }
+            """
+        )["program.ts"];
+
+        await Assert.That(output).Contains("const app = ");
+        await Assert.That(output).Contains("export default app;");
     }
 
     [Test]
@@ -277,6 +581,136 @@ public class ConstNamingConsistencyTests
 
         await Assert.That(output).Contains("import { MaxItems } from \"shared\"");
         await Assert.That(output).Contains("return MaxItems;");
+    }
+
+    [Test]
+    public async Task ModuleStaticReadOnly_SiblingOfConst_StaysCamelCaseWhileConstKeepsName()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Limits
+            {
+                public static readonly int Fallback = 10;
+                public const int HardCap = 20;
+
+                public static int Pick(bool hard) => hard ? HardCap : Fallback;
+            }
+            """
+        )["limits.ts"];
+
+        await Assert.That(output).Contains("export const fallback: number = 10;");
+        await Assert.That(output).Contains("export const HardCap: number = 20;");
+        await Assert.That(output).Contains("return hard ? HardCap : fallback;");
+    }
+
+    [Test]
+    public async Task ModuleConstNamedLikeReservedWord_Escapes()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Globals
+            {
+                public const int @new = 9;
+
+                public static int F(int x) => @new + x;
+            }
+            """
+        )["globals.ts"];
+
+        await Assert.That(output).Contains("export const new_: number = 9;");
+        await Assert.That(output).Contains("return new_ + x;");
+    }
+
+    [Test]
+    public async Task ModuleConstNextToSameSpellingFunction_ReportsNoCollision()
+    {
+        // `const Cap` keeps its C# name (`Cap`) while `cap()` emits `cap`, so
+        // the module declares two distinct names — no MS0001. Under the old
+        // camelCase rule both emitted `cap` and the check fired.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Counter
+            {
+                public const int Cap = 1;
+
+                public static int cap() => Cap;
+            }
+            """
+        );
+
+        await Assert.That(files).ContainsKey("counter.ts");
+        await Assert.That(files["counter.ts"]).Contains("export const Cap: number = 1;");
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Severity == MetanoDiagnosticSeverity.Error
+                    && d.Message.Contains("emitted under the same name")
+                )
+            )
+            .IsFalse();
+    }
+
+    [Test]
+    public async Task ModuleConstReadNextToSameSpellingLocal_ReportsNoShadow()
+    {
+        // The read emits `Max`; the local `max` emits `max` — distinct TS
+        // identifiers, so the shadow diagnostic must not fire.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Limits
+            {
+                public const int Max = 10;
+
+                public static int F()
+                {
+                    var max = 3;
+                    return Max + max;
+                }
+            }
+            """
+        );
+
+        await Assert.That(files).ContainsKey("limits.ts");
+        await Assert.That(files["limits.ts"]).Contains("export const Max: number = 10;");
+        await Assert.That(files["limits.ts"]).Contains("const max = 3;");
+        await Assert.That(files["limits.ts"]).Contains("return Max + max;");
+        await Assert.That(diagnostics.Any(d => d.Message.Contains("shadows"))).IsFalse();
+    }
+
+    [Test]
+    public async Task ConstOnExternalContainerlessClass_ReadKeepsMemberNaming()
+    {
+        // `[External]` declares a runtime-provided shape the toolchain does
+        // not emit, so its const is not a module constant: the read keeps the
+        // ordinary member rule (camelCase) even though the class is
+        // containerless and the access flattens to a bare identifier.
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [External, NoContainer]
+            public static class NativeLimits
+            {
+                public const int HardCap = 5;
+            }
+            """,
+            """
+            [assembly: TranspileAssembly]
+
+            public class Reader
+            {
+                public int Read() => NativeLimits.HardCap;
+            }
+            """
+        );
+
+        var output = result["reader.ts"];
+        await Assert.That(output).Contains("return hardCap;");
+        await Assert.That(output).DoesNotContain("HardCap");
     }
 
     [Test]
