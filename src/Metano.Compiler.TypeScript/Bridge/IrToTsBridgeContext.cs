@@ -23,8 +23,10 @@ internal sealed record IrToTsBridgeContext(
 {
     /// <summary>
     /// The context of a position outside class emission (module functions, plain
-    /// objects, branded structs, static operators, parameter defaults, initializers):
-    /// no backing field is ever recognized.
+    /// objects, branded structs, static operators, JSX components, entry-point
+    /// bodies): no backing field is ever recognized. Inside a class emission the
+    /// emitter passes the class's own scope everywhere, including parameter
+    /// defaults and member initializers.
     /// </summary>
     public static IrToTsBridgeContext For(DeclarativeMappingRegistry? bclRegistry) =>
         new(bclRegistry, PerClassBackingFieldScope.None);
