@@ -482,7 +482,7 @@ public class SwitchStatementPatternTests
             """
         );
 
-        await Assert.That(output).Contains("let total;");
+        await Assert.That(output).Contains("let total: number;");
         await Assert.That(output).Contains("total = c.r;");
         await Assert.That(output).Contains("total = s.side;");
         await Assert.That(output).DoesNotContain("let total = c.r;");
@@ -506,6 +506,93 @@ public class SwitchStatementPatternTests
 
         await Assert.That(output).Contains("($subject0 = h.inner, true)");
         await Assert.That(output).Contains("$subject0 instanceof Circle && $subject0.r > 0");
+    }
+
+    [Test]
+    public async Task ComputedGetterInSwitchLabelsAndArms_IsNotCaptured()
+    {
+        // Labels and arms rebind designators from the subject path, so a
+        // capture would only add a read.
+        var output = TranspileDescriber(
+            """
+            public static double Radius(Holder h)
+            {
+                switch (h)
+                {
+                    case { Inner: Circle { R: var r } }:
+                        return r;
+                    default:
+                        return 0;
+                }
+            }
+
+            public static int Arm(Holder h) =>
+                h switch
+                {
+                    { Inner: Circle { R: > 0 } } => 1,
+                    _ => 0,
+                };
+            """,
+            """
+            [Transpile]
+            public sealed class Holder
+            {
+                public Shape Inner => new Circle(1);
+            }
+            """
+        );
+
+        await Assert.That(output).DoesNotContain("$subject0");
+    }
+
+    [Test]
+    public async Task SharedVarLocal_IsHoistedWithItsInferredType()
+    {
+        var output = TranspileDescriber(
+            """
+            public static Func<double> Measure(object? o)
+            {
+                switch (o)
+                {
+                    case Circle c:
+                        var total = c.R;
+                        return () => total;
+                    case Square s:
+                        total = s.Side;
+                        return () => total;
+                    default:
+                        return () => 0;
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("let total: number;");
+    }
+
+    [Test]
+    public async Task SharedConstLocal_IsHoistedWithItsInitializer()
+    {
+        var output = TranspileDescriber(
+            """
+            public static double Measure(object? o)
+            {
+                switch (o)
+                {
+                    case Circle c:
+                        const double scale = 2;
+                        return c.R * scale;
+                    case Square s:
+                        return s.Side * scale;
+                    default:
+                        return 0;
+                }
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("const scale = 2;");
+        await Assert.That(output).DoesNotContain("scale = 2;\n          return");
     }
 
     [Test]

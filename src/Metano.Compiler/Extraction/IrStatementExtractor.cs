@@ -361,9 +361,20 @@ public sealed class IrStatementExtractor(
             variable.Identifier.ValueText,
             DeclaredLocalType(declaration, variable),
             initializer,
-            IsConst: isConst
+            IsConst: isConst,
+            InferredType: InferredLocalType(declaration, variable)
         );
     }
+
+    /// <summary>The inferred type of a <c>var</c> local; <c>null</c> for any other.</summary>
+    private IrTypeRef? InferredLocalType(
+        VariableDeclarationSyntax declaration,
+        VariableDeclaratorSyntax variable
+    ) =>
+        declaration.Type is IdentifierNameSyntax { Identifier.ValueText: "var" }
+        && _semantic.GetDeclaredSymbol(variable) is ILocalSymbol local
+            ? IrTypeRefMapper.Map(local.Type, _originResolver)
+            : null;
 
     /// <summary>
     /// The declared type of a local, or null for <c>var</c>. The declared
