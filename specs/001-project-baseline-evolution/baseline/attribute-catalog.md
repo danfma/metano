@@ -4,7 +4,7 @@ Metano's customization surface. Source of truth: `src/Metano/Annotations/*.cs` (
 `Metano.Annotations` namespace) plus a few **backend-specific** attributes that live inside a target
 project. Migrated from `old-spec/09-attribute-catalog.md` and **corrected against the codebase**.
 
-> Drift corrected during migration: `Metano.Annotations` ships **27 attribute types** today (the legacy
+> Drift corrected during migration: `Metano.Annotations` ships **28 attribute types** today (the legacy
 > catalog said "26"; the CLAUDE.md quick-table said "21"). Newly surfaced here: `[ObjectArgs]`,
 > `[Queryable]`, `[ImportAlias]`. Two non-attribute support enums also live in the folder
 > (`EmitTarget`, `TargetLanguage`) and are intentionally not counted as attributes.
@@ -28,6 +28,7 @@ project. Migrated from `old-spec/09-attribute-catalog.md` and **corrected agains
 | `[PlainObject]` | Emit DTO-style object shape without class wrapper. | `Annotations/PlainObjectAttribute.cs` |
 | `[Branded]` | Branded/opaque wrapper over a primitive (zero-cost nominal type). Successor of `[InlineWrapper]`. | `Annotations/BrandedAttribute.cs` |
 | `[InlineWrapper]` | Predecessor of `[Branded]`; kept working. Prefer `[Branded]`. | `Annotations/InlineWrapperAttribute.cs` |
+| `[JsonFactory]` | On the one static method of a `[Branded]` / `[InlineWrapper]` type that the generated `JsonSerializerContext` descriptor calls instead of the non-validating `create`, so C# validation (`From`) also runs on JSON input; TypeScript-only (→ MS0034). | `Annotations/JsonFactoryAttribute.cs` |
 | `[EmitInFile("name")]` | Co-locate multiple types in one output file (→ MS0008 on conflict). | `Annotations/EmitInFileAttribute.cs` |
 | `[ObjectArgs]` | Treat a parameter set as an object-args bag (widget/DSL-style call sites). | `Annotations/ObjectArgsAttribute.cs` |
 

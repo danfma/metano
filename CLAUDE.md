@@ -131,6 +131,7 @@ All attributes live in the `Metano.Annotations` namespace inside the `src/Metano
 | `[Import]` | Type/Method | Declares external JS module dependency (with optional `Version`, `AsDefault`) |
 | `[Emit("$0.foo($1)")]` | Method | Inlines JS at call site with argument placeholders |
 | `[InlineWrapper]` | Struct | Value wrapper that lowers to a branded primitive |
+| `[JsonFactory]` | Method | On a `[Branded]` type's static method: the generated `JsonSerializerContext` descriptor calls it (`create: Type.from`) instead of the non-validating `create`, so C# validation also runs on JSON input (TS-only; invalid shapes → MS0034) |
 | `[NoEmit]` | Type | Discoverable in C# but no .ts file emitted (ambient/declaration-only) |
 | `[ModuleEntryPoint]` | Method | Method body becomes top-level executable code in the module |
 | `[ExportVarFromBody]` | Method | Promotes a local var from the entry point to a module export |

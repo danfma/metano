@@ -108,24 +108,54 @@ internal sealed class JsonTypeDescriptorBuilder(
     }
 
     /// <summary>
-    /// System.Guid maps to the UUID branded type from metano-runtime.
-    /// Other branded types come from user-defined <c>[Branded]</c>
-    /// structs and use their TS type name directly.
+    /// System.Guid maps to the UUID branded type from metano-runtime. Other
+    /// branded types come from user-defined <c>[Branded]</c> structs and use
+    /// their TS type reference (qualified when nested). <c>create</c> is the
+    /// companion's non-validating factory unless the type declares a valid
+    /// <c>[JsonFactory]</c>, whose companion member the descriptor names
+    /// instead (FR-021).
     /// </summary>
     private TsObjectLiteral BuildBrandedDescriptor(ITypeSymbol type)
     {
         var named = (INamedTypeSymbol)type;
-
-        var tsTypeName =
-            named.ToDisplayString() == "System.Guid" ? "UUID" : _context.ResolveTsName(named);
+        var isGuid = named.ToDisplayString() == "System.Guid";
+        var tsTypeName = isGuid ? "UUID" : TypeReferenceName(named);
+        var factoryName = isGuid ? null : JsonBrandedFactoryResolver.Resolve(named)?.TsName;
 
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Branded),
             new TsObjectProperty(
                 "create",
-                new TsPropertyAccess(new TsIdentifier(tsTypeName), "create")
+                new TsPropertyAccess(QualifiedReference(tsTypeName), factoryName ?? "create")
             ),
         ]);
+    }
+
+    /// <summary>
+    /// The TS type reference of <paramref name="type"/>: the mapped type name,
+    /// qualified for a nested type (<c>Outer.Inner</c>) as property types
+    /// reference it.
+    /// </summary>
+    private string TypeReferenceName(INamedTypeSymbol type) =>
+        JsonTsTypes.Map(_context, type) is TsNamedType namedTs
+            ? namedTs.Name
+            : _context.ResolveTsName(type);
+
+    /// <summary>
+    /// A possibly qualified type reference as an expression: <c>Episode.Title</c>
+    /// is <c>Episode</c> accessed by <c>Title</c>, so the import collector sees
+    /// the root binding as a value use instead of an unresolvable dotted name.
+    /// </summary>
+    private static TsExpression QualifiedReference(string name)
+    {
+        var segments = name.Split('.');
+
+        return segments
+            .Skip(1)
+            .Aggregate<string, TsExpression>(
+                new TsIdentifier(segments[0]),
+                (target, segment) => new TsPropertyAccess(target, segment)
+            );
     }
 
     private TsObjectLiteral BuildEnumValuesDescriptor(ITypeSymbol type, JsonPropertyKind kind)

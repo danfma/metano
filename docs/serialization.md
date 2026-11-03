@@ -227,11 +227,51 @@ handles these kinds:
 | `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
-| `branded` | `[Branded]` / `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)` |
+| `branded` | `[Branded]` / `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)`, or the type's `[JsonFactory]` ([below](#validating-branded-types)) |
 | `enum` | string enum | passthrough (already string) | validates against allowed values |
 | `numericEnum` | numeric enum | passthrough | validates against allowed values |
 | `nullable` | `T \| null` | `null` passes through, else recurse | same |
 | `ref` | another spec | recursive `serialize` with target spec | recursive `deserialize` |
+
+## Validating branded types
+
+A `[Branded]` type's descriptor calls `Type.create(value)`, which only casts: the validation you
+wrote in C# (`From`) never runs on JSON input. Mark the validating method with `[JsonFactory]` and
+the descriptor calls it instead:
+
+```csharp
+[Branded]
+public readonly record struct Title(string Value)
+{
+    [JsonFactory]
+    public static Title From(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException("A title cannot be blank.");
+
+        return new Title(value.Trim());
+    }
+}
+```
+
+```ts
+type: { kind: "branded", create: Title.from },   // was: create: Title.create
+```
+
+`JsonSerializer.deserialize` then throws the factory's own error for `"   "` and returns `"ok"` for
+`"  ok "`. Exceptions propagate unchanged, at any nesting depth (nullable, array, map value and map
+key positions, and branded value roots). The member name is the one the companion declares, so
+`[Name("parse")]` gives `create: Title.parse`, and a nested type gives `create: Episode.Title.from`.
+
+A valid factory is a named static method (any accessibility) with exactly one parameter of the
+wrapper's underlying type, returning the containing type; it is neither generic nor overloaded, is
+emitted for TypeScript, is the type's only `[JsonFactory]`, and its TypeScript name is not `create`
+or `toString`. Anything else, or `[JsonFactory]` on a non-branded type, is error `MS0034` and the
+descriptor keeps `create`. Without the attribute nothing changes.
+
+This is TypeScript-only: Metano ships no `System.Text.Json` converter that calls the factory, so
+on the C# side `System.Text.Json` still writes the record struct as an object unless you supply
+your own `JsonConverter`.
 
 ## Attribute support
 
@@ -239,6 +279,7 @@ handles these kinds:
 |---|---|---|
 | `[JsonSerializable(typeof(T))]` | ✅ | Adds `T` and every object type reachable from it to the context's type list; collection, dictionary, set, primitive, enum, branded and nullable roots get a `ValueSpec` |
 | `[JsonSerializable(..., TypeInfoPropertyName = "X")]` | ✅ | Names the getter `x` for that type everywhere in the context |
+| `[JsonFactory]` (Metano) | ✅ | On a `[Branded]` type's static method: deserialization calls it instead of `create` ([details](#validating-branded-types)) |
 | `[JsonSourceGenerationOptions]` with `PropertyNamingPolicy` | ✅ | Applies the naming policy to all properties |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
 | `[JsonIgnore]` | ✅ | Excludes the property from the spec |

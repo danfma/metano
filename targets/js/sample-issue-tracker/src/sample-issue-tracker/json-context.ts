@@ -77,7 +77,7 @@ export class JsonContext extends SerializerContext {
           json: "assigneeId",
           type: {
             kind: "nullable",
-            inner: { kind: "branded", create: UserId.create },
+            inner: { kind: "branded", create: UserId.from },
           },
           optional: true,
         },
@@ -134,7 +134,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "authorId",
           json: "authorId",
-          type: { kind: "branded", create: UserId.create },
+          type: { kind: "branded", create: UserId.from },
         },
         {
           ts: "message",
