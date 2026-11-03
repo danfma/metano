@@ -484,7 +484,7 @@ public static partial class IrToTsExpressionBridge
                 ma.MemberName,
                 origin.EmittedName
             ),
-            { IsModuleVariable: true } origin => IrToTsNamingPolicy.ToModuleVariableName(
+            { IsModuleVariable: true } origin => IrToTsNamingPolicy.ToModuleDataVariableName(
                 ma.MemberName,
                 origin.EmittedName
             ),

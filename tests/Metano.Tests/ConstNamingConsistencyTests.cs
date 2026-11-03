@@ -737,8 +737,7 @@ public class ConstNamingConsistencyTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("(of_: number)");
-        await Assert.That(output).Contains("of_ + 3");
+        await Assert.That(output).Contains("(of_: number) => of_ + 3");
     }
 
     [Test]
@@ -756,10 +755,14 @@ public class ConstNamingConsistencyTests
             """
         )["sample.ts"];
 
-        // Every overload's fast-path signature and its body reads escape.
-        await Assert.That(output).Contains("(of_: number)");
-        await Assert.That(output).Contains("of_ + 1");
-        await Assert.That(output).Contains("of_ + by");
+        await Assert.That(output).Contains("static f(of_: number, by: number): number;");
+        await Assert.That(output).Contains("static f(of_: number): number;");
+        await Assert
+            .That(output)
+            .Contains("private static fOfBy(of_: number, by: number): number {");
+        await Assert.That(output).Contains("private static fOf(of_: number): number {");
+        await Assert.That(output).Contains("return of_ + 1;");
+        await Assert.That(output).Contains("return of_ + by;");
     }
 
     [Test]
@@ -839,13 +842,14 @@ public class ConstNamingConsistencyTests
             """
         )["line.ts"];
 
-        await Assert.That(output).Contains("of_");
-        await Assert.That(output).DoesNotContain("(of:");
-        await Assert.That(output).DoesNotContain("of + 1");
+        await Assert
+            .That(output)
+            .Contains("export function shift(self: Line, of_: number): number {");
+        await Assert.That(output).Contains("  return of_ + 1;");
     }
 
     [Test]
-    public async Task ParameterNamedLikeReservedWord_EscapesAtPrimaryConstructorPromotion()
+    public async Task ParameterNamedLikeReservedWord_EscapesAtExplicitConstructorParameter()
     {
         var output = TranspileHelper.Transpile(
             """
@@ -862,11 +866,60 @@ public class ConstNamingConsistencyTests
             """
         )["range.ts"];
 
-        // The promoted parameter declares its property under the member rule
-        // (which escapes `of`), and the capture assignment reads the same name.
-        await Assert.That(output).Contains("of_");
-        await Assert.That(output).DoesNotContain("of:");
-        await Assert.That(output).DoesNotContain("of;");
+        await Assert.That(output).Contains("constructor(of_: number) {");
+        await Assert.That(output).Contains("this.length = of_;");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtPrimaryConstructorCapture()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Range(int of)
+            {
+                private readonly int _of = of;
+
+                public int Length => _of;
+            }
+            """
+        )["range.ts"];
+
+        // The captured field's declaration and the constructor's capture
+        // assignment write the same member, and the parameter binding escapes.
+        await Assert.That(output).Contains("private readonly _of: number;");
+        await Assert.That(output).Contains("constructor(of_: number) {");
+        await Assert.That(output).Contains("this._of = of_;");
+    }
+
+    [Test]
+    public async Task ParameterNamedLikeReservedWord_EscapesAtConstructorOverloadDispatcher()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Sample
+            {
+                public Sample(int of, int by)
+                {
+                    Sum = of + by;
+                }
+
+                public Sample(int of)
+                    : this(of, 0) { }
+
+                public int Sum { get; }
+            }
+            """
+        )["sample.ts"];
+
+        // Overload signatures, the dispatcher's rebind of args and the
+        // `: this(...)` chain binding all escape the parameter name.
+        await Assert.That(output).Contains("constructor(of_: number, by: number);");
+        await Assert.That(output).Contains("constructor(of_: number);");
+        await Assert.That(output).Contains("const of_ = args[0] as number;");
+        await Assert.That(output).Contains("const of_ = __chain0Arg0;");
+        await Assert.That(output).Contains("this.sum = of_ + by;");
     }
 
     [Test]

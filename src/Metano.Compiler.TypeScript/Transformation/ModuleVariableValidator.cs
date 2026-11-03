@@ -219,16 +219,12 @@ public sealed class ModuleVariableValidator(
         && SymbolHelper.IsToolchainDeclared(owner, compilation.Assembly)
         && IsModuleState(symbol.OriginalDefinition);
 
-    // Mirrors IrToTsNamingPolicy.ToDeclaredModuleVariableName (the IR overload)
-    // from the Roslyn symbol this validator sees; keep the two in sync.
-    private static string EmittedName(ISymbol member)
-    {
-        var overrideName = member.GetNameOverride(TargetLanguage.TypeScript);
-
-        return member is IFieldSymbol { IsConst: true }
-            ? IrToTsNamingPolicy.ToModuleConstantName(member.Name, overrideName)
-            : IrToTsNamingPolicy.ToModuleVariableName(member.Name, overrideName);
-    }
+    private static string EmittedName(ISymbol member) =>
+        IrToTsNamingPolicy.ToDeclaredModuleVariableName(
+            member.Name,
+            member.GetNameOverride(TargetLanguage.TypeScript),
+            member is IFieldSymbol { IsConst: true }
+        );
 
     private static bool IsLocalBinding(ISymbol symbol) =>
         symbol

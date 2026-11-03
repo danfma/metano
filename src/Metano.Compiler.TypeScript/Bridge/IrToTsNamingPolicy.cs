@@ -79,28 +79,46 @@ public static class IrToTsNamingPolicy
         emittedName ?? TypeScriptNaming.EscapeIfReserved(irName);
 
     /// <summary>
-    /// The emitted name of a module variable — a static field or property of a
-    /// containerless static class declared as a top-level variable: the
-    /// <c>[Name]</c> override verbatim, otherwise the data-member rule
-    /// (camelCase, reserved words escaped — a top-level binding is a bare
-    /// identifier). Compile-time constants take
-    /// <see cref="ToModuleConstantName"/> instead; this overload is the
-    /// non-<c>const</c> member rule (#390).
+    /// The emitted name of a module data variable — a non-<c>const</c> static
+    /// field or property of a containerless static class declared as a
+    /// top-level variable: the <c>[Name]</c> override verbatim, otherwise the
+    /// data-member rule (camelCase, reserved words escaped — a top-level
+    /// binding is a bare identifier). Compile-time constants take
+    /// <see cref="ToModuleConstantName"/> instead (#390).
     /// </summary>
-    public static string ToModuleVariableName(string irName, string? emittedName) =>
+    public static string ToModuleDataVariableName(string irName, string? emittedName) =>
         emittedName ?? TypeScriptNaming.EscapeIfReserved(TypeScriptNaming.ToCamelCase(irName));
 
     /// <summary>
     /// The emitted name of <paramref name="variable"/> as a module variable,
-    /// picking the constant or the member rule from the IR node: a C#
-    /// <c>const</c> field keeps its C# name, anything else is camelCased (#390).
-    /// The module bridge's declaration and the collision report both resolve
+    /// from the facts the IR node carries: a C# compile-time constant keeps
+    /// its C# name (<see cref="ToModuleConstantName"/>), anything else takes
+    /// the member rule (<see cref="ToModuleDataVariableName"/>) (#390). The
+    /// module bridge's declaration and the collision report both resolve
     /// through here so they name what is declared.
     /// </summary>
     public static string ToDeclaredModuleVariableName(IrMemberDeclaration variable) =>
-        variable is IrFieldDeclaration { IsCompileTimeConstant: true }
-            ? ToModuleConstantName(variable.Name, FindNameOverride(variable.Attributes))
-            : ToModuleVariableName(variable.Name, FindNameOverride(variable.Attributes));
+        ToDeclaredModuleVariableName(
+            variable.Name,
+            FindNameOverride(variable.Attributes),
+            variable is IrFieldDeclaration { IsCompileTimeConstant: true }
+        );
+
+    /// <summary>
+    /// One decision for a module variable's emitted name over the facts each
+    /// caller computes from its own source (an IR node here, a Roslyn symbol
+    /// in the shadow validator): the <c>[Name]</c> override wins verbatim, a
+    /// C# compile-time constant keeps its C# name, anything else takes the
+    /// member rule (#390).
+    /// </summary>
+    public static string ToDeclaredModuleVariableName(
+        string name,
+        string? nameOverride,
+        bool isCompileTimeConstant
+    ) =>
+        isCompileTimeConstant
+            ? ToModuleConstantName(name, nameOverride)
+            : ToModuleDataVariableName(name, nameOverride);
 
     /// <summary>
     /// Resolves the emitted type name from the IR's <see cref="IrAttribute"/>

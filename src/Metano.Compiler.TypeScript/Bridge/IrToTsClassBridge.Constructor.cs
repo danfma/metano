@@ -240,9 +240,14 @@ internal static partial class IrToTsClassBridge
                     continue;
 
                 // The parameter binding uses the local policy; the captured
-                // field it writes is a member and keeps member naming.
+                // field it writes is named by the same data-member policy its
+                // declaration uses.
                 var paramName = IrToTsNamingPolicy.ToParameterName(p.Parameter.Name);
-                var fieldName = TypeScriptNaming.ToCamelCase(p.CapturedFieldName);
+                var fieldName = IrToTsNamingPolicy.ToDeclaredDataMemberName(
+                    p.CapturedFieldName,
+                    null
+                );
+
                 body.Add(
                     new TsExpressionStatement(
                         new TsBinaryExpression(
