@@ -60,8 +60,8 @@
       MetanoCompilerProject (dev mode) or a hash of the nearest .NET tool
       manifest of each file name (.config/dotnet-tools.json and
       dotnet-tools.json) plus one line per installed global tool version
-      folder. Bumping any of them
-      rewrites the key, so the next build reruns the target, and the compiler
+      folder. Bumping any of them rewrites the key, so the next build reruns
+      the target, and the compiler
       treats a different compiler release as an incremental cache miss
       (.metano-cache.json), so the output is regenerated. The key is a content
       check on purpose: NuGet extracts package files with their pack-time

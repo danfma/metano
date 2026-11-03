@@ -12,7 +12,11 @@ namespace Metano.Tests.Build;
 /// </summary>
 public class ToolchainKeyTests
 {
+    private const string ProjectFileName = "App.proj";
+
     private const string ToolStoreRelativePath = ".dotnet/tools/.store/metano.compiler.typescript";
+
+    private static readonly TimeSpan MsBuildTimeout = TimeSpan.FromMinutes(2);
 
     private readonly string _root = Directory
         .CreateTempSubdirectory("metano-toolchain-key-")
@@ -22,7 +26,8 @@ public class ToolchainKeyTests
 
     private string CliHome => Path.Combine(_root, "home");
 
-    private string KeyPath => Path.Combine(ProjectDir, "obj", "App.proj.MetanoToolchain.cache");
+    private string KeyPath =>
+        Path.Combine(ProjectDir, "obj", $"{ProjectFileName}.MetanoToolchain.cache");
 
     [Before(Test)]
     public void CreateProject()
@@ -36,7 +41,7 @@ public class ToolchainKeyTests
         );
 
         File.WriteAllText(
-            Path.Combine(ProjectDir, "App.proj"),
+            Path.Combine(ProjectDir, ProjectFileName),
             $"""<Project><Import Project="{targetsPath}" /></Project>"""
         );
     }
@@ -98,7 +103,8 @@ public class ToolchainKeyTests
         InstallGlobalTool("2.10.0");
         WriteToolManifest("2.10.0");
         await WriteKey();
-        var past = DateTime.UtcNow.AddHours(-1);
+        var oneHourAgo = DateTime.UtcNow.AddHours(-1);
+        var past = oneHourAgo.AddTicks(-(oneHourAgo.Ticks % TimeSpan.TicksPerSecond));
         File.SetLastWriteTimeUtc(KeyPath, past);
 
         await WriteKey();
@@ -153,12 +159,13 @@ public class ToolchainKeyTests
         {
             WorkingDirectory = ProjectDir,
             RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
 
         string[] arguments =
         [
             "msbuild",
-            "App.proj",
+            ProjectFileName,
             "-t:_MetanoWriteToolchainKey",
             "-nologo",
             "-nodeReuse:false",
@@ -170,14 +177,19 @@ public class ToolchainKeyTests
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
 
-        using var process = Process.Start(startInfo)!;
-        var output = await process.StandardOutput.ReadToEndAsync();
+        using var process =
+            Process.Start(startInfo)
+            ?? throw new InvalidOperationException("dotnet could not be started.");
 
-        await process.WaitForExitAsync();
+        using var timeout = new CancellationTokenSource(MsBuildTimeout);
+        var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+
+        await process.WaitForExitAsync(timeout.Token);
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException(
-                $"msbuild exited with {process.ExitCode}:\n{output}"
+                $"msbuild exited with {process.ExitCode}:\n{await output}\n{await errors}"
             );
 
         return File.ReadAllText(KeyPath);
