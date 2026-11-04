@@ -87,11 +87,12 @@ public class IrToTsOverloadDispatcherBridgeTests
     }
 
     [Test]
-    public async Task DecimalOverload_UsesIsFloat64_NotInstanceofDecimal()
+    public async Task DecimalOverload_WithoutBclOverride_ChecksANumber()
     {
-        // IrToTsTypeMapper still lowers `decimal` to `number`, so the guard
-        // must accept plain numbers. `instanceof Decimal` would never match
-        // and also introduce a runtime reference the legacy didn't require.
+        // Without the [ExportFromBcl] override IrToTsTypeMapper lowers
+        // `decimal` to `number`, so the guard must accept plain numbers; with
+        // it the parameter is a `Decimal` and the guard tests `instanceof
+        // Decimal` (covered by the dispatcher-defaults-imports golden).
         var (primary, containingTypeName) = ExtractOverloadGroup(
             """
             public class MoneyDispatch
@@ -112,7 +113,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
-        await Assert.That(printed).Contains("isFloat64(args[0])");
+        await Assert.That(printed).Contains("typeof args[0] === \"number\"");
         await Assert.That(printed).DoesNotContain("instanceof Decimal");
     }
 

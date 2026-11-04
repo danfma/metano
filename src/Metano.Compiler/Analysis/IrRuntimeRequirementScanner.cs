@@ -262,7 +262,6 @@ public static class IrRuntimeRequirementScanner
             IrPrimitive.Int64 => "isInt64",
             IrPrimitive.Float32 => "isFloat32",
             IrPrimitive.Float64 => "isFloat64",
-            IrPrimitive.Decimal => "isFloat64",
             IrPrimitive.Boolean => "isBool",
             IrPrimitive.BigInteger => "isBigInt",
             IrPrimitive.Guid => "isString",

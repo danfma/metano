@@ -109,6 +109,63 @@ public class OverloadDispatchArgumentTests
     }
 
     [Test]
+    public async Task Defaults_ReferencingValues_ImportThemAndKeepTheBclType()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public enum Color { Red, Green }
+
+            public class Painter
+            {
+                public string Log { get; } = "";
+
+                public Painter(Color c = Color.Green) { Log = "color:" + (int)c; }
+
+                public Painter(bool flag) { Log = "bool"; }
+
+                public string D(Color c = Color.Green) => "color:" + (int)c;
+
+                public string D(bool b) => "bool";
+
+                public static string F(int a, decimal d = 1.5m) => "dec:" + d;
+
+                public static string F(string s) => "s";
+            }
+            """
+        );
+
+        await Assert
+            .That(result["painter.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-defaults-imports.ts"));
+    }
+
+    [Test]
+    public async Task SingleMethod_EnumDefault_ImportsTheEnumAsAValue()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public enum Color { Red, Green }
+
+            public class Single
+            {
+                public string D(Color c = Color.Green) => "c" + (int)c;
+            }
+            """
+        );
+
+        var output = result["single.ts"];
+
+        await Assert.That(output).Contains("import { Color } from \"./color\";");
+        await Assert.That(output).DoesNotContain("import type { Color }");
+    }
+
+    [Test]
     public async Task OptionalAttribute_WithoutDefault_AcceptsTheOmittedArgument()
     {
         var result = TranspileHelper.Transpile(

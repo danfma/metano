@@ -71,7 +71,8 @@ public sealed class IrToTsClassEmitter(
         var backingFields = PerClassBackingFields.For(type);
         var lowering = new IrToTsBridgeContext(
             _context.DeclarativeMappings,
-            backingFields.ScopeFor(ir)
+            backingFields.ScopeFor(ir),
+            BclOverrides
         );
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);

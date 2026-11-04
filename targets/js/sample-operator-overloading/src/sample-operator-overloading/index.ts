@@ -4,4 +4,6 @@ export { Currency } from "./currency";
 export { InvalidCurrencyCodeException } from "./invalid-currency-code-exception";
 export { Money } from "./money";
 export { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception";
+export { PriceRule } from "./price-rule";
+export { Tagged } from "./tagged";
 export { UnsupportedCurrencyException } from "./unsupported-currency-exception";

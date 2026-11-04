@@ -14,6 +14,10 @@ small `Money` domain type.
   message composition (`ArgumentException` parameter suffix), a `Message`
   override two levels below the BCL base, and `: this(...)` chained
   constructors forwarding the inner exception as `cause`.
+- `PriceRule.cs` — constructor and method overloads with default values (an
+  enum and a `decimal` default) and `params` arrays, dispatched at runtime.
+- `Tagged.cs` — a generic class whose constructor overloads mix a
+  type-parameter-typed parameter with a concrete one of the same arity.
 - `Program.cs` — top-level code that creates money, applies `+=`, and writes the
   result.
 
@@ -31,6 +35,7 @@ The related TypeScript source is in
 - `no-same-money-currency-exception.ts`
 - `invalid-currency-code-exception.ts`, `unsupported-currency-exception.ts`,
   `currency-conversion-exception.ts`
+- `price-rule.ts`, `tagged.ts`
 - `program.ts`
 - `index.ts`
 

@@ -16,9 +16,14 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <param name="Bcl">The declarative BCL mappings, or <c>null</c> to emit raw
 /// member accesses and calls.</param>
 /// <param name="ClassFields">The backing fields in scope; never <c>null</c>.</param>
+/// <param name="TypeOverrides">The <c>[ExportFromBcl]</c> type overrides
+/// (<c>decimal</c> → <c>Decimal</c>) the overload dispatchers apply to the
+/// parameter types and runtime checks they emit, matching the class
+/// emitter's own signatures; <c>null</c> keeps the default mapping.</param>
 internal sealed record IrToTsBridgeContext(
     DeclarativeMappingRegistry? Bcl,
-    PerClassBackingFieldScope ClassFields
+    PerClassBackingFieldScope ClassFields,
+    IrToTsTypeOverrides? TypeOverrides = null
 )
 {
     /// <summary>
