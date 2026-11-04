@@ -271,8 +271,8 @@ public sealed partial class IrExpressionExtractor
                 false,
                 IrLiteralKind.Boolean
             ),
-            { SpecialType: SpecialType.System_Int64 or SpecialType.System_UInt64 } =>
-                ClassifyNumeric(0L),
+            { SpecialType: SpecialType.System_Int64 } => ClassifyNumeric(0L),
+            { SpecialType: SpecialType.System_UInt64 } => ClassifyNumeric(0UL),
             {
                 SpecialType: SpecialType.System_Int32
                     or SpecialType.System_UInt32

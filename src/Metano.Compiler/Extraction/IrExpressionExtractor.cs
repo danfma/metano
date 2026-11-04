@@ -4516,7 +4516,8 @@ public sealed partial class IrExpressionExtractor
             string s => new IrLiteral(s, IrLiteralKind.String),
             char c => new IrLiteral(c, IrLiteralKind.Char),
             long l => new IrLiteral(l, IrLiteralKind.Int64),
-            ulong u => new IrLiteral(u, IrLiteralKind.UInt64),
+            // A ulong default stays opaque (Default) until the 64-bit slice
+            // that gives it a literal, so the shipped output is unchanged.
             int i => new IrLiteral(i, IrLiteralKind.Int32),
             double d => new IrLiteral(d, IrLiteralKind.Float64),
             float f => new IrLiteral(f, IrLiteralKind.Float64),
