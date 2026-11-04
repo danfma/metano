@@ -21,6 +21,10 @@ export type JsonContainer = "object" | "array";
  * separate root inherits the outer depth, where STJ's
  * `JsonSerializer.Serialize(…)` inside a converter starts a fresh writer at
  * depth 0.
+ *
+ * `enterWriteContainer` / `enterReadContainer` / `exitContainer` deliberately
+ * repeat what `writeContainer` / `readContainer` do: the compiled contract
+ * walks call them directly, so no closure is allocated per container (#456).
  */
 const openContainers = { count: 0 };
 

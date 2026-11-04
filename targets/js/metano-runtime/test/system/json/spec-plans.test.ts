@@ -16,8 +16,12 @@ import { abstractFactory } from "./spec-fixtures.ts";
 
 const primitive = { kind: "primitive" } as const;
 
-/** `spec` with a `properties` getter that counts how often it is compiled. */
-function counted<T>(spec: TypeSpec<T>): { readonly spec: TypeSpec<T>; compilations(): number } {
+/**
+ * `spec` with a `properties` getter that counts its reads: a plan reads
+ * `properties` once when it compiles, so `propertiesReads()` is the number of
+ * times the spec was compiled.
+ */
+function counted<T>(spec: TypeSpec<T>): { readonly spec: TypeSpec<T>; propertiesReads(): number } {
   const { properties, ...rest } = spec;
   const counter = { reads: 0 };
 
@@ -29,7 +33,7 @@ function counted<T>(spec: TypeSpec<T>): { readonly spec: TypeSpec<T>; compilatio
     },
   };
 
-  return { spec: countedSpec, compilations: () => counter.reads };
+  return { spec: countedSpec, propertiesReads: () => counter.reads };
 }
 
 class Price {
@@ -66,7 +70,7 @@ describe("Spec plans: reuse", () => {
       JsonSerializer.deserialize(json, price.spec);
     }
 
-    expect(price.compilations()).toBe(1);
+    expect(price.propertiesReads()).toBe(1);
   });
 
   test("a nested spec is compiled once for every element that reaches it", () => {
@@ -80,7 +84,7 @@ describe("Spec plans: reuse", () => {
     const json = JsonSerializer.serialize(values, prices);
 
     expect(JsonSerializer.deserialize(json, prices)).toEqual(values);
-    expect(price.compilations()).toBe(1);
+    expect(price.propertiesReads()).toBe(1);
   });
 
   test("a value spec resolves its nested spec once", () => {
@@ -121,7 +125,7 @@ describe("Spec plans: custom converters per call", () => {
     });
 
     expect(JsonSerializer.serialize(value, price.spec)).toEqual({ Label: "a", Amount: 1.5 });
-    expect(price.compilations()).toBe(2);
+    expect(price.propertiesReads()).toBe(2);
   });
 
   test("a fresh array of the same converters reuses their plan", () => {
@@ -135,7 +139,7 @@ describe("Spec plans: custom converters per call", () => {
       );
     }
 
-    expect(price.compilations()).toBe(1);
+    expect(price.propertiesReads()).toBe(1);
   });
 
   test("no converters and an empty array share a plan", () => {
@@ -144,7 +148,7 @@ describe("Spec plans: custom converters per call", () => {
     JsonSerializer.serialize(new Price("a", 2), price.spec);
     JsonSerializer.serialize(new Price("a", 2), price.spec, []);
 
-    expect(price.compilations()).toBe(1);
+    expect(price.propertiesReads()).toBe(1);
   });
 
   test("a converter array changed in place is honored on the next call", () => {
@@ -166,6 +170,7 @@ describe("Spec plans: custom converters per call", () => {
 
   test("converters apply inside nested specs of the plan", () => {
     const price = priceSpecOf();
+
     const prices: ValueSpec<Price[]> = {
       descriptor: { kind: "array", element: { kind: "ref", spec: () => price } },
     };
@@ -406,22 +411,26 @@ describe("Spec plans: polymorphism", () => {
       expect(json.map((item) => JsonSerializer.deserialize(item, shapeSpec))).toEqual(shapes);
     }
 
-    expect(square.compilations()).toBe(1);
+    expect(square.propertiesReads()).toBe(1);
   });
 
   test("a derived contract shares its plan between dispatch and direct use", () => {
     const { square, shapeSpec } = shapeSpecsOf();
 
     expect(JsonSerializer.serialize(new Square(4), square.spec)).toEqual({ Side: 4 });
+
     expect(JsonSerializer.serialize(new Square(4), shapeSpec)).toEqual({
       $type: "square",
       Side: 4,
     });
+
     expect(JsonSerializer.deserialize({ Side: 4 }, square.spec)).toEqual(new Square(4));
+
     expect(JsonSerializer.deserialize({ $type: "square", Side: 4 }, shapeSpec)).toEqual(
       new Square(4),
     );
-    expect(square.compilations()).toBe(1);
+
+    expect(square.propertiesReads()).toBe(1);
   });
 });
 
@@ -498,7 +507,9 @@ describe("Spec plans: structural polymorphism", () => {
       expect(json.map((item) => JsonSerializer.deserialize(item, label.spec))).toEqual(values);
     }
 
-    expect([point.compilations(), point3.compilations(), label.compilations()]).toEqual([1, 1, 1]);
+    expect([point.propertiesReads(), point3.propertiesReads(), label.propertiesReads()]).toEqual([
+      1, 1, 1,
+    ]);
   });
 
   test("a value no guard accepts still fails through the cached plan", () => {

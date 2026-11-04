@@ -796,6 +796,22 @@ reference loads as source and is otherwise judged exactly; a binary reference
 (a DLL or a package) is read from metadata, which also cannot tell an abstract
 class's C# 12 primary constructor from a declared `protected` one.
 
+### Hand-written specs
+
+The runtime compiles each spec once, on first use, into a cached plan. Specs
+that the transpiler generates always meet its assumptions. A spec written by
+hand must meet them too:
+
+- Property converters are resolved when the spec is first used. A malformed
+  descriptor fails then, even when the value being converted lacks that
+  property.
+- A `ref` descriptor's `spec()` thunk is called once and its result is kept.
+  It must return the same spec every time, as the generated `??=` context
+  getters do.
+- A `ref` that points at a raw spec object instead of the context getter does
+  not inherit the context's read options, because the context attaches them in
+  `createSpec`. This behavior predates the plans.
+
 ## When to use `[PlainObject]` vs `JsonSerializerContext`
 
 Both are valid ways to handle JSON data:
