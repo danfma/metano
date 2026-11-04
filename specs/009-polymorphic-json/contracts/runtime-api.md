@@ -34,6 +34,7 @@ other change is additive. Behavior also changes in these cases:
 
 ```ts
 class JsonSerializer {
+  static serialize<T>(value: T & {}, spec: TypeSpec<T>, converters?: readonly JsonConverter[]): Record<string, unknown>;        // non-null in, record out (S3b review)
   static serialize<T>(value: T | null, spec: TypeSpec<T>, converters?: readonly JsonConverter[]): Record<string, unknown> | null; // BREAKING (was value: T → Record<string, unknown>)
   static serialize<T>(value: T, spec: ValueSpec<T>, converters?: readonly JsonConverter[]): unknown;                             // new overload
   static deserialize<T>(data: unknown, spec: TypeSpec<T>, converters?: readonly JsonConverter[]): T | null;                       // BREAKING (was T)
@@ -43,6 +44,7 @@ class JsonSerializer {
 }
 
 class BoundSerializer {
+  serialize<T>(value: T & {}, spec: TypeSpec<T>): Record<string, unknown>;          // non-null in, record out
   serialize<T>(value: T | null, spec: TypeSpec<T>): Record<string, unknown> | null; // BREAKING
   serialize<T>(value: T, spec: ValueSpec<T>): unknown;                               // new overload
   deserialize<T>(data: unknown, spec: TypeSpec<T>): T | null;                        // BREAKING
@@ -55,6 +57,7 @@ interface TypeSpec<T> {
   // …
   readonly polymorphism?: PolymorphismSpec; // new, optional
   readonly valueType?: boolean;             // new, optional (struct contracts)
+  readonly typeName?: string;               // new, optional (S3b): CLR name next to valueType
   readonly readOptions?: JsonReadOptions;   // new, optional (attached by createSpec)
   readonly ignoredProperties?: readonly string[]; // new, optional (S4): TS names of base properties a [JsonIgnore] override hides
 }
@@ -212,9 +215,11 @@ converter receives it, so no exported type or converter signature changes. `long
 ## Delivery status (S3b)
 
 S3b ships the changed signatures above (`serialize` / `deserialize` / `deserializeText` through a
-`TypeSpec` on `JsonSerializer` and `BoundSerializer`), `TypeSpec.valueType`, `ValueSpec.valueType`
-and guarantee 9. The null-root check lives in `null-root.ts` and runs before any converter; a
-value root names its type from its descriptor when it can (DECIDED-26 d). An empty or blank text
+`TypeSpec` on `JsonSerializer` and `BoundSerializer`), `valueType` and `typeName` on `TypeSpec` and
+`ValueSpec` (`ValueSpec<T>` is `{ descriptor, valueType?, typeName?, readOptions? }`), and
+guarantee 9. The null check lives in `null-reads.ts`: at the root it runs before any converter,
+and the `ref` converter runs it for a struct property, element or dictionary value (DECIDED-26 h).
+Every "could not be converted" error of a spec with `typeName` names it (DECIDED-26 d). An empty or blank text
 keeps the reader's "does not contain any JSON tokens" message for every root (DECIDED-26 b).
 `test/system/json/typecheck/null-root-signatures.ts`, compiled by `tsgo` from a bun test, pins the
 return types and the strict-mode errors of the migration.

@@ -94,7 +94,8 @@ Rules:
   redeclaration at its most-derived position; the factory keeps declaration order (DECIDED-20 a).
 - A `[JsonIgnore]` override over a linked base adds `ignoredProperties: ["<ts name>", …]` after
   `properties`, naming every overridden declaration (DECIDED-20 a); absent otherwise.
-- A C# `struct` contract adds `valueType: true` after `properties` (FR-037).
+- A C# `struct` contract adds `valueType: true` and its CLR `typeName` (`"MyApp.SPoint"`) after
+  `properties` (FR-037, DECIDED-26 d).
 
 ### 1a. Interface base (FR-018)
 
@@ -265,6 +266,7 @@ export class AppJsonContext extends SerializerContext {
     return this._int32 ??= this.createValueSpec({
       descriptor: { kind: "primitive" },
       valueType: true, // FR-037: JSON null throws JsonException
+      typeName: "System.Int32", // the name STJ prints in that error (DECIDED-26 d)
     });
   }
 
@@ -278,7 +280,7 @@ Rules:
   read options (§4) and registers nothing (value specs have no constructor to resolve).
 - The field/getter type argument is the mapped TS type of the root (FR-032), plus `| null` for a
   reference-type value root (FR-037). A value-type root (`int32`, `guid`, an enum, a branded type)
-  carries `valueType: true` and no `| null`. `nullableInt32` is already `number | null` through its
+  carries `valueType: true`, its CLR `typeName` and no `| null`. `nullableInt32` is already `number | null` through its
   `nullable` descriptor and has no `valueType`.
 - `IEnumerable<T>` / `IReadOnlyCollection<T>` roots are typed `ValueSpec<Iterable<T> | null>` and
   serialize any iterable (FR-038).
