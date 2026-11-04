@@ -106,8 +106,8 @@ selects the variant).
 | E7 | `ignAbs` | `{"k":"zzz","V":1}` | read | `NotSupportedException` | `The JSON payload for polymorphic interface or abstract type 'IgnAbs' must specify a type discriminator.` |
 | E8 | `uFail` | `UFailX(1)` | write | `NotSupportedException` | `Runtime type 'UFailX' is not supported by polymorphic type 'UFail'.` |
 | E9 | `nBase` | `NLeaf(1,2,3)` (registered only on `NMid`) | write | `NotSupportedException` | `Runtime type 'NLeaf' is not supported by polymorphic type 'NBase'.` |
-| E10 | `int32` | JSON `null` | read | `JsonException` | measured in S8 (FR-037) |
-| E11 | `sPoint` (`record struct`) | JSON `null` | read | `JsonException` | `The JSON value could not be converted to SPoint.` (FR-037) |
+| E10 | `int32` | JSON `null` | read | `JsonException` | `The JSON value could not be converted to System.Int32.` (FR-037, measured in S3b, DECIDED-26 d) |
+| E11 | `sPoint` (`record struct`) | JSON `null` | read | `JsonException` | `The JSON value could not be converted to <Namespace>.SPoint.` (FR-037; the full name, DECIDED-26 d) |
 | E12 | `groupClip` | a `Group` that contains itself | write | `JsonException` | `A possible object cycle was detected.` (FR-016) |
 | E13 | `shape` | `{"Side":2}` | read | `NotSupportedException` | `The JSON payload for polymorphic interface or abstract type 'IShape' must specify a type discriminator.` |
 | E14 | `shape` | `Other()` (unregistered implementation) | write | `NotSupportedException` | `Runtime type 'Other' is not supported by polymorphic type 'IShape'.` |

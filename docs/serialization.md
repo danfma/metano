@@ -242,21 +242,32 @@ JSON `null` at a root reads and writes as System.Text.Json does (measured on
 | A class or record contract, polymorphic and interface bases, a `[PlainObject]` type | `null` | `T \| null` (`TypeSpec<T>`) |
 | A collection, dictionary, set, `string`, `byte[]` | `null` | `T \| null` (`ValueSpec<T \| null>`) |
 | `Nullable<T>` (`int?`, `SPoint?`) | `null` | `T \| null` (`ValueSpec<T \| null>`) |
-| A `struct` / `record struct` contract | throws `The JSON value could not be converted to SPoint.` | `T \| null` (`TypeSpec<T>`; the throw makes the `null` impossible) |
+| A `struct` / `record struct` contract | throws `The JSON value could not be converted to MyApp.SPoint.` | `T \| null` (`TypeSpec<T>`; the throw makes the `null` impossible) |
 | Another value type (`int`, `bool`, `Guid`, `decimal`, an enum, a branded type, a temporal type) | throws `The JSON value could not be converted to <Type>.` | `T` (`ValueSpec<T>`) |
 
 - The generator marks every C# value type except `Nullable<T>` with
-  `valueType: true`: on the struct contract's `TypeSpec` (wherever the
-  closure reaches it) and on a value root's `ValueSpec`. The check runs at the
-  root, before any converter, custom ones included.
-- The message names the type as the runtime knows it: a struct contract by its
-  constructor name (STJ: the full name, `MyApp.SPoint`); a value root by its
-  CLR name when the descriptor states it (`System.Decimal`, and the
-  `numberType` of a context that reads numbers from strings, such as
-  `System.Int32`), and otherwise as `a value type` (a value spec carries no
-  type name).
-- `serialize(null, spec)` through a `TypeSpec` returns `null`; a value root
-  converts `null` through its descriptor, which writes `null`.
+  `valueType: true` and its CLR `typeName`, as .NET prints it
+  (`System.Int32`, `MyApp.Level`, `MyApp.Outer+Inner`,
+  ``MyApp.Pair`1[System.Int32]``): on the struct contract's `TypeSpec`
+  (wherever the closure reaches it) and on a value root's `ValueSpec`. The
+  message names that `typeName`; a hand-written spec without one names its
+  constructor, or `Object` for a value spec.
+- At the root the check runs before any converter, custom ones included.
+  Below the root, JSON `null` for a struct contract throws the same error for
+  a property (`{"P":null}` for `record Holder(SPoint P)`), a list or set
+  element and a dictionary value, as in .NET; `SPoint?` still reads `null`.
+- `serialize(value, spec)` through a `TypeSpec` returns the written object for
+  a non-null `value`, and `null` for `null`. A struct contract shares that
+  overload, so `serialize(null, structSpec)` also returns `null`, a value C#
+  cannot express (a struct is never `null`). A value root converts `null`
+  through its descriptor, which writes `null`.
+- Not mirrored: a value-type custom converter. .NET passes the `null` token
+  to a custom converter of a value type, which decides what it reads; Metano
+  throws before any converter runs. Also, JSON `null` for an `int`, `bool`,
+  enum, branded or temporal **property, element or dictionary value** still
+  reads `null`, where .NET throws (`The JSON value could not be converted to
+  MyApp.Holder.` for a constructor-bound property, `System.Int32` for an
+  element): their descriptors carry no value-type flag.
 - An empty or blank text has no JSON token: `deserializeText("", …)` throws
   `The input does not contain any JSON tokens. Expected the input to start with
   a valid JSON token, when isFinalBlock is true.` for every root, as STJ does.
@@ -699,10 +710,10 @@ if (order === null) {
 const sure = JsonSerializer.deserialize(data, JsonContext.default.order)!;
 ```
 
-`serialize` through a `TypeSpec` now accepts `null`, returns `null` for it, and
-is typed `Record<string, unknown> | null`, so code that reads the tree's keys
-asserts it too (`JsonSerializer.serialize(order, ctx.order)!.id`).
-`BoundSerializer` changes the same way. Struct contracts (`record struct`) and
+`serialize` through a `TypeSpec` now also accepts a value that may be `null`
+(`Order | null`), returns `null` for it, and is then typed
+`Record<string, unknown> | null`; a non-null value keeps the
+`Record<string, unknown>` result. `BoundSerializer` changes the same way. Struct contracts (`record struct`) and
 value-type roots still throw `JsonException` for `null` ([Null
 roots](#null-roots)). Value roots (`ValueSpec`) already carry `| null` in
 their type argument for a reference type.
@@ -1022,7 +1033,7 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 | Input | Message |
 |---|---|
 | A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor); JSON `null` reads as `null` instead ([Null roots](#null-roots)) |
-| JSON `null` at a struct contract or a value-type root (`valueType: true`) | `The JSON value could not be converted to SPoint.` ([Null roots](#null-roots)) |
+| JSON `null` at a struct contract or a value-type root (`valueType: true`), or for a struct property, element or dictionary value | `The JSON value could not be converted to MyApp.SPoint.` ([Null roots](#null-roots)) |
 | A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence). A nullable member declared `required` or `[JsonRequired]` reads `null` when missing, where STJ throws (both warn `MS0037`) |
 | An invalid base64 text, or a non-string JSON value, for a `byte[]` | `The JSON value could not be converted to System.Byte[].` (STJ names the declaring type for a constructor-bound property) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |
