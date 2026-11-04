@@ -1745,7 +1745,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     ReportUnsupportedBody(
                         entryPoint,
                         $"[ModuleEntryPoint] body of '{type.Name}.{entryPoint.Name}' contains "
-                            + "constructs the IR pipeline doesn't yet model; the type was skipped."
+                            + "constructs that the IR pipeline does not model yet; the type was skipped."
                     );
                     return true;
                 }
@@ -1769,8 +1769,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             {
                 ReportUnsupportedBody(
                     type,
-                    $"Module function '{type.Name}.{fn.Name}' contains constructs the IR "
-                        + "pipeline doesn't yet model; the type was skipped."
+                    $"Module function '{type.Name}.{fn.Name}' contains constructs that the IR "
+                        + "pipeline does not model yet; the type was skipped."
                 );
                 return true;
             }

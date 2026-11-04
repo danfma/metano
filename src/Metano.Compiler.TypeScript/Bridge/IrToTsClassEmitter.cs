@@ -166,8 +166,8 @@ public sealed class IrToTsClassEmitter(
                 )
                 ?? EmitUnsupportedConstructor(
                     type,
-                    $"Constructor overload group on '{type.Name}' contains constructs the IR "
-                        + "pipeline doesn't yet model; an empty constructor was emitted."
+                    $"Constructor overload group on '{type.Name}' contains constructs that the IR "
+                        + "pipeline does not model yet; an empty constructor was emitted."
                 );
         }
 
@@ -487,8 +487,8 @@ public sealed class IrToTsClassEmitter(
             {
                 _context.ReportUnsupportedBody(
                     type,
-                    $"Overload group '{type.Name}.{irMethod.Name}' contains constructs "
-                        + "the IR pipeline doesn't yet model; the methods were skipped."
+                    $"Overload group '{type.Name}.{irMethod.Name}' contains constructs that "
+                        + "the IR pipeline does not model yet; the methods were skipped."
                 );
                 return null;
             }
