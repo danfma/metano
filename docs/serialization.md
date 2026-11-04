@@ -197,7 +197,8 @@ generic types that use it as an argument. Type arguments use the same rule, so
 **Diagnostics:**
 
 - `MS0035` (error) rejects a root the context cannot describe: an open generic,
-  `object`, a non-collection interface, a type that is not a transpiled class
+  `object`, a non-collection interface without `[JsonDerivedType]`
+  registrations, a type that is not a transpiled class
   or struct (`KeyValuePair<,>`, tuples, `[Ignore]` / `[External]` types, types
   of non-Metano assemblies, and the dictionary types that are not recognized as
   dictionaries yet: `SortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary`),
@@ -310,7 +311,7 @@ your own `JsonConverter`.
 | `[JsonRequired]` | ❌ | Not yet |
 | `[JsonExtensionData]` | ❌ | Not yet |
 | `[JsonDerivedType]` / `[JsonPolymorphic]` on a class or record | ✅ | Emits the base's `polymorphism` descriptor and a spec for every registered type ([details](#polymorphism)) |
-| `[JsonDerivedType]` on an interface or a `[PlainObject]` type | ❌ | Not yet: the context is generated as if the attribute were absent ([#268](https://github.com/danfma/metano/issues/268), slice S6c) |
+| `[JsonDerivedType]` on an interface or a `[PlainObject]` type | ✅ | Interface bases dispatch class variants by constructor; `[PlainObject]` variants are selected by synthesized guards ([details](#interface-and-plainobject-hierarchies)) |
 
 ## Web defaults
 
@@ -592,12 +593,101 @@ get clip(): TypeSpec<Clip> {
 - **Known gap.** A closed generic registration
   (`[JsonDerivedType(typeof(GenD<int>), "g")]`) is `MS0032`, although
   System.Text.Json accepts it.
-- **Not yet.** Interface bases and `[PlainObject]` bases or variants come with
-  slice S6c of [#268](https://github.com/danfma/metano/issues/268); until then
-  such hierarchies are generated as if the attributes were absent, with an
-  `MS0033` warning saying so. The
-  context's `AllowOutOfOrderMetadataProperties` option is mirrored in its
-  `readOptions` ([details](#web-defaults)).
+- **Read options.** The context's `AllowOutOfOrderMetadataProperties` option is
+  mirrored in its `readOptions` ([details](#web-defaults)).
+
+### Interface and `[PlainObject]` hierarchies
+
+```csharp
+[JsonDerivedType(typeof(Sq), "sq")]
+[JsonDerivedType(typeof(Circle), "circle")]
+public interface IShape { double Area { get; } }
+
+public sealed record Sq(double Side) : IShape { public double Area => Side * Side; }
+
+[PlainObject]
+[JsonDerivedType(typeof(Point), "point")]
+[JsonDerivedType(typeof(Point3), "point3")]
+public abstract record Shape;
+
+[PlainObject] public record Point(double X) : Shape;
+[PlainObject] public sealed record Point3(double X, double Y, double Z) : Point(X);
+```
+
+```typescript
+get iShape(): TypeSpec<IShape> {
+  return this._iShape ??= this.createSpec({
+    factory: (p) => { throw new Error("Cannot deserialize interface type 'IShape' directly; …"); },
+    properties: [{ ts: "area", json: "Area", type: { kind: "primitive" } }],
+    polymorphism: {
+      discriminator: "$type",
+      abstract: true,
+      typeName: "IShape",
+      derived: [{ tag: "sq", spec: () => this.sq }, { tag: "circle", spec: () => this.circle }],
+    },
+  });
+}
+
+get shape(): TypeSpec<Shape> {
+  return this._shape ??= this.createSpec({
+    factory: (p) => { throw new Error("Cannot deserialize abstract type 'Shape' directly; …"); },
+    properties: [],
+    polymorphism: {
+      discriminator: "$type",
+      abstract: true,
+      typeName: "Shape",
+      derived: [
+        { tag: "point", spec: () => this.point, test: isPoint },
+        { tag: "point3", spec: () => this.point3, test: isPoint3 },
+      ],
+      testOrder: [1, 0],
+    },
+  });
+}
+```
+
+- **Interface bases.** A C# interface with `[JsonDerivedType]` is an abstract
+  base: its spec has no `type` (a TS interface has no constructor), a throwing
+  factory, the interface's own and inherited properties (written under
+  `FallBackToBaseType`, in System.Text.Json's order: the interface first, then
+  the interfaces it extends, sorted topologically), and `typeName` for the
+  messages. Class variants are dispatched by constructor and have no `base`
+  link to the interface. `Sq(2)` through `IShape` writes
+  `{"$type":"sq","Side":2,"Area":4}`, as System.Text.Json does. An interface
+  registered as a derived type is `MS0032`; an interface without
+  `[JsonDerivedType]` is still not a JSON contract (`MS0035` as a root).
+- **Synthesized guards.** Every `[PlainObject]` type a `[JsonDerivedType]`
+  registers, and every concrete `[PlainObject]` type that is itself
+  polymorphic, gets an `isT` guard in its own file, built like a
+  `[GenerateGuard]` guard (the predicate only, without `assertT`). The
+  context imports it as a value (`import { isPoint, type Point } from
+  "./point"`; `Shape.isCircle` for a nested type; from the package for a
+  library variant, whose own build emits the guard). A guard checks a member
+  whose type has no guard of its own for presence (`v.from != null`).
+- **Write order.** Guards run only for plain objects (prototype
+  `Object.prototype` or `null`); class instances never reach them. A variant
+  whose guard requires a subset of another variant's members is tested after
+  it: `Point` accepts every `Point3`, so `testOrder: [1, 0]` tests `Point3`
+  first, and `{ x: 1, y: 2, z: 3 }` writes `{"$type":"point3","Y":2,"Z":3,"X":1}`.
+  `testOrder` is omitted when it equals attribute order.
+- **Concrete `[PlainObject]` base.** A concrete base that does not register
+  itself carries its own guard as `baseTest`: a plain object no variant guard
+  accepts is written as the base, with no tag, when `baseTest` accepts it
+  (`{"Name":"a"}`, as System.Text.Json writes an `Animal`); otherwise it is an
+  unregistered runtime type named `Object` (`NotSupportedException` `Runtime
+  type 'Object' is not supported by polymorphic type 'Animal'.` under
+  `failSerialization`). A self-registered base is an entry with its own `test`.
+- **Reads** dispatch on the tag, as for classes; a `[PlainObject]` entry's
+  factory builds an object literal with the inherited members too.
+- **Diagnostics.** `MS0032` rejects two `[PlainObject]` variants whose guards
+  accept each other's values (the same required members with compatible test
+  kinds, or no required member at all) and variants with no consistent test
+  order, leaving the base without `polymorphism`. Members of the same name
+  with different kinds (`string` vs `number`) tell variants apart.
+- **Divergences.** A plain object carries no runtime type: an unregistered C#
+  subtype whose shape satisfies a registered variant's guard is written as
+  that variant (System.Text.Json throws), and the runtime type name in the
+  error is `Object`.
 
 ### Runtime dispatch
 

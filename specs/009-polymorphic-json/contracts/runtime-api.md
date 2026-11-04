@@ -21,7 +21,7 @@ other change is additive. Behavior also changes in these cases:
 | `TypeDiscriminator` | type | `string \| number` |
 | `UnknownDerivedTypeHandling` | type | `"failSerialization" \| "fallBackToBaseType" \| "fallBackToNearestAncestor"` |
 | `DerivedTypeSpec` | type | `{ tag?, spec: () => TypeSpec, test?, abstract? }` (`test` for `[PlainObject]` variants; `abstract` for an abstract registration, S6) |
-| `PolymorphismSpec` | type | discriminator + options + derived entries (+ `typeName`, `testOrder`) |
+| `PolymorphismSpec` | type | discriminator + options + derived entries (+ `typeName`, `testOrder`, `baseTest`) |
 | `JsonReadOptions` | type | `{ propertyNameCaseInsensitive?, numberHandling?: "allowReadingFromString", allowOutOfOrderMetadataProperties? }` |
 | `NumberTypeName` | type | CLR names of numeric primitives (`"System.Int32"`, …) |
 | `ValueSpec<T>` | type | non-object root: `{ descriptor, valueType?, readOptions? }` |
@@ -155,3 +155,11 @@ guarantees 11 and 12. Keys match properties by `OrdinalIgnoreCase` rather than `
 discriminator a polymorphic read consumes is never a property, a nullable number names
 ``System.Nullable`1[<CLR name>]`` in its error, and a `decimal` descriptor's `type` builds the value
 from the JSON number or text (DECIDED-23 f).
+
+## Delivery status (S6c)
+
+S6c adds `PolymorphismSpec.baseTest`, the base-guard member DECIDED-21 e anticipated, and
+replaces the interim rule: a plain object that matches no variant guard is written as the base
+(no tag) only when `baseTest` accepts it, and otherwise follows `unknownDerivedType` with the
+runtime type name `Object` (FR-019 rule 5, DECIDED-23 b). Generated contexts now emit `typeName`,
+`testOrder` and the `test` guards of `[PlainObject]` entries.

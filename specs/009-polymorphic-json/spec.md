@@ -446,7 +446,9 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   points at the base's own getter. Non-default options (`unknownDerivedType`,
   `ignoreUnrecognizedTags`) are emitted only when set. When the base has no runtime constructor (an
   interface or a `[PlainObject]` base), the descriptor also carries `typeName`, the C# simple name
-  used in error messages. Specs of non-polymorphic types MUST NOT change.
+  used in error messages; a concrete `[PlainObject]` base that does not register itself also
+  carries its synthesized guard as `baseTest` (FR-019 rule 5, DECIDED-23 b). Specs of
+  non-polymorphic types MUST NOT change.
 - **FR-005**: Serializing through a polymorphic spec MUST resolve the value's runtime constructor
   **first against the registered entries** (`byCtor`, which includes the base itself when it is
   self-registered): a registered type → its tag (if any) **as the first JSON property**, then its
@@ -534,8 +536,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   type is registered without a tag (serializes without a tag and reads back as a concrete base, or
   cannot be read through an abstract base, exactly as in STJ), and when a derived type is itself
   polymorphic (informational: its own `[JsonDerivedType]`s apply only through its own spec, as in
-  STJ). Until slice S6c, it also reports an interface or `[PlainObject]` hierarchy that carries the
-  attributes, which is emitted without a discriminator (DECIDED-22 b).
+  STJ). Slice S6 also reported an interface or `[PlainObject]` hierarchy that carries the
+  attributes, emitted without a discriminator (DECIDED-22 b); S6c removed that warning.
 - **FR-014**: The discriminator name and values MUST be emitted verbatim. Data property names keep
   today's rule (`[JsonPropertyName]`, else the context naming policy, else the C# name). The naming
   policy also comes from `JsonSerializerDefaults.Web` (camelCase) when the context passes it, and an
@@ -1141,7 +1143,8 @@ the former `OPEN-N`.
     constructor, instead of testing the base guard first and otherwise following
     `unknownDerivedType` (FR-019 rule 5). A self-registered base is an entry with a `test` and is
     checked like any variant. S6c adds a base-guard member to `PolymorphismSpec` and the rule 5
-    check (plan.md, S6c row), which removes the interim behavior.
+    check (plan.md, S6c row), which removes the interim behavior. **Resolved in S6c**
+    (DECIDED-23 b): the member is `baseTest`.
   - (f) FR-017 read side (the tag of an abstract derived entry) is **not** implemented: no member
     of the descriptor marks an entry as abstract, so its tag reads through the entry's throwing
     factory (a plain `Error`). Measured STJ text, both modes: `NotSupportedException`
@@ -1316,6 +1319,63 @@ the former `OPEN-N`.
     Node and Bun against 37 STJ rows (8 writes, 29 reads): every write matched byte for byte and
     every read agreed, except the type names of (c) and the namespace in the missing-tag message
     of a namespaced base (`'TestApp.Clip'`; the runtime names `'Clip'`, which predates S2b).
+
+- **DECIDED-23 — Slice S6c decisions (#268).** Taken while implementing interface bases (FR-018)
+  and `[PlainObject]` hierarchies (FR-019), probed against a source-generated context on .NET SDK
+  10.0.401 (rows quoted in `tests/Metano.Tests/JsonStructuralPolymorphismTests.cs`):
+  - (a) **Guard trigger.** A `[PlainObject]` type gets its synthesized `isT` when a
+    `[JsonDerivedType]` of its compilation registers it, or when it is a concrete, non-generic
+    polymorphic `[PlainObject]` type (its base or self-registration guard), read from the
+    attributes rather than from the contract closure of a context (plan.md planned the closure).
+    A registered type always lives in its base's assembly (the base names it with `typeof`, and
+    it derives from the base), so a library emits the guards a consumer's context imports
+    without knowing that context (FR-047). A registration no context reaches still gets its
+    guard. The context references the guard as `isPoint` (a module export of the variant's
+    file), `Shape.isCircle` (a nested type's companion namespace) or `isPoint` with the package
+    origin (a library type).
+  - (b) **`baseTest`.** The base-guard member DECIDED-21 e asked for is
+    `PolymorphismSpec.baseTest?: (value: unknown) => boolean`, emitted after `testOrder` for a
+    concrete, non-self-registered, non-generic `[PlainObject]` base. The runtime tests it after
+    every variant guard and writes the base (no tag) only when it accepts the value; otherwise
+    the value follows `unknownDerivedType` with the runtime type name `Object`. A hand-written
+    spec without `baseTest` no longer writes every unmatched plain object as the base.
+  - (c) A synthesized guard is the predicate only (no `assertT`); a type that also declares
+    `[GenerateGuard]` keeps both.
+  - (d) **Guard member tests.** A guard calls `isN` for a member only when `N` has a guard of
+    this compilation (`[GenerateGuard]` or synthesized); any other named type is checked for
+    presence (`v.from != null`), as cross-package types already were. Before S6c a
+    `[GenerateGuard]` guard called an `isN` nothing declared or imported (an invalid module).
+    The coarse kinds come from the same switch that emits the checks: `typeof` checks give
+    `string` / `number` / `boolean` / `bigint`, `Array.isArray` and tuples `array`,
+    `instanceof Map` / `Set` / `Temporal.*` `object`, a guard call or a presence check
+    `present`; a nullable member is not required and keeps its inner kind; an unchecked member
+    (`any`) is never required.
+  - (e) **Order and rejection.** The test order is a stable topological sort of the "more
+    specific" relation (attribute order among unrelated variants); `testOrder` lists only the
+    structural entries' indices. Variants that cover each other are reported at the later
+    registration, naming the union of both variants' required members (`(none)` when neither
+    requires one); a cycle names the variants left unordered. Either leaves the base without
+    `polymorphism`.
+  - (f) **Interface properties** follow the source generator's topological sort over the direct
+    base interfaces (Kahn's algorithm): `ID : IB, IC, IE` with `IB : IA` and `IE : IA` writes
+    `{"D":4,"E":5,"B":2,"A":1,"C":3}` (measured).
+  - (g) An interface base's factory names the C# interface (`Cannot deserialize interface type
+    'IShape' directly; …`); `typeName` is the C# simple name of the definition (`IBox` for
+    `IBox<int>`). STJ's messages name the type with its namespace (`'P.IShape'`); the runtime
+    names it as for class bases (DECIDED-5 compares prefixes).
+  - (h) Only interfaces with `[JsonDerivedType]` are object contracts; any other non-collection
+    interface stays `MS0035` as a root and out of the closure. Interface entries are excluded
+    from the FR-049 constructor checks (no `type:`).
+  - (i) An abstract polymorphic `[PlainObject]` base gets the throwing FR-011 factory
+    (contracts/context-codegen.md §1b); a `[PlainObject]` factory literal now carries the
+    inherited members of its linked base specs (it dropped them before, so `point3` read
+    `{ y, z }` without `x`).
+  - (j) End-to-end evidence: the TypeScript of the S6c golden
+    (`tests/Metano.Tests/Expected/json-structural-polymorphic-context.ts`) compiles under
+    `tsgo --strict` and, bundled with `bun build` and run under Node, writes every probe row
+    byte-identically and reads each tag back into the expected class or plain object. A read of
+    `{"$type":"sq","Side":2}` (no `Area`) throws the FR-045 missing-property `JsonException`,
+    while STJ ignores the getter-only `Area` on read (the pre-existing FR-045 divergence).
 
 ## Open questions
 
