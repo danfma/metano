@@ -424,3 +424,90 @@ describe("Spec plans: polymorphism", () => {
     expect(square.compilations()).toBe(1);
   });
 });
+
+// ─── Structural ([PlainObject]) polymorphism ─────────────────────────────────
+
+interface Label {
+  readonly text: string;
+}
+
+interface Point {
+  readonly x: number;
+}
+
+interface Point3 extends Point {
+  readonly z: number;
+}
+
+const isLabel = (value: unknown): value is Label =>
+  typeof (value as Label | null)?.text === "string";
+
+const isPoint = (value: unknown): value is Point => typeof (value as Point | null)?.x === "number";
+
+const isPoint3 = (value: unknown): value is Point3 =>
+  isPoint(value) && typeof (value as Point3).z === "number";
+
+/** A fresh concrete `[PlainObject]` base with guarded variants, tested most specific first. */
+function labelSpecsOf() {
+  const point = counted<Point>({
+    factory: (p) => ({ x: p.x as number }),
+    properties: [{ ts: "x", json: "X", type: primitive }],
+  });
+
+  const point3 = counted<Point3>({
+    factory: (p) => ({ x: p.x as number, z: p.z as number }),
+    properties: [
+      { ts: "z", json: "Z", type: primitive },
+      { ts: "x", json: "X", type: primitive },
+    ],
+  });
+
+  const label = counted<Label | Point>({
+    factory: (p) => ({ text: p.text as string }),
+    properties: [{ ts: "text", json: "Text", type: primitive }],
+    polymorphism: {
+      discriminator: "$type",
+      typeName: "Label",
+      derived: [
+        { tag: "point", spec: () => point.spec as TypeSpec, test: isPoint },
+        { tag: "point3", spec: () => point3.spec as TypeSpec, test: isPoint3 },
+      ],
+      testOrder: [1, 0],
+      baseTest: isLabel,
+    },
+  });
+
+  return { point, point3, label };
+}
+
+describe("Spec plans: structural polymorphism", () => {
+  test("the guards select the target per value, each target compiled once", () => {
+    const { point, point3, label } = labelSpecsOf();
+    const values: (Label | Point)[] = [{ x: 1 }, { x: 2, z: 3 } as Point3, { text: "a" }, { x: 4 }];
+
+    for (let call = 0; call < 2; call++) {
+      const json = values.map((value) => JsonSerializer.serialize(value, label.spec));
+
+      expect(json).toEqual([
+        { $type: "point", X: 1 },
+        { $type: "point3", Z: 3, X: 2 },
+        { Text: "a" },
+        { $type: "point", X: 4 },
+      ]);
+
+      expect(json.map((item) => JsonSerializer.deserialize(item, label.spec))).toEqual(values);
+    }
+
+    expect([point.compilations(), point3.compilations(), label.compilations()]).toEqual([1, 1, 1]);
+  });
+
+  test("a value no guard accepts still fails through the cached plan", () => {
+    const { label } = labelSpecsOf();
+
+    for (let call = 0; call < 2; call++) {
+      expect(() =>
+        JsonSerializer.serialize({ other: true } as unknown as Label, label.spec),
+      ).toThrow("Runtime type 'Object' is not supported by polymorphic type 'Label'.");
+    }
+  });
+});
