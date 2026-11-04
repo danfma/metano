@@ -262,6 +262,8 @@ const json = JsonSerializer.serialize(todo, JsonContext.default.todoItem);
 
 const parsed = JsonSerializer.deserialize(json, JsonContext.default.todoItem);
 // → TodoItem { title: "Write docs", completed: false, priority: "high" }
+// Typed TodoItem | null: JSON `null` reads as `null`, as in .NET (a struct
+// contract or a value-type root throws instead). Assert with `!` or check it.
 
 // From JSON text, as .NET's Deserialize(string): decimals keep every digit,
 // invalid text throws JsonException with .NET's message.

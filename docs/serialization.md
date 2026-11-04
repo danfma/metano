@@ -102,7 +102,7 @@ const todo = new TodoItem("Write docs", false, "high");
 const wire = JsonSerializer.serialize(todo, JsonContext.default.todoItem);
 // → { title: "Write docs", completed: false, priority: "high" }
 
-// JSON → TS
+// JSON → TS (TodoItem | null: JSON `null` reads as `null`, as in STJ)
 const parsed = JsonSerializer.deserialize(wire, JsonContext.default.todoItem);
 // → TodoItem { title: "Write docs", completed: false, priority: "high" }
 
@@ -115,7 +115,8 @@ const fromText = JsonSerializer.deserializeText(
 
 `deserialize` takes the tree `JSON.parse` built; `deserializeText` takes the
 JSON text, reads each `decimal` from its exact digits and throws .NET's
-`JsonException` messages for invalid text ([details](#exact-reads)).
+`JsonException` messages for invalid text ([details](#exact-reads)). Both
+return `TodoItem | null` ([Null roots](#null-roots)).
 
 ## What the transpiler does
 
@@ -192,7 +193,8 @@ const restored = JsonSerializer.deserialize(data, AppJsonContext.default.shotTim
 ```
 
 A reference-type root (a collection, dictionary, set or `string`) is typed
-`T | null`, because JSON `null` reads back as `null`; a value-type root is not.
+`T | null`, because JSON `null` reads back as `null`; a value-type root is not,
+and carries `valueType: true` instead ([Null roots](#null-roots)).
 `IEnumerable<T>` / `IReadOnlyCollection<T>` roots and properties serialize any
 iterable (a `Set`, a generator, a LINQ pipe) as a JSON array.
 
@@ -229,6 +231,35 @@ generic types that use it as an argument. Type arguments use the same rule, so
 
 **Divergences:** `Stack<T>` is written and read in array order (System.Text.Json
 writes it top-first and reverses it on read); the `[Name]` naming above.
+
+### Null roots
+
+JSON `null` at a root reads and writes as System.Text.Json does (measured on
+.NET 10 with a source-generated context):
+
+| Root | `deserialize(null, …)` / `deserializeText("null", …)` | Return type |
+|---|---|---|
+| A class or record contract, polymorphic and interface bases, a `[PlainObject]` type | `null` | `T \| null` (`TypeSpec<T>`) |
+| A collection, dictionary, set, `string`, `byte[]` | `null` | `T \| null` (`ValueSpec<T \| null>`) |
+| `Nullable<T>` (`int?`, `SPoint?`) | `null` | `T \| null` (`ValueSpec<T \| null>`) |
+| A `struct` / `record struct` contract | throws `The JSON value could not be converted to SPoint.` | `T \| null` (`TypeSpec<T>`; the throw makes the `null` impossible) |
+| Another value type (`int`, `bool`, `Guid`, `decimal`, an enum, a branded type, a temporal type) | throws `The JSON value could not be converted to <Type>.` | `T` (`ValueSpec<T>`) |
+
+- The generator marks every C# value type except `Nullable<T>` with
+  `valueType: true`: on the struct contract's `TypeSpec` (wherever the
+  closure reaches it) and on a value root's `ValueSpec`. The check runs at the
+  root, before any converter, custom ones included.
+- The message names the type as the runtime knows it: a struct contract by its
+  constructor name (STJ: the full name, `MyApp.SPoint`); a value root by its
+  CLR name when the descriptor states it (`System.Decimal`, and the
+  `numberType` of a context that reads numbers from strings, such as
+  `System.Int32`), and otherwise as `a value type` (a value spec carries no
+  type name).
+- `serialize(null, spec)` through a `TypeSpec` returns `null`; a value root
+  converts `null` through its descriptor, which writes `null`.
+- An empty or blank text has no JSON token: `deserializeText("", …)` throws
+  `The input does not contain any JSON tokens. Expected the input to start with
+  a valid JSON token, when isFinalBlock is true.` for every root, as STJ does.
 
 **Getter renames (#270):** every getter now comes from the naming rule above.
 A type whose camel-cased name is a JavaScript reserved word keeps the bare
@@ -618,7 +649,7 @@ as .NET's `JsonSerializer.Deserialize(string, JsonTypeInfo<T>)` does:
 const order = JsonSerializer.deserializeText(
   '{"total":12345678901234567890.123456789}',
   JsonContext.default.order,
-);
+)!; // the text is not `null`
 order.total.toFixed(); // "12345678901234567890.123456789"
 ```
 
@@ -651,7 +682,32 @@ order.total.toFixed(); // "12345678901234567890.123456789"
 
 ### Migrating to 3.0
 
-`JsonSerializer.serialize` used to return a `number` for each decimal; it now
+**Null roots (#268, FR-037).** `deserialize` and `deserializeText` through a
+`TypeSpec` now return `T | null`: the JSON text `null` used to throw and now
+returns `null`, as `System.Text.Json` does for reference types. Code such as
+`const order: Order = JsonSerializer.deserialize(data, ctx.order);` no longer
+compiles under `strict`. Handle the null, or assert it when the payload can
+never be `null`:
+
+```typescript
+const order = JsonSerializer.deserialize(data, JsonContext.default.order);
+
+if (order === null) {
+  throw new Error("expected an order");
+}
+
+const sure = JsonSerializer.deserialize(data, JsonContext.default.order)!;
+```
+
+`serialize` through a `TypeSpec` now accepts `null`, returns `null` for it, and
+is typed `Record<string, unknown> | null`, so code that reads the tree's keys
+asserts it too (`JsonSerializer.serialize(order, ctx.order)!.id`).
+`BoundSerializer` changes the same way. Struct contracts (`record struct`) and
+value-type roots still throw `JsonException` for `null` ([Null
+roots](#null-roots)). Value roots (`ValueSpec`) already carry `| null` in
+their type argument for a reference type.
+
+**Decimals.** `JsonSerializer.serialize` used to return a `number` for each decimal; it now
 returns a `JSON.rawJSON` leaf, a frozen object whose `rawJSON` property holds
 the text. Only `JSON.stringify` treats it as a number: `structuredClone` and
 `postMessage` throw `DataCloneError` on a tree that holds one, and `{ ...leaf }`
@@ -965,7 +1021,8 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 
 | Input | Message |
 |---|---|
-| A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor) |
+| A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor); JSON `null` reads as `null` instead ([Null roots](#null-roots)) |
+| JSON `null` at a struct contract or a value-type root (`valueType: true`) | `The JSON value could not be converted to SPoint.` ([Null roots](#null-roots)) |
 | A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence). A nullable member declared `required` or `[JsonRequired]` reads `null` when missing, where STJ throws (both warn `MS0037`) |
 | An invalid base64 text, or a non-string JSON value, for a `byte[]` | `The JSON value could not be converted to System.Byte[].` (STJ names the declaring type for a constructor-bound property) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |

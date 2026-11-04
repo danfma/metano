@@ -1052,6 +1052,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Read depth limit | the reader counts every container of the document | counts only the containers the contract visits (a deep value under an undeclared key is skipped) | DECIDED-20 (b) |
 | Write depth limit | fast path: 64 containers, `InvalidOperationException` "CurrentDepth (64) is equal to or larger than …" at the 65th; metadata / reflection: `JsonException` "A possible object cycle …", also for a non-null scalar inside the 64th container | 64 containers (scalars never count), `JsonException` "A possible object cycle …" at the 65th: the fast path's boundary with the metadata mode's error | DECIDED-20 (b) |
 | Depth inside a custom converter | `JsonSerializer.Serialize(…)` of a separate root inside a converter starts a fresh writer at depth 0 | the root inherits the outer depth (one process-global counter) | DECIDED-20 (b) |
+| JSON `null` at a value-type root: type name | the full CLR name (`MyApp.SPoint`, `System.Int32`, `MyApp.Level`) | a struct contract's constructor name (`SPoint`); a value root's `numberType` or `System.Decimal` when its descriptor states it, else `a value type` | DECIDED-26 (d); manifest rows compare the prefix |
 | Non-object / non-array input type name | the CLR type (`System.Collections.Generic.List`1[Arr]`) | the constructor name; `Object` for a `[PlainObject]` contract; `Expected array for deserialization, got <kind>` for arrays and sets, `Expected object for deserialization, got <kind>` for dictionaries | DECIDED-20 (c) |
 | Unknown numeric enum value | read as is (`7` reads as `(Color)7`) | `JsonException` "Invalid numeric enum value: …" (pre-existing) | DECIDED-20 (c) |
 | Unknown string enum value | `JsonException` "The JSON value could not be converted to Color." | `JsonException` "Invalid enum value: …" (pre-existing message) | DECIDED-20 (c) |
@@ -1086,10 +1087,13 @@ this note:
 > throw; it now returns `null`, as `System.Text.Json` does for reference types. Code such as
 > `const order: Order = JsonSerializer.deserialize(data, ctx.order);` no longer compiles under
 > `strict`. Handle the null (`if (order === null) …`), or assert it when the payload can never be
-> `null` (`JsonSerializer.deserialize(data, ctx.order)!`). `serialize` through a `TypeSpec` now
-> accepts `null` and returns `null` for it. `BoundSerializer` changes the same way. Struct
-> contracts (`record struct`) still throw `JsonException` for `null`. Value roots
-> (`ValueSpec`) are new in this release and already carry `| null` in their type argument.
+> `null` (`JsonSerializer.deserialize(data, ctx.order)!`). `deserializeText` through a `TypeSpec`
+> returns `T | null` the same way. `serialize` through a `TypeSpec` now accepts `null`, returns
+> `null` for it and is typed `Record<string, unknown> | null`, so code that reads the written
+> tree asserts it as well. `BoundSerializer` changes the same way. Struct contracts
+> (`record struct`) and value-type roots (`valueType: true`) still throw `JsonException` for
+> `null`. Value roots (`ValueSpec`) are new in this release and already carry `| null` in their
+> type argument.
 
 > **Decimals are written with their exact digits (#458).** `JsonSerializer.serialize` now returns
 > a `JSON.rawJSON` leaf instead of a `number` for each `decimal` value, so `JSON.stringify` writes
@@ -1741,6 +1745,40 @@ the former `OPEN-N`.
     non-nullable key: the runtime throws where STJ uses the default (`RInit.N`, an `init` value
     type, reads `0`) or keeps the initializer (`PlDer.S`, a non-nullable `set` member of a
     `[PlainObject]` type, keeps `4`; a `[PlainObject]` literal has no initializer to keep).
+
+- **DECIDED-26 — Slice S3b decisions (#268, #270).** Taken while implementing FR-034's
+  signatures, FR-037 and FR-049, measured on .NET 10 (source-generated context) for a class,
+  an abstract polymorphic base, an interface base, a `record struct`, `Nullable<record struct>`,
+  `int`, `int?`, `bool`, `string`, `Guid`, `decimal`, `DateOnly`, `DateTime`, an enum, `List<int>`,
+  `int[]`, `Dictionary<string, int>`, `HashSet<string>`, `IReadOnlyList<T>` and `byte[]`:
+  - (a) The text `null` (also ` null `) and a `JsonElement` of kind `Null` read as `null` for every
+    reference type and `Nullable<T>`, and throw `JsonException` "The JSON value could not be
+    converted to <FullName>." for every other value type (`Probe.SPoint`, `System.Int32`,
+    `Probe.Level`, `System.Guid`, `System.Decimal`, `System.DateOnly`, `System.Boolean`).
+    `Serialize` of a `null` class, `string`, `List<int>` or `int?` writes `null`.
+  - (b) An empty or whitespace-only text throws `JsonException` "The input does not contain any
+    JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true."
+    for every root, value types included; `deserializeText` already threw exactly this (#457), so
+    S3b only pins it with tests.
+  - (c) The root check runs in `JsonSerializer` / `BoundSerializer` before any converter, custom
+    ones included (STJ passes no `null` token to a converter of a reference type; Metano's custom
+    converters match by descriptor kind and are not STJ converters). Only JSON `null` is checked
+    as a null root; `undefined`, which no JSON text produces, keeps its earlier behavior. A `null` value written through a
+    `TypeSpec` returns `null` without touching the contract; a value root converts `null` through
+    its descriptor, as before.
+  - (d) A struct contract names itself as every contract error does, by constructor name (`SPoint`;
+    STJ writes the full name, a documented divergence of the existing "non-object input" row). A
+    `ValueSpec` carries no type name: the message names the CLR type the descriptor states
+    (`numberType`, `System.Decimal`) and otherwise reads "The JSON value could not be converted to
+    a value type." Manifest row E10 (S8) compares the prefix (DECIDED-5); pinning the exact
+    `System.Int32` text there needs a type name on `ValueSpec` or a `numberType` on every numeric
+    value root, which S8 decides.
+  - (e) `valueType: true` is emitted on every struct `TypeSpec`, including a struct reached only
+    through a property, right after `properties`, and on every `ValueSpec` of a C# value type
+    except `Nullable<T>`. Generated sample contexts have no struct contract or value-type root, so
+    no sample output changes (FR-040).
+  - (f) Hand-written callers in this repository (the runtime and sample tests, the docs) assert the
+    non-null result with `!` where the payload cannot be `null`: the migration of FR-049.
 
 ## Open questions
 

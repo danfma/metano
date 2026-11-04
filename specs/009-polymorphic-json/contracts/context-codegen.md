@@ -283,8 +283,8 @@ Rules:
 - `IEnumerable<T>` / `IReadOnlyCollection<T>` roots are typed `ValueSpec<Iterable<T> | null>` and
   serialize any iterable (FR-038).
 - Getter order follows closure order (roots in attribute order, then discovered types), as today.
-- Slice S3a (#270) emits everything above except `valueType: true`, which lands with S3b (FR-037);
-  until then a value-type root carries no flag. Contexts get their runtime imports (`HashSet`,
+- Slice S3a (#270) emitted everything above except `valueType: true`, which landed with S3b
+  (FR-037, DECIDED-26 e) on every value-type root but `Nullable<T>`. Contexts get their runtime imports (`HashSet`,
   `UUID`, `Temporal`) from the root types themselves, not from the members the System.Text.Json
   source generator adds.
 
