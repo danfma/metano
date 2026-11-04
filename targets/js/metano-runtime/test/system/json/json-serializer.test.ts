@@ -657,6 +657,15 @@ describe("JsonSerializer — custom converters", () => {
     expect(json.amount).toBe(19.99);
     expect(typeof json.amount).toBe("number");
   });
+
+  test("a descriptor without type round-trips the raw JSON value", () => {
+    const rawSpec: ValueSpec<unknown> = { descriptor: { kind: "decimal" } };
+
+    const read = JsonSerializer.deserialize(19.99, rawSpec);
+
+    expect(read).toBe(19.99);
+    expect(JsonSerializer.serialize(read, rawSpec)).toBe(19.99);
+  });
 });
 
 // ─── SerializerContext ───────────────────────────────────────────────────────
