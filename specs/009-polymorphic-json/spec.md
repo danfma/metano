@@ -854,14 +854,19 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      way. **Domain check** (on both paths, before any text is built): a value no `System.Decimal`
      holds (NaN, ±Infinity, a magnitude beyond `MaxValue`) throws `JsonException` "The value
      <value> cannot be written as System.Decimal: it is outside the System.Decimal range."
-     (FR-045). The magnitude is compared as a double (`|toNumber()|` against 2^96); a value whose
-     double is 2^96 itself is decided by its exact `toFixed()` text with the read grammar of item
-     4, so every leaf written is one `deserialize` accepts (`…335.4` is written, STJ reads it as
-     `MaxValue`; `…335.5` and `…336` throw). Without the check, decimal.js NaN / Infinity threw a
-     bare `SyntaxError` from `JSON.rawJSON` (`null` without it), `1e30` was written in full, and
-     `1e400000000` built a 400 MB string. A non-zero value whose double underflows to `0`
-     (`1e-400000000`) is written `0`, as STJ reads `1e-400` (measured), instead of printing its
-     exponent's worth of zeros.
+     (FR-045). The check reads decimal.js's exponent `e` (`NaN` for NaN and ±Infinity), which
+     converts no digits: above 28 is outside, and exactly 28 (`1e28` up to `MaxValue` and past it)
+     is decided by the exact `toFixed()` text with the read grammar of item 4, so every leaf
+     written is one `deserialize` accepts (`…335.4` is written, STJ reads it as `MaxValue`;
+     `…335.5` and `…336` throw). A value without `e` is compared as a double (`|toNumber()|`
+     against 2^96, the text deciding at 2^96 itself). Without the check, decimal.js NaN /
+     Infinity threw a bare `SyntaxError` from `JSON.rawJSON` (`null` without it), `1e30` was
+     written in full, and `1e400000000` built a 400 MB string. A value below `1e-29` (exponent
+     under -29) is written `0`, as STJ reads `1e-29`, `1e-40` and `1e-400` as `0` (measured),
+     instead of printing its exponent's worth of zeros (`1e-400000000`).
+     **Cost** (`bun run bench:json`, 1 MB `Order[]` with decimal.js prices, medians): writes take
+     5.5–5.7 ms against 4.3 ms with `toNumber()` on Bun 1.4.2, and 8.8–9.1 ms against 8.8–9.1 ms
+     on Node 24.11.
 - **FR-049**: **Breaking change and versioning** (DECIDED-6). FR-034 changes public signatures of
   `metano-runtime/system/json`, so the feature MUST ship as a breaking release: the commit that
   changes the signatures uses `feat!:` with a `BREAKING CHANGE:` footer. `.releaserc.json` maps a
