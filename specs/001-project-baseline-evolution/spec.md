@@ -196,6 +196,47 @@ Reconciliation (single source of truth):
   existing ADRs (notably the target-agnostic core and shared-IR ADRs); any divergence MUST
   be surfaced rather than applied silently.
 
+Product requirements added after the migration (normative; each one is traced by a row of
+[baseline/feature-support-matrix.md](./baseline/feature-support-matrix.md) and continues the
+`FR-###` space after `FR-048`):
+
+- **FR-049** (constructor access modifiers, #432): The TypeScript backend MUST emit a C#
+  constructor's accessibility on the class constructor, and the IR MUST carry the declared
+  accessibility on every constructor (`IrConstructorDeclaration`) so other backends can map it
+  later (the Dart mapping is out of scope).
+  1. *Mapping.* `private` and `private protected` emit `private constructor`; `protected` emits
+     `protected constructor`; `public`, `internal` and `protected internal` emit no modifier.
+     Record positional constructors and C# 12 primary constructors follow the same mapping; an
+     implicit constructor emits no modifier.
+  2. *Mixed accessibility.* A TypeScript class has one constructor accessibility: every overload
+     signature and the implementation must share it (TS2385). When a type's constructors mix
+     accessibility, the backend MUST emit the most permissive mapped modifier (public, then
+     protected, then private) and report `MS0060` (`MixedConstructorAccessibility`, warning)
+     naming the narrower constructors.
+  3. *Construction outside the class body.* When generated or lowered code constructs the type
+     from outside its TypeScript class body, a non-public constructor would fail to type-check
+     (TS2673 / TS2674, or TS2322 where the class is passed as a constructor value). The backend
+     MUST then keep the constructor public and report `MS0061`
+     (`ConstructorAccessibilityWidened`, warning) naming the path. The paths are: (a) the
+     type's `TypeSpec` in a generated JSON `SerializerContext` (`type: T`, typed
+     `abstract new (...) => T`, and `factory: (p) => new T(...)`); (b) a `new T(...)` written in
+     a type nested in `T` (C# lets a nested type call its container's private or protected
+     constructor; the backend emits nested types outside the container's class body, in the
+     companion namespace or module-local as `Owner$Inner`). `[PlainObject]` (an interface plus
+     object literals), `[Branded]` / `[InlineWrapper]` (a brand alias whose `create` casts),
+     the `[ObjectArgs]` `create` factory (a static member inside the class body) and record
+     `with` (copied through `copyRecordWith`) construct nothing outside a class body.
+  4. *Derived types.* TypeScript forbids extending a class whose constructor is private
+     (TS2675). When an emitted class directly extends `T` and `T`'s constructor maps to
+     `private` — a type nested in `T` (including the module-local `Owner$Inner` of #412), or,
+     for a `private protected` constructor, any derived type of the assembly — the backend MUST
+     emit `protected constructor` for `T`, and only for `T`. When code outside the class body
+     also constructs `T`, rule 3 applies and the constructor stays public.
+
+  Limitation: a referenced package decides its own types' constructors; a consumer's
+  `SerializerContext` that claims a package type with a non-public constructor does not
+  type-check.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
