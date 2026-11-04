@@ -45,6 +45,10 @@ import { abstractFactory } from "./spec-fixtures.ts";
 //   FallBackToNearestAncestor, none registered      → base contract, no tag ({"V":1})
 //   FallBackToBaseType, UBaseX : UBaseH (abstract)  → {"A":1}
 //   Untagged UA : UBase                             → {"A":2,"V":1}; {"V":1,"A":2} reads as UBase
+//   Only untagged registrations (S6 review probe)  → {"$type":"x","V":1} / {"V":1,"$x":1} read as UB;
+//                                                    abstract UAB {"A":1} → NotSupportedException
+//                                                    "Deserialization of interface or abstract types is not
+//                                                    supported. Type 'UAB'."
 //   IgnoreUnrecognizedTypeDiscriminators            concrete base → base; abstract → NotSupportedException
 //   Nested NMid : NBase (both polymorphic)          → outer tag only; NLeaf (on NMid only) fails via NBase
 //   Interface IShape                               Sq(2) → {"$type":"sq","Side":2}; Other → NotSupportedException
@@ -951,7 +955,55 @@ describe("polymorphism — untagged registrations", () => {
     expect(value).toBeInstanceOf(UBase);
     expect(value).not.toBeInstanceOf(UA);
   });
+
+  test("without any tag, `$` keys are plain data keys of the base", () => {
+    for (const json of ['{"$type":"x","V":1}', '{"V":1,"$x":1}', '{"$id":"1","V":1}']) {
+      const value = read(json, uBaseSpec);
+
+      expect(value).toBeInstanceOf(UBase);
+      expect(value.v).toBe(1);
+    }
+  });
+
+  test("an abstract base without any tag cannot be read", () => {
+    for (const json of ['{"A":1}', '{"$type":"x","A":1}']) {
+      expectNotSupportedException(
+        () => read(json, uAbstractSpec),
+        abstractTypeMessage("UAbstract"),
+      );
+    }
+  });
+
+  test("an abstract base without any tag still writes its registrations", () => {
+    expect(write(new UAbstractA(1), uAbstractSpec)).toBe('{"A":1}');
+  });
 });
+
+abstract class UAbstract {
+  constructor(readonly a: number) {}
+}
+
+class UAbstractA extends UAbstract {}
+
+const uAbstractSpec: TypeSpec<UAbstract> = {
+  type: UAbstract,
+  factory: abstractFactory,
+  properties: [{ ts: "a", json: "A", type: primitive }],
+  polymorphism: {
+    discriminator: "$type",
+    abstract: true,
+    derived: [
+      {
+        spec: () => ({
+          type: UAbstractA,
+          base: uAbstractSpec,
+          factory: (p) => new UAbstractA(p.a as number),
+          properties: [],
+        }),
+      },
+    ],
+  },
+};
 
 // ─── IgnoreUnrecognizedTypeDiscriminators ────────────────────────────────────
 

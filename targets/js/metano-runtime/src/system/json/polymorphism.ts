@@ -1,4 +1,4 @@
-import type { PolymorphismSpec, TypeDiscriminator, TypeSpec } from "./types.ts";
+import type { DerivedTypeSpec, PolymorphismSpec, TypeDiscriminator, TypeSpec } from "./types.ts";
 import { cannotConvertTo, contractNameOf } from "./contract-name.ts";
 import { JsonException, NotSupportedException } from "./errors.ts";
 
@@ -15,9 +15,8 @@ export interface SerializeTarget {
 type VariantGuard = (value: unknown) => boolean;
 
 /** One registration with its contract resolved. */
-interface ResolvedVariant extends SerializeTarget {
+interface ResolvedVariant extends SerializeTarget, Pick<DerivedTypeSpec, "abstract"> {
   readonly test?: VariantGuard;
-  readonly abstract?: boolean;
 }
 
 /** A `[PlainObject]` variant, with the guard that selects it on write. */
@@ -274,12 +273,35 @@ export function resolveDeserializeTarget(
   spec: TypeSpec,
   polymorphism: PolymorphismSpec,
 ): TypeSpec {
+  if (!hasTaggedRegistration(polymorphism)) {
+    return contractOfUntaggedHierarchy(spec, polymorphism);
+  }
+
   const keys = documentOrderKeysOf(raw);
   const allowsOutOfOrderTag = spec.readOptions?.allowOutOfOrderMetadataProperties ?? false;
 
   return allowsOutOfOrderTag
     ? resolveWithTagAnywhere(raw, keys, spec, polymorphism)
     : resolveWithLeadingTag(raw, keys, spec, polymorphism);
+}
+
+/** Whether any registration declares a tag: without one, nothing is read as metadata. */
+function hasTaggedRegistration(polymorphism: PolymorphismSpec): boolean {
+  return dispatchIndexOf(polymorphism).byTag.size > 0;
+}
+
+/**
+ * A hierarchy whose registrations are all untagged reads like a
+ * non-polymorphic contract (measured on .NET 10): a concrete base reads its
+ * own contract, `$`-prefixed keys included, and an abstract or interface
+ * base cannot be read.
+ */
+function contractOfUntaggedHierarchy(spec: TypeSpec, polymorphism: PolymorphismSpec): TypeSpec {
+  if (polymorphism.abstract) {
+    throw notSupportedAbstractTypeException(spec);
+  }
+
+  return spec;
 }
 
 /**
@@ -302,13 +324,16 @@ function resolveWithLeadingTag(
   }
 
   const tag = hasLeadingTag ? readTag(raw[discriminator], spec) : undefined;
+  const registration = registrationOf(tag, polymorphism);
   const laterKeys = hasLeadingTag ? keys.slice(1) : keys;
 
-  if (isAbstractRegistrationTag(tag, polymorphism)) {
+  // An abstract registration fails only after the metadata that directly
+  // follows its tag has been read (DECIDED-12).
+  if (registration?.abstract) {
     throwIfMetadataFollowsTag(laterKeys[0]);
   }
 
-  const target = contractOfTag(tag, spec, polymorphism);
+  const target = contractOfTag(tag, registration, spec, polymorphism);
 
   for (const key of laterKeys) {
     throwIfMetadata(key, discriminator, NOT_FIRST_METADATA_MESSAGE);
@@ -346,7 +371,7 @@ function resolveWithTagAnywhere(
   }
 
   if (!walk.valuesPending) {
-    return contractOfTag(walk.tag, spec, polymorphism);
+    return contractOfTag(walk.tag, registrationOf(walk.tag, polymorphism), spec, polymorphism);
   }
 
   if (walk.tag === undefined) {
@@ -370,7 +395,7 @@ function visitOutOfOrderKey(
     return;
   }
 
-  if (REFERENCE_METADATA_NAMES.has(key)) {
+  if (isReferenceMetadataKey(key)) {
     throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
   }
 
@@ -419,15 +444,17 @@ function isArrayIndex(key: string): boolean {
   return ARRAY_INDEX_PATTERN.test(key) && Number(key) <= MAX_ARRAY_INDEX;
 }
 
-/**
- * Whether `tag` selects an abstract registration (DECIDED-12), whose read
- * fails once the metadata that directly follows the tag has been read.
- */
-function isAbstractRegistrationTag(
+/** `$id` / `$ref`: reference-preservation metadata, which a polymorphic read never accepts. */
+function isReferenceMetadataKey(key: string): boolean {
+  return REFERENCE_METADATA_NAMES.has(key);
+}
+
+/** The registration `tag` selects; `undefined` for a missing or an unknown tag. */
+function registrationOf(
   tag: TypeDiscriminator | undefined,
   polymorphism: PolymorphismSpec,
-): boolean {
-  return tag !== undefined && dispatchIndexOf(polymorphism).byTag.get(tag)?.abstract === true;
+): ResolvedVariant | undefined {
+  return tag === undefined ? undefined : dispatchIndexOf(polymorphism).byTag.get(tag);
 }
 
 /**
@@ -435,7 +462,7 @@ function isAbstractRegistrationTag(
  * before an abstract registration is reported (measured on .NET 10).
  */
 function throwIfMetadataFollowsTag(key: string | undefined): void {
-  if (key === VALUES_KEY || (key !== undefined && REFERENCE_METADATA_NAMES.has(key))) {
+  if (key !== undefined && (key === VALUES_KEY || isReferenceMetadataKey(key))) {
     throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
   }
 }
@@ -446,7 +473,7 @@ function throwIfLeadingMetadata(key: string): void {
     throw new JsonException(LEADING_VALUES_MESSAGE);
   }
 
-  if (REFERENCE_METADATA_NAMES.has(key)) {
+  if (isReferenceMetadataKey(key)) {
     throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
   }
 }
@@ -469,7 +496,7 @@ function metadataErrorMessageOf(
   discriminator: string,
   valuesMessage: string,
 ): string | undefined {
-  if (key === discriminator || REFERENCE_METADATA_NAMES.has(key)) {
+  if (key === discriminator || isReferenceMetadataKey(key)) {
     return NOT_FIRST_METADATA_MESSAGE;
   }
 
@@ -481,19 +508,19 @@ function metadataErrorMessageOf(
 }
 
 /**
- * The contract a tag selects (FR-007); `undefined` is a missing tag. An
- * unknown tag reads like a missing one under `ignoreUnrecognizedTags`.
+ * The contract a tag selects (FR-007), given the tag's `registration`
+ * (`registrationOf`); `undefined` is a missing tag. An unknown tag reads
+ * like a missing one under `ignoreUnrecognizedTags`.
  */
 function contractOfTag(
   tag: TypeDiscriminator | undefined,
+  registration: ResolvedVariant | undefined,
   spec: TypeSpec,
   polymorphism: PolymorphismSpec,
 ): TypeSpec {
   if (tag === undefined) {
     return contractWithoutTag(spec, polymorphism);
   }
-
-  const registration = dispatchIndexOf(polymorphism).byTag.get(tag);
 
   if (registration) {
     return contractOfRegistration(registration);
@@ -521,10 +548,7 @@ function contractOfRegistration(registration: ResolvedVariant): TypeSpec {
     throw missingDiscriminatorException(spec);
   }
 
-  throw new NotSupportedException(
-    "Deserialization of interface or abstract types is not supported. " +
-      `Type '${contractNameOf(spec)}'.`,
-  );
+  throw notSupportedAbstractTypeException(spec);
 }
 
 /**
@@ -555,10 +579,26 @@ function contractWithoutTag(spec: TypeSpec, polymorphism: PolymorphismSpec): Typ
   return spec;
 }
 
+/**
+ * System.Text.Json's error for a polymorphic abstract or interface `spec`
+ * read without a tag it can use.
+ */
 function missingDiscriminatorException(spec: TypeSpec): NotSupportedException {
   return new NotSupportedException(
     `The JSON payload for polymorphic interface or abstract type '${contractNameOf(spec)}' ` +
       "must specify a type discriminator.",
+  );
+}
+
+/**
+ * System.Text.Json's error for reading an abstract or interface `spec` that
+ * no tag dispatches away from: an abstract registration, or the base of a
+ * hierarchy without tags.
+ */
+function notSupportedAbstractTypeException(spec: TypeSpec): NotSupportedException {
+  return new NotSupportedException(
+    "Deserialization of interface or abstract types is not supported. " +
+      `Type '${contractNameOf(spec)}'.`,
   );
 }
 
