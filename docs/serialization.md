@@ -464,7 +464,7 @@ without an exponent.
 | `decimal.MaxValue` | `79228162514264337593543950335` | same |
 | `12345678901234567890.123456789m` | `12345678901234567890.123456789` | same |
 | `0.0000001m` | `0.0000001` | same (decimal.js `toString()` would print `1e-7`) |
-| `decimal.Negate(0m)` | `0` | `0` |
+| `decimal.Negate(0m)` | `0` | same |
 | `1.10m`, `1.0m`, `0.00m` | `1.10`, `1.0`, `0.00` | `1.1`, `1`, `0` |
 
 The last row is the remaining gap: decimal.js drops trailing zeros (the scale),
@@ -494,7 +494,10 @@ Limits:
 
 `JsonSerializer.serialize` used to return a `number` for each decimal; it now
 returns a `JSON.rawJSON` leaf, a frozen object whose `rawJSON` property holds
-the text.
+the text. Only `JSON.stringify` treats it as a number: `structuredClone` and
+`postMessage` throw `DataCloneError` on a tree that holds one, and `{ ...leaf }`
+is the plain object `{"rawJSON":"2.5"}` (measured on Node 24 and Bun 1.4.2).
+Stringify the tree before cloning or posting it.
 
 - `JSON.stringify(JsonSerializer.serialize(...))` works unchanged and now
   writes every digit.

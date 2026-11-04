@@ -40,9 +40,10 @@ export type TemporalDescriptor = {
 
 /**
  * `System.Decimal` — its exact digits on serialize (a `JSON.rawJSON` leaf of
- * `toFixed()`, #458), overridable via a custom converter. `type` builds the value on deserialize from the JSON number or,
- * when the context reads numbers from strings, the JSON text (decimal.js
- * `Decimal` in generated contexts); without it the JSON value is kept as is.
+ * `toFixed()`, #458), overridable via a custom converter. `type` builds the
+ * value on deserialize from the JSON number or, when the context reads
+ * numbers from strings, the JSON text (decimal.js `Decimal` in generated
+ * contexts); without it the JSON value is kept as is.
  */
 export type DecimalDescriptor = {
   readonly kind: "decimal";

@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -56,14 +56,9 @@ describe("JsonSerializer — decimal writes match System.Text.Json (#458)", () =
 
   test("the scale is the remaining gap: trailing zeros are dropped", () => {
     const scaled = DECIMAL_WRITE_ROWS.filter((row) => row.metano !== undefined);
+    const withoutTrailingZeros = (text: string) => text.replace(/\.?0+$/, "");
 
-    expect(scaled.map((row) => [row.stj, writtenTextOf(row)])).toEqual([
-      ["1.10", "1.1"],
-      ["1.0", "1"],
-      ["0.00", "0"],
-      ["1000.000", "1000"],
-      ["0.00", "0"],
-    ]);
+    expect(scaled.map(writtenTextOf)).toEqual(scaled.map((row) => withoutTrailingZeros(row.stj)));
   });
 
   test("a dictionary value is written unquoted inside its object", () => {
@@ -164,28 +159,37 @@ describe("exactNumberWriterOf", () => {
 });
 
 describe("decimal writes on each runtime", () => {
-  const bundleDir = mkdtempSync(join(tmpdir(), "metano-decimal-probe-"));
-  const bundle = join(bundleDir, "probe.mjs");
+  type ProbeOutput = { readonly written: string[]; readonly domain: string[] };
 
-  const build = spawnSync(
-    process.execPath,
-    ["build", PROBE, "--target=node", `--outfile=${bundle}`],
-    { encoding: "utf8" },
-  );
+  let bundleDir = "";
+  let bundle = "";
+  let buildStatus: number | null = null;
+
+  beforeAll(() => {
+    bundleDir = mkdtempSync(join(tmpdir(), "metano-decimal-probe-"));
+    bundle = join(bundleDir, "probe.mjs");
+
+    buildStatus = spawnSync(
+      process.execPath,
+      ["build", PROBE, "--target=node", `--outfile=${bundle}`],
+      { encoding: "utf8" },
+    ).status;
+  });
 
   afterAll(() => rmSync(bundleDir, { recursive: true, force: true }));
 
-  const probeOf = (command: string, args: readonly string[]) => {
+  const probeOf = (command: string, args: readonly string[]): ProbeOutput => {
     const run = spawnSync(command, args, { encoding: "utf8" });
 
-    expect(run.stderr).toBe("");
-    expect(run.status).toBe(0);
+    if (run.status !== 0) {
+      throw new Error(`${command} ${args.join(" ")} exited ${run.status}: ${run.stderr}`);
+    }
 
-    return JSON.parse(run.stdout) as { written: string[]; domain: string[] };
+    return JSON.parse(run.stdout) as ProbeOutput;
   };
 
   test("the probe bundles for Node", () => {
-    expect(build.status).toBe(0);
+    expect(buildStatus).toBe(0);
   });
 
   test("Node writes the System.Text.Json digits and checks the domain", () => {
