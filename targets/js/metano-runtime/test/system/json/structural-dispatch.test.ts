@@ -95,7 +95,7 @@ function write<T>(value: T, spec: TypeSpec<T>): string {
 }
 
 function read<T>(json: string, spec: TypeSpec<T>): T {
-  return JsonSerializer.deserialize(JSON.parse(json), spec);
+  return JsonSerializer.deserialize(JSON.parse(json), spec)!;
 }
 
 describe("structural dispatch — [PlainObject] variants (FR-019)", () => {

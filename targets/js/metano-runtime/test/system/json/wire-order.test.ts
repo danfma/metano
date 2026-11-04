@@ -176,7 +176,7 @@ describe("JsonSerializer — wire order", () => {
   });
 
   test("an ignored override reads no base declaration", () => {
-    const value = JsonSerializer.deserialize({ Name: "z", Base: 5, X: 7 }, ignoredSpec);
+    const value = JsonSerializer.deserialize({ Name: "z", Base: 5, X: 7 }, ignoredSpec)!;
 
     expect(value.base).toBe(5);
     expect(value.x).toBe(7);
@@ -184,7 +184,7 @@ describe("JsonSerializer — wire order", () => {
   });
 
   test("an ignored override does not require the base key", () => {
-    const value = JsonSerializer.deserialize({ Base: 5, X: 7 }, ignoredSpec);
+    const value = JsonSerializer.deserialize({ Base: 5, X: 7 }, ignoredSpec)!;
 
     expect(value.x).toBe(7);
   });

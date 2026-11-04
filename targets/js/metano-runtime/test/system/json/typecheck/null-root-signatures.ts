@@ -1,0 +1,108 @@
+// Compile-time checks of the null-root signatures (FR-034, FR-037), run by
+// `null-root-signatures.test.ts` through `tsgo -p tsconfig.typecheck.json`.
+// Each `@ts-expect-error` must flag an error, or tsgo fails on it as unused.
+import { JsonSerializer, SerializerContext, type TypeSpec, type ValueSpec } from "#/system/json";
+
+/** `true` only when `A` and `B` are the same type. */
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+
+function expectType<_ extends true>(): void {}
+
+class Order {
+  constructor(readonly id: string) {}
+}
+
+class SPoint {
+  constructor(readonly x: number) {}
+}
+
+declare const orderSpec: TypeSpec<Order>;
+declare const pointSpec: TypeSpec<SPoint>;
+declare const int32Spec: ValueSpec<number>;
+declare const orderListSpec: ValueSpec<Order[] | null>;
+declare const nullableInt32Spec: ValueSpec<number | null>;
+declare const context: SerializerContext;
+declare const data: unknown;
+
+const bound = JsonSerializer.withContext(context);
+
+// ─── TypeSpec reads return T | null ───────────────────────────────────────────
+
+const order = JsonSerializer.deserialize(data, orderSpec);
+expectType<Equal<typeof order, Order | null>>();
+
+const orderFromText = JsonSerializer.deserializeText("null", orderSpec);
+expectType<Equal<typeof orderFromText, Order | null>>();
+
+const boundOrder = bound.deserialize(data, orderSpec);
+expectType<Equal<typeof boundOrder, Order | null>>();
+
+const boundOrderFromText = bound.deserializeText("null", orderSpec);
+expectType<Equal<typeof boundOrderFromText, Order | null>>();
+
+// A struct contract shares the overload; its runtime check throws for null.
+const point = JsonSerializer.deserialize(data, pointSpec);
+expectType<Equal<typeof point, SPoint | null>>();
+
+// @ts-expect-error a TypeSpec read may be null under strict
+const strictOrder: Order = JsonSerializer.deserialize(data, orderSpec);
+
+// @ts-expect-error a TypeSpec text read may be null under strict
+const strictTextOrder: Order = JsonSerializer.deserializeText("{}", orderSpec);
+
+// @ts-expect-error a bound TypeSpec read may be null under strict
+const strictBoundOrder: Order = bound.deserialize(data, orderSpec);
+
+// @ts-expect-error a bound TypeSpec text read may be null under strict
+const strictBoundTextOrder: Order = bound.deserializeText("{}", orderSpec);
+
+// The migration: handle the null or assert it.
+const assertedOrder: Order = JsonSerializer.deserialize(data, orderSpec)!;
+
+// ─── ValueSpec reads return T, which holds | null for a reference type ───────
+
+const int32 = JsonSerializer.deserialize(data, int32Spec);
+expectType<Equal<typeof int32, number>>();
+
+const int32FromText = bound.deserializeText("1", int32Spec);
+expectType<Equal<typeof int32FromText, number>>();
+
+const orders = JsonSerializer.deserializeText("[]", orderListSpec);
+expectType<Equal<typeof orders, Order[] | null>>();
+
+const nullableInt32 = bound.deserialize(data, nullableInt32Spec);
+expectType<Equal<typeof nullableInt32, number | null>>();
+
+// @ts-expect-error a reference-type value root may be null under strict
+const strictOrders: Order[] = JsonSerializer.deserialize(data, orderListSpec);
+
+// ─── TypeSpec writes accept null and may return null ─────────────────────────
+
+const written = JsonSerializer.serialize(null, orderSpec);
+expectType<Equal<typeof written, Record<string, unknown> | null>>();
+
+const boundWritten = bound.serialize(new Order("a"), orderSpec);
+expectType<Equal<typeof boundWritten, Record<string, unknown> | null>>();
+
+// ─── valueType is part of both spec shapes ───────────────────────────────────
+
+const structSpec: TypeSpec<SPoint> = {
+  type: SPoint,
+  factory: (p) => new SPoint(p.x as number),
+  properties: [{ ts: "x", json: "X", type: { kind: "primitive" } }],
+  valueType: true,
+};
+
+const valueRootSpec: ValueSpec<number> = { descriptor: { kind: "primitive" }, valueType: true };
+
+export {
+  assertedOrder,
+  strictBoundOrder,
+  strictBoundTextOrder,
+  strictOrder,
+  strictOrders,
+  strictTextOrder,
+  structSpec,
+  valueRootSpec,
+};

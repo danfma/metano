@@ -155,6 +155,7 @@ export class JsonContext extends SerializerContext {
   get int32(): ValueSpec<number> {
     return this._int32 ??= this.createValueSpec({
       descriptor: { kind: "primitive" },
+      valueType: true,
     });
   }
 
@@ -167,36 +168,42 @@ export class JsonContext extends SerializerContext {
   get guid(): ValueSpec<UUID> {
     return this._guid ??= this.createValueSpec({
       descriptor: { kind: "branded", create: UUID.create },
+      valueType: true,
     });
   }
 
   get dateTimeOffset(): ValueSpec<Temporal.ZonedDateTime> {
     return this._dateTimeOffset ??= this.createValueSpec({
       descriptor: { kind: "temporal", parse: Temporal.ZonedDateTime.from },
+      valueType: true,
     });
   }
 
   get decimal(): ValueSpec<Decimal> {
     return this._decimal ??= this.createValueSpec({
       descriptor: { kind: "decimal", type: Decimal },
+      valueType: true,
     });
   }
 
   get mood(): ValueSpec<Mood> {
     return this._mood ??= this.createValueSpec({
       descriptor: { kind: "enum", values: Mood },
+      valueType: true,
     });
   }
 
   get level(): ValueSpec<Level> {
     return this._level ??= this.createValueSpec({
       descriptor: { kind: "numericEnum", values: Level },
+      valueType: true,
     });
   }
 
   get episodeId(): ValueSpec<EpisodeId> {
     return this._episodeId ??= this.createValueSpec({
       descriptor: { kind: "branded", create: EpisodeId.create },
+      valueType: true,
     });
   }
 

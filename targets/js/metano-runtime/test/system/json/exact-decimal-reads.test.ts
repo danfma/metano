@@ -244,11 +244,11 @@ describe("deserializeText — a decimal assigned after construction", () => {
   };
 
   test("a present member reads its exact digits", () => {
-    expect(JsonSerializer.deserializeText(`{"price":${LONG}}`, spec).price.toFixed()).toBe(LONG);
+    expect(JsonSerializer.deserializeText(`{"price":${LONG}}`, spec)!.price.toFixed()).toBe(LONG);
   });
 
   test("a missing member keeps its initializer", () => {
-    expect(JsonSerializer.deserializeText(`{"other":${LONG}}`, spec).price.toFixed()).toBe("1");
+    expect(JsonSerializer.deserializeText(`{"other":${LONG}}`, spec)!.price.toFixed()).toBe("1");
   });
 });
 

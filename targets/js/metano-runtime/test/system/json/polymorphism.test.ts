@@ -215,7 +215,7 @@ function write<T>(value: T, spec: TypeSpec<T>): string {
 
 /** Parses `json` and deserializes it through `spec`. */
 function read<T>(json: string, spec: TypeSpec<T>): T {
-  return JsonSerializer.deserialize(JSON.parse(json), spec);
+  return JsonSerializer.deserialize(JSON.parse(json), spec)!;
 }
 
 describe("polymorphism — string tags (Clip)", () => {

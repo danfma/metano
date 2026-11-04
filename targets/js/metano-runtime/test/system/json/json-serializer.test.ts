@@ -62,7 +62,7 @@ describe("JsonSerializer — primitives", () => {
 
   test("deserialize from JSON wire format to typed instance", () => {
     const data = { first_name: "Daniel", age: 30, is_active: true };
-    const person = JsonSerializer.deserialize(data, personSpec);
+    const person = JsonSerializer.deserialize(data, personSpec)!;
 
     expect(person).toBeInstanceOf(Person);
     expect(person.firstName).toBe("Daniel");
@@ -73,7 +73,7 @@ describe("JsonSerializer — primitives", () => {
   test("round-trip preserves data", () => {
     const original = new Person("Alice", 25, false);
     const json = JsonSerializer.serialize(original, personSpec);
-    const restored = JsonSerializer.deserialize(json, personSpec);
+    const restored = JsonSerializer.deserialize(json, personSpec)!;
 
     expect(restored.firstName).toBe(original.firstName);
     expect(restored.age).toBe(original.age);
@@ -107,23 +107,23 @@ describe("JsonSerializer — nullable", () => {
 
   test("serialize null value", () => {
     const obj = new WithOptional("test", null);
-    const json = JsonSerializer.serialize(obj, spec);
+    const json = JsonSerializer.serialize(obj, spec)!;
     expect(json.note).toBeNull();
   });
 
   test("serialize non-null value", () => {
     const obj = new WithOptional("test", "hello");
-    const json = JsonSerializer.serialize(obj, spec);
+    const json = JsonSerializer.serialize(obj, spec)!;
     expect(json.note).toBe("hello");
   });
 
   test("deserialize null", () => {
-    const obj = JsonSerializer.deserialize({ name: "test", note: null }, spec);
+    const obj = JsonSerializer.deserialize({ name: "test", note: null }, spec)!;
     expect(obj.note).toBeNull();
   });
 
   test("deserialize missing optional", () => {
-    const obj = JsonSerializer.deserialize({ name: "test" }, spec);
+    const obj = JsonSerializer.deserialize({ name: "test" }, spec)!;
     expect(obj.note).toBeNull();
   });
 });
@@ -149,12 +149,12 @@ describe("JsonSerializer — arrays", () => {
 
   test("serialize array of primitives", () => {
     const obj = new WithTags("item", ["a", "b", "c"]);
-    const json = JsonSerializer.serialize(obj, spec);
+    const json = JsonSerializer.serialize(obj, spec)!;
     expect(json.tags).toEqual(["a", "b", "c"]);
   });
 
   test("deserialize array of primitives", () => {
-    const obj = JsonSerializer.deserialize({ name: "item", tags: ["a", "b"] }, spec);
+    const obj = JsonSerializer.deserialize({ name: "item", tags: ["a", "b"] }, spec)!;
     expect(obj.tags).toEqual(["a", "b"]);
   });
 });
@@ -190,7 +190,7 @@ describe("JsonSerializer — ref (nested objects)", () => {
 
   test("deserialize nested objects", () => {
     const data = { start: { x: 1, y: 2 }, end: { x: 3, y: 4 } };
-    const line = JsonSerializer.deserialize(data, lineSpec);
+    const line = JsonSerializer.deserialize(data, lineSpec)!;
 
     expect(line).toBeInstanceOf(Line);
     expect(line.start).toBeInstanceOf(Point);
@@ -216,13 +216,13 @@ describe("JsonSerializer — ref (nested objects)", () => {
     };
 
     const shape = new Shape([new Point(0, 0), new Point(1, 1)]);
-    const json = JsonSerializer.serialize(shape, shapeSpec);
+    const json = JsonSerializer.serialize(shape, shapeSpec)!;
     expect(json.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
     ]);
 
-    const restored = JsonSerializer.deserialize(json, shapeSpec);
+    const restored = JsonSerializer.deserialize(json, shapeSpec)!;
     expect(restored.points[0]).toBeInstanceOf(Point);
     expect(restored.points[1]!.x).toBe(1);
   });
@@ -254,12 +254,12 @@ describe("JsonSerializer — map", () => {
         ["b", 2],
       ]),
     );
-    const json = JsonSerializer.serialize(obj, spec);
+    const json = JsonSerializer.serialize(obj, spec)!;
     expect(json.metadata).toEqual({ a: 1, b: 2 });
   });
 
   test("deserialize plain object to Map", () => {
-    const obj = JsonSerializer.deserialize({ metadata: { x: 10, y: 20 } }, spec);
+    const obj = JsonSerializer.deserialize({ metadata: { x: 10, y: 20 } }, spec)!;
     expect(obj.metadata).toBeInstanceOf(Map);
     expect(obj.metadata.get("x")).toBe(10);
     expect(obj.metadata.get("y")).toBe(20);
@@ -288,13 +288,13 @@ describe("JsonSerializer — hashSet", () => {
   test("serialize HashSet to array", () => {
     const set = new HashSet([1, 2, 3]);
     const obj = new WithSet(set);
-    const json = JsonSerializer.serialize(obj, spec);
+    const json = JsonSerializer.serialize(obj, spec)!;
     const arr = json.items as number[];
     expect(arr.sort()).toEqual([1, 2, 3]);
   });
 
   test("deserialize array to HashSet", () => {
-    const obj = JsonSerializer.deserialize({ items: [1, 2, 3] }, spec);
+    const obj = JsonSerializer.deserialize({ items: [1, 2, 3] }, spec)!;
     expect(obj.items).toBeInstanceOf(HashSet);
     expect(obj.items.has(1)).toBe(true);
     expect(obj.items.has(4)).toBe(false);
@@ -328,12 +328,12 @@ describe("JsonSerializer — branded", () => {
 
   test("serialize branded — brand erases, passthrough", () => {
     const user = new User(UserId.create("abc123"), "Alice");
-    const json = JsonSerializer.serialize(user, spec);
+    const json = JsonSerializer.serialize(user, spec)!;
     expect(json.user_id).toBe("abc123");
   });
 
   test("deserialize branded — calls create()", () => {
-    const user = JsonSerializer.deserialize({ user_id: "abc123", name: "Alice" }, spec);
+    const user = JsonSerializer.deserialize({ user_id: "abc123", name: "Alice" }, spec)!;
     expect(user.id).toBe("abc123");
     expect(user.name).toBe("Alice");
   });
@@ -374,7 +374,7 @@ describe("JsonSerializer — branded with a validating factory", () => {
   };
 
   test("a valid value is normalized by the factory and round-trips", () => {
-    const video = JsonSerializer.deserialize({ title: "  ok ", aliases: [" a "] }, spec);
+    const video = JsonSerializer.deserialize({ title: "  ok ", aliases: [" a "] }, spec)!;
 
     expect(video.title).toBe("ok");
     expect(video.aliases).toEqual(["a"]);
@@ -424,12 +424,12 @@ describe("JsonSerializer — enum (string)", () => {
 
   test("serialize enum — passthrough", () => {
     const task = new Task("Do it", "Active");
-    const json = JsonSerializer.serialize(task, spec);
+    const json = JsonSerializer.serialize(task, spec)!;
     expect(json.status).toBe("Active");
   });
 
   test("deserialize valid enum value", () => {
-    const task = JsonSerializer.deserialize({ title: "Do it", status: "Draft" }, spec);
+    const task = JsonSerializer.deserialize({ title: "Do it", status: "Draft" }, spec)!;
     expect(task.status).toBe("Draft");
   });
 
@@ -459,9 +459,9 @@ describe("JsonSerializer — numericEnum", () => {
 
   test("round-trip numeric enum", () => {
     const item = new Item(1);
-    const json = JsonSerializer.serialize(item, spec);
+    const json = JsonSerializer.serialize(item, spec)!;
     expect(json.priority).toBe(1);
-    const restored = JsonSerializer.deserialize(json, spec);
+    const restored = JsonSerializer.deserialize(json, spec)!;
     expect(restored.priority).toBe(1);
   });
 
@@ -504,12 +504,12 @@ describe("JsonSerializer — temporal", () => {
 
   test("serialize temporal — calls toString()", () => {
     const event = new Event("Launch", new FakeDate("2024-01-15"));
-    const json = JsonSerializer.serialize(event, spec);
+    const json = JsonSerializer.serialize(event, spec)!;
     expect(json.date).toBe("2024-01-15");
   });
 
   test("deserialize temporal — calls parse()", () => {
-    const event = JsonSerializer.deserialize({ name: "Launch", date: "2024-01-15" }, spec);
+    const event = JsonSerializer.deserialize({ name: "Launch", date: "2024-01-15" }, spec)!;
     expect(event.date).toBeInstanceOf(FakeDate);
     expect(event.date.isoString).toBe("2024-01-15");
   });
@@ -544,12 +544,12 @@ describe("JsonSerializer — decimal", () => {
 
   test("serialize decimal — calls toNumber()", () => {
     const product = new Product("Widget", new FakeDecimal(19.99));
-    const json = JsonSerializer.serialize(product, spec);
+    const json = JsonSerializer.serialize(product, spec)!;
     expect(json.price).toBe(19.99);
   });
 
   test("deserialize decimal — factory constructs it", () => {
-    const product = JsonSerializer.deserialize({ name: "Widget", price: 19.99 }, spec);
+    const product = JsonSerializer.deserialize({ name: "Widget", price: 19.99 }, spec)!;
     expect(product.price).toBeInstanceOf(FakeDecimal);
     expect(product.price.toNumber()).toBe(19.99);
   });
@@ -606,7 +606,7 @@ describe("JsonSerializer — inheritance", () => {
   });
 
   test("deserialize derived type", () => {
-    const dog = JsonSerializer.deserialize({ name: "Rex", legs: 4, breed: "Labrador" }, dogSpec);
+    const dog = JsonSerializer.deserialize({ name: "Rex", legs: 4, breed: "Labrador" }, dogSpec)!;
     expect(dog).toBeInstanceOf(Dog);
     expect(dog.name).toBe("Rex");
     expect(dog.breed).toBe("Labrador");
@@ -644,7 +644,7 @@ describe("JsonSerializer — custom converters", () => {
 
   test("custom converter overrides built-in", () => {
     const price = new Price(new FakeDecimal("123.456789012345"));
-    const json = JsonSerializer.serialize(price, spec, [decimalAsString]);
+    const json = JsonSerializer.serialize(price, spec, [decimalAsString])!;
 
     // With custom converter: serialized as string, not number
     expect(json.amount).toBe("123.456789012345");
@@ -653,7 +653,7 @@ describe("JsonSerializer — custom converters", () => {
 
   test("without custom converter, uses built-in (toNumber)", () => {
     const price = new Price(new FakeDecimal("19.99"));
-    const json = JsonSerializer.serialize(price, spec);
+    const json = JsonSerializer.serialize(price, spec)!;
     expect(json.amount).toBe(19.99);
     expect(typeof json.amount).toBe("number");
   });
@@ -723,11 +723,8 @@ describe("SerializerContext", () => {
 // ─── Error Cases ─────────────────────────────────────────────────────────────
 
 describe("JsonSerializer — error cases", () => {
-  test("deserialize null throws", () => {
-    expectJsonException(
-      () => JsonSerializer.deserialize(null, personSpec),
-      "The JSON value could not be converted to Person.",
-    );
+  test("deserialize null reads as null (FR-037)", () => {
+    expect(JsonSerializer.deserialize(null, personSpec)).toBeNull();
   });
 
   test("deserialize non-object throws", () => {
@@ -827,7 +824,7 @@ describe("JsonSerializer — complex scenario", () => {
       note: null,
     });
 
-    const restored = JsonSerializer.deserialize(json, orderSpec);
+    const restored = JsonSerializer.deserialize(json, orderSpec)!;
 
     expect(restored).toBeInstanceOf(Order);
     expect(restored.id).toBe("ord-001");

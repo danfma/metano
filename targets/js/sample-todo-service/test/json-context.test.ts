@@ -16,7 +16,7 @@ describe("StoredTodo serialization", () => {
   };
 
   test("serializes to camelCase JSON with nested TodoItem", () => {
-    const json = JsonSerializer.serialize(stored, ctx.storedTodo);
+    const json = JsonSerializer.serialize(stored, ctx.storedTodo)!;
 
     expect(json.id).toBe("abc-123");
     expect(json.item).toBeDefined();
@@ -31,7 +31,7 @@ describe("StoredTodo serialization", () => {
     const json = JsonSerializer.serialize(stored, ctx.storedTodo);
     const wire = JSON.stringify(json);
     const parsed = JSON.parse(wire);
-    const result = JsonSerializer.deserialize<StoredTodo>(parsed, ctx.storedTodo);
+    const result = JsonSerializer.deserialize<StoredTodo>(parsed, ctx.storedTodo)!;
 
     expect(result.id).toBe("abc-123");
     expect(result.item).toBeInstanceOf(TodoItem);
@@ -46,7 +46,7 @@ describe("StoredTodo serialization", () => {
       item: { title: "Walk the dog", completed: true, priority: "low" },
     };
 
-    const result = JsonSerializer.deserialize<StoredTodo>(payload, ctx.storedTodo);
+    const result = JsonSerializer.deserialize<StoredTodo>(payload, ctx.storedTodo)!;
 
     expect(result.id).toBe("from-wire");
     expect(result.item).toBeInstanceOf(TodoItem);
@@ -62,7 +62,7 @@ describe("CreateTodoDto serialization", () => {
   const dto: CreateTodoDto = { title: "Read a book", priority: Priority.Medium };
 
   test("serializes with camelCase keys", () => {
-    const json = JsonSerializer.serialize(dto, ctx.createTodoDto);
+    const json = JsonSerializer.serialize(dto, ctx.createTodoDto)!;
 
     expect(json.title).toBe("Read a book");
     expect(json.priority).toBe("medium");
@@ -72,7 +72,7 @@ describe("CreateTodoDto serialization", () => {
     const json = JsonSerializer.serialize(dto, ctx.createTodoDto);
     const wire = JSON.stringify(json);
     const parsed = JSON.parse(wire);
-    const result = JsonSerializer.deserialize<CreateTodoDto>(parsed, ctx.createTodoDto);
+    const result = JsonSerializer.deserialize<CreateTodoDto>(parsed, ctx.createTodoDto)!;
 
     expect(result.title).toBe("Read a book");
     expect(result.priority).toBe(Priority.Medium);
@@ -88,7 +88,7 @@ describe("UpdateTodoDto serialization", () => {
       priority: Priority.Low,
       completed: true,
     };
-    const json = JsonSerializer.serialize(dto, ctx.updateTodoDto);
+    const json = JsonSerializer.serialize(dto, ctx.updateTodoDto)!;
 
     expect(json.title).toBe("Updated title");
     expect(json.priority).toBe("low");
@@ -97,7 +97,7 @@ describe("UpdateTodoDto serialization", () => {
 
   test("serializes null fields as null", () => {
     const dto: UpdateTodoDto = { title: null, priority: null, completed: null };
-    const json = JsonSerializer.serialize(dto, ctx.updateTodoDto);
+    const json = JsonSerializer.serialize(dto, ctx.updateTodoDto)!;
 
     expect(json.title).toBeNull();
     expect(json.priority).toBeNull();
@@ -109,7 +109,7 @@ describe("UpdateTodoDto serialization", () => {
     const result = JsonSerializer.deserialize<UpdateTodoDto>(
       payload,
       ctx.updateTodoDto,
-    );
+    )!;
 
     expect(result.title).toBe("New name");
     expect(result.priority).toBeNull();
@@ -155,7 +155,7 @@ describe("Hono request/response boundary", () => {
     const patch = JsonSerializer.deserialize<UpdateTodoDto>(
       JSON.parse(patchWire),
       ctx.updateTodoDto,
-    );
+    )!;
 
     // Apply the patch (mimicking TodoStore.update logic):
     let item = existing.item;
@@ -165,7 +165,7 @@ describe("Hono request/response boundary", () => {
     const updated: StoredTodo = { ...existing, item };
 
     // Serialize back for the response:
-    const responseJson = JsonSerializer.serialize(updated, ctx.storedTodo);
+    const responseJson = JsonSerializer.serialize(updated, ctx.storedTodo)!;
 
     expect(responseJson.id).toBe("todo-1");
     const responseItem = responseJson.item as Record<string, unknown>;
