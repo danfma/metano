@@ -9,12 +9,8 @@ import {
 } from "./converters.ts";
 import { specNeedsExactNumbers } from "./exact-number-reads.ts";
 import { mayHoldInexactNumber, parseJsonText, readJsonText } from "./json-text-reader.ts";
-import { readNullRoot } from "./null-root.ts";
-
-/** A `ValueSpec` carries a `descriptor`; a `TypeSpec` never does. */
-function isValueSpec<T>(spec: JsonTypeInfo<T>): spec is ValueSpec<T> {
-  return "descriptor" in spec;
-}
+import { readNull } from "./null-reads.ts";
+import { isValueSpec } from "./spec-kind.ts";
 
 /**
  * Serializes through either spec kind: an object contract walks its
@@ -31,6 +27,8 @@ function serializeWithInfo<T>(
     return serializeWithValueSpec(value, spec, converters);
   }
 
+  // `undefined` (an absent optional member) writes `null` too, as a `ref`
+  // property does: C# has only `null`, and JSON has no `undefined`.
   if (value == null) {
     return null;
   }
@@ -40,7 +38,8 @@ function serializeWithInfo<T>(
 
 /**
  * Reads through either spec kind. JSON `null` at the root reads as `null`,
- * or throws `JsonException` for a value type (`readNullRoot`, FR-037).
+ * or throws `JsonException` for a value type (`readNull`, FR-037). Only
+ * `null` is checked: `JSON.parse` never yields `undefined`.
  */
 function deserializeWithInfo<T>(
   data: unknown,
@@ -49,7 +48,7 @@ function deserializeWithInfo<T>(
   treeNumbers?: TreeNumbers,
 ): T | null {
   if (data === null) {
-    return readNullRoot(spec);
+    return readNull(spec);
   }
 
   if (isValueSpec(spec)) {
@@ -89,7 +88,9 @@ function deserializeTextWithInfo<T>(
 export class BoundSerializer {
   constructor(private readonly context: SerializerContext) {}
 
-  /** Serialize a TS object to a JSON-safe plain object; `null` serializes to `null`. */
+  /** Serialize a TS object to a JSON-safe plain object. */
+  serialize<T>(value: T & {}, spec: TypeSpec<T>): Record<string, unknown>;
+  /** Serialize a TS object that may be `null`; `null` serializes to `null`. */
   serialize<T>(value: T | null, spec: TypeSpec<T>): Record<string, unknown> | null;
   /** Serialize a non-object root (collection, map, primitive, …) to a JSON-safe value. */
   serialize<T>(value: T, spec: ValueSpec<T>): unknown;
@@ -115,7 +116,11 @@ export class BoundSerializer {
 
   /** Deserialize JSON text into a typed instance, decimals with their exact digits. */
   deserializeText<T>(text: string, spec: TypeSpec<T>): T | null;
-  /** Deserialize JSON text into a non-object root value, decimals with their exact digits. */
+  /**
+   * Deserialize JSON text into a non-object root value, decimals with their
+   * exact digits. `T` holds `| null` for a reference-type root; a value-type
+   * root throws for `null`.
+   */
   deserializeText<T>(text: string, spec: ValueSpec<T>): T;
   deserializeText<T>(text: string, spec: JsonTypeInfo<T>): T | null {
     return deserializeTextWithInfo(text, spec, this.context.converters);
@@ -152,9 +157,15 @@ export class BoundSerializer {
 export class JsonSerializer {
   private constructor() {}
 
+  /** Serialize a TS object to a JSON-safe plain object using the given spec. */
+  static serialize<T>(
+    value: T & {},
+    spec: TypeSpec<T>,
+    converters?: readonly JsonConverter[],
+  ): Record<string, unknown>;
   /**
-   * Serialize a TS object to a JSON-safe plain object using the given spec;
-   * `null` serializes to `null`, as System.Text.Json writes it (FR-037).
+   * Serialize a TS object that may be `null` using the given spec; `null`
+   * serializes to `null`, as System.Text.Json writes it (FR-037).
    */
   static serialize<T>(
     value: T | null,
@@ -216,7 +227,11 @@ export class JsonSerializer {
     spec: TypeSpec<T>,
     converters?: readonly JsonConverter[],
   ): T | null;
-  /** Deserialize JSON text into a non-object root value using the given spec. */
+  /**
+   * Deserialize JSON text into a non-object root value using the given
+   * spec. `T` holds `| null` for a reference-type root; a value-type root
+   * (`valueType`) throws `JsonException` for `null`.
+   */
   static deserializeText<T>(
     text: string,
     spec: ValueSpec<T>,

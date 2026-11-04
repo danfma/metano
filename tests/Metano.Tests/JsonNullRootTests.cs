@@ -23,12 +23,28 @@ public class JsonNullRootTests
         public sealed record Segment(SPoint From, SPoint? To, Corner Tip);
 
         [Transpile]
+        public enum Level { Low, High }
+
+        [Transpile]
+        public static class Outer
+        {
+            [Transpile]
+            public readonly record struct Inner(int V);
+        }
+
+        [Transpile]
+        public readonly record struct Pair<T>(T A);
+
+        [Transpile]
         [JsonSerializable(typeof(SPoint))]
         [JsonSerializable(typeof(SPoint?))]
         [JsonSerializable(typeof(Segment))]
         [JsonSerializable(typeof(bool))]
         [JsonSerializable(typeof(DateOnly))]
         [JsonSerializable(typeof(bool?))]
+        [JsonSerializable(typeof(Level))]
+        [JsonSerializable(typeof(Outer.Inner))]
+        [JsonSerializable(typeof(Pair<int>))]
         """;
 
     private const string ContextBoilerplate = """
@@ -65,6 +81,30 @@ public class JsonNullRootTests
     }
 
     [Test]
+    public async Task ValueTypeRoots_AreMarked()
+    {
+        var ts = TranspileContext();
+
+        await Assert.That(SpecOf(ts, "boolean")).Contains("valueType: true");
+        await Assert.That(SpecOf(ts, "dateOnly")).Contains("valueType: true");
+    }
+
+    [Test]
+    public async Task ValueTypeSpecs_NameTheirClrType()
+    {
+        var ts = TranspileContext();
+
+        await Assert.That(SpecOf(ts, "boolean")).Contains("typeName: \"System.Boolean\"");
+        await Assert.That(SpecOf(ts, "level")).Contains("typeName: \"TestApp.Level\"");
+        await Assert.That(SpecOf(ts, "sPoint")).Contains("typeName: \"TestApp.SPoint\"");
+        await Assert.That(SpecOf(ts, "inner")).Contains("typeName: \"TestApp.Outer+Inner\"");
+
+        await Assert
+            .That(SpecOf(ts, "pairInt32"))
+            .Contains("typeName: \"TestApp.Pair`1[System.Int32]\"");
+    }
+
+    [Test]
     public async Task NullableRoots_AreNotMarked()
     {
         var ts = TranspileContext();
@@ -73,10 +113,14 @@ public class JsonNullRootTests
         await Assert.That(SpecOf(ts, "nullableBoolean")).DoesNotContain("valueType");
     }
 
-    /// <summary>The getter body of <paramref name="getter"/>, up to the next getter.</summary>
+    /// <summary>The getter body of <paramref name="getter"/>, up to its closing brace.</summary>
     private static string SpecOf(string ts, string getter)
     {
         var start = ts.IndexOf($"  get {getter}()", StringComparison.Ordinal);
+
+        if (start < 0)
+            throw new InvalidOperationException($"The context has no getter '{getter}'.");
+
         var end = ts.IndexOf("\n  }\n", start, StringComparison.Ordinal);
 
         return ts[start..end];

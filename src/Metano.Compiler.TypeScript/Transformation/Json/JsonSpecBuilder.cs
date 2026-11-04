@@ -92,28 +92,44 @@ internal sealed class JsonSpecBuilder
     }
 
     /// <summary>
-    /// <c>{ descriptor }</c>, plus <c>valueType: true</c> for a value type
-    /// (FR-037).
+    /// <c>{ descriptor }</c>, plus <c>valueType: true</c> and the CLR
+    /// <c>typeName</c> for a value type (FR-037).
     /// </summary>
-    private static TsObjectLiteral BuildValueSpecObject(ITypeSymbol root, TsExpression descriptor)
-    {
-        var descriptorProperty = new TsObjectProperty("descriptor", descriptor);
-
-        return ValueTypeProperty(root) is { } valueType
-            ? new TsObjectLiteral([descriptorProperty, valueType])
-            : new TsObjectLiteral([descriptorProperty]);
-    }
+    private static TsObjectLiteral BuildValueSpecObject(
+        ITypeSymbol type,
+        TsExpression descriptor
+    ) =>
+        new(
+            new[]
+            {
+                new TsObjectProperty("descriptor", descriptor),
+                ValueTypeProperty(type),
+                TypeNameProperty(type),
+            }
+                .OfType<TsObjectProperty>()
+                .ToList()
+        );
 
     /// <summary>
-    /// <c>valueType: true</c> for a C# value type, whose JSON <c>null</c> at
-    /// the root throws <c>JsonException</c> as in System.Text.Json (FR-037);
-    /// absent for a reference type and for <c>Nullable&lt;T&gt;</c>, which
-    /// read <c>null</c> as <c>null</c>.
+    /// <c>valueType: true</c> for a C# value type, whose JSON <c>null</c>
+    /// throws <c>JsonException</c> as in System.Text.Json (FR-037); absent for
+    /// a reference type and for <c>Nullable&lt;T&gt;</c>, which read
+    /// <c>null</c> as <c>null</c>.
     /// </summary>
     private static TsObjectProperty? ValueTypeProperty(ITypeSymbol type) =>
-        RejectsNullRoot(type) ? new TsObjectProperty("valueType", new TsLiteral("true")) : null;
+        RejectsNull(type) ? new TsObjectProperty("valueType", new TsLiteral("true")) : null;
 
-    private static bool RejectsNullRoot(ITypeSymbol type) =>
+    /// <summary>
+    /// <c>typeName: "MyApp.SPoint"</c> next to <c>valueType</c>: the name
+    /// System.Text.Json prints when JSON <c>null</c> cannot be converted to
+    /// the type (<see cref="JsonClrTypeName"/>).
+    /// </summary>
+    private static TsObjectProperty? TypeNameProperty(ITypeSymbol type) =>
+        RejectsNull(type)
+            ? new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type)))
+            : null;
+
+    private static bool RejectsNull(ITypeSymbol type) =>
         type.IsValueType && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T;
 
     /// <summary>
@@ -212,6 +228,7 @@ internal sealed class JsonSpecBuilder
             factoryProperty,
             propertiesProperty,
             ValueTypeProperty(targetType),
+            TypeNameProperty(targetType),
             IgnoredPropertiesProperty(targetType),
             AssignIfPresentProperty(targetType),
             polymorphism is null ? null : _polymorphismSpecs.Build(polymorphism),

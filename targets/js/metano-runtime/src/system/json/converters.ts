@@ -31,6 +31,7 @@ import {
   writeContainer,
 } from "./container-depth.ts";
 import { cannotConvertTo } from "./contract-name.ts";
+import { readNull } from "./null-reads.ts";
 import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
 import { numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
@@ -394,15 +395,19 @@ function builtinNullableInnerConverter(
  * the same spec every time, as the generated `??=` context getters do.
  */
 function refConverter(descriptor: RefDescriptor, plans: SpecPlans) {
-  const targetPlan = lazy(() => plans.planOf(descriptor.spec()));
+  const targetSpec = lazy(() => descriptor.spec());
+  const targetPlan = lazy(() => plans.planOf(targetSpec()));
 
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
       return targetPlan().serialize(value);
     },
+    // JSON `null` for a struct contract (a property, an element or a
+    // dictionary value) throws as in System.Text.Json; a `Nullable<T>`
+    // wraps the ref in a `nullable` descriptor, which reads it first.
     deserialize: (value: unknown) => {
-      if (value == null) return null;
+      if (value == null) return readNull(targetSpec());
       return targetPlan().deserialize(value);
     },
   };
