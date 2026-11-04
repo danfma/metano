@@ -52,7 +52,7 @@ The leaf comes from `writeExactNumber(value.toString(), () => Number(value))`, s
 | `rawJSON` leaf `"1.0"`, `"1e3"` | `JsonException` | `JsonException` (R7) |
 | `rawJSON` leaf `"9223372036854775808"` | `JsonException` | `JsonException` (R7) |
 | `number` `5` (a safe integer) | `5n` | `5` |
-| `number` `1152921504606846976` (from `JSON.parse("1152921504606846977")`) | `JsonException` naming the exact read path (OQ-3 *Proposed* (d): beyond `Number.MAX_SAFE_INTEGER`) | `1152921504606846977` |
+| `number` `1152921504606846976` (from `JSON.parse("1152921504606846977")`) | `JsonException` naming the exact read path (OQ-3 (d): beyond `Number.MAX_SAFE_INTEGER`) | `1152921504606846977` |
 | `number` `1.5`, `NaN`, `Infinity` | `JsonException` | `JsonException` |
 | `string` `"5"`, read options without `allowReadingFromString` | `JsonException` | `JsonException` (R7) |
 | `string` `"5"`, with `allowReadingFromString` | `5n` | `5` (R7) |
