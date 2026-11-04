@@ -8,10 +8,10 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// Builds the <c>MS0037</c> (<c>UnmirroredJsonOption</c>) warnings of
 /// spec 009 FR-046 and names the symbols and locations they point at.
 /// </summary>
-internal static class JsonUnmirroredOption
+internal static class UnmirroredJsonWarning
 {
     /// <summary>The warning with <paramref name="message"/> at <paramref name="location"/>.</summary>
-    public static MetanoDiagnostic Warning(string message, Location? location) =>
+    public static MetanoDiagnostic Create(string message, Location? location) =>
         new(
             MetanoDiagnosticSeverity.Warning,
             DiagnosticCodes.UnmirroredJsonOption,
@@ -28,14 +28,14 @@ internal static class JsonUnmirroredOption
         type.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat);
 
     /// <summary>Where <paramref name="attribute"/> is applied, if in source.</summary>
-    public static Location? LocationOf(AttributeData attribute) =>
+    public static Location? At(AttributeData attribute) =>
         attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation();
 
     /// <summary>
     /// The named argument <paramref name="name"/> of <paramref name="attribute"/>
     /// in source (<c>DefaultIgnoreCondition = …</c>), else the attribute.
     /// </summary>
-    public static Location? LocationOf(AttributeData attribute, string name) =>
+    public static Location? At(AttributeData attribute, string name) =>
         attribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax syntax
             ? syntax
                 .ArgumentList?.Arguments.FirstOrDefault(argument =>
@@ -46,6 +46,6 @@ internal static class JsonUnmirroredOption
             : null;
 
     /// <summary>The first source location of <paramref name="symbol"/>.</summary>
-    public static Location? LocationOf(ISymbol symbol) =>
+    public static Location? At(ISymbol symbol) =>
         symbol.Locations.FirstOrDefault(location => location.IsInSource);
 }

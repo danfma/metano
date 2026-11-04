@@ -306,15 +306,11 @@ internal sealed class JsonPropertyCollector(
         !field.IsConst && IsSerializableMember(field);
 
     private static bool IsSerializableMember(ISymbol member) =>
-        !member.IsStatic
-        && !member.IsImplicitlyDeclared
-        && JsonMemberAccess.IsIncluded(member)
-        && !JsonSerializationAttributes.IsAlwaysIgnored(member)
-        && !JsonSerializationAttributes.Has(member, "JsonExtensionDataAttribute");
+        JsonMemberAccess.IsSerialized(member)
+        && !JsonSerializationAttributes.Has(member, JsonSerializationAttributes.ExtensionData);
 
     private JsonSerializableProperty ToSerializableProperty(ISymbol member)
     {
-        // JSON name: [JsonPropertyName] wins, otherwise apply naming policy
         var jsonName = JsonPropertyNameOf(member) ?? ApplyNamingPolicy(member.Name);
 
         return new JsonSerializableProperty(
@@ -347,7 +343,7 @@ internal sealed class JsonPropertyCollector(
         member
             .GetAttributes()
             .Where(attribute =>
-                JsonSerializationAttributes.Is(attribute, "JsonPropertyNameAttribute")
+                JsonSerializationAttributes.Is(attribute, JsonSerializationAttributes.PropertyName)
             )
             .Select(attribute =>
                 attribute.ConstructorArguments is [{ Value: string name }] ? name : null

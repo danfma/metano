@@ -37,7 +37,7 @@ namespace Metano.Tests.Json;
 /// FR-009 order, and an override without the attribute has order 0
 /// (<c>{"V":3,"Z":4,"W":2}</c>, the base declaration's order 2 is not
 /// inherited). The base64 rows are quoted in the runtime's
-/// <c>byte-array.test.ts</c>.
+/// <c>byte-array-converter.test.ts</c>.
 ///
 /// The golden's TypeScript compiles under <c>tsgo --strict</c> and, bundled
 /// with <c>bun build</c> and run under Node, wrote every row above byte for

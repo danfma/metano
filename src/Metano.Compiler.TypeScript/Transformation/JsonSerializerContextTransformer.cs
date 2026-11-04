@@ -160,7 +160,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             polymorphismValidator
         ).Collect(roots);
 
-        ReportUnmirroredOptions(contextType, properties, contract, report);
+        ReportUnmirroredSettings(contextType, properties, contract, report);
 
         return new JsonContextPlan(
             names,
@@ -175,7 +175,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     /// Reports <c>MS0037</c> for every context option and every attribute of
     /// the closure the generated context does not mirror (FR-046).
     /// </summary>
-    private static void ReportUnmirroredOptions(
+    private static void ReportUnmirroredSettings(
         INamedTypeSymbol contextType,
         JsonPropertyCollector properties,
         JsonContract contract,
@@ -183,8 +183,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     )
     {
         var warnings = JsonUnmirroredContextOptions
-            .Of(contextType)
-            .Concat(new JsonUnmirroredAttributes(properties).Of(contract.Entries));
+            .WarningsOf(contextType)
+            .Concat(new JsonUnmirroredAttributes(properties).WarningsOf(contract.Entries));
 
         foreach (var warning in warnings)
             report(warning);

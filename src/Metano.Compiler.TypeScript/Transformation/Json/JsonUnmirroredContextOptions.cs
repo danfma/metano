@@ -29,8 +29,6 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal static class JsonUnmirroredContextOptions
 {
-    private const string OptionsAttribute = "JsonSourceGenerationOptionsAttribute";
-
     private const string NumberHandlingOption = "NumberHandling";
 
     private const string ConvertersOption = "Converters";
@@ -71,23 +69,31 @@ internal static class JsonUnmirroredContextOptions
     };
 
     /// <summary>The warnings of <paramref name="contextType"/>'s options, in argument order.</summary>
-    public static IEnumerable<MetanoDiagnostic> Of(INamedTypeSymbol contextType)
+    public static IEnumerable<MetanoDiagnostic> WarningsOf(INamedTypeSymbol contextType)
     {
-        var attribute = JsonSerializationAttributes.Find(contextType, OptionsAttribute);
+        var attribute = JsonSerializationAttributes.Find(
+            contextType,
+            JsonSerializationAttributes.SourceGenerationOptions
+        );
 
         if (attribute is null)
             return [];
 
-        return attribute.NamedArguments.SelectMany(argument =>
-            UnmirroredSettingsOf(argument.Key, argument.Value)
-                .Select(setting =>
-                    JsonUnmirroredOption.Warning(
-                        Message(setting),
-                        JsonUnmirroredOption.LocationOf(attribute, argument.Key)
-                    )
-                )
-        );
+        return attribute.NamedArguments.SelectMany(argument => WarningsOf(attribute, argument));
     }
+
+    /// <summary>One warning per unmirrored setting of one named argument.</summary>
+    private static IEnumerable<MetanoDiagnostic> WarningsOf(
+        AttributeData attribute,
+        KeyValuePair<string, TypedConstant> argument
+    ) =>
+        UnmirroredSettingsOf(argument.Key, argument.Value)
+            .Select(setting =>
+                UnmirroredJsonWarning.Create(
+                    Message(setting),
+                    UnmirroredJsonWarning.At(attribute, argument.Key)
+                )
+            );
 
     /// <summary>
     /// The names under which one named argument is reported: the option
@@ -99,14 +105,17 @@ internal static class JsonUnmirroredContextOptions
             NumberHandlingOption => UnmirroredNumberHandlingFlagsOf(value),
             ConvertersOption => value.Values.IsDefaultOrEmpty ? [] : [option],
             MaxDepthOption => value.Value is 0 or MirroredMaxDepth ? [] : [option],
-            _ when UnmirroredDefaults.TryGetValue(option, out var defaultValue) => Equals(
-                value.Value,
-                defaultValue
-            )
-                ? []
-                : [option],
+            _ when IsNonDefaultUnmirrored(option, value) => [option],
             _ => [],
         };
+
+    /// <summary>
+    /// Whether <paramref name="option"/> is an unmirrored single-valued option
+    /// set to a value other than System.Text.Json's default.
+    /// </summary>
+    private static bool IsNonDefaultUnmirrored(string option, TypedConstant value) =>
+        UnmirroredDefaults.TryGetValue(option, out var defaultValue)
+        && !Equals(value.Value, defaultValue);
 
     /// <summary>
     /// The <c>NumberHandling</c> flags other than the mirrored

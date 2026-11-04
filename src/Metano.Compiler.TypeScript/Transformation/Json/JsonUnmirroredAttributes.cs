@@ -22,27 +22,13 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 {
-    private const string ConverterAttribute = "JsonConverterAttribute";
-
-    private const string NumberHandlingAttribute = "JsonNumberHandlingAttribute";
-
-    private const string CreationHandlingAttribute = "JsonObjectCreationHandlingAttribute";
-
-    private const string UnmappedMemberAttribute = "JsonUnmappedMemberHandlingAttribute";
-
-    private const string ExtensionDataAttribute = "JsonExtensionDataAttribute";
-
-    private const string RequiredAttribute = "JsonRequiredAttribute";
-
-    private const string ConstructorAttribute = "JsonConstructorAttribute";
-
     private readonly JsonPropertyCollector _properties = properties;
 
     /// <summary>
     /// The warnings of every entry, each member and type reported once
     /// (generic constructions share their definition's warnings).
     /// </summary>
-    public IEnumerable<MetanoDiagnostic> Of(IReadOnlyList<JsonContractEntry> entries)
+    public IEnumerable<MetanoDiagnostic> WarningsOf(IReadOnlyList<JsonContractEntry> entries)
     {
         var contracts = entries
             .Where(entry => entry.Kind == JsonPropertyKind.Ref)
@@ -60,9 +46,9 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
         var contractWarnings = declaringTypes.SelectMany(ContractTypeWarningsOf);
 
         var converterWarnings = ReachedTypesOf(entries, contracts)
-            .Select(type => type.OriginalDefinition)
-            .Distinct(SymbolEqualityComparer.Default)
             .OfType<INamedTypeSymbol>()
+            .Select(type => type.OriginalDefinition)
+            .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
             .Select(TypeConverterWarningOf)
             .OfType<MetanoDiagnostic>();
 
@@ -81,23 +67,19 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     /// </summary>
     private static IEnumerable<MetanoDiagnostic> MemberWarningsOf(ISymbol member)
     {
-        var name = JsonUnmirroredOption.MemberName(member);
+        var name = UnmirroredJsonWarning.MemberName(member);
 
         if (JsonMemberAccess.HasUnreachableInclude(member))
         {
-            yield return JsonUnmirroredOption.Warning(
+            yield return UnmirroredJsonWarning.Create(
                 $"'{name}' has [JsonInclude], but the System.Text.Json source generator cannot "
                     + "access it (SYSLIB1038), so its contract throws InvalidOperationException; "
                     + "the TypeScript context does not mirror that.",
-                JsonUnmirroredOption.LocationOf(member)
+                UnmirroredJsonWarning.At(member)
             );
         }
 
-        var isSerialized =
-            JsonMemberAccess.IsIncluded(member)
-            && !JsonSerializationAttributes.IsAlwaysIgnored(member);
-
-        if (!isSerialized)
+        if (!JsonMemberAccess.IsSerialized(member))
             yield break;
 
         foreach (var warning in SerializedMemberWarningsOf(member, name))
@@ -112,20 +94,20 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
         {
             AttributeWarningOf(
                 member,
-                ExtensionDataAttribute,
+                JsonSerializationAttributes.ExtensionData,
                 $"'{name}' is [JsonExtensionData]: System.Text.Json writes its entries as "
                     + "properties of the object and collects unmapped ones into it, the "
                     + "TypeScript context leaves it out."
             ),
             AttributeWarningOf(
                 member,
-                ConverterAttribute,
+                JsonSerializationAttributes.Converter,
                 $"'{name}' has [JsonConverter]: the TypeScript context converts it as its type, "
                     + "without the custom converter."
             ),
             AttributeWarningOf(
                 member,
-                NumberHandlingAttribute,
+                JsonSerializationAttributes.NumberHandling,
                 $"'{name}' has [JsonNumberHandling]: the TypeScript context applies the "
                     + "context's number handling."
             ),
@@ -141,7 +123,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
         string message
     ) =>
         JsonSerializationAttributes.Find(symbol, attributeName) is { } attribute
-            ? JsonUnmirroredOption.Warning(message, JsonUnmirroredOption.LocationOf(attribute))
+            ? UnmirroredJsonWarning.Create(message, UnmirroredJsonWarning.At(attribute))
             : null;
 
     /// <summary>
@@ -151,7 +133,11 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     private static MetanoDiagnostic? PopulateWarningOf(ISymbol symbol, string name)
     {
         var isPopulate =
-            JsonSerializationAttributes.Find(symbol, CreationHandlingAttribute) is { } attribute
+            JsonSerializationAttributes.Find(
+                symbol,
+                JsonSerializationAttributes.ObjectCreationHandling
+            )
+                is { } attribute
             && JsonSerializationAttributes.EnumArgumentOf(attribute)
                 == (int)JsonObjectCreationHandling.Populate;
 
@@ -160,7 +146,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 
         return AttributeWarningOf(
             symbol,
-            CreationHandlingAttribute,
+            JsonSerializationAttributes.ObjectCreationHandling,
             $"'{name}' has [JsonObjectCreationHandling(Populate)]: the TypeScript context "
                 + "replaces the value on read."
         );
@@ -178,7 +164,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 
         return AttributeWarningOf(
             member,
-            RequiredAttribute,
+            JsonSerializationAttributes.Required,
             $"'{name}' has [JsonRequired]: System.Text.Json rejects a payload without it, the "
                 + "TypeScript context reads a missing nullable member as null."
         );
@@ -196,10 +182,10 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
         if (condition is null or JsonIgnoreCondition.Always or JsonIgnoreCondition.Never)
             return null;
 
-        return JsonUnmirroredOption.Warning(
+        return UnmirroredJsonWarning.Create(
             $"'{name}' has [JsonIgnore(Condition = {condition})]: the TypeScript context always "
                 + "writes and reads it.",
-            JsonUnmirroredOption.LocationOf(member)
+            UnmirroredJsonWarning.At(member)
         );
     }
 
@@ -209,13 +195,13 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     /// </summary>
     private static IEnumerable<MetanoDiagnostic> ContractTypeWarningsOf(INamedTypeSymbol type)
     {
-        var name = JsonUnmirroredOption.TypeName(type);
+        var name = UnmirroredJsonWarning.TypeName(type);
 
         return new[]
         {
             AttributeWarningOf(
                 type,
-                NumberHandlingAttribute,
+                JsonSerializationAttributes.NumberHandling,
                 $"'{name}' has [JsonNumberHandling]: the TypeScript context applies the "
                     + "context's number handling to its members."
             ),
@@ -235,7 +221,11 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     )
     {
         var isDisallow =
-            JsonSerializationAttributes.Find(type, UnmappedMemberAttribute) is { } attribute
+            JsonSerializationAttributes.Find(
+                type,
+                JsonSerializationAttributes.UnmappedMemberHandling
+            )
+                is { } attribute
             && JsonSerializationAttributes.EnumArgumentOf(attribute)
                 == (int)JsonUnmappedMemberHandling.Disallow;
 
@@ -244,7 +234,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 
         return AttributeWarningOf(
             type,
-            UnmappedMemberAttribute,
+            JsonSerializationAttributes.UnmappedMemberHandling,
             $"'{name}' has [JsonUnmappedMemberHandling(Disallow)]: the TypeScript context "
                 + "skips unmapped JSON properties."
         );
@@ -255,10 +245,10 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
         string name
     ) =>
         UncalledJsonConstructorOf(type) is { } constructor
-            ? JsonUnmirroredOption.Warning(
+            ? UnmirroredJsonWarning.Create(
                 $"'{name}' has [JsonConstructor] on a constructor the TypeScript context does "
                     + "not call: it constructs the type through its primary constructor.",
-                JsonUnmirroredOption.LocationOf(constructor)
+                UnmirroredJsonWarning.At(constructor)
             )
             : null;
 
@@ -270,7 +260,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     private static IMethodSymbol? UncalledJsonConstructorOf(INamedTypeSymbol type)
     {
         var marked = type.InstanceConstructors.FirstOrDefault(constructor =>
-            JsonSerializationAttributes.Has(constructor, ConstructorAttribute)
+            JsonSerializationAttributes.Has(constructor, JsonSerializationAttributes.Constructor)
         );
 
         if (marked is null)
@@ -290,8 +280,8 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
             ? null
             : AttributeWarningOf(
                 type,
-                ConverterAttribute,
-                $"'{JsonUnmirroredOption.TypeName(type)}' has [JsonConverter]: the TypeScript "
+                JsonSerializationAttributes.Converter,
+                $"'{UnmirroredJsonWarning.TypeName(type)}' has [JsonConverter]: the TypeScript "
                     + "context converts it with its built-in descriptor, without the custom "
                     + "converter."
             );

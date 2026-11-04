@@ -4,7 +4,7 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 
 /// <summary>
 /// System.Text.Json's source-generation rules for which members a contract
-/// writes and which it assigns on read (FR-046, slice S6b), measured on .NET
+/// writes and which it assigns on read (FR-046), measured on .NET
 /// 10 (SDK 10.0.401):
 /// <list type="bullet">
 ///   <item>a public instance property is serialized; a field or a non-public
@@ -22,13 +22,23 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal static class JsonMemberAccess
 {
-    private const string IncludeAttribute = "JsonIncludeAttribute";
+    /// <summary>
+    /// Whether System.Text.Json serializes <paramref name="member"/>: it is
+    /// included (<see cref="IsIncluded"/>) and no <c>[JsonIgnore]</c> hides it
+    /// both ways. The collector further leaves out indexers, constants and
+    /// the <c>[JsonExtensionData]</c> overflow.
+    /// </summary>
+    public static bool IsSerialized(ISymbol member) =>
+        !member.IsStatic
+        && !member.IsImplicitlyDeclared
+        && IsIncluded(member)
+        && !JsonSerializationAttributes.IsAlwaysIgnored(member);
 
     /// <summary>
-    /// Whether the contract serializes <paramref name="member"/>, before
+    /// Whether the contract includes <paramref name="member"/>, before
     /// <c>[JsonIgnore]</c> and <c>[JsonExtensionData]</c> are applied.
     /// </summary>
-    public static bool IsIncluded(ISymbol member) =>
+    private static bool IsIncluded(ISymbol member) =>
         member switch
         {
             IPropertySymbol property => property.DeclaredAccessibility == Accessibility.Public
@@ -52,9 +62,10 @@ internal static class JsonMemberAccess
     public static bool IsAssignedOnRead(ISymbol member) =>
         member switch
         {
-            IPropertySymbol { SetMethod: { } setter } property => setter.DeclaredAccessibility
-                == Accessibility.Public
-                || (HasInclude(property) && IsReachable(setter.DeclaredAccessibility)),
+            IPropertySymbol { SetMethod: { } setter } property => IsSetterAssignable(
+                property,
+                setter
+            ),
             IFieldSymbol field => !field.IsReadOnly,
             _ => false,
         };
@@ -72,13 +83,21 @@ internal static class JsonMemberAccess
             ),
         };
 
+    /// <summary>
+    /// A public setter, or one generated code reaches under <c>[JsonInclude]</c>.
+    /// </summary>
+    private static bool IsSetterAssignable(IPropertySymbol property, IMethodSymbol setter) =>
+        setter.DeclaredAccessibility == Accessibility.Public
+        || (HasInclude(property) && IsVisibleToGeneratedCode(setter.DeclaredAccessibility));
+
     private static bool HasInclude(ISymbol member) =>
-        JsonSerializationAttributes.Has(member, IncludeAttribute);
+        JsonSerializationAttributes.Has(member, JsonSerializationAttributes.Include);
 
     /// <summary>The member and each of its accessors are reachable.</summary>
     private static bool IsReachable(ISymbol member) =>
-        IsReachable(member.DeclaredAccessibility)
-        && AccessorsOf(member).All(accessor => IsReachable(accessor.DeclaredAccessibility));
+        IsVisibleToGeneratedCode(member.DeclaredAccessibility)
+        && AccessorsOf(member)
+            .All(accessor => IsVisibleToGeneratedCode(accessor.DeclaredAccessibility));
 
     private static IEnumerable<IMethodSymbol> AccessorsOf(ISymbol member) =>
         member is IPropertySymbol property
@@ -89,7 +108,7 @@ internal static class JsonMemberAccess
     /// The accessibility levels generated code of the same assembly can
     /// reach outside the type.
     /// </summary>
-    private static bool IsReachable(Accessibility accessibility) =>
+    private static bool IsVisibleToGeneratedCode(Accessibility accessibility) =>
         accessibility
             is Accessibility.Public
                 or Accessibility.Internal

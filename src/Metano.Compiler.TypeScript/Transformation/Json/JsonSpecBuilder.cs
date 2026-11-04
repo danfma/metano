@@ -300,22 +300,19 @@ internal sealed class JsonSpecBuilder
     {
         var boundNames = ConstructorBoundMemberNames(targetType);
 
-        var assigned = _properties
+        var assignedMembers = _properties
             .LiteralPropertiesOf(targetType)
             .Where(property => !boundNames.Contains(property.Member.Name))
             .Where(property => JsonMemberAccess.IsAssignedOnRead(property.Member))
-            .Select(property => new TsObjectProperty(
-                property.TsName,
-                CastProperty(property.TsName, property.Type)
-            ))
+            .Select(ToCastProperty)
             .ToList();
 
-        if (assigned.Count == 0)
+        if (assignedMembers.Count == 0)
             return construction;
 
         return new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("Object"), "assign"),
-            [construction, new TsObjectLiteral(assigned)]
+            [construction, new TsObjectLiteral(assignedMembers)]
         );
     }
 
@@ -323,12 +320,8 @@ internal sealed class JsonSpecBuilder
     /// The C# names of the members the constructor's parameters bind,
     /// matched ignoring case as System.Text.Json binds them.
     /// </summary>
-    private static HashSet<string> ConstructorBoundMemberNames(INamedTypeSymbol targetType)
-    {
-        var parameters =
-            IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
-
-        return parameters
+    private static HashSet<string> ConstructorBoundMemberNames(INamedTypeSymbol targetType) =>
+        PrimaryConstructorParametersOf(targetType)
             .Select(parameter =>
                 SymbolHelper
                     .FindInstancePropertyInHierarchy(parameter.ContainingType, parameter.Name)
@@ -336,19 +329,14 @@ internal sealed class JsonSpecBuilder
                 ?? parameter.Name
             )
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
 
     private TsObjectLiteral BuildPlainObjectLiteral(
         IReadOnlyList<JsonSerializableProperty> properties
-    ) =>
-        new(
-            properties
-                .Select(property => new TsObjectProperty(
-                    property.TsName,
-                    CastProperty(property.TsName, property.Type)
-                ))
-                .ToList()
-        );
+    ) => new(properties.Select(ToCastProperty).ToList());
+
+    /// <summary><c>name: p.name as T</c>, one member of a factory's object literal.</summary>
+    private TsObjectProperty ToCastProperty(JsonSerializableProperty property) =>
+        new(property.TsName, CastProperty(property.TsName, property.Type));
 
     /// <summary>
     /// Builds the <c>new T(...)</c> arguments: each parameter of the
@@ -358,16 +346,14 @@ internal sealed class JsonSpecBuilder
     /// (<c>ImageClip(string Path, double Seconds) : Clip(Seconds)</c>) reads
     /// the inherited <c>seconds</c>. A type without a parameterized
     /// constructor is built with <c>new T()</c> and its members are assigned
-    /// (<see cref="WithAssignedMembers"/>); before spec 009 S6b it passed its
-    /// properties to the parameterless TS constructor, which dropped them.
+    /// (<see cref="WithAssignedMembers"/>).
     /// </summary>
-    private List<TsExpression> BuildConstructorArguments(INamedTypeSymbol targetType)
-    {
-        var parameters =
-            IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
+    private List<TsExpression> BuildConstructorArguments(INamedTypeSymbol targetType) =>
+        PrimaryConstructorParametersOf(targetType).Select(BuildConstructorArgument).ToList();
 
-        return parameters.Select(BuildConstructorArgument).ToList();
-    }
+    private static IEnumerable<IParameterSymbol> PrimaryConstructorParametersOf(
+        INamedTypeSymbol targetType
+    ) => IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
 
     private TsExpression BuildConstructorArgument(IParameterSymbol parameter)
     {
@@ -397,7 +383,7 @@ internal sealed class JsonSpecBuilder
     /// Builds a property spec object literal:
     /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true, order?: n }</c>,
     /// where <c>order</c> is a non-zero <c>[JsonPropertyOrder]</c>: the
-    /// runtime sorts the whole base chain by it (FR-046, slice S6b).
+    /// runtime sorts the whole base chain by it (FR-046).
     /// </summary>
     private TsObjectLiteral BuildPropertySpec(JsonSerializableProperty property)
     {
