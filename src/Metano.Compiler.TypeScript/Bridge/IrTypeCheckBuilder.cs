@@ -31,19 +31,30 @@ internal static class IrTypeCheckBuilder
     /// <param name="typeParameters">The type parameters in scope, innermost
     /// first, which a type parameter reference resolves against; an
     /// unresolved one matches any value.</param>
+    /// <param name="typeOverrides">The <c>[ExportFromBcl]</c> type overrides:
+    /// a type that lowers to an exported class (<c>decimal</c> →
+    /// <c>Decimal</c>) is checked with <c>instanceof</c> that class.</param>
     public static TsExpression? Generate(
         IrTypeRef type,
         TsExpression value,
-        IReadOnlyList<IrTypeParameter> typeParameters
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        IrToTsTypeOverrides? typeOverrides = null
     ) =>
         type switch
         {
-            IrNullableTypeRef nullable => NullableCheck(nullable, value, typeParameters),
+            IrNullableTypeRef nullable => NullableCheck(
+                nullable,
+                value,
+                typeParameters,
+                typeOverrides
+            ),
             IrTypeParameterRef typeParameter => TypeParameterCheck(
                 typeParameter,
                 value,
                 typeParameters
             ),
+            _ when typeOverrides?.TryResolve(type) is TsNamedType exported =>
+                new TsBinaryExpression(value, "instanceof", new TsIdentifier(exported.Name)),
             _ => ConcreteCheck(type, value),
         };
 
@@ -85,9 +96,10 @@ internal static class IrTypeCheckBuilder
     private static TsExpression? NullableCheck(
         IrNullableTypeRef nullable,
         TsExpression value,
-        IReadOnlyList<IrTypeParameter> typeParameters
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        IrToTsTypeOverrides? typeOverrides
     ) =>
-        Generate(nullable.Inner, value, typeParameters) is { } innerCheck
+        Generate(nullable.Inner, value, typeParameters, typeOverrides) is { } innerCheck
             ? new TsBinaryExpression(
                 new TsBinaryExpression(value, "===", new TsLiteral("null")),
                 "||",
@@ -264,10 +276,11 @@ internal static class IrTypeCheckBuilder
             IrPrimitive.Float32 => RuntimeIs("isFloat32", value),
             IrPrimitive.Float64 => RuntimeIs("isFloat64", value),
             IrPrimitive.Boolean => RuntimeIs("isBool", value),
-            // Decimal surfaces in TS as `number` (see IrToTsTypeMapper), so the
-            // runtime guard must also be `isFloat64` — instanceof Decimal would
-            // never match the values the signature advertises.
-            IrPrimitive.Decimal => RuntimeIs("isFloat64", value),
+            // Decimal surfaces as `Decimal` under its [ExportFromBcl] override,
+            // checked by Generate before reaching here; without one it maps to
+            // `number`, checked with a plain typeof so no runtime helper is
+            // imported for a value the override would make a class.
+            IrPrimitive.Decimal => TypeofTest(value, "number"),
             IrPrimitive.BigInteger => RuntimeIs("isBigInt", value),
             IrPrimitive.Guid => RuntimeIs("isString", value),
             // DateTime/DateTimeOffset/DateOnly/TimeOnly/TimeSpan surface in TS as

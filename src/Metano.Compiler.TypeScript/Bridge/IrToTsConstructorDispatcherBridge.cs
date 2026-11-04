@@ -57,7 +57,7 @@ public static class IrToTsConstructorDispatcherBridge
             .Select(c => new TsConstructorOverload(
                 c.Parameters.Select(p => new TsConstructorParam(
                         IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
-                        IrToTsTypeMapper.MapParameterType(p.Parameter),
+                        IrToTsTypeMapper.MapParameterType(p.Parameter, context.TypeOverrides),
                         Accessibility: TsAccessibility.None,
                         Rest: p.Parameter.IsParams,
                         Optional: p.Parameter.CanBeOmitted
@@ -124,7 +124,7 @@ public static class IrToTsConstructorDispatcherBridge
                     IrToTsNamingPolicy.ToParameterName(param.Parameter.Name),
                     new TsCastExpression(
                         BindArgument(arguments, param, i, context),
-                        IrToTsTypeMapper.Map(param.Parameter.Type)
+                        IrToTsTypeMapper.Map(param.Parameter.Type, context.TypeOverrides)
                     )
                 )
             );
@@ -134,7 +134,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
-        return new TsIfStatement(arguments.Guard(typeParameters), branch);
+        return new TsIfStatement(arguments.Guard(typeParameters, context.TypeOverrides), branch);
     }
 
     /// <summary>

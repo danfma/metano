@@ -804,7 +804,7 @@ public sealed class ImportCollector(
             case TsFunction func:
                 CollectFromTypeParameters(func.TypeParameters, names, crossPackageOrigins);
                 foreach (var param in func.Parameters)
-                    CollectFromType(param.Type, names, crossPackageOrigins);
+                    CollectFromParameter(param.Type, param.DefaultValue, sink);
                 CollectFromType(func.ReturnType, names, crossPackageOrigins);
                 CollectFromStatements(func.Body, sink);
                 break;
@@ -839,7 +839,7 @@ public sealed class ImportCollector(
                 if (cls.Constructor is not null)
                 {
                     foreach (var p in cls.Constructor.Parameters)
-                        CollectFromType(p.Type, names, crossPackageOrigins);
+                        CollectFromParameter(p.Type, p.DefaultValue, sink);
                     CollectFromStatements(cls.Constructor.Body, sink);
                 }
                 foreach (var member in cls.Members)
@@ -849,7 +849,7 @@ public sealed class ImportCollector(
                         case TsMethodMember m:
                             CollectFromTypeParameters(m.TypeParameters, names, crossPackageOrigins);
                             foreach (var p in m.Parameters)
-                                CollectFromType(p.Type, names, crossPackageOrigins);
+                                CollectFromParameter(p.Type, p.DefaultValue, sink);
                             CollectFromType(m.ReturnType, names, crossPackageOrigins);
                             CollectFromStatements(m.Body, sink);
                             // Collect from overload signatures too
@@ -889,6 +889,23 @@ public sealed class ImportCollector(
                 // already exists locally — no external import to collect.
                 break;
         }
+    }
+
+    /// <summary>
+    /// A parameter's annotation and its default value: a default such as
+    /// <c>Color.Green</c> or <c>new Decimal("1.5")</c> references a value that
+    /// needs a value import.
+    /// </summary>
+    private void CollectFromParameter(
+        TsType? type,
+        TsExpression? defaultValue,
+        ImportCollectionSink sink
+    )
+    {
+        CollectFromType(type, sink.Names, sink.CrossPackageOrigins);
+
+        if (defaultValue is not null)
+            CollectFromExpression(defaultValue, sink);
     }
 
     private void CollectFromTypeParameters(

@@ -51,7 +51,8 @@ public static class IrToTsOverloadDispatcherBridge
     )
     {
         var primaryName = TypeScriptNaming.ToCamelCaseMember(primary.Name);
-        var plan = PlanOverloadGroup(CollectOverloads(primary), primaryName);
+        var typeOverrides = context.TypeOverrides;
+        var plan = PlanOverloadGroup(CollectOverloads(primary), primaryName, typeOverrides);
 
         if (plan is null)
             return [];
@@ -79,7 +80,13 @@ public static class IrToTsOverloadDispatcherBridge
                 primaryName,
                 DispatcherParameters(),
                 plan.CommonReturn,
-                BuildDispatcherBody(plan.Sorted, plan.FastPathNames, receiver, classTypeParameters),
+                BuildDispatcherBody(
+                    plan.Sorted,
+                    plan.FastPathNames,
+                    receiver,
+                    classTypeParameters,
+                    typeOverrides
+                ),
                 Static: isStatic,
                 Async: plan.IsAsync,
                 Accessibility: VisibilityToAccessibility(primary.Visibility),
@@ -122,7 +129,7 @@ public static class IrToTsOverloadDispatcherBridge
     )
     {
         var plan =
-            PlanOverloadGroup(overloads, functionName)
+            PlanOverloadGroup(overloads, functionName, typeOverrides: null)
             ?? throw new ArgumentException(
                 "An overload group needs two or more methods.",
                 nameof(overloads)
@@ -141,7 +148,7 @@ public static class IrToTsOverloadDispatcherBridge
                 functionName,
                 DispatcherParameters(),
                 plan.CommonReturn,
-                BuildDispatcherBody(plan.Sorted, fastPathNames, receiver: null, []),
+                BuildDispatcherBody(plan.Sorted, fastPathNames, receiver: null, [], null),
                 Exported: true,
                 Async: plan.IsAsync,
                 Overloads: plan.Signatures
@@ -172,7 +179,8 @@ public static class IrToTsOverloadDispatcherBridge
     /// </summary>
     private static OverloadGroupPlan? PlanOverloadGroup(
         IReadOnlyList<IrMethodDeclaration> overloads,
-        string dispatcherName
+        string dispatcherName,
+        IrToTsTypeOverrides? typeOverrides
     )
     {
         if (overloads.Count < 2)
@@ -185,8 +193,8 @@ public static class IrToTsOverloadDispatcherBridge
             sorted,
             ComputeFastPathNames(dispatcherName, sorted),
             isAsync,
-            ResolveCommonReturnType(sorted, isAsync),
-            sorted.Select(BuildOverloadSignature).ToList()
+            ResolveCommonReturnType(sorted, isAsync, typeOverrides),
+            sorted.Select(method => BuildOverloadSignature(method, typeOverrides)).ToList()
         );
     }
 
@@ -206,10 +214,13 @@ public static class IrToTsOverloadDispatcherBridge
     /// </summary>
     private static TsType ResolveCommonReturnType(
         IReadOnlyList<IrMethodDeclaration> sorted,
-        bool isAsync
+        bool isAsync,
+        IrToTsTypeOverrides? typeOverrides
     )
     {
-        var returns = sorted.Select(m => IrToTsTypeMapper.Map(m.ReturnType)).ToList();
+        var returns = sorted
+            .Select(m => IrToTsTypeMapper.Map(m.ReturnType, typeOverrides))
+            .ToList();
         var isGeneric = sorted.Any(IsGeneric);
 
         if (!isGeneric && returns.All(t => t.Equals(returns[0])))
@@ -223,10 +234,13 @@ public static class IrToTsOverloadDispatcherBridge
     private static bool IsGeneric(IrMethodDeclaration method) =>
         method.TypeParameters is { Count: > 0 };
 
-    private static TsMethodOverload BuildOverloadSignature(IrMethodDeclaration method) =>
+    private static TsMethodOverload BuildOverloadSignature(
+        IrMethodDeclaration method,
+        IrToTsTypeOverrides? typeOverrides
+    ) =>
         new(
-            SignatureParameters(method),
-            IrToTsTypeMapper.Map(method.ReturnType),
+            SignatureParameters(method, typeOverrides),
+            IrToTsTypeMapper.Map(method.ReturnType, typeOverrides),
             MapTypeParameters(method.TypeParameters)
         );
 
@@ -259,7 +273,7 @@ public static class IrToTsOverloadDispatcherBridge
         return new TsMethodMember(
             fastPathName,
             FastPathParameters(method, context),
-            IrToTsTypeMapper.Map(method.ReturnType),
+            IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
             IrToTsStatementBridge.MapBody(method.Body, context),
             Static: isStatic,
             Async: method.Semantics.IsAsync,
@@ -298,11 +312,14 @@ public static class IrToTsOverloadDispatcherBridge
     }
 
     /// <summary>Maps a method's parameters to TS parameters (local-binding names, rest for <c>params</c>).</summary>
-    internal static List<TsParameter> MapParameters(IrMethodDeclaration method) =>
+    internal static List<TsParameter> MapParameters(
+        IrMethodDeclaration method,
+        IrToTsTypeOverrides? typeOverrides = null
+    ) =>
         method
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.MapParameterType(p),
+                IrToTsTypeMapper.MapParameterType(p, typeOverrides),
                 Rest: p.IsParams
             ))
             .ToList();
@@ -311,8 +328,11 @@ public static class IrToTsOverloadDispatcherBridge
     /// The parameters of an overload signature, where TypeScript forbids an
     /// initializer: a parameter a call may omit is optional instead.
     /// </summary>
-    private static List<TsParameter> SignatureParameters(IrMethodDeclaration method) =>
-        MapParameters(method)
+    private static List<TsParameter> SignatureParameters(
+        IrMethodDeclaration method,
+        IrToTsTypeOverrides? typeOverrides
+    ) =>
+        MapParameters(method, typeOverrides)
             .Select(
                 (parameter, index) =>
                     parameter with
@@ -330,7 +350,7 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         IrToTsBridgeContext context
     ) =>
-        MapParameters(method)
+        MapParameters(method, context.TypeOverrides)
             .Select(
                 (parameter, index) =>
                     parameter with
@@ -360,7 +380,8 @@ public static class IrToTsOverloadDispatcherBridge
         IReadOnlyList<IrMethodDeclaration> sorted,
         IReadOnlyList<string> fastPathNames,
         TsExpression? receiver,
-        IReadOnlyList<IrTypeParameter> classTypeParameters
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
+        IrToTsTypeOverrides? typeOverrides
     )
     {
         var body = new List<TsStatement>();
@@ -373,12 +394,12 @@ public static class IrToTsOverloadDispatcherBridge
 
             var delegateCall = new TsCallExpression(
                 FastPathCallee(receiver, fastPathNames[i]),
-                DelegatedArguments(method, arguments)
+                DelegatedArguments(method, arguments, typeOverrides)
             );
 
             body.Add(
                 new TsIfStatement(
-                    arguments.Guard(typeParameters),
+                    arguments.Guard(typeParameters, typeOverrides),
                     BuildBranchStatements(method, delegateCall)
                 )
             );
@@ -420,7 +441,8 @@ public static class IrToTsOverloadDispatcherBridge
     /// </summary>
     private static List<TsExpression> DelegatedArguments(
         IrMethodDeclaration method,
-        OverloadArgumentShape arguments
+        OverloadArgumentShape arguments,
+        IrToTsTypeOverrides? typeOverrides
     ) =>
         method
             .Parameters.Select(
@@ -428,7 +450,7 @@ public static class IrToTsOverloadDispatcherBridge
                 {
                     var value = new TsCastExpression(
                         arguments.ValueOf(index),
-                        DispatchArgumentType(method, parameter)
+                        DispatchArgumentType(method, parameter, typeOverrides)
                     );
 
                     return parameter.IsParams ? new TsSpreadExpression(value) : (TsExpression)value;
@@ -452,8 +474,14 @@ public static class IrToTsOverloadDispatcherBridge
     /// <c>params</c> parameter takes its rest-parameter type, never
     /// <c>null</c>, since its arguments are spread.
     /// </summary>
-    private static TsType DispatchArgumentType(IrMethodDeclaration method, IrParameter parameter) =>
-        IsGeneric(method) ? new TsAnyType() : IrToTsTypeMapper.MapParameterType(parameter);
+    private static TsType DispatchArgumentType(
+        IrMethodDeclaration method,
+        IrParameter parameter,
+        IrToTsTypeOverrides? typeOverrides
+    ) =>
+        IsGeneric(method)
+            ? new TsAnyType()
+            : IrToTsTypeMapper.MapParameterType(parameter, typeOverrides);
 
     /// <summary>
     /// A null receiver means the fast path is a namespace-local function
