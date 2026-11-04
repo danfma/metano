@@ -18,6 +18,15 @@ export const declaredTypeName: ErrorTypeName = (clrName) => clrName;
 /** System.Text.Json names a nullable number ``System.Nullable`1[System.Int32]``. */
 export const nullableTypeName: ErrorTypeName = (clrName) => `System.Nullable\`1[${clrName}]`;
 
+/**
+ * `System.Decimal.MaxValue` as the double `JSON.parse` rounds it to (2^96).
+ * A JSON number is already a double, so it is compared with this, not by
+ * its text: `79228162514264337593543950335`, `…335.4` and
+ * `7.9228162514264337593543950335e28` all read as MaxValue in
+ * System.Text.Json and all parse to this double (measured).
+ */
+const DECIMAL_MAX_AS_DOUBLE = Number("79228162514264337593543950335");
+
 const passthroughConverter: ValueConverter = {
   serialize: (value: unknown) => value,
   deserialize: (value: unknown) => value,
@@ -63,8 +72,10 @@ export function primitiveConverterOf(
  * from a JSON string when the context reads numbers from strings, within the
  * decimal range. The descriptor's `type` (decimal.js `Decimal` in generated
  * contexts) builds the value from the JSON number or the text, so a string
- * keeps every digit; without it the JSON value is returned as is. Anything
- * else throws System.Text.Json's conversion error.
+ * keeps its significant digits (decimal.js drops trailing zeros); without
+ * it the JSON value is returned as is. A JSON number is range-checked as the
+ * double it already is. Anything else throws System.Text.Json's conversion
+ * error.
  */
 export function decimalConverterOf(
   descriptor: DecimalDescriptor,
@@ -74,7 +85,7 @@ export function decimalConverterOf(
   const readsStrings = readsNumbersFromStrings(readOptions);
 
   const isDecimalValue = (value: unknown): value is string | number =>
-    (typeof value === "number" && isDecimalText(String(value))) ||
+    (typeof value === "number" && isDecimalNumber(value)) ||
     (typeof value === "string" && readsStrings && isDecimalText(value));
 
   return {
@@ -93,6 +104,11 @@ export function decimalConverterOf(
       return descriptor.type ? new descriptor.type(value) : value;
     },
   };
+}
+
+/** A finite JSON number within the decimal range, compared as doubles. */
+function isDecimalNumber(value: number): boolean {
+  return Math.abs(value) <= DECIMAL_MAX_AS_DOUBLE;
 }
 
 function readsNumbersFromStrings(readOptions: JsonReadOptions | undefined): boolean {

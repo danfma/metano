@@ -391,7 +391,8 @@ reading numbers from strings. `PropertyNameCaseInsensitive = true`,
   nullable number, dictionary keys and integer type discriminators never read
   strings, as in .NET. Writing is unchanged: numbers are written as JSON
   numbers. A `decimal` read from a string is built from the exact text, so
-  `"1.2345678901234567890123456789"` keeps every digit.
+  `"1.2345678901234567890123456789"` keeps its significant digits (trailing
+  zeros are dropped: `"1.10"` reads as `1.1`).
 - **Out-of-order metadata.** `AllowOutOfOrderMetadataProperties = true` lets the
   type discriminator follow other properties ([details](#runtime-dispatch)).
 - **Divergences.** For a property bound to a constructor parameter (a record's

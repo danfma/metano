@@ -342,8 +342,28 @@ describe("numbers from strings — decimal", () => {
     expect(readRoot(1.5, decimalRoot)).toBe(1.5);
   });
 
+  // Measured: STJ reads the JSON numbers 79228162514264337593543950335,
+  // …335.4 and 7.9228162514264337593543950335e28 as MaxValue and rejects
+  // 79228162514264355185729994752 (the next double) and 1e29. JSON.parse
+  // rounds the first three to the double 2^96, as it does …335.5 and …336,
+  // which STJ rejects: that difference is undetectable after JSON.parse.
+  test("a JSON number at the decimal range limit reads", () => {
+    const limits = [
+      "79228162514264337593543950335",
+      "79228162514264337593543950335.4",
+      "7.9228162514264337593543950335e28",
+      "-79228162514264337593543950335",
+    ];
+
+    for (const text of limits) {
+      expect(readRoot(JSON.parse(text), decimalRoot)).toBe(JSON.parse(text));
+    }
+  });
+
   test("a JSON number outside the decimal range, or any other JSON value, is rejected", () => {
-    for (const value of [1e29, -1e29, true, {}]) {
+    const outside = [JSON.parse("79228162514264355185729994752"), -7.922816251426436e28, 1e29, -1e29];
+
+    for (const value of [...outside, true, {}]) {
       expectJsonException(() => readRoot(value, decimalRoot), cannotConvertMessage("System.Decimal"));
     }
   });
