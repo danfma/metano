@@ -29,7 +29,7 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `0xFFFF_FFFF_FFFF_FFFFUL` | `18446744073709551615n` |
 | `const long Big = 9007199254740993L;` | `static readonly big: bigint = 9007199254740993n;` |
 | `long.MaxValue`, `long.MinValue`, `ulong.MaxValue` | `9223372036854775807n`, `-9223372036854775808n`, `18446744073709551615n` |
-| `nint.MaxValue`, `IntPtr.Size` | `9223372036854775807n`, `8` |
+| `nint.MaxValue`, `IntPtr.Size` (member mappings; not C# constants) | `9223372036854775807n`, `8` |
 | `1L << 40` | `1099511627776n` |
 | `unchecked((long)ulong.MaxValue)` | `-1n` |
 | `l + 1` | `BigInt.asIntN(64, l + 1n)` |
@@ -53,6 +53,9 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `double x = l;` / `(double)l` | `Number(l)` | same |
 | `float x = l;` / `(float)l` | `int64ToSingle(l)` | same |
 | `(long)d`, `(long)f` | `int64FromDouble(d)` | `int64FromDoubleChecked(d)` |
+| `(int)d`, `(uint)d` (any source, FR-070) | `int32FromDouble(d)`, `uint32FromDouble(d)` | `int32FromDoubleChecked(d)`, `uint32FromDoubleChecked(d)` |
+| `(byte)d`, `(short)d`, … (FR-070) | saturate to `int`, keep the low bits (`int32FromDouble(d) & 0xFF`, `(int32FromDouble(d) << 16) >> 16`, …) | the `…Checked` helper, then the target range check |
+| `long x = (int)d;` | `BigInt(int32FromDouble(d))` | `BigInt(int32FromDoubleChecked(d))` |
 | `(ulong)d` | `uint64FromDouble(d)` | `uint64FromDoubleChecked(d)` |
 | `decimal x = l;` / `(decimal)l` | `new Decimal(l.toString())` | same |
 | `(long)dm` | `int64FromDecimal(dm)` | same (always checked, DECIDED-11) |
@@ -62,7 +65,7 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `(long)e` (enum) | `BigInt(e)` | same |
 | `(IntEnum)l` | `Number(BigInt.asIntN(32, l))` | `Number(checkedNarrow(l, 32, true))` |
 | `(LongEnum)l` | `Number(l)` | same |
-| `long? x = ni;` (`int? ni`, identifier) | `ni === null ? null : BigInt(ni)` | same |
+| `long? x = ni;` (`int? ni`, identifier) | `ni == null ? null : BigInt(ni)` (also catches `undefined`) | same |
 | `long? x = F();` (`int? F()`) | `mapNullable(f(), BigInt)` | same |
 
 ## Overflow (FR-021–FR-026)
@@ -81,6 +84,10 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `nl + 1` (`long? nl`) | the lifted lowering with `BigInt.asIntN(64, nl + 1n)` in its non-null branch | with `checkedInt64` |
 | `checked(e)`, `unchecked(e)` | the lowering of `e` | — |
 | `checked { s; }` | `{ s; }` with `s` lowered in a checked context | — |
+| `checked { Func<long> f = () => l + 1; }` | — | `const f = () => checkedInt64(l + 1n);` (the lambda inherits the context) |
+| `checked { long G() => l * 2; }` (local function) | — | `const g = (): bigint => checkedInt64(l * 2n);` |
+| `checked { l <<= 1; }` | — | `l = BigInt.asIntN(64, l << 1n);` (shifts never check; no throw at `long.MaxValue`) |
+| `l /= m;`, `l %= m;`, `l &= m;`, `l >>= n;`, `l >>>= 2;` | `l = divInt64(l, m);`, `l = remInt64(l, m);`, `l = l & m;`, `l = l >> BigInt(n & 63);`, `l = BigInt.asIntN(64, BigInt.asUintN(64, l) >> 2n);` | same (the division helpers check their own cases) |
 
 ## Operators (FR-027–FR-034)
 
@@ -99,7 +106,11 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `l >>> 2` | `BigInt.asIntN(64, BigInt.asUintN(64, l) >> 2n)` |
 | `u >>> 2` | `u >> 2n` |
 | `l & m`, `l \| m`, `l ^ m` | `l & m`, `l \| m`, `l ^ m` |
-| `l == m`, `l != 5`, `l < i` | `l === m`, `l !== 5n`, `l < BigInt(i)` |
+| `l == m`, `l != 5`, `l == i` | `l === m`, `l !== 5n`, `l === BigInt(i)` |
+| `l < i`, `l >= ui` | `l < i`, `l >= ui` (exact mixed comparison, FR-069) |
+| `ui < i` (C# compares in `long`) | `ui < i` (both 32-bit or narrower, FR-069) |
+| `ui + i`, `ui * i`, `-ui` (C# evaluates in `long`) | `BigInt.asIntN(64, BigInt(ui) + BigInt(i))`, `BigInt.asIntN(64, BigInt(ui) * BigInt(i))`, `BigInt.asIntN(64, -BigInt(ui))` |
+| `int r = (int)(ui + i);` | `Number(BigInt.asIntN(32, BigInt.asIntN(64, BigInt(ui) + BigInt(i))))` |
 | `l is 0 or > 10` | `l === 0n \|\| l > 10n` |
 | `switch (l) { case 1L << 40: … }` | `switch (l) { case 1099511627776n: … }` |
 | `l switch { 5 => "five", _ => "other" }` | the existing switch-expression lowering with `5n` |
@@ -118,7 +129,8 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `Math.DivRem(l, m)` | `divRemInt64(l, m)` (a `[quotient, remainder]` tuple) |
 | `Math.BigMul(l, m, out var low)` | `const [high, low] = bigMulInt64(l, m)` (out-parameter lowering) |
 | `Math.Pow(l, 2)` | `Math.pow(Number(l), 2)` |
-| `arr[l]`, `arr.LongLength` | `arr[Number(l)]`, `BigInt(arr.length)` |
+| `arr[l]`, `arr.LongLength`, `new int[l]` | `arr[Number(l)]`, `BigInt(arr.length)`, `new Array<number>(Number(l)).fill(0)` |
+| `Console.WriteLine(l)` | `console.log(String(l))` |
 | `xs.LongCount()` | `BigInt(<count terminal>)` |
 | `l.ToString("N0")`, `$"{l:X}"`, `$"{l,8}"` | `formatInt64(l, "N0")`, `formatInt64(l, "X")`, `formatInt64(l, null, 8)` |
 | `long.Parse(s)`, `ulong.Parse(s, NumberStyles.HexNumber)` | `parseInt64(s)`, `parseUInt64(s, 515)` (the folded `NumberStyles` flags) |

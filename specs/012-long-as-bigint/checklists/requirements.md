@@ -23,14 +23,15 @@
 - [x] Scope is clearly bounded (FR-043 and the plan's deferred list)
 - [x] Dependencies identified (011 FR-013 with fallback, #457 for one slice, #458 and 009 FR-048 merged)
 - [x] Interactions with specs 009 and 011, #457 and #308 listed with the requirement that changes
-- [x] Consistency across spec / plan / contracts / data-model checked (FR numbers ascending FR-001–FR-068, codes `MS0064`–`MS0066`, slice names 012a–012j, helper names identical in spec and contracts)
+- [x] First `compiler-man` review (APPROVED WITH NOTES) applied: `uint` / `int` promotion, float → int truncation, staging switch, OQ-3 / OQ-7 re-proposed, Dart narrowing, minor items
+- [x] Consistency across spec / plan / contracts / data-model checked (FR-001–FR-073, with FR-069–FR-073 grouped by topic, codes `MS0064`–`MS0066`, slice names 012a–012k, helper names identical in spec and contracts)
 
 ## Feature Readiness
 
 - [x] Diagnostic codes reserved (`MS0064`–`MS0066`) in the baseline catalog; next free code `MS0067`
 - [x] Spec directory is `specs/012-long-as-bigint/`
 - [x] Baseline feature-support matrix rows added (Planned)
-- [ ] Open questions OQ-1–OQ-7 answered by the maintainer before `/speckit-tasks`
+- [ ] Open questions OQ-1–OQ-7 answered by the maintainer before `/speckit-tasks` (OQ-3 and OQ-7 carry *Proposed* recommendations revised after the first review)
 - [ ] C# spec section numbers cross-checked against the published ECMA-334 text (the behaviors are pinned by probes; only the citations are unverified)
 - [ ] ADR for "64-bit integers as `bigint` with core-decided conversions and overflow" (recommended alongside slice 012a; not required by this spec PR)
 - [ ] Reference fixtures (FR-064) green from slice 012c on

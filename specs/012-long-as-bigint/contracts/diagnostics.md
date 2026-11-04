@@ -9,7 +9,7 @@ code after this block is `MS0067`.
 | Code | Name | Severity | Location |
 |---|---|---|---|
 | `MS0064` | `Int64EnumValuePrecision` | Warning | the enum member |
-| `MS0065` | `BigIntAtInteropBoundary` | Warning | the `[Import]` / `[Emit]` / `[NoEmit]` / `[External]` declaration (once) |
+| `MS0065` | `BigIntAtInteropBoundary` | Warning | the `[Import]` / `[Emit]` / `[External]` declaration, or the user `[MapMethod]` / `[MapProperty]` attribute (once) |
 | `MS0066` | `UnsupportedInt64Format` | Warning | the format or `NumberStyles` argument (the interpolation hole for `$"{x:…}"`) |
 
 All three are warnings: the output is emitted and type-checks; each names a place where the 3.0 behavior
@@ -21,14 +21,18 @@ differs from C# or from 2.x interop expectations.
 
 1. A member of an enum whose underlying type is `long`, `ulong`, `nint` or `nuint` has a constant value that
    `Number(value)` does not represent exactly.
+2. A member of a `[Flags]` enum with such an underlying type has a value of 2^31 or more: JS bit operators on
+   `number` keep only 32 bits, so `A | B` and `HasFlag` lose it.
 
 Example: `Enum member 'Big.A' has the value 9007199254740993, which TypeScript enum members cannot hold exactly; it is emitted as 9007199254740992 (spec 012 FR-058).`
 
 **MS0065 — BigIntAtInteropBoundary** (Warning). FR-059.
 
-1. A parameter, return, property or field type of an `[Import]`, `[Emit]`, `[NoEmit]` or `[External]`
+1. A parameter, return, property or field type of an `[Import]`, `[Emit]` or `[External]`
    member or type is `long` / `ulong` / `nint` / `nuint`, or contains one (nullable, array, generic argument,
    delegate parameter or return).
+2. A user assembly (not `src/Metano/Runtime`) maps a BCL member whose signature contains a 64-bit integer with
+   `[MapMethod]` / `[MapProperty]`; the template's JavaScript receives or must return a `bigint`.
 
 Example: `'Lib.Count()' returns 'long', which is a bigint in TypeScript; the imported JavaScript must return a bigint, not a number (spec 012 FR-059).`
 

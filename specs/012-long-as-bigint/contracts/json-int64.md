@@ -16,7 +16,7 @@ export type Int64Descriptor = {
 ```
 
 `TypeDescriptor` gains `Int64Descriptor`. The generator emits it for every 64-bit property, element,
-dictionary value and root (FR-050), whatever the read options; `primitive` descriptors no longer carry
+dictionary value and root (FR-050), whatever the read options (and for a `[Branded]` / `[InlineWrapper]` over a 64-bit integer); `primitive` descriptors no longer carry
 `numberType: "System.Int64"` / `"System.UInt64"`. A nullable 64-bit slot keeps the existing nullable
 wrapping, and its error names ``System.Nullable`1[System.Int64]``.
 
@@ -51,8 +51,8 @@ The leaf comes from `writeExactNumber(value.toString(), () => Number(value))`, s
 | `rawJSON` leaf `"-0"` | `0n` | `0` (R7) |
 | `rawJSON` leaf `"1.0"`, `"1e3"` | `JsonException` | `JsonException` (R7) |
 | `rawJSON` leaf `"9223372036854775808"` | `JsonException` | `JsonException` (R7) |
-| `number` `5` | `5n` | `5` |
-| `number` `1152921504606846976` (from `JSON.parse("1152921504606846977")`) | `1152921504606846976n` | `1152921504606846977` (**divergence**: the tree already rounded; exact through #457, FR-053) |
+| `number` `5` (a safe integer) | `5n` | `5` |
+| `number` `1152921504606846976` (from `JSON.parse("1152921504606846977")`) | `JsonException` naming the exact read path (OQ-3 *Proposed* (d): beyond `Number.MAX_SAFE_INTEGER`) | `1152921504606846977` |
 | `number` `1.5`, `NaN`, `Infinity` | `JsonException` | `JsonException` |
 | `string` `"5"`, read options without `allowReadingFromString` | `JsonException` | `JsonException` (R7) |
 | `string` `"5"`, with `allowReadingFromString` | `5n` | `5` (R7) |

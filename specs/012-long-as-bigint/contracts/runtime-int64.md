@@ -55,7 +55,12 @@ export function int64FromDouble(value: number): bigint;
 export function int64FromDoubleChecked(value: number): bigint;
 export function uint64FromDouble(value: number): bigint;          // NaN → 0n, negatives → 0n, ≥ 2^64 → UINT64_MAX
 export function uint64FromDoubleChecked(value: number): bigint;   // (ulong)-0.9 → 0n (truncate first, R2)
-/** `(float)l`: rounds once to the nearest single (ties to even), via round-to-odd to 53 bits then Math.fround (R5). */
+/** `(int)d` / `(uint)d` for any source (FR-070): truncate, saturate, NaN → 0 (.NET 9+); `…Checked` throws OverflowException("Arithmetic operation resulted in an overflow."). Narrower targets saturate to `int` first and keep the low bits (R11: `(byte)300.5` → 44). */
+export function int32FromDouble(value: number): number;
+export function int32FromDoubleChecked(value: number): number;
+export function uint32FromDouble(value: number): number;
+export function uint32FromDoubleChecked(value: number): number;
+/** `(float)l` and `(float)u` (the whole `long` and `ulong` range): rounds once to the nearest single (ties to even), via round-to-odd to 53 bits then Math.fround (R5). */
 export function int64ToSingle(value: bigint): number;
 /** `(long)m`: truncate toward zero; OverflowException("Value was either too large or too small for an Int64.") outside the range, in every context. */
 export function int64FromDecimal(value: DecimalLike): bigint;
