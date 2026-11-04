@@ -95,6 +95,8 @@ operand or body (FR-023), because `IsChecked` already carries the context into e
 
 ## 3. TypeScript rendering (`src/Metano.Compiler.TypeScript/Bridge/`)
 
+Until slice 012k the bridge also has the `Number` mode of the staging switch (DECIDED-22): `Int64` / `UInt64` render as `number`, `IrNumericConversion` and `IrIntegerOverflow` as their operand, 64-bit division as `intDiv`, and the BCL and JSON mappings as in 2.x. The table below is the `BigInt` mode.
+
 | IR | TS |
 |---|---|
 | `IrPrimitiveTypeRef(Int64 / UInt64)` | `TsBigIntType` |
@@ -116,9 +118,13 @@ camelCase them (the existing `ExtractCast` already does this for `BigInt`, R1).
 |---|---|
 | `IrPrimitive.UInt64` | `int` |
 | `IrLiteral(_, UInt64)` beyond `long.MaxValue` | the two's-complement `int` literal (Dart has no unsigned type) |
-| `IrNumericConversion` between integer kinds | the operand (Dart `int` is 64-bit) |
+| `IrNumericConversion` widening between integer kinds | the operand (Dart `int` is 64-bit) |
+| `IrNumericConversion` narrowing to an integer of `n` < 64 bits | `x.toSigned(n)` / `x.toUnsigned(n)` (`(int)0x100000001L` → `1`) |
+| `IrNumericConversion` `long` ↔ `ulong` | the operand (same 64 bits) |
 | `IrNumericConversion` to / from `Double` | `.toDouble()` / `.toInt()` |
 | `IrIntegerOverflow` | the operand (VM `int` wraps; checked mode is a documented gap, DECIDED-19) |
+
+A `ulong` value of 2^63 or more is a negative Dart `int`: unsigned `/`, `%`, `>>`, relational operators, `.toDouble()` and `.toString()` on it give signed results (documented divergence, spec.md § Divergences).
 
 ## 5. Runtime types (`targets/js/metano-runtime/`)
 
@@ -136,8 +142,8 @@ camelCase them (the existing `ExtractCast` already does this for `BigInt`, R1).
 
 | Code | Raised by | Inputs |
 |---|---|---|
-| `MS0064` | the enum extractor | the member's constant value and the enum's underlying `SpecialType` |
-| `MS0065` | the declaration extractor for `[Import]` / `[Emit]` / `[NoEmit]` / `[External]` | the member's signature types, walked through nullable, array, generic and delegate types |
+| `MS0064` | the enum extractor | the member's constant value, the enum's underlying `SpecialType` and `[Flags]` |
+| `MS0065` | the declaration extractor for `[Import]` / `[Emit]` / `[External]`, and the user `[MapMethod]` / `[MapProperty]` reader | the member's signature types, walked through nullable, array, generic and delegate types |
 | `MS0066` | the BCL lowering of `ToString` / interpolation / `Parse` | the constant format string or `NumberStyles` value |
 
 ## 7. Conversion decision table (the single source for both FR-010 and the bridge)

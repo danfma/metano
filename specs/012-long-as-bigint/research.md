@@ -679,7 +679,7 @@ native Dart type. The Dart target is a shape-only prototype (no bodies; CLAUDE.m
   `JSON.stringify` (for example `samples/SampleTodo.Service/Program.cs` L18-54, which calls Hono's
   `c.Json(...)` on transpiled objects) throws `TypeError` (R4) once a field is `bigint`. Only the
   generated `JsonSerializerContext` writes it [I].
-- `[Import]` / `[Emit]` / `[NoEmit]` / `[External]` declarations describe JavaScript the compiler does not
+- `[Import]` / `[Emit]` / `[External]` (`src/Metano/Annotations/`, `Annotations/TypeScript/ExternalAttribute.cs`; there is no `[NoEmit]` attribute in the source, although CLAUDE.md lists one) and user `[MapMethod]` / `[MapProperty]` templates declarations describe JavaScript the compiler does not
   generate. A `long` in their signature becomes `bigint` on the TS side, but the JS implementation may
   still pass or expect a `number`; TypeScript cannot catch that because the declaration itself is the
   only type source [I].
@@ -687,3 +687,48 @@ native Dart type. The Dart target is a shape-only prototype (no bodies; CLAUDE.m
   reports every mismatch in consumer code at build time [I].
 - TypeScript requires `target` ≥ ES2020 for `bigint` literals (TS2737). Every `targets/js/*/tsconfig*.json`
   uses `ES2023` or `ESNext` [V].
+
+
+## R11 — Review probes (2026-11-04, after the first `compiler-man` review)
+
+`uint` with `int` promotes to `long` (the reviewer's probe, `scratchpad/p450`, rerun here) [V]:
+
+```csharp
+uint ui = 1; int i = -2;
+var a = ui + i; var b = -ui; var c = ui < i; var d = ui * i;
+```
+
+```text
+Int64 -1 Int64 -1 False Int64
+```
+
+So `ui + i`, `-ui` and `ui * i` are `long` expressions and `ui < i` compares in 64 bits (§12.4.7.3 binary
+numeric promotions [S]). Code that never names `long` therefore produces 64-bit operations.
+
+Floating point to `int` and narrower, and shifts in a checked block (.NET 10) [V]:
+
+```text
+(int)3.7 = 3; (int)-3.7 = -3; (int)1e10 = 2147483647; (int)NaN = 0; (uint)-3.7 = 0; (byte)300.5 = 44
+checked((int)1e10) => OverflowException: Arithmetic operation resulted in an overflow.
+checked(l <<= ...) = 0          // checked { l <<= 63; l <<= 1; } from l = 5: no exception
+```
+
+`(byte)300.5` is `44` (`300 mod 256`): a narrow target saturates to `int` and keeps the low bits.
+
+Mixed `bigint` / `number` comparisons are exact; `BigInt` rejects fractions (Node 24.11) [V]:
+
+```text
+5n < 6 = true
+9007199254740993n > 9007199254740992 = true
+9007199254740993n == 9007199254740992 = false
+BigInt(3.7) => The number 3.7 cannot be converted to a BigInt because it is not an integer
+```
+
+Release flow on `90be699e` [V]: `.github/workflows/release.yml` triggers on `workflow_dispatch` only;
+`.releaserc.json` has `"branches": ["main"]`; there is no `release/3.0` branch; `main` holds the breaking
+commits `a4b03cd2` and `e79a114b` after `v2.10.1`, so the next release from `main` is 3.0.0.
+
+Other facts the review raised [S, I]: `long.MinValue / -1` with constant operands is CS0220 in a checked
+context and folded under `unchecked`; `nint.MaxValue` is not a constant (CS0133 in a `const` initializer); a
+`[Flags]` enum `: long` lowered to `number` loses members of 2^31 and above in JS `|` / `&` (32-bit
+operators); a Dart `int` is signed, so a `ulong` ≥ 2^63 is negative there.

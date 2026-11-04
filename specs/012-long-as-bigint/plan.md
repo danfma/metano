@@ -9,7 +9,7 @@ primitive, an explicit numeric-conversion node and an overflow-reduction node, a
 semantic model (DECIDED-1–DECIDED-7). The TS target renders them with native `BigInt` operations where that
 is exact and with a tree-shakable `metano-runtime/system/int64` module where .NET's exceptions or rounding
 need code (DECIDED-8–DECIDED-13). BCL mappings, runtime type tests, JSON and diagnostics follow
-(DECIDED-14–DECIDED-21). The work lands in ten slices (below).
+(DECIDED-14–DECIDED-21). The work lands in eleven slices behind a compiler-internal staging switch, with one final breaking flip (DECIDED-22, below).
 
 ## Technical Context
 
@@ -55,6 +55,7 @@ All paths repo-relative, line numbers on `main` at `90be699e`.
 | `IR/IrExpression.cs` L14-38 (`IrLiteral`, `IrLiteralKind`), L363-367 (`IrBinaryExpression`), L378-423 (`IrBinaryOp`, `IntegerDivide`), L484 (`IrCastExpression`) | — | `IrLiteralKind.UInt64`; `IrBinaryExpression.NumericKind`; new `IrNumericConversion`, `IrIntegerOverflow` (data-model.md) |
 | `IR/IrPrimitiveExtensions.cs` L19-29 | `IsBrandable` lists `Int64` | add `UInt64` |
 | `Extraction/IrTypeRefMapper.cs` L72-98 | `Int64` / `UInt64` → `Int64`; `IntPtr` unmapped | `UInt64`, `nint` / `nuint` (FR-001, FR-005) |
+| `Extraction/IrExpressionExtractor.cs` L4542-4625 (`ExtractCast`) erases `(int)d` | — | FR-070 float → int truncation (all sources) |
 | `Extraction/IrExpressionExtractor.cs` L1629-1637 (`ClassifyNumericInContext`), L1663-1672 (`ClassifyNumeric`), L1676-1700 (`ExtractBinary`), L1939 (`ExtractUnary`), L4542-4625 (`ExtractCast`) | literals classified by `ConvertedType` for `decimal` / `BigInteger` only; casts erased except `BigInteger` / `decimal` | constant folding (FR-008), implicit conversions at every position (FR-010), casts through `IrNumericConversion` (FR-003, FR-010–FR-019), overflow nodes (FR-021–FR-026) |
 | `Extraction/IrExpressionExtractor.IntegerDivision.cs` | `IntegerDivide` for every integral `/` | also sets `NumericKind` (FR-027) |
 | `Extraction/IrExpressionExtractor.ReadModifyWrite.cs`, `NullableIncrement.cs`, `LiftedOperators.cs` | read-modify-write and lifted lowerings over `number` | wrap / check the stored value (FR-024, FR-025) |
@@ -72,6 +73,7 @@ All paths repo-relative, line numbers on `main` at `90be699e`.
 
 | File | Today | Change |
 |---|---|---|
+| `TypeScriptTarget.cs`, `tests/Metano.Tests/TranspileHelper.cs` | no 64-bit option | the internal `Int64Representation` staging switch and a test overload (FR-071, removed by 012k) |
 | `Bridge/IrToTsTypeMapper.cs` L184-207 (`MapPrimitive`, L191) | `Int64 => TsNumberType` | `Int64` / `UInt64` → `TsBigIntType` (FR-002) |
 | `Bridge/IrToTsExpressionBridge.cs` L82-86 (cast dispatch), L140-190 (`MapBinary`), L153-154 + L256 (`MapIntegerDivision`), L1681-1700 (`MapLiteral`), L1730 (`BinaryOperatorToken`) | `number` lowering | literals `Nn`; the two new nodes; division helpers; shift counts (FR-007, FR-027–FR-034) |
 | `Bridge/IrToTsExpressionBridge.Patterns.cs` L267-277 (`MapCast`) | erases casts | 64-bit casts arrive as `IrNumericConversion`, not here |
@@ -128,25 +130,31 @@ All paths repo-relative, line numbers on `main` at `90be699e`.
 
 ## Slices
 
-Each slice is one PR with dual-agent review, merged into the `release/3.0` integration branch (OQ-7
-recommendation) and kept green: the full TUnit suite, every bun sample, `git diff --exit-code targets/`.
+Each slice is one PR with dual-agent review, merged into `main` (OQ-7 *Proposed*) and kept green: the full
+TUnit suite, every bun sample, `git diff --exit-code targets/`. Until slice 012k, the new behavior sits
+behind the compiler-internal staging switch `Int64Representation` (DECIDED-22, FR-071): the default
+`Number` mode renders the new IR nodes as their operands and keeps every 2.x mapping, so shipped output is
+byte-identical (apart from the FR-023 and FR-070 fixes); the tests, the goldens of this feature and the
+conformance sample run in `BigInt` mode. No slice before 012k is breaking, so a release cut at any point
+ships consistent 2.x-style 64-bit output.
 
 | Slice | Commit type | Scope | FRs | Depends on |
 |---|---|---|---|---|
-| **012a — IR groundwork and `checked` / `unchecked`** | `feat:` | `IrPrimitive.UInt64` (TS still `number`, Dart `int`), `IrLiteralKind.UInt64`, `IrNumericKind`, the two new nodes with their children / rewriter / Dart arms (not produced yet), `checked` / `unchecked` expressions and statements lowered transparently (replaces `MS0001` + placeholder). Output changes only at `checked` / `unchecked` sites. | FR-001 (IR part), FR-006, FR-023 (lowering) | — |
-| **012b — Type flip, literals, constants, conversions** | `feat!:` (`BREAKING CHANGE:` footer) | `Int64` / `UInt64` → `bigint`; literals and constant folding; zero values; `nint` / `nuint`; `IrNumericConversion` for every position and every pair of contracts/ts-emission.md § Conversions; the conversion helpers of `system/int64.ts` (`checkedNarrow`, `int64FromDouble*`, `int64ToSingle`, `int64FromDecimal`, `int64FromBigInteger`, `mapNullable`); comparisons, patterns, `switch`, unary plus; `MS0064`; every affected golden regenerated. | FR-001–FR-020, FR-031–FR-034, FR-058 | 012a |
-| **012c — Overflow** | `feat:` | `IrIntegerOverflow` production (`IntegerOverflowLowering`), unchecked wraps, `checkedInt64` / `checkedUInt64`, increments, compound assignments, lifted operators; the reference generator (`tests/Int64Reference/`) and the conformance sample start here. | FR-021–FR-026, FR-064 (first rows) | 012b; `OverflowException` from 011a or added here (DECIDED-20) |
-| **012d — Division, remainder, shifts** | `feat:` | `NumericKind` on binary nodes; `divInt64` / `remInt64` / `divUInt64` / `remUInt64`; inline constant divisors; shift-count masking and conversion; `>>>`; compound forms. | FR-027–FR-030 | 012c (shares the overflow lowering for `<<`) |
-| **012e — JSON (tree path)** | `feat!:` (`BREAKING CHANGE:` footer: tree leaves) | `Int64Descriptor`, generator emission, exact writes, tree reads, numbers from strings as `bigint`, dictionary keys, `object` slots, STJ fixtures. Scheduled right after 012b's merge so the integration branch never carries `bigint` fields whose JSON writes throw for long. | FR-050–FR-052, FR-054–FR-057, FR-065 (tree rows) | 012b |
-| **012f — Runtime equality, hashing, type tests, dispatch** | `feat:` | `hashInt64` in `HashCode` / `valueHashCode`; `isInt64` / `isUInt64` over `bigint`; `TypeofKind` / `PrimitiveCheck` / scanner; dispatcher order and `ULong` suffix; guard tests; `[Branded]` over `bigint`. | FR-046–FR-049 | 012b |
-| **012g — BCL mappings** | `feat:` | `Math` / `INumber` statics, indexing / `LongLength` / `LongCount`, `formatInt64` + interpolation formats and alignment, `Parse` / `TryParse` with styles, `Convert`, `CompareTo` / `Equals`, LINQ terminals, ticks, expression-tree `convert`; `MS0066`. | FR-035–FR-044 | 012c, 012d |
+| **012a — IR groundwork, staging switch, `checked` / `unchecked`** | `feat:` | `IrPrimitive.UInt64`, `IrLiteralKind.UInt64`, `IrNumericKind`, the two new nodes with their children / rewriter / Dart arms (not produced yet); the `Int64Representation` option on `TypeScriptTarget` and a `TranspileHelper` overload that sets it; `checked` / `unchecked` expressions and statements lowered transparently (replaces `MS0001` + placeholder). | FR-001 (IR part), FR-006, FR-023, FR-071 | — |
+| **012b — Mapping, literals, constants, conversions (BigInt mode)** | `feat:` | `Int64` / `UInt64` → `bigint` in `BigInt` mode; literals and constant folding; zero values; `nint` / `nuint` member mappings; `IrNumericConversion` for every position and pair of contracts/ts-emission.md § Conversions; relational operators (FR-069); the conversion helpers (`checkedNarrow`, `int64FromDouble*`, `int64ToSingle`, `int64FromDecimal`, `int64FromBigInteger`, `mapNullable`); comparisons, patterns, `switch`, unary plus; Dart `.toSigned` / `.toUnsigned`; `MS0064`. **Outside the switch**: FR-070 (`int32FromDouble` and friends replace the erased float → int cast for every source, a `fix` with regenerated goldens). | FR-001–FR-020, FR-031–FR-034, FR-058, FR-069, FR-070 | 012a |
+| **012c — Overflow** | `feat:` | `IrIntegerOverflow` production (`IntegerOverflowLowering`), unchecked wraps, `checkedInt64` / `checkedUInt64`, increments, every compound assignment, lifted operators, lambdas and local functions in `checked` blocks; the reference generator (`tests/Int64Reference/`) and the conformance sample start here. | FR-021–FR-026, FR-064 (first rows) | 012b; `OverflowException` from 011a or added here (DECIDED-20) |
+| **012d — Division, remainder, shifts** | `feat:` | `NumericKind` on binary nodes; `divInt64` / `remInt64` / `divUInt64` / `remUInt64`; inline constant divisors; shift-count masking and conversion; `>>>`; compound forms. `Number` mode keeps `intDiv` and today's shifts. | FR-027–FR-030 | 012c |
+| **012e — JSON (tree path)** | `feat:` | `Int64Descriptor` (also for `[Branded]` / `[InlineWrapper]`), generator emission, exact writes, tree reads (safe integers; OQ-3 *Proposed*), numbers from strings as `bigint`, dictionary keys, `object` slots, STJ fixtures. `Number` mode keeps the 2.x descriptors. | FR-050–FR-052, FR-054–FR-057, FR-065 (tree rows) | 012b |
+| **012f — Runtime equality, hashing, type tests, dispatch** | `feat:` | `hashInt64` in `HashCode` / `valueHashCode`; `isInt64Value` / `isUInt64Value` (the `bigint` checks, added beside today's `number` checks, which 012k replaces); `TypeofKind` / `PrimitiveCheck` / scanner in `BigInt` mode; dispatcher order and `ULong` suffix; guard tests. | FR-046–FR-049 | 012b |
+| **012g — BCL mappings** | `feat:` | `Math` / `INumber` statics, indexing / `LongLength` / `LongCount` / `new T[l]`, `formatInt64` + interpolation formats and alignment, `Parse` / `TryParse` with styles, `Convert`, `CompareTo` / `Equals`, LINQ terminals, ticks, `Console.WriteLine`, expression-tree `convert`; `MS0066`. The declarative mappings pick their `bigint` templates only in `BigInt` mode. | FR-035–FR-044, FR-072, FR-073 | 012c, 012d |
 | **012h — JSON exact reads** | `feat:` | Route 64-bit roots through #457's exact path; exact-path fixture rows. | FR-053, FR-065 (exact rows) | 012e, #457 |
-| **012i — Interop diagnostics** | `feat:` | `MS0065`; `[PlainObject]` construction conversions verified; docs for the `JSON.stringify` hazard. | FR-059, FR-060 | 012b |
-| **012j — Conformance, samples, docs, release** | `test:` + `docs:` | Complete the reference matrix (every BCL row), the `SampleIssueTracker` 64-bit scenario, the benchmark and its recorded table, `docs/bcl-mappings.md`, `docs/serialization.md`, README, CHANGELOG migration notes; matrix rows → Implemented. | FR-061–FR-068 (remaining) | all above |
+| **012i — Interop diagnostics** | `feat:` | `MS0065` (`[Import]`, `[Emit]`, `[External]`, user `[MapMethod]` / `[MapProperty]`); `[PlainObject]` construction conversions verified. | FR-059, FR-060 | 012b |
+| **012j — Conformance, samples, docs** | `test:` + `docs:` | Complete the reference matrix (every BCL row), the `SampleIssueTracker` 64-bit scenario, the benchmark and its recorded table, `docs/bcl-mappings.md`, `docs/serialization.md`, README, CHANGELOG migration notes. | FR-061, FR-063–FR-068 | 012a–012i |
+| **012k — Flip** | `feat!:` (`BREAKING CHANGE:` footer) | Default `Int64Representation` to `BigInt`, delete the option and every `Number`-mode branch, replace `isInt64` / `isUInt64` with the `bigint` versions, regenerate every golden and `targets/` output, matrix rows → Implemented. Small by construction: every behavior it enables was already tested in `BigInt` mode. | FR-062, FR-071 | 012j (and 012h, or an explicit decision to ship before #457) |
 
 ```mermaid
 flowchart LR
-  a[012a IR groundwork] --> b[012b type flip + conversions]
+  a[012a IR + staging switch] --> b[012b mapping + conversions]
   b --> c[012c overflow]
   c --> d[012d division + shifts]
   b --> e[012e JSON tree path]
@@ -160,6 +168,7 @@ flowchart LR
   f --> j
   h --> j
   i --> j
+  j --> k[012k flip: feat!]
   o11[011a exceptions] -. "or DECIDED-20 fallback" .-> c
 ```
 
@@ -195,8 +204,14 @@ Deferred / follow-ups: `checked` / wrap semantics for `int` and narrower (OQ-4);
 - **Runtime units**: every helper of contracts/runtime-int64.md with boundary operands and every exception
   message; `isInt64` / `isUInt64`; `hashInt64` against R2's four values.
 - **Dart**: unit tests for the new nodes; `git diff --exit-code targets/flutter`.
-- **Regression**: full TUnit suite and every bun sample; NFR-001 checked by transpiling `SampleTodo` and
-  `SampleIssueTracker` before 012a and after 012d (no 64-bit code) and diffing.
+- **Regression**: full TUnit suite and every bun sample; NFR-001 checked by transpiling every sample in the
+  default `Number` mode before 012a and after each slice up to 012j and diffing (only FR-023 / FR-070 hunks
+  allowed).
+- **Staging switch**: every 64-bit golden is produced in `BigInt` mode; a guard test asserts that `Number`
+  mode reproduces the pre-012a output for the same sources.
+- **Hazards pinned**: a bun test that a fractional `number` reaching an `int` slot from untyped JS throws
+  `RangeError` at `BigInt(...)` (spec Edge Cases); goldens for `uint` / `int` promotion (arithmetic in
+  `bigint`, relational in `number`).
 
 ## Benchmark plan (FR-066; review artifact, not a CI gate)
 
@@ -228,7 +243,9 @@ ADR-0025 did for the layout).
 |---|---|---|
 | K1 | A conversion position is missed and a `bigint` / `number` mix reaches the output (TS2365 at build or `TypeError` at run time) | Conversions come from Roslyn's semantic model, not from syntax (R3); every golden is built with `tsgo --strict` in the conformance sample (SC-003) |
 | K2 | `bigint` cost hurts hot paths (R8: 12–95×) | Documented (NFR-006), benchmarked (FR-066); `int` / `double` remain the fast types; range elision is a measured follow-up (OQ-5) |
-| K3 | A release is cut between 012b and 012e and ships `bigint` fields whose JSON writes throw | OQ-7 (integration branch); 012e is scheduled right after 012b |
+| K3 | A release is cut mid-feature and ships a half-converted `bigint` surface | The staging switch (DECIDED-22) keeps shipped output in 2.x form until 012k; only 012k is breaking; releases are held until the 3.0 gate anyway (OQ-7 *Proposed*) |
+| K9 | The staging switch rots or leaks into user configuration | It is internal to `TypeScriptTarget` (no CLI / MSBuild / attribute surface), exercised by every test in `BigInt` mode, and deleted by 012k (FR-071) |
+| K10 | `uint op int` promotion turns hot 32-bit code into `bigint` code after the flip | Documented (NFR-001, migration item 12); relational operators stay `number` (FR-069); the benchmark includes a `uint` + `int` loop |
 | K4 | 011's exception classes are not ready for 012c | DECIDED-20 fallback: 012c adds the modules exactly as 011's contract defines them |
 | K5 | #457 slips | Only 012h waits for it; the tree path is exact for `bigint` and `rawJSON` leaves already |
 | K6 | Hand-written TS in consumers breaks widely | 3.0 major, migration notes, `tsgo` reports every site; `MS0065` points at interop declarations |
