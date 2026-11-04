@@ -1590,7 +1590,7 @@ the former `OPEN-N`.
     `{"Der2":20,"Der1":10,"Base1":1,"Base2":2}`) and read the STJ payloads back into the same
     values. No sample's generated output changed.
 
-  - (k) **Review round (compiler-man, measured with the probe of `scratchpad/s6b2`).**
+  - (k) **Review round (compiler-man; measured with a source-generated STJ probe).**
     A read sets an unbound `set` member or writable field only when the payload carries it
     (`class Init { string? Note = "init"; int Count = 5; List<int>? Items = [9] }` reads `{}` as
     `{"Note":"init","Count":5,"Items":[9]}` and `{"Count":1}` as
