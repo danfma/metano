@@ -112,7 +112,17 @@ describe("PropertyNamingPolicy.kebabCaseUpper", () => {
 // (SDK 10.0.401, runtime 10.0.12). Columns: camelCase, snakeCaseLower,
 // snakeCaseUpper, kebabCaseLower, kebabCaseUpper.
 
-const measured: readonly (readonly [string, string, string, string, string, string])[] = [
+/** The name, then its camelCase, snake lower / upper and kebab lower / upper forms. */
+type MeasuredCase = readonly [
+  name: string,
+  camelCase: string,
+  snakeCaseLower: string,
+  snakeCaseUpper: string,
+  kebabCaseLower: string,
+  kebabCaseUpper: string,
+];
+
+const measured: readonly MeasuredCase[] = [
   ["URL", "url", "url", "URL", "url", "URL"],
   ["IPAddress", "ipAddress", "ip_address", "IP_ADDRESS", "ip-address", "IP-ADDRESS"],
   ["IOStream", "ioStream", "io_stream", "IO_STREAM", "io-stream", "IO-STREAM"],
@@ -141,6 +151,10 @@ const measured: readonly (readonly [string, string, string, string, string, stri
   [" Lead", " Lead", "lead", "LEAD", "lead", "LEAD"],
   ["Trail ", "trail ", "trail", "TRAIL", "trail", "TRAIL"],
   ["A  B", "a  B", "a_b", "A_B", "a-b", "A-B"],
+  ["AB\u00a0CD", "aB\u00a0CD", "ab_cd", "AB_CD", "ab-cd", "AB-CD"],
+  ["A\ud835Bc", "a\ud835Bc", "a\ud835bc", "A\ud835BC", "a\ud835bc", "A\ud835BC"],
+  ["\ud835Abc", "\ud835Abc", "\ud835abc", "\ud835ABC", "\ud835abc", "\ud835ABC"],
+  ["Ab\udc00Cd", "ab\udc00Cd", "ab\udc00cd", "AB\udc00CD", "ab\udc00cd", "AB\udc00CD"],
 ];
 
 describe("PropertyNamingPolicy matches System.Text.Json", () => {

@@ -14,10 +14,12 @@ export abstract class PropertyNamingPolicy {
   static readonly kebabCaseUpper: PropertyNamingPolicy;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Character classes ──────────────────────────────────────────────────────
 // The policies port System.Text.Json's JsonCamelCaseNamingPolicy and
 // JsonSeparatorNamingPolicy, so a context built at runtime writes the names the
-// transpiler pre-computes and .NET writes. Like .NET they walk UTF-16 code
+// transpiler pre-computes and .NET writes, except for characters whose Unicode
+// category or casing differs between the JS engine and .NET 10
+// (engine-dependent, e.g. U+0295 under Bun). Like .NET they walk UTF-16 code
 // units: a surrogate half is no letter.
 
 const uppercaseLetter = /^\p{Lu}$/u;
@@ -27,6 +29,22 @@ const spaceSeparator = /^\p{Zs}$/u;
 
 function isUpper(ch: string | undefined): boolean {
   return ch !== undefined && uppercaseLetter.test(ch);
+}
+
+function isLower(ch: string | undefined): boolean {
+  return ch !== undefined && lowercaseLetter.test(ch);
+}
+
+function isLowerOrDigit(ch: string): boolean {
+  return lowercaseLetter.test(ch) || decimalDigit.test(ch);
+}
+
+/**
+ * .NET's camelCase policy compares with `' '` only: a no-break space
+ * (U+00A0) does not count (measured: `AB\u00a0CD` → `aB\u00a0CD`).
+ */
+function isSpace(ch: string | undefined): boolean {
+  return ch === " ";
 }
 
 /**
@@ -39,20 +57,24 @@ function toLowerChar(ch: string): string {
   return lower.length === 1 ? lower : ch;
 }
 
+/** The first code points of the three Greek blocks with ypogegrammeni (`ᾀ`, `ᾐ`, `ᾠ`). */
+const iotaSubscriptBlockStarts = [0x1f80, 0x1f90, 0x1fa0] as const;
+
+/** Distance from a lowercase letter with ypogegrammeni to its simple uppercase (`ᾀ` → `ᾈ`). */
+const greekCaseOffset = 8;
+
 /** Simple uppercase of the Greek letters with ypogegrammeni, which JS expands to two letters. */
-const greekIotaSubscriptUpper: Readonly<Record<string, string>> = {
-  ...Object.fromEntries(
-    [0x1f80, 0x1f90, 0x1fa0].flatMap((start) =>
-      Array.from({ length: 8 }, (_, offset) => [
-        String.fromCharCode(start + offset),
-        String.fromCharCode(start + offset + 8),
-      ]),
-    ),
+const iotaSubscriptUpper: Readonly<Record<string, string>> = Object.fromEntries([
+  ...iotaSubscriptBlockStarts.flatMap((start) =>
+    Array.from({ length: greekCaseOffset }, (_, offset) => [
+      String.fromCharCode(start + offset),
+      String.fromCharCode(start + offset + greekCaseOffset),
+    ]),
   ),
-  "\u1fb3": "\u1fbc",
-  "\u1fc3": "\u1fcc",
-  "\u1ff3": "\u1ffc",
-};
+  ["\u1fb3", "\u1fbc"], // ᾳ → ᾼ
+  ["\u1fc3", "\u1fcc"], // ῃ → ῌ
+  ["\u1ff3", "\u1ffc"], // ῳ → ῼ
+]);
 
 /**
  * .NET's `char.ToUpperInvariant`: a one-to-one mapping that keeps the dotless
@@ -62,8 +84,10 @@ const greekIotaSubscriptUpper: Readonly<Record<string, string>> = {
 function toUpperChar(ch: string): string {
   const upper = ch === "ı" ? ch : ch.toUpperCase();
 
-  return upper.length === 1 ? upper : (greekIotaSubscriptUpper[ch] ?? ch);
+  return upper.length === 1 ? upper : (iotaSubscriptUpper[ch] ?? ch);
 }
+
+// ─── Word separation ────────────────────────────────────────────────────────
 
 type SeparatorState =
   | "notStarted"
@@ -72,17 +96,17 @@ type SeparatorState =
   | "spaceSeparator";
 
 /**
- * Whether the uppercase letter at `index` starts a new word: after a lowercase
- * letter, a digit or a space, or as the last letter of an uppercase run that a
- * lowercase letter follows (`XMLReader` → `xml_reader`).
+ * Whether an uppercase letter followed by `next` starts a new word: after a
+ * lowercase letter, a digit or a space, or as the last letter of an uppercase
+ * run that a lowercase letter follows (`XMLReader` → `xml_reader`).
  */
-function startsWordAt(name: string, index: number, previousState: SeparatorState): boolean {
+function startsWordAt(next: string | undefined, previousState: SeparatorState): boolean {
   switch (previousState) {
     case "lowercaseLetterOrDigit":
     case "spaceSeparator":
       return true;
     case "uppercaseLetter":
-      return lowercaseLetter.test(name[index + 1] ?? "");
+      return isLower(next);
     default:
       return false;
   }
@@ -102,18 +126,24 @@ function separate(name: string, separator: string, lowercase: boolean): string {
   for (let i = 0; i < name.length; i++) {
     const ch = name[i]!;
 
-    if (uppercaseLetter.test(ch)) {
-      if (startsWordAt(name, i, state)) result += separator;
+    if (isUpper(ch)) {
+      if (startsWordAt(name[i + 1], state)) {
+        result += separator;
+      }
 
       result += lowercase ? toLowerChar(ch) : ch;
       state = "uppercaseLetter";
-    } else if (lowercaseLetter.test(ch) || decimalDigit.test(ch)) {
-      if (state === "spaceSeparator") result += separator;
+    } else if (isLowerOrDigit(ch)) {
+      if (state === "spaceSeparator") {
+        result += separator;
+      }
 
       result += lowercase ? ch : toUpperChar(ch);
       state = "lowercaseLetterOrDigit";
     } else if (spaceSeparator.test(ch)) {
-      if (state !== "notStarted") state = "spaceSeparator";
+      if (state !== "notStarted") {
+        state = "spaceSeparator";
+      }
     } else {
       result += ch;
       state = "notStarted";
@@ -125,6 +155,17 @@ function separate(name: string, separator: string, lowercase: boolean): string {
 
 // ─── Policy Implementations ─────────────────────────────────────────────────
 
+/**
+ * Whether position `i` is the last letter of the leading uppercase run to
+ * lowercase: the next character exists and is not an uppercase letter.
+ */
+function endsLeadingUppercaseRun(chars: readonly string[], i: number): boolean {
+  return i > 0 && i + 1 < chars.length && !isUpper(chars[i + 1]);
+}
+
+/**
+ * A literal port of .NET's `JsonCamelCaseNamingPolicy` (`FixCasing`).
+ */
 class CamelCasePolicy extends PropertyNamingPolicy {
   /**
    * Lowercases the leading uppercase run, keeping its last letter when a
@@ -133,17 +174,24 @@ class CamelCasePolicy extends PropertyNamingPolicy {
    * uppercase letter is kept.
    */
   convert(name: string): string {
-    if (!isUpper(name[0])) return name;
+    if (!isUpper(name[0])) {
+      return name;
+    }
 
     const chars = name.split("");
 
     for (let i = 0; i < chars.length; i++) {
-      if (i === 1 && !isUpper(chars[i])) break;
+      // A second character that is not uppercase means the run was one
+      // letter long: only the first one is lowercased (`Name` → `name`).
+      if (i === 1 && !isUpper(chars[i])) {
+        break;
+      }
 
-      const hasNext = i + 1 < chars.length;
-
-      if (i > 0 && hasNext && !isUpper(chars[i + 1])) {
-        if (chars[i + 1] === " ") chars[i] = toLowerChar(chars[i]!);
+      if (endsLeadingUppercaseRun(chars, i)) {
+        // .NET also lowercases the run's last letter before a space.
+        if (isSpace(chars[i + 1])) {
+          chars[i] = toLowerChar(chars[i]!);
+        }
 
         break;
       }

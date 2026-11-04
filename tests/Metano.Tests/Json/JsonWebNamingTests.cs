@@ -226,6 +226,33 @@ public class JsonWebNamingTests
         await Assert.That(JsonNamesOf(ts)).IsEqualTo(MeasuredColumn(Declared));
     }
 
+    // A same-named [JsonPropertyName] from another namespace leaves the policy in charge.
+    [Test]
+    public async Task PropertyNameAttributeOfAnotherNamespace_IsIgnored()
+    {
+        var ts = TranspileContext(
+            """
+            public static class Fake
+            {
+                [AttributeUsage(AttributeTargets.Property)]
+                public sealed class JsonPropertyNameAttribute(string name) : Attribute
+                {
+                    public string Name { get; } = name;
+                }
+            }
+
+            [Transpile]
+            public sealed record Item([property: Fake.JsonPropertyName("Wire_Name")] string ItemName);
+
+            [Transpile]
+            [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+            [JsonSerializable(typeof(Item))]
+            """
+        );
+
+        await Assert.That(JsonNamesOf(ts)).IsEqualTo("itemName");
+    }
+
     [Test]
     [Arguments(
         "JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower",

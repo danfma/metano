@@ -247,23 +247,19 @@ internal sealed class JsonPropertyCollector(
         _namingPolicy?.Invoke(csharpName) ?? csharpName;
 
     /// <summary>
-    /// Reads [JsonPropertyName("name")] from a property if present.
+    /// The name of System.Text.Json's <c>[JsonPropertyName("name")]</c> on
+    /// <paramref name="property"/>, or <c>null</c> when it has none.
     /// </summary>
-    private static string? JsonPropertyNameOf(IPropertySymbol property)
-    {
-        foreach (var attr in property.GetAttributes())
-        {
-            if (
-                attr.AttributeClass?.Name is not ("JsonPropertyNameAttribute" or "JsonPropertyName")
+    private static string? JsonPropertyNameOf(IPropertySymbol property) =>
+        property
+            .GetAttributes()
+            .Where(attribute =>
+                JsonSerializationAttributes.Is(attribute, "JsonPropertyNameAttribute")
             )
-                continue;
-
-            if (attr.ConstructorArguments.Length > 0)
-                return attr.ConstructorArguments[0].Value?.ToString();
-        }
-
-        return null;
-    }
+            .Select(attribute =>
+                attribute.ConstructorArguments is [{ Value: string name }] ? name : null
+            )
+            .FirstOrDefault();
 }
 
 /// <summary>A serializable property with its JSON wire name and TS member
