@@ -216,8 +216,8 @@ public class JsonStructuralPolymorphismTests
             .Contains("import { isDot, type Dot } from \"./dot\";");
     }
 
-    // The [Discriminator]-free variant order: Point covers Point3, so Point3
-    // is tested first; Rect is independent and keeps its place.
+    // Point covers Point3, so Point3 is tested first; listed first, that is
+    // attribute order, and testOrder is left out.
     [Test]
     public async Task TestOrder_IsOmittedForAttributeOrder()
     {
@@ -268,46 +268,84 @@ public class JsonStructuralPolymorphismTests
     }
 
     // FR-018: an interface's properties include the interfaces it extends,
-    // in System.Text.Json's topological order (measured on .NET 10:
+    // in System.Text.Json's topological order over each interface's
+    // AllInterfaces (measured on .NET 10 under FallBackToBaseType:
     // ID : IB, IC, IE with IB : IA and IE : IA writes
-    // {"D":4,"E":5,"B":2,"A":1,"C":3} under FallBackToBaseType).
+    // {"D":4,"E":5,"B":2,"A":1,"C":3}; IP0 : IQ0, IRr0 with IQ0 : IS0 and
+    // IRr0 : IT0, IS0 writes {"P0":5,"Rr0":4,"Q0":3,"S0":1,"T0":2}).
     [Test]
-    public async Task InterfaceBase_ListsInheritedInterfacePropertiesInStjOrder()
-    {
-        var ts = TranspileContext(
-            """
-            [Transpile]
+    [Arguments(
+        """
             public interface IA { int A { get; } }
-
-            [Transpile]
             public interface IB : IA { int B { get; } }
-
-            [Transpile]
             public interface IC { int C { get; } }
-
-            [Transpile]
             public interface IE : IA { int E { get; } }
-
-            [Transpile]
-            [JsonPolymorphic(UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToBaseType)]
-            [JsonDerivedType(typeof(DReg), "r")]
             public interface ID : IB, IC, IE { int D { get; } }
+            """,
+        "ID",
+        "D,E,B,A,C"
+    )]
+    [Arguments(
+        """
+            public interface IS0 { int S0 { get; } }
+            public interface IT0 { int T0 { get; } }
+            public interface IQ0 : IS0 { int Q0 { get; } }
+            public interface IRr0 : IT0, IS0 { int Rr0 { get; } }
+            public interface IP0 : IQ0, IRr0 { int P0 { get; } }
+            """,
+        "IP0",
+        "P0,Rr0,Q0,S0,T0"
+    )]
+    public async Task InterfaceBase_ListsInheritedInterfacePropertiesInStjOrder(
+        string interfaces,
+        string entry,
+        string expectedOrder
+    )
+    {
+        var transpiled = string.Join(
+            "\n",
+            interfaces
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Select(line =>
+                    line.StartsWith($"public interface {entry} ", StringComparison.Ordinal)
+                        ? $"[Transpile]\n[JsonPolymorphic(UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FallBackToBaseType)]\n[JsonDerivedType(typeof(Reg), \"r\")]\n{line}"
+                        : $"[Transpile]\n{line}"
+                )
+        );
+
+        var names = expectedOrder.Split(',');
+
+        var ts = TranspileContext(
+            $$"""
+            {{transpiled}}
 
             [Transpile]
-            public sealed record DReg(int A, int B, int C, int D, int E) : ID;
+            public sealed record Reg({{string.Join(
+                ", ",
+                names.Select(name => $"int {name}")
+            )}}) : {{entry}};
 
             [Transpile]
-            [JsonSerializable(typeof(ID))]
+            [JsonSerializable(typeof({{entry}}))]
             """
         );
 
-        var order = new[] { "\"D\"", "\"E\"", "\"B\"", "\"A\"", "\"C\"" }
-            .Select(json => ts.IndexOf("json: " + json, StringComparison.Ordinal))
-            .ToList();
+        var getterStart = ts.IndexOf(
+            $"get {char.ToLowerInvariant(entry[0])}{entry[1..]}()",
+            StringComparison.Ordinal
+        );
+        var getter = ts[
+            getterStart..ts.IndexOf("polymorphism: {", getterStart, StringComparison.Ordinal)
+        ];
 
-        await Assert.That(order).IsOrderedBy(position => position);
-        await Assert.That(order.All(position => position >= 0)).IsTrue();
-        await Assert.That(ts).Contains("unknownDerivedType: \"fallBackToBaseType\",");
+        var actualOrder = getter
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("json: ", StringComparison.Ordinal))
+            .Select(line => line["json: \"".Length..^"\",".Length]);
+
+        await Assert.That(string.Join(",", actualOrder)).IsEqualTo(expectedOrder);
     }
 
     // FR-018 + FR-015: a closed generic interface base (measured on .NET 10:
@@ -343,6 +381,43 @@ public class JsonStructuralPolymorphismTests
 
         await Assert.That(ts).DoesNotContain("type: IShape");
         await Assert.That(ts).DoesNotContain("type: Shape,");
+        await Assert.That(ts).Contains("type: Sq,");
+        await Assert.That(ts).Contains("type: Mixed,");
+    }
+
+    // A [JsonIgnore] override hides the base declaration: the payload never
+    // carries it, so the factory literal leaves it out.
+    [Test]
+    public async Task PlainObjectFactory_LeavesOutAMemberHiddenByJsonIgnore()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(D5), "d")]
+            public abstract record B5
+            {
+                public virtual string Name { get; init; } = "";
+
+                public int Keep { get; init; }
+            }
+
+            [Transpile, PlainObject]
+            public sealed record D5(int V) : B5
+            {
+                [JsonIgnore]
+                public override string Name { get; init; } = "";
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(B5))]
+            """
+        );
+
+        await Assert
+            .That(ts)
+            .Contains(
+                "factory: (p: Record<string, unknown>) => ({ keep: p.keep as number, v: p.v as number }),"
+            );
     }
 
     // FR-047: [PlainObject] variants declared in a referenced Metano package

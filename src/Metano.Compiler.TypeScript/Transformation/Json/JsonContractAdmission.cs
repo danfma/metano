@@ -26,6 +26,14 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
         && IsTranspiledInDeclaringAssembly(named.OriginalDefinition);
 
     /// <summary>
+    /// Whether the TS type of an object contract is a class the spec can name
+    /// in <c>type: T</c> and construct: <c>[PlainObject]</c> types lower to
+    /// TS interfaces, and a C# interface (FR-018) has no constructor either.
+    /// </summary>
+    public static bool HasRuntimeConstructor(INamedTypeSymbol type) =>
+        type.TypeKind != TypeKind.Interface && !SymbolHelper.HasPlainObject(type);
+
+    /// <summary>
     /// Why an object-kind root cannot get a <c>TypeSpec</c>, or <c>null</c>
     /// when it can (<see cref="HasObjectContract"/>). A BCL generic
     /// (<c>KeyValuePair</c>, <c>ValueTuple</c>, <c>SortedDictionary</c>, …) is

@@ -59,13 +59,23 @@ internal sealed class JsonPolymorphismValidator(
 
         ReportLossyRegistrations(polymorphism);
 
-        var structural = _structuralVariants.DispatchOf(polymorphism);
-        var conflicts = _conflicts.ConflictsOf(polymorphism).Concat(structural.Conflicts).ToList();
+        var structuralDispatch = _structuralVariants.DispatchOf(polymorphism);
+
+        var conflicts = _conflicts
+            .ConflictsOf(polymorphism)
+            .Concat(structuralDispatch.Conflicts)
+            .Concat(GuardlessBaseConflictsOf(polymorphism))
+            .ToList();
 
         foreach (var conflict in conflicts)
             ReportInvalid(conflict.Message, conflict.Location);
 
-        return conflicts.Count == 0 ? polymorphism with { TestOrder = structural.TestOrder } : null;
+        return conflicts.Count == 0
+            ? polymorphism with
+            {
+                TestOrder = structuralDispatch.TestOrder,
+            }
+            : null;
     }
 
     /// <summary>
@@ -141,6 +151,9 @@ internal sealed class JsonPolymorphismValidator(
         if (!_admission.HasObjectContract(registration.Type))
             return JsonPolymorphismMessages.NotTranspiled(registered, owner);
 
+        if (registration.IsStructural && !HasGuard(registration.Type))
+            return JsonPolymorphismMessages.GuardlessRegistration(registered, owner);
+
         var requiresNearestAncestor =
             registration.IsAbstract
             && polymorphism.UnknownDerivedType
@@ -177,6 +190,28 @@ internal sealed class JsonPolymorphismValidator(
 
         return null;
     }
+
+    /// <summary>
+    /// A concrete <c>[PlainObject]</c> base whose <c>baseTest</c> would
+    /// reference a guard that is never emitted (FR-019 rule 5).
+    /// </summary>
+    private IEnumerable<JsonPolymorphismConflict> GuardlessBaseConflictsOf(
+        JsonPolymorphism polymorphism
+    )
+    {
+        if (!polymorphism.NeedsBaseTest || HasGuard(polymorphism.BaseType))
+            return [];
+
+        return
+        [
+            new JsonPolymorphismConflict(
+                JsonPolymorphismMessages.GuardlessBase(OwnerOf(polymorphism)),
+                polymorphism.Location
+            ),
+        ];
+    }
+
+    private bool HasGuard(ITypeSymbol type) => _structuralVariants.HasGuard((INamedTypeSymbol)type);
 
     /// <summary>
     /// The FR-012 message, or the FR-015 one for a constructed generic base,

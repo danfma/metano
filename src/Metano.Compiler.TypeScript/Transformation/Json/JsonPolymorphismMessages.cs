@@ -84,15 +84,31 @@ internal static class JsonPolymorphismMessages
         string first,
         string second,
         string owner,
-        IReadOnlyList<string> members
-    )
-    {
-        var listed = members.Count == 0 ? "none" : string.Join(", ", members);
+        IReadOnlyList<string> requiredMembers
+    ) =>
+        $"[PlainObject] variants '{first}' and '{second}' of '{owner}' accept each other's "
+        + $"values (required members: {Listed(requiredMembers)}), so serialization cannot tell "
+        + "them apart. Add a distinguishing required member or use class-backed records.";
 
-        return $"[PlainObject] variants '{first}' and '{second}' of '{owner}' have the same "
-            + $"required members ({listed}), so serialization cannot tell them apart. Add a "
-            + "distinguishing required member or use class-backed records.";
-    }
+    public static string VariantCapturesBase(
+        string variant,
+        string owner,
+        IReadOnlyList<string> requiredMembers
+    ) =>
+        $"[PlainObject] variant '{variant}' of '{owner}' accepts every '{owner}' value "
+        + $"(required members: {Listed(requiredMembers)}), so serialization would write each "
+        + $"'{owner}' as '{variant}'. Add a distinguishing required member to '{variant}' or "
+        + "use class-backed records.";
+
+    public static string GuardlessRegistration(string registered, string owner) =>
+        $"[PlainObject] type '{registered}' registered on '{owner}' gets no TypeScript guard "
+        + "([Import], [ExportedAsModule], [NoContainer], an exception or a type with extension "
+        + "members), so serialization cannot select it.";
+
+    public static string GuardlessBase(string owner) =>
+        $"[PlainObject] base '{owner}' gets no TypeScript guard ([Import], [ExportedAsModule], "
+        + "[NoContainer], an exception or a type with extension members), so serialization "
+        + "cannot tell its own values from unregistered ones.";
 
     public static string UnorderedVariants(IReadOnlyList<string> variants, string owner)
     {
@@ -101,4 +117,7 @@ internal static class JsonPolymorphismMessages
 
         return $"[PlainObject] variants {listed} of '{owner}' have no consistent test order.";
     }
+
+    private static string Listed(IReadOnlyList<string> members) =>
+        members.Count == 0 ? "none" : string.Join(", ", members);
 }

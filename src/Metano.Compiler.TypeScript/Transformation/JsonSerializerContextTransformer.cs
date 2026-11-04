@@ -117,7 +117,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             .Entries.Where(entry => entry.Kind == JsonPropertyKind.Ref)
             .Select(entry => entry.Type)
             .OfType<INamedTypeSymbol>()
-            .Where(JsonSpecBuilder.HasRuntimeConstructor)
+            .Where(JsonContractAdmission.HasRuntimeConstructor)
             .Select(type => type.OriginalDefinition);
     }
 

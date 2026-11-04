@@ -164,8 +164,9 @@ describe("structural dispatch — unmatched plain objects", () => {
   }
 
   // FR-019 rule 5: a concrete [PlainObject] base `Label(string Text)` that does not register
-  // itself. STJ writes an `Animal` through `Animal` as `{"Name":"a"}` (measured, .NET 10).
-  function concreteBase(polymorphism: Partial<PolymorphismSpec>): TypeSpec<Shape> {
+  // itself writes its own values with no tag, as STJ writes a concrete `Animal("a")` through
+  // `Animal` as `{"Name":"a"}` (measured, .NET 10).
+  function concreteBase(overrides: Partial<PolymorphismSpec>): TypeSpec<Shape> {
     return {
       factory: (p) => ({ text: p.text as string }),
       properties: [{ ts: "text", json: "Text", type: primitive }],
@@ -174,7 +175,7 @@ describe("structural dispatch — unmatched plain objects", () => {
         typeName: "Label",
         derived: pointVariants,
         testOrder: [1, 0],
-        ...polymorphism,
+        ...overrides,
       },
     };
   }
@@ -211,7 +212,7 @@ describe("structural dispatch — unmatched plain objects", () => {
     expect(write(stranger, concrete)).toBe('{"Text":1}');
   });
 
-  test("without a baseTest, a concrete base no longer writes every unmatched plain object", () => {
+  test("without a baseTest, an unmatched plain object is an unregistered runtime type", () => {
     expectNotSupportedException(
       () => write(unmatched, concreteBase({})),
       unsupportedRuntimeTypeMessage("Object", "Label"),
@@ -306,5 +307,64 @@ describe("structural dispatch — mixed class and [PlainObject] variants", () =>
   test("reads dispatch both families by tag", () => {
     expect(read('{"$type":"circle","X":1}', figureSpec)).toBeInstanceOf(Circle);
     expect(read('{"$type":"point","X":1}', figureSpec)).toEqual({ x: 1 });
+  });
+});
+
+// FR-019 rules 4–5: the variant guards run before `baseTest`, so a variant guard that accepts
+// every base value captures them. Animal2(string Name) with Dog2(string Name, int? Bark): STJ
+// writes Animal2("a") as {"Name":"a"} and Dog2("d", null) as {"$type":"dog","Bark":null,"Name":"d"}
+// (measured, .NET 10). The generator reports MS0032 for such a hierarchy; this hand-written spec
+// shows why.
+describe("structural dispatch — a variant guard that accepts the base", () => {
+  interface Animal2 {
+    readonly name: string;
+  }
+
+  interface Dog2 extends Animal2 {
+    readonly bark: number | null;
+  }
+
+  const isAnimal2 = (value: unknown): value is Animal2 =>
+    typeof (value as Animal2 | null)?.name === "string";
+
+  const isDog2 = (value: unknown): value is Dog2 => {
+    const candidate = value as Dog2 | null;
+
+    return isAnimal2(value) && (candidate?.bark == null || typeof candidate.bark === "number");
+  };
+
+  const animal2Spec: TypeSpec<Animal2> = {
+    factory: (p) => ({ name: p.name as string }),
+    properties: [{ ts: "name", json: "Name", type: primitive }],
+    polymorphism: {
+      discriminator: "$type",
+      typeName: "Animal2",
+      derived: [
+        {
+          tag: "dog",
+          spec: () => dog2Spec,
+          test: isDog2,
+        },
+      ],
+      baseTest: isAnimal2,
+    },
+  };
+
+  const dog2Spec: TypeSpec<Dog2> = {
+    base: animal2Spec,
+    factory: (p) => ({ name: p.name as string, bark: p.bark as number | null }),
+    properties: [{ ts: "bark", json: "Bark", type: { kind: "nullable", inner: primitive } }],
+  };
+
+  test("captures a base value: {name} is written as the variant", () => {
+    expect(write<Animal2>({ name: "a" }, animal2Spec)).toBe(
+      '{"$type":"dog","Bark":null,"Name":"a"}',
+    );
+  });
+
+  test("a variant value with the nullable member set is still written as the variant", () => {
+    expect(write<Animal2>({ name: "d", bark: null } as Dog2, animal2Spec)).toBe(
+      '{"$type":"dog","Bark":null,"Name":"d"}',
+    );
   });
 });

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Extraction;
@@ -45,23 +46,50 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     /// </summary>
     public IReadOnlyList<TsFunction> Generate(INamedTypeSymbol type)
     {
-        if (TypeTransformer.IsExceptionType(type))
+        if (TryBuildPredicate(type) is not { } predicate)
             return [];
+
+        var tsName = _context.ResolveTsName(type);
+        var ownName = _context.ResolveOwnTsName(type);
+
+        return
+        [
+            predicate.Guard,
+            GenerateAssert(tsName, ownName, predicate.Guard.Name, predicate.PredicateType),
+        ];
+    }
+
+    /// <summary>
+    /// The <c>isT</c> predicate alone, without the <c>assertT</c> companion:
+    /// the guard a polymorphic JSON hierarchy synthesizes for a
+    /// <c>[PlainObject]</c> type that does not declare <c>[GenerateGuard]</c>
+    /// (FR-019 rule 1). <c>null</c> when the type gets no guard (see
+    /// <see cref="Generate"/>).
+    /// </summary>
+    public TsFunction? GeneratePredicate(INamedTypeSymbol type) => TryBuildPredicate(type)?.Guard;
+
+    /// <summary>
+    /// The <c>isT</c> function of <paramref name="type"/> and the type it
+    /// narrows to, or <c>null</c> when the type gets no guard.
+    /// </summary>
+    private (TsFunction Guard, TsType PredicateType)? TryBuildPredicate(INamedTypeSymbol type)
+    {
+        if (TypeTransformer.IsExceptionType(type))
+            return null;
         if (
             SymbolHelper.HasExportedAsModule(type)
             || SymbolHelper.HasNoContainer(type)
             || TypeTransformer.HasExtensionMembers(type)
         )
-            return [];
+            return null;
         if (SymbolHelper.HasImport(type))
-            return [];
+            return null;
 
         // A private nested type is declared under its module-local identifier (#412).
         // The predicate type and the unexported guard and assert identifiers spell it,
         // so two private `Circle`s, or a private `Circle` next to a module's own
         // `isCircle`, never clash; the error message reads the type's own name.
         var tsName = _context.ResolveTsName(type);
-        var ownName = _context.ResolveOwnTsName(type);
         var guardName = $"is{tsName}";
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
 
@@ -90,10 +118,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             guard = GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof);
         }
 
-        if (guard is null)
-            return [];
-
-        return [guard, GenerateAssert(tsName, ownName, guardName, predicateType)];
+        return guard is null ? null : (guard, predicateType);
     }
 
     private IReadOnlyList<INamedTypeSymbol>? TryFindDiscriminatedVariants(INamedTypeSymbol baseType)
@@ -230,17 +255,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             ),
         };
 
-        var discriminatorField = SymbolHelper.GetDiscriminatorFieldName(baseType)!;
-        var discriminatorMember = baseType
-            .GetMembers(discriminatorField)
-            .OfType<IPropertySymbol>()
-            .FirstOrDefault();
-        var discriminatorTsName =
-            (
-                discriminatorMember is not null
-                    ? SymbolHelper.GetNameOverride(discriminatorMember, TargetLanguage.TypeScript)
-                    : null
-            ) ?? TypeScriptNaming.ToCamelCase(discriminatorField);
+        var discriminatorTsName = DiscriminatorTsNameOf(baseType)!;
 
         var discriminatorMatch = variants
             .Select<INamedTypeSymbol, TsExpression>(v => new TsBinaryExpression(
@@ -531,23 +546,9 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         // uses (`[Name(TypeScript, …)]` override ∪ camelCase), so a
         // renamed discriminator surfaces on both the short-circuit
         // access and the skip filter below.
-        var discriminatorFieldName = SymbolHelper.GetDiscriminatorFieldName(type);
-        string? discriminatorTsName = null;
-        if (discriminatorFieldName is not null)
+        var discriminatorTsName = DiscriminatorTsNameOf(type);
+        if (discriminatorTsName is not null)
         {
-            var discriminatorMember = type.GetMembers(discriminatorFieldName)
-                .OfType<IPropertySymbol>()
-                .FirstOrDefault();
-            discriminatorTsName =
-                (
-                    discriminatorMember is not null
-                        ? SymbolHelper.GetNameOverride(
-                            discriminatorMember,
-                            TargetLanguage.TypeScript
-                        )
-                        : null
-                ) ?? TypeScriptNaming.ToCamelCase(discriminatorFieldName);
-
             body.Add(
                 new TsIfStatement(
                     new TsBinaryExpression(
@@ -589,28 +590,25 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     }
 
     /// <summary>
-    /// The <c>isT</c> predicate alone, without the <c>assertT</c> companion:
-    /// the guard a polymorphic JSON hierarchy synthesizes for a
-    /// <c>[PlainObject]</c> type that does not declare <c>[GenerateGuard]</c>
-    /// (FR-019 rule 1). <c>null</c> when the type gets no guard.
-    /// </summary>
-    public TsFunction? GeneratePredicate(INamedTypeSymbol type) => Generate(type).FirstOrDefault();
-
-    /// <summary>
     /// The members the shape guard of a <c>[PlainObject]</c> record or class
     /// tests, with the kind of each test and whether a missing member fails
     /// it (FR-019 rule 3). Built from the same field list and the same
     /// per-field tests <see cref="GenerateShapeGuard"/> emits; a
-    /// <c>[Discriminator]</c> member is compared to a string literal.
+    /// <c>[Discriminator]</c> member is compared to the type's own TS name.
     /// </summary>
-    public IReadOnlyList<GuardedMember> GuardedMembersOf(INamedTypeSymbol type)
+    internal IReadOnlyList<GuardedMember> GuardedMembersOf(INamedTypeSymbol type)
     {
         var discriminatorTsName = DiscriminatorTsNameOf(type);
 
         return GetAllFieldsForGuard(type)
             .Select(field =>
                 field.Name == discriminatorTsName
-                    ? new GuardedMember(field.Name, GuardTestKind.String, IsRequired: true)
+                    ? new GuardedMember(
+                        field.Name,
+                        GuardTestKind.String,
+                        IsRequired: true,
+                        Literal: _context.ResolveOwnTsName(type)
+                    )
                     : ToGuardedMember(field.Name, field.Type)
             )
             .ToList();
@@ -618,14 +616,18 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
     private GuardedMember ToGuardedMember(string name, TsType type)
     {
+        // Only the test's kind is read: the access expression is a stand-in
+        // for the guard's `v.<name>`.
         var test = FieldTestOf(new TsPropertyAccess(new TsIdentifier("v"), name), type);
 
         return new GuardedMember(name, test.Kind, IsRequired: !test.AcceptsAbsent);
     }
 
     /// <summary>
-    /// The TS name of a <c>[Discriminator]</c> member, resolved as
-    /// <see cref="GenerateShapeGuard"/> resolves it, or <c>null</c>.
+    /// The TS name of the <c>[Discriminator]</c> member of
+    /// <paramref name="type"/> (its <c>[Name]</c> override, else camelCase),
+    /// or <c>null</c> when it declares none. One rule for the guard's
+    /// short-circuit, its field filter and the union guard.
     /// </summary>
     private static string? DiscriminatorTsNameOf(INamedTypeSymbol type)
     {
@@ -633,12 +635,9 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             return null;
 
         var member = type.GetMembers(fieldName).OfType<IPropertySymbol>().FirstOrDefault();
+        var nameOverride = member?.GetNameOverride(TargetLanguage.TypeScript);
 
-        return (
-                member is null
-                    ? null
-                    : SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
-            ) ?? TypeScriptNaming.ToCamelCase(fieldName);
+        return nameOverride ?? TypeScriptNaming.ToCamelCase(fieldName);
     }
 
     /// <summary>
@@ -774,27 +773,12 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             // String literal union (from StringEnum that's not transpilable).
             TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) =>
                 Required(
-                    types
-                        .Cast<TsStringLiteralType>()
-                        .Select<TsStringLiteralType, TsExpression>(t => new TsBinaryExpression(
-                            fieldAccess,
-                            "===",
-                            new TsStringLiteral(t.Value)
-                        ))
-                        .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
+                    StringLiteralUnionCheck(fieldAccess, types.Cast<TsStringLiteralType>()),
                     GuardTestKind.String
                 ),
 
             TsTupleType { Elements: var elements } => Required(
-                new TsBinaryExpression(
-                    ArrayCheck(fieldAccess),
-                    "&&",
-                    new TsBinaryExpression(
-                        new TsPropertyAccess(fieldAccess, "length"),
-                        "===",
-                        new TsLiteral(elements.Count.ToString())
-                    )
-                ),
+                TupleCheck(fieldAccess, elements.Count),
                 GuardTestKind.Array
             ),
 
@@ -839,6 +823,29 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             new TsUnaryExpression("typeof ", expr),
             "===",
             new TsStringLiteral(typeName)
+        );
+
+    private static TsExpression StringLiteralUnionCheck(
+        TsExpression fieldAccess,
+        IEnumerable<TsStringLiteralType> literals
+    ) =>
+        literals
+            .Select<TsStringLiteralType, TsExpression>(literal => new TsBinaryExpression(
+                fieldAccess,
+                "===",
+                new TsStringLiteral(literal.Value)
+            ))
+            .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+
+    private static TsBinaryExpression TupleCheck(TsExpression fieldAccess, int length) =>
+        new(
+            ArrayCheck(fieldAccess),
+            "&&",
+            new TsBinaryExpression(
+                new TsPropertyAccess(fieldAccess, "length"),
+                "===",
+                new TsLiteral(length.ToString(CultureInfo.InvariantCulture))
+            )
         );
 
     private static TsCallExpression ArrayCheck(TsExpression fieldAccess) =>

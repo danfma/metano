@@ -20,7 +20,7 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal static class JsonStructuralGuardTargets
 {
-    public static IReadOnlySet<INamedTypeSymbol> Collect(
+    public static JsonStructuralGuardSet Collect(
         IEnumerable<INamedTypeSymbol> transpilableTypes,
         bool assemblyWideTranspile,
         IAssemblySymbol? currentAssembly
@@ -35,18 +35,41 @@ internal static class JsonStructuralGuardTargets
                 .SelectMany(WithNestedTypes)
                 .Prepend(type);
 
-        return transpilableTypes
+        var types = transpilableTypes
             .SelectMany(WithNestedTypes)
             .SelectMany(GuardedTypesOf)
             .Where(type => IsInAssembly(type, currentAssembly) && IsTranspiled(type))
             .Select(type => type.OriginalDefinition)
             .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        return new JsonStructuralGuardSet(
+            types,
+            types.Select(type => type.GetCrossAssemblyOriginKey()).ToHashSet(StringComparer.Ordinal)
+        );
     }
 
     /// <summary>
+    /// A <c>[PlainObject]</c> type that can carry a synthesized guard: a
+    /// generic type has none the context could reference (its registrations
+    /// are MS0032, and its base spec is a construction).
+    /// </summary>
+    public static bool IsGuardedPlainObject(ITypeSymbol type) =>
+        type is INamedTypeSymbol { IsGenericType: false } && SymbolHelper.HasPlainObject(type);
+
+    /// <summary>
+    /// A concrete <c>[PlainObject]</c> class or struct that can carry a
+    /// guard: as a polymorphic base, its guard is the rule 5 base test or
+    /// its self-registration's test.
+    /// </summary>
+    public static bool IsConcretePlainObjectBase(INamedTypeSymbol type) =>
+        type.TypeKind is (TypeKind.Class or TypeKind.Struct)
+        && !type.IsAbstract
+        && IsGuardedPlainObject(type);
+
+    /// <summary>
     /// The <c>[PlainObject]</c> types the polymorphism of
-    /// <paramref name="baseType"/> tests with a guard: its non-generic
-    /// registrations and, for a concrete base, the base itself.
+    /// <paramref name="baseType"/> tests with a guard: its registrations and,
+    /// for a concrete base, the base itself.
     /// </summary>
     private static IEnumerable<INamedTypeSymbol> GuardedTypesOf(INamedTypeSymbol baseType)
     {
@@ -55,19 +78,23 @@ internal static class JsonStructuralGuardTargets
 
         var registered = polymorphism
             .Registrations.Select(registration => registration.Type)
-            .OfType<INamedTypeSymbol>();
+            .Where(IsGuardedPlainObject)
+            .Cast<INamedTypeSymbol>();
 
-        var candidates = IsConcreteObjectType(baseType) ? registered.Append(baseType) : registered;
-
-        // A generic type has no guard the context could reference: its
-        // registrations are MS0032, and its base spec is a construction.
-        return candidates.Where(type => !type.IsGenericType && SymbolHelper.HasPlainObject(type));
+        return IsConcretePlainObjectBase(baseType) ? registered.Append(baseType) : registered;
     }
-
-    private static bool IsConcreteObjectType(INamedTypeSymbol type) =>
-        type.TypeKind is TypeKind.Class or TypeKind.Struct && !type.IsAbstract;
 
     private static bool IsInAssembly(INamedTypeSymbol type, IAssemblySymbol? assembly) =>
         assembly is null
         || SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, assembly);
 }
+
+/// <summary>
+/// The types whose guard is synthesized (original definitions) and their
+/// cross-assembly origin keys, which join the guardable type keys so guard
+/// references resolve to them.
+/// </summary>
+internal sealed record JsonStructuralGuardSet(
+    IReadOnlySet<INamedTypeSymbol> Types,
+    IReadOnlySet<string> OriginKeys
+);

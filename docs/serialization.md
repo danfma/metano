@@ -588,7 +588,9 @@ get shape(): TypeSpec<Shape> {
 - **Synthesized guards.** Every `[PlainObject]` type a `[JsonDerivedType]`
   registers, and every concrete `[PlainObject]` type that is itself
   polymorphic, gets an `isT` guard in its own file, built like a
-  `[GenerateGuard]` guard (the predicate only, without `assertT`). The
+  `[GenerateGuard]` guard (the predicate only, without `assertT`), so every
+  registered `[PlainObject]` type exports an `isT` function from its module,
+  whether or not a context uses it. The
   context imports it as a value (`import { isPoint, type Point } from
   "./point"`; `Shape.isCircle` for a nested type; from the package for a
   library variant, whose own build emits the guard). A guard checks a member
@@ -610,13 +612,22 @@ get shape(): TypeSpec<Shape> {
   factory builds an object literal with the inherited members too.
 - **Diagnostics.** `MS0032` rejects two `[PlainObject]` variants whose guards
   accept each other's values (the same required members with compatible test
-  kinds, or no required member at all) and variants with no consistent test
-  order, leaving the base without `polymorphism`. Members of the same name
-  with different kinds (`string` vs `number`) tell variants apart.
+  kinds, or no required member at all), variants with no consistent test
+  order, and a variant whose guard accepts every value of a concrete base
+  written through `baseTest` (`Dog2(string Name, int? Bark)` under
+  `Animal2(string Name)` would capture every `Animal2`), leaving the base
+  without `polymorphism`. It also rejects a registered `[PlainObject]` type
+  that gets no guard (`[Import]`, `[ExportedAsModule]`, `[NoContainer]`).
+  Members of the same name with different kinds (`string` vs `number`), or
+  different `[Discriminator]` literals, tell variants apart.
 - **Divergences.** A plain object carries no runtime type: an unregistered C#
   subtype whose shape satisfies a registered variant's guard is written as
-  that variant (System.Text.Json throws), and the runtime type name in the
-  error is `Object`.
+  that variant, and one whose shape passes the base's `baseTest` is written as
+  the base (`Cat4` → `{"Name":"c"}`), where System.Text.Json throws
+  `NotSupportedException`; the runtime type name in the error is `Object`.
+- **Known gap.** A generic concrete `[PlainObject]` base gets no guard, so no
+  `baseTest` (generic `[PlainObject]` contracts do not compile under `tsgo`
+  yet anyway).
 
 ### Runtime dispatch
 
