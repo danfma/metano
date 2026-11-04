@@ -83,16 +83,14 @@ public sealed class IrToTsClassEmitter(
         );
 
         var explicitCtors = IrConstructorExtractor.AllExplicitConstructors(type);
-
-        // A dispatcher's `(...args)` implementation declares no parameter
-        // properties, so the promoted members are emitted as ordinary members.
-        var parameterPropertyCtor = explicitCtors.Count > 1 ? null : ir.Constructor;
+        var emitsDispatcher = explicitCtors.Count > 1;
+        var promotedMembers = PromotedMembersOf(ir.Constructor, emitsDispatcher);
 
         var constructor = BuildClassConstructor(
             type,
             ir,
             ctorParams,
-            explicitCtors,
+            emitsDispatcher,
             extendsType,
             keepsBaseMessage,
             lowering
@@ -106,8 +104,14 @@ public sealed class IrToTsClassEmitter(
         if (keepsBaseMessage)
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
 
-        EmitPromotedParamsCompanionFields(parameterPropertyCtor, classMembers);
-        EmitClassMembers(ir, parameterPropertyCtor, classMembers, keepsBaseMessage, lowering);
+        EmitPromotedMemberFields(ir.Constructor, promotedMembers, classMembers);
+        EmitClassMembers(
+            ir,
+            PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMembers),
+            classMembers,
+            keepsBaseMessage,
+            lowering
+        );
         EmitDeferredOperatorsAndMethods(type, ir, classMembers, lowering);
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
 
@@ -137,13 +141,13 @@ public sealed class IrToTsClassEmitter(
         INamedTypeSymbol type,
         IrClassDeclaration ir,
         IReadOnlyList<TsConstructorParam> ctorParams,
-        IReadOnlyList<IMethodSymbol> explicitCtors,
+        bool emitsDispatcher,
         TsType? extendsType,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering
     )
     {
-        if (explicitCtors.Count > 1)
+        if (emitsDispatcher)
         {
             // The IR pipeline owns multi-constructor dispatch. When the body
             // coverage probe flags any overload as uncovered, surface a
@@ -152,8 +156,7 @@ public sealed class IrToTsClassEmitter(
             // valid type, and silently dropping the type would hide the gap.
             return TryBuildConstructorDispatcherFromIr(
                     ir.Constructor,
-                    extendsType is not null,
-                    keepsBaseMessage,
+                    new DispatcherBaseCall(extendsType is not null, keepsBaseMessage),
                     lowering
                 )
                 ?? EmitUnsupportedConstructor(
@@ -173,8 +176,8 @@ public sealed class IrToTsClassEmitter(
 
     /// <summary>
     /// Walks <see cref="IrClassDeclaration.Members"/> and emits fields,
-    /// properties (except those <paramref name="parameterPropertyCtor"/>
-    /// declares as parameter properties), and
+    /// properties (except the <paramref name="promotedNames"/> the
+    /// constructor declares), and
     /// events into <paramref name="classMembers"/>. Operators and
     /// methods are deferred — <see cref="EmitDeferredOperatorsAndMethods"/>
     /// runs them after this pass so the final layout keeps the
@@ -183,14 +186,12 @@ public sealed class IrToTsClassEmitter(
     /// </summary>
     private void EmitClassMembers(
         IrClassDeclaration ir,
-        IrConstructorDeclaration? parameterPropertyCtor,
+        IReadOnlySet<string> promotedNames,
         List<TsClassMember> classMembers,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering
     )
     {
-        var promotedNames = IrToTsClassBridge.PromotedMemberNames(parameterPropertyCtor);
-
         foreach (var irMember in ir.Members ?? [])
         {
             switch (irMember)
@@ -360,21 +361,55 @@ public sealed class IrToTsClassEmitter(
     /// form on the ctor signature; this helper declares the companion field so
     /// the public surface still exposes it as a property (#152).
     /// </summary>
-    private void EmitPromotedParamsCompanionFields(
+    private void EmitPromotedMemberFields(
         IrConstructorDeclaration? ctorIr,
+        PromotedMembers promotedMembers,
         List<TsClassMember> classMembers
     )
     {
-        if (ctorIr is null)
-            return;
+        var declaredAsFields = (ctorIr?.Parameters ?? []).Where(p =>
+            promotedMembers switch
+            {
+                PromotedMembers.ParameterProperties => IsPromotedParamsParameter(p),
+                PromotedMembers.Fields => p.Promotion is not IrParameterPromotion.None,
+                _ => false,
+            }
+        );
 
-        foreach (var p in ctorIr.Parameters)
-        {
-            if (!IsPromotedParamsParameter(p))
-                continue;
-            classMembers.Add(BuildPromotedParamsCompanionField(p));
-        }
+        classMembers.AddRange(declaredAsFields.Select(BuildPromotedParamsCompanionField));
     }
+
+    /// <summary>
+    /// The promoted members the constructor declares, which the member walk
+    /// skips: none when the members keep their own declarations.
+    /// </summary>
+    private static IReadOnlySet<string> PromotedNamesDeclaredByConstructor(
+        IrConstructorDeclaration? ctorIr,
+        PromotedMembers promotedMembers
+    ) =>
+        promotedMembers is PromotedMembers.OwnDeclarations
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : IrToTsClassBridge.PromotedMemberNames(ctorIr);
+
+    /// <summary>
+    /// How the members a constructor promotes are declared: as parameter
+    /// properties of a single constructor; as fields when a dispatcher runs a
+    /// record positional or C# 12 primary constructor, which every other
+    /// constructor chains to (its branch assigns them, and a member that
+    /// merely reads the parameter must not be emitted as a self-reading
+    /// getter); or by the members' own declarations when a dispatcher runs
+    /// explicit constructors whose bodies assign them.
+    /// </summary>
+    private static PromotedMembers PromotedMembersOf(
+        IrConstructorDeclaration? ctorIr,
+        bool emitsDispatcher
+    ) =>
+        (emitsDispatcher, ctorIr?.IsPrimary) switch
+        {
+            (false, _) => PromotedMembers.ParameterProperties,
+            (true, true) => PromotedMembers.Fields,
+            _ => PromotedMembers.OwnDeclarations,
+        };
 
     private static bool IsPromotedParamsParameter(IrConstructorParameter p) =>
         p.Parameter.IsParams && p.Promotion is not IrParameterPromotion.None;
@@ -708,14 +743,14 @@ public sealed class IrToTsClassEmitter(
     /// <see cref="IrToTsConstructorDispatcherBridge"/>. Returns <c>null</c>
     /// when the IR pipeline cannot lower the constructor group (no overloads,
     /// or any body fails <see cref="IrBodyCoverageProbe"/>); the caller emits
-    /// an unsupported stub and surfaces the gap as a diagnostic. A constructor
-    /// without a body — a record positional or C# 12 primary constructor —
-    /// is covered: its branch assigns the promoted and captured parameters.
+    /// an unsupported stub and surfaces the gap as a diagnostic. A record
+    /// positional or C# 12 primary constructor has no body of its own (only
+    /// moved initializers) and is covered: its branch assigns the promoted and
+    /// captured parameters.
     /// </summary>
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
         IrConstructorDeclaration? primary,
-        bool extendsBase,
-        bool keepsBaseMessage,
+        DispatcherBaseCall baseCall,
         IrToTsBridgeContext lowering
     )
     {
@@ -730,12 +765,7 @@ public sealed class IrToTsClassEmitter(
                 return null;
         }
 
-        return IrToTsConstructorDispatcherBridge.Build(
-            primary,
-            extendsBase,
-            keepsBaseMessage,
-            lowering
-        );
+        return IrToTsConstructorDispatcherBridge.Build(primary, baseCall, lowering);
     }
 
     /// <summary>
@@ -829,5 +859,13 @@ public sealed class IrToTsClassEmitter(
             : null;
 
         return baseCall ?? new TsBaseConstructorCall([], [], keepsBaseMessage);
+    }
+
+    /// <summary>How the members a constructor promotes are declared.</summary>
+    private enum PromotedMembers
+    {
+        ParameterProperties,
+        Fields,
+        OwnDeclarations,
     }
 }

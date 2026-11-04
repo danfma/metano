@@ -24,6 +24,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 public sealed class ConstructorAccessFacts
 {
     private const string OutsideConstructionFact = "outside";
+
+    private static readonly IEqualityComparer<INamedTypeSymbol> TypeComparer =
+        SymbolEqualityComparer.Default;
+
     private const string ExtendedFact = "extended";
 
     private readonly Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>> _constructors;
@@ -44,11 +48,9 @@ public sealed class ConstructorAccessFacts
     /// <summary>No type declares a non-public constructor.</summary>
     public static ConstructorAccessFacts Empty { get; } =
         new(
-            new Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>>(
-                SymbolEqualityComparer.Default
-            ),
-            new Dictionary<INamedTypeSymbol, OutsideConstruction>(SymbolEqualityComparer.Default),
-            new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default)
+            new Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>>(TypeComparer),
+            new Dictionary<INamedTypeSymbol, OutsideConstruction>(TypeComparer),
+            new HashSet<INamedTypeSymbol>(TypeComparer)
         );
 
     /// <summary>
@@ -75,7 +77,7 @@ public sealed class ConstructorAccessFacts
     /// </summary>
     public string FingerprintOf(IEnumerable<INamedTypeSymbol> groupTypes)
     {
-        var group = groupTypes.ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var group = groupTypes.ToHashSet(TypeComparer);
 
         var entries = _outsideConstructions
             .Keys.Select(type => (Type: type, Fact: OutsideConstructionFact))
@@ -89,14 +91,14 @@ public sealed class ConstructorAccessFacts
 
     /// <summary>
     /// Collects the facts over <paramref name="emittedTypes"/> (top-level and
-    /// emitted nested types). <paramref name="jsonConstructedTypesOf"/> yields
-    /// the classes a <c>SerializerContext</c> type constructs through its
+    /// emitted nested types). <paramref name="jsonConstructedTypes"/> maps each
+    /// <c>SerializerContext</c> type to the classes it constructs through its
     /// <c>TypeSpec</c>s.
     /// </summary>
     public static ConstructorAccessFacts Collect(
         Compilation compilation,
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
-        Func<INamedTypeSymbol, IEnumerable<INamedTypeSymbol>> jsonConstructedTypesOf
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>> jsonConstructedTypes
     )
     {
         var constructors = emittedTypes
@@ -105,23 +107,18 @@ public sealed class ConstructorAccessFacts
                 (Type: type.OriginalDefinition, Constructors: DeclaredConstructors(type))
             )
             .Where(entry => entry.Constructors.Any(IsNonPublic))
-            .ToDictionary(
-                entry => entry.Type,
-                entry => entry.Constructors,
-                (IEqualityComparer<INamedTypeSymbol>)SymbolEqualityComparer.Default
-            );
+            .ToDictionary(entry => entry.Type, entry => entry.Constructors, TypeComparer);
 
         if (constructors.Count == 0)
             return Empty;
 
         var restricted = constructors
-            .Where(entry => entry.Value.All(IsNonPublic))
-            .Select(entry => entry.Key)
-            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            .Keys.Where(type => TsConstructorModifier.DeclaredModifierOf(type).IsNonPublic())
+            .ToHashSet(TypeComparer);
 
         return new ConstructorAccessFacts(
             constructors,
-            OutsideConstructions(compilation, emittedTypes, jsonConstructedTypesOf, restricted),
+            OutsideConstructions(compilation, emittedTypes, jsonConstructedTypes, restricted),
             ExtendedTypes(emittedTypes, restricted)
         );
     }
@@ -136,7 +133,7 @@ public sealed class ConstructorAccessFacts
         );
 
         return new DeclaredConstructor(
-            TsConstructorModifier.Of(IrConstructorExtractor.DeclaredVisibility(constructor)),
+            TsConstructorModifier.OfConstructor(constructor),
             $"'{constructor.ContainingType.Name}({string.Join(", ", parameters)})' "
                 + $"({SyntaxFacts.GetText(constructor.DeclaredAccessibility)})",
             constructor.Locations.FirstOrDefault()
@@ -144,7 +141,7 @@ public sealed class ConstructorAccessFacts
     }
 
     private static bool IsNonPublic(DeclaredConstructor constructor) =>
-        constructor.Modifier is not TsAccessibility.Public;
+        constructor.Modifier.IsNonPublic();
 
     /// <summary>
     /// The first site outside the class body that constructs each restricted
@@ -154,13 +151,11 @@ public sealed class ConstructorAccessFacts
     private static Dictionary<INamedTypeSymbol, OutsideConstruction> OutsideConstructions(
         Compilation compilation,
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
-        Func<INamedTypeSymbol, IEnumerable<INamedTypeSymbol>> jsonConstructedTypesOf,
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>> jsonConstructedTypes,
         IReadOnlySet<INamedTypeSymbol> restricted
     )
     {
-        var constructions = new Dictionary<INamedTypeSymbol, OutsideConstruction>(
-            SymbolEqualityComparer.Default
-        );
+        var constructions = new Dictionary<INamedTypeSymbol, OutsideConstruction>(TypeComparer);
 
         foreach (var type in emittedTypes)
         {
@@ -168,7 +163,9 @@ public sealed class ConstructorAccessFacts
                 $"the TypeSpec of the JSON SerializerContext '{type.Name}'"
             );
 
-            foreach (var constructed in jsonConstructedTypesOf(type).Where(restricted.Contains))
+            var constructedByJson = jsonConstructedTypes.GetValueOrDefault(type) ?? [];
+
+            foreach (var constructed in constructedByJson.Where(restricted.Contains))
                 constructions.TryAdd(constructed, jsonSite);
 
             var nestedSite = new OutsideConstruction($"the nested type '{type.ToDisplayString()}'");
@@ -188,7 +185,7 @@ public sealed class ConstructorAccessFacts
             .Select(type => type.BaseType?.OriginalDefinition)
             .OfType<INamedTypeSymbol>()
             .Where(restricted.Contains)
-            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            .ToHashSet(TypeComparer);
 
     /// <summary>
     /// The restricted containers of <paramref name="nested"/> that a
@@ -202,9 +199,7 @@ public sealed class ConstructorAccessFacts
         IReadOnlySet<INamedTypeSymbol> restricted
     )
     {
-        var containers = ContainersOf(nested)
-            .Where(restricted.Contains)
-            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var containers = ContainersOf(nested).Where(restricted.Contains).ToHashSet(TypeComparer);
 
         if (containers.Count == 0)
             return [];

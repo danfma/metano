@@ -87,32 +87,34 @@ public static class IrConstructorExtractor
 
     /// <summary>
     /// The constructor whose parameters become the emitted primary
-    /// constructor: the one with the most parameters — for records always the
-    /// explicit positional ctor; for C# 12+ primary constructor classes the
-    /// implicit one. Promotions are keyed off it, and any target building
-    /// positional <c>new T(...)</c> calls must follow its parameter order.
-    /// Returns <c>null</c> when the type only has the implicit parameterless
-    /// constructor (or the record copy constructor).
+    /// constructor: the record positional or C# 12 primary constructor when
+    /// the type has one (every other constructor chains to it), else the one
+    /// with the most parameters. Promotions are keyed off it, and any target
+    /// building positional <c>new T(...)</c> calls must follow its parameter
+    /// order. Returns <c>null</c> when the type only has the implicit
+    /// parameterless constructor (or the record copy constructor).
     /// </summary>
-    public static IMethodSymbol? FindPrimaryConstructor(INamedTypeSymbol type) =>
-        AllExplicitConstructors(type).OrderByDescending(c => c.Parameters.Length).FirstOrDefault();
+    public static IMethodSymbol? FindPrimaryConstructor(INamedTypeSymbol type)
+    {
+        var constructors = AllExplicitConstructors(type);
+
+        return constructors.FirstOrDefault(IsPrimaryConstructor)
+            ?? constructors.OrderByDescending(c => c.Parameters.Length).FirstOrDefault();
+    }
 
     /// <summary>
     /// Whether <paramref name="constructor"/> is the C# 12 primary constructor
     /// (or a record's positional one): declared by the type declaration's
-    /// parameter list rather than by a constructor declaration.
+    /// parameter list rather than by a constructor declaration. Read from
+    /// metadata, only a record's positional constructor is recognized, by the
+    /// <c>Deconstruct</c> the compiler synthesizes with the same parameter types.
     /// </summary>
     public static bool IsPrimaryConstructor(IMethodSymbol constructor) =>
-        constructor.DeclaringSyntaxReferences.Any(r =>
-            r.GetSyntax() is TypeDeclarationSyntax { ParameterList: not null }
-        );
-
-    /// <summary>
-    /// How many constructors <see cref="Extract"/> models for
-    /// <paramref name="type"/> (the main one plus its overloads).
-    /// </summary>
-    public static int ExplicitConstructorCount(INamedTypeSymbol type) =>
-        AllExplicitConstructors(type).Count;
+        constructor.DeclaringSyntaxReferences.IsEmpty
+            ? IsPositionalRecordConstructorInMetadata(constructor)
+            : constructor.DeclaringSyntaxReferences.Any(r =>
+                r.GetSyntax() is TypeDeclarationSyntax { ParameterList: not null }
+            );
 
     /// <summary>
     /// The accessibility the source declares for <paramref name="ctor"/>. A
@@ -121,8 +123,13 @@ public static class IrConstructorExtractor
     /// an abstract type's primary constructor only restates that the type
     /// cannot be instantiated.
     /// </summary>
+    /// <para>
+    /// Read from metadata, the implicit constructor is indistinguishable from
+    /// a declared one: an abstract type's <c>protected</c> parameterless
+    /// constructor, the one C# synthesizes, is taken as implicit and public.
+    /// </para>
     public static IrVisibility DeclaredVisibility(IMethodSymbol ctor) =>
-        IsPrimaryConstructor(ctor)
+        IsPrimaryConstructor(ctor) || IsImplicitAbstractConstructorInMetadata(ctor)
             ? IrVisibility.Public
             : IrVisibilityMapper.Map(ctor.DeclaredAccessibility);
 
@@ -177,11 +184,34 @@ public static class IrConstructorExtractor
             && IsPrimaryConstructor(constructor);
     }
 
+    /// <summary>
+    /// A record's synthesized copy constructor; read from metadata, where
+    /// nothing is implicitly declared, any one taking the record itself.
+    /// </summary>
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
-        ctor.IsImplicitlyDeclared
+        (ctor.IsImplicitlyDeclared || ctor.DeclaringSyntaxReferences.IsEmpty)
         && ctor.ContainingType.IsRecord
         && ctor.Parameters.Length == 1
         && SymbolEqualityComparer.Default.Equals(ctor.Parameters[0].Type, ctor.ContainingType);
+
+    private static bool IsPositionalRecordConstructorInMetadata(IMethodSymbol ctor) =>
+        ctor.ContainingType.IsRecord
+        && ctor.ContainingType.GetMembers("Deconstruct")
+            .OfType<IMethodSymbol>()
+            .Any(deconstruct =>
+                deconstruct
+                    .Parameters.Select(parameter => parameter.Type)
+                    .SequenceEqual(
+                        ctor.Parameters.Select(parameter => parameter.Type),
+                        SymbolEqualityComparer.Default
+                    )
+            );
+
+    private static bool IsImplicitAbstractConstructorInMetadata(IMethodSymbol ctor) =>
+        ctor.DeclaringSyntaxReferences.IsEmpty
+        && ctor.ContainingType.IsAbstract
+        && ctor.Parameters.IsEmpty
+        && ctor.DeclaredAccessibility == Accessibility.Protected;
 
     private static IrConstructorDeclaration BuildFromMethod(
         IMethodSymbol ctor,
@@ -217,7 +247,11 @@ public static class IrConstructorExtractor
         var visibility = DeclaredVisibility(ctor);
 
         if (compilation is null)
-            return new IrConstructorDeclaration(Parameters: parameters, Visibility: visibility);
+            return new IrConstructorDeclaration(
+                Parameters: parameters,
+                Visibility: visibility,
+                IsPrimary: IsPrimaryConstructor(ctor)
+            );
 
         // One map per constructor declaration (#398): the walk's root is the
         // whole declaration, so the `: base(...)` / `: this(...)` argument
@@ -243,7 +277,8 @@ public static class IrConstructorExtractor
                 target
             ),
             ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context, localNames),
-            Visibility: visibility
+            Visibility: visibility,
+            IsPrimary: IsPrimaryConstructor(ctor)
         );
     }
 

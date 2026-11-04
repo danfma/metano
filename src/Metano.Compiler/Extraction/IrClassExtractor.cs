@@ -114,6 +114,8 @@ public static class IrClassExtractor
             constructor = deferral.Constructor;
         }
 
+        constructor = WithFinalPrimaryChainTargets(constructor);
+
         return new IrClassDeclaration(
             type.Name,
             IrVisibilityMapper.Map(type.DeclaredAccessibility),
@@ -155,6 +157,52 @@ public static class IrClassExtractor
             IrExpressionExtractor.PrimaryCtorScope = previous;
         }
     }
+
+    /// <summary>
+    /// Points every <c>: this(...)</c> chain that ends in the primary
+    /// constructor at the final primary IR. A chain's target is built on its
+    /// own, before the capture annotations and the initializer deferral that
+    /// only the primary receives; without them, a backend inlining the chain
+    /// would skip the captured-field assignments and the moved initializers.
+    /// </summary>
+    private static IrConstructorDeclaration? WithFinalPrimaryChainTargets(
+        IrConstructorDeclaration? constructor
+    )
+    {
+        if (constructor is not { IsPrimary: true, Overloads: { Count: > 0 } overloads })
+            return constructor;
+
+        var primary = constructor with { Overloads = null };
+
+        return constructor with
+        {
+            Overloads = overloads
+                .Select(overload =>
+                    overload with
+                    {
+                        ThisChain = Retarget(overload.ThisChain, primary),
+                    }
+                )
+                .ToList(),
+        };
+    }
+
+    private static IrConstructorChain? Retarget(
+        IrConstructorChain? chain,
+        IrConstructorDeclaration primary
+    ) =>
+        chain switch
+        {
+            null => null,
+            { Target.IsPrimary: true } => chain with { Target = primary },
+            _ => chain with
+            {
+                Target = chain.Target with
+                {
+                    ThisChain = Retarget(chain.Target.ThisChain, primary),
+                },
+            },
+        };
 
     /// <summary>
     /// Surfaces the implicit-capture map produced by

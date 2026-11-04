@@ -34,8 +34,7 @@ public class IrToTsConstructorDispatcherBridgeTests
         var printed = PrintConstructor(
             IrToTsConstructorDispatcherBridge.Build(
                 ctor,
-                extendsBase: false,
-                keepsBaseMessage: false,
+                baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -73,8 +72,7 @@ public class IrToTsConstructorDispatcherBridgeTests
         var printed = PrintConstructor(
             IrToTsConstructorDispatcherBridge.Build(
                 ctor,
-                extendsBase: false,
-                keepsBaseMessage: false,
+                baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -101,8 +99,7 @@ public class IrToTsConstructorDispatcherBridgeTests
             .That(
                 IrToTsConstructorDispatcherBridge.Build(
                     ctor,
-                    extendsBase: false,
-                    keepsBaseMessage: false,
+                    baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                     IrToTsBridgeContext.For(null)
                 )
             )

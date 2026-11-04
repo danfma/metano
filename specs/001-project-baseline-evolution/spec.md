@@ -213,9 +213,13 @@ Product requirements added after the migration (normative; each one is traced by
      (`struct`, `record struct`) always emits a public constructor: C# gives it a public implicit
      parameterless constructor, so `new S()` is legal anywhere whatever it declares.
   2. *Mixed accessibility.* Every declared instance constructor, whatever its accessibility,
-     takes part in the emitted constructor: two or more go through the overload dispatcher (#435),
-     whose branch for a record positional or C# 12 primary constructor assigns the promoted
-     members. A TypeScript class has one constructor accessibility: every overload
+     takes part in the emitted constructor: two or more go through the overload dispatcher (#435).
+     C# makes every other constructor of a type with a record positional or C# 12 primary
+     constructor chain to it, so each branch inlines it: its promoted members are declared as
+     fields (a member that only reads the parameter is not emitted as a getter), and the branch
+     assigns them and the captured parameters' fields and runs the field and property
+     initializers that read a parameter, moved into it. A TypeScript class has one constructor
+     accessibility: every overload
      signature and the implementation must share it (TS2385). When a type's constructors mix
      accessibility, the backend MUST emit the most permissive mapped modifier (public, then
      protected, then private) and report `MS0060` (`MixedConstructorAccessibility`, warning)
@@ -241,10 +245,14 @@ Product requirements added after the migration (normative; each one is traced by
      also constructs `T`, rule 3 applies and the constructor stays public.
 
   A referenced package decides its own types' constructors: when a consumer's
-  `SerializerContext` constructs a referenced class none of whose constructors is public (read
-  from metadata, the positional record constructor counting as public), the backend MUST report
-  `MS0062` (`JsonContractConstructorNotPublic`, warning) at the context, since its `TypeSpec`
-  does not type-check.
+  `SerializerContext` constructs a referenced class whose constructor rules 1 and 2 make
+  non-public, the backend MUST report `MS0062` (`JsonContractConstructorNotPublic`, warning) at
+  the context, since its `TypeSpec` does not type-check. The check reads metadata with the
+  predicate the emitter uses: a record's positional constructor counts as public, and so does an
+  abstract type's `protected` parameterless constructor, the one C# synthesizes. Known false
+  positives, which metadata cannot tell apart: a type its package kept public under rule 3, and
+  an abstract class's C# 12 primary constructor (`protected` in metadata). Known false negative:
+  an abstract type's declared `protected` parameterless constructor.
 
 ### Key Entities
 

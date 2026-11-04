@@ -22,6 +22,11 @@ namespace Metano.Compiler.IR;
 /// primary constructor, whose accessibility the source cannot declare, and an
 /// implicit one are <see cref="IrVisibility.Public"/>. Each backend maps it to
 /// its own constructor access.</param>
+/// <param name="IsPrimary">Whether this is a record positional or C# 12
+/// primary constructor, declared by the type's parameter list: it has no body
+/// of its own, its promoted and captured parameters initialize members, and
+/// every other constructor of the type chains to it through
+/// <see cref="ThisChain"/>.</param>
 public sealed record IrConstructorDeclaration(
     IReadOnlyList<IrConstructorParameter> Parameters,
     IReadOnlyList<IrStatement>? Body = null,
@@ -29,7 +34,8 @@ public sealed record IrConstructorDeclaration(
     IReadOnlyList<IrConstructorDeclaration>? Overloads = null,
     IrExceptionConstruction? BaseExceptionConstruction = null,
     IrConstructorChain? ThisChain = null,
-    IrVisibility Visibility = IrVisibility.Public
+    IrVisibility Visibility = IrVisibility.Public,
+    bool IsPrimary = false
 );
 
 /// <summary>
