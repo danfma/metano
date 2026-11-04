@@ -104,7 +104,7 @@ define how `List<T>.Add` → `push`, etc.).
 This is the **only** assembly your user code depends on — everything else is
 build-time tooling.
 
-- Target: `net8.0;net9.0;net10.0` (multi-targeted)
+- Target: `net10.0` (.NET 8 and 9 are out of support; `net11.0` joins once the .NET 11 SDK is GA)
 - No dependencies beyond the netstandard BCL
 - Shipped as NuGet package `Metano`
 
