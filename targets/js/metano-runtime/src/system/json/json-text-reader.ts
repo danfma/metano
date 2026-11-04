@@ -133,8 +133,8 @@ export function parseJsonText(text: string): unknown {
 }
 
 /**
- * The tree `JSON.parse(text)` builds, except that a number with more than 15
- * significant digits is a `JsonNumberText` leaf. Strings are copied, so the
+ * The tree `JSON.parse(text)` builds, except that a number whose mantissa has
+ * more than 15 digits past a zero integer part is a `JsonNumberText` leaf. Strings are copied, so the
  * tree never keeps `text` alive (a slice would, on JavaScriptCore).
  */
 export function readJsonText(text: string): unknown {
@@ -594,8 +594,10 @@ function copiedString(text: string, start: number, end: number, escaped: boolean
 
 /**
  * The number `text` spells from `start` to `end`: a `number` when its
- * mantissa (from `mantissaStart` to `mantissaEnd`) has at most 15
- * significant digits, a `JsonNumberText` with a copy of its text otherwise.
+ * mantissa (from `mantissaStart` to `mantissaEnd`) has at most 15 digits
+ * past a zero integer part, a `JsonNumberText` with a copy of its text
+ * otherwise. Leading fraction zeros count: the decimal reader rounds a tie
+ * by its position in the text (`decimal-text.ts`), which a double loses.
  */
 function numberOf(
   text: string,
@@ -606,23 +608,25 @@ function numberOf(
 ): number | JsonNumberText {
   const source = text.slice(start, end);
 
-  if (significantDigitsOf(text, mantissaStart, mantissaEnd) <= DOUBLE_EXACT_DIGITS) {
+  if (textDigitsOf(text, mantissaStart, mantissaEnd) <= DOUBLE_EXACT_DIGITS) {
     return Number(source);
   }
 
   return new JsonNumberText(JSON.parse(`"${source}"`) as string);
 }
 
-/** The digits of the mantissa from its first non-zero one on; trailing zeros count. */
-function significantDigitsOf(text: string, start: number, end: number): number {
-  let digits = 0;
+/**
+ * The digits of the mantissa, without a zero integer part (JSON spells it as
+ * a single `0`): every significant digit, and the zeros before it in the
+ * fraction.
+ */
+function textDigitsOf(text: string, start: number, end: number): number {
+  const zeroIntegerPart = text.charCodeAt(start) === ZERO ? 1 : 0;
+  let digits = end - start - zeroIntegerPart;
 
   for (let index = start; index < end; index++) {
-    const code = text.charCodeAt(index);
-    const isSignificant = code !== DOT && (digits > 0 || code !== ZERO);
-
-    if (isSignificant) {
-      digits++;
+    if (text.charCodeAt(index) === DOT) {
+      digits--;
     }
   }
 
