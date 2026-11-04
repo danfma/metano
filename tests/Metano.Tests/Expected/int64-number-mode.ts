@@ -139,4 +139,12 @@ export class Ops {
 
     return f(3);
   }
+
+  defaults(a: number = 10, b: number = UInt64.maxValue, c: number = -1): number {
+    return a + b + c;
+  }
+
+  callDefaults(): string {
+    return this.defaults(undefined, 3, -1).toString() + this.defaults(undefined, undefined, 2) + this.defaults();
+  }
 }

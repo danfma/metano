@@ -53,6 +53,8 @@ public class Int64StagingSwitchTests
             public ulong[] Arr() => new ulong[] { 1, 2, 3 };
             public ulong Sum(List<ulong> xs) { ulong s = 0; foreach (var x in xs) s += x; return s; }
             public ulong Lambda() { Func<ulong, ulong> f = x => x * 2; return f(3); }
+            public ulong Defaults(ulong a = 10, ulong b = ulong.MaxValue, long c = -1) => a + b + (ulong)c;
+            public string CallDefaults() => Defaults(b: 3).ToString() + Defaults(c: 2) + Defaults();
         }
 
         [Transpile, GenerateGuard]
@@ -73,6 +75,23 @@ public class Int64StagingSwitchTests
         await Assert
             .That(files["ops.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("int64-number-mode.ts"));
+    }
+
+    /// <summary>
+    /// A named-argument call that skips a <c>ulong</c> default keeps the
+    /// shipped opaque default until the 64-bit literal slice (FR-071).
+    /// </summary>
+    [Test]
+    public async Task Dart_SkippedULongDefault_KeepsTheShippedOpaqueDefault()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(SixtyFourBitSource);
+
+        await Assert
+            .That(files["ops.dart"])
+            .Contains(
+                "this.defaults(/* default */ null, b: 3, -1).toString()"
+                    + " + this.defaults(/* default */ null, /* default */ null, c: 2)"
+            );
     }
 
     [Test]
