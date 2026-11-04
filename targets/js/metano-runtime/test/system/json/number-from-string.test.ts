@@ -341,6 +341,51 @@ describe("numbers from strings — decimal", () => {
   test("a JSON number still reads as before", () => {
     expect(readRoot(1.5, decimalRoot)).toBe(1.5);
   });
+
+  test("a JSON number outside the decimal range, or any other JSON value, is rejected", () => {
+    for (const value of [1e29, -1e29, true, {}]) {
+      expectJsonException(() => readRoot(value, decimalRoot), cannotConvertMessage("System.Decimal"));
+    }
+  });
+});
+
+describe("decimal — values built by the descriptor's type", () => {
+  /** Stands in for decimal.js `Decimal`, which the runtime does not depend on. */
+  class ExactDecimal {
+    constructor(readonly source: string | number) {}
+
+    toNumber(): number {
+      return Number(this.source);
+    }
+  }
+
+  const descriptor: TypeDescriptor = { kind: "decimal", type: ExactDecimal };
+
+  function readDecimal(data: unknown, readOptions?: JsonReadOptions): unknown {
+    return JsonSerializer.deserialize(data, { descriptor, readOptions });
+  }
+
+  test("a JSON number builds a value from the number", () => {
+    expect(readDecimal(1.25)).toEqual(new ExactDecimal(1.25));
+  });
+
+  test("a JSON string builds a value from the exact text when the context reads strings", () => {
+    expect(readDecimal("1.10", READS_NUMBERS)).toEqual(new ExactDecimal("1.10"));
+    expect(readDecimal("79228162514264337593543950335", READS_NUMBERS)).toEqual(
+      new ExactDecimal("79228162514264337593543950335"),
+    );
+  });
+
+  test("a string is rejected without the option, and null stays null", () => {
+    expectJsonException(() => readDecimal("1.10"), cannotConvertMessage("System.Decimal"));
+    expect(readDecimal(null)).toBeNull();
+  });
+
+  test("the value round-trips through toNumber()", () => {
+    const value = readDecimal("2.5", READS_NUMBERS);
+
+    expect(JsonSerializer.serialize(value, { descriptor })).toBe(2.5);
+  });
 });
 
 describe("numbers from strings — where the option applies", () => {
@@ -416,7 +461,13 @@ describe("numbers from strings — where the option applies", () => {
     const strict = numberRoot("System.Int32", {});
 
     expect(JsonSerializer.deserialize("5.5", strict)).toBe("5.5");
-    expect(JsonSerializer.deserialize("x", { descriptor: { kind: "decimal" } })).toBe("x");
+  });
+
+  test("without the option, a decimal rejects every string (measured: General, \"1\")", () => {
+    expectJsonException(
+      () => JsonSerializer.deserialize("1", { descriptor: { kind: "decimal" } }),
+      cannotConvertMessage("System.Decimal"),
+    );
   });
 
   test("writing is unaffected (FR-048 item 5)", () => {

@@ -737,8 +737,9 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   FR-033 / FR-047 add the getters (and their imports and `package.json` dependency) of closed
   generic and referenced-package types that were previously dangling `ref` / inlined bases,
   FR-009 removes a duplicated overridden property, FR-037 adds `valueType: true` to struct
-  contracts, and FR-048 changes contexts declared with `JsonSerializerDefaults.Web` (camelCase
-  names, read options, number hints). The types of call sites change with FR-034 (breaking,
+  contracts, FR-048 changes contexts declared with `JsonSerializerDefaults.Web` (camelCase
+  names, read options, number hints), and every `decimal` descriptor names its type
+  (`{ kind: "decimal", type: Decimal }`, DECIDED-23 f). The types of call sites change with FR-034 (breaking,
   FR-049).
 - **FR-041**: The runtime additions MUST be additive and exported from
   `metano-runtime/system/json` (`ValueSpec`, `JsonTypeInfo`, `PolymorphismSpec`, `DerivedTypeSpec`,
@@ -868,6 +869,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Integer-like property names in a polymorphic hierarchy | allowed | JS key order puts them first | Rejected, `MS0032` |
 | Array-index payload key (`"0"`) written **before** the tag | `JsonException` "The metadata property … not the first property …" (measured) | the tag is read as first (JS enumerates index keys first, so their position is lost) | Undetectable after `JSON.parse`; an index key after the tag reads as in STJ (DECIDED-21 i) |
 | `byte[]` | base64 string | number array | `MS0037`; follow-up issue (DECIDED-16) |
+| Writing a `decimal` | its exact digits as a JSON number (`1.10`, all 29 digits of `MaxValue`) | `toNumber()` (`1.1`, `7.922816251426434e+28`) | Documented (DECIDED-23 f); a string converter keeps every digit |
 | Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows compare the prefix |
 | Two properties whose JSON names differ only in case, case-insensitive context | `InvalidOperationException` "The JSON property name for 'Twins.A' collides with another property." at first use | both kept; a key fills the property listed last | Not reported; follow-up with the naming-collision issue (DECIDED-23 e) |
 | Case-insensitive names with characters whose casing differs between the JS engine's and .NET's Unicode version | .NET's tables | the engine's tables (Node 24: U+A7CF, U+A7D3, U+A7D5) | Engine-dependent (DECIDED-23 a) |
@@ -1276,9 +1278,21 @@ the former `OPEN-N`.
     `WriteAsString` / `AllowNamedFloatingPointLiterals` flags (FR-046, slice S6b). A
     `NumberHandling` that combines `AllowReadingFromString` with them still mirrors the reading
     flag.
-  - (f) A `decimal` read from a string returns the accepted text unchanged (`"1.10"` keeps its
-    scale): the built-in decimal converter never constructs a `Decimal` (the runtime has no
-    `decimal.js` dependency, so a JSON number also stays a number). A `Single` read from a string
+  - (f) Decimals (revised in review). Before S2b the built-in decimal converter returned the raw
+    JSON value, so a property typed `Decimal` held a `number` (and threw `toNumber is not a
+    function` when written back). The `decimal` descriptor now carries `type` (the mapped
+    decimal.js `Decimal`, `{ kind: "decimal", type: Decimal }`, as a temporal descriptor carries
+    `parse`), and the converter builds `new Decimal(value)` from a JSON number, or from the JSON
+    text when the context reads numbers from strings, so a string keeps every digit. A JSON
+    number outside the decimal range (`1e29`), a string without the option (measured under
+    `General`: `"1"` throws) and any other JSON value throw `The JSON value could not be converted
+    to System.Decimal.`; a hand-written descriptor without `type` keeps the JSON value. Writing
+    stays `toNumber()`: STJ writes the decimal's exact digits (measured: `1.10m` → `1.10`, `1.0m`
+    → `1.0`, `0.00m` → `0.00`, `79228162514264337593543950335m` and
+    `1.2345678901234567890123456789m` in full, `1e2` read → `100`), which a JS number cannot
+    carry through `JSON.stringify`; trailing zeros and digits beyond a double are a documented
+    divergence (`JSON.rawJSON` could write them but would change what `serialize` returns). A
+    `Single` read from a string
     keeps double precision, as one read from a JSON number does; only overflow is checked at
     single precision, against the exact text: the threshold `2^128 − 2^103` is itself a double,
     so a text that parses to it reads only when its exact value is below it (measured:

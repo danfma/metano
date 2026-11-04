@@ -56,6 +56,7 @@ interface TypeSpec<T> {
 }
 
 type PrimitiveDescriptor = { readonly kind: "primitive"; readonly numberType?: NumberTypeName }; // numberType new, optional
+type DecimalDescriptor = { readonly kind: "decimal"; readonly type?: new (value: string | number) => unknown }; // type new, optional (S2b)
 
 abstract class SerializerContext {
   protected get readOptions(): JsonReadOptions;                  // new; default {}
@@ -152,5 +153,5 @@ S2b completes `JsonReadOptions` (`propertyNameCaseInsensitive`, `numberHandling`
 `SerializerContext.readOptions` getter and its attachment by `createSpec` / `createValueSpec`, and
 guarantees 11 and 12. Keys match properties by `OrdinalIgnoreCase` rather than `toUpperCase()`, the
 discriminator a polymorphic read consumes is never a property, a nullable number names
-``System.Nullable`1[<CLR name>]`` in its error, and a `decimal` read from a string returns the text
-(DECIDED-23).
+``System.Nullable`1[<CLR name>]`` in its error, and a `decimal` descriptor's `type` builds the value
+from the JSON number or text (DECIDED-23 f).

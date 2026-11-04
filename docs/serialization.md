@@ -232,7 +232,7 @@ handles these kinds:
 |------|---------|-------------|----------------|
 | `primitive` | string, number, boolean | passthrough | passthrough; a JSON string for a numeric `numberType` when the context reads numbers from strings ([details](#web-defaults)) |
 | `temporal` | `Temporal.PlainDate`, etc. | `.toString()` | `Type.from(iso)` |
-| `decimal` | `Decimal` | `.toNumber()` (or string via custom converter) | the JSON value as is (a JSON string too, validated, when the context reads numbers from strings); wrap it with `new Decimal(...)` in a custom converter |
+| `decimal` | `Decimal` | `.toNumber()` (or string via custom converter) | `new Decimal(value)` from the JSON number, or from the JSON string when the context reads numbers from strings; anything else, or a value outside the decimal range, throws `The JSON value could not be converted to System.Decimal.` |
 | `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
@@ -390,9 +390,8 @@ reading numbers from strings. `PropertyNameCaseInsensitive = true`,
   ``System.Nullable`1[System.Int32]`` for `int?`). Enums, the text `"null"` for a
   nullable number, dictionary keys and integer type discriminators never read
   strings, as in .NET. Writing is unchanged: numbers are written as JSON
-  numbers. A `decimal` read from a string keeps the text (`"1.10"`); the
-  built-in decimal converter never builds a `Decimal`, so register a custom
-  `decimal` converter to get one.
+  numbers. A `decimal` read from a string is built from the exact text, so
+  `"1.2345678901234567890123456789"` keeps every digit.
 - **Out-of-order metadata.** `AllowOutOfOrderMetadataProperties = true` lets the
   type discriminator follow other properties ([details](#runtime-dispatch)).
 - **Divergences.** For a property bound to a constructor parameter (a record's
@@ -449,9 +448,14 @@ class MyContext extends SerializerContext {
 }
 ```
 
-The default `decimal` converter uses `.toNumber()`, which can lose precision for
-large/high-precision values. Use the custom converter above to serialize as
-strings for safety.
+The default `decimal` converter reads a JSON number (or, with
+`AllowReadingFromString`, a JSON string) into a `Decimal`, and writes it with
+`.toNumber()`. .NET writes a decimal's exact digits as a JSON number
+(`1.10m` → `1.10`, `79228162514264337593543950335m` → all 29 digits), which
+`JSON.stringify` cannot produce from a JS number: the default converter writes
+`1.1` and `7.922816251426434e+28`, and a JSON number read with more digits than
+a double holds is rounded by `JSON.parse` before the converter sees it. Use the
+custom converter above to serialize as strings when every digit matters.
 
 ## Inheritance
 

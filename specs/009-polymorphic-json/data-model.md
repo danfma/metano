@@ -145,6 +145,12 @@ export type NumberTypeName =
 // numbers from strings, FR-048):
 export type PrimitiveDescriptor = { readonly kind: "primitive"; readonly numberType?: NumberTypeName };
 
+// S2b (DECIDED-23 f): the decimal.js `Decimal` the converter builds from the JSON number or text.
+export type DecimalDescriptor = {
+  readonly kind: "decimal";
+  readonly type?: new (value: string | number) => unknown;
+};
+
 export interface TypeSpec<T = unknown> {
   // …existing members unchanged…
   readonly polymorphism?: PolymorphismSpec;

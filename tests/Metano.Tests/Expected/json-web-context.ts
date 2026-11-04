@@ -126,7 +126,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "amount",
           json: "amount",
-          type: { kind: "decimal" },
+          type: { kind: "decimal", type: Decimal },
         },
         {
           ts: "total",
