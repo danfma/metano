@@ -55,10 +55,16 @@ const SINGLE_OVERFLOW: Bound = { limit: 2n ** 128n - 2n ** 103n, scale: 0 };
 const SINGLE_OVERFLOW_AS_DOUBLE = Number(SINGLE_OVERFLOW.limit);
 
 /** A matched number text as `significand × 10^exponent`, without its sign. */
-interface ExactValue {
+export interface SignificandParts {
   /** The significant digits without leading zeros; empty for zero. */
   readonly significand: string;
   readonly exponent: number;
+  /**
+   * The zeros that open the fraction when the integer part is zero (`0.001`
+   * has 2); 0 otherwise. System.Decimal rounds a tie by a position that
+   * counts them (`decimal-text.ts`).
+   */
+  readonly leadingFractionZeros: number;
 }
 
 /** Reads a JSON string as a number, or `undefined` when the grammar rejects it. */
@@ -130,7 +136,7 @@ function fitsSingle(parts: RegExpExecArray, value: number): boolean {
     return magnitude < SINGLE_OVERFLOW_AS_DOUBLE;
   }
 
-  return isBelow(exactValueOf(parts), SINGLE_OVERFLOW);
+  return isBelow(significandPartsOf(parts), SINGLE_OVERFLOW);
 }
 
 const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = {
@@ -158,18 +164,22 @@ export function readNumberText(text: string, numberType: NumberTypeName): number
   return NUMBER_TEXT_READERS[numberType](text);
 }
 
-function exactValueOf(parts: RegExpExecArray): ExactValue {
+/** The digits of a matched number text as `significand × 10^exponent`, without its sign. */
+export function significandPartsOf(parts: RegExpExecArray): SignificandParts {
   const { integer = "", fraction = "", bareFraction = "", exponent = "0" } = parts.groups ?? {};
   const fractionDigits = fraction + bareFraction;
+  const integerIsZero = integer.replace(LEADING_ZEROS_PATTERN, "") === "";
+  const significantFraction = fractionDigits.replace(LEADING_ZEROS_PATTERN, "");
 
   return {
     significand: (integer + fractionDigits).replace(LEADING_ZEROS_PATTERN, ""),
     exponent: Number(exponent) - fractionDigits.length,
+    leadingFractionZeros: integerIsZero ? fractionDigits.length - significantFraction.length : 0,
   };
 }
 
 /** Whether `value` is strictly below `bound`. */
-function isBelow(value: ExactValue, bound: Bound): boolean {
+function isBelow(value: SignificandParts, bound: Bound): boolean {
   return compareMagnitude(value, bound) < 0;
 }
 
@@ -177,7 +187,7 @@ function isBelow(value: ExactValue, bound: Bound): boolean {
  * The sign of `value − bound`, computed exactly: the digit counts decide
  * first, so a huge exponent never builds a huge power of ten.
  */
-function compareMagnitude(value: ExactValue, bound: Bound): number {
+function compareMagnitude(value: SignificandParts, bound: Bound): number {
   if (value.significand === "") {
     return -1;
   }

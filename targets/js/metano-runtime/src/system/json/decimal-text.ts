@@ -1,4 +1,4 @@
-import { REAL_NUMBER_PATTERN } from "./number-from-string.ts";
+import { REAL_NUMBER_PATTERN, significandPartsOf } from "./number-from-string.ts";
 
 /**
  * How System.Text.Json reads a number text as a `System.Decimal` (#457),
@@ -36,7 +36,9 @@ const TIE_ROUNDS_UP_FROM = 29;
 /** A text with at most this many significant digits and scale is held as written. */
 const EXACT_DIGITS = 28;
 
-const LEADING_ZEROS = /^0+/;
+const MINUS = 0x2d;
+
+const ZERO = 0x30;
 
 const TRAILING_ZEROS = /0+$/;
 
@@ -53,25 +55,22 @@ export function readDecimalText(text: string): string | undefined {
     return undefined;
   }
 
-  const { integer = "", fraction = "", bareFraction = "", exponent = "0" } = parts.groups ?? {};
-  const fractionDigits = fraction + bareFraction;
-  const withLeading = (integer + fractionDigits).replace(LEADING_ZEROS, "");
-  const digits = withLeading.replace(TRAILING_ZEROS, "");
-  const integerIsZero = integer.replace(LEADING_ZEROS, "") === "";
-  const leadingFractionZeros = integerIsZero
-    ? fractionDigits.length - fractionDigits.replace(LEADING_ZEROS, "").length
-    : 0;
-  const negative = text.charCodeAt(0) === 45;
+  const { significand, exponent, leadingFractionZeros } = significandPartsOf(parts);
+  const digits = significand.replace(TRAILING_ZEROS, "");
+  const negative = text.charCodeAt(0) === MINUS;
 
   if (digits === "") {
     return negative ? "-0" : "0";
   }
 
   // The decimal point sits `pointPosition` digits after the first significant one.
-  const pointPosition = withLeading.length - fractionDigits.length + Number(exponent);
+  const pointPosition = significand.length + exponent;
   const scale = digits.length - pointPosition;
 
-  if (digits.length <= EXACT_DIGITS && pointPosition <= EXACT_DIGITS && scale <= MAX_SCALE) {
+  const isHeldAsWritten =
+    digits.length <= EXACT_DIGITS && pointPosition <= EXACT_DIGITS && scale <= MAX_SCALE;
+
+  if (isHeldAsWritten) {
     return text;
   }
 
@@ -107,17 +106,20 @@ function roundToDecimal(
   let kept = 0;
   let exponent = pointPosition;
 
-  const digitAt = (index: number) => (index < digits.length ? digits.charCodeAt(index) - 48 : 0);
+  const digitAt = (index: number) => (index < digits.length ? digits.charCodeAt(index) - ZERO : 0);
 
-  const takesDigit = () =>
-    (exponent > 0 || (kept < digits.length && exponent > -MAX_SCALE)) &&
-    (integer < LAST_EXTENSIBLE || (integer === LAST_EXTENSIBLE && digitAt(kept) <= 5));
+  // Integer digits always fit the scale; fraction digits while it stays at most 28.
+  const hasScaleRoom = () => exponent > 0 || (kept < digits.length && exponent > -MAX_SCALE);
+
+  const hasIntegerRoom = () =>
+    integer < LAST_EXTENSIBLE || (integer === LAST_EXTENSIBLE && digitAt(kept) <= 5);
 
   // Past the last digit, the integer takes zeros up to the decimal point.
-  while (takesDigit()) {
+  while (hasScaleRoom() && hasIntegerRoom()) {
     integer = integer * 10n + BigInt(digitAt(kept));
-    kept += kept < digits.length ? 1 : 0;
     exponent--;
+
+    if (kept < digits.length) kept++;
   }
 
   if (kept < digits.length && roundsUp(digits, kept, leadingFractionZeros, integer)) {
@@ -146,7 +148,7 @@ function roundsUp(
   leadingFractionZeros: number,
   integer: bigint,
 ): boolean {
-  const digit = digits.charCodeAt(next) - 48;
+  const digit = digits.charCodeAt(next) - ZERO;
 
   if (digit !== 5) {
     return digit > 5;

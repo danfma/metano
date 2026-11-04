@@ -76,7 +76,11 @@ export const DECIMAL_READ_ROWS: readonly DecimalReadRow[] = [
     stj: "-879.7782493740287605295911519",
     web: true,
   },
-  { json: '"0.0123456789012345678901234567850e1"', stj: "0.1234567890123456789012345679", web: true },
+  {
+    json: '"0.0123456789012345678901234567850e1"',
+    stj: "0.1234567890123456789012345679",
+    web: true,
+  },
   { json: "9.9999999999999999999999999999", stj: "10.000000000000000000000000000", metano: "10" },
   { json: "0.99999999999999999999999999995", stj: "1.0000000000000000000000000000", metano: "1" },
   // Strings: rejected by default, read with the same grammar and rounding under Web.

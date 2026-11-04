@@ -8,13 +8,11 @@
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { MEMORY_OPERATIONS } from "./memory-operations.ts";
 import { payloadFileOf } from "./order-payload.ts";
 
 /** Fresh processes per memory measurement; the median is reported. */
 const MEMORY_REPEATS = 3;
-
-/** The operations of `memory-probe.ts`. */
-const MEMORY_OPERATIONS = ["read", "read-text", "read-full", "write"];
 
 const NODE_FLAGS = ["--expose-gc", "--experimental-transform-types", "--no-warnings"];
 

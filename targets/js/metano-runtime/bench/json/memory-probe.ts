@@ -13,6 +13,7 @@
  *        node --expose-gc --experimental-transform-types memory-probe.ts <size> <operation>
  */
 import { JsonSerializer } from "../../src/system/json/index.ts";
+import type { MemoryOperation } from "./memory-operations.ts";
 import { ordersSpec } from "./order-schema.ts";
 import { payloadTextOf } from "./order-payload.ts";
 import { collectGarbage, peakRssMb, runtimeName } from "./runtime-probe.ts";
@@ -20,14 +21,14 @@ import { collectGarbage, peakRssMb, runtimeName } from "./runtime-probe.ts";
 const size = process.argv[2] ?? "10m";
 const operation = process.argv[3] ?? "read";
 
-const OPERATIONS: Readonly<Record<string, () => Measurement>> = {
+const OPERATIONS: Readonly<Record<MemoryOperation, () => Measurement>> = {
   read: measureRead,
   "read-text": () => measureTextRead(payloadTextOf(size)),
   "read-full": () => measureTextRead(payloadTextOf(size, "full")),
   write: measureWrite,
 };
 
-const measureOperation = OPERATIONS[operation];
+const measureOperation = OPERATIONS[operation as MemoryOperation];
 
 if (!measureOperation) {
   throw new Error(`Unknown operation '${operation}'. Known: ${Object.keys(OPERATIONS)}.`);
