@@ -262,13 +262,17 @@ const json = JsonSerializer.serialize(todo, JsonContext.default.todoItem);
 
 const parsed = JsonSerializer.deserialize(json, JsonContext.default.todoItem);
 // → TodoItem { title: "Write docs", completed: false, priority: "high" }
+
+// From JSON text, as .NET's Deserialize(string): decimals keep every digit,
+// invalid text throws JsonException with .NET's message.
+const fromText = JsonSerializer.deserializeText(text, JsonContext.default.todoItem);
 ```
 
 **Built-in type descriptors:**
 
 - `primitive` — string, number, boolean passthrough
 - `temporal` — `Temporal.*` types via `toString()` / `parse()`
-- `decimal` — `decimal.js` via `toNumber()` / `new Decimal()`
+- `decimal` — `decimal.js`: written with its exact digits (`JSON.rawJSON`), read with `new Decimal()` (exactly through `deserializeText`)
 - `map` — `Map<K,V>` ↔ plain object
 - `array` — `T[]` with recursive element handling
 - `hashSet` — `HashSet<T>` ↔ array

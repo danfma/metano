@@ -105,7 +105,17 @@ const wire = JsonSerializer.serialize(todo, JsonContext.default.todoItem);
 // JSON → TS
 const parsed = JsonSerializer.deserialize(wire, JsonContext.default.todoItem);
 // → TodoItem { title: "Write docs", completed: false, priority: "high" }
+
+// JSON text → TS, as STJ's Deserialize(string): decimals keep every digit
+const fromText = JsonSerializer.deserializeText(
+  JSON.stringify(wire),
+  JsonContext.default.todoItem,
+);
 ```
+
+`deserialize` takes the tree `JSON.parse` built; `deserializeText` takes the
+JSON text, reads each `decimal` from its exact digits and throws .NET's
+`JsonException` messages for invalid text ([details](#exact-reads)).
 
 ## What the transpiler does
 
@@ -236,7 +246,7 @@ handles these kinds:
 |------|---------|-------------|----------------|
 | `primitive` | string, number, boolean | passthrough | passthrough; a JSON string for a numeric `numberType` when the context reads numbers from strings ([details](#web-defaults)) |
 | `temporal` | `Temporal.PlainDate`, etc. | `.toString()` | `Type.from(iso)` |
-| `decimal` | `Decimal` | `JSON.rawJSON(value.toFixed())`: its exact digits as a JSON number ([details](#decimals)) | `new Decimal(value)` from the JSON number, or from the JSON string when the context reads numbers from strings; anything else, or a value outside the decimal range, throws `The JSON value could not be converted to System.Decimal.` |
+| `decimal` | `Decimal` | `JSON.rawJSON(value.toFixed())`: its exact digits as a JSON number ([details](#decimals)) | `new Decimal(…)` from the JSON number (its exact digits through `deserializeText`), or from the JSON string when the context reads numbers from strings, rounded as .NET rounds it; anything else, or a value outside the decimal range, throws `The JSON value could not be converted to System.Decimal.` |
 | `bytes` | `number[]` (C# `byte[]`) | padded standard base64, one line (`[1,2,3]` → `"AQID"`) | base64 as System.Text.Json reads it: space, tab, CR and LF ignored; anything else invalid throws `The JSON value could not be converted to System.Byte[].` |
 | `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
@@ -497,7 +507,8 @@ reading numbers from strings. `PropertyNameCaseInsensitive = true`,
   strings, as in .NET. Writing is unchanged: numbers are written as JSON
   numbers. A `decimal` read from a string is built from the exact text, so
   `"1.2345678901234567890123456789"` keeps its significant digits (trailing
-  zeros are dropped: `"1.10"` reads as `1.1`).
+  zeros are dropped: `"1.10"` reads as `1.1`), rounded to 28 decimal places as
+  .NET rounds it (`"1e-29"` reads as `0`).
 - **Out-of-order metadata.** `AllowOutOfOrderMetadataProperties = true` lets the
   type discriminator follow other properties ([details](#runtime-dispatch)).
 - **Divergences.** For a property bound to a constructor parameter (a record's
@@ -580,11 +591,10 @@ creating the `JSON.rawJSON` leaves, and the same 8.8–9.1 ms on Node 24.11.
 
 Limits:
 
-- **Reads still go through `JSON.parse`**, which rounds a JSON number to a
-  double before the converter sees it, so `12345678901234567890.123456789`
-  reads as `12345678901234567000` (#457 tracks exact reads). A `decimal` read
-  from a string (`AllowReadingFromString`, or the string converter above) keeps
-  every digit.
+- **`deserialize` reads the tree `JSON.parse` built**, which has already
+  rounded every JSON number to a double, so `12345678901234567890.123456789`
+  reads as `12345678901234567000` there. Read the text with `deserializeText`
+  to keep every digit ([Exact reads](#exact-reads)).
 - **Engines without `JSON.rawJSON`.** The runtime detects `JSON.rawJSON` once
   when it loads (Node 24 and Bun 1.4.2 have it). Without it, decimals are
   written with `toNumber()`, as before 3.0: `7.922816251426434e+28` for
@@ -597,6 +607,46 @@ Limits:
 - A value without `toFixed` is written with `toNumber()`. A hand-written
   descriptor without `type` keeps the raw JSON number or string it read and
   writes it back as is.
+
+### Exact reads
+
+`JsonSerializer.deserializeText(text, spec)` (and
+`JsonSerializer.withContext(ctx).deserializeText(text, spec)`) reads JSON text
+as .NET's `JsonSerializer.Deserialize(string, JsonTypeInfo<T>)` does:
+
+```typescript
+const order = JsonSerializer.deserializeText(
+  '{"total":12345678901234567890.123456789}',
+  JsonContext.default.order,
+);
+order.total.toFixed(); // "12345678901234567890.123456789"
+```
+
+- **Decimals** are built from their source digits and rounded as .NET rounds
+  them: at most 28 decimal places and 96 bits, half to even (`2.5e-28` reads as
+  `2e-28`, `1e-29` as `0`), and a value that rounds past `MaxValue`
+  (`79228162514264337593543950335.5`) throws `The JSON value could not be
+  converted to System.Decimal.`. Every other value reads as `JSON.parse` reads
+  it, custom converters included: a `double` or `long` property still gets a JS
+  `number`.
+- **The path is chosen per spec.** A spec with no `decimal` anywhere in its
+  closure reads `JSON.parse(text)`, at the same cost as before. A spec with one
+  reads `JSON.parse(text)` too unless the text may hold a number of more than
+  15 significant digits, which only the runtime's tokenizer keeps exactly. On a
+  10 MB `Order[]` (`bun run bench:json`, Node 24.11 / Bun 1.4.2), prices of two
+  decimal places read in 123.5 / 83.9 ms against 114.7 / 78.1 ms through
+  `JSON.parse` + `deserialize`; prices of 20 or more significant digits read
+  exactly in 237.9 / 139.4 ms, against 124.0 / 84.1 ms for the inexact tree.
+- **Invalid text** throws `JsonException` with .NET's reader message (`'}' is
+  an invalid start of a value.`, `Expected depth to be zero at the end of the
+  JSON payload. …`), not the engine's `SyntaxError`. The runtime accepts what
+  `JSON.parse` accepts, so lone surrogates in strings, which .NET rejects, are
+  read. The text is read whole before the contract, so a syntax error is
+  reported before a contract error that precedes it in the text.
+- **Depth.** When the text is tokenized, a container nested past 64 levels
+  throws anywhere in the document, as .NET's reader does; through `JSON.parse`,
+  only the containers the contract reads count ([Errors and
+  limits](#errors-and-limits)).
 
 ### Migrating to 3.0
 
@@ -929,7 +979,13 @@ The depth limit is System.Text.Json's default `MaxDepth` of 64: 64 nested
 objects, arrays and dictionaries are written and read, the 65th throws; scalars
 never count. On read, only the containers the contract visits count; a deeply
 nested value under a key the contract does not declare is skipped without being
-counted, where the STJ reader would throw.
+counted, where the STJ reader would throw, unless `deserializeText` tokenizes
+the text ([Exact reads](#exact-reads)), which counts the whole document.
+
+Invalid JSON text passed to `deserializeText` throws `JsonException` with the
+STJ reader's message (`'x' is an invalid start of a value.`); `deserialize`
+takes an already parsed value, so `JSON.parse` throws its own `SyntaxError`
+first.
 
 On write, Metano is a hybrid of STJ's two modes. Its boundary is the one of a
 source-generated context at its default (fast-path) settings, which also writes

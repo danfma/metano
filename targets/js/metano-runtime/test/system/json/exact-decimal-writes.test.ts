@@ -47,8 +47,9 @@ describe("JsonSerializer — decimal writes match System.Text.Json (#458)", () =
       expect(treeRoundTripOf(row)?.equals(new Decimal(row.text))).toBe(true);
     });
 
-    // JSON.parse reads the written text as a double, so the text round-trip
-    // is exact only for values a double holds; exact reads are #457.
+    // JSON.parse reads the written text as a double, so this round-trip is
+    // exact only for values a double holds; deserializeText reads the text
+    // exactly (exact-decimal-reads.test.ts, #457).
     test(`${row.csharp} round-trips through the text as JSON.parse reads it`, () => {
       const read = JsonSerializer.deserialize(JSON.parse(writtenTextOf(row)), decimalSpec);
 

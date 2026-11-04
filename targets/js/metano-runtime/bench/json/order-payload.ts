@@ -34,8 +34,21 @@ const NOTES = [
   "Entregar após às 18h — obrigado!",
 ];
 
+/**
+ * How the payload writes `total` and `unitPrice`: `cents`, two decimal
+ * places, which a double holds exactly; `full`, 18 more fraction digits
+ * (20 significant digits or more, like a `decimal` computed by a division),
+ * which only an exact read keeps (#457).
+ */
+export type PricePrecision = "cents" | "full";
+
+/** The prices of a generated payload, with their two decimal places. */
+const PRICE_PATTERN = /"(total|unitPrice)":(\d+\.\d\d)/g;
+
+const EXTRA_PRICE_DIGITS = 18;
+
 /** The path of the payload file of `label`, generated on first use. */
-export function payloadFileOf(label: string): string {
+export function payloadFileOf(label: string, precision: PricePrecision = "cents"): string {
   const bytes = PAYLOAD_SIZES[label];
 
   if (bytes === undefined) {
@@ -43,19 +56,31 @@ export function payloadFileOf(label: string): string {
   }
 
   const directory = join(tmpdir(), "metano-json-bench");
-  const path = join(directory, `orders-${label}.json`);
+  const suffix = precision === "full" ? "-full" : "";
+  const path = join(directory, `orders-${label}${suffix}.json`);
 
   if (!existsSync(path)) {
+    const payload = ordersPayloadOf(bytes);
+
     mkdirSync(directory, { recursive: true });
-    writeFileSync(path, ordersPayloadOf(bytes));
+    writeFileSync(path, precision === "full" ? withFullPrecisionPrices(payload) : payload);
   }
 
   return path;
 }
 
 /** The payload text of `label`. */
-export function payloadTextOf(label: string): string {
-  return readFileSync(payloadFileOf(label), "utf8");
+export function payloadTextOf(label: string, precision: PricePrecision = "cents"): string {
+  return readFileSync(payloadFileOf(label, precision), "utf8");
+}
+
+function withFullPrecisionPrices(payload: string): string {
+  const random = seededRandom(457);
+
+  const extraDigits = () =>
+    Array.from({ length: EXTRA_PRICE_DIGITS }, () => random.int(0, 9)).join("");
+
+  return payload.replace(PRICE_PATTERN, (_, name, cents) => `"${name}":${cents}${extraDigits()}`);
 }
 
 function ordersPayloadOf(targetBytes: number): string {
