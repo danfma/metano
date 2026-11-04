@@ -38,12 +38,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public sealed class IrToTsClassEmitter(
     TypeScriptTransformContext context,
-    ConstructorAccessFacts constructorAccess
+    ConstructorAccessFacts constructorAccessFacts
 )
 {
     private readonly TypeScriptTransformContext _context = context;
-    private readonly ConstructorAccessPolicy _constructorAccess = new(
-        constructorAccess,
+    private readonly ConstructorAccessPolicy _constructorAccessPolicy = new(
+        constructorAccessFacts,
         context.ReportDiagnostic
     );
 
@@ -82,7 +82,12 @@ public sealed class IrToTsClassEmitter(
             lowering
         );
 
-        var explicitCtors = IrConstructorExtractor.PublicExplicitConstructors(type);
+        var explicitCtors = IrConstructorExtractor.AllExplicitConstructors(type);
+
+        // A dispatcher's `(...args)` implementation declares no parameter
+        // properties, so the promoted members are emitted as ordinary members.
+        var parameterPropertyCtor = explicitCtors.Count > 1 ? null : ir.Constructor;
+
         var constructor = BuildClassConstructor(
             type,
             ir,
@@ -93,7 +98,7 @@ public sealed class IrToTsClassEmitter(
             lowering
         ) with
         {
-            Accessibility = _constructorAccess.Resolve(type, ir.Constructor),
+            Accessibility = _constructorAccessPolicy.ResolveAndReport(type, ir),
         };
 
         var classMembers = new List<TsClassMember>();
@@ -101,8 +106,8 @@ public sealed class IrToTsClassEmitter(
         if (keepsBaseMessage)
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
 
-        EmitPromotedParamsCompanionFields(ir.Constructor, classMembers);
-        EmitClassMembers(ir, classMembers, keepsBaseMessage, lowering);
+        EmitPromotedParamsCompanionFields(parameterPropertyCtor, classMembers);
+        EmitClassMembers(ir, parameterPropertyCtor, classMembers, keepsBaseMessage, lowering);
         EmitDeferredOperatorsAndMethods(type, ir, classMembers, lowering);
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
 
@@ -132,7 +137,7 @@ public sealed class IrToTsClassEmitter(
         INamedTypeSymbol type,
         IrClassDeclaration ir,
         IReadOnlyList<TsConstructorParam> ctorParams,
-        List<IMethodSymbol> explicitCtors,
+        IReadOnlyList<IMethodSymbol> explicitCtors,
         TsType? extendsType,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering
@@ -145,7 +150,12 @@ public sealed class IrToTsClassEmitter(
             // build-time diagnostic and emit an empty constructor stub —
             // crashing here would abort the whole transpile for an otherwise
             // valid type, and silently dropping the type would hide the gap.
-            return TryBuildConstructorDispatcherFromIr(ir.Constructor, keepsBaseMessage, lowering)
+            return TryBuildConstructorDispatcherFromIr(
+                    ir.Constructor,
+                    extendsType is not null,
+                    keepsBaseMessage,
+                    lowering
+                )
                 ?? EmitUnsupportedConstructor(
                     type,
                     $"Constructor overload group on '{type.Name}' contains constructs the IR "
@@ -163,7 +173,8 @@ public sealed class IrToTsClassEmitter(
 
     /// <summary>
     /// Walks <see cref="IrClassDeclaration.Members"/> and emits fields,
-    /// properties (except those covered by a promoted ctor param), and
+    /// properties (except those <paramref name="parameterPropertyCtor"/>
+    /// declares as parameter properties), and
     /// events into <paramref name="classMembers"/>. Operators and
     /// methods are deferred — <see cref="EmitDeferredOperatorsAndMethods"/>
     /// runs them after this pass so the final layout keeps the
@@ -172,12 +183,13 @@ public sealed class IrToTsClassEmitter(
     /// </summary>
     private void EmitClassMembers(
         IrClassDeclaration ir,
+        IrConstructorDeclaration? parameterPropertyCtor,
         List<TsClassMember> classMembers,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering
     )
     {
-        var promotedNames = IrToTsClassBridge.PromotedMemberNames(ir.Constructor);
+        var promotedNames = IrToTsClassBridge.PromotedMemberNames(parameterPropertyCtor);
 
         foreach (var irMember in ir.Members ?? [])
         {
@@ -280,7 +292,7 @@ public sealed class IrToTsClassEmitter(
     private void EmitSynthesizedMembers(
         INamedTypeSymbol type,
         IrClassDeclaration ir,
-        List<IMethodSymbol> explicitCtors,
+        IReadOnlyList<IMethodSymbol> explicitCtors,
         List<TsClassMember> classMembers,
         IrToTsBridgeContext lowering
     )
@@ -696,10 +708,13 @@ public sealed class IrToTsClassEmitter(
     /// <see cref="IrToTsConstructorDispatcherBridge"/>. Returns <c>null</c>
     /// when the IR pipeline cannot lower the constructor group (no overloads,
     /// or any body fails <see cref="IrBodyCoverageProbe"/>); the caller emits
-    /// an unsupported stub and surfaces the gap as a diagnostic.
+    /// an unsupported stub and surfaces the gap as a diagnostic. A constructor
+    /// without a body — a record positional or C# 12 primary constructor —
+    /// is covered: its branch assigns the promoted and captured parameters.
     /// </summary>
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
         IrConstructorDeclaration? primary,
+        bool extendsBase,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering
     )
@@ -711,11 +726,16 @@ public sealed class IrToTsClassEmitter(
 
         foreach (var ctor in new[] { primary }.Concat(primary.Overloads))
         {
-            if (ctor.Body is null || !IrBodyCoverageProbe.IsFullyCovered(ctor.Body))
+            if (ctor.Body is { } body && !IrBodyCoverageProbe.IsFullyCovered(body))
                 return null;
         }
 
-        return IrToTsConstructorDispatcherBridge.Build(primary, keepsBaseMessage, lowering);
+        return IrToTsConstructorDispatcherBridge.Build(
+            primary,
+            extendsBase,
+            keepsBaseMessage,
+            lowering
+        );
     }
 
     /// <summary>

@@ -561,8 +561,9 @@ Constructor access: a class with a `TypeSpec` in the context is passed as
 body, so its constructor stays public even when C# declares it `private` or
 `protected` (warning `MS0061`, FR-049). Other classes keep their constructor's
 `private` / `protected` modifier. A context that claims a type from a referenced
-package whose constructor is non-public does not type-check: that package
-decided the modifier when it was transpiled.
+package with no public constructor does not type-check, because that package
+decided the modifier when it was transpiled; the transpiler reports `MS0062` at
+the context.
 
 ## When to use `[PlainObject]` vs `JsonSerializerContext`
 

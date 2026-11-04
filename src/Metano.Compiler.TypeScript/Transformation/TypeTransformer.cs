@@ -397,7 +397,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         new JsonBrandedFactoryValidator(transpilableTypes, ReportDiagnostic).Validate();
 
-        _constructorAccess = CollectConstructorAccessFacts(transpilableTypes);
+        _constructorAccessFacts = CollectConstructorAccessFacts(transpilableTypes);
 
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();
@@ -454,7 +454,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             perGroupClosure =
                 cachedGroups is null && CacheOutputDir is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
-                    : ComputePerGroupClosure(ir, groups, _constructorAccess);
+                    : ComputePerGroupClosure(ir, groups, _constructorAccessFacts);
             var perGroupResults = new TsSourceFile?[groups.Count];
             perGroupEmissions = new GroupEmission[groups.Count];
             var skippedGroupCount = 0;
@@ -600,7 +600,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
     private PathNaming _pathNaming = new("");
-    private ConstructorAccessFacts _constructorAccess = ConstructorAccessFacts.Empty;
+    private ConstructorAccessFacts _constructorAccessFacts = ConstructorAccessFacts.Empty;
 
     /// <summary>
     /// Built once after the setup phase of <see cref="TransformAll"/> completes.
@@ -756,15 +756,26 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// The FR-049 constructor facts over every emitted type, nested ones
     /// included, and the classes each <c>SerializerContext</c> constructs.
+    /// Reports <c>MS0062</c> for a constructed class of a referenced assembly
+    /// that has no public constructor.
     /// </summary>
     private ConstructorAccessFacts CollectConstructorAccessFacts(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes
-    ) =>
-        ConstructorAccessFacts.Collect(
-            compilation,
-            transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList(),
-            JsonConstructedTypesOf
+    )
+    {
+        var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
+        var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);
+
+        new JsonReferencedConstructorValidator(compilation.Assembly, ReportDiagnostic).Validate(
+            jsonConstructedTypes
         );
+
+        return ConstructorAccessFacts.Collect(
+            compilation,
+            emittedTypes,
+            context => jsonConstructedTypes.GetValueOrDefault(context) ?? []
+        );
+    }
 
     private IEnumerable<INamedTypeSymbol> WithEmittedNestedTypes(INamedTypeSymbol type) =>
         type.GetTypeMembers()
@@ -772,10 +783,23 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .SelectMany(WithEmittedNestedTypes)
             .Prepend(type);
 
-    private IEnumerable<INamedTypeSymbol> JsonConstructedTypesOf(INamedTypeSymbol type) =>
-        IsJsonSerializerContextType(type)
-            ? new JsonSerializerContextTransformer(Context).ConstructedTypesOf(type)
-            : [];
+    private Dictionary<
+        INamedTypeSymbol,
+        IReadOnlyList<INamedTypeSymbol>
+    > JsonConstructedTypesByContext(IReadOnlyList<INamedTypeSymbol> emittedTypes)
+    {
+        var contextTransformer = new JsonSerializerContextTransformer(Context);
+
+        return emittedTypes
+            .Where(IsJsonSerializerContextType)
+            .ToDictionary(
+                context => context,
+                context =>
+                    (IReadOnlyList<INamedTypeSymbol>)
+                        contextTransformer.ConstructedTypesOf(context).ToList(),
+                (IEqualityComparer<INamedTypeSymbol>)SymbolEqualityComparer.Default
+            );
+    }
 
     /// <summary>
     /// C# 9+ top-level statements: the synthetic <c>&lt;Program&gt;</c>
@@ -836,7 +860,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
         if (TryEmitPlainObjectViaIr(type, sink, irCache))
             return true;
-        new IrToTsClassEmitter(Context, _constructorAccess).Transform(type, sink);
+        new IrToTsClassEmitter(Context, _constructorAccessFacts).Transform(type, sink);
         return true;
     }
 
@@ -1264,12 +1288,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// hash index is amortised: a type appearing in N groups gets
     /// hashed once. A group whose constructors depend on another file
     /// (FR-049: a <c>SerializerContext</c> or a derived class elsewhere) also
-    /// keys on <paramref name="constructorAccess"/>'s facts for its types.
+    /// keys on <paramref name="constructorAccessFacts"/> for its types.
     /// </summary>
     private static Dictionary<string, string> ComputePerGroupClosure(
         IrCompilation ir,
         IReadOnlyList<TypeFileGroup> groups,
-        ConstructorAccessFacts constructorAccess
+        ConstructorAccessFacts constructorAccessFacts
     )
     {
         var allTypes = groups
@@ -1284,7 +1308,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             var fqns = group.Types.Select(IrTypeDependencyGraph.QualifiedName);
             var closure = GroupClosureHasher.HashGroupClosure(fqns, graph, sigIndex);
-            var constructorFacts = constructorAccess.FingerprintOf(group.Types);
+            var constructorFacts = constructorAccessFacts.FingerprintOf(group.Types);
 
             result[GroupKey(group)] =
                 constructorFacts.Length == 0 ? closure : $"{closure}|{constructorFacts}";

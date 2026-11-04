@@ -398,4 +398,11 @@ public static class DiagnosticCodes
     /// TypeScript target emits outside the container's class body. The message names the
     /// path. A warning (FR-049, #432).</summary>
     public const string ConstructorAccessibilityWidened = "MS0061";
+
+    /// <summary>MS0062 — a generated JSON <c>SerializerContext</c> constructs a class of a
+    /// referenced assembly through its <c>TypeSpec</c>, and none of that class's
+    /// constructors is public there. The referenced package decided the modifier when it
+    /// was transpiled, so the context does not type-check. A warning at the context
+    /// (FR-049, #432).</summary>
+    public const string JsonContractConstructorNotPublic = "MS0062";
 }

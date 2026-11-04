@@ -18,11 +18,10 @@ namespace Metano.Compiler.IR;
 /// through <c>: this(...)</c>: the chained arguments and the target
 /// constructor, so a backend without constructor chaining can inline the
 /// target (and, transitively, its base call). Null otherwise.</param>
-/// <param name="Visibility">The constructor's declared accessibility. An
-/// implicit constructor is modelled as <see cref="IrVisibility.Public"/>.
-/// Each backend maps it to its own constructor access (TypeScript:
-/// <c>private</c> / <c>protected constructor</c>; Dart, later: a
-/// <c>_</c>-named constructor).</param>
+/// <param name="Visibility">The constructor's declared accessibility; a
+/// primary constructor, whose accessibility the source cannot declare, and an
+/// implicit one are <see cref="IrVisibility.Public"/>. Each backend maps it to
+/// its own constructor access.</param>
 public sealed record IrConstructorDeclaration(
     IReadOnlyList<IrConstructorParameter> Parameters,
     IReadOnlyList<IrStatement>? Body = null,

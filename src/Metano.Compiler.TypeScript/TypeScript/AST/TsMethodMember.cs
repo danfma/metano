@@ -33,11 +33,3 @@ public sealed record TsMethodOverload(
     TsType ReturnType,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null
 );
-
-public enum TsAccessibility
-{
-    Public,
-    Protected,
-    Private,
-    None,
-}
