@@ -135,7 +135,7 @@ Planned. A C# 15 `union` declaration is erased to a TS type union, case tests ar
 
 | Area | Feature | Backend | Status | Code area | Test | Constraints |
 | --- | --- | --- | --- | --- | --- | --- |
-| Toolchain | Roslyn 5.9.0, SDK 11 RC `global.json`, `RollForward=Major` tools | core | Planned | `Directory.Packages.props`, `global.json`, tool csproj files, `.github/workflows/` | — | 010 FR-001–FR-004. The tools stay `net10.0`. |
+| Toolchain | Roslyn 5.9.0, SDK 11 RC `global.json`, `RollForward=Major` tools | core | Planned | `Directory.Packages.props`, `global.json`, tool csproj files, `.github/workflows/` | — | 010 FR-001–FR-004. The tools stay `net10.0`. `RollForward=Major` is implemented (FR-002); Roslyn 5.9.0 and the SDK 11 `global.json` are still planned. |
 | Types | `union U(A, B)` → `export type U = A \| B` | TS | Planned | — | — | 010 FR-005–FR-018, FR-039. Erased; `.Value` / `new U(x)` / conversions are identity; `default(U)` → `null` with widened slots (MS0041 warning only where `null` cannot fit); unsupported shapes → MS0038 / MS0040; overlapping cases → MS0039 warning, first wins. |
 | Pattern matching | Union case tests + `satisfies never` tail; synthesized structural guards | TS | Planned | — | — | 010 FR-019–FR-021, FR-040, FR-041. Builds on `IrRuntimeTypeTest` (PR #298, merged); statement labels follow OQ-3 (#239). |
 | Types | Union body members and extra interfaces → companion `namespace U` | TS | Planned | — | — | 010 FR-042. Call sites become `U.member(u, …)`; conversion to an extra interface → MS0038. |

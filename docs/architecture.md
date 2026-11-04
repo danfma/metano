@@ -105,7 +105,7 @@ This is the **only** assembly your user code depends on — everything else is
 build-time tooling.
 
 - Target: `net10.0` (.NET 8 and 9 are out of support; `net11.0` joins once the .NET 11 SDK is GA)
-- No dependencies beyond the netstandard BCL
+- No dependencies beyond the .NET BCL
 - Shipped as NuGet package `Metano`
 
 ### `Metano.Compiler` (assembly / NuGet: `Metano.Compiler`)

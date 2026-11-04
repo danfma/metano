@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!--
-            Targets the supported .NET releases only. .NET 8 and .NET 9 reached end of
-            support in November 2026, so they were dropped; a net10.0 library also loads
-            in .NET 11 applications. net11.0 is added once the .NET 11 SDK is GA and CI
-            builds with it.
+            Targets net10.0 only. .NET 8 and .NET 9 reach end of support on
+            2026-11-10, so they were dropped; a net10.0 library also loads in .NET 11
+            applications. net11.0 is added once the .NET 11 SDK is GA and CI builds
+            with it.
         -->
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>preview</LangVersion>
