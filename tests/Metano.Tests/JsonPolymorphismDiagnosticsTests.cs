@@ -763,8 +763,8 @@ public class JsonPolymorphismDiagnosticsTests
 
         await AssertSingleError(
             diagnostics,
-            "[PlainObject] variants 'A' and 'B' of 'Base' have the same required members "
-                + "(name: string), so serialization cannot tell them apart. Add a "
+            "[PlainObject] variants 'A' and 'B' of 'Base' accept each other's values (required "
+                + "members: name: string), so serialization cannot tell them apart. Add a "
                 + "distinguishing required member or use class-backed records."
         );
 
@@ -795,9 +795,9 @@ public class JsonPolymorphismDiagnosticsTests
 
         await AssertSingleError(
             diagnostics,
-            "[PlainObject] variants 'A' and 'B' of 'Base' have the same required members "
-                + "(none), so serialization cannot tell them apart. Add a distinguishing "
-                + "required member or use class-backed records."
+            "[PlainObject] variants 'A' and 'B' of 'Base' accept each other's values (required "
+                + "members: none), so serialization cannot tell them apart. Add a "
+                + "distinguishing required member or use class-backed records."
         );
     }
 
@@ -826,9 +826,9 @@ public class JsonPolymorphismDiagnosticsTests
 
         await AssertSingleError(
             diagnostics,
-            "[PlainObject] variants 'A' and 'B' of 'Base' have the same required members "
-                + "(name: string, x: number), so serialization cannot tell them apart. Add a "
-                + "distinguishing required member or use class-backed records."
+            "[PlainObject] variants 'A' and 'B' of 'Base' accept each other's values (required "
+                + "members: name: string, x: number), so serialization cannot tell them apart. "
+                + "Add a distinguishing required member or use class-backed records."
         );
     }
 
@@ -891,6 +891,111 @@ public class JsonPolymorphismDiagnosticsTests
         await Assert.That(diagnostics).IsEmpty();
         await Assert.That(ts).Contains("test: isB,");
         await Assert.That(ts).DoesNotContain("testOrder");
+    }
+
+    // FR-019 rules 4–5: the variant guards run before the base's baseTest, so
+    // a variant whose guard accepts every base value would capture them.
+    // System.Text.Json (.NET 10) writes Animal2("a") as {"Name":"a"} and
+    // Dog2("d", null) as {"$type":"dog","Bark":null,"Name":"d"}; the
+    // TypeScript context would have written {name: "a"} as the latter.
+    [Test]
+    [Arguments("int? Bark", "name: string")]
+    [Arguments("", "name: string")]
+    public async Task VariantWhoseGuardAcceptsTheBase_IsReported(
+        string extraMember,
+        string requiredMembers
+    )
+    {
+        var members = extraMember.Length == 0 ? "string Name" : $"string Name, {extraMember}";
+
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            $$"""
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(Dog2), "dog")]
+            public record Animal2(string Name);
+
+            [Transpile, PlainObject]
+            public sealed record Dog2({{members}}) : Animal2(Name);
+
+            [Transpile]
+            [JsonSerializable(typeof(Animal2))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            $"[PlainObject] variant 'Dog2' of 'Animal2' accepts every 'Animal2' value (required "
+                + $"members: {requiredMembers}), so serialization would write each 'Animal2' as "
+                + "'Dog2'. Add a distinguishing required member to 'Dog2' or use class-backed "
+                + "records."
+        );
+
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
+    }
+
+    // A [Discriminator] member is compared to the variant's own literal, so
+    // two variants with otherwise identical shapes are told apart by it.
+    [Test]
+    public async Task DiscriminatorLiterals_TellVariantsApart()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile, StringEnum]
+            public enum Kind { KA, KB }
+
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(KA), "a")]
+            [JsonDerivedType(typeof(KB), "b")]
+            public abstract record KBase;
+
+            [Transpile, PlainObject, Metano.Annotations.TypeScript.Discriminator("Kind")]
+            public sealed record KA(Kind Kind, double X) : KBase;
+
+            [Transpile, PlainObject, Metano.Annotations.TypeScript.Discriminator("Kind")]
+            public sealed record KB(Kind Kind, double X) : KBase;
+
+            [Transpile]
+            [JsonSerializable(typeof(KBase))]
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(ts).Contains("test: isKA,");
+        await Assert.That(ts).Contains("test: isKB,");
+    }
+
+    // A [PlainObject] type with no TypeScript guard ([Import] here) cannot be
+    // selected on write; referencing `isNE` would import a missing module.
+    [Test]
+    public async Task PlainObjectRegistrationWithoutAGuard_IsReportedAndLeftOut()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(NE), "ne")]
+            [JsonDerivedType(typeof(Ok), "ok")]
+            public abstract record NB;
+
+            [Transpile, PlainObject, Import("NE", "ext-lib")]
+            public sealed record NE(string Ne) : NB;
+
+            [Transpile, PlainObject]
+            public sealed record Ok(double V) : NB;
+
+            [Transpile]
+            [JsonSerializable(typeof(NB))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "[PlainObject] type 'NE' registered on 'NB' gets no TypeScript guard ([Import], "
+                + "[ExportedAsModule], [NoContainer], an exception or a type with extension "
+                + "members), so serialization cannot select it."
+        );
+
+        await Assert.That(ts).Contains("test: isOk,");
+        await Assert.That(ts).DoesNotContain("isNE");
     }
 
     private static Task AssertSingleError(

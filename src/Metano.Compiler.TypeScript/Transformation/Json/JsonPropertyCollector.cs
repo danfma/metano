@@ -89,28 +89,44 @@ internal sealed class JsonPropertyCollector(
     /// <summary>
     /// Every property the object literal of a <c>[PlainObject]</c> factory
     /// sets: the declarations of each spec of the <c>base</c> chain, base-most
-    /// first, each TS member once at its most-derived declaration. A linked
-    /// spec reads its inherited properties through its base spec, and the
-    /// literal must still carry them (FR-019: a <c>[PlainObject]</c> variant
-    /// read through a polymorphic base keeps its inherited members).
+    /// first, each TS member once with its most-derived declaration, leaving
+    /// out the base declarations a <c>[JsonIgnore]</c> override hides (the
+    /// payload never carries them). A linked spec reads its inherited
+    /// properties through its base spec, and the literal must still carry
+    /// them (FR-019: a <c>[PlainObject]</c> variant read through a polymorphic
+    /// base keeps its inherited members).
     /// </summary>
     public List<JsonSerializableProperty> LiteralPropertiesOf(INamedTypeSymbol type)
     {
-        var mostDerivedFirst = ContractPropertiesOf(type)
-            .DistinctBy(property => property.TsName)
-            .ToList();
+        var chain = LinkedChainBaseMostFirst(type);
+        var hidden = chain.SelectMany(IgnoredBasePropertiesOf).ToHashSet(StringComparer.Ordinal);
 
-        var levels = new List<INamedTypeSymbol>();
+        var mostDerivedByTsName = chain
+            .SelectMany(DeclarationOrderPropertiesOf)
+            .GroupBy(property => property.TsName)
+            .ToDictionary(declarations => declarations.Key, declarations => declarations.Last());
 
-        for (var current = type; current is not null; current = LinkedBaseOf(current))
-            levels.Insert(0, current);
-
-        return levels
+        return chain
             .SelectMany(DeclarationOrderPropertiesOf)
             .Select(property => property.TsName)
+            .Where(tsName => !hidden.Contains(tsName))
             .Distinct()
-            .Select(tsName => mostDerivedFirst.First(property => property.TsName == tsName))
+            .Select(tsName => mostDerivedByTsName[tsName])
             .ToList();
+    }
+
+    /// <summary>
+    /// <paramref name="type"/> and the specs its <c>base</c> links reach,
+    /// base-most first.
+    /// </summary>
+    private List<INamedTypeSymbol> LinkedChainBaseMostFirst(INamedTypeSymbol type)
+    {
+        var chain = new List<INamedTypeSymbol>();
+
+        for (var current = type; current is not null; current = LinkedBaseOf(current))
+            chain.Insert(0, current);
+
+        return chain;
     }
 
     /// <summary>

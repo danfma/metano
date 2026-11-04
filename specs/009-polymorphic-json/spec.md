@@ -611,8 +611,13 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      generator-computed `testOrder` index list emitted only when it differs from attribute order.
   4. **Indistinguishable variants → `MS0032`.** Two variants that cover each other (for example the
      same required members with the same kinds, or two variants with no required member) cannot be
-     told apart on write. The generator reports `MS0032` naming both and the shared members. A
-     cycle in the "more specific" relation is reported the same way.
+     told apart on write. The generator reports `MS0032` naming both and their required members. A
+     cycle in the "more specific" relation is reported the same way. The base guard of rule 5
+     counts too: when the base writes its own values through its guard (a concrete,
+     non-self-registered `[PlainObject]` base), a variant whose guard covers the base would capture
+     every base value, since the variant guards run first, and is reported (DECIDED-23 e). A
+     registered `[PlainObject]` type that gets no guard (`[Import]`, `[ExportedAsModule]`,
+     `[NoContainer]`, an exception or a type with extension members) is `MS0032` as well.
   5. **Unmatched plain objects.** A plain object that matches no variant guard is the base itself
      when the base is a concrete `[PlainObject]` type whose guard matches (base contract, its tag
      only when self-registered); otherwise it is an unregistered runtime type and follows
@@ -887,6 +892,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Missing non-required property | default value | `JsonException` | FR-045 |
 | Closed generic registration `[JsonDerivedType(typeof(GenD<int>), "g")]` | accepted (`{"$type":"g","X":1}`, measured) | `MS0032` | Known gap of v1 (FR-012) |
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
+| Unregistered C# subtype of a concrete `[PlainObject]` base whose shape passes the base's `baseTest` | `NotSupportedException` (measured: `Cat4` through `Animal4`) | written as the base (`{"Name":"c"}`) | FR-019 rule 5, DECIDED-23 b |
 | Runtime type name of a plain object in `Runtime type '…' is not supported` | the C# type name | `Object` | FR-019 |
 | Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Not measured; fixtures use ASCII names; probed in S8 |
 | Read depth limit | the reader counts every container of the document | counts only the containers the contract visits (a deep value under an undeclared key is skipped) | DECIDED-20 (b) |
@@ -1330,7 +1336,8 @@ the former `OPEN-N`.
     A registered type always lives in its base's assembly (the base names it with `typeof`, and
     it derives from the base), so a library emits the guards a consumer's context imports
     without knowing that context (FR-047). A registration no context reaches still gets its
-    guard. The context references the guard as `isPoint` (a module export of the variant's
+    guard, so every registered `[PlainObject]` type now exports `isT` from its module (a visible
+    change of the generated API). The context references the guard as `isPoint` (a module export of the variant's
     file), `Shape.isCircle` (a nested type's companion namespace) or `isPoint` with the package
     origin (a library type).
   - (b) **`baseTest`.** The base-guard member DECIDED-21 e asked for is
@@ -1338,7 +1345,13 @@ the former `OPEN-N`.
     concrete, non-self-registered, non-generic `[PlainObject]` base. The runtime tests it after
     every variant guard and writes the base (no tag) only when it accepts the value; otherwise
     the value follows `unknownDerivedType` with the runtime type name `Object`. A hand-written
-    spec without `baseTest` no longer writes every unmatched plain object as the base.
+    spec without `baseTest` no longer writes every unmatched plain object as the base. An
+    unregistered C# subtype of the base whose shape passes `baseTest` is written as the base
+    (`Cat4(string Name, int Meow) : Animal4` writes `{"Name":"c"}`; STJ throws
+    `NotSupportedException` "Runtime type 'Cat4' is not supported by polymorphic type
+    'Animal4'.", measured): plain objects carry no runtime type (documented divergence). Known
+    gap: a generic concrete `[PlainObject]` base gets no guard, hence no `baseTest`; generic
+    `[PlainObject]` contracts already fail `tsgo`, so the gap is moot today.
   - (c) A synthesized guard is the predicate only (no `assertT`); a type that also declares
     `[GenerateGuard]` keeps both.
   - (d) **Guard member tests.** A guard calls `isN` for a member only when `N` has a guard of
@@ -1353,12 +1366,21 @@ the former `OPEN-N`.
   - (e) **Order and rejection.** The test order is a stable topological sort of the "more
     specific" relation (attribute order among unrelated variants); `testOrder` lists only the
     structural entries' indices. Variants that cover each other are reported at the later
-    registration, naming the union of both variants' required members (`(none)` when neither
-    requires one); a cycle names the variants left unordered. Either leaves the base without
-    `polymorphism`.
-  - (f) **Interface properties** follow the source generator's topological sort over the direct
-    base interfaces (Kahn's algorithm): `ID : IB, IC, IE` with `IB : IA` and `IE : IA` writes
-    `{"D":4,"E":5,"B":2,"A":1,"C":3}` (measured).
+    registration, naming the union of both variants' required members (`none` when neither
+    requires one); a cycle names the variants left unordered; with a `baseTest`, each variant
+    whose guard covers the base guard is reported at its registration (review: `Animal2(string
+    Name)` with `Dog2(string Name, int? Bark)` would write `{name: "a"}` as
+    `{"$type":"dog","Bark":null,"Name":"a"}`, where STJ writes `{"Name":"a"}`). Each leaves the
+    base without `polymorphism`. A `[Discriminator]` member is compared with the variant's own
+    literal, and two different literals never cover each other (review: `KA(Kind Kind, double X)`
+    and `KB(Kind Kind, double X)` are distinguishable). A registered `[PlainObject]` type without
+    a guard is `MS0032` and left out of `derived`; a base whose `baseTest` would have no guard
+    is `MS0032` too.
+  - (f) **Interface properties** follow the source generator's topological sort (Kahn's
+    algorithm) over each interface's `AllInterfaces`: `ID : IB, IC, IE` with `IB : IA` and
+    `IE : IA` writes `{"D":4,"E":5,"B":2,"A":1,"C":3}`, and `IP0 : IQ0, IRr0` with `IQ0 : IS0` and
+    `IRr0 : IT0, IS0` writes `{"P0":5,"Rr0":4,"Q0":3,"S0":1,"T0":2}` (measured; the direct
+    interfaces alone order `T0` before `S0`, a review finding).
   - (g) An interface base's factory names the C# interface (`Cannot deserialize interface type
     'IShape' directly; …`); `typeName` is the C# simple name of the definition (`IBox` for
     `IBox<int>`). STJ's messages name the type with its namespace (`'P.IShape'`); the runtime
@@ -1369,7 +1391,7 @@ the former `OPEN-N`.
   - (i) An abstract polymorphic `[PlainObject]` base gets the throwing FR-011 factory
     (contracts/context-codegen.md §1b); a `[PlainObject]` factory literal now carries the
     inherited members of its linked base specs (it dropped them before, so `point3` read
-    `{ y, z }` without `x`).
+    `{ y, z }` without `x`), except the base declarations a `[JsonIgnore]` override hides.
   - (j) End-to-end evidence: the TypeScript of the S6c golden
     (`tests/Metano.Tests/Expected/json-structural-polymorphic-context.ts`) compiles under
     `tsgo --strict` and, bundled with `bun build` and run under Node, writes every probe row

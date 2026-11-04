@@ -368,17 +368,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // [PlainObject] types a polymorphic JSON hierarchy tests with a
         // synthesized guard (FR-019): their `isT` is emitted and resolved
         // like a [GenerateGuard] one.
-        var structuralGuardTypes = JsonStructuralGuardTargets.Collect(
+        var structuralGuards = JsonStructuralGuardTargets.Collect(
             transpilableTypes,
             _assemblyWideTranspile,
             _currentAssembly
         );
-
-        var guardableTypeKeys = (
-            ir.GuardableTypeKeys ?? new HashSet<string>(StringComparer.Ordinal)
-        )
-            .Concat(structuralGuardTypes.Select(type => type.GetCrossAssemblyOriginKey()))
-            .ToHashSet(StringComparer.Ordinal);
 
         _context = new TypeScriptTransformContext(
             compilation,
@@ -388,7 +382,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.ExternalImports,
             ir.BclExports,
             typeNamesBySymbol,
-            guardableTypeKeys,
+            MergeGuardableTypeKeys(ir.GuardableTypeKeys, structuralGuards),
             _pathNaming,
             declarativeMappings,
             ReportDiagnostic
@@ -398,7 +392,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
-            StructuralGuardTypes = structuralGuardTypes,
+            StructuralGuardTypes = structuralGuards.Types,
         };
 
         // Module state of containerless classes (#314): reject the uses the
@@ -697,35 +691,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (sink.Count == startCount)
             return false;
 
-        // Generate type guard functions when [GenerateGuard] is present.
-        // The builder returns both isT (narrowing predicate) and assertT
-        // (throwing variant) so a consumer can pick either path depending
-        // on whether missed narrowing should be an exception (trust
-        // boundary) or a branch (conditional handling).
-        if (SymbolHelper.HasGenerateGuard(type))
-        {
-            var guardBuilder = new TypeGuardBuilder(Context);
-            foreach (var guard in guardBuilder.Generate(type))
-                sink.Add(guard);
-
-            // Strict-union variant: emit a top-level
-            // `registerUnionGuard("Variant", isVariant)` side-effect so
-            // the abstract base's dispatch picks the variant up at
-            // module load. Skipped silently when the type isn't part of
-            // a [StrictUnionGuard] hierarchy.
-            var registration = guardBuilder.TryBuildVariantRegistration(type);
-            if (registration is not null)
-                sink.Add(registration);
-        }
-        else if (Context.StructuralGuardTypes.Contains(type.OriginalDefinition))
-        {
-            // A [PlainObject] variant (or concrete base) of a polymorphic
-            // JSON hierarchy: the serializer selects it with this guard on
-            // write (FR-019 rule 1), so it is synthesized without
-            // [GenerateGuard] — the predicate only, no assert companion.
-            if (new TypeGuardBuilder(Context).GeneratePredicate(type) is { } guard)
-                sink.Add(guard);
-        }
+        EmitGuards(type, sink);
 
         // Process nested types — the non-private ones go to a companion namespace
         // (declaration merging makes `Outer.Inner` read just like in C#), the private
@@ -741,6 +707,51 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         return true;
     }
+
+    /// <summary>
+    /// The guards of <paramref name="type"/>. With <c>[GenerateGuard]</c>:
+    /// <c>isT</c> (narrowing predicate) and <c>assertT</c> (throwing variant),
+    /// so a consumer can pick a branch or an exception at a trust boundary,
+    /// plus the <c>registerUnionGuard("Variant", isVariant)</c> side effect of
+    /// a <c>[StrictUnionGuard]</c> variant, which lets the abstract base's
+    /// dispatch pick it up at module load. Without it, a <c>[PlainObject]</c>
+    /// variant (or concrete base) of a polymorphic JSON hierarchy still gets
+    /// <c>isT</c>, which the serializer selects it with on write (FR-019
+    /// rule 1), the predicate only.
+    /// </summary>
+    private void EmitGuards(INamedTypeSymbol type, List<TsTopLevel> sink)
+    {
+        var guardBuilder = new TypeGuardBuilder(Context);
+
+        if (SymbolHelper.HasGenerateGuard(type))
+        {
+            sink.AddRange(guardBuilder.Generate(type));
+
+            if (guardBuilder.TryBuildVariantRegistration(type) is { } registration)
+                sink.Add(registration);
+
+            return;
+        }
+
+        var isStructuralGuardTarget = Context.StructuralGuardTypes.Contains(
+            type.OriginalDefinition
+        );
+
+        if (isStructuralGuardTarget && guardBuilder.GeneratePredicate(type) is { } guard)
+            sink.Add(guard);
+    }
+
+    /// <summary>
+    /// The frontend's <c>[GenerateGuard]</c> keys plus the synthesized
+    /// guards' (FR-019), so a reference to either resolves as a guard import.
+    /// </summary>
+    private static HashSet<string> MergeGuardableTypeKeys(
+        IReadOnlySet<string>? generateGuardKeys,
+        JsonStructuralGuardSet structuralGuards
+    ) =>
+        (generateGuardKeys ?? new HashSet<string>(StringComparer.Ordinal))
+            .Concat(structuralGuards.OriginKeys)
+            .ToHashSet(StringComparer.Ordinal);
 
     private bool TryEmitEnum(
         INamedTypeSymbol type,

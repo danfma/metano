@@ -4,12 +4,6 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.TypeScript.Transformation.Json;
 
 /// <summary>
-/// One JSON property that cannot share a payload with the discriminator,
-/// with the location of the property.
-/// </summary>
-internal readonly record struct JsonDiscriminatorConflict(string Message, Location? Location);
-
-/// <summary>
 /// Finds the JSON properties that make a tagged payload unfaithful
 /// (spec 009 FR-012): a final name equal to the discriminator
 /// (System.Text.Json throws <c>InvalidOperationException</c>) or an
@@ -24,7 +18,7 @@ internal sealed class JsonDiscriminatorConflictDetector(JsonPropertyCollector pr
 
     private readonly JsonPropertyCollector _properties = properties;
 
-    public List<JsonDiscriminatorConflict> ConflictsOf(JsonPolymorphism polymorphism) =>
+    public List<JsonPolymorphismConflict> ConflictsOf(JsonPolymorphism polymorphism) =>
         polymorphism
             .Registrations.Where(registration => registration.IsTagged)
             .Select(registration => registration.Type)
@@ -32,14 +26,14 @@ internal sealed class JsonDiscriminatorConflictDetector(JsonPropertyCollector pr
             .SelectMany(_properties.ContractPropertiesOf)
             .DistinctBy(property => (property.Property, property.JsonName))
             .Select(property => ConflictOf(polymorphism, property))
-            .OfType<JsonDiscriminatorConflict>()
+            .OfType<JsonPolymorphismConflict>()
             .ToList();
 
     /// <summary>
     /// The conflict of one property, named through the property's definition
     /// so every construction of a generic base reports the same text.
     /// </summary>
-    private static JsonDiscriminatorConflict? ConflictOf(
+    private static JsonPolymorphismConflict? ConflictOf(
         JsonPolymorphism polymorphism,
         JsonSerializableProperty property
     )
@@ -51,7 +45,7 @@ internal sealed class JsonDiscriminatorConflictDetector(JsonPropertyCollector pr
 
         if (property.JsonName == polymorphism.Discriminator)
         {
-            return new JsonDiscriminatorConflict(
+            return new JsonPolymorphismConflict(
                 JsonPolymorphismMessages.DiscriminatorConflict(member, property.JsonName, owner),
                 location
             );
@@ -59,7 +53,7 @@ internal sealed class JsonDiscriminatorConflictDetector(JsonPropertyCollector pr
 
         if (IsIntegerLike(property.JsonName))
         {
-            return new JsonDiscriminatorConflict(
+            return new JsonPolymorphismConflict(
                 JsonPolymorphismMessages.IntegerLikeName(property.JsonName, member),
                 location
             );
