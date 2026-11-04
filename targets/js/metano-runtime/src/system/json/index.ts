@@ -20,6 +20,7 @@ export type {
   DerivedTypeSpec,
   PolymorphismSpec,
   JsonReadOptions,
+  NumberTypeName,
   JsonConverter,
   SerializerContextOptions,
 } from "./types.ts";

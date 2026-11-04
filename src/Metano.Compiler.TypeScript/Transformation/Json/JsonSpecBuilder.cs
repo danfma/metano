@@ -30,14 +30,15 @@ internal sealed class JsonSpecBuilder
         TypeScriptTransformContext context,
         JsonTypeInfoNames names,
         JsonPropertyCollector properties,
-        IReadOnlyDictionary<ITypeSymbol, JsonPolymorphism> polymorphisms
+        IReadOnlyDictionary<ITypeSymbol, JsonPolymorphism> polymorphisms,
+        bool readsNumbersFromStrings
     )
     {
         _context = context;
         _names = names;
         _properties = properties;
         _polymorphisms = polymorphisms;
-        _descriptors = new JsonTypeDescriptorBuilder(context, names);
+        _descriptors = new JsonTypeDescriptorBuilder(context, names, readsNumbersFromStrings);
         _polymorphismSpecs = new JsonPolymorphismSpecBuilder(_descriptors);
     }
 

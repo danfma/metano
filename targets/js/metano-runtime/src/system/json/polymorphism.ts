@@ -286,7 +286,7 @@ export function resolveDeserializeTarget(
 }
 
 /** Whether any registration declares a tag: without one, nothing is read as metadata. */
-function hasTaggedRegistration(polymorphism: PolymorphismSpec): boolean {
+export function hasTaggedRegistration(polymorphism: PolymorphismSpec): boolean {
   return dispatchIndexOf(polymorphism).byTag.size > 0;
 }
 

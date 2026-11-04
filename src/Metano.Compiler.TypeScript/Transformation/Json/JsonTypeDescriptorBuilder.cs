@@ -9,15 +9,19 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// same for a property and for a value root (FR-030). Nested descriptors
 /// (nullable inner, element, key, value) recurse through
 /// <see cref="JsonTypeClassifier"/>, and every <c>ref</c> names its target
-/// getter through <see cref="JsonTypeInfoNames"/>.
+/// getter through <see cref="JsonTypeInfoNames"/>. When the context reads
+/// numbers from strings, a numeric <c>primitive</c> also names its CLR type
+/// (<c>numberType</c>, FR-048 item 4).
 /// </summary>
 internal sealed class JsonTypeDescriptorBuilder(
     TypeScriptTransformContext context,
-    JsonTypeInfoNames names
+    JsonTypeInfoNames names,
+    bool readsNumbersFromStrings
 )
 {
     private readonly TypeScriptTransformContext _context = context;
     private readonly JsonTypeInfoNames _names = names;
+    private readonly bool _readsNumbersFromStrings = readsNumbersFromStrings;
 
     /// <summary>The descriptor of <paramref name="type"/>, classified first.</summary>
     public TsObjectLiteral Build(ITypeSymbol type) =>
@@ -48,7 +52,8 @@ internal sealed class JsonTypeDescriptorBuilder(
                 kind
             ),
             JsonPropertyKind.Ref => BuildRefDescriptor(type),
-            JsonPropertyKind.Primitive or JsonPropertyKind.Decimal => BuildBareKindDescriptor(kind),
+            JsonPropertyKind.Primitive => BuildPrimitiveDescriptor(type),
+            JsonPropertyKind.Decimal => BuildBareKindDescriptor(kind),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
         };
 
@@ -203,6 +208,26 @@ internal sealed class JsonTypeDescriptorBuilder(
             KindProperty(JsonPropertyKind.Ref),
             new TsObjectProperty("spec", BuildSpecLink(type)),
         ]);
+
+    /// <summary>
+    /// <c>{ kind: "primitive" }</c>, plus <c>numberType: "System.Int32"</c>
+    /// for a numeric type when the context reads numbers from strings: the
+    /// runtime needs the type for the grammar and the error text.
+    /// </summary>
+    private TsObjectLiteral BuildPrimitiveDescriptor(ITypeSymbol type)
+    {
+        var numberType = _readsNumbersFromStrings
+            ? JsonTypeClassifier.NumberTypeNameOf(type)
+            : null;
+
+        if (numberType is null)
+            return BuildBareKindDescriptor(JsonPropertyKind.Primitive);
+
+        return new TsObjectLiteral([
+            KindProperty(JsonPropertyKind.Primitive),
+            new TsObjectProperty("numberType", new TsStringLiteral(numberType)),
+        ]);
+    }
 
     /// <summary>
     /// Builds a kind-only descriptor for leaf wire kinds with no
