@@ -19,11 +19,13 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <param name="TypeOverrides">The <c>[ExportFromBcl]</c> type overrides
 /// (<c>decimal</c> → <c>Decimal</c>) the overload dispatchers apply to the
 /// parameter types and runtime checks they emit, matching the class
-/// emitter's own signatures; <c>null</c> keeps the default mapping.</param>
+/// emitter's own signatures. Required, so a class emission cannot forget it;
+/// <c>null</c> (outside class emission, see <see cref="For"/>) keeps the
+/// default mapping.</param>
 internal sealed record IrToTsBridgeContext(
     DeclarativeMappingRegistry? Bcl,
     PerClassBackingFieldScope ClassFields,
-    IrToTsTypeOverrides? TypeOverrides = null
+    IrToTsTypeOverrides? TypeOverrides
 )
 {
     /// <summary>
@@ -31,8 +33,9 @@ internal sealed record IrToTsBridgeContext(
     /// objects, branded structs, static operators, JSX components, entry-point
     /// bodies): no backing field is ever recognized. Inside a class emission the
     /// emitter passes the class's own scope everywhere, including parameter
-    /// defaults and member initializers.
+    /// defaults and member initializers. No type override applies there: those
+    /// positions map their types without the class emitter's overrides.
     /// </summary>
     public static IrToTsBridgeContext For(DeclarativeMappingRegistry? bclRegistry) =>
-        new(bclRegistry, PerClassBackingFieldScope.None);
+        new(bclRegistry, PerClassBackingFieldScope.None, TypeOverrides: null);
 }

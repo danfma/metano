@@ -36,7 +36,15 @@ public sealed record IrConstructorDeclaration(
     IrConstructorChain? ThisChain = null,
     IrVisibility Visibility = IrVisibility.Public,
     bool IsPrimary = false
-);
+)
+{
+    /// <summary>
+    /// The parameters without their promotion details, as a method declares
+    /// them.
+    /// </summary>
+    public IReadOnlyList<IrParameter> PlainParameters =>
+        Parameters.Select(p => p.Parameter).ToList();
+}
 
 /// <summary>
 /// A <c>: this(...)</c> delegation: <paramref name="Arguments"/> as written at

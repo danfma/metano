@@ -22,24 +22,22 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
     public void ReportConstructors(
         INamedTypeSymbol type,
         IrConstructorDeclaration primary,
-        IReadOnlyList<IrTypeParameter> classTypeParameters
+        TypeCheckScope classScope
     )
     {
         var symbols = type.InstanceConstructors.Where(c => !c.IsImplicitlyDeclared).ToList();
 
         var found = CatchAllOverloads.Find(
             [primary, .. primary.Overloads ?? []],
-            ctor => ctor.Parameters.Select(p => p.Parameter).ToList(),
-            _ => classTypeParameters
+            ctor => ctor.PlainParameters,
+            _ => classScope
         );
 
         foreach (var catchAll in found)
         {
             Report(
-                SymbolOf(symbols, catchAll.Overload.Parameters.Select(p => p.Parameter).ToList()),
-                catchAll.Shadowed.Select(ctor =>
-                    SymbolOf(symbols, ctor.Parameters.Select(p => p.Parameter).ToList())
-                ),
+                SymbolOf(symbols, catchAll.Overload.PlainParameters),
+                catchAll.Shadowed.Select(ctor => SymbolOf(symbols, ctor.PlainParameters)),
                 type
             );
         }
@@ -48,7 +46,7 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
     public void ReportMethods(
         INamedTypeSymbol type,
         IrMethodDeclaration primary,
-        IReadOnlyList<IrTypeParameter> classTypeParameters
+        TypeCheckScope classScope
     )
     {
         var symbols = type.GetMembers(primary.Name).OfType<IMethodSymbol>().ToList();
@@ -56,7 +54,12 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         var found = CatchAllOverloads.Find(
             [primary, .. primary.Overloads ?? []],
             method => method.Parameters,
-            method => [.. method.TypeParameters ?? [], .. classTypeParameters]
+            method =>
+                TypeCheckScope.ForMethod(
+                    method,
+                    classScope.TypeParameters,
+                    classScope.TypeOverrides
+                )
         );
 
         foreach (var catchAll in found)

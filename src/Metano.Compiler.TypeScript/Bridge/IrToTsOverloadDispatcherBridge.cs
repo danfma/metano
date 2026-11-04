@@ -84,8 +84,7 @@ public static class IrToTsOverloadDispatcherBridge
                     plan.Sorted,
                     plan.FastPathNames,
                     receiver,
-                    classTypeParameters,
-                    typeOverrides
+                    new TypeCheckScope(classTypeParameters, typeOverrides)
                 ),
                 Static: isStatic,
                 Async: plan.IsAsync,
@@ -148,7 +147,12 @@ public static class IrToTsOverloadDispatcherBridge
                 functionName,
                 DispatcherParameters(),
                 plan.CommonReturn,
-                BuildDispatcherBody(plan.Sorted, fastPathNames, receiver: null, [], null),
+                BuildDispatcherBody(
+                    plan.Sorted,
+                    fastPathNames,
+                    receiver: null,
+                    TypeCheckScope.Empty
+                ),
                 Exported: true,
                 Async: plan.IsAsync,
                 Overloads: plan.Signatures
@@ -380,8 +384,7 @@ public static class IrToTsOverloadDispatcherBridge
         IReadOnlyList<IrMethodDeclaration> sorted,
         IReadOnlyList<string> fastPathNames,
         TsExpression? receiver,
-        IReadOnlyList<IrTypeParameter> classTypeParameters,
-        IrToTsTypeOverrides? typeOverrides
+        TypeCheckScope classScope
     )
     {
         var body = new List<TsStatement>();
@@ -390,16 +393,20 @@ public static class IrToTsOverloadDispatcherBridge
         {
             var method = sorted[i];
             var arguments = new OverloadArgumentShape(method.Parameters);
-            var typeParameters = TypeParametersInScope(method, classTypeParameters);
+            var scope = TypeCheckScope.ForMethod(
+                method,
+                classScope.TypeParameters,
+                classScope.TypeOverrides
+            );
 
             var delegateCall = new TsCallExpression(
                 FastPathCallee(receiver, fastPathNames[i]),
-                DelegatedArguments(method, arguments, typeOverrides)
+                DelegatedArguments(method, arguments, classScope.TypeOverrides)
             );
 
             body.Add(
                 new TsIfStatement(
-                    arguments.Guard(typeParameters, typeOverrides),
+                    arguments.Guard(scope),
                     BuildBranchStatements(method, delegateCall)
                 )
             );
@@ -457,15 +464,6 @@ public static class IrToTsOverloadDispatcherBridge
                 }
             )
             .ToList();
-
-    /// <summary>
-    /// The method's own type parameters, then its class's, so a method type
-    /// parameter shadows a class one of the same name.
-    /// </summary>
-    private static IReadOnlyList<IrTypeParameter> TypeParametersInScope(
-        IrMethodDeclaration method,
-        IReadOnlyList<IrTypeParameter> classTypeParameters
-    ) => [.. method.TypeParameters ?? [], .. classTypeParameters];
 
     /// <summary>
     /// The cast applied to <c>args[i]</c> before delegating. The dispatcher

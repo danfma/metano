@@ -19,29 +19,34 @@ internal static class CatchAllOverloads
     /// Each catch-all overload, in dispatch order, with the overloads it
     /// shadows; empty when there is none.
     /// </summary>
-    /// <param name="typeParametersOf">The type parameters in scope for an
-    /// overload, innermost first.</param>
+    /// <param name="scopeOf">What an overload's argument checks resolve
+    /// against.</param>
     public static IReadOnlyList<CatchAllOverload<TOverload>> Find<TOverload>(
         IEnumerable<TOverload> overloads,
         Func<TOverload, IReadOnlyList<IrParameter>> parametersOf,
-        Func<TOverload, IReadOnlyList<IrTypeParameter>> typeParametersOf
+        Func<TOverload, TypeCheckScope> scopeOf
     )
     {
         var sorted = OverloadDispatchOrder
             .Sort(overloads, parametersOf)
-            .Select(overload => new DispatchedOverload<TOverload>(
-                overload,
-                new OverloadArgumentShape(parametersOf(overload)),
-                ChecksNothing(parametersOf(overload), typeParametersOf(overload))
-            ))
+            .Select(overload =>
+            {
+                var parameters = parametersOf(overload);
+
+                return new DispatchedOverload<TOverload>(
+                    overload,
+                    new OverloadArgumentShape(parameters),
+                    ChecksNothing(parameters, scopeOf(overload))
+                );
+            })
             .ToList();
 
         return sorted
-            .Select((catchAll, index) => (catchAll, index))
-            .Where(entry => entry.catchAll.ChecksNothing)
+            .Select((overload, index) => (overload, index))
+            .Where(entry => entry.overload.ChecksNothing)
             .Select(entry => new CatchAllOverload<TOverload>(
-                entry.catchAll.Overload,
-                ShadowedBy(entry.catchAll, sorted.Skip(entry.index + 1))
+                entry.overload.Overload,
+                ShadowedBy(entry.overload, sorted.Skip(entry.index + 1))
             ))
             .Where(found => found.Shadowed.Count > 0)
             .ToList();
@@ -64,17 +69,10 @@ internal static class CatchAllOverloads
     /// </summary>
     private static bool ChecksNothing(
         IReadOnlyList<IrParameter> parameters,
-        IReadOnlyList<IrTypeParameter> typeParameters
+        TypeCheckScope scope
     ) =>
         parameters.Count > 0
-        && parameters.All(parameter =>
-            IrTypeCheckBuilder.Generate(
-                parameter.ParamsElementType ?? parameter.Type,
-                new AST.TsIdentifier("value"),
-                typeParameters
-            )
-                is null
-        );
+        && parameters.All(p => !IrTypeCheckBuilder.HasCheck(p.ParamsElementType ?? p.Type, scope));
 
     private static bool Overlaps(OverloadArgumentShape first, OverloadArgumentShape second) =>
         Math.Max(first.RequiredCount, second.RequiredCount)

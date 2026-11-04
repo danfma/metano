@@ -45,7 +45,10 @@ public static class IrToTsConstructorDispatcherBridge
         if (primary.Overloads is not { Count: > 0 })
             return null;
 
-        var sorted = OverloadDispatchOrder.Sort([primary, .. primary.Overloads], ParametersOf);
+        var sorted = OverloadDispatchOrder.Sort(
+            [primary, .. primary.Overloads],
+            ctor => ctor.PlainParameters
+        );
 
         // Overload signatures are declaration-only — they do not introduce
         // parameter properties. Set Accessibility=None so the printer emits
@@ -95,9 +98,6 @@ public static class IrToTsConstructorDispatcherBridge
         );
     }
 
-    private static IReadOnlyList<IrParameter> ParametersOf(IrConstructorDeclaration ctor) =>
-        ctor.Parameters.Select(p => p.Parameter).ToList();
-
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
         DispatcherBaseCall baseCall,
@@ -105,7 +105,7 @@ public static class IrToTsConstructorDispatcherBridge
         IrToTsBridgeContext context
     )
     {
-        var arguments = new OverloadArgumentShape(ParametersOf(ctor));
+        var arguments = new OverloadArgumentShape(ctor.PlainParameters);
         var branch = new List<TsStatement>();
 
         // Bring the original parameter names back into scope as
@@ -134,7 +134,10 @@ public static class IrToTsConstructorDispatcherBridge
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
-        return new TsIfStatement(arguments.Guard(typeParameters, context.TypeOverrides), branch);
+        return new TsIfStatement(
+            arguments.Guard(new TypeCheckScope(typeParameters, context.TypeOverrides)),
+            branch
+        );
     }
 
     /// <summary>

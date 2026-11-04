@@ -92,7 +92,7 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<IReadOnlyList<TsParameter>> overloadParameters,
         IReadOnlyList<TsType> overloadReturnTypes,
         IReadOnlyList<IReadOnlyList<IrTypeRef>> overloadParamIrTypes,
-        OperatorTypeCheckScope typeCheckScope,
+        TypeCheckScope typeCheckScope,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -216,7 +216,7 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<string> fastPathNames,
         TsIdentifier className,
         string operatorName,
-        OperatorTypeCheckScope typeCheckScope,
+        TypeCheckScope typeCheckScope,
         int paramOffset,
         bool includeThis
     )
@@ -238,8 +238,7 @@ internal static partial class IrToTsClassBridge
                 var check = IrTypeCheckBuilder.Generate(
                     paramTypes[j + paramOffset],
                     OverloadArgumentShape.ArgumentAt(j),
-                    typeCheckScope.TypeParameters,
-                    typeCheckScope.TypeOverrides
+                    typeCheckScope
                 );
 
                 if (check is not null)
@@ -340,13 +339,3 @@ internal static partial class IrToTsClassBridge
             _ => null,
         };
 }
-
-/// <summary>
-/// What an operator dispatcher's runtime checks resolve against: the class's
-/// type parameters and the <c>[ExportFromBcl]</c> type overrides its operand
-/// types were mapped with.
-/// </summary>
-internal sealed record OperatorTypeCheckScope(
-    IReadOnlyList<IrTypeParameter> TypeParameters,
-    IrToTsTypeOverrides? TypeOverrides
-);

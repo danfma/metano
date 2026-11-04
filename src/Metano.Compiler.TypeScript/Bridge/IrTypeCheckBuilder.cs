@@ -28,35 +28,26 @@ internal static class IrTypeCheckBuilder
     /// The check that <paramref name="value"/> is a <paramref name="type"/>,
     /// or <c>null</c> when any value matches.
     /// </summary>
-    /// <param name="typeParameters">The type parameters in scope, innermost
-    /// first, which a type parameter reference resolves against; an
-    /// unresolved one matches any value.</param>
-    /// <param name="typeOverrides">The <c>[ExportFromBcl]</c> type overrides:
-    /// a type that lowers to an exported class (<c>decimal</c> →
-    /// <c>Decimal</c>) is checked with <c>instanceof</c> that class.</param>
     public static TsExpression? Generate(
         IrTypeRef type,
         TsExpression value,
-        IReadOnlyList<IrTypeParameter> typeParameters,
-        IrToTsTypeOverrides? typeOverrides = null
+        TypeCheckScope scope
     ) =>
         type switch
         {
-            IrNullableTypeRef nullable => NullableCheck(
-                nullable,
-                value,
-                typeParameters,
-                typeOverrides
-            ),
-            IrTypeParameterRef typeParameter => TypeParameterCheck(
-                typeParameter,
-                value,
-                typeParameters
-            ),
-            _ when typeOverrides?.TryResolve(type) is TsNamedType exported =>
+            IrNullableTypeRef nullable => NullableCheck(nullable, value, scope),
+            IrTypeParameterRef typeParameter => TypeParameterCheck(typeParameter, value, scope),
+            _ when scope.TypeOverrides?.TryResolve(type) is TsNamedType exported =>
                 new TsBinaryExpression(value, "instanceof", new TsIdentifier(exported.Name)),
             _ => ConcreteCheck(type, value),
         };
+
+    /// <summary>
+    /// Whether a value of <paramref name="type"/> has a runtime check at all;
+    /// <c>false</c> when any value matches.
+    /// </summary>
+    public static bool HasCheck(IrTypeRef type, TypeCheckScope scope) =>
+        Generate(type, new TsIdentifier("value"), scope) is not null;
 
     private static TsExpression ConcreteCheck(IrTypeRef type, TsExpression value) =>
         type switch
@@ -96,10 +87,9 @@ internal static class IrTypeCheckBuilder
     private static TsExpression? NullableCheck(
         IrNullableTypeRef nullable,
         TsExpression value,
-        IReadOnlyList<IrTypeParameter> typeParameters,
-        IrToTsTypeOverrides? typeOverrides
+        TypeCheckScope scope
     ) =>
-        Generate(nullable.Inner, value, typeParameters, typeOverrides) is { } innerCheck
+        Generate(nullable.Inner, value, scope) is { } innerCheck
             ? new TsBinaryExpression(
                 new TsBinaryExpression(value, "===", new TsLiteral("null")),
                 "||",
@@ -117,16 +107,16 @@ internal static class IrTypeCheckBuilder
     private static TsExpression? TypeParameterCheck(
         IrTypeParameterRef typeParameter,
         TsExpression value,
-        IReadOnlyList<IrTypeParameter> typeParameters
+        TypeCheckScope scope
     )
     {
-        var declaration = typeParameters.FirstOrDefault(p => p.Name == typeParameter.Name);
+        var declaration = scope.TypeParameters.FirstOrDefault(p => p.Name == typeParameter.Name);
 
         if (declaration is null)
             return null;
 
         var constraintChecks = (declaration.Constraints ?? []).Select(constraint =>
-            ConstraintCheck(constraint, value, typeParameters)
+            ConstraintCheck(constraint, value, scope)
         );
 
         return AllOf([KindConstraintCheck(declaration.KindConstraint, value), .. constraintChecks]);
@@ -140,15 +130,11 @@ internal static class IrTypeCheckBuilder
     private static TsExpression? ConstraintCheck(
         IrTypeRef constraint,
         TsExpression value,
-        IReadOnlyList<IrTypeParameter> typeParameters
+        TypeCheckScope scope
     ) =>
         constraint switch
         {
-            IrTypeParameterRef typeParameter => TypeParameterCheck(
-                typeParameter,
-                value,
-                typeParameters
-            ),
+            IrTypeParameterRef typeParameter => TypeParameterCheck(typeParameter, value, scope),
             IrNamedTypeRef { Semantics.IsTranspilable: true } named => NamedTypeCheck(named, value),
             _ => null,
         };
