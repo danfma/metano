@@ -306,6 +306,28 @@ describe("read options — polymorphic payloads", () => {
       expectJsonException(() => read('{"Kind":"x","kind":"k"}', kindBase), METADATA_NOT_FIRST_MESSAGE);
     });
 
+    // System.Text.Json rejects a property named exactly like the discriminator
+    // ("The type 'KDer' contains property 'kind' that conflicts with an existing
+    // metadata property name.", measured; MS0032 in generated contexts). A
+    // hand-written spec gets the same rule on both lookups: the tag is metadata.
+    test("a property named exactly like the discriminator is never filled by the tag", () => {
+      const exactDer: TypeSpec<KindDer> = {
+        type: KindDer,
+        factory: (p) => new KindDer(p.kind as string | null),
+        properties: [{ ts: "kind", json: "kind", type: { kind: "primitive" }, optional: true }],
+      };
+
+      const exactBase: TypeSpec<KindBase> = {
+        type: KindBase,
+        factory: () => new KindBase(),
+        properties: [],
+        polymorphism: { discriminator: "kind", derived: [{ tag: "k", spec: () => exactDer }] },
+      };
+
+      expect(read('{"kind":"k"}', exactBase)).toEqual(new KindDer(null));
+      expect(read('{"kind":"x"}', exactDer)).toEqual(new KindDer("x"));
+    });
+
     test("read directly, the contract matches the key ignoring case", () => {
       expect(read('{"KIND":"x"}', kindDer)).toEqual(new KindDer("x"));
       expect(read('{"kind":"x"}', kindDer)).toEqual(new KindDer("x"));

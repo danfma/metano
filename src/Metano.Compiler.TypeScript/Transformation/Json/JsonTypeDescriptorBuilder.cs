@@ -16,12 +16,12 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 internal sealed class JsonTypeDescriptorBuilder(
     TypeScriptTransformContext context,
     JsonTypeInfoNames names,
-    bool readsNumbersFromStrings
+    JsonContextReadOptions readOptions
 )
 {
     private readonly TypeScriptTransformContext _context = context;
     private readonly JsonTypeInfoNames _names = names;
-    private readonly bool _readsNumbersFromStrings = readsNumbersFromStrings;
+    private readonly JsonContextReadOptions _readOptions = readOptions;
 
     /// <summary>The descriptor of <paramref name="type"/>, classified first.</summary>
     public TsObjectLiteral Build(ITypeSymbol type) =>
@@ -227,7 +227,7 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// </summary>
     private TsObjectLiteral BuildPrimitiveDescriptor(ITypeSymbol type)
     {
-        var numberType = _readsNumbersFromStrings
+        var numberType = _readOptions.ReadsNumbersFromStrings
             ? JsonTypeClassifier.NumberTypeNameOf(type)
             : null;
 

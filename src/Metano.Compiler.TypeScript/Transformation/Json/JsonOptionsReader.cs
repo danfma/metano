@@ -58,13 +58,14 @@ internal static class JsonOptionsReader
         var webDefaults = HasWebDefaults(attribute);
 
         return new JsonContextReadOptions(
-            PropertyNameCaseInsensitive: options.TryGetValue(CaseInsensitiveOption, out var named)
-                ? named is true
-                : webDefaults,
+            PropertyNameCaseInsensitive: BoolOptionOf(options, CaseInsensitiveOption, webDefaults),
             ReadsNumbersFromStrings: NumberHandlingOf(options, webDefaults)
                 .HasFlag(JsonNumberHandling.AllowReadingFromString),
-            AllowOutOfOrderMetadataProperties: options.GetValueOrDefault(OutOfOrderMetadataOption)
-                is true
+            AllowOutOfOrderMetadataProperties: BoolOptionOf(
+                options,
+                OutOfOrderMetadataOption,
+                defaultValue: false
+            )
         );
     }
 
@@ -88,6 +89,13 @@ internal static class JsonOptionsReader
     private static bool HasWebDefaults(AttributeData attribute) =>
         attribute.ConstructorArguments is [{ Value: int defaults }]
         && (JsonSerializerDefaults)defaults == JsonSerializerDefaults.Web;
+
+    /// <summary>The named boolean option <paramref name="name"/>, else <paramref name="defaultValue"/>.</summary>
+    private static bool BoolOptionOf(
+        Dictionary<string, object?> options,
+        string name,
+        bool defaultValue
+    ) => options.TryGetValue(name, out var named) ? named is true : defaultValue;
 
     /// <summary>The named <c>NumberHandling</c>, else the defaults' one.</summary>
     private static JsonNumberHandling NumberHandlingOf(

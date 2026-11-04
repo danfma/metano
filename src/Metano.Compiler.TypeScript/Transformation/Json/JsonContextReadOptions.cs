@@ -19,5 +19,9 @@ internal sealed record JsonContextReadOptions(
     bool AllowOutOfOrderMetadataProperties
 )
 {
-    public static readonly JsonContextReadOptions Default = new(false, false, false);
+    public static readonly JsonContextReadOptions Default = new(
+        PropertyNameCaseInsensitive: false,
+        ReadsNumbersFromStrings: false,
+        AllowOutOfOrderMetadataProperties: false
+    );
 }

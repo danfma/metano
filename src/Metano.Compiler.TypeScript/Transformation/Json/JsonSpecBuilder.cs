@@ -17,8 +17,6 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal sealed class JsonSpecBuilder
 {
-    private static readonly TsTypeOrigin RuntimeJsonOrigin = new("metano-runtime", "system/json");
-
     private readonly TypeScriptTransformContext _context;
     private readonly JsonTypeInfoNames _names;
     private readonly JsonPropertyCollector _properties;
@@ -26,19 +24,13 @@ internal sealed class JsonSpecBuilder
     private readonly JsonTypeDescriptorBuilder _descriptors;
     private readonly JsonPolymorphismSpecBuilder _polymorphismSpecs;
 
-    public JsonSpecBuilder(
-        TypeScriptTransformContext context,
-        JsonTypeInfoNames names,
-        JsonPropertyCollector properties,
-        IReadOnlyDictionary<ITypeSymbol, JsonPolymorphism> polymorphisms,
-        bool readsNumbersFromStrings
-    )
+    public JsonSpecBuilder(TypeScriptTransformContext context, JsonContextPlan plan)
     {
         _context = context;
-        _names = names;
-        _properties = properties;
-        _polymorphisms = polymorphisms;
-        _descriptors = new JsonTypeDescriptorBuilder(context, names, readsNumbersFromStrings);
+        _names = plan.Names;
+        _properties = plan.Properties;
+        _polymorphisms = plan.Polymorphisms;
+        _descriptors = new JsonTypeDescriptorBuilder(context, plan.Names, plan.ReadOptions);
         _polymorphismSpecs = new JsonPolymorphismSpecBuilder(_descriptors);
     }
 
@@ -86,7 +78,11 @@ internal sealed class JsonSpecBuilder
         var descriptor = _descriptors.Build(entry.Type, entry.Kind);
 
         return (
-            new TsNamedType("ValueSpec", [ValueSpecTypeArgument(entry.Type)], RuntimeJsonOrigin),
+            new TsNamedType(
+                "ValueSpec",
+                [ValueSpecTypeArgument(entry.Type)],
+                JsonRuntimeModule.Origin
+            ),
             ContextFactoryCall(
                 "createValueSpec",
                 new TsObjectLiteral([new TsObjectProperty("descriptor", descriptor)])
@@ -108,7 +104,7 @@ internal sealed class JsonSpecBuilder
         var spec = BuildTypeSpecObject(objectType, SpecTypeReferenceName(objectType, contractType));
 
         return (
-            new TsNamedType("TypeSpec", [contractType], RuntimeJsonOrigin),
+            new TsNamedType("TypeSpec", [contractType], JsonRuntimeModule.Origin),
             ContextFactoryCall("createSpec", spec, ExplicitTypeArgumentsOf(contractType))
         );
     }
