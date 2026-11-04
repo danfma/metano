@@ -15,7 +15,9 @@ namespace Metano.Compiler.TypeScript.Transformation;
 ///
 /// Orchestrates the <c>Json/</c> units: reads <c>[JsonSourceGenerationOptions]</c>
 /// for the naming policy and the read options (<see cref="JsonOptionsReader"/>,
-/// emitted by <see cref="JsonReadOptionsGetterBuilder"/>), the <c>[JsonSerializable]</c> roots
+/// emitted by <see cref="JsonReadOptionsGetterBuilder"/>), reports what it does
+/// not mirror (<see cref="JsonUnmirroredContextOptions"/>,
+/// <see cref="JsonUnmirroredAttributes"/>), the <c>[JsonSerializable]</c> roots
 /// (<see cref="JsonContractRoots"/>), their contract closure
 /// (<see cref="JsonContractClosure"/>) and the member names
 /// (<see cref="JsonTypeInfoNames"/>), then emits one lazy getter per entry
@@ -124,7 +126,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     /// <summary>
     /// Reads the roots, names them and computes their closure, reporting every
-    /// <c>MS0035</c> / <c>MS0036</c> to <paramref name="report"/>. <c>null</c>
+    /// <c>MS0035</c> / <c>MS0036</c> / <c>MS0037</c> to <paramref name="report"/>. <c>null</c>
     /// when the context has no admitted root (nothing is emitted).
     /// </summary>
     private JsonContextPlan? Plan(INamedTypeSymbol contextType, Action<MetanoDiagnostic> report)
@@ -158,6 +160,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             polymorphismValidator
         ).Collect(roots);
 
+        ReportUnmirroredOptions(contextType, properties, contract, report);
+
         return new JsonContextPlan(
             names,
             properties,
@@ -165,5 +169,24 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             contract.Polymorphisms,
             JsonOptionsReader.ReadOptionsOf(contextType)
         );
+    }
+
+    /// <summary>
+    /// Reports <c>MS0037</c> for every context option and every attribute of
+    /// the closure the generated context does not mirror (FR-046).
+    /// </summary>
+    private static void ReportUnmirroredOptions(
+        INamedTypeSymbol contextType,
+        JsonPropertyCollector properties,
+        JsonContract contract,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var warnings = JsonUnmirroredContextOptions
+            .Of(contextType)
+            .Concat(new JsonUnmirroredAttributes(properties).Of(contract.Entries));
+
+        foreach (var warning in warnings)
+            report(warning);
     }
 }

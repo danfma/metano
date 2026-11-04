@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Metano.Compiler.Diagnostics;
 
 namespace Metano.Tests.Json;
 
@@ -27,7 +28,7 @@ namespace Metano.Tests.Json;
 /// given <c>"1"</c> and an int tag given <c>"1"</c> are rejected in every
 /// context. <c>NumberHandling = AllowNamedFloatingPointLiterals</c> alone reads
 /// <c>"NaN"</c> but not <c>"5"</c>, and <c>WriteAsString</c> writes <c>"5"</c>:
-/// neither flag is mirrored (FR-046 reports them, slice S6b). Writes under Web
+/// neither flag is mirrored (FR-046 reports them with MS0037, slice S6b). Writes under Web
 /// stay JSON numbers (<c>{"count":5,"ratio":2.5,"url":"u"}</c>).
 ///
 /// The Web golden's generated TypeScript was bundled with <c>bun build</c> and
@@ -286,10 +287,17 @@ public class JsonReadOptionsTests
             """
         );
 
-        if (diagnostics.Count > 0)
+        // The unmirrored NumberHandling flags raise MS0037 (FR-046), which
+        // JsonUnmirroredOptionTests asserts; the emitted read options are the
+        // subject here.
+        var unexpected = diagnostics
+            .Where(diagnostic => diagnostic.Code != DiagnosticCodes.UnmirroredJsonOption)
+            .ToList();
+
+        if (unexpected.Count > 0)
             throw new InvalidOperationException(
                 "Unexpected diagnostics: "
-                    + string.Join("; ", diagnostics.Select(diagnostic => diagnostic.Format()))
+                    + string.Join("; ", unexpected.Select(diagnostic => diagnostic.Format()))
             );
 
         return files[ContextPath];

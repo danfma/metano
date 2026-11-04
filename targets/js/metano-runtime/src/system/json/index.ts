@@ -4,6 +4,7 @@ export type {
   RefDescriptor,
   TemporalDescriptor,
   DecimalDescriptor,
+  BytesDescriptor,
   MapDescriptor,
   ArrayDescriptor,
   HashSetDescriptor,

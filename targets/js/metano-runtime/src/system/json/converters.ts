@@ -18,6 +18,7 @@ import type {
   ValueSpec,
 } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
+import { byteArrayConverter } from "./byte-array-converter.ts";
 import { HashSet } from "../collections/hash-set.ts";
 // Only the contract walks (the hot path: one container per object) open and
 // close containers with enter/exit; the collection converters keep the
@@ -84,6 +85,8 @@ function getBuiltinConverter(
       return temporalConverter(descriptor);
     case "decimal":
       return decimalConverterOf(descriptor, readOptions);
+    case "bytes":
+      return byteArrayConverter;
     case "map":
       return mapConverter(descriptor, customConverters, readOptions);
     case "array":
@@ -370,7 +373,10 @@ export function collectProperties(spec: TypeSpec): readonly PropertySpec[] {
  * (FR-009): the spec's own properties, then its base's, recursively. A JSON
  * name appears once, from its most-derived declaration, and a base
  * declaration whose `ts` name a more-derived spec lists in
- * `ignoredProperties` (a `[JsonIgnore]` override) is left out.
+ * `ignoredProperties` (a `[JsonIgnore]` override) is left out. When any
+ * property has an `order` (`[JsonPropertyOrder]`), the list is then sorted by
+ * it, stably, across the whole chain (measured: `{"Der2":20,"Base3":3,"Der1":10,
+ * "Base1":1,"Der3":30,"Base2":2}` for orders -5, -5, 0, 0, 1, 5).
  */
 export function collectWireProperties(spec: TypeSpec): readonly PropertySpec[] {
   const wire: PropertySpec[] = [];
@@ -392,7 +398,15 @@ export function collectWireProperties(spec: TypeSpec): readonly PropertySpec[] {
     }
   }
 
-  return wire;
+  return wire.some(hasExplicitOrder) ? wire.sort(byPropertyOrder) : wire;
+}
+
+function hasExplicitOrder(property: PropertySpec): boolean {
+  return property.order !== undefined;
+}
+
+function byPropertyOrder(left: PropertySpec, right: PropertySpec): number {
+  return (left.order ?? 0) - (right.order ?? 0);
 }
 
 /** The spec and its bases, most-derived first. */

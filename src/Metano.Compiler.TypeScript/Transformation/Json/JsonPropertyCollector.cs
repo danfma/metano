@@ -88,7 +88,8 @@ internal sealed class JsonPropertyCollector(
 
     /// <summary>
     /// Every property the object literal of a <c>[PlainObject]</c> factory
-    /// sets: the declarations of each spec of the <c>base</c> chain, base-most
+    /// sets, and the candidates a class factory assigns after construction:
+    /// the declarations of each spec of the <c>base</c> chain, base-most
     /// first, each TS member once with its most-derived declaration, leaving
     /// out the base declarations a <c>[JsonIgnore]</c> override hides (the
     /// payload never carries them). A linked spec reads its inherited
@@ -156,6 +157,14 @@ internal sealed class JsonPropertyCollector(
     }
 
     /// <summary>
+    /// The types whose own declarations the spec of <paramref name="type"/>
+    /// lists: the type alone for a linked spec, else the type and every
+    /// inlined ancestor (for an interface, the interfaces it extends).
+    /// </summary>
+    public IReadOnlyList<INamedTypeSymbol> DeclaringTypesOf(INamedTypeSymbol type) =>
+        LinkedBaseOf(type) is null ? DeclarationChainOf(type) : [type];
+
+    /// <summary>
     /// The base type a spec links to through <c>base: this.x</c>, or
     /// <c>null</c> when the base has no object contract in the context. The
     /// base is admitted by the closure rule
@@ -168,6 +177,17 @@ internal sealed class JsonPropertyCollector(
     /// </summary>
     public INamedTypeSymbol? LinkedBaseOf(INamedTypeSymbol type) =>
         type.BaseType is { } baseType && _admission.HasObjectContract(baseType) ? baseType : null;
+
+    /// <summary>
+    /// <paramref name="type"/> and the ancestors an unlinked spec inlines,
+    /// most-derived first; for an interface (FR-018), the interface and every
+    /// interface it extends, in System.Text.Json's order
+    /// (<see cref="JsonInterfaceHierarchy"/>).
+    /// </summary>
+    private IReadOnlyList<INamedTypeSymbol> DeclarationChainOf(INamedTypeSymbol type) =>
+        type.TypeKind == TypeKind.Interface
+            ? JsonInterfaceHierarchy.Of(type)
+            : InlinedAncestorsOf(type).Prepend(type).ToList();
 
     /// <summary>
     /// The ancestors whose properties an unlinked spec inlines, nearest first:
@@ -187,15 +207,28 @@ internal sealed class JsonPropertyCollector(
     }
 
     /// <summary>
-    /// Collects public properties from the type, excluding [JsonIgnore], and computes
-    /// both the TS field name and the JSON wire name.
+    /// The type's own serialized members with their TS and JSON names:
+    /// its properties, then its fields, each in declaration order, as
+    /// System.Text.Json lists them (measured:
+    /// <c>{"DProp":5,"DProtInt":7,"DField":4,"BProp":1,"BInternal":3,"BField":2}</c>
+    /// for a derived type declaring the field <c>DField</c> before the
+    /// properties). A member is serialized under
+    /// <see cref="JsonMemberAccess.IsIncluded"/>, unless <c>[JsonIgnore]</c>
+    /// hides it both ways or it is the <c>[JsonExtensionData]</c> overflow
+    /// (reported with <c>MS0037</c>).
     /// </summary>
-    private List<JsonSerializableProperty> CollectOwnProperties(INamedTypeSymbol type) =>
-        type.GetMembers()
+    private List<JsonSerializableProperty> CollectOwnProperties(INamedTypeSymbol type)
+    {
+        var members = type.GetMembers();
+
+        return members
             .OfType<IPropertySymbol>()
             .Where(IsSerializable)
+            .Cast<ISymbol>()
+            .Concat(members.OfType<IFieldSymbol>().Where(IsSerializable))
             .Select(ToSerializableProperty)
             .ToList();
+    }
 
     /// <summary>
     /// The visible own declarations of an unlinked spec's type and of each
@@ -209,10 +242,7 @@ internal sealed class JsonPropertyCollector(
         INamedTypeSymbol type
     )
     {
-        var chain =
-            type.TypeKind == TypeKind.Interface
-                ? JsonInterfaceHierarchy.Of(type)
-                : InlinedAncestorsOf(type).Prepend(type).ToList();
+        var chain = DeclarationChainOf(type);
 
         return chain
             .Select(
@@ -232,12 +262,12 @@ internal sealed class JsonPropertyCollector(
         IEnumerable<INamedTypeSymbol> derivedTypes
     ) =>
         CollectOwnProperties(declaringType)
-            .Where(property => !IsHiddenByIgnoredOverride(derivedTypes, property.Property.Name))
+            .Where(property => !IsHiddenByIgnoredOverride(derivedTypes, property.Member.Name))
             .ToList();
 
     private static (string ClrName, string JsonName) RedeclarationKey(
         JsonSerializableProperty property
-    ) => (property.Property.Name, property.JsonName);
+    ) => (property.Member.Name, property.JsonName);
 
     /// <summary>
     /// Whether one of the <paramref name="derivedTypes"/> overrides the
@@ -255,7 +285,7 @@ internal sealed class JsonPropertyCollector(
             .Any(IsIgnoredOverride);
 
     private static bool IsIgnoredOverride(IPropertySymbol property) =>
-        property.IsOverride && SymbolHelper.HasAttribute(property, "JsonIgnore");
+        property.IsOverride && JsonSerializationAttributes.IsAlwaysIgnored(property);
 
     private static IEnumerable<IPropertySymbol> OverriddenDeclarationsOf(IPropertySymbol property)
     {
@@ -270,24 +300,36 @@ internal sealed class JsonPropertyCollector(
     }
 
     private static bool IsSerializable(IPropertySymbol property) =>
-        !property.IsStatic
-        && !property.IsImplicitlyDeclared
-        && property.DeclaredAccessibility == Accessibility.Public
-        && !SymbolHelper.HasAttribute(property, "JsonIgnore")
-        && !property.IsIndexer;
+        !property.IsIndexer && IsSerializableMember(property);
 
-    private JsonSerializableProperty ToSerializableProperty(IPropertySymbol property)
+    private static bool IsSerializable(IFieldSymbol field) =>
+        !field.IsConst && IsSerializableMember(field);
+
+    private static bool IsSerializableMember(ISymbol member) =>
+        !member.IsStatic
+        && !member.IsImplicitlyDeclared
+        && JsonMemberAccess.IsIncluded(member)
+        && !JsonSerializationAttributes.IsAlwaysIgnored(member)
+        && !JsonSerializationAttributes.Has(member, "JsonExtensionDataAttribute");
+
+    private JsonSerializableProperty ToSerializableProperty(ISymbol member)
     {
         // JSON name: [JsonPropertyName] wins, otherwise apply naming policy
-        var jsonName = JsonPropertyNameOf(property) ?? ApplyNamingPolicy(property.Name);
+        var jsonName = JsonPropertyNameOf(member) ?? ApplyNamingPolicy(member.Name);
 
-        return new JsonSerializableProperty(property, jsonName, TsNameOf(property));
+        return new JsonSerializableProperty(
+            member,
+            JsonMemberAccess.TypeOf(member),
+            jsonName,
+            TsNameOf(member),
+            JsonSerializationAttributes.OrderOf(member)
+        );
     }
 
-    private static string TsNameOf(IPropertySymbol property) =>
+    private static string TsNameOf(ISymbol member) =>
         IrToTsNamingPolicy.ToDataMemberName(
-            property.Name,
-            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
+            member.Name,
+            SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
         );
 
     /// <summary>
@@ -299,10 +341,10 @@ internal sealed class JsonPropertyCollector(
 
     /// <summary>
     /// The name of System.Text.Json's <c>[JsonPropertyName("name")]</c> on
-    /// <paramref name="property"/>, or <c>null</c> when it has none.
+    /// <paramref name="member"/>, or <c>null</c> when it has none.
     /// </summary>
-    private static string? JsonPropertyNameOf(IPropertySymbol property) =>
-        property
+    private static string? JsonPropertyNameOf(ISymbol member) =>
+        member
             .GetAttributes()
             .Where(attribute =>
                 JsonSerializationAttributes.Is(attribute, "JsonPropertyNameAttribute")
@@ -313,10 +355,15 @@ internal sealed class JsonPropertyCollector(
             .FirstOrDefault();
 }
 
-/// <summary>A serializable property with its JSON wire name and TS member
-/// name.</summary>
+/// <summary>
+/// A serialized data member (a property, or a <c>[JsonInclude]</c> field)
+/// with its type, JSON wire name, TS member name and
+/// <c>[JsonPropertyOrder]</c> (<c>0</c> without one).
+/// </summary>
 internal sealed record JsonSerializableProperty(
-    IPropertySymbol Property,
+    ISymbol Member,
+    ITypeSymbol Type,
     string JsonName,
-    string TsName
+    string TsName,
+    int Order
 );

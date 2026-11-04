@@ -196,3 +196,69 @@ describe("JsonSerializer — wire order", () => {
     expect(value).toEqual(new Derived(1, "d", 2));
   });
 });
+
+// [JsonPropertyOrder] (FR-046, slice S6b), measured on .NET 10:
+//   class Ord { A; [Order(-1)] B; C; [Order(1)] D; [Order(-1)] E } → {"B":2,"E":5,"A":1,"C":3,"D":4}
+//   class OrdBase { Base1; [Order(5)] Base2; [Order(-5)] Base3 }
+//   class OrdDer : OrdBase { Der1; [Order(-5)] Der2; [Order(1)] Der3 }
+//     → {"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}
+describe("[JsonPropertyOrder]", () => {
+  const ordSpec: TypeSpec = {
+    factory: (p) => p,
+    properties: [
+      { ts: "a", json: "A", type: primitive },
+      { ts: "b", json: "B", type: primitive, order: -1 },
+      { ts: "c", json: "C", type: primitive },
+      { ts: "d", json: "D", type: primitive, order: 1 },
+      { ts: "e", json: "E", type: primitive, order: -1 },
+    ],
+  };
+
+  const ordBaseSpec: TypeSpec = {
+    factory: (p) => p,
+    properties: [
+      { ts: "base1", json: "Base1", type: primitive },
+      { ts: "base2", json: "Base2", type: primitive, order: 5 },
+      { ts: "base3", json: "Base3", type: primitive, order: -5 },
+    ],
+  };
+
+  const ordDerSpec: TypeSpec = {
+    base: ordBaseSpec,
+    factory: (p) => p,
+    properties: [
+      { ts: "der1", json: "Der1", type: primitive },
+      { ts: "der2", json: "Der2", type: primitive, order: -5 },
+      { ts: "der3", json: "Der3", type: primitive, order: 1 },
+    ],
+  };
+
+  test("sorts one contract stably by order", () => {
+    expect(jsonNamesOf(collectWireProperties(ordSpec))).toEqual(["B", "E", "A", "C", "D"]);
+  });
+
+  test("sorts the whole base chain, derived-first within one order", () => {
+    expect(jsonNamesOf(collectWireProperties(ordDerSpec))).toEqual([
+      "Der2",
+      "Base3",
+      "Der1",
+      "Base1",
+      "Der3",
+      "Base2",
+    ]);
+  });
+
+  test("writes in the sorted order", () => {
+    const value = { base1: 1, base2: 2, base3: 3, der1: 10, der2: 20, der3: 30 };
+
+    expect(JSON.stringify(JsonSerializer.serialize(value, ordDerSpec))).toBe(
+      '{"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}',
+    );
+  });
+
+  test("leaves a spec's own properties list untouched", () => {
+    collectWireProperties(ordSpec);
+
+    expect(jsonNamesOf(ordSpec.properties)).toEqual(["A", "B", "C", "D", "E"]);
+  });
+});

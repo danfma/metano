@@ -24,7 +24,7 @@ internal sealed class JsonDiscriminatorConflictDetector(JsonPropertyCollector pr
             .Select(registration => registration.Type)
             .OfType<INamedTypeSymbol>()
             .SelectMany(_properties.ContractPropertiesOf)
-            .DistinctBy(property => (property.Property, property.JsonName))
+            .DistinctBy(property => (property.Member, property.JsonName))
             .Select(property => ConflictOf(polymorphism, property))
             .OfType<JsonPolymorphismConflict>()
             .ToList();
@@ -38,7 +38,7 @@ internal sealed class JsonDiscriminatorConflictDetector(JsonPropertyCollector pr
         JsonSerializableProperty property
     )
     {
-        var definition = property.Property.OriginalDefinition;
+        var definition = property.Member.OriginalDefinition;
         var member = $"{Display(definition.ContainingType)}.{definition.Name}";
         var location = definition.Locations.FirstOrDefault(candidate => candidate.IsInSource);
         var owner = Display(polymorphism.BaseType.OriginalDefinition);

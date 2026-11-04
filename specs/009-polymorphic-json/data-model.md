@@ -9,8 +9,11 @@ builds, and the runtime shapes the generated context emits.
 |---|---|---|
 | `JsonPolymorphicAttribute` (own attributes only) | `TypeDiscriminatorPropertyName` (default `$type`), `UnknownDerivedTypeHandling` (`FailSerialization` = 0, `FallBackToBaseType` = 1, `FallBackToNearestAncestor` = 2), `IgnoreUnrecognizedTypeDiscriminators` | Optional; `Inherited = false`. |
 | `JsonDerivedTypeAttribute` (own, repeatable) | ctor `(Type)`, `(Type, string)`, `(Type, int)` | ≥ 1 makes the type polymorphic, whether it is a class, a record, an interface (FR-018) or a `[PlainObject]` type (FR-019). Attribute order = entry order. |
-| `JsonSourceGenerationOptionsAttribute` on the context | ctor `JsonSerializerDefaults` (`Web` sets the next three), `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`, `NumberHandling` (`AllowReadingFromString` only), `AllowOutOfOrderMetadataProperties`; every other named argument is only checked against the FR-046 list (`MS0037`) | A named argument overrides the Web default (FR-048). |
-| `JsonPropertyOrderAttribute` on a contract member | presence only | `MS0037` (DECIDED-3); the order is not mirrored. |
+| `JsonSourceGenerationOptionsAttribute` on the context | ctor `JsonSerializerDefaults` (`Web` sets the next three), `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`, `NumberHandling` (`AllowReadingFromString` only), `AllowOutOfOrderMetadataProperties`; every other named argument is only compared with its System.Text.Json default (`MS0037` when it differs, FR-046) | A named argument overrides the Web default (FR-048). |
+| `JsonPropertyOrderAttribute` on a contract member | ctor `int` | `PropertySpec.order` when non-zero; the runtime sorts the whole base chain by it, stably (FR-046, DECIDED-25). |
+| `JsonIncludeAttribute` on a field or non-public property | presence | Collected when the member and its accessors are `public`, `internal` or `protected internal`; else `MS0037` (DECIDED-25). |
+| `JsonIgnoreAttribute` | named `Condition` | `Always` (default) hides the member, `Never` keeps it; any other condition keeps it and reports `MS0037`. |
+| `JsonConverterAttribute`, `JsonExtensionDataAttribute`, `JsonNumberHandlingAttribute`, `JsonObjectCreationHandlingAttribute`, `JsonUnmappedMemberHandlingAttribute`, `JsonRequiredAttribute`, `JsonConstructorAttribute` | presence and argument | `MS0037` when not mirrored (DECIDED-25). |
 | `JsonSerializableAttribute` on the context (repeatable) | ctor `Type` (named **or rank-1 array** type), `TypeInfoPropertyName` | Rank > 1 → `MS0035`. |
 | `JsonFactoryAttribute` (new, `Metano.Annotations`) | marker on a static method | `[AttributeUsage(AttributeTargets.Method)]`. |
 
@@ -153,6 +156,15 @@ export type DecimalDescriptor = {
   readonly type?: new (value: string | number) => unknown;
 };
 
+// S6b (FR-046, DECIDED-25): byte[] as a base64 JSON string; the TS value stays number[].
+export type BytesDescriptor = { readonly kind: "bytes" };
+
+export interface PropertySpec {
+  // …existing members unchanged…
+  /** S6b: a non-zero [JsonPropertyOrder]; collectWireProperties sorts the chain by it. */
+  readonly order?: number;
+}
+
 export interface TypeSpec<T = unknown> {
   // …existing members unchanged…
   readonly polymorphism?: PolymorphismSpec;
@@ -182,14 +194,15 @@ export class NotSupportedException extends Error {}
 
 /** Wire order: own properties, then base's, recursively (STJ); deduplicated by JSON name,
  *  keeping the most-derived declaration (FR-009); skips base declarations a more-derived
- *  spec lists in ignoredProperties (DECIDED-20 a). */
+ *  spec lists in ignoredProperties (DECIDED-20 a); then sorted stably by `order` when any
+ *  property has one (S6b, DECIDED-25). */
 export function collectWireProperties(spec: TypeSpec): readonly PropertySpec[];
 ```
 
 `SerializerContext` gains a protected `readOptions` getter (default: no options), which generated
 contexts override when their options are not the defaults, and a protected `createValueSpec`.
-`BrandedDescriptor`, `PropertySpec`, the 11 descriptor kinds, `JsonConverter` and
-`collectProperties` are unchanged.
+`BrandedDescriptor`, `JsonConverter` and `collectProperties` are unchanged; S6b adds the 12th
+descriptor kind (`bytes`) and `PropertySpec.order`.
 
 ### Dispatch index (internal)
 

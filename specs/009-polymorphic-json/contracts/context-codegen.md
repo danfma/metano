@@ -404,3 +404,92 @@ Rules:
   option) and, in every context, names its type: `{ kind: "decimal", type: Decimal }` (DECIDED-23 f).
 - `JsonReadOptions` is a type-only import.
 
+
+## 5. Member options (FR-046, slice S6b)
+
+```csharp
+public sealed record Blob(byte[] Data, byte[]? Maybe, List<byte> Numbers);
+
+public sealed class Account
+{
+    public string Name { get; set; } = "";
+
+    [JsonInclude]
+    internal int Version { get; set; }
+
+    [JsonInclude, JsonPropertyOrder(-1)]
+    internal string Id = "";
+
+    [JsonInclude]
+    public int Hits;
+
+    public int Unlisted;
+}
+
+public record OrdBase(int Base1)
+{
+    [JsonPropertyOrder(5)]
+    public int Base2 { get; init; }
+}
+```
+
+```ts
+get blob(): TypeSpec<Blob> {
+  return this._blob ??= this.createSpec({
+    type: Blob,
+    factory: (p: Record<string, unknown>) => new Blob(p.data as number[], p.maybe as number[] | null, p.numbers as number[]),
+    properties: [
+      { ts: "data", json: "Data", type: { kind: "bytes" } },
+      { ts: "maybe", json: "Maybe", type: { kind: "nullable", inner: { kind: "bytes" } }, optional: true },
+      { ts: "numbers", json: "Numbers", type: { kind: "array", element: { kind: "primitive" } } },
+    ],
+  });
+}
+
+get account(): TypeSpec<Account> {
+  return this._account ??= this.createSpec({
+    type: Account,
+    factory: (p: Record<string, unknown>) => Object.assign(new Account(), {
+      name: p.name as string,
+      version: p.version as number,
+      id: p.id as string,
+      hits: p.hits as number,
+    }),
+    properties: [
+      { ts: "name", json: "Name", type: { kind: "primitive" } },
+      { ts: "version", json: "Version", type: { kind: "primitive" } },
+      { ts: "id", json: "Id", type: { kind: "primitive" }, order: -1 },
+      { ts: "hits", json: "Hits", type: { kind: "primitive" } },
+    ],
+  });
+}
+
+get ordBase(): TypeSpec<OrdBase> {
+  return this._ordBase ??= this.createSpec({
+    type: OrdBase,
+    factory: (p: Record<string, unknown>) => Object.assign(new OrdBase(p.base1 as number), { base2: p.base2 as number }),
+    properties: [
+      { ts: "base1", json: "Base1", type: { kind: "primitive" } },
+      { ts: "base2", json: "Base2", type: { kind: "primitive" }, order: 5 },
+    ],
+  });
+}
+```
+
+Rules (DECIDED-25):
+
+- A single-dimensional `byte[]` is `{ kind: "bytes" }` wherever it appears (property, element,
+  dictionary value, nullable inner, value root `ValueSpec<number[] | null>`); `List<byte>` and
+  `byte[,]` keep their array descriptors.
+- Each type's properties are listed before its fields, each group in declaration order. A field
+  or a non-public property is listed only with `[JsonInclude]`, and only when the member and its
+  accessors are `public`, `internal` or `protected internal`.
+- `order` follows `optional` and appears only for a non-zero `[JsonPropertyOrder]`; the list stays
+  in the FR-009 order and the runtime sorts the chain.
+- The factory wraps `new T(…)` in `Object.assign(…, { … })` when the contract (its base chain
+  included) has members no constructor parameter binds that System.Text.Json assigns on read: a
+  property with a public `set` / `init` accessor, or a reachable one under `[JsonInclude]`, and a
+  writable `[JsonInclude]` field. A type without a parameterized constructor is built with
+  `new T()`. A contract whose members are all constructor-bound keeps `new T(…)` (FR-040).
+- `[JsonIgnore(Condition = Never)]` keeps the member; `[JsonExtensionData]` is left out.
+- Golden: `tests/Metano.Tests/Expected/json-member-options-context.ts`.
