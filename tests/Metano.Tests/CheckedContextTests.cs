@@ -220,6 +220,87 @@ public class CheckedContextTests
         await Assert.That(files["ops.ts"]).DoesNotContain("CheckedStatement");
     }
 
+    /// <summary>
+    /// C# evaluates a constant inside <c>unchecked</c> at compile time modulo
+    /// its type; the lowering takes Roslyn's value rather than printing the
+    /// unbounded operation.
+    /// </summary>
+    private const string WrappedConstantsSource = """
+        [Transpile]
+        public class Hashing
+        {
+            public const int Offset = unchecked((int)2166136261);
+            public const int MinBit = unchecked((int)0x80000000);
+            public const ulong AllOnes = unchecked((ulong)-1);
+            public const uint U = unchecked((uint)-1);
+            public const byte B = unchecked((byte)300);
+
+            public int Fnv(string s)
+            {
+                int h = unchecked((int)2166136261);
+                foreach (var c in s)
+                    h = unchecked((h ^ c) * 16777619);
+
+                return h;
+            }
+
+            public int Mix(int a)
+            {
+                unchecked
+                {
+                    return a * (int)2166136261;
+                }
+            }
+
+            public ulong Borrow() => unchecked(0UL - 1UL);
+            public int Wrap() => unchecked(int.MaxValue + 1);
+            public decimal Money() => unchecked((int)2166136261);
+            public int Named() => unchecked(Offset);
+        }
+        """;
+
+    [Test]
+    [Arguments("static readonly offset: number = -2128831035;")]
+    [Arguments("static readonly minBit: number = -2147483648;")]
+    [Arguments("static readonly allOnes: number = 18446744073709551615;")]
+    [Arguments("static readonly u: number = 4294967295;")]
+    [Arguments("static readonly b: number = 44;")]
+    [Arguments("let h = -2128831035;")]
+    [Arguments("h = (h ^ c) * 16777619;")]
+    [Arguments("return a * -2128831035;")]
+    [Arguments("return 18446744073709551615;")]
+    [Arguments("return -2147483648;")]
+    [Arguments("return new Decimal(\"-2128831035\");")]
+    [Arguments("return Hashing.offset;")]
+    public async Task UncheckedConstants_LowerToTheirWrappedValue(string expected)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            WrappedConstantsSource,
+            Int64Representation.Number
+        );
+
+        await Assert.That(files["hashing.ts"]).Contains(expected);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("static final int offset = -2128831035;")]
+    [Arguments("static final int minBit = -2147483648;")]
+    [Arguments("static final int allOnes = -1;")]
+    [Arguments("static final int u = 4294967295;")]
+    [Arguments("static final int b = 44;")]
+    [Arguments("int h = -2128831035;")]
+    [Arguments("return a * -2128831035;")]
+    [Arguments("int borrow() => -1;")]
+    [Arguments("int wrap() => -2147483648;")]
+    public async Task Dart_UncheckedConstants_LowerToTheirWrappedValue(string expected)
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(WrappedConstantsSource);
+
+        await Assert.That(files["hashing.dart"]).Contains(expected);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
     [Test]
     public async Task Dart_LowersCheckedContextsToTheirOperandAndBlock()
     {
