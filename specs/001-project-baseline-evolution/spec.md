@@ -206,8 +206,10 @@ Product requirements added after the migration (normative; each one is traced by
   later (the Dart mapping is out of scope).
   1. *Mapping.* `private` and `private protected` emit `private constructor`; `protected` emits
      `protected constructor`; `public`, `internal` and `protected internal` emit no modifier.
-     Record positional constructors and C# 12 primary constructors follow the same mapping; an
-     implicit constructor emits no modifier.
+     Record positional constructors and C# 12 primary constructors follow the same mapping: C#
+     has no syntax to declare their accessibility, so they are public and emit no modifier,
+     including an abstract type's, which Roslyn synthesizes `protected` only to restate that the
+     type cannot be instantiated. An implicit constructor emits no modifier.
   2. *Mixed accessibility.* A TypeScript class has one constructor accessibility: every overload
      signature and the implementation must share it (TS2385). When a type's constructors mix
      accessibility, the backend MUST emit the most permissive mapped modifier (public, then

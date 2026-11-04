@@ -397,6 +397,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         new JsonBrandedFactoryValidator(transpilableTypes, ReportDiagnostic).Validate();
 
+        _constructorAccess = CollectConstructorAccessFacts(transpilableTypes);
+
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();
         var perGroupClosure = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -452,7 +454,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             perGroupClosure =
                 cachedGroups is null && CacheOutputDir is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
-                    : ComputePerGroupClosure(ir, groups);
+                    : ComputePerGroupClosure(ir, groups, _constructorAccess);
             var perGroupResults = new TsSourceFile?[groups.Count];
             perGroupEmissions = new GroupEmission[groups.Count];
             var skippedGroupCount = 0;
@@ -598,6 +600,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
     private PathNaming _pathNaming = new("");
+    private ConstructorAccessFacts _constructorAccess = ConstructorAccessFacts.Empty;
 
     /// <summary>
     /// Built once after the setup phase of <see cref="TransformAll"/> completes.
@@ -751,6 +754,30 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
+    /// The FR-049 constructor facts over every emitted type, nested ones
+    /// included, and the classes each <c>SerializerContext</c> constructs.
+    /// </summary>
+    private ConstructorAccessFacts CollectConstructorAccessFacts(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes
+    ) =>
+        ConstructorAccessFacts.Collect(
+            compilation,
+            transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList(),
+            JsonConstructedTypesOf
+        );
+
+    private IEnumerable<INamedTypeSymbol> WithEmittedNestedTypes(INamedTypeSymbol type) =>
+        type.GetTypeMembers()
+            .Where(ShouldEmitNestedType)
+            .SelectMany(WithEmittedNestedTypes)
+            .Prepend(type);
+
+    private IEnumerable<INamedTypeSymbol> JsonConstructedTypesOf(INamedTypeSymbol type) =>
+        IsJsonSerializerContextType(type)
+            ? new JsonSerializerContextTransformer(Context).ConstructedTypesOf(type)
+            : [];
+
+    /// <summary>
     /// C# 9+ top-level statements: the synthetic <c>&lt;Program&gt;</c>
     /// class carries the entry-point method whose body lowers to
     /// module-level code instead of a class wrapper.
@@ -809,7 +836,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
         if (TryEmitPlainObjectViaIr(type, sink, irCache))
             return true;
-        new IrToTsClassEmitter(Context).Transform(type, sink);
+        new IrToTsClassEmitter(Context, _constructorAccess).Transform(type, sink);
         return true;
     }
 
@@ -1235,11 +1262,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// Builds the per-group closure hash map (ADR-0023). The signature
     /// hash index is amortised: a type appearing in N groups gets
-    /// hashed once.
+    /// hashed once. A group whose constructors depend on another file
+    /// (FR-049: a <c>SerializerContext</c> or a derived class elsewhere) also
+    /// keys on <paramref name="constructorAccess"/>'s facts for its types.
     /// </summary>
     private static Dictionary<string, string> ComputePerGroupClosure(
         IrCompilation ir,
-        IReadOnlyList<TypeFileGroup> groups
+        IReadOnlyList<TypeFileGroup> groups,
+        ConstructorAccessFacts constructorAccess
     )
     {
         var allTypes = groups
@@ -1253,7 +1283,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         foreach (var group in groups)
         {
             var fqns = group.Types.Select(IrTypeDependencyGraph.QualifiedName);
-            result[GroupKey(group)] = GroupClosureHasher.HashGroupClosure(fqns, graph, sigIndex);
+            var closure = GroupClosureHasher.HashGroupClosure(fqns, graph, sigIndex);
+            var constructorFacts = constructorAccess.FingerprintOf(group.Types);
+
+            result[GroupKey(group)] =
+                constructorFacts.Length == 0 ? closure : $"{closure}|{constructorFacts}";
         }
         return result;
     }

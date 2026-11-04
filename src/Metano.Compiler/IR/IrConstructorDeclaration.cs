@@ -7,8 +7,8 @@ namespace Metano.Compiler.IR;
 /// that become properties).</param>
 /// <param name="Body">Constructor body statements.</param>
 /// <param name="BaseArguments">Arguments passed to the base constructor, if any.</param>
-/// <param name="Overloads">Additional constructor overloads, if the type has multiple
-/// public constructors.</param>
+/// <param name="Overloads">The type's other explicit constructors, whatever
+/// their accessibility, when it declares more than one.</param>
 /// <param name="BaseExceptionConstruction">Set when the base constructor called
 /// (explicitly via <c>: base(...)</c> or implicitly) belongs to an exception type
 /// with no emitted target declaration: the base arguments classified by
@@ -18,13 +18,19 @@ namespace Metano.Compiler.IR;
 /// through <c>: this(...)</c>: the chained arguments and the target
 /// constructor, so a backend without constructor chaining can inline the
 /// target (and, transitively, its base call). Null otherwise.</param>
+/// <param name="Visibility">The constructor's declared accessibility. An
+/// implicit constructor is modelled as <see cref="IrVisibility.Public"/>.
+/// Each backend maps it to its own constructor access (TypeScript:
+/// <c>private</c> / <c>protected constructor</c>; Dart, later: a
+/// <c>_</c>-named constructor).</param>
 public sealed record IrConstructorDeclaration(
     IReadOnlyList<IrConstructorParameter> Parameters,
     IReadOnlyList<IrStatement>? Body = null,
     IReadOnlyList<IrArgument>? BaseArguments = null,
     IReadOnlyList<IrConstructorDeclaration>? Overloads = null,
     IrExceptionConstruction? BaseExceptionConstruction = null,
-    IrConstructorChain? ThisChain = null
+    IrConstructorChain? ThisChain = null,
+    IrVisibility Visibility = IrVisibility.Public
 );
 
 /// <summary>

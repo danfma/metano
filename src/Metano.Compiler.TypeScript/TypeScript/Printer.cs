@@ -636,24 +636,19 @@ public sealed class Printer(string indent = "  ")
             // Print overload signatures first
             foreach (var overload in ctor.Overloads)
             {
-                _sb.Write("constructor(");
-                _sb.WriteList(overload.Parameters, PrintConstructorParam);
-                _sb.Write(");");
+                PrintConstructorHead(ctor.Accessibility, overload.Parameters);
+                _sb.Write(";");
                 _sb.WriteLn();
             }
 
             // Print dispatcher implementation
-            _sb.Write("constructor(");
-            _sb.WriteList(ctor.Parameters, PrintConstructorParam);
-            _sb.Write(")");
+            PrintConstructorHead(ctor.Accessibility, ctor.Parameters);
             PrintBody(ctor.Body);
         }
         else
         {
             // Single constructor (no overloads)
-            _sb.Write("constructor(");
-            _sb.WriteList(ctor.Parameters, PrintConstructorParam);
-            _sb.Write(")");
+            PrintConstructorHead(ctor.Accessibility, ctor.Parameters);
 
             if (ctor.Body.Count == 0)
             {
@@ -666,6 +661,17 @@ public sealed class Printer(string indent = "  ")
         }
 
         _sb.WriteLn();
+    }
+
+    private void PrintConstructorHead(
+        TsAccessibility accessibility,
+        IReadOnlyList<TsConstructorParam> parameters
+    )
+    {
+        PrintAccessibility(accessibility);
+        _sb.Write("constructor(");
+        _sb.WriteList(parameters, PrintConstructorParam);
+        _sb.Write(")");
     }
 
     private void PrintConstructorParam(TsConstructorParam p)

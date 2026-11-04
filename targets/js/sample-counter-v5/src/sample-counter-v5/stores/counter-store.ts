@@ -8,7 +8,7 @@ export class CounterStore {
   private readonly _set: ((value: Counter) => void) &
     ((updater: (arg: Counter) => Counter) => void);
 
-  constructor() {
+  private constructor() {
     const [get, set] = createSignal(Counter.zero);
     this._get = get;
     this._set = set;

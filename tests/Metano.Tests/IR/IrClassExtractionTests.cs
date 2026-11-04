@@ -637,6 +637,45 @@ public class IrClassExtractionTests
     }
 
     [Test]
+    public async Task ConstructorVisibility_CarriesDeclaredAccessibilityOnEveryOverload()
+    {
+        var ir = ExtractClass(
+            """
+            [Transpile]
+            public class Money
+            {
+                public decimal Amount { get; }
+                private Money(decimal amount, string currency) { Amount = amount; }
+                protected Money(decimal amount) : this(amount, "USD") { }
+                internal Money() : this(0) { }
+            }
+            """
+        );
+
+        var ctor = ir.Constructor!;
+
+        await Assert.That(ctor.Visibility).IsEqualTo(IrVisibility.Private);
+        await Assert
+            .That(ctor.Overloads!.Select(overload => overload.Visibility))
+            .IsEquivalentTo([IrVisibility.Protected, IrVisibility.Internal]);
+    }
+
+    [Test]
+    public async Task ConstructorVisibility_AbstractRecordPositionalConstructorIsPublic()
+    {
+        // Roslyn synthesizes the positional constructor of an abstract record
+        // as protected; the source declares no accessibility for it (FR-049).
+        var ir = ExtractClass(
+            """
+            [Transpile]
+            public abstract record Shape(string Name);
+            """
+        );
+
+        await Assert.That(ir.Constructor!.Visibility).IsEqualTo(IrVisibility.Public);
+    }
+
+    [Test]
     public async Task ClassWithoutExplicitConstructor_HasNullConstructor()
     {
         var ir = ExtractClass(
