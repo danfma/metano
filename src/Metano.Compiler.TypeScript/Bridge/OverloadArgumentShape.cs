@@ -49,27 +49,18 @@ internal sealed class OverloadArgumentShape
     /// The runtime test that the dispatcher's <c>args</c> match this
     /// overload: the argument count, then each argument's type check.
     /// </summary>
-    /// <param name="typeParameters">The type parameters in scope, innermost
-    /// first (see <see cref="IrTypeCheckBuilder.Generate"/>).</param>
-    /// <param name="typeOverrides">The <c>[ExportFromBcl]</c> type overrides
-    /// the parameter types were mapped with.</param>
-    public TsExpression Guard(
-        IReadOnlyList<IrTypeParameter> typeParameters,
-        IrToTsTypeOverrides? typeOverrides = null
-    )
+    /// <param name="scope">What the argument checks resolve against.</param>
+    public TsExpression Guard(TypeCheckScope scope)
     {
         var fixedChecks = _parameters
             .Take(FixedCount)
-            .Select(
-                (parameter, index) =>
-                    FixedArgumentCheck(parameter, index, typeParameters, typeOverrides)
-            );
+            .Select((parameter, index) => FixedArgumentCheck(parameter, index, scope));
 
         IReadOnlyList<TsExpression?> clauses =
         [
             .. ArgumentCountChecks(),
             .. fixedChecks,
-            RestArgumentsCheck(typeParameters, typeOverrides),
+            RestArgumentsCheck(scope),
         ];
 
         return IrTypeCheckBuilder.AllOf(clauses) ?? new TsLiteral("true");
@@ -109,24 +100,14 @@ internal sealed class OverloadArgumentShape
     /// <c>args.slice(n).every((value) =&gt; check)</c> over the trailing
     /// arguments of a <c>params</c> parameter whose element type has a check.
     /// </summary>
-    private TsExpression? RestArgumentsCheck(
-        IReadOnlyList<IrTypeParameter> typeParameters,
-        IrToTsTypeOverrides? typeOverrides
-    )
+    private TsExpression? RestArgumentsCheck(TypeCheckScope scope)
     {
         if (Rest?.ParamsElementType is not { } elementType)
             return null;
 
         var element = new TsIdentifier("value");
 
-        var check = IrTypeCheckBuilder.Generate(
-            elementType,
-            element,
-            typeParameters,
-            typeOverrides
-        );
-
-        if (check is null)
+        if (IrTypeCheckBuilder.Generate(elementType, element, scope) is not { } check)
             return null;
 
         var elementCheck = new TsArrowFunction(
@@ -171,19 +152,12 @@ internal sealed class OverloadArgumentShape
     private static TsExpression? FixedArgumentCheck(
         IrParameter parameter,
         int index,
-        IReadOnlyList<IrTypeParameter> typeParameters,
-        IrToTsTypeOverrides? typeOverrides
+        TypeCheckScope scope
     )
     {
         var argument = ArgumentAt(index);
-        var check = IrTypeCheckBuilder.Generate(
-            parameter.Type,
-            argument,
-            typeParameters,
-            typeOverrides
-        );
 
-        if (check is null)
+        if (IrTypeCheckBuilder.Generate(parameter.Type, argument, scope) is not { } check)
             return null;
 
         return parameter.CanBeOmitted

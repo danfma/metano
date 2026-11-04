@@ -163,7 +163,7 @@ public sealed class IrToTsClassEmitter(
                 _catchAllOverloadReporter.ReportConstructors(
                     type,
                     constructor,
-                    ir.TypeParameters ?? []
+                    new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides)
                 );
             }
 
@@ -495,7 +495,11 @@ public sealed class IrToTsClassEmitter(
                 return null;
             }
 
-            _catchAllOverloadReporter.ReportMethods(type, irMethod, ir.TypeParameters ?? []);
+            _catchAllOverloadReporter.ReportMethods(
+                type,
+                irMethod,
+                new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides)
+            );
 
             var dispatcher = TryBuildOverloadDispatcherFromIr(irMethod, type.Name, ir, lowering);
             if (dispatcher is null)
@@ -592,7 +596,7 @@ public sealed class IrToTsClassEmitter(
                 perParams,
                 perReturns,
                 perParamIrTypes,
-                new OperatorTypeCheckScope(ir.TypeParameters ?? [], BclOverrides),
+                new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides),
                 _context.DeclarativeMappings
             );
         }
