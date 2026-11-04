@@ -470,6 +470,10 @@ without an exponent.
 The last row is the remaining gap: decimal.js drops trailing zeros (the scale),
 so `1.10m` is written `1.1`. The value is the same; only the text differs.
 
+Cost: writing a 1 MB `Order[]` with decimal.js prices (`bun run bench:json`)
+takes 5.5–5.7 ms against 4.3 ms with `toNumber()` on Bun 1.4.2, which pays for
+creating the `JSON.rawJSON` leaves, and the same 8.8–9.1 ms on Node 24.11.
+
 Limits:
 
 - **Reads still go through `JSON.parse`**, which rounds a JSON number to a
@@ -484,8 +488,8 @@ Limits:
 - **Values no `System.Decimal` holds** (NaN, ±Infinity, a magnitude beyond
   `79228162514264337593543950335`) throw `JsonException` `The value NaN cannot
   be written as System.Decimal: it is outside the System.Decimal range.`, on
-  every engine. A non-zero value too small for a double (`1e-400000000`) is
-  written `0`, which is what .NET reads for it.
+  every engine. A value below `1e-29` is written `0`, which is what .NET reads
+  for it (`1e-400000000` would otherwise print 400 million zeros).
 - A value without `toFixed` is written with `toNumber()`. A hand-written
   descriptor without `type` keeps the raw JSON number or string it read and
   writes it back as is.

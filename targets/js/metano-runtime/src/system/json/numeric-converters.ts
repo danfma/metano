@@ -124,12 +124,33 @@ export function decimalConverterOf(
   };
 }
 
-/** The decimal.js surface the writer uses. */
+/**
+ * The decimal.js surface the writer uses. `e` is decimal.js's exponent of
+ * the most significant digit (`NaN` for NaN and ±Infinity).
+ */
 type DecimalLike = {
   toNumber(): number;
   toFixed?(): string;
   isZero?(): boolean;
+  readonly e?: number;
 };
+
+/**
+ * Where a value sits against the `System.Decimal` domain: `outside` it,
+ * at its `edge` (decided by the exact text), `inside` it, or `negligible`
+ * (non-zero, but too small for its plain digits to be worth printing).
+ */
+type DecimalPosition = "outside" | "edge" | "inside" | "negligible";
+
+/** `MaxValue` is `7.92…e28`: an exponent of 28 may or may not be in range. */
+const DECIMAL_MAX_EXPONENT = 28;
+
+/**
+ * System.Text.Json reads `1e-29` and anything smaller as `0` (measured:
+ * `1e-29`, `5e-29`, `1e-40`, `1e-400`). A value below `1e-29` (exponent
+ * under -29) is written `0`; one from `1e-29` up keeps its digits.
+ */
+const DECIMAL_SMALLEST_EXPONENT = -29;
 
 /**
  * A decimal.js-like object. What a descriptor without `type` reads (a JSON
@@ -149,48 +170,65 @@ function isDecimalLike(value: unknown): value is DecimalLike {
  * `toNumber()`.
  *
  * A value no `System.Decimal` holds (NaN, ±Infinity, beyond `MaxValue`)
- * throws before any text is built, so `1e400000000` costs no 400 MB string.
- * A non-zero value below the smallest double is written `0`: System.Text.Json
- * reads `1e-400` as `0` (measured), and its plain digits would be as long as
- * its exponent.
+ * throws before any text is built, so `1e400000000` costs no 400 MB string,
+ * and a negligible one is written `0` rather than as its exponent's worth
+ * of zeros.
  */
 function decimalJsonOf(value: DecimalLike): unknown {
-  const approximate = value.toNumber();
+  const position = decimalPositionOf(value);
 
-  if (!isWithinDecimalRange(value, approximate)) {
+  if (position === "outside" || (position === "edge" && !isDecimalText(exactTextOf(value)))) {
     throw new JsonException(
       `The value ${String(value)} cannot be written as System.Decimal: it is outside the System.Decimal range.`,
     );
   }
 
   if (typeof value.toFixed !== "function") {
-    return approximate;
+    return value.toNumber();
   }
 
-  const text = isBelowDoubleRange(value, approximate) ? "0" : value.toFixed();
+  const text = position === "negligible" ? "0" : value.toFixed();
 
-  return writeExactNumber(text, () => approximate);
+  return writeExactNumber(text, () => value.toNumber());
 }
 
 /**
- * Compared as a double first; only a value that rounds to the bound itself
- * (`79228162514264337593543950335` and its neighbors) is decided by its
- * exact text, with the read grammar, so every leaf written is read back.
- * NaN fails both comparisons.
+ * From decimal.js's exponent when the value has one, a field read with no
+ * digits converted; otherwise from its double, compared with 2^96.
  */
-function isWithinDecimalRange(value: DecimalLike, approximate: number): boolean {
-  const magnitude = Math.abs(approximate);
+function decimalPositionOf(value: DecimalLike): DecimalPosition {
+  const { e } = value;
 
-  if (magnitude !== DECIMAL_MAX_AS_DOUBLE) {
-    return magnitude < DECIMAL_MAX_AS_DOUBLE;
-  }
-
-  return isDecimalText(value.toFixed?.() ?? String(approximate));
+  return typeof e === "number" ? positionOfExponent(e) : positionOfDouble(value);
 }
 
-/** A non-zero value whose double underflows to zero. */
-function isBelowDoubleRange(value: DecimalLike, approximate: number): boolean {
-  return approximate === 0 && value.isZero?.() === false;
+function positionOfExponent(exponent: number): DecimalPosition {
+  if (!(exponent <= DECIMAL_MAX_EXPONENT)) return "outside";
+
+  if (exponent === DECIMAL_MAX_EXPONENT) return "edge";
+
+  return exponent < DECIMAL_SMALLEST_EXPONENT ? "negligible" : "inside";
+}
+
+/** NaN fails every comparison, so it is `outside`. */
+function positionOfDouble(value: DecimalLike): DecimalPosition {
+  const approximate = value.toNumber();
+  const magnitude = Math.abs(approximate);
+
+  if (magnitude === DECIMAL_MAX_AS_DOUBLE) return "edge";
+
+  if (!(magnitude < DECIMAL_MAX_AS_DOUBLE)) return "outside";
+
+  return approximate === 0 && value.isZero?.() === false ? "negligible" : "inside";
+}
+
+/**
+ * The exact text of a value at the edge, read with the read grammar, so
+ * every leaf written is one `deserialize` accepts (`…335.4` is written and
+ * STJ reads it as `MaxValue`; `…335.5` and `…336` throw).
+ */
+function exactTextOf(value: DecimalLike): string {
+  return value.toFixed?.() ?? String(value.toNumber());
 }
 
 /** A finite JSON number within the decimal range, compared as doubles. */

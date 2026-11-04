@@ -69,8 +69,8 @@ export const DECIMAL_WRITE_ROWS: readonly DecimalWriteRow[] = [
 /**
  * Values at and past the edge of the `System.Decimal` domain (#458): a value
  * no `System.Decimal` holds throws `JsonException` before any text is built;
- * `written` is the text of an accepted one. `±1e-400000000` underflows a
- * double and is written `0`, as System.Text.Json reads `1e-400` (measured).
+ * `written` is the text of an accepted one. A value below `1e-29` is written
+ * `0`, as System.Text.Json reads `1e-40` and `1e-400` (measured).
  */
 export type DecimalDomainRow = {
   readonly text: string;
@@ -88,6 +88,11 @@ export const DECIMAL_DOMAIN_ROWS: readonly DecimalDomainRow[] = [
   { text: "1e400000000" },
   { text: "79228162514264337593543950335", written: "79228162514264337593543950335" },
   { text: "-79228162514264337593543950335", written: "-79228162514264337593543950335" },
+  { text: "79228162514264337593543950335.5" },
+  { text: "79228162514264337593543950335.4", written: "79228162514264337593543950335.4" },
+  { text: "1e28", written: "10000000000000000000000000000" },
+  { text: "1e-29", written: "0.00000000000000000000000000001" },
+  { text: "1e-40", written: "0" },
   { text: "1e-400000000", written: "0" },
   { text: "-1e-400000000", written: "0" },
 ];
