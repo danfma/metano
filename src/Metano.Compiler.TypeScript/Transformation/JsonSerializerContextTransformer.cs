@@ -100,6 +100,27 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
+    /// The classes the generated context passes as constructor values: every
+    /// object entry that is not <c>[PlainObject]</c> gets a <c>TypeSpec</c>
+    /// naming the class (<c>type: T</c>, typed <c>abstract new (...) =&gt; T</c>)
+    /// and calling it (<c>factory: (p) =&gt; new T(...)</c>), both outside the
+    /// class body, so the class must keep a public constructor (FR-049). The
+    /// plan is computed silently, as in <see cref="RuntimeRequirementsOf"/>.
+    /// </summary>
+    public IEnumerable<INamedTypeSymbol> ConstructedTypesOf(INamedTypeSymbol contextType)
+    {
+        if (Plan(contextType, report: _ => { }) is not { } plan)
+            return [];
+
+        return plan
+            .Entries.Where(entry => entry.Kind == JsonPropertyKind.Ref)
+            .Select(entry => entry.Type)
+            .OfType<INamedTypeSymbol>()
+            .Where(type => !SymbolHelper.HasPlainObject(type))
+            .Select(type => type.OriginalDefinition);
+    }
+
+    /// <summary>
     /// Reads the roots, names them and computes their closure, reporting every
     /// <c>MS0035</c> / <c>MS0036</c> to <paramref name="report"/>. <c>null</c>
     /// when the context has no admitted root (nothing is emitted).

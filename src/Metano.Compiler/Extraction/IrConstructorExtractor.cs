@@ -123,6 +123,26 @@ public static class IrConstructorExtractor
     public static int ExplicitConstructorCount(INamedTypeSymbol type) =>
         ExplicitConstructors(type).Count;
 
+    /// <summary>
+    /// The constructors <see cref="Extract"/> models for
+    /// <paramref name="type"/> (the main one plus its overloads), whatever
+    /// their accessibility, in declaration order.
+    /// </summary>
+    public static IReadOnlyList<IMethodSymbol> ModeledConstructors(INamedTypeSymbol type) =>
+        ExplicitConstructors(type);
+
+    /// <summary>
+    /// The accessibility the source declares for <paramref name="ctor"/>. A
+    /// primary (record positional or C# 12) constructor has no place to
+    /// declare one and is public: the <c>protected</c> Roslyn synthesizes for
+    /// an abstract type's primary constructor only restates that the type
+    /// cannot be instantiated.
+    /// </summary>
+    public static IrVisibility DeclaredVisibility(IMethodSymbol ctor) =>
+        IsPrimaryConstructor(ctor)
+            ? IrVisibility.Public
+            : IrVisibilityMapper.Map(ctor.DeclaredAccessibility);
+
     private static List<IMethodSymbol> ExplicitConstructors(INamedTypeSymbol type) =>
         type
             .Constructors.Where(c =>
@@ -204,8 +224,10 @@ public static class IrConstructorExtractor
             })
             .ToList();
 
+        var visibility = DeclaredVisibility(ctor);
+
         if (compilation is null)
-            return new IrConstructorDeclaration(Parameters: parameters);
+            return new IrConstructorDeclaration(Parameters: parameters, Visibility: visibility);
 
         // One map per constructor declaration (#398): the walk's root is the
         // whole declaration, so the `: base(...)` / `: this(...)` argument
@@ -230,7 +252,8 @@ public static class IrConstructorExtractor
                 compilation,
                 target
             ),
-            ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context, localNames)
+            ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context, localNames),
+            Visibility: visibility
         );
     }
 

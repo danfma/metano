@@ -385,4 +385,17 @@ public static class DiagnosticCodes
     /// <c>browser</c>, …), or it is a bundler default (<c>module</c>, <c>development</c>,
     /// <c>production</c>). An error: the run fails before transpiling (#424).</summary>
     public const string InvalidSourceCondition = "MS0059";
+
+    /// <summary>MS0060 — a type's constructors mix accessibility levels that map to
+    /// different target modifiers. A TypeScript class has one constructor accessibility
+    /// (TS2385), so the constructor is emitted with the most permissive one; the message
+    /// names the narrower constructors. A warning (FR-049, #432).</summary>
+    public const string MixedConstructorAccessibility = "MS0060";
+
+    /// <summary>MS0061 — a non-public constructor is emitted public because code outside
+    /// the class body constructs the type: its <c>TypeSpec</c> in a generated JSON
+    /// <c>SerializerContext</c>, or a <c>new</c> written in a nested type, which the
+    /// TypeScript target emits outside the container's class body. The message names the
+    /// path. A warning (FR-049, #432).</summary>
+    public const string ConstructorAccessibilityWidened = "MS0061";
 }

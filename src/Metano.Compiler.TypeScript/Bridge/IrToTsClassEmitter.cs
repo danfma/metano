@@ -19,7 +19,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Responsibilities:
 /// <list type="bullet">
 ///   <item>Resolves the base class (when transpilable) and the primary-constructor params in C# order</item>
-///   <item>Builds the TS constructor (single ctor inline; multiple ctors → <see cref="IrToTsConstructorDispatcherBridge"/>)</item>
+///   <item>Builds the TS constructor (single ctor inline; multiple ctors → <see cref="IrToTsConstructorDispatcherBridge"/>) with the modifier <see cref="ConstructorAccessPolicy"/> decides</item>
 ///   <item>Detects captured primary-ctor params (DI-style) and emits <c>this._field = param</c> assignments</item>
 ///   <item>Walks fields, properties (auto/computed/getter+setter), ordinary methods (with overloads), and user-defined operators</item>
 ///   <item>For records: appends <c>equals</c> / <c>hashCode</c> / <c>with</c> via <see cref="IrToTsRecordSynthesisBridge"/> (<c>with</c> copies the instance, so abstract records stay abstract)</item>
@@ -36,9 +36,16 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// flows through the IR.
 /// </para>
 /// </summary>
-public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
+public sealed class IrToTsClassEmitter(
+    TypeScriptTransformContext context,
+    ConstructorAccessFacts constructorAccess
+)
 {
     private readonly TypeScriptTransformContext _context = context;
+    private readonly ConstructorAccessPolicy _constructorAccess = new(
+        constructorAccess,
+        context.ReportDiagnostic
+    );
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
@@ -84,7 +91,10 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             extendsType,
             keepsBaseMessage,
             lowering
-        );
+        ) with
+        {
+            Accessibility = _constructorAccess.Resolve(type, ir.Constructor),
+        };
 
         var classMembers = new List<TsClassMember>();
 

@@ -556,6 +556,14 @@ receives `undefined` (STJ passes `default(T)`), and a `[JsonIgnore] new`
 written from the single TS member that holds the derived value, at the base's
 position (STJ writes the base value at the redeclaration's position).
 
+Constructor access: a class with a `TypeSpec` in the context is passed as
+`type: T` and built by `factory: (p) => new T(...)`, both outside its class
+body, so its constructor stays public even when C# declares it `private` or
+`protected` (warning `MS0061`, FR-049). Other classes keep their constructor's
+`private` / `protected` modifier. A context that claims a type from a referenced
+package whose constructor is non-public does not type-check: that package
+decided the modifier when it was transpiled.
+
 ## When to use `[PlainObject]` vs `JsonSerializerContext`
 
 Both are valid ways to handle JSON data:

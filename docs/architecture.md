@@ -197,7 +197,8 @@ Highlights:
 - **Members.** `IrFieldDeclaration`, `IrPropertyDeclaration`, `IrMethodDeclaration`
   (overloads folded onto a primary via the `Overloads` slot),
   `IrEventDeclaration`, `IrConstructorDeclaration` (with
-  `IrConstructorParameter.Promotion` for record-style promotion).
+  `IrConstructorParameter.Promotion` for record-style promotion and the
+  declared `Visibility` each backend maps to its constructor access).
 - **Type references.** `IrPrimitiveTypeRef` (semantic names like `Guid` —
   never `UUID`), `IrNamedTypeRef` (with optional `IrTypeOrigin` for
   cross-package resolution and `IrNamedTypeSemantics` with the type's kind,
@@ -275,6 +276,12 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   `with` for records that aren't `[PlainObject]`.
 - **`IrToTsConstructorDispatcherBridge`** / **`IrToTsOverloadDispatcherBridge`** —
   multi-arity dispatchers with runtime type guards via `IrTypeCheckBuilder`.
+- **`ConstructorAccessPolicy`** — the constructor's `private` / `protected`
+  modifier (FR-049): the most permissive one when overloads mix accessibility
+  (`MS0060`), public when code outside the class body constructs the type — a
+  JSON `TypeSpec` or a `new` in a nested type (`MS0061`) — and `protected`
+  instead of `private` when an emitted class extends it. The cross-file facts
+  come from `ConstructorAccessFacts`, which also feeds the per-group cache key.
 - **`IrToTsBclMapper`** — consumes the `DeclarativeMappingRegistry` (built
   from `[MapMethod]` / `[MapProperty]` assembly attributes) and renders
   lowered call / member-access expressions.
