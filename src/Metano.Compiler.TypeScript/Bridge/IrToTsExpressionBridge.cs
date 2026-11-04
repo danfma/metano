@@ -84,6 +84,11 @@ public static partial class IrToTsExpressionBridge
                 context
             ),
             IrCastExpression cast => MapCast(cast, context),
+            // The Number mode of the Int64Representation staging switch: a
+            // 64-bit integer is a TS number, so the conversion and the
+            // overflow reduction render as their operand.
+            IrNumericConversion conversion => Map(conversion.Operand, context),
+            IrIntegerOverflow overflow => Map(overflow.Value, context),
             IrLambdaExpression lambda => MapLambda(lambda, context),
             IrStringInterpolation interp => MapStringInterpolation(interp, context),
             IrIsPatternExpression isPattern => MapIsPattern(isPattern, context),

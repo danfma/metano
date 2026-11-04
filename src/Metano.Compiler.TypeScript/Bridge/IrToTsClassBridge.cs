@@ -120,6 +120,7 @@ internal static partial class IrToTsClassBridge
                 IrPrimitive.Int16
                 or IrPrimitive.Int32
                 or IrPrimitive.Int64
+                or IrPrimitive.UInt64
                 or IrPrimitive.Byte
                 or IrPrimitive.Float32
                 or IrPrimitive.Float64 => new TsLiteral("0"),

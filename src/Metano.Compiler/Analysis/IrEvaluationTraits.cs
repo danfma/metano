@@ -49,6 +49,8 @@ public static class IrEvaluationTraits
             IrBinaryExpression binary when !binary.Operator.IsAssignment() => IsSideEffectFree(
                 binary.Left
             ) && IsSideEffectFree(binary.Right),
+            IrNumericConversion conversion => IsSideEffectFree(conversion.Operand),
+            IrIntegerOverflow overflow => IsSideEffectFree(overflow.Value),
             _ => IsReusableReceiver(expression),
         };
 

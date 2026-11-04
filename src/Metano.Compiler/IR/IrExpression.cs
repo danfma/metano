@@ -22,6 +22,9 @@ public enum IrLiteralKind
     Boolean,
     Int32,
     Int64,
+
+    /// <summary>A C# <c>ulong</c> constant; <see cref="IrLiteral.Value"/> is a <see cref="ulong"/>.</summary>
+    UInt64,
     Float64,
     Decimal,
     BigInteger,

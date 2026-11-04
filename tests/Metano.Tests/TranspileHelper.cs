@@ -159,7 +159,8 @@ public static class TranspileHelper
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
         string? importAlias = null,
-        IEnumerable<SyntaxTree>? generatedTrees = null
+        IEnumerable<SyntaxTree>? generatedTrees = null,
+        Int64Representation int64Representation = Int64Representation.Number
     )
     {
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(
@@ -173,6 +174,7 @@ public static class TranspileHelper
             NamespaceBarrels = namespaceBarrels,
             StripInterfacePrefix = stripInterfacePrefix,
             ImportAlias = importAlias,
+            Int64Representation = int64Representation,
         };
 
         var files = transformer.TransformAll();
@@ -335,7 +337,27 @@ public static class TranspileHelper
     }
 
     /// <summary>
-    /// Like <see cref="TranspileWithDiagnostics"/> but first runs the real
+    /// Like <see cref="TranspileWithDiagnostics(string, string?)"/> under an
+    /// explicit 64-bit integer representation: the compiler-internal staging
+    /// switch of spec 012 (DECIDED-22), which the 64-bit tests set to
+    /// <see cref="Int64Representation.BigInt"/>.
+    /// </summary>
+    internal static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithDiagnostics(string csharpSource, Int64Representation int64Representation)
+    {
+        var compilation = CompileAssembly(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary
+        );
+
+        return TranspileCore(compilation, int64Representation: int64Representation);
+    }
+
+    /// <summary>
+    /// Like <see cref="TranspileWithDiagnostics(string, string?)"/> but first runs the real
     /// System.Text.Json source generator over the compilation, mirroring what
     /// <c>MSBuildWorkspace</c> hands the frontend in production (the generated
     /// <c>*.g.cs</c> trees are part of the compilation). The generator's

@@ -24,10 +24,12 @@ internal static class DartBinaryOperandGrouping
         if (binary.Operator.IsAssignment())
             return false;
 
-        if (BindsLooserThanAnyOperator(binary.Left))
+        var left = DartTransparentNumericNodes.Unwrap(binary.Left);
+
+        if (BindsLooserThanAnyOperator(left))
             return true;
 
-        if (binary.Left is not IrBinaryExpression inner)
+        if (left is not IrBinaryExpression inner)
             return false;
 
         var outerPrecedence = Precedence(binary.Operator);
@@ -49,10 +51,12 @@ internal static class DartBinaryOperandGrouping
         if (binary.Operator.IsAssignment())
             return false;
 
-        if (BindsLooserThanAnyOperator(binary.Right))
+        var right = DartTransparentNumericNodes.Unwrap(binary.Right);
+
+        if (BindsLooserThanAnyOperator(right))
             return true;
 
-        if (binary.Right is not IrBinaryExpression inner)
+        if (right is not IrBinaryExpression inner)
             return false;
 
         var outerPrecedence = Precedence(binary.Operator);
@@ -71,7 +75,7 @@ internal static class DartBinaryOperandGrouping
     /// every shape that binds looser than an operator.
     /// </summary>
     public static bool NeedsUnaryOperandParentheses(IrExpression operand) =>
-        operand
+        DartTransparentNumericNodes.Unwrap(operand)
             is IrBinaryExpression
                 or IrUnaryExpression { IsPrefix: true }
                 or IrIsPatternExpression
@@ -84,8 +88,12 @@ internal static class DartBinaryOperandGrouping
     /// expression, and an assignment is the loosest binary operator.
     /// </summary>
     public static bool BindsLooserThanAnyOperator(IrExpression operand) =>
-        operand is IrConditionalExpression or IrThrowExpression or IrLambdaExpression
-        || operand is IrBinaryExpression { Operator: var op } && op.IsAssignment();
+        DartTransparentNumericNodes.Unwrap(operand) switch
+        {
+            IrConditionalExpression or IrThrowExpression or IrLambdaExpression => true,
+            IrBinaryExpression { Operator: var op } => op.IsAssignment(),
+            _ => false,
+        };
 
     private static bool IsAssociativeChain(IrBinaryOp outer, IrBinaryOp inner) =>
         inner == outer

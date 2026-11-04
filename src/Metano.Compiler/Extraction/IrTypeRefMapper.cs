@@ -82,8 +82,9 @@ public static class IrTypeRefMapper
             case SpecialType.System_UInt32:
                 return new IrPrimitiveTypeRef(IrPrimitive.Int32);
             case SpecialType.System_Int64:
-            case SpecialType.System_UInt64:
                 return new IrPrimitiveTypeRef(IrPrimitive.Int64);
+            case SpecialType.System_UInt64:
+                return new IrPrimitiveTypeRef(IrPrimitive.UInt64);
             case SpecialType.System_Single:
                 return new IrPrimitiveTypeRef(IrPrimitive.Float32);
             case SpecialType.System_Double:

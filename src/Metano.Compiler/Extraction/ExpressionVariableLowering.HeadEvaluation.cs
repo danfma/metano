@@ -54,6 +54,12 @@ internal sealed partial class ExpressionVariableLowering
                 case IrCastExpression cast:
                     return cast with { Expression = Bind(cast.Expression) };
 
+                case IrNumericConversion conversion:
+                    return conversion with { Operand = Bind(conversion.Operand) };
+
+                case IrIntegerOverflow overflow:
+                    return overflow with { Value = Bind(overflow.Value) };
+
                 case IrTypeCheck check:
                     return check with { Expression = Bind(check.Expression) };
 

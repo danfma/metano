@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Analysis;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
@@ -853,7 +854,8 @@ public sealed class IrToTsClassEmitter(
     /// surfacing the diagnostic alongside keeps the build noisy about gaps.
     /// The IR doesn't carry per-statement source locations, so the diagnostic
     /// points at the containing type — granular enough for the user to find
-    /// the offending member.
+    /// the offending member. Nested statements are reported too, so a block
+    /// (a lowered <c>checked { }</c>, a branch, a loop body) never hides one.
     /// </summary>
     private void ReportUnsupportedInBody(IrStatement stmt, INamedTypeSymbol type)
     {
@@ -868,6 +870,9 @@ public sealed class IrToTsClassEmitter(
                 )
             );
         }
+
+        foreach (var nested in IrNodeChildren.StatementsOf(stmt))
+            ReportUnsupportedInBody(nested, type);
     }
 
     // ─── Constructor helpers ────────────────────────────────────

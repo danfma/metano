@@ -18,6 +18,20 @@ public class IrTypeRefMapperTests
     }
 
     [Test]
+    [Arguments(SpecialType.System_Int64, IrPrimitive.Int64)]
+    [Arguments(SpecialType.System_UInt64, IrPrimitive.UInt64)]
+    public async Task SixtyFourBitIntegers_KeepTheirSignedness(
+        SpecialType specialType,
+        IrPrimitive expected
+    )
+    {
+        var compilation = IrTestHelper.Compile("public class X { }");
+        var result = IrTypeRefMapper.Map(compilation.GetSpecialType(specialType));
+
+        await Assert.That(result).IsEqualTo(new IrPrimitiveTypeRef(expected));
+    }
+
+    [Test]
     public async Task String_MapsToPrimitive()
     {
         var compilation = IrTestHelper.Compile("public class X { }");

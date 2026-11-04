@@ -218,6 +218,7 @@ internal static class IrTypeCheckBuilder
             IrPrimitive.Boolean => "boolean",
             IrPrimitive.Int32
             or IrPrimitive.Int64
+            or IrPrimitive.UInt64
             or IrPrimitive.Int16
             or IrPrimitive.Byte
             or IrPrimitive.Float32
@@ -251,7 +252,8 @@ internal static class IrTypeCheckBuilder
             IrPrimitive.Byte => RuntimeIs("isByte", value),
             IrPrimitive.Int16 => RuntimeIs("isInt16", value),
             IrPrimitive.Int32 => RuntimeIs("isInt32", value),
-            IrPrimitive.Int64 => RuntimeIs("isInt64", value),
+            // ulong shares long's check while both lower to a TS number.
+            IrPrimitive.Int64 or IrPrimitive.UInt64 => RuntimeIs("isInt64", value),
             IrPrimitive.Float32 => RuntimeIs("isFloat32", value),
             IrPrimitive.Float64 => RuntimeIs("isFloat64", value),
             IrPrimitive.Boolean => RuntimeIs("isBool", value),

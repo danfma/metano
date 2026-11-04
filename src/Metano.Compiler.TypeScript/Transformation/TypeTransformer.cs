@@ -76,6 +76,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public string? ImportAlias { get; init; }
 
     /// <summary>
+    /// Forwarded to <see cref="TypeScriptTransformContext.Int64Representation"/>.
+    /// Compiler-internal (spec 012, DECIDED-22): set by
+    /// <see cref="TypeScriptTarget"/> and by tests, never by a user option.
+    /// </summary>
+    internal Int64Representation Int64Representation { get; init; } = Int64Representation.Number;
+
+    /// <summary>
     /// Output directory for the active run, supplied by the host
     /// (<see cref="Metano.Compiler.TranspilerHost"/>) so the per-group
     /// cache (ADR-0023) can live next to the generated <c>.ts</c> files.
@@ -390,6 +397,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             TypeMapping = typeMappingContext,
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
+            Int64Representation = Int64Representation,
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
             StructuralGuardTypes = structuralGuards.Types,

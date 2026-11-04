@@ -210,6 +210,7 @@ public static class IrToTsJsxComponentBridge
                 or IrPrimitive.Int16
                 or IrPrimitive.Int32
                 or IrPrimitive.Int64
+                or IrPrimitive.UInt64
                 or IrPrimitive.Float32
                 or IrPrimitive.Float64
                 or IrPrimitive.Decimal;
@@ -439,6 +440,14 @@ public static class IrToTsJsxComponentBridge
             IrCastExpression cast => cast with
             {
                 Expression = Rewrite(cast.Expression, propNames, referenced),
+            },
+            IrNumericConversion conversion => conversion with
+            {
+                Operand = Rewrite(conversion.Operand, propNames, referenced),
+            },
+            IrIntegerOverflow overflow => overflow with
+            {
+                Value = Rewrite(overflow.Value, propNames, referenced),
             },
             IrAwaitExpression aw => aw with
             {

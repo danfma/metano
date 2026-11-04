@@ -139,6 +139,8 @@ public sealed class DartIrRewriter
                 WhenFalse = RewriteExpression(c.WhenFalse),
             },
             IrCastExpression c => c with { Expression = RewriteExpression(c.Expression) },
+            IrNumericConversion n => n with { Operand = RewriteExpression(n.Operand) },
+            IrIntegerOverflow o => o with { Value = RewriteExpression(o.Value) },
             IrTypeCheck t => t with { Expression = RewriteExpression(t.Expression) },
             IrAwaitExpression a => a with { Expression = RewriteExpression(a.Expression) },
             IrYieldExpression y => y.Value is null

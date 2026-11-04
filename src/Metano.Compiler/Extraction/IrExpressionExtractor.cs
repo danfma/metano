@@ -212,6 +212,10 @@ public sealed partial class IrExpressionExtractor
             ThisExpressionSyntax => new IrThisExpression(),
             BaseExpressionSyntax => new IrBaseExpression(),
             ParenthesizedExpressionSyntax paren => Extract(paren.Expression),
+            // `checked(e)` / `unchecked(e)`: Roslyn folds the context into the
+            // IsChecked flag of every operation inside, so the expression
+            // lowers to its operand.
+            CheckedExpressionSyntax context => Extract(context.Expression),
             BinaryExpressionSyntax bin => ExtractBinary(bin),
             AssignmentExpressionSyntax assign => ExtractAssignment(assign),
             MemberAccessExpressionSyntax member => ExtractMemberAccess(
@@ -1665,6 +1669,7 @@ public sealed partial class IrExpressionExtractor
         {
             int i => new IrLiteral(i, IrLiteralKind.Int32),
             long l => new IrLiteral(l, IrLiteralKind.Int64),
+            ulong u => new IrLiteral(u, IrLiteralKind.UInt64),
             double d => new IrLiteral(d, IrLiteralKind.Float64),
             float f => new IrLiteral((double)f, IrLiteralKind.Float64),
             decimal dec => new IrLiteral(dec, IrLiteralKind.Decimal),
@@ -4512,6 +4517,7 @@ public sealed partial class IrExpressionExtractor
             string s => new IrLiteral(s, IrLiteralKind.String),
             char c => new IrLiteral(c, IrLiteralKind.Char),
             long l => new IrLiteral(l, IrLiteralKind.Int64),
+            ulong u => new IrLiteral(u, IrLiteralKind.UInt64),
             int i => new IrLiteral(i, IrLiteralKind.Int32),
             double d => new IrLiteral(d, IrLiteralKind.Float64),
             float f => new IrLiteral(f, IrLiteralKind.Float64),

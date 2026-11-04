@@ -44,10 +44,8 @@ internal static class DefaultValueLiterals
                 0.0,
                 IrLiteralKind.Float64
             ),
-            SpecialType.System_Int64 or SpecialType.System_UInt64 => new IrLiteral(
-                0L,
-                IrLiteralKind.Int64
-            ),
+            SpecialType.System_Int64 => new IrLiteral(0L, IrLiteralKind.Int64),
+            SpecialType.System_UInt64 => new IrLiteral(0UL, IrLiteralKind.UInt64),
             SpecialType.System_SByte
             or SpecialType.System_Byte
             or SpecialType.System_Int16

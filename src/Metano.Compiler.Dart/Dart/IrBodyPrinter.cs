@@ -342,6 +342,9 @@ public static class IrBodyPrinter
                 sb.Append("throw ");
                 PrintExpression(sb, th.Expression);
                 break;
+            case IrIntegerOverflow or IrNumericConversion:
+                PrintExpression(sb, DartTransparentNumericNodes.Unwrap(expr));
+                break;
             case IrCastExpression cast:
                 // Dart uses `expr as Type` for downcasts.
                 PrintGroupedOperand(sb, cast.Expression);
@@ -450,7 +453,7 @@ public static class IrBodyPrinter
     /// the conditional and lambda forms.
     /// </summary>
     private static bool ReceiverRequiresParens(IrExpression expression) =>
-        expression
+        DartTransparentNumericNodes.Unwrap(expression)
             is IrBinaryExpression
                 or IrUnaryExpression { IsPrefix: true }
                 or IrCastExpression
@@ -1084,6 +1087,12 @@ public static class IrBodyPrinter
                 break;
             case IrLiteralKind.Default:
                 sb.Append("/* default */ null");
+                break;
+            case IrLiteralKind.UInt64:
+                // Dart has no unsigned type: a ulong above long.MaxValue is the
+                // int with the same 64 bits.
+                var sameBits = unchecked((long)(ulong)lit.Value!);
+                sb.Append(sameBits.ToString(CultureInfo.InvariantCulture));
                 break;
             default:
                 sb.Append(

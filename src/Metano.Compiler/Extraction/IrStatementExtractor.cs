@@ -295,6 +295,12 @@ public sealed class IrStatementExtractor(
         statement switch
         {
             BlockSyntax block => new IrBlockStatement(ExtractStatementSequence(block.Statements)),
+            // `checked { }` / `unchecked { }`: Roslyn folds the context into the
+            // IsChecked flag of every operation inside, so the statement lowers
+            // to its block.
+            CheckedStatementSyntax context => new IrBlockStatement(
+                ExtractStatementSequence(context.Block.Statements)
+            ),
             // `var (a, b) = expr;` parses as an ExpressionStatement wrapping a
             // SimpleAssignment whose Left is a DeclarationExpression with a
             // parenthesized variable designation. Intercept it BEFORE the generic
