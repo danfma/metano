@@ -24,7 +24,37 @@ internal sealed record JsonPolymorphism(
     /// <summary>The discriminator System.Text.Json uses when none is set.</summary>
     public const string DefaultDiscriminator = "$type";
 
+    /// <summary>
+    /// The registrations' guard test order (FR-019 rule 3): indices into
+    /// <see cref="Registrations"/>, most specific first; <c>null</c> when it
+    /// is attribute order.
+    /// </summary>
+    public IReadOnlyList<int>? TestOrder { get; init; }
+
+    /// <summary>An abstract class or an interface (both are <c>IsAbstract</c>).</summary>
     public bool IsAbstractBase => BaseType.IsAbstract;
+
+    /// <summary>
+    /// The base has no TypeScript constructor (an interface, FR-018, or a
+    /// <c>[PlainObject]</c> type, FR-019), so the descriptor names it with
+    /// <c>typeName</c>.
+    /// </summary>
+    public bool HasNoConstructor =>
+        BaseType.TypeKind == TypeKind.Interface || SymbolHelper.HasPlainObject(BaseType);
+
+    /// <summary>
+    /// A concrete <c>[PlainObject]</c> base that does not register itself: a
+    /// plain object no variant guard accepts is written as the base when the
+    /// base's own guard accepts it (FR-019 rule 5, the <c>baseTest</c>). A
+    /// generic base gets no guard (<see cref="JsonStructuralGuardTargets"/>).
+    /// </summary>
+    public bool NeedsBaseTest =>
+        !IsAbstractBase
+        && !BaseType.IsGenericType
+        && SymbolHelper.HasPlainObject(BaseType)
+        && !Registrations.Any(registration =>
+            SymbolEqualityComparer.Default.Equals(registration.Type, BaseType)
+        );
 
     /// <summary>
     /// Whether any registration declares a tag. Without one, System.Text.Json
@@ -47,6 +77,12 @@ internal sealed record JsonDerivedTypeRegistration(
     public bool IsAbstract => Type.IsAbstract;
 
     public bool IsTagged => Tag is not null;
+
+    /// <summary>
+    /// A <c>[PlainObject]</c> registration, selected on write by its
+    /// synthesized guard (FR-019).
+    /// </summary>
+    public bool IsStructural => SymbolHelper.HasPlainObject(Type);
 }
 
 /// <summary>

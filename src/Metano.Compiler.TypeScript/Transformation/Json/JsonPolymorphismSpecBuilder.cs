@@ -1,3 +1,4 @@
+using System.Globalization;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Transformation.Json;
@@ -9,7 +10,10 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// polymorphism: {
 ///   discriminator: "kind",
 ///   abstract: true,
-///   derived: [{ tag: "image", spec: () =&gt; this.imageClip }, …],
+///   typeName: "Shape",
+///   derived: [{ tag: "image", spec: () =&gt; this.imageClip }, { tag: "point", spec: () =&gt; this.point, test: isPoint }, …],
+///   testOrder: [1, 0],
+///   baseTest: isShape,
 ///   unknownDerivedType: "fallBackToNearestAncestor",
 ///   ignoreUnrecognizedTags: true,
 /// }
@@ -18,11 +22,20 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// System.Text.Json's defaults. Each registration keeps attribute order; an
 /// abstract registration (allowed under <c>FallBackToNearestAncestor</c>
 /// only) is marked <c>abstract: true</c> so a read of its tag fails as in
-/// System.Text.Json (DECIDED-12).
+/// System.Text.Json (DECIDED-12). A base without a constructor (an interface
+/// or a <c>[PlainObject]</c> type) carries <c>typeName</c>; a
+/// <c>[PlainObject]</c> registration carries its synthesized guard as
+/// <c>test</c>, ordered by <c>testOrder</c> when that differs from attribute
+/// order; a concrete, non-self-registered <c>[PlainObject]</c> base carries
+/// its own guard as <c>baseTest</c> (FR-019 rule 5).
 /// </summary>
-internal sealed class JsonPolymorphismSpecBuilder(JsonTypeDescriptorBuilder descriptors)
+internal sealed class JsonPolymorphismSpecBuilder(
+    JsonTypeDescriptorBuilder descriptors,
+    JsonGuardReferences guards
+)
 {
     private readonly JsonTypeDescriptorBuilder _descriptors = descriptors;
+    private readonly JsonGuardReferences _guards = guards;
 
     public TsObjectProperty Build(JsonPolymorphism polymorphism)
     {
@@ -34,7 +47,10 @@ internal sealed class JsonPolymorphismSpecBuilder(JsonTypeDescriptorBuilder desc
         {
             new TsObjectProperty("discriminator", new TsStringLiteral(polymorphism.Discriminator)),
             TrueFlag("abstract", polymorphism.IsAbstractBase),
+            TypeNameProperty(polymorphism),
             new TsObjectProperty("derived", new TsArrayLiteral(registrations)),
+            TestOrderProperty(polymorphism.TestOrder),
+            BaseTestProperty(polymorphism),
             UnknownDerivedTypeProperty(polymorphism.UnknownDerivedType),
             TrueFlag("ignoreUnrecognizedTags", polymorphism.IgnoreUnrecognizedTags),
         };
@@ -47,8 +63,9 @@ internal sealed class JsonPolymorphismSpecBuilder(JsonTypeDescriptorBuilder desc
 
     /// <summary>
     /// <c>{ tag: "image", spec: () =&gt; this.imageClip }</c>; an untagged
-    /// registration has no <c>tag</c>, and a self-registration links to the
-    /// base's own getter.
+    /// registration has no <c>tag</c>, a self-registration links to the
+    /// base's own getter, and a <c>[PlainObject]</c> registration ends with
+    /// its guard (<c>test: isPoint</c>).
     /// </summary>
     private TsObjectLiteral BuildRegistration(JsonDerivedTypeRegistration registration)
     {
@@ -57,10 +74,46 @@ internal sealed class JsonPolymorphismSpecBuilder(JsonTypeDescriptorBuilder desc
             registration.Tag is { } tag ? new TsObjectProperty("tag", TagLiteralOf(tag)) : null,
             new TsObjectProperty("spec", _descriptors.BuildSpecLink(registration.Type)),
             TrueFlag("abstract", registration.IsAbstract),
+            registration.IsStructural
+                ? new TsObjectProperty("test", _guards.Build(registration.Type))
+                : null,
         };
 
         return new TsObjectLiteral(members.OfType<TsObjectProperty>().ToList());
     }
+
+    /// <summary>
+    /// <c>typeName: "IShape"</c>, the C# simple name System.Text.Json's
+    /// messages use, for a base the runtime cannot name by its constructor.
+    /// </summary>
+    private static TsObjectProperty? TypeNameProperty(JsonPolymorphism polymorphism) =>
+        polymorphism.HasNoConstructor
+            ? new TsObjectProperty(
+                "typeName",
+                new TsStringLiteral(polymorphism.BaseType.OriginalDefinition.Name)
+            )
+            : null;
+
+    /// <summary><c>testOrder: [1, 0]</c> when it differs from attribute order.</summary>
+    private static TsObjectProperty? TestOrderProperty(IReadOnlyList<int>? testOrder) =>
+        testOrder is null
+            ? null
+            : new TsObjectProperty(
+                "testOrder",
+                new TsArrayLiteral(
+                    testOrder
+                        .Select(index => new TsLiteral(
+                            index.ToString(CultureInfo.InvariantCulture)
+                        ))
+                        .ToList<TsExpression>()
+                )
+            );
+
+    /// <summary><c>baseTest: isShape</c> for the rule 5 base guard.</summary>
+    private TsObjectProperty? BaseTestProperty(JsonPolymorphism polymorphism) =>
+        polymorphism.NeedsBaseTest
+            ? new TsObjectProperty("baseTest", _guards.Build(polymorphism.BaseType))
+            : null;
 
     /// <summary>
     /// A string tag prints as a string literal, an int tag as a number

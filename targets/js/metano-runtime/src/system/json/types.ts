@@ -183,6 +183,11 @@ export interface PolymorphismSpec {
   readonly derived: readonly DerivedTypeSpec[];
   /** Indices into `derived` in guard test order; absent when it is attribute order. */
   readonly testOrder?: readonly number[];
+  /**
+   * The guard of a concrete `[PlainObject]` base that does not register itself: a plain object
+   * no variant guard accepts is written as the base (no tag) when this accepts it (FR-019 rule 5).
+   */
+  readonly baseTest?: (value: unknown) => boolean;
   /** Default `"failSerialization"`. */
   readonly unknownDerivedType?: UnknownDerivedTypeHandling;
   /** An unknown tag reads the base (a concrete base) instead of throwing. */

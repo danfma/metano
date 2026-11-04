@@ -38,8 +38,19 @@ internal sealed class JsonSpecBuilder
         _properties = properties;
         _polymorphisms = polymorphisms;
         _descriptors = new JsonTypeDescriptorBuilder(context, names);
-        _polymorphismSpecs = new JsonPolymorphismSpecBuilder(_descriptors);
+        _polymorphismSpecs = new JsonPolymorphismSpecBuilder(
+            _descriptors,
+            new JsonGuardReferences(context)
+        );
     }
+
+    /// <summary>
+    /// Whether the TS type of an object contract is a class the spec can name
+    /// in <c>type: T</c> and construct: <c>[PlainObject]</c> types lower to
+    /// TS interfaces, and a C# interface (FR-018) has no constructor either.
+    /// </summary>
+    public static bool HasRuntimeConstructor(INamedTypeSymbol type) =>
+        type.TypeKind != TypeKind.Interface && !SymbolHelper.HasPlainObject(type);
 
     /// <summary>
     /// The lazy field + getter pair of one context entry:
@@ -160,7 +171,6 @@ internal sealed class JsonSpecBuilder
     private TsObjectLiteral BuildTypeSpecObject(INamedTypeSymbol targetType, string tsTypeName)
     {
         var properties = _properties.DeclarationOrderPropertiesOf(targetType);
-        var isPlainObject = SymbolHelper.HasPlainObject(targetType);
         var polymorphism = _polymorphisms.GetValueOrDefault(targetType);
 
         var factoryParameter = new TsParameter(
@@ -173,14 +183,7 @@ internal sealed class JsonSpecBuilder
             "factory",
             new TsArrowFunction(
                 [factoryParameter],
-                [
-                    BuildFactoryStatement(
-                        targetType,
-                        tsTypeName,
-                        properties,
-                        AbstractFactoryMessageOf(tsTypeName, polymorphism)
-                    ),
-                ]
+                [BuildFactoryStatement(targetType, tsTypeName, properties, polymorphism)]
             )
         );
 
@@ -193,7 +196,7 @@ internal sealed class JsonSpecBuilder
 
         var specProperties = new[]
         {
-            TypeProperty(tsTypeName, isPlainObject),
+            TypeProperty(targetType, tsTypeName),
             BaseLinkProperty(targetType),
             factoryProperty,
             propertiesProperty,
@@ -206,12 +209,14 @@ internal sealed class JsonSpecBuilder
 
     /// <summary>
     /// <c>type: TodoItem</c> — only for class-backed types. [PlainObject] types
-    /// lower to TS interfaces with no runtime constructor, so there's no value
-    /// to reference. Their specs are accessed via the context getter (e.g.,
-    /// <c>ctx.storedTodo</c>), not via <c>resolve(Class)</c>.
+    /// and C# interfaces lower to TS interfaces with no runtime constructor, so
+    /// there's no value to reference. Their specs are accessed via the context
+    /// getter (e.g., <c>ctx.storedTodo</c>), not via <c>resolve(Class)</c>.
     /// </summary>
-    private static TsObjectProperty? TypeProperty(string tsTypeName, bool isPlainObject) =>
-        isPlainObject ? null : new TsObjectProperty("type", new TsIdentifier(tsTypeName));
+    private static TsObjectProperty? TypeProperty(INamedTypeSymbol targetType, string tsTypeName) =>
+        HasRuntimeConstructor(targetType)
+            ? new TsObjectProperty("type", new TsIdentifier(tsTypeName))
+            : null;
 
     /// <summary><c>base: this.baseSpec</c> when the type links to a base spec.</summary>
     private TsObjectProperty? BaseLinkProperty(INamedTypeSymbol targetType) =>
@@ -245,11 +250,15 @@ internal sealed class JsonSpecBuilder
     /// <summary>
     /// The single statement of the spec's <c>factory</c> arrow:
     /// <list type="bullet">
-    ///   <item><c>[PlainObject]</c> → <c>return { title: p.title as string, ... }</c>;</item>
-    ///   <item>abstract class → <c>throw new Error(...)</c>: TypeScript rejects
-    ///     <c>new</c> on an abstract class. A polymorphic base never reaches it
-    ///     (its reads dispatch to a derived contract, FR-011); any other
-    ///     abstract class cannot be deserialized directly;</item>
+    ///   <item>abstract polymorphic base (a class, a <c>[PlainObject]</c> type
+    ///     or an interface) → <c>throw new Error(...)</c>: its reads dispatch
+    ///     to a derived contract and never reach it (FR-011, FR-018);</item>
+    ///   <item><c>[PlainObject]</c> → <c>return { title: p.title as string, ... }</c>,
+    ///     inherited members included: a TS interface has no base constructor
+    ///     to fill them;</item>
+    ///   <item>any other abstract class → <c>throw new Error(...)</c>:
+    ///     TypeScript rejects <c>new</c> on an abstract class, so it cannot be
+    ///     deserialized directly;</item>
     ///   <item>class → <c>return new TodoItem(p.title as string, ...)</c>, with
     ///     the arguments in the emitted constructor's positional order.</item>
     /// </list>
@@ -258,14 +267,21 @@ internal sealed class JsonSpecBuilder
         INamedTypeSymbol targetType,
         string tsTypeName,
         IReadOnlyList<JsonSerializableProperty> properties,
-        string abstractFactoryMessage
+        JsonPolymorphism? polymorphism
     )
     {
+        if (polymorphism is { IsAbstractBase: true })
+            return BuildAbstractFactoryThrow(
+                PolymorphicAbstractFactoryMessage(targetType, tsTypeName)
+            );
+
         if (SymbolHelper.HasPlainObject(targetType))
-            return new TsReturnStatement(BuildPlainObjectLiteral(properties));
+            return new TsReturnStatement(
+                BuildPlainObjectLiteral(_properties.LiteralPropertiesOf(targetType))
+            );
 
         if (targetType.IsAbstract)
-            return BuildAbstractFactoryThrow(abstractFactoryMessage);
+            return BuildAbstractFactoryThrow(UnsupportedAbstractFactoryMessage(tsTypeName));
 
         return new TsReturnStatement(
             new TsNewExpression(
@@ -361,20 +377,19 @@ internal sealed class JsonSpecBuilder
         new(new TsNewExpression(new TsIdentifier("Error"), [new TsStringLiteral(message)]));
 
     /// <summary>
-    /// The text the factory of an abstract type throws: FR-011's for a
-    /// polymorphic base, the #238 one otherwise.
+    /// The text the factory of an abstract polymorphic base throws: FR-011's,
+    /// naming an interface base by its C# name (FR-018). A non-polymorphic
+    /// abstract type keeps the #238 text.
     /// </summary>
-    private static string AbstractFactoryMessageOf(
-        string tsTypeName,
-        JsonPolymorphism? polymorphism
+    private static string PolymorphicAbstractFactoryMessage(
+        INamedTypeSymbol targetType,
+        string tsTypeName
     ) =>
-        polymorphism is null
-            ? UnsupportedAbstractFactoryMessage(tsTypeName)
-            : PolymorphicAbstractFactoryMessage(tsTypeName);
-
-    private static string PolymorphicAbstractFactoryMessage(string tsTypeName) =>
-        $"Cannot deserialize abstract type '{tsTypeName}' directly; deserialize it through a "
-        + "polymorphic spec.";
+        targetType.TypeKind == TypeKind.Interface
+            ? $"Cannot deserialize interface type '{targetType.Name}' directly; deserialize it "
+                + "through a polymorphic spec."
+            : $"Cannot deserialize abstract type '{tsTypeName}' directly; deserialize it through "
+                + "a polymorphic spec.";
 
     private static string UnsupportedAbstractFactoryMessage(string tsTypeName) =>
         $"Cannot deserialize abstract type '{tsTypeName}': polymorphic JSON deserialization is "

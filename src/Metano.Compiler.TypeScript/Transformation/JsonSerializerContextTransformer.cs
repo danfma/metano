@@ -101,7 +101,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     /// <summary>
     /// The classes the generated context passes as constructor values: every
-    /// object entry that is not <c>[PlainObject]</c> gets a <c>TypeSpec</c>
+    /// object entry that is neither <c>[PlainObject]</c> nor an interface
+    /// gets a <c>TypeSpec</c>
     /// naming the class (<c>type: T</c>, typed <c>abstract new (...) =&gt; T</c>)
     /// and calling it (<c>factory: (p) =&gt; new T(...)</c>), both outside the
     /// class body, so the class must keep a public constructor (FR-049). The
@@ -116,7 +117,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             .Entries.Where(entry => entry.Kind == JsonPropertyKind.Ref)
             .Select(entry => entry.Type)
             .OfType<INamedTypeSymbol>()
-            .Where(type => !SymbolHelper.HasPlainObject(type))
+            .Where(JsonSpecBuilder.HasRuntimeConstructor)
             .Select(type => type.OriginalDefinition);
     }
 
@@ -140,7 +141,12 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         );
 
         var names = JsonTypeInfoNames.Create(_context, roots, report);
-        var polymorphismValidator = new JsonPolymorphismValidator(properties, admission, report);
+        var polymorphismValidator = new JsonPolymorphismValidator(
+            properties,
+            admission,
+            new JsonStructuralVariants(new TypeGuardBuilder(_context)),
+            report
+        );
 
         var contract = new JsonContractClosure(
             properties,

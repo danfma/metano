@@ -589,6 +589,59 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     }
 
     /// <summary>
+    /// The <c>isT</c> predicate alone, without the <c>assertT</c> companion:
+    /// the guard a polymorphic JSON hierarchy synthesizes for a
+    /// <c>[PlainObject]</c> type that does not declare <c>[GenerateGuard]</c>
+    /// (FR-019 rule 1). <c>null</c> when the type gets no guard.
+    /// </summary>
+    public TsFunction? GeneratePredicate(INamedTypeSymbol type) => Generate(type).FirstOrDefault();
+
+    /// <summary>
+    /// The members the shape guard of a <c>[PlainObject]</c> record or class
+    /// tests, with the kind of each test and whether a missing member fails
+    /// it (FR-019 rule 3). Built from the same field list and the same
+    /// per-field tests <see cref="GenerateShapeGuard"/> emits; a
+    /// <c>[Discriminator]</c> member is compared to a string literal.
+    /// </summary>
+    public IReadOnlyList<GuardedMember> GuardedMembersOf(INamedTypeSymbol type)
+    {
+        var discriminatorTsName = DiscriminatorTsNameOf(type);
+
+        return GetAllFieldsForGuard(type)
+            .Select(field =>
+                field.Name == discriminatorTsName
+                    ? new GuardedMember(field.Name, GuardTestKind.String, IsRequired: true)
+                    : ToGuardedMember(field.Name, field.Type)
+            )
+            .ToList();
+    }
+
+    private GuardedMember ToGuardedMember(string name, TsType type)
+    {
+        var test = FieldTestOf(new TsPropertyAccess(new TsIdentifier("v"), name), type);
+
+        return new GuardedMember(name, test.Kind, IsRequired: !test.AcceptsAbsent);
+    }
+
+    /// <summary>
+    /// The TS name of a <c>[Discriminator]</c> member, resolved as
+    /// <see cref="GenerateShapeGuard"/> resolves it, or <c>null</c>.
+    /// </summary>
+    private static string? DiscriminatorTsNameOf(INamedTypeSymbol type)
+    {
+        if (SymbolHelper.GetDiscriminatorFieldName(type) is not { } fieldName)
+            return null;
+
+        var member = type.GetMembers(fieldName).OfType<IPropertySymbol>().FirstOrDefault();
+
+        return (
+                member is null
+                    ? null
+                    : SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
+            ) ?? TypeScriptNaming.ToCamelCase(fieldName);
+    }
+
+    /// <summary>
     /// Gets all fields (own + inherited) for guard validation.
     /// </summary>
     private IReadOnlyList<(string Name, TsType Type)> GetAllFieldsForGuard(INamedTypeSymbol type)
@@ -675,93 +728,111 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     /// <summary>
     /// Generates a runtime type check expression for a single field.
     /// </summary>
-    private TsExpression GenerateFieldCheck(TsExpression fieldAccess, TsType fieldType)
-    {
-        return fieldType switch
+    private TsExpression GenerateFieldCheck(TsExpression fieldAccess, TsType fieldType) =>
+        FieldTestOf(fieldAccess, fieldType).Check;
+
+    /// <summary>
+    /// The check a guard emits for one field and the coarse kind it amounts
+    /// to (FR-019 rule 3). Both come from this one switch, so the specificity
+    /// order the JSON context computes always follows the emitted guard.
+    /// </summary>
+    private GuardFieldTest FieldTestOf(TsExpression fieldAccess, TsType fieldType) =>
+        fieldType switch
         {
-            TsNumberType => TypeofCheck(fieldAccess, "number"),
-            TsStringType => TypeofCheck(fieldAccess, "string"),
-            TsBooleanType => TypeofCheck(fieldAccess, "boolean"),
-            TsBigIntType => TypeofCheck(fieldAccess, "bigint"),
+            TsNumberType => Required(TypeofCheck(fieldAccess, "number"), GuardTestKind.Number),
+            TsStringType => Required(TypeofCheck(fieldAccess, "string"), GuardTestKind.String),
+            TsBooleanType => Required(TypeofCheck(fieldAccess, "boolean"), GuardTestKind.Boolean),
+            TsBigIntType => Required(TypeofCheck(fieldAccess, "bigint"), GuardTestKind.BigInt),
 
-            TsArrayType => new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                [fieldAccess]
-            ),
+            TsArrayType => Required(ArrayCheck(fieldAccess), GuardTestKind.Array),
 
-            TsNamedType { Name: "Map" } => new TsBinaryExpression(
-                fieldAccess,
-                "instanceof",
-                new TsIdentifier("Map")
-            ),
-
-            TsNamedType { Name: "Set" } => new TsBinaryExpression(
-                fieldAccess,
-                "instanceof",
-                new TsIdentifier("Set")
+            TsNamedType { Name: "Map" or "Set" } named => Required(
+                InstanceofCheck(fieldAccess, named.Name),
+                GuardTestKind.Object
             ),
 
             // Temporal types
-            TsNamedType { Name: var n } when n.StartsWith("Temporal.") => new TsBinaryExpression(
-                fieldAccess,
-                "instanceof",
-                new TsIdentifier(n)
+            TsNamedType { Name: var n } when n.StartsWith("Temporal.") => Required(
+                InstanceofCheck(fieldAccess, n),
+                GuardTestKind.Object
             ),
 
-            // Transpilable named type → call guard recursively
-            TsNamedType { Name: var n } when _context.TranspilableTypes.ContainsKey(n) =>
+            // Transpilable named type with its own guard → call it. The guard
+            // may test an enum value or an object, so its kind is presence only.
+            TsNamedType { Name: var n } when HasGuard(n) => Required(
                 new TsCallExpression(new TsIdentifier($"is{n}"), [fieldAccess]),
+                GuardTestKind.Present
+            ),
 
             // Union with null (nullable) → field == null || innerCheck
             TsUnionType { Types: var types }
-                when types.Any(t => t is TsNamedType { Name: "null" }) => NullableFieldCheck(
+                when types.Any(t => t is TsNamedType { Name: "null" }) => NullableFieldTest(
                 fieldAccess,
                 types
             ),
 
             // String literal union (from StringEnum that's not transpilable).
-            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) => types
-                .Cast<TsStringLiteralType>()
-                .Select<TsStringLiteralType, TsExpression>(t => new TsBinaryExpression(
-                    fieldAccess,
-                    "===",
-                    new TsStringLiteral(t.Value)
-                ))
-                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
-
-            TsTupleType { Elements: var elements } => new TsBinaryExpression(
-                new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                    [fieldAccess]
+            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) =>
+                Required(
+                    types
+                        .Cast<TsStringLiteralType>()
+                        .Select<TsStringLiteralType, TsExpression>(t => new TsBinaryExpression(
+                            fieldAccess,
+                            "===",
+                            new TsStringLiteral(t.Value)
+                        ))
+                        .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
+                    GuardTestKind.String
                 ),
-                "&&",
+
+            TsTupleType { Elements: var elements } => Required(
                 new TsBinaryExpression(
-                    new TsPropertyAccess(fieldAccess, "length"),
-                    "===",
-                    new TsLiteral(elements.Count.ToString())
-                )
+                    ArrayCheck(fieldAccess),
+                    "&&",
+                    new TsBinaryExpression(
+                        new TsPropertyAccess(fieldAccess, "length"),
+                        "===",
+                        new TsLiteral(elements.Count.ToString())
+                    )
+                ),
+                GuardTestKind.Array
             ),
 
-            TsAnyType or TsVoidType or TsPromiseType => new TsLiteral("true"),
+            TsAnyType or TsVoidType or TsPromiseType => Unchecked(),
 
-            // Cross-package / cross-assembly named type that didn't
-            // match any specific case above — the TranspilableTypes
-            // dict only carries current-assembly entries, so referenced
-            // enums / records land here. Full recursion into their
-            // guards requires cross-package guard resolution (tracked
-            // as a follow-up); for now emit a presence check so the
-            // field can't silently be missing from the input. Uses the
-            // loose-equality convention from ADR-0014 so `undefined`
-            // and `null` collapse to the same "absent" case.
-            TsNamedType => new TsBinaryExpression(fieldAccess, "!=", new TsLiteral("null")),
+            // A named type without a guard of this compilation: a type of
+            // this project that declares no guard, or a cross-package /
+            // cross-assembly type (the TranspilableTypes dict only carries
+            // current-assembly entries). Emit a presence check so the field
+            // can't silently be missing from the input. Uses the
+            // loose-equality convention from ADR-0014 so `undefined` and
+            // `null` collapse to the same "absent" case.
+            TsNamedType => Required(
+                new TsBinaryExpression(fieldAccess, "!=", new TsLiteral("null")),
+                GuardTestKind.Present
+            ),
 
             // Unknown shape the switch doesn't cover — accept anything.
             // Reaches this branch only for TsType variants the builder
             // does not know about (new AST kinds); safer to keep the
             // field permissive than to reject valid shapes.
-            _ => new TsLiteral("true"),
+            _ => Unchecked(),
         };
-    }
+
+    /// <summary>
+    /// Whether <c>is{tsName}</c> is a guard this compilation emits and the
+    /// import collector resolves: a type of this project with
+    /// <c>[GenerateGuard]</c>, or a <c>[PlainObject]</c> type whose guard a
+    /// polymorphic JSON hierarchy synthesizes (FR-019). Any other type gets a
+    /// presence check instead of a call to a function that does not exist.
+    /// </summary>
+    private bool HasGuard(string tsName) => _context.TryResolveGuardImport($"is{tsName}", out _);
+
+    private static GuardFieldTest Required(TsExpression check, GuardTestKind kind) =>
+        new(check, kind, AcceptsAbsent: false);
+
+    private static GuardFieldTest Unchecked() =>
+        new(new TsLiteral("true"), GuardTestKind.Unchecked, AcceptsAbsent: true);
 
     private static TsExpression TypeofCheck(TsExpression expr, string typeName) =>
         new TsBinaryExpression(
@@ -770,26 +841,43 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             new TsStringLiteral(typeName)
         );
 
-    private TsExpression NullableFieldCheck(
+    private static TsCallExpression ArrayCheck(TsExpression fieldAccess) =>
+        new(new TsPropertyAccess(new TsIdentifier("Array"), "isArray"), [fieldAccess]);
+
+    private static TsBinaryExpression InstanceofCheck(TsExpression fieldAccess, string typeName) =>
+        new(fieldAccess, "instanceof", new TsIdentifier(typeName));
+
+    /// <summary>
+    /// <c>field == null || innerCheck</c>: the member may be absent, and its
+    /// kind is the inner test's when there is a single one.
+    /// </summary>
+    private GuardFieldTest NullableFieldTest(
         TsExpression fieldAccess,
         IReadOnlyList<TsType> unionTypes
     )
     {
-        var nonNullTypes = unionTypes.Where(t => t is not TsNamedType { Name: "null" }).ToList();
-        if (nonNullTypes.Count == 0)
-            return new TsLiteral("true");
+        var innerTests = unionTypes
+            .Where(t => t is not TsNamedType { Name: "null" })
+            .Select(t => FieldTestOf(fieldAccess, t))
+            .ToList();
 
-        var innerCheck =
-            nonNullTypes.Count == 1
-                ? GenerateFieldCheck(fieldAccess, nonNullTypes[0])
-                : nonNullTypes
-                    .Select(t => GenerateFieldCheck(fieldAccess, t))
-                    .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+        if (innerTests.Count == 0)
+            return Unchecked();
 
-        return new TsBinaryExpression(
-            new TsBinaryExpression(fieldAccess, "==", new TsLiteral("null")),
-            "||",
-            innerCheck
+        var innerCheck = innerTests
+            .Select(test => test.Check)
+            .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+
+        var kind = innerTests.Count == 1 ? innerTests[0].Kind : GuardTestKind.Present;
+
+        return new GuardFieldTest(
+            new TsBinaryExpression(
+                new TsBinaryExpression(fieldAccess, "==", new TsLiteral("null")),
+                "||",
+                innerCheck
+            ),
+            kind,
+            AcceptsAbsent: true
         );
     }
 }
