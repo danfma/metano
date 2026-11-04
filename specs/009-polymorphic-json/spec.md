@@ -447,7 +447,7 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   `ignoreUnrecognizedTags`) are emitted only when set. When the base has no runtime constructor (an
   interface or a `[PlainObject]` base), the descriptor also carries `typeName`, the C# simple name
   used in error messages; a concrete `[PlainObject]` base that does not register itself also
-  carries its synthesized guard as `baseTest` (FR-019 rule 5, DECIDED-23 b). Specs of
+  carries its synthesized guard as `baseTest` (FR-019 rule 5, DECIDED-24 b). Specs of
   non-polymorphic types MUST NOT change.
 - **FR-005**: Serializing through a polymorphic spec MUST resolve the value's runtime constructor
   **first against the registered entries** (`byCtor`, which includes the base itself when it is
@@ -615,7 +615,7 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      cycle in the "more specific" relation is reported the same way. The base guard of rule 5
      counts too: when the base writes its own values through its guard (a concrete,
      non-self-registered `[PlainObject]` base), a variant whose guard covers the base would capture
-     every base value, since the variant guards run first, and is reported (DECIDED-23 e). A
+     every base value, since the variant guards run first, and is reported (DECIDED-24 e). A
      registered `[PlainObject]` type that gets no guard (`[Import]`, `[ExportedAsModule]`,
      `[NoContainer]`, an exception or a type with extension members) is `MS0032` as well.
   5. **Unmatched plain objects.** A plain object that matches no variant guard is the base itself
@@ -892,7 +892,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Missing non-required property | default value | `JsonException` | FR-045 |
 | Closed generic registration `[JsonDerivedType(typeof(GenD<int>), "g")]` | accepted (`{"$type":"g","X":1}`, measured) | `MS0032` | Known gap of v1 (FR-012) |
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
-| Unregistered C# subtype of a concrete `[PlainObject]` base whose shape passes the base's `baseTest` | `NotSupportedException` (measured: `Cat4` through `Animal4`) | written as the base (`{"Name":"c"}`) | FR-019 rule 5, DECIDED-23 b |
+| Unregistered C# subtype of a concrete `[PlainObject]` base whose shape passes the base's `baseTest` | `NotSupportedException` (measured: `Cat4` through `Animal4`) | written as the base (`{"Name":"c"}`) | FR-019 rule 5, DECIDED-24 b |
 | Runtime type name of a plain object in `Runtime type '…' is not supported` | the C# type name | `Object` | FR-019 |
 | Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Not measured; fixtures use ASCII names; probed in S8 |
 | Read depth limit | the reader counts every container of the document | counts only the containers the contract visits (a deep value under an undeclared key is skipped) | DECIDED-20 (b) |
@@ -1150,7 +1150,7 @@ the former `OPEN-N`.
     `unknownDerivedType` (FR-019 rule 5). A self-registered base is an entry with a `test` and is
     checked like any variant. S6c adds a base-guard member to `PolymorphismSpec` and the rule 5
     check (plan.md, S6c row), which removes the interim behavior. **Resolved in S6c**
-    (DECIDED-23 b): the member is `baseTest`.
+    (DECIDED-24 b): the member is `baseTest`.
   - (f) FR-017 read side (the tag of an abstract derived entry) is **not** implemented: no member
     of the descriptor marks an entry as abstract, so its tag reads through the entry's throwing
     factory (a plain `Error`). Measured STJ text, both modes: `NotSupportedException`
@@ -1326,7 +1326,7 @@ the former `OPEN-N`.
     every read agreed, except the type names of (c) and the namespace in the missing-tag message
     of a namespaced base (`'TestApp.Clip'`; the runtime names `'Clip'`, which predates S2b).
 
-- **DECIDED-23 — Slice S6c decisions (#268).** Taken while implementing interface bases (FR-018)
+- **DECIDED-24 — Slice S6c decisions (#268).** Taken while implementing interface bases (FR-018)
   and `[PlainObject]` hierarchies (FR-019), probed against a source-generated context on .NET SDK
   10.0.401 (rows quoted in `tests/Metano.Tests/JsonStructuralPolymorphismTests.cs`):
   - (a) **Guard trigger.** A `[PlainObject]` type gets its synthesized `isT` when a

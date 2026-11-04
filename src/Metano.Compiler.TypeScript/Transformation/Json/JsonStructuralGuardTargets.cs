@@ -11,7 +11,7 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// rule 5 base test, or its self-registration's test).
 /// <para>
 /// The set is read from the attributes, not from the contract closure of a
-/// context (DECIDED-23 a): a registered type always lives in its base's
+/// context (DECIDED-24 a): a registered type always lives in its base's
 /// assembly (the base names it with <c>typeof</c>, and it derives from the
 /// base), so a library emits the guards a consumer's context imports without
 /// knowing that context. Computed once per compilation, so a variant's file

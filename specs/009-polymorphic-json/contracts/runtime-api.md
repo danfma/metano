@@ -161,5 +161,5 @@ from the JSON number or text (DECIDED-23 f).
 S6c adds `PolymorphismSpec.baseTest`, the base-guard member DECIDED-21 e anticipated, and
 replaces the interim rule: a plain object that matches no variant guard is written as the base
 (no tag) only when `baseTest` accepts it, and otherwise follows `unknownDerivedType` with the
-runtime type name `Object` (FR-019 rule 5, DECIDED-23 b). Generated contexts now emit `typeName`,
+runtime type name `Object` (FR-019 rule 5, DECIDED-24 b). Generated contexts now emit `typeName`,
 `testOrder` and the `test` guards of `[PlainObject]` entries.
