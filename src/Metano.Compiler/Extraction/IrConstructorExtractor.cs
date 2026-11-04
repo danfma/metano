@@ -42,7 +42,7 @@ public static class IrConstructorExtractor
         PrimaryConstructorPromotion promotion
     )
     {
-        var explicitCtors = ExplicitConstructors(type);
+        var explicitCtors = AllExplicitConstructors(type);
         var primary = FindPrimaryConstructor(type);
 
         if (primary is null)
@@ -95,16 +95,7 @@ public static class IrConstructorExtractor
     /// constructor (or the record copy constructor).
     /// </summary>
     public static IMethodSymbol? FindPrimaryConstructor(INamedTypeSymbol type) =>
-        ExplicitConstructors(type).OrderByDescending(c => c.Parameters.Length).FirstOrDefault();
-
-    /// <summary>
-    /// The public constructors among those <see cref="Extract"/> models — the
-    /// ones a target exposes, which drive multi-constructor dispatch.
-    /// </summary>
-    public static List<IMethodSymbol> PublicExplicitConstructors(INamedTypeSymbol type) =>
-        ExplicitConstructors(type)
-            .Where(c => c.DeclaredAccessibility == Accessibility.Public)
-            .ToList();
+        AllExplicitConstructors(type).OrderByDescending(c => c.Parameters.Length).FirstOrDefault();
 
     /// <summary>
     /// Whether <paramref name="constructor"/> is the C# 12 primary constructor
@@ -121,15 +112,7 @@ public static class IrConstructorExtractor
     /// <paramref name="type"/> (the main one plus its overloads).
     /// </summary>
     public static int ExplicitConstructorCount(INamedTypeSymbol type) =>
-        ExplicitConstructors(type).Count;
-
-    /// <summary>
-    /// The constructors <see cref="Extract"/> models for
-    /// <paramref name="type"/> (the main one plus its overloads), whatever
-    /// their accessibility, in declaration order.
-    /// </summary>
-    public static IReadOnlyList<IMethodSymbol> ModeledConstructors(INamedTypeSymbol type) =>
-        ExplicitConstructors(type);
+        AllExplicitConstructors(type).Count;
 
     /// <summary>
     /// The accessibility the source declares for <paramref name="ctor"/>. A
@@ -143,9 +126,16 @@ public static class IrConstructorExtractor
             ? IrVisibility.Public
             : IrVisibilityMapper.Map(ctor.DeclaredAccessibility);
 
-    private static List<IMethodSymbol> ExplicitConstructors(INamedTypeSymbol type) =>
+    /// <summary>
+    /// The constructors <see cref="Extract"/> models for
+    /// <paramref name="type"/> (the main one plus its overloads), whatever
+    /// their accessibility, in declaration order: every declared instance
+    /// constructor except the implicit parameterless one and a record's copy
+    /// constructor. A static constructor is not one of them.
+    /// </summary>
+    public static IReadOnlyList<IMethodSymbol> AllExplicitConstructors(INamedTypeSymbol type) =>
         type
-            .Constructors.Where(c =>
+            .InstanceConstructors.Where(c =>
                 (!c.IsImplicitlyDeclared || c.Parameters.Length > 0) && !IsRecordCopyConstructor(c)
             )
             .ToList();

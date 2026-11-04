@@ -31,11 +31,14 @@ public static class IrToTsConstructorDispatcherBridge
     /// </summary>
     /// <param name="primary">The primary constructor carrying the overloads.</param>
     /// <param name="bclRegistry">The declarative BCL mappings.</param>
+    /// <param name="extendsBase">Whether the class extends an emitted base,
+    /// so a branch without base arguments still calls <c>super()</c>.</param>
     /// <param name="keepsBaseMessage">Whether the class overrides
     /// <c>Message</c>, so every <c>super(...)</c> is followed by the
     /// base-message capture.</param>
     internal static TsConstructor? Build(
         IrConstructorDeclaration primary,
+        bool extendsBase,
         bool keepsBaseMessage,
         IrToTsBridgeContext context
     )
@@ -69,7 +72,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         var body = new List<TsStatement>();
         foreach (var ctor in sorted)
-            body.Add(BuildBranch(ctor, keepsBaseMessage, context));
+            body.Add(BuildBranch(ctor, new BranchScope(extendsBase, keepsBaseMessage), context));
 
         // Unmatched — match the legacy behavior: the bare TS `throw` so a
         // caller that passes an unsupported signature fails loudly at runtime.
@@ -98,7 +101,7 @@ public static class IrToTsConstructorDispatcherBridge
 
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
-        bool keepsBaseMessage,
+        BranchScope scope,
         IrToTsBridgeContext context
     )
     {
@@ -139,7 +142,7 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        branch.AddRange(LowerConstructorInvocation(ctor, chainDepth: 0, keepsBaseMessage, context));
+        branch.AddRange(LowerConstructorInvocation(ctor, chainDepth: 0, scope, context));
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
@@ -157,16 +160,24 @@ public static class IrToTsConstructorDispatcherBridge
     private static IReadOnlyList<TsStatement> LowerConstructorInvocation(
         IrConstructorDeclaration ctor,
         int chainDepth,
-        bool keepsBaseMessage,
+        BranchScope scope,
         IrToTsBridgeContext context
     )
     {
         var statements = new List<TsStatement>();
 
         if (ctor.ThisChain is { } chain)
-            statements.AddRange(LowerThisChain(chain, chainDepth, keepsBaseMessage, context));
-        else if (IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, context) is { } baseCall)
+            statements.AddRange(LowerThisChain(chain, chainDepth, scope, context));
+        else if (BaseCallOf(ctor, scope, context) is { } baseCall)
             statements.AddRange(baseCall.ToStatements());
+
+        statements.AddRange(IrToTsClassBridge.BuildCapturedAssignments(ctor));
+
+        // A constructor without a body (record positional, C# 12 primary)
+        // promotes its parameters; the dispatcher's `(...args)` cannot declare
+        // parameter properties, so the branch assigns them.
+        if (ctor.Body is null)
+            statements.AddRange(IrToTsClassBridge.BuildPromotedAssignments(ctor));
 
         // The body references the original parameter names, which the caller
         // already brought into scope.
@@ -188,7 +199,7 @@ public static class IrToTsConstructorDispatcherBridge
     private static IReadOnlyList<TsStatement> LowerThisChain(
         IrConstructorChain chain,
         int chainDepth,
-        bool keepsBaseMessage,
+        BranchScope scope,
         IrToTsBridgeContext context
     )
     {
@@ -217,9 +228,7 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        targetScope.AddRange(
-            LowerConstructorInvocation(target, chainDepth + 1, keepsBaseMessage, context)
-        );
+        targetScope.AddRange(LowerConstructorInvocation(target, chainDepth + 1, scope, context));
 
         return [.. temporaries, new TsBlockStatement(targetScope)];
     }
@@ -265,4 +274,24 @@ public static class IrToTsConstructorDispatcherBridge
 
         return isPositional ? parameterIndex : -1;
     }
+
+    /// <summary>
+    /// The <c>super(...)</c> call of <paramref name="ctor"/>; a bare
+    /// <c>super()</c> when the class extends a base and the constructor passes
+    /// nothing to it, since TypeScript requires the call in a derived class.
+    /// </summary>
+    private static TsBaseConstructorCall? BaseCallOf(
+        IrConstructorDeclaration ctor,
+        BranchScope scope,
+        IrToTsBridgeContext context
+    ) =>
+        IrToTsClassBridge.BuildBaseCall(ctor, scope.KeepsBaseMessage, context)
+        ?? (scope.ExtendsBase ? new TsBaseConstructorCall([], [], scope.KeepsBaseMessage) : null);
+
+    /// <summary>
+    /// What every branch of one dispatcher shares: whether the class extends
+    /// an emitted base (so a branch must reach <c>super(...)</c>) and whether
+    /// it keeps its base message (see <see cref="IrToTsClassBridge.BuildBaseCall"/>).
+    /// </summary>
+    private sealed record BranchScope(bool ExtendsBase, bool KeepsBaseMessage);
 }

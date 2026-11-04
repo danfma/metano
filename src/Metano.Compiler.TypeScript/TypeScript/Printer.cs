@@ -1696,17 +1696,14 @@ public sealed class Printer(string indent = "  ")
         _sb.Write(">");
     }
 
+    /// <summary>
+    /// Writes the <c>private</c> / <c>protected</c> modifier; public members
+    /// carry no keyword.
+    /// </summary>
     private void PrintAccessibility(TsAccessibility accessibility)
     {
-        switch (accessibility)
-        {
-            case TsAccessibility.Private:
-                _sb.Write("private ");
-                break;
-            case TsAccessibility.Protected:
-                _sb.Write("protected ");
-                break;
-        }
+        if (accessibility is TsAccessibility.Private or TsAccessibility.Protected)
+            _sb.Write($"{accessibility.ToKeyword()} ");
     }
 
     private void PrintBody(IReadOnlyList<TsStatement> body)

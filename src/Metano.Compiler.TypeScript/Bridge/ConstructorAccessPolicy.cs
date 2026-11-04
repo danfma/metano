@@ -1,19 +1,18 @@
 using Metano.Compiler.Diagnostics;
-using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
-using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Decides the TypeScript modifier of a class constructor (FR-049):
+/// Decides the TypeScript modifier of a class constructor (FR-049) from the
+/// type's IR and the compilation-wide <see cref="ConstructorAccessFacts"/>;
+/// the Roslyn symbol only keys the facts.
 /// <list type="number">
-///   <item>C# <c>private</c> / <c>private protected</c> map to
-///     <c>private</c>, <c>protected</c> to <c>protected</c>, every other
-///     accessibility to no modifier;</item>
+///   <item>Each declared visibility maps through
+///     <see cref="TsConstructorModifier"/>; a value type, whose implicit
+///     parameterless constructor is always public, keeps a public one;</item>
 ///   <item>a TypeScript class has one constructor accessibility (TS2385), so
 ///     mixed constructors emit the most permissive one and report
 ///     <c>MS0060</c>;</item>
@@ -24,89 +23,61 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </list>
 /// </summary>
 public sealed class ConstructorAccessPolicy(
-    ConstructorAccessFacts facts,
+    ConstructorAccessFacts constructorAccessFacts,
     Action<MetanoDiagnostic> reportDiagnostic
 )
 {
-    private readonly ConstructorAccessFacts _facts = facts;
+    private readonly ConstructorAccessFacts _constructorAccessFacts = constructorAccessFacts;
     private readonly Action<MetanoDiagnostic> _reportDiagnostic = reportDiagnostic;
 
     /// <summary>
-    /// The modifier of <paramref name="type"/>'s emitted constructor, whose
-    /// IR is <paramref name="constructor"/> (<c>null</c> for an implicit one,
-    /// which stays public).
+    /// The modifier of the constructor emitted for <paramref name="type"/>
+    /// (whose IR is <paramref name="ir"/>), reporting <c>MS0060</c> /
+    /// <c>MS0061</c> on the way. The class emitter calls it once per type.
     /// </summary>
-    public TsAccessibility Resolve(INamedTypeSymbol type, IrConstructorDeclaration? constructor)
+    public TsAccessibility ResolveAndReport(INamedTypeSymbol type, IrClassDeclaration ir)
     {
-        if (constructor is null)
+        if (ir.Constructor is not { } constructor || ir.Semantics.IsValueType)
             return TsAccessibility.Public;
 
-        var declared = MostPermissive(constructor);
-        ReportNarrowerConstructors(type, declared);
+        var mostPermissive = MostPermissive(constructor);
+        ReportNarrowerConstructors(type, mostPermissive);
 
-        if (declared is TsAccessibility.Public)
-            return declared;
+        if (mostPermissive is TsAccessibility.Public)
+            return mostPermissive;
 
-        if (_facts.OutsideConstructionOf(type) is { } construction)
+        if (_constructorAccessFacts.OutsideConstructionOf(type) is { } construction)
         {
-            ReportWidened(type, declared, construction);
+            ReportWidened(type, mostPermissive, construction);
 
             return TsAccessibility.Public;
         }
 
-        return declared is TsAccessibility.Private && _facts.IsExtended(type)
+        return mostPermissive is TsAccessibility.Private && _constructorAccessFacts.IsExtended(type)
             ? TsAccessibility.Protected
-            : declared;
+            : mostPermissive;
     }
-
-    /// <summary>The TypeScript constructor modifier of a C# accessibility.</summary>
-    public static TsAccessibility Map(IrVisibility visibility) =>
-        visibility switch
-        {
-            IrVisibility.Private or IrVisibility.PrivateProtected => TsAccessibility.Private,
-            IrVisibility.Protected => TsAccessibility.Protected,
-            _ => TsAccessibility.Public,
-        };
-
-    /// <summary>The TypeScript constructor modifier of a C# constructor.</summary>
-    public static TsAccessibility Map(IMethodSymbol constructor) =>
-        Map(IrConstructorExtractor.DeclaredVisibility(constructor));
-
-    private static TsAccessibility MostPermissive(IrConstructorDeclaration constructor) =>
-        new[] { constructor }
-            .Concat(constructor.Overloads ?? [])
-            .Select(declaration => Map(declaration.Visibility))
-            .MinBy(Restriction);
-
-    /// <summary>How restrictive a modifier is: public 0, protected 1, private 2.</summary>
-    private static int Restriction(TsAccessibility accessibility) =>
-        accessibility switch
-        {
-            TsAccessibility.Private => 2,
-            TsAccessibility.Protected => 1,
-            _ => 0,
-        };
 
     private void ReportNarrowerConstructors(INamedTypeSymbol type, TsAccessibility emitted)
     {
-        var narrower = IrConstructorExtractor
-            .ModeledConstructors(type)
-            .Where(constructor => Restriction(Map(constructor)) > Restriction(emitted))
+        var narrower = _constructorAccessFacts
+            .ConstructorsOf(type)
+            .Where(constructor => constructor.Modifier.IsNarrowerThan(emitted))
             .ToList();
 
         if (narrower.Count == 0)
             return;
 
-        var names = string.Join(", ", narrower.Select(Describe));
+        var names = string.Join(", ", narrower.Select(constructor => constructor.Description));
 
         _reportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.MixedConstructorAccessibility,
                 $"The constructors of '{type.Name}' mix accessibility levels; a TypeScript "
-                    + $"class has one constructor accessibility, so it is emitted {Keyword(emitted)}. "
+                    + $"class has one constructor accessibility, so it is emitted {emitted.ToKeyword()}. "
                     + $"TypeScript does not enforce the narrower constructors: {names}.",
-                narrower[0].Locations.FirstOrDefault()
+                narrower[0].Location
             )
         );
     }
@@ -121,30 +92,18 @@ public sealed class ConstructorAccessPolicy(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.ConstructorAccessibilityWidened,
                 $"The constructor of '{type.Name}' is emitted public instead of "
-                    + $"{Keyword(declared)} because {construction.Site} constructs it outside "
+                    + $"{declared.ToKeyword()} because {construction.Site} constructs it outside "
                     + "the TypeScript class body.",
-                IrConstructorExtractor
-                    .ModeledConstructors(type)
-                    .FirstOrDefault(constructor => Map(constructor) == declared)
-                    ?.Locations.FirstOrDefault()
+                _constructorAccessFacts
+                    .ConstructorsOf(type)
+                    .FirstOrDefault(constructor => constructor.Modifier == declared)
+                    ?.Location
             )
         );
 
-    private static string Describe(IMethodSymbol constructor)
-    {
-        var parameters = constructor.Parameters.Select(parameter =>
-            parameter.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
-        );
-
-        return $"'{constructor.ContainingType.Name}({string.Join(", ", parameters)})' "
-            + $"({SyntaxFacts.GetText(constructor.DeclaredAccessibility)})";
-    }
-
-    private static string Keyword(TsAccessibility accessibility) =>
-        accessibility switch
-        {
-            TsAccessibility.Private => "private",
-            TsAccessibility.Protected => "protected",
-            _ => "public",
-        };
+    private static TsAccessibility MostPermissive(IrConstructorDeclaration constructor) =>
+        new[] { constructor }
+            .Concat(constructor.Overloads ?? [])
+            .Select(declaration => TsConstructorModifier.Of(declaration.Visibility))
+            .MinBy(TsConstructorModifier.RestrictionOf);
 }

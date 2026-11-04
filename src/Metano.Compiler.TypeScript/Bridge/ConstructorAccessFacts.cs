@@ -1,17 +1,20 @@
 using Metano.Compiler.Extraction;
 using Metano.Compiler.TypeScript.AST;
-using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Metano.Compiler.TypeScript.Transformation;
+namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// The compilation-wide facts that decide whether a non-public constructor
-/// keeps its TypeScript modifier (FR-049): which classes code outside their
-/// class body constructs, and which classes an emitted class extends. Only
-/// types whose constructors all map to a non-public modifier are recorded;
-/// every other type emits a public constructor anyway.
+/// The compilation-wide facts <see cref="ConstructorAccessPolicy"/> needs
+/// beyond a type's IR (FR-049): the declared constructors of every reference
+/// type with a non-public one (to name them in <c>MS0060</c> / <c>MS0061</c>),
+/// which classes code outside their class body constructs, and which classes
+/// an emitted class extends. Accessibility comes from
+/// <see cref="IrConstructorExtractor.DeclaredVisibility"/>, the function the IR
+/// is built from, so the facts and the IR agree. Value types are left out:
+/// their implicit parameterless constructor is always public.
 /// <para>
 /// The facts cross file boundaries — a <c>SerializerContext</c> or a derived
 /// class in another file changes a type's constructor — so
@@ -20,49 +23,40 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public sealed class ConstructorAccessFacts
 {
+    private const string OutsideConstructionFact = "outside";
+    private const string ExtendedFact = "extended";
+
+    private readonly Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>> _constructors;
     private readonly Dictionary<INamedTypeSymbol, OutsideConstruction> _outsideConstructions;
     private readonly HashSet<INamedTypeSymbol> _extended;
 
     private ConstructorAccessFacts(
+        Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>> constructors,
         Dictionary<INamedTypeSymbol, OutsideConstruction> outsideConstructions,
         HashSet<INamedTypeSymbol> extended
     )
     {
+        _constructors = constructors;
         _outsideConstructions = outsideConstructions;
         _extended = extended;
     }
 
-    /// <summary>No type is constructed outside its class body or extended.</summary>
+    /// <summary>No type declares a non-public constructor.</summary>
     public static ConstructorAccessFacts Empty { get; } =
         new(
+            new Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>>(
+                SymbolEqualityComparer.Default
+            ),
             new Dictionary<INamedTypeSymbol, OutsideConstruction>(SymbolEqualityComparer.Default),
             new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default)
         );
 
     /// <summary>
-    /// Collects the facts over <paramref name="emittedTypes"/> (top-level and
-    /// emitted nested types). <paramref name="jsonConstructedTypesOf"/> yields
-    /// the classes a <c>SerializerContext</c> type constructs through its
-    /// <c>TypeSpec</c>s.
+    /// The declared constructors of <paramref name="type"/> when one of them
+    /// is non-public; empty otherwise.
     /// </summary>
-    public static ConstructorAccessFacts Collect(
-        Compilation compilation,
-        IReadOnlyList<INamedTypeSymbol> emittedTypes,
-        Func<INamedTypeSymbol, IEnumerable<INamedTypeSymbol>> jsonConstructedTypesOf
-    )
-    {
-        var restricted = emittedTypes
-            .Where(DeclaresOnlyNonPublicConstructors)
-            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-
-        if (restricted.Count == 0)
-            return Empty;
-
-        return new ConstructorAccessFacts(
-            OutsideConstructions(compilation, emittedTypes, jsonConstructedTypesOf, restricted),
-            ExtendedTypes(emittedTypes, restricted)
-        );
-    }
+    public IReadOnlyList<DeclaredConstructor> ConstructorsOf(INamedTypeSymbol type) =>
+        _constructors.GetValueOrDefault(type.OriginalDefinition) ?? [];
 
     /// <summary>
     /// Where code outside the TypeScript class body of <paramref name="type"/>
@@ -76,21 +70,81 @@ public sealed class ConstructorAccessFacts
 
     /// <summary>
     /// The facts recorded for <paramref name="groupTypes"/> and the types nested
-    /// in them, as a stable string; empty when none is recorded.
+    /// in them that another file can change, as a stable string; empty when
+    /// none is recorded.
     /// </summary>
     public string FingerprintOf(IEnumerable<INamedTypeSymbol> groupTypes)
     {
         var group = groupTypes.ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
         var entries = _outsideConstructions
-            .Keys.Select(type => (Type: type, Fact: "outside"))
-            .Concat(_extended.Select(type => (Type: type, Fact: "extended")))
+            .Keys.Select(type => (Type: type, Fact: OutsideConstructionFact))
+            .Concat(_extended.Select(type => (Type: type, Fact: ExtendedFact)))
             .Where(entry => group.Contains(OutermostType(entry.Type)))
             .Select(entry => $"{entry.Type.ToDisplayString()}:{entry.Fact}")
             .Order(StringComparer.Ordinal);
 
         return string.Join(";", entries);
     }
+
+    /// <summary>
+    /// Collects the facts over <paramref name="emittedTypes"/> (top-level and
+    /// emitted nested types). <paramref name="jsonConstructedTypesOf"/> yields
+    /// the classes a <c>SerializerContext</c> type constructs through its
+    /// <c>TypeSpec</c>s.
+    /// </summary>
+    public static ConstructorAccessFacts Collect(
+        Compilation compilation,
+        IReadOnlyList<INamedTypeSymbol> emittedTypes,
+        Func<INamedTypeSymbol, IEnumerable<INamedTypeSymbol>> jsonConstructedTypesOf
+    )
+    {
+        var constructors = emittedTypes
+            .Where(type => !type.IsValueType)
+            .Select(type =>
+                (Type: type.OriginalDefinition, Constructors: DeclaredConstructors(type))
+            )
+            .Where(entry => entry.Constructors.Any(IsNonPublic))
+            .ToDictionary(
+                entry => entry.Type,
+                entry => entry.Constructors,
+                (IEqualityComparer<INamedTypeSymbol>)SymbolEqualityComparer.Default
+            );
+
+        if (constructors.Count == 0)
+            return Empty;
+
+        var restricted = constructors
+            .Where(entry => entry.Value.All(IsNonPublic))
+            .Select(entry => entry.Key)
+            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        return new ConstructorAccessFacts(
+            constructors,
+            OutsideConstructions(compilation, emittedTypes, jsonConstructedTypesOf, restricted),
+            ExtendedTypes(emittedTypes, restricted)
+        );
+    }
+
+    private static IReadOnlyList<DeclaredConstructor> DeclaredConstructors(INamedTypeSymbol type) =>
+        IrConstructorExtractor.AllExplicitConstructors(type).Select(Describe).ToList();
+
+    private static DeclaredConstructor Describe(IMethodSymbol constructor)
+    {
+        var parameters = constructor.Parameters.Select(parameter =>
+            parameter.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
+        );
+
+        return new DeclaredConstructor(
+            TsConstructorModifier.Of(IrConstructorExtractor.DeclaredVisibility(constructor)),
+            $"'{constructor.ContainingType.Name}({string.Join(", ", parameters)})' "
+                + $"({SyntaxFacts.GetText(constructor.DeclaredAccessibility)})",
+            constructor.Locations.FirstOrDefault()
+        );
+    }
+
+    private static bool IsNonPublic(DeclaredConstructor constructor) =>
+        constructor.Modifier is not TsAccessibility.Public;
 
     /// <summary>
     /// The first site outside the class body that constructs each restricted
@@ -137,17 +191,6 @@ public sealed class ConstructorAccessFacts
             .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
     /// <summary>
-    /// Whether <paramref name="type"/> declares constructors and none of them
-    /// maps to a public one — the most permissive modifier, which the
-    /// constructor is emitted with, is then non-public.
-    /// </summary>
-    private static bool DeclaresOnlyNonPublicConstructors(INamedTypeSymbol type) =>
-        IrConstructorExtractor.ModeledConstructors(type) is { Count: > 0 } constructors
-        && constructors.All(constructor =>
-            ConstructorAccessPolicy.Map(constructor) is not TsAccessibility.Public
-        );
-
-    /// <summary>
     /// The restricted containers of <paramref name="nested"/> that a
     /// <c>new</c> in its declaration constructs: C# lets a nested type call its
     /// container's private or protected constructor, but the TypeScript target
@@ -168,7 +211,7 @@ public sealed class ConstructorAccessFacts
 
         return nested
             .DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
-            .SelectMany(declaration => ConstructedTypesIn(declaration, compilation))
+            .SelectMany(declaration => ConstructedTypesIn(compilation, declaration))
             .Where(containers.Contains);
     }
 
@@ -178,14 +221,17 @@ public sealed class ConstructorAccessFacts
     /// type is scanned on its own).
     /// </summary>
     private static IEnumerable<INamedTypeSymbol> ConstructedTypesIn(
-        SyntaxNode declaration,
-        Compilation compilation
+        Compilation compilation,
+        SyntaxNode declaration
     )
     {
         var model = compilation.GetSemanticModel(declaration.SyntaxTree);
 
+        bool StaysInThisTypeBody(SyntaxNode node) =>
+            node == declaration || node is not BaseTypeDeclarationSyntax;
+
         return declaration
-            .DescendantNodes(node => node == declaration || node is not BaseTypeDeclarationSyntax)
+            .DescendantNodes(StaysInThisTypeBody)
             .OfType<BaseObjectCreationExpressionSyntax>()
             .Select(creation => model.GetSymbolInfo(creation).Symbol)
             .OfType<IMethodSymbol>()
@@ -201,6 +247,17 @@ public sealed class ConstructorAccessFacts
     private static INamedTypeSymbol OutermostType(INamedTypeSymbol type) =>
         ContainersOf(type).LastOrDefault() ?? type.OriginalDefinition;
 }
+
+/// <summary>
+/// A declared constructor as the FR-049 diagnostics name it: its TypeScript
+/// <paramref name="Modifier"/>, a <paramref name="Description"/> such as
+/// <c>'Size(int, int)' (private)</c>, and its source location.
+/// </summary>
+public sealed record DeclaredConstructor(
+    TsAccessibility Modifier,
+    string Description,
+    Location? Location
+);
 
 /// <summary>
 /// Code outside a type's TypeScript class body that constructs it;

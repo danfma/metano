@@ -280,8 +280,11 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   modifier (FR-049): the most permissive one when overloads mix accessibility
   (`MS0060`), public when code outside the class body constructs the type — a
   JSON `TypeSpec` or a `new` in a nested type (`MS0061`) — and `protected`
-  instead of `private` when an emitted class extends it. The cross-file facts
-  come from `ConstructorAccessFacts`, which also feeds the per-group cache key.
+  instead of `private` when an emitted class extends it. It reads the type's IR;
+  the cross-file facts (declared constructors, outside constructions, extended
+  classes) come from `ConstructorAccessFacts`, which also feeds the per-group
+  cache key. `TsConstructorModifier` holds the IR visibility → modifier mapping
+  both share.
 - **`IrToTsBclMapper`** — consumes the `DeclarativeMappingRegistry` (built
   from `[MapMethod]` / `[MapProperty]` assembly attributes) and renders
   lowered call / member-access expressions.

@@ -1,6 +1,7 @@
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
 
@@ -133,9 +134,11 @@ public class ConstructorAccessModifierTests
             DiagnosticCodes.MixedConstructorAccessibility
         );
 
-        await Assert
-            .That(files["range.ts"])
-            .Contains("  protected constructor(readonly start: number) {");
+        var output = files["range.ts"];
+
+        await Assert.That(output).Contains("  protected constructor(start: number);\n");
+        await Assert.That(output).Contains("  protected constructor();\n");
+        await Assert.That(output).Contains("  protected constructor(...args: unknown[]) {");
         await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert.That(warning.Message).Contains("emitted protected");
         await Assert.That(warning.Message).Contains("'Range()' (private)");
@@ -172,6 +175,249 @@ public class ConstructorAccessModifierTests
         await Assert.That(output).DoesNotContain("private constructor");
         await Assert.That(warning.Message).Contains("emitted public");
         await Assert.That(warning.Message).Contains("'Size(int, int)' (private)");
+    }
+
+    [Test]
+    public async Task ValueTypes_KeepAPublicConstructor()
+    {
+        // A struct always has a public implicit parameterless constructor, so
+        // `new Temp()` is legal anywhere whatever the declared constructors.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct Temp
+            {
+                public int Value { get; }
+
+                private Temp(int value = 0) { Value = value; }
+
+                public static Temp Of(int value) => new(value);
+            }
+
+            [Transpile]
+            public readonly record struct Celsius
+            {
+                public double Degrees { get; }
+
+                private Celsius(double degrees) { Degrees = degrees; }
+
+                public static Celsius Of(double degrees) => new(degrees);
+            }
+
+            [Transpile]
+            public class Thermometer
+            {
+                public Temp Zero() => new Temp();
+
+                public Temp Implicit() => new();
+            }
+            """
+        );
+
+        await Assert.That(files["temp.ts"]).Contains("export class Temp {\n  constructor(");
+        await Assert.That(files["celsius.ts"]).Contains("export class Celsius {\n  constructor(");
+        await Assert.That(files["thermometer.ts"]).Contains("return new Temp();");
+        await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task PrivateOverloads_DispatchUnderAPrivateConstructor()
+    {
+        // #435: every declared constructor takes part in the dispatcher, not
+        // only the public ones, so the factory-only pattern keeps both.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Code
+            {
+                public int Length { get; }
+
+                private Code(int length) { Length = length; }
+
+                private Code(string text) { Length = text.Length; }
+
+                public static Code FromLength(int length) => new(length);
+
+                public static Code FromText(string text) => new(text);
+            }
+            """
+        );
+
+        var output = files["code.ts"];
+
+        await Assert.That(output).Contains("  private constructor(length: number);\n");
+        await Assert.That(output).Contains("  private constructor(text: string);\n");
+        await Assert.That(output).Contains("  private constructor(...args: unknown[]) {");
+        await Assert.That(output).Contains("return new Code(text);");
+        await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task PublicConstructorBesideALargerPrivateOne_IsKept()
+    {
+        // #435: the public constructor used to be dropped for the larger
+        // private one, and MS0060 then named the public one.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Size
+            {
+                public Size(int side) : this(side, side) { }
+
+                private Size(int width, int height) { Width = width; Height = height; }
+
+                public int Width { get; }
+
+                public int Height { get; }
+            }
+
+            [Transpile]
+            public class Box
+            {
+                public Size Square() => new Size(2);
+            }
+            """
+        );
+
+        var output = files["size.ts"];
+        var warning = await SingleDiagnostic(
+            diagnostics,
+            DiagnosticCodes.MixedConstructorAccessibility
+        );
+
+        await Assert.That(output).Contains("  readonly width: number = 0;");
+        await Assert.That(output).Contains("  constructor(width: number, height: number);\n");
+        await Assert.That(output).Contains("  constructor(side: number);\n");
+        await Assert.That(warning.Message).Contains("'Size(int, int)' (private)");
+        await Assert.That(warning.Message).DoesNotContain("'Size(int)'");
+    }
+
+    [Test]
+    public async Task RecordWithAPrivateSecondaryConstructor_DeclaresAndAssignsItsPositionalMembers()
+    {
+        // A positional constructor has no body: its dispatcher branch assigns
+        // the members a parameter property would have declared.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public abstract record Animal(string Name)
+            {
+                private protected Animal() : this("unknown") { }
+            }
+
+            [Transpile]
+            public sealed record Dog(string Name) : Animal(Name);
+            """
+        );
+
+        var output = files["animal.ts"];
+
+        await Assert.That(output).Contains("  readonly name: string;\n");
+        await Assert.That(output).Contains("  constructor(name: string);\n");
+        await Assert.That(output).Contains("      this.name = name;\n");
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task DerivedClassDispatcher_CallsSuperInEveryBranch()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Shape { }
+
+            [Transpile]
+            public class Square : Shape
+            {
+                public int Side { get; }
+
+                public Square(int side) { Side = side; }
+
+                private Square() : this(1) { }
+            }
+            """
+        );
+
+        var output = files["square.ts"];
+
+        await Assert.That(output).Contains("      const side = args[0] as number;\n      super();");
+        await Assert.That(output).Contains("        const side = __chain0Arg0;\n        super();");
+    }
+
+    [Test]
+    public async Task StaticConstructor_IsNotAnOverload()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Registry
+            {
+                public static readonly Registry Instance = new();
+
+                static Registry() { }
+
+                private Registry() { }
+            }
+            """
+        );
+
+        var output = files["registry.ts"];
+
+        await Assert.That(output).Contains("  private constructor() { }");
+        await Assert.That(output).DoesNotContain("...args");
+    }
+
+    [Test]
+    public async Task JsonContextConstructingAReferencedClassWithoutPublicConstructor_ReportsMs0062()
+    {
+        // An abstract positional record's constructor is protected in
+        // metadata, but its package emits it public: no warning for Shape.
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("shared")]
+
+            namespace Shared;
+
+            public record Tag
+            {
+                public string Name { get; }
+
+                private Tag(string name) { Name = name; }
+
+                public static Tag Of(string name) => new Tag(name);
+            }
+
+            public abstract record Shape(string Kind);
+            """,
+            """
+            using System.Text.Json.Serialization;
+
+            namespace App;
+
+            [Transpile]
+            [JsonSourceGenerationOptions]
+            [JsonSerializable(typeof(Shared.Tag))]
+            [JsonSerializable(typeof(Shared.Shape))]
+            public partial class AppJsonContext : JsonSerializerContext
+            {
+                public AppJsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        );
+
+        var warning = await SingleDiagnostic(
+            diagnostics,
+            DiagnosticCodes.JsonContractConstructorNotPublic
+        );
+
+        await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert.That(warning.Message).Contains("constructs 'Tag' of the referenced assembly");
+        await Assert.That(warning.Message).Contains("'AppJsonContext'");
     }
 
     [Test]
@@ -251,7 +497,12 @@ public class ConstructorAccessModifierTests
             )
         );
 
-        await Assert.That(files["app/app-json-context.ts"]).DoesNotContain("new Payload");
+        var context = files["app/app-json-context.ts"];
+
+        await Assert
+            .That(context)
+            .Contains("factory: (p: Record<string, unknown>) => ({ name: p.name as string })");
+        await Assert.That(context).DoesNotContain("new Payload");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
 
@@ -544,14 +795,18 @@ public class ConstructorAccessModifierTests
             public class Plain { }
             """
         );
-        var types = new[] { "App.Base", "App.Derived", "App.Plain" }
-            .Select(name => compilation.GetTypeByMetadataName(name)!)
-            .ToList();
+        var baseType = compilation.GetTypeByMetadataName("App.Base")!;
+        var derived = compilation.GetTypeByMetadataName("App.Derived")!;
+        var plain = compilation.GetTypeByMetadataName("App.Plain")!;
 
-        var facts = ConstructorAccessFacts.Collect(compilation, types, _ => []);
+        var facts = ConstructorAccessFacts.Collect(
+            compilation,
+            [baseType, derived, plain],
+            _ => []
+        );
 
-        await Assert.That(facts.FingerprintOf([types[0]])).IsEqualTo("App.Base:extended");
-        await Assert.That(facts.FingerprintOf([types[1], types[2]])).IsEmpty();
+        await Assert.That(facts.FingerprintOf([baseType])).IsEqualTo("App.Base:extended");
+        await Assert.That(facts.FingerprintOf([derived, plain])).IsEmpty();
     }
 
     [Test]

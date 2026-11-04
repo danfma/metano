@@ -14,7 +14,7 @@ Metano's stable diagnostic contract. Source of truth: the diagnostic-code consta
 Each diagnostic carries: severity, stable code, message, optional source location. Stable codes are
 part of the transpiler contract (ADR-0010) and are searchable across docs, tests, issues, and ADRs.
 
-## Stable codes (`MS0001`–`MS0036`, `MS0044`, `MS0059`–`MS0061`)
+## Stable codes (`MS0001`–`MS0036`, `MS0044`, `MS0059`–`MS0062`)
 
 | Code | Symbolic name | Meaning |
 | --- | --- | --- |
@@ -58,10 +58,11 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0059` | `InvalidSourceCondition` | `--source-condition` (`MetanoSourceCondition`) is not a usable export condition name: a character outside letters, digits, `-`, `_`, `.`, `:`, an all-digit name, a Node built-in condition (`import`, `require`, `default`, `types`, `node`, `browser`, `node-addons`, `module-sync`), or a bundler default (`module`, `development`, `production`). An error: the run fails before transpiling (FR-030, #424). |
 | `MS0060` | `MixedConstructorAccessibility` | A type's constructors mix accessibility levels that map to different TypeScript modifiers. TypeScript gives a class one constructor accessibility (TS2385), so the constructor and every overload signature are emitted with the most permissive one; the message names the narrower constructors, whose restriction TypeScript does not enforce. A warning at the first narrower constructor (FR-049, #432). |
 | `MS0061` | `ConstructorAccessibilityWidened` | A non-public constructor is emitted public because code outside the class body constructs the type: its `TypeSpec` in a generated JSON `SerializerContext` (`type: T` / `new T(...)`), or a `new` written in a nested type (emitted outside the container's class body). The message names the path. A warning at the constructor (FR-049, #432). |
+| `MS0062` | `JsonContractConstructorNotPublic` | A generated JSON `SerializerContext` constructs a class of a referenced assembly through its `TypeSpec`, and none of that class's constructors is public there (read from metadata; a record's positional and copy constructors do not count). The referenced package decided the modifier when it was transpiled, so the context does not type-check. A warning at the context (FR-049, #432). |
 
 ## Reserved codes (specified, not yet implemented)
 
-Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0059`: `MS0038`–`MS0043` are reserved by the C# unions specification, PR #333, `MS0044` is taken by the package-root fix #334 / PR #355, and `MS0045`–`MS0058` by the runtime collections and type descriptors specification, issue #335; `MS0057` and `MS0058` were added after the maintainer decisions of 2026-11-02), so the next free code was `MS0059`; #424 took it for `InvalidSourceCondition`, and #432 took `MS0060` and `MS0061` for constructor access modifiers (FR-049), so the next free code is `MS0062`.
+Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0059`: `MS0038`–`MS0043` are reserved by the C# unions specification, PR #333, `MS0044` is taken by the package-root fix #334 / PR #355, and `MS0045`–`MS0058` by the runtime collections and type descriptors specification, issue #335; `MS0057` and `MS0058` were added after the maintainer decisions of 2026-11-02), so the next free code was `MS0059`; #424 took it for `InvalidSourceCondition`, and #432 took `MS0060`–`MS0062` for constructor access modifiers (FR-049), so the next free code is `MS0063`.
 
 | Code | Symbolic name | Severity | Meaning | Spec |
 | --- | --- | --- | --- | --- |

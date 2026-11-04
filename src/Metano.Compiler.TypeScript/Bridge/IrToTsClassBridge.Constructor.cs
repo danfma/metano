@@ -234,31 +234,7 @@ internal static partial class IrToTsClassBridge
 
         if (ir is not null)
         {
-            foreach (var p in ir.Parameters)
-            {
-                if (p.CapturedFieldName is null)
-                    continue;
-
-                // The parameter binding uses the local policy; the captured
-                // field it writes uses the data-member rule (camelCase,
-                // reserved words escaped). A [Name] override on the captured
-                // field is not consulted here.
-                var paramName = IrToTsNamingPolicy.ToParameterName(p.Parameter.Name);
-                var fieldName = IrToTsNamingPolicy.ToDeclaredDataMemberName(
-                    p.CapturedFieldName,
-                    attributes: null
-                );
-
-                body.Add(
-                    new TsExpressionStatement(
-                        new TsBinaryExpression(
-                            new TsPropertyAccess(new TsIdentifier("this"), fieldName),
-                            "=",
-                            new TsIdentifier(paramName)
-                        )
-                    )
-                );
-            }
+            body.AddRange(BuildCapturedAssignments(ir));
 
             // Promoted `params T[]` slots can't carry the parameter-property
             // modifier (TS forbids `readonly ...x: T[]`), so the field is
@@ -290,6 +266,55 @@ internal static partial class IrToTsClassBridge
 
         return new TsConstructor(tsCtorParams, body);
     }
+
+    /// <summary>
+    /// One <c>this.&lt;capturedField&gt; = &lt;paramName&gt;</c> per parameter a
+    /// field initializer captures (DI-style). The parameter binding uses the
+    /// local policy; the captured field it writes uses the data-member rule
+    /// (camelCase, reserved words escaped). A [Name] override on the captured
+    /// field is not consulted here.
+    /// </summary>
+    public static IEnumerable<TsStatement> BuildCapturedAssignments(
+        IrConstructorDeclaration ctor
+    ) =>
+        ctor
+            .Parameters.Where(p => p.CapturedFieldName is not null)
+            .Select(p =>
+                ThisAssignment(
+                    IrToTsNamingPolicy.ToDeclaredDataMemberName(
+                        p.CapturedFieldName!,
+                        attributes: null
+                    ),
+                    IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
+                )
+            );
+
+    /// <summary>
+    /// One <c>this.&lt;member&gt; = &lt;paramName&gt;</c> per promoted
+    /// parameter: what a parameter property does implicitly, spelled out for
+    /// a constructor whose parameters cannot be parameter properties (a branch
+    /// of the overload dispatcher).
+    /// </summary>
+    public static IEnumerable<TsStatement> BuildPromotedAssignments(
+        IrConstructorDeclaration ctor
+    ) =>
+        ctor
+            .Parameters.Where(IsPromoted)
+            .Select(p =>
+                ThisAssignment(
+                    PromotedName(p),
+                    IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
+                )
+            );
+
+    private static TsExpressionStatement ThisAssignment(string member, string parameter) =>
+        new(
+            new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("this"), member),
+                "=",
+                new TsIdentifier(parameter)
+            )
+        );
 }
 
 /// <summary>
