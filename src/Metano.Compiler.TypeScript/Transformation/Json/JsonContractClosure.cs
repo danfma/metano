@@ -44,58 +44,91 @@ internal sealed record JsonContract(
 internal sealed class JsonContractClosure(
     JsonPropertyCollector properties,
     JsonContractAdmission admission,
-    JsonPolymorphismValidator polymorphisms
+    JsonPolymorphismValidator polymorphismValidator
 )
 {
     private readonly JsonPropertyCollector _properties = properties;
     private readonly JsonContractAdmission _admission = admission;
-    private readonly JsonPolymorphismValidator _polymorphisms = polymorphisms;
+    private readonly JsonPolymorphismValidator _polymorphismValidator = polymorphismValidator;
 
+    /// <summary>
+    /// Walks the closure breadth-first. Polymorphism is read only for the
+    /// <em>dispatch targets</em> — roots, <c>ref</c> targets and registered
+    /// types — never for a type reached only through a <c>base</c> link:
+    /// System.Text.Json never builds the polymorphism of such a base, so
+    /// neither its registrations nor its diagnostics apply (DECIDED-22 j). A
+    /// type that becomes a dispatch target after it was walked is expanded
+    /// then.
+    /// </summary>
     public JsonContract Collect(IReadOnlyList<JsonContractRoot> roots)
     {
-        var entries = new List<JsonContractEntry>();
-        var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        var entries = new Dictionary<ITypeSymbol, JsonContractEntry>(
+            SymbolEqualityComparer.Default
+        );
+        var ordered = new List<JsonContractEntry>();
         var referrers = new Dictionary<ITypeSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
         var polymorphisms = new Dictionary<ITypeSymbol, JsonPolymorphism>(
             SymbolEqualityComparer.Default
         );
+        var dispatchTargets = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        var walked = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var pending = new Queue<JsonContractEntry>();
 
         foreach (var root in roots)
+        {
             Enqueue(new JsonContractEntry(root.Type, root.Kind, root));
+            MarkDispatchTarget(root.Type);
+        }
 
         while (pending.TryDequeue(out var current))
         {
+            walked.Add(current.Type);
+
             if (LinkedBaseOf(current) is { } baseType)
-                Link(current, baseType);
+                Link(current, baseType, isDispatchTarget: false);
 
             foreach (var target in RefTargetsOf(current).Where(_admission.HasObjectContract))
-                Link(current, target);
+                Link(current, target, isDispatchTarget: true);
 
-            if (PolymorphismOf(current) is not { } polymorphism)
-                continue;
-
-            polymorphisms.Add(current.Type, polymorphism);
-
-            foreach (var derivedType in DerivedTypesOf(polymorphism))
-                Link(current, derivedType);
+            if (dispatchTargets.Contains(current.Type))
+                ExpandPolymorphism(current);
         }
 
-        return new JsonContract(entries, referrers, polymorphisms);
+        return new JsonContract(ordered, referrers, polymorphisms);
 
-        void Link(JsonContractEntry referrer, ITypeSymbol target)
+        void Link(JsonContractEntry referrer, ITypeSymbol target, bool isDispatchTarget)
         {
             referrers.TryAdd(target, referrer.Type);
             Enqueue(new JsonContractEntry(target, JsonPropertyKind.Ref, Root: null));
+
+            if (isDispatchTarget)
+                MarkDispatchTarget(target);
         }
 
         void Enqueue(JsonContractEntry entry)
         {
-            if (!seen.Add(entry.Type))
+            if (!entries.TryAdd(entry.Type, entry))
                 return;
 
-            entries.Add(entry);
+            ordered.Add(entry);
             pending.Enqueue(entry);
+        }
+
+        void MarkDispatchTarget(ITypeSymbol type)
+        {
+            if (dispatchTargets.Add(type) && walked.Contains(type))
+                ExpandPolymorphism(entries[type]);
+        }
+
+        void ExpandPolymorphism(JsonContractEntry entry)
+        {
+            if (ValidatedPolymorphismOf(entry) is not { } polymorphism)
+                return;
+
+            polymorphisms.Add(entry.Type, polymorphism);
+
+            foreach (var registeredType in RegisteredTypesOf(polymorphism))
+                Link(entry, registeredType, isDispatchTarget: true);
         }
     }
 
@@ -111,20 +144,20 @@ internal sealed class JsonContractClosure(
     /// <summary>
     /// The validated polymorphism of an object contract, whose registered
     /// types the closure adds (FR-003); <c>null</c> for a value root and a
-    /// non-polymorphic contract.
+    /// non-polymorphic contract. Validating reports the diagnostics.
     /// </summary>
-    private JsonPolymorphism? PolymorphismOf(JsonContractEntry entry) =>
+    private JsonPolymorphism? ValidatedPolymorphismOf(JsonContractEntry entry) =>
         entry.Kind == JsonPropertyKind.Ref
-            ? _polymorphisms.Validate((INamedTypeSymbol)entry.Type)
+            ? _polymorphismValidator.ValidatedPolymorphismOf((INamedTypeSymbol)entry.Type)
             : null;
 
     /// <summary>
     /// The registered types a polymorphic base links to, leaving out a
     /// self-registration (the base is already an entry).
     /// </summary>
-    private static IEnumerable<ITypeSymbol> DerivedTypesOf(JsonPolymorphism polymorphism) =>
+    private static IEnumerable<ITypeSymbol> RegisteredTypesOf(JsonPolymorphism polymorphism) =>
         polymorphism
-            .Derived.Select(registration => registration.Type)
+            .Registrations.Select(registration => registration.Type)
             .Where(type => !SymbolEqualityComparer.Default.Equals(type, polymorphism.BaseType));
 
     /// <summary>

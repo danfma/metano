@@ -135,10 +135,11 @@ When it sees a class that inherits from `JsonSerializerContext`:
    their constructed name (`Page<EpisodeSummary>` → `pageEpisodeSummary`, with
    `TypeSpec<Page<EpisodeSummary>>`). Interfaces are not discovered. Base
    types, including a base declared in a referenced library, are included
-   whenever the spec links to them through `base`. Every type a reached
-   polymorphic base registers with `[JsonDerivedType]` is added too, in
-   attribute order, with its own base chain and property types, even when no
-   root names it (see [Polymorphism](#polymorphism)).
+   whenever the spec links to them through `base`. Every type registered with
+   `[JsonDerivedType]` by a polymorphic base the context dispatches through (a
+   root, a property / element / value type, or a registered type) is added
+   too, in attribute order, with its own base chain and property types, even
+   when no root names it (see [Polymorphism](#polymorphism)).
 
 4. **For each serializable type `T`**, walks its public properties and:
    - Excludes `[JsonIgnore]` and static properties
@@ -422,7 +423,11 @@ get clip(): TypeSpec<Clip> {
   `{"$type":1,"X":5}` on the wire); an untagged registration has no `tag`. A
   base that registers itself links to its own getter
   (`{ tag: "b", spec: () => this.sBase }`). The default discriminator is
-  `$type`.
+  `$type`. When **no** registration has a tag, System.Text.Json reads no
+  metadata at all: a concrete base reads its own contract (`$`-prefixed keys
+  are plain data), and an abstract base throws `NotSupportedException`
+  `Deserialization of interface or abstract types is not supported. Type
+  'UAB'.`; writes still dispatch.
 - **Options.** `unknownDerivedType: "fallBackToBaseType"` /
   `"fallBackToNearestAncestor"` and `ignoreUnrecognizedTags: true` are emitted
   only when the attribute sets them. Under `FallBackToNearestAncestor` an
@@ -434,27 +439,39 @@ get clip(): TypeSpec<Clip> {
   instead).
 - **Closed generic bases.** `[JsonDerivedType(typeof(GDer), "g")]` on
   `GBase<T>` with `GDer : GBase<int>`: the attributes are read from
-  `GBase<T>`, and every construction the context reaches gets its own
-  polymorphic spec (`get gBaseInt32(): TypeSpec<GBase<number>>`), which
+  `GBase<T>`, and every construction the context dispatches through gets its
+  own polymorphic spec (`get gBaseInt32(): TypeSpec<GBase<number>>`), which
   `GDer`'s `base` link names.
+- **Only where the context dispatches.** A base reached only through a
+  derived type's `base` link (for example a root `typeof(GDer)` alone) gets a
+  plain spec with no `polymorphism`, no registrations and no diagnostics:
+  System.Text.Json never builds its polymorphism either.
 - **Abstract factory.** The factory of an abstract polymorphic base stays a
   throwing factory, which a polymorphic read never calls; its message tells to
   read through the polymorphic spec. A non-polymorphic abstract type keeps
   the message "polymorphic JSON deserialization is not supported yet".
 - **Diagnostics.** `MS0032` (error, at the attribute) rejects a registration
   that is generic, not assignable to the base (to each construction the
-  context reaches, for a generic base), not transpiled in its declaring
-  assembly, abstract without `FallBackToNearestAncestor`, or a repeated type
-  or tag; the registration is left out of `derived`. A JSON property of the
-  hierarchy named like the discriminator (System.Text.Json throws) or
-  integer-like (JavaScript would write it before the tag) is also `MS0032`,
-  and the base then gets no `polymorphism`. `MS0033` (warning) flags an
-  untagged registration (it reads back as the base) and a registered type that
-  declares its own `[JsonDerivedType]`s (not re-dispatched through the outer
-  base); both behave exactly as in System.Text.Json.
+  context dispatches through, for a generic base), not transpiled in its
+  declaring assembly, abstract without `FallBackToNearestAncestor`, or a
+  repeated type or tag; the registration is left out of `derived`. It also
+  rejects, leaving the base without `polymorphism`, a sealed base, a
+  `[JsonPolymorphic]` without any `[JsonDerivedType]`, a reserved
+  discriminator (`$id`, `$ref`, `$values`), and a JSON property of a
+  contract written with a tag that is named like the discriminator
+  (System.Text.Json throws) or integer-like (JavaScript would write it before
+  the tag); System.Text.Json rejects all of them too. `MS0033` (warning) flags
+  an untagged registration (it reads back as a concrete base, and cannot be
+  read through an abstract one) and a registered type that declares its own
+  `[JsonDerivedType]`s (not re-dispatched through the outer base); both behave
+  exactly as in System.Text.Json.
+- **Known gap.** A closed generic registration
+  (`[JsonDerivedType(typeof(GenD<int>), "g")]`) is `MS0032`, although
+  System.Text.Json accepts it.
 - **Not yet.** Interface bases and `[PlainObject]` bases or variants come with
   slice S6c of [#268](https://github.com/danfma/metano/issues/268); until then
-  such hierarchies are generated as if the attributes were absent. The
+  such hierarchies are generated as if the attributes were absent, with an
+  `MS0033` warning saying so. The
   context's `AllowOutOfOrderMetadataProperties` option is mirrored by slice
   S2b.
 

@@ -205,10 +205,10 @@ public class JsonPolymorphicContextTests
         await Assert.That(ts).Contains("type: Shape.Circle,");
     }
 
-    // FR-015: the base is reached only through GDer's `base` link, and its
-    // spec and the derived link use the constructed name.
+    // DECIDED-22 j: a base reached only through a `base` link is never
+    // dispatched through, so System.Text.Json never builds its polymorphism.
     [Test]
-    public async Task ClosedGenericBase_ReachedThroughItsDerivedType_IsPolymorphic()
+    public async Task BaseReachedOnlyThroughABaseLink_IsNotPolymorphic()
     {
         var ts = TranspileContext(
             """
@@ -225,6 +225,33 @@ public class JsonPolymorphicContextTests
         );
 
         await Assert.That(ts).Contains("base: this.gBaseInt32,");
+        await Assert.That(ts).Contains("get gBaseInt32(): TypeSpec<GBase<number>>");
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
+    }
+
+    // FR-015: the constructed base is reached through a property after its
+    // derived type's `base` link walked it, so it is expanded then.
+    [Test]
+    public async Task ClosedGenericBase_ReachedThroughAPropertyLater_IsPolymorphic()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            [JsonDerivedType(typeof(GDer), "g")]
+            public abstract record GBase<T>(T Value);
+
+            [Transpile]
+            public sealed record GDer(int Value, int Extra) : GBase<int>(Value);
+
+            [Transpile]
+            public sealed record Holder(GBase<int> Item);
+
+            [Transpile]
+            [JsonSerializable(typeof(GDer))]
+            [JsonSerializable(typeof(Holder))]
+            """
+        );
+
         await Assert.That(ts).Contains("get gBaseInt32(): TypeSpec<GBase<number>>");
         await Assert.That(ts).Contains("tag: \"g\",\n            spec: () => this.gDer,");
     }
@@ -331,11 +358,11 @@ public class JsonPolymorphicContextTests
     }
 
     // Interface bases and [PlainObject] variants are slice S6c (FR-018,
-    // FR-019): until then their contexts are unchanged.
+    // FR-019): until then their contexts are unchanged, with an MS0033 warning.
     [Test]
     public async Task PlainObjectHierarchy_IsLeftForStructuralDispatch()
     {
-        var ts = TranspileContext(
+        var (files, diagnostics) = Transpile(
             """
             [Transpile, PlainObject]
             [JsonDerivedType(typeof(Point), "point")]
@@ -349,8 +376,21 @@ public class JsonPolymorphicContextTests
             """
         );
 
-        await Assert.That(ts).DoesNotContain("polymorphism");
+        var ts = files[ContextPath];
+        var warnings = diagnostics.Where(IsPolymorphismDiagnostic).ToList();
+
+        await Assert.That(ts).Contains("get shape(): TypeSpec<Shape>");
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
         await Assert.That(ts).DoesNotContain("get point()");
+        await Assert.That(warnings).Count().IsEqualTo(1);
+        await Assert.That(warnings[0].Code).IsEqualTo(DiagnosticCodes.LossyJsonPolymorphism);
+
+        await Assert
+            .That(warnings[0].Message)
+            .IsEqualTo(
+                "Polymorphism for interface and [PlainObject] types is not supported yet; "
+                    + "'Shape' is emitted without a discriminator."
+            );
     }
 
     [Test]
@@ -366,7 +406,8 @@ public class JsonPolymorphicContextTests
             """
         );
 
-        await Assert.That(ts).DoesNotContain("polymorphism");
+        await Assert.That(ts).Contains("get clip(): TypeSpec<Clip>");
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
 
         await Assert
             .That(ts)

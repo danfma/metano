@@ -50,7 +50,7 @@ public class JsonPolymorphismDiagnosticsTests
         );
 
         await Assert.That(ts).Contains("spec: () => this.imageClip,");
-        await Assert.That(ts).DoesNotContain("this.other");
+        await Assert.That(ts).DoesNotContain("spec: () => this.other,");
     }
 
     [Test]
@@ -98,6 +98,7 @@ public class JsonPolymorphismDiagnosticsTests
                 + "TypeScript contract."
         );
 
+        await Assert.That(ts).Contains("polymorphism: {");
         await Assert.That(ts).DoesNotContain("get hidden()");
     }
 
@@ -145,7 +146,7 @@ public class JsonPolymorphismDiagnosticsTests
 
         await AssertSingleError(diagnostics, "'ImageClip' is registered twice on 'Clip'.");
         await Assert.That(ts).Contains("tag: \"image\",");
-        await Assert.That(ts).DoesNotContain("picture");
+        await Assert.That(ts).DoesNotContain("tag: \"picture\"");
     }
 
     [Test]
@@ -173,7 +174,9 @@ public class JsonPolymorphismDiagnosticsTests
             diagnostics,
             "Type discriminator 'image' is registered twice on 'Clip'."
         );
-        await Assert.That(ts).DoesNotContain("this.silenceClip");
+
+        await Assert.That(ts).Contains("spec: () => this.imageClip,");
+        await Assert.That(ts).DoesNotContain("spec: () => this.silenceClip,");
     }
 
     [Test]
@@ -276,7 +279,8 @@ public class JsonPolymorphismDiagnosticsTests
             "'KA.Kind' serializes as 'kind', which conflicts with the discriminator of 'KBase'."
         );
 
-        await Assert.That(ts).DoesNotContain("polymorphism");
+        await Assert.That(ts).Contains("get kBase(): TypeSpec<KBase>");
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
     }
 
     [Test]
@@ -298,7 +302,7 @@ public class JsonPolymorphismDiagnosticsTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
-        await Assert.That(ts).Contains("polymorphism");
+        await Assert.That(ts).Contains("polymorphism: {");
     }
 
     [Test]
@@ -326,7 +330,8 @@ public class JsonPolymorphismDiagnosticsTests
                 + "before the discriminator."
         );
 
-        await Assert.That(ts).DoesNotContain("polymorphism");
+        await Assert.That(ts).Contains("get numBase(): TypeSpec<NumBase>");
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
     }
 
     [Test]
@@ -442,6 +447,233 @@ public class JsonPolymorphismDiagnosticsTests
             "'Hidden' registered by [JsonDerivedType] on 'Clip' is not transpiled, so it has no "
                 + "TypeScript contract."
         );
+    }
+
+    [Test]
+    public async Task UntaggedRegistrationOnAnAbstractBase_WarnsThatItCannotBeRead()
+    {
+        var (_, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonDerivedType(typeof(UAD))]
+            public abstract record UAB(int A);
+
+            [Transpile]
+            public sealed record UAD(int A) : UAB(A);
+
+            [Transpile]
+            [JsonSerializable(typeof(UAB))]
+            """
+        );
+
+        await AssertSingle(
+            diagnostics,
+            MetanoDiagnosticSeverity.Warning,
+            DiagnosticCodes.LossyJsonPolymorphism,
+            "'UAD' is registered on 'UAB' without a type discriminator; it serializes without a "
+                + "tag and cannot be deserialized through the abstract 'UAB' (as in "
+                + "System.Text.Json)."
+        );
+    }
+
+    // System.Text.Json writes {"kind":"x","V":1} for the untagged KUD: an
+    // untagged contract is never written with a tag, so it cannot conflict.
+    [Test]
+    public async Task PropertyNamedLikeTheDiscriminatorOnAnUntaggedRegistration_IsAllowed()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+            [JsonDerivedType(typeof(KUD))]
+            [JsonDerivedType(typeof(KUE), "e")]
+            public record KUB(int V);
+
+            [Transpile]
+            public record KUD(int V, [property: JsonPropertyName("kind")] string Kind2) : KUB(V);
+
+            [Transpile]
+            public record KUE(int V) : KUB(V);
+
+            [Transpile]
+            [JsonSerializable(typeof(KUB))]
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Select(d => d.Code))
+            .DoesNotContain(DiagnosticCodes.InvalidJsonPolymorphism);
+        await Assert.That(ts).Contains("polymorphism: {");
+    }
+
+    // A base property inherited by a tagged registration conflicts, as
+    // System.Text.Json reports it on the registration (KBBD).
+    [Test]
+    public async Task InheritedPropertyNamedLikeTheDiscriminator_IsReported()
+    {
+        var (_, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+            [JsonDerivedType(typeof(KBBD), "d")]
+            public record KBB([property: JsonPropertyName("kind")] string K);
+
+            [Transpile]
+            public record KBBD(string K) : KBB(K);
+
+            [Transpile]
+            [JsonSerializable(typeof(KBB))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "'KBB.K' serializes as 'kind', which conflicts with the discriminator of 'KBB'."
+        );
+    }
+
+    [Test]
+    public async Task HierarchyWithoutTags_HasNoDiscriminatorConflicts()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonDerivedType(typeof(DUD))]
+            public record DU([property: JsonPropertyName("1")] int X, [property: JsonPropertyName("$type")] int Y);
+
+            [Transpile]
+            public record DUD(int X, int Y) : DU(X, Y);
+
+            [Transpile]
+            [JsonSerializable(typeof(DU))]
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Select(d => d.Code))
+            .DoesNotContain(DiagnosticCodes.InvalidJsonPolymorphism);
+        await Assert.That(ts).Contains("polymorphism: {");
+    }
+
+    // One conflict shared by GBase<int> and GBase<string> is reported once.
+    [Test]
+    public async Task ConflictSharedByTwoConstructions_IsReportedOnce()
+    {
+        var (_, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+            [JsonDerivedType(typeof(GInt), "i")]
+            [JsonDerivedType(typeof(GStr), "s")]
+            public abstract record GBase<T>([property: JsonPropertyName("kind")] T Value);
+
+            [Transpile]
+            public sealed record GInt(int Value) : GBase<int>(Value);
+
+            [Transpile]
+            public sealed record GStr(string Value) : GBase<string>(Value);
+
+            [Transpile]
+            [JsonSerializable(typeof(GBase<int>))]
+            [JsonSerializable(typeof(GBase<string>))]
+            """
+        );
+
+        var conflicts = diagnostics.Where(d => d.Message.Contains("conflicts with")).ToList();
+
+        await Assert.That(conflicts).Count().IsEqualTo(1);
+
+        await Assert
+            .That(conflicts[0].Message)
+            .IsEqualTo(
+                "'GBase<T>.Value' serializes as 'kind', which conflicts with the discriminator of "
+                    + "'GBase<T>'."
+            );
+    }
+
+    // System.Text.Json: "Specified type 'SealedB' does not support polymorphism.
+    // Polymorphic types cannot be structs, sealed types, generic types or
+    // System.Object." (a struct cannot carry the attribute: CS0592).
+    [Test]
+    public async Task SealedBase_IsReported()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonDerivedType(typeof(SealedB), "s")]
+            public sealed record SealedB(int V);
+
+            [Transpile]
+            [JsonSerializable(typeof(SealedB))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "'SealedB' does not support polymorphism: polymorphic types cannot be sealed types "
+                + "(as in System.Text.Json)."
+        );
+
+        await Assert.That(ts).Contains("get sealedB(): TypeSpec<SealedB>");
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
+    }
+
+    // System.Text.Json: "Polymorphic configuration for type 'PolyOnly' should
+    // specify at least one derived type."
+    [Test]
+    public async Task PolymorphicAttributeWithoutRegistrations_IsReported()
+    {
+        var (_, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonPolymorphic]
+            public record PolyOnly(int V);
+
+            [Transpile]
+            [JsonSerializable(typeof(PolyOnly))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "Polymorphic configuration for type 'PolyOnly' should specify at least one derived "
+                + "type (as in System.Text.Json)."
+        );
+    }
+
+    // System.Text.Json: "The metadata property names '$id', '$ref', and
+    // '$values' are reserved and cannot be used as custom type discriminator
+    // property names."
+    [Test]
+    [Arguments("$id")]
+    [Arguments("$ref")]
+    [Arguments("$values")]
+    public async Task ReservedDiscriminator_IsReported(string discriminator)
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            $$"""
+            [Transpile]
+            [JsonPolymorphic(TypeDiscriminatorPropertyName = "{{discriminator}}")]
+            [JsonDerivedType(typeof(IdDiscD), "d")]
+            public abstract record IdDisc;
+
+            [Transpile]
+            public sealed record IdDiscD(int V) : IdDisc;
+
+            [Transpile]
+            [JsonSerializable(typeof(IdDisc))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            $"The discriminator '{discriminator}' of 'IdDisc' is reserved: '$id', '$ref' and "
+                + "'$values' cannot be used as custom type discriminator property names (as in "
+                + "System.Text.Json)."
+        );
+
+        await Assert.That(ts).Contains("get idDisc(): TypeSpec<IdDisc>");
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
     }
 
     private static Task AssertSingleError(

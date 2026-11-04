@@ -16,46 +16,70 @@ internal static class JsonPolymorphismReader
 
     private const string PolymorphicAttribute = "JsonPolymorphicAttribute";
 
+    private const string DiscriminatorOption = "TypeDiscriminatorPropertyName";
+
+    private const string UnknownDerivedTypeOption = "UnknownDerivedTypeHandling";
+
+    private const string IgnoreUnrecognizedOption = "IgnoreUnrecognizedTypeDiscriminators";
+
     /// <summary>
     /// The polymorphism of <paramref name="type"/>, or <c>null</c> when it
-    /// registers no derived type: a type is polymorphic when it has at least
-    /// one <c>[JsonDerivedType]</c>, with or without <c>[JsonPolymorphic]</c>.
+    /// carries neither attribute. A type is polymorphic when it has at least
+    /// one <c>[JsonDerivedType]</c>; a <c>[JsonPolymorphic]</c> without any is
+    /// read with no registration, which the validator rejects as
+    /// System.Text.Json does.
     /// </summary>
     public static JsonPolymorphism? TryRead(INamedTypeSymbol type)
     {
-        var attributes = type.OriginalDefinition.GetAttributes();
-
-        var derived = attributes
-            .Where(attribute => IsAttribute(attribute, DerivedTypeAttribute))
-            .Select(ToDerivedType)
-            .OfType<JsonDerivedType>()
+        var registrations = DerivedTypeAttributesOf(type)
+            .Select(ToRegistration)
+            .OfType<JsonDerivedTypeRegistration>()
             .ToList();
 
-        if (derived.Count == 0)
+        var polymorphicAttribute = type
+            .OriginalDefinition.GetAttributes()
+            .FirstOrDefault(attribute => IsAttribute(attribute, PolymorphicAttribute));
+
+        if (registrations.Count == 0 && polymorphicAttribute is null)
             return null;
 
-        var options = attributes
-            .Where(attribute => IsAttribute(attribute, PolymorphicAttribute))
-            .SelectMany(attribute => attribute.NamedArguments)
-            .ToDictionary(argument => argument.Key, argument => argument.Value.Value);
+        var options =
+            polymorphicAttribute?.NamedArguments.ToDictionary(
+                argument => argument.Key,
+                argument => argument.Value.Value
+            ) ?? [];
+
+        var discriminator =
+            options.GetValueOrDefault(DiscriminatorOption) as string
+            ?? JsonPolymorphism.DefaultDiscriminator;
+
+        var unknownDerivedType = (JsonUnknownDerivedTypeHandling)(
+            options.GetValueOrDefault(UnknownDerivedTypeOption) as int?
+            ?? (int)JsonUnknownDerivedTypeHandling.FailSerialization
+        );
+
+        var ignoreUnrecognizedTags =
+            options.GetValueOrDefault(IgnoreUnrecognizedOption) as bool? ?? false;
+
+        var location = LocationOf(polymorphicAttribute) ?? registrations.FirstOrDefault()?.Location;
 
         return new JsonPolymorphism(
             type,
-            options.GetValueOrDefault("TypeDiscriminatorPropertyName") as string
-                ?? JsonPolymorphism.DefaultDiscriminator,
-            (JsonUnknownDerivedTypeHandling)(
-                options.GetValueOrDefault("UnknownDerivedTypeHandling") as int? ?? 0
-            ),
-            options.GetValueOrDefault("IgnoreUnrecognizedTypeDiscriminators") as bool? ?? false,
-            derived
+            discriminator,
+            unknownDerivedType,
+            ignoreUnrecognizedTags,
+            registrations,
+            location
         );
     }
 
     /// <summary>Whether <paramref name="type"/> registers any derived type.</summary>
-    public static bool IsPolymorphic(INamedTypeSymbol type) =>
+    public static bool IsPolymorphic(INamedTypeSymbol type) => DerivedTypeAttributesOf(type).Any();
+
+    private static IEnumerable<AttributeData> DerivedTypeAttributesOf(INamedTypeSymbol type) =>
         type
             .OriginalDefinition.GetAttributes()
-            .Any(attribute => IsAttribute(attribute, DerivedTypeAttribute));
+            .Where(attribute => IsAttribute(attribute, DerivedTypeAttribute));
 
     private static bool IsAttribute(AttributeData attribute, string metadataName) =>
         attribute.AttributeClass is { } attributeClass
@@ -66,7 +90,7 @@ internal static class JsonPolymorphismReader
     /// The <c>(Type)</c>, <c>(Type, string)</c> and <c>(Type, int)</c>
     /// constructors; <c>null</c> when the type argument does not resolve.
     /// </summary>
-    private static JsonDerivedType? ToDerivedType(AttributeData attribute)
+    private static JsonDerivedTypeRegistration? ToRegistration(AttributeData attribute)
     {
         if (attribute.ConstructorArguments is not [{ Value: ITypeSymbol type }, .. var rest])
             return null;
@@ -78,8 +102,9 @@ internal static class JsonPolymorphismReader
             _ => (JsonTypeTag?)null,
         };
 
-        var location = attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation();
-
-        return new JsonDerivedType(type, tag, location);
+        return new JsonDerivedTypeRegistration(type, tag, LocationOf(attribute));
     }
+
+    private static Location? LocationOf(AttributeData? attribute) =>
+        attribute?.ApplicationSyntaxReference?.GetSyntax().GetLocation();
 }

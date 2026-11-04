@@ -1,4 +1,3 @@
-using System.Globalization;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Transformation.Json;
@@ -27,13 +26,15 @@ internal sealed class JsonPolymorphismSpecBuilder(JsonTypeDescriptorBuilder desc
 
     public TsObjectProperty Build(JsonPolymorphism polymorphism)
     {
-        var derived = polymorphism.Derived.Select(BuildRegistration).ToList<TsExpression>();
+        var registrations = polymorphism
+            .Registrations.Select(BuildRegistration)
+            .ToList<TsExpression>();
 
         var members = new[]
         {
             new TsObjectProperty("discriminator", new TsStringLiteral(polymorphism.Discriminator)),
             TrueFlag("abstract", polymorphism.IsAbstractBase),
-            new TsObjectProperty("derived", new TsArrayLiteral(derived)),
+            new TsObjectProperty("derived", new TsArrayLiteral(registrations)),
             UnknownDerivedTypeProperty(polymorphism.UnknownDerivedType),
             TrueFlag("ignoreUnrecognizedTags", polymorphism.IgnoreUnrecognizedTags),
         };
@@ -49,7 +50,7 @@ internal sealed class JsonPolymorphismSpecBuilder(JsonTypeDescriptorBuilder desc
     /// registration has no <c>tag</c>, and a self-registration links to the
     /// base's own getter.
     /// </summary>
-    private TsObjectLiteral BuildRegistration(JsonDerivedType registration)
+    private TsObjectLiteral BuildRegistration(JsonDerivedTypeRegistration registration)
     {
         var members = new[]
         {
@@ -61,31 +62,38 @@ internal sealed class JsonPolymorphismSpecBuilder(JsonTypeDescriptorBuilder desc
         return new TsObjectLiteral(members.OfType<TsObjectProperty>().ToList());
     }
 
-    /// <summary>A string tag prints as a string literal, an int tag as a
-    /// number literal (FR-014: verbatim).</summary>
+    /// <summary>
+    /// A string tag prints as a string literal, an int tag as a number
+    /// literal (FR-014: verbatim).
+    /// </summary>
     private static TsExpression TagLiteralOf(JsonTypeTag tag) =>
         tag switch
         {
             JsonTypeTag.Text text => new TsStringLiteral(text.Value),
-            JsonTypeTag.Number number => new TsLiteral(
-                number.Value.ToString(CultureInfo.InvariantCulture)
-            ),
+            JsonTypeTag.Number number => new TsLiteral(number.ToString()),
             _ => throw new ArgumentOutOfRangeException(nameof(tag), tag, "Unknown tag kind."),
         };
 
+    /// <summary>
+    /// <c>unknownDerivedType</c> for a non-default handling; absent for
+    /// <c>FailSerialization</c>.
+    /// </summary>
     private static TsObjectProperty? UnknownDerivedTypeProperty(
         JsonUnknownDerivedTypeHandling handling
     ) =>
+        WireNameOf(handling) is { } wireName
+            ? new TsObjectProperty("unknownDerivedType", new TsStringLiteral(wireName))
+            : null;
+
+    /// <summary>
+    /// The runtime <c>UnknownDerivedTypeHandling</c> value of a non-default
+    /// handling.
+    /// </summary>
+    private static string? WireNameOf(JsonUnknownDerivedTypeHandling handling) =>
         handling switch
         {
-            JsonUnknownDerivedTypeHandling.FallBackToBaseType => new TsObjectProperty(
-                "unknownDerivedType",
-                new TsStringLiteral("fallBackToBaseType")
-            ),
-            JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor => new TsObjectProperty(
-                "unknownDerivedType",
-                new TsStringLiteral("fallBackToNearestAncestor")
-            ),
+            JsonUnknownDerivedTypeHandling.FallBackToBaseType => "fallBackToBaseType",
+            JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor => "fallBackToNearestAncestor",
             _ => null,
         };
 
