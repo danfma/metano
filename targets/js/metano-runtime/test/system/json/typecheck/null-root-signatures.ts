@@ -77,13 +77,58 @@ expectType<Equal<typeof nullableInt32, number | null>>();
 // @ts-expect-error a reference-type value root may be null under strict
 const strictOrders: Order[] = JsonSerializer.deserialize(data, orderListSpec);
 
-// ─── TypeSpec writes accept null and may return null ─────────────────────────
+// ─── TypeSpec writes: non-null in, record out; null in, null out ──────────────
 
-const written = JsonSerializer.serialize(null, orderSpec);
-expectType<Equal<typeof written, Record<string, unknown> | null>>();
+class Derived extends Order {
+  constructor(
+    id: string,
+    readonly extra: number,
+  ) {
+    super(id);
+  }
+}
 
-const boundWritten = bound.serialize(new Order("a"), orderSpec);
-expectType<Equal<typeof boundWritten, Record<string, unknown> | null>>();
+interface Shape {
+  readonly kind: string;
+}
+
+declare const maybeOrder: Order | null;
+declare const optionalOrder: Order | undefined;
+declare const anyOrder: any;
+declare const shape: Shape;
+declare const shapeSpec: TypeSpec<Shape>;
+
+const written = JsonSerializer.serialize(new Order("a"), orderSpec);
+expectType<Equal<typeof written, Record<string, unknown>>>();
+
+const writtenDerived = JsonSerializer.serialize(new Derived("a", 1), orderSpec);
+expectType<Equal<typeof writtenDerived, Record<string, unknown>>>();
+
+const writtenShape = bound.serialize(shape, shapeSpec);
+expectType<Equal<typeof writtenShape, Record<string, unknown>>>();
+
+const writtenAny = JsonSerializer.serialize(anyOrder, orderSpec);
+// `any` may be `null`, so it takes the nullable overload.
+expectType<Equal<typeof writtenAny, Record<string, unknown> | null>>();
+
+const writtenNull = JsonSerializer.serialize(null, orderSpec);
+expectType<Equal<typeof writtenNull, Record<string, unknown> | null>>();
+
+const writtenMaybe = bound.serialize(maybeOrder, orderSpec);
+expectType<Equal<typeof writtenMaybe, Record<string, unknown> | null>>();
+
+const writtenOptional = JsonSerializer.serialize(optionalOrder, orderSpec);
+expectType<Equal<typeof writtenOptional, Record<string, unknown> | null>>();
+
+function writeAny<U extends Order>(value: U, spec: TypeSpec<U>): Record<string, unknown> {
+  return JsonSerializer.serialize(value, spec);
+}
+
+// @ts-expect-error a value of another type is rejected
+JsonSerializer.serialize("order", orderSpec);
+
+// @ts-expect-error a write that may be null cannot be read without a check
+const strictWritten: Record<string, unknown> = JsonSerializer.serialize(maybeOrder, orderSpec);
 
 // ─── valueType is part of both spec shapes ───────────────────────────────────
 
@@ -96,8 +141,12 @@ const structSpec: TypeSpec<SPoint> = {
 
 const valueRootSpec: ValueSpec<number> = { descriptor: { kind: "primitive" }, valueType: true };
 
+// Exported so `noUnusedLocals`-style checks never drop the declarations
+// above: each one exists only for its inferred type or its expected error.
 export {
   assertedOrder,
+  strictWritten,
+  writeAny,
   strictBoundOrder,
   strictBoundTextOrder,
   strictOrder,

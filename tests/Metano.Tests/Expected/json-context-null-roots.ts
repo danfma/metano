@@ -1,6 +1,9 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Corner } from "./corner";
+import { Level } from "./level";
+import { Outer } from "./outer";
+import { Pair } from "./pair";
 import { SPoint } from "./s-point";
 import { Segment } from "./segment";
 
@@ -18,6 +21,12 @@ export class JsonContext extends SerializerContext {
   private _dateOnly?: ValueSpec<Temporal.PlainDate>;
 
   private _nullableBoolean?: ValueSpec<boolean | null>;
+
+  private _level?: ValueSpec<Level>;
+
+  private _inner?: TypeSpec<Outer.Inner>;
+
+  private _pairInt32?: TypeSpec<Pair<number>>;
 
   private _corner?: TypeSpec<Corner>;
 
@@ -42,6 +51,7 @@ export class JsonContext extends SerializerContext {
         },
       ],
       valueType: true,
+      typeName: "TestApp.SPoint",
     });
   }
 
@@ -98,6 +108,7 @@ export class JsonContext extends SerializerContext {
     return this._boolean ??= this.createValueSpec({
       descriptor: { kind: "primitive" },
       valueType: true,
+      typeName: "System.Boolean",
     });
   }
 
@@ -105,6 +116,7 @@ export class JsonContext extends SerializerContext {
     return this._dateOnly ??= this.createValueSpec({
       descriptor: { kind: "temporal", parse: Temporal.PlainDate.from },
       valueType: true,
+      typeName: "System.DateOnly",
     });
   }
 
@@ -114,6 +126,46 @@ export class JsonContext extends SerializerContext {
         kind: "nullable",
         inner: { kind: "primitive" },
       },
+    });
+  }
+
+  get level(): ValueSpec<Level> {
+    return this._level ??= this.createValueSpec({
+      descriptor: { kind: "numericEnum", values: Level },
+      valueType: true,
+      typeName: "TestApp.Level",
+    });
+  }
+
+  get inner(): TypeSpec<Outer.Inner> {
+    return this._inner ??= this.createSpec({
+      type: Outer.Inner,
+      factory: (p: Record<string, unknown>) => new Outer.Inner(p.v as number),
+      properties: [
+        {
+          ts: "v",
+          json: "V",
+          type: { kind: "primitive" },
+        },
+      ],
+      valueType: true,
+      typeName: "TestApp.Outer+Inner",
+    });
+  }
+
+  get pairInt32(): TypeSpec<Pair<number>> {
+    return this._pairInt32 ??= this.createSpec<Pair<number>>({
+      type: Pair,
+      factory: (p: Record<string, unknown>) => new Pair(p.a as number),
+      properties: [
+        {
+          ts: "a",
+          json: "A",
+          type: { kind: "primitive" },
+        },
+      ],
+      valueType: true,
+      typeName: "TestApp.Pair`1[System.Int32]",
     });
   }
 
@@ -129,6 +181,7 @@ export class JsonContext extends SerializerContext {
         },
       ],
       valueType: true,
+      typeName: "TestApp.Corner",
     });
   }
 }

@@ -156,6 +156,7 @@ export class JsonContext extends SerializerContext {
     return this._int32 ??= this.createValueSpec({
       descriptor: { kind: "primitive" },
       valueType: true,
+      typeName: "System.Int32",
     });
   }
 
@@ -169,6 +170,7 @@ export class JsonContext extends SerializerContext {
     return this._guid ??= this.createValueSpec({
       descriptor: { kind: "branded", create: UUID.create },
       valueType: true,
+      typeName: "System.Guid",
     });
   }
 
@@ -176,6 +178,7 @@ export class JsonContext extends SerializerContext {
     return this._dateTimeOffset ??= this.createValueSpec({
       descriptor: { kind: "temporal", parse: Temporal.ZonedDateTime.from },
       valueType: true,
+      typeName: "System.DateTimeOffset",
     });
   }
 
@@ -183,6 +186,7 @@ export class JsonContext extends SerializerContext {
     return this._decimal ??= this.createValueSpec({
       descriptor: { kind: "decimal", type: Decimal },
       valueType: true,
+      typeName: "System.Decimal",
     });
   }
 
@@ -190,6 +194,7 @@ export class JsonContext extends SerializerContext {
     return this._mood ??= this.createValueSpec({
       descriptor: { kind: "enum", values: Mood },
       valueType: true,
+      typeName: "TestApp.Mood",
     });
   }
 
@@ -197,6 +202,7 @@ export class JsonContext extends SerializerContext {
     return this._level ??= this.createValueSpec({
       descriptor: { kind: "numericEnum", values: Level },
       valueType: true,
+      typeName: "TestApp.Level",
     });
   }
 
@@ -204,6 +210,7 @@ export class JsonContext extends SerializerContext {
     return this._episodeId ??= this.createValueSpec({
       descriptor: { kind: "branded", create: EpisodeId.create },
       valueType: true,
+      typeName: "TestApp.EpisodeId",
     });
   }
 

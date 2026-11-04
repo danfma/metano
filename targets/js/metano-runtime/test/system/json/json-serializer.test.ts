@@ -107,13 +107,13 @@ describe("JsonSerializer — nullable", () => {
 
   test("serialize null value", () => {
     const obj = new WithOptional("test", null);
-    const json = JsonSerializer.serialize(obj, spec)!;
+    const json = JsonSerializer.serialize(obj, spec);
     expect(json.note).toBeNull();
   });
 
   test("serialize non-null value", () => {
     const obj = new WithOptional("test", "hello");
-    const json = JsonSerializer.serialize(obj, spec)!;
+    const json = JsonSerializer.serialize(obj, spec);
     expect(json.note).toBe("hello");
   });
 
@@ -149,7 +149,7 @@ describe("JsonSerializer — arrays", () => {
 
   test("serialize array of primitives", () => {
     const obj = new WithTags("item", ["a", "b", "c"]);
-    const json = JsonSerializer.serialize(obj, spec)!;
+    const json = JsonSerializer.serialize(obj, spec);
     expect(json.tags).toEqual(["a", "b", "c"]);
   });
 
@@ -216,7 +216,7 @@ describe("JsonSerializer — ref (nested objects)", () => {
     };
 
     const shape = new Shape([new Point(0, 0), new Point(1, 1)]);
-    const json = JsonSerializer.serialize(shape, shapeSpec)!;
+    const json = JsonSerializer.serialize(shape, shapeSpec);
     expect(json.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -254,7 +254,7 @@ describe("JsonSerializer — map", () => {
         ["b", 2],
       ]),
     );
-    const json = JsonSerializer.serialize(obj, spec)!;
+    const json = JsonSerializer.serialize(obj, spec);
     expect(json.metadata).toEqual({ a: 1, b: 2 });
   });
 
@@ -288,7 +288,7 @@ describe("JsonSerializer — hashSet", () => {
   test("serialize HashSet to array", () => {
     const set = new HashSet([1, 2, 3]);
     const obj = new WithSet(set);
-    const json = JsonSerializer.serialize(obj, spec)!;
+    const json = JsonSerializer.serialize(obj, spec);
     const arr = json.items as number[];
     expect(arr.sort()).toEqual([1, 2, 3]);
   });
@@ -328,7 +328,7 @@ describe("JsonSerializer — branded", () => {
 
   test("serialize branded — brand erases, passthrough", () => {
     const user = new User(UserId.create("abc123"), "Alice");
-    const json = JsonSerializer.serialize(user, spec)!;
+    const json = JsonSerializer.serialize(user, spec);
     expect(json.user_id).toBe("abc123");
   });
 
@@ -424,7 +424,7 @@ describe("JsonSerializer — enum (string)", () => {
 
   test("serialize enum — passthrough", () => {
     const task = new Task("Do it", "Active");
-    const json = JsonSerializer.serialize(task, spec)!;
+    const json = JsonSerializer.serialize(task, spec);
     expect(json.status).toBe("Active");
   });
 
@@ -459,7 +459,7 @@ describe("JsonSerializer — numericEnum", () => {
 
   test("round-trip numeric enum", () => {
     const item = new Item(1);
-    const json = JsonSerializer.serialize(item, spec)!;
+    const json = JsonSerializer.serialize(item, spec);
     expect(json.priority).toBe(1);
     const restored = JsonSerializer.deserialize(json, spec)!;
     expect(restored.priority).toBe(1);
@@ -504,7 +504,7 @@ describe("JsonSerializer — temporal", () => {
 
   test("serialize temporal — calls toString()", () => {
     const event = new Event("Launch", new FakeDate("2024-01-15"));
-    const json = JsonSerializer.serialize(event, spec)!;
+    const json = JsonSerializer.serialize(event, spec);
     expect(json.date).toBe("2024-01-15");
   });
 
@@ -544,7 +544,7 @@ describe("JsonSerializer — decimal", () => {
 
   test("serialize decimal — calls toNumber()", () => {
     const product = new Product("Widget", new FakeDecimal(19.99));
-    const json = JsonSerializer.serialize(product, spec)!;
+    const json = JsonSerializer.serialize(product, spec);
     expect(json.price).toBe(19.99);
   });
 
@@ -644,7 +644,7 @@ describe("JsonSerializer — custom converters", () => {
 
   test("custom converter overrides built-in", () => {
     const price = new Price(new FakeDecimal("123.456789012345"));
-    const json = JsonSerializer.serialize(price, spec, [decimalAsString])!;
+    const json = JsonSerializer.serialize(price, spec, [decimalAsString]);
 
     // With custom converter: serialized as string, not number
     expect(json.amount).toBe("123.456789012345");
@@ -653,7 +653,7 @@ describe("JsonSerializer — custom converters", () => {
 
   test("without custom converter, uses built-in (toNumber)", () => {
     const price = new Price(new FakeDecimal("19.99"));
-    const json = JsonSerializer.serialize(price, spec)!;
+    const json = JsonSerializer.serialize(price, spec);
     expect(json.amount).toBe(19.99);
     expect(typeof json.amount).toBe("number");
   });

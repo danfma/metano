@@ -62,7 +62,7 @@ describe("JsonContext — default serialization", () => {
 
   test("serializes primitives, enums, and branded IDs to JSON-safe values", () => {
     const snapshot = makeSnapshot();
-    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
     expect(json.id).toBe("issue-001");
     expect(json.title).toBe("Ship the serializer end-to-end");
@@ -76,7 +76,7 @@ describe("JsonContext — default serialization", () => {
 
   test("serializes Temporal fields as ISO strings that round-trip", () => {
     const snapshot = makeSnapshot();
-    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
     expect(typeof json.createdAt).toBe("string");
     expect(typeof json.updatedAt).toBe("string");
@@ -86,7 +86,7 @@ describe("JsonContext — default serialization", () => {
 
   test("serializes decimal as a JSON number by default", () => {
     const snapshot = makeSnapshot();
-    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
     expect(JSON.stringify(json.estimatedHours)).toBe("1.5");
   });
@@ -98,14 +98,14 @@ describe("JsonContext — default serialization", () => {
       estimatedHours: new Decimal("12345678901234567890.123456789"),
     });
 
-    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
     expect(JSON.stringify(json.estimatedHours)).toBe("12345678901234567890.123456789");
   });
 
   test("emits null for nullable fields when absent", () => {
     const snapshot = makeSnapshot({ assigneeId: null, sprintKey: null });
-    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
     expect(json.assigneeId).toBeNull();
     expect(json.sprintKey).toBeNull();
@@ -113,7 +113,7 @@ describe("JsonContext — default serialization", () => {
 
   test("serializes nested Comment array via the ref spec getter", () => {
     const snapshot = makeSnapshot();
-    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
     const comments = json.comments as Array<Record<string, unknown>>;
     expect(comments).toHaveLength(1);
@@ -125,7 +125,7 @@ describe("JsonContext — default serialization", () => {
 
   test("serializes an empty comments array without nesting", () => {
     const snapshot = makeSnapshot({ comments: [] });
-    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
     expect(json.comments).toEqual([]);
   });
@@ -190,7 +190,7 @@ describe("JsonContext — default serialization", () => {
     expect(issue.estimatedHours).toBeInstanceOf(Decimal);
     expect(issue.estimatedHours.toString()).toBe("2");
 
-    const written = JsonSerializer.serialize(issue, ctx.issueSnapshot)!;
+    const written = JsonSerializer.serialize(issue, ctx.issueSnapshot);
 
     expect(JSON.stringify(written.estimatedHours)).toBe("2");
   });
@@ -235,7 +235,7 @@ describe("JsonContext — decimal-as-string custom converter", () => {
 
   test("serializes decimal as a JSON string", () => {
     const snapshot = makeSnapshot({ estimatedHours: preciseValue });
-    const json = precise.serialize(snapshot, preciseCtx.issueSnapshot)!;
+    const json = precise.serialize(snapshot, preciseCtx.issueSnapshot);
 
     expect(typeof json.estimatedHours).toBe("string");
     expect(json.estimatedHours).toBe("0.3");
@@ -280,7 +280,7 @@ describe("JsonContext — decimal-as-string custom converter", () => {
 
   test("default context is unaffected — still emits decimal as a number", () => {
     const snapshot = makeSnapshot({ estimatedHours: preciseValue });
-    const json = JsonSerializer.serialize(snapshot, JsonContext.default.issueSnapshot)!;
+    const json = JsonSerializer.serialize(snapshot, JsonContext.default.issueSnapshot);
 
     expect(JSON.stringify(json.estimatedHours)).toBe("0.3");
   });
@@ -291,11 +291,11 @@ describe("JsonContext — decimal-as-string custom converter", () => {
     // JsonContext class.
     const snapshot = makeSnapshot({ estimatedHours: preciseValue });
 
-    const preciseJson = precise.serialize(snapshot, preciseCtx.issueSnapshot)!;
+    const preciseJson = precise.serialize(snapshot, preciseCtx.issueSnapshot);
     const defaultJson = JsonSerializer.withContext(JsonContext.default).serialize(
       snapshot,
       JsonContext.default.issueSnapshot,
-    )!;
+    );
 
     expect(typeof preciseJson.estimatedHours).toBe("string");
     expect(JSON.stringify(defaultJson.estimatedHours)).toBe("0.3");

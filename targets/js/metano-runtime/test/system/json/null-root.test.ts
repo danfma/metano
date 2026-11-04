@@ -3,16 +3,18 @@ import { Decimal } from "decimal.js";
 import {
   type JsonConverter,
   JsonSerializer,
+  type JsonTypeInfo,
   SerializerContext,
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json/index.ts";
 import { cannotConvertMessage, expectJsonException } from "./json-exception-assertions.ts";
 
-// JSON `null` at a root, as measured on System.Text.Json (.NET 10, source
-// generated context, FR-037): `null` for every reference type and for
-// `Nullable<T>`; "The JSON value could not be converted to <Type>." for every
-// value type; and the empty text has no JSON token at all.
+// JSON `null`, as measured on System.Text.Json (.NET 10, source generated
+// context, FR-037): `null` for every reference type and for `Nullable<T>`;
+// "The JSON value could not be converted to <Type>." for every value type, at
+// the root and for a struct property, element or dictionary value; and the
+// empty text has no JSON token at all.
 
 // ─── Test Domain ─────────────────────────────────────────────────────────────
 
@@ -46,14 +48,22 @@ interface StoredNote {
   readonly text: string;
 }
 
+class Holder {
+  constructor(
+    readonly point: SPoint,
+    readonly maybe: SPoint | null,
+  ) {}
+}
+
 const NO_TOKENS_MESSAGE =
   "The input does not contain any JSON tokens. Expected the input to start with a valid JSON " +
   "token, when isFinalBlock is true.";
 
-/** Mirrors a generated context: struct contracts and value-type roots carry `valueType`. */
+/** Mirrors a generated context: value-type specs carry `valueType` and `typeName`. */
 class NullRootContext extends SerializerContext {
   private _cls?: TypeSpec<Cls>;
   private _sPoint?: TypeSpec<SPoint>;
+  private _holder?: TypeSpec<Holder>;
   private _clip?: TypeSpec<Clip>;
   private _imageClip?: TypeSpec<ImageClip>;
   private _storedNote?: TypeSpec<StoredNote>;
@@ -62,6 +72,9 @@ class NullRootContext extends SerializerContext {
   private _string?: ValueSpec<string | null>;
   private _listInt32?: ValueSpec<number[] | null>;
   private _dictionaryStringInt32?: ValueSpec<Map<string, number> | null>;
+  private _listSPoint?: ValueSpec<SPoint[] | null>;
+  private _listNullableSPoint?: ValueSpec<(SPoint | null)[] | null>;
+  private _dictionaryStringSPoint?: ValueSpec<Map<string, SPoint> | null>;
   private _decimal?: ValueSpec<Decimal>;
   private _level?: ValueSpec<Level>;
   private _episodeId?: ValueSpec<EpisodeId>;
@@ -83,6 +96,23 @@ class NullRootContext extends SerializerContext {
         { ts: "y", json: "Y", type: { kind: "primitive" } },
       ],
       valueType: true,
+      typeName: "Probe.SPoint",
+    }));
+  }
+
+  get holder(): TypeSpec<Holder> {
+    return (this._holder ??= this.createSpec({
+      type: Holder,
+      factory: (p) => new Holder(p.point as SPoint, p.maybe as SPoint | null),
+      properties: [
+        { ts: "point", json: "P", type: { kind: "ref", spec: () => this.sPoint } },
+        {
+          ts: "maybe",
+          json: "M",
+          type: { kind: "nullable", inner: { kind: "ref", spec: () => this.sPoint } },
+          optional: true,
+        },
+      ],
     }));
   }
 
@@ -121,6 +151,7 @@ class NullRootContext extends SerializerContext {
     return (this._int32 ??= this.createValueSpec({
       descriptor: { kind: "primitive" },
       valueType: true,
+      typeName: "System.Int32",
     }));
   }
 
@@ -146,10 +177,36 @@ class NullRootContext extends SerializerContext {
     }));
   }
 
+  get listSPoint(): ValueSpec<SPoint[] | null> {
+    return (this._listSPoint ??= this.createValueSpec({
+      descriptor: { kind: "array", element: { kind: "ref", spec: () => this.sPoint } },
+    }));
+  }
+
+  get listNullableSPoint(): ValueSpec<(SPoint | null)[] | null> {
+    return (this._listNullableSPoint ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "nullable", inner: { kind: "ref", spec: () => this.sPoint } },
+      },
+    }));
+  }
+
+  get dictionaryStringSPoint(): ValueSpec<Map<string, SPoint> | null> {
+    return (this._dictionaryStringSPoint ??= this.createValueSpec({
+      descriptor: {
+        kind: "map",
+        key: { kind: "primitive" },
+        value: { kind: "ref", spec: () => this.sPoint },
+      },
+    }));
+  }
+
   get decimal(): ValueSpec<Decimal> {
     return (this._decimal ??= this.createValueSpec({
       descriptor: { kind: "decimal", type: Decimal },
       valueType: true,
+      typeName: "System.Decimal",
     }));
   }
 
@@ -157,6 +214,7 @@ class NullRootContext extends SerializerContext {
     return (this._level ??= this.createValueSpec({
       descriptor: { kind: "numericEnum", values: Level },
       valueType: true,
+      typeName: "Probe.Level",
     }));
   }
 
@@ -164,22 +222,7 @@ class NullRootContext extends SerializerContext {
     return (this._episodeId ??= this.createValueSpec({
       descriptor: { kind: "branded", create: EpisodeId.create },
       valueType: true,
-    }));
-  }
-}
-
-/** A context that reads numbers from strings names each number's CLR type (FR-048). */
-class WebNumbersContext extends SerializerContext {
-  private _int32?: ValueSpec<number>;
-
-  protected override get readOptions() {
-    return { numberHandling: "allowReadingFromString" as const };
-  }
-
-  get int32(): ValueSpec<number> {
-    return (this._int32 ??= this.createValueSpec({
-      descriptor: { kind: "primitive", numberType: "System.Int32" },
-      valueType: true,
+      typeName: "Probe.EpisodeId",
     }));
   }
 }
@@ -188,38 +231,45 @@ const ctx = new NullRootContext();
 
 type Row<S> = readonly [name: string, spec: S];
 
+/** Reference-type object contracts: JSON `null` reads, and `null` writes, as `null`. */
+const OBJECT_ROOTS: readonly Row<TypeSpec<unknown>>[] = [
+  ["class contract", ctx.cls],
+  ["abstract polymorphic base", ctx.clip],
+  ["[PlainObject] contract", ctx.storedNote],
+];
+
+/** Value roots whose `T` holds `| null`: reference types and `Nullable<T>`. */
+const NULLABLE_VALUE_ROOTS: readonly Row<ValueSpec<unknown>>[] = [
+  ["Nullable<int>", ctx.nullableInt32],
+  ["string", ctx.string],
+  ["List<int>", ctx.listInt32],
+  ["Dictionary<string, int>", ctx.dictionaryStringInt32],
+];
+
+/** Every read entry point, static and bound, tree and text, returns `null`. */
+function expectNullAtEveryEntryPoint(spec: TypeSpec<unknown>): void;
+function expectNullAtEveryEntryPoint(spec: ValueSpec<unknown>): void;
+function expectNullAtEveryEntryPoint(spec: JsonTypeInfo<unknown>): void {
+  // The entry points dispatch on the spec's kind at runtime; the overloads
+  // above keep each caller's spec kind checked.
+  const anyKind = spec as TypeSpec<unknown>;
+  const bound = JsonSerializer.withContext(ctx);
+
+  expect(JsonSerializer.deserialize(null, anyKind)).toBeNull();
+  expect(JsonSerializer.deserializeText(" null ", anyKind)).toBeNull();
+  expect(bound.deserialize(null, anyKind)).toBeNull();
+  expect(bound.deserializeText("null", anyKind)).toBeNull();
+}
+
 // ─── Reference-type roots ────────────────────────────────────────────────────
 
 describe("JSON null at a reference-type root reads as null", () => {
-  const objectRoots: readonly Row<TypeSpec<unknown>>[] = [
-    ["class contract", ctx.cls],
-    ["abstract polymorphic base", ctx.clip],
-    ["[PlainObject] contract", ctx.storedNote],
-  ];
-
-  const valueRoots: readonly Row<ValueSpec<unknown>>[] = [
-    ["Nullable<int>", ctx.nullableInt32],
-    ["string", ctx.string],
-    ["List<int>", ctx.listInt32],
-    ["Dictionary<string, int>", ctx.dictionaryStringInt32],
-  ];
-
-  test.each(objectRoots)("%s through every entry point", (_, spec) => {
-    const bound = JsonSerializer.withContext(ctx);
-
-    expect(JsonSerializer.deserialize(null, spec)).toBeNull();
-    expect(JsonSerializer.deserializeText(" null ", spec)).toBeNull();
-    expect(bound.deserialize(null, spec)).toBeNull();
-    expect(bound.deserializeText("null", spec)).toBeNull();
+  test.each(OBJECT_ROOTS)("%s", (_, spec) => {
+    expectNullAtEveryEntryPoint(spec);
   });
 
-  test.each(valueRoots)("%s value root through every entry point", (_, spec) => {
-    const bound = JsonSerializer.withContext(ctx);
-
-    expect(JsonSerializer.deserialize(null, spec)).toBeNull();
-    expect(JsonSerializer.deserializeText(" null ", spec)).toBeNull();
-    expect(bound.deserialize(null, spec)).toBeNull();
-    expect(bound.deserializeText("null", spec)).toBeNull();
+  test.each(NULLABLE_VALUE_ROOTS)("%s value root", (_, spec) => {
+    expectNullAtEveryEntryPoint(spec);
   });
 
   test("a custom converter of the root's kind never sees the null", () => {
@@ -242,15 +292,20 @@ describe("JSON null at a reference-type root reads as null", () => {
 // ─── Value-type roots ────────────────────────────────────────────────────────
 
 describe("JSON null at a value-type root throws JsonException", () => {
-  test("a struct contract names its type", () => {
-    expectJsonException(
-      () => JsonSerializer.deserialize(null, ctx.sPoint),
-      cannotConvertMessage("SPoint"),
-    );
+  test("a struct contract names its CLR type on every entry point", () => {
+    const bound = JsonSerializer.withContext(ctx);
+    const message = cannotConvertMessage("Probe.SPoint");
 
+    expectJsonException(() => JsonSerializer.deserialize(null, ctx.sPoint), message);
+    expectJsonException(() => JsonSerializer.deserializeText("null", ctx.sPoint), message);
+    expectJsonException(() => bound.deserialize(null, ctx.sPoint), message);
+    expectJsonException(() => bound.deserializeText("null", ctx.sPoint), message);
+  });
+
+  test("a struct contract names its CLR type for a non-object input too", () => {
     expectJsonException(
-      () => JsonSerializer.deserializeText("null", ctx.sPoint),
-      cannotConvertMessage("SPoint"),
+      () => JsonSerializer.deserialize(1, ctx.sPoint),
+      cannotConvertMessage("Probe.SPoint"),
     );
   });
 
@@ -258,49 +313,26 @@ describe("JSON null at a value-type root throws JsonException", () => {
     expect(JsonSerializer.deserialize({ X: 1, Y: 2 }, ctx.sPoint)).toEqual(new SPoint(1, 2));
   });
 
-  test("a decimal names System.Decimal on both read paths", () => {
-    expectJsonException(
-      () => JsonSerializer.deserialize(null, ctx.decimal),
-      cannotConvertMessage("System.Decimal"),
-    );
-
-    expectJsonException(
-      () => JsonSerializer.deserializeText("null", ctx.decimal),
-      cannotConvertMessage("System.Decimal"),
-    );
-  });
-
-  test("a number names its numberType when the descriptor carries it", () => {
-    const web = new WebNumbersContext();
-
-    expectJsonException(
-      () => JsonSerializer.deserialize(null, web.int32),
-      cannotConvertMessage("System.Int32"),
-    );
-  });
-
-  const unnamedValueTypes: readonly Row<ValueSpec<unknown>>[] = [
-    ["int without a numberType", ctx.int32],
-    ["numeric enum", ctx.level],
-    ["branded type", ctx.episodeId],
+  const namedValueTypes: readonly (readonly [string, ValueSpec<unknown>, string])[] = [
+    ["int", ctx.int32, "System.Int32"],
+    ["decimal", ctx.decimal, "System.Decimal"],
+    ["numeric enum", ctx.level, "Probe.Level"],
+    ["branded type", ctx.episodeId, "Probe.EpisodeId"],
   ];
 
-  test.each(unnamedValueTypes)("a %s is named generically", (_, spec) => {
-    expectJsonException(
-      () => JsonSerializer.deserialize(null, spec),
-      cannotConvertMessage("a value type"),
-    );
-  });
-
-  test("a bound serializer throws as well", () => {
+  test.each(namedValueTypes)("a %s names its typeName on both read paths", (_, spec, name) => {
     const bound = JsonSerializer.withContext(ctx);
 
-    expectJsonException(() => bound.deserialize(null, ctx.sPoint), cannotConvertMessage("SPoint"));
+    expectJsonException(() => JsonSerializer.deserialize(null, spec), cannotConvertMessage(name));
+    expectJsonException(() => bound.deserializeText("null", spec), cannotConvertMessage(name));
+  });
 
-    expectJsonException(
-      () => bound.deserializeText("null", ctx.int32),
-      cannotConvertMessage("a value type"),
-    );
+  test("a spec without typeName names its constructor, or Object for a value root", () => {
+    const point: TypeSpec<SPoint> = { ...ctx.sPoint, typeName: undefined };
+    const int32: ValueSpec<number> = { descriptor: { kind: "primitive" }, valueType: true };
+
+    expectJsonException(() => JsonSerializer.deserialize(null, point), cannotConvertMessage("SPoint"));
+    expectJsonException(() => JsonSerializer.deserialize(null, int32), cannotConvertMessage("Object"));
   });
 
   test("the check runs before a custom converter of the root's kind", () => {
@@ -310,8 +342,48 @@ describe("JSON null at a value-type root throws JsonException", () => {
 
     expectJsonException(
       () => JsonSerializer.deserialize(null, ctx.int32, converters),
-      cannotConvertMessage("a value type"),
+      cannotConvertMessage("System.Int32"),
     );
+  });
+});
+
+// ─── Struct contracts below the root ─────────────────────────────────────────
+
+describe("JSON null for a struct contract below the root", () => {
+  const message = cannotConvertMessage("Probe.SPoint");
+
+  test("a non-nullable struct property throws", () => {
+    expectJsonException(() => JsonSerializer.deserialize({ P: null, M: null }, ctx.holder), message);
+  });
+
+  test("a Nullable<struct> property reads null", () => {
+    const holder = JsonSerializer.deserialize({ P: { X: 1, Y: 2 }, M: null }, ctx.holder);
+
+    expect(holder).toEqual(new Holder(new SPoint(1, 2), null));
+  });
+
+  test("a struct element of a list throws", () => {
+    expectJsonException(
+      () => JsonSerializer.deserialize([{ X: 1, Y: 2 }, null], ctx.listSPoint),
+      message,
+    );
+  });
+
+  test("a Nullable<struct> element reads null", () => {
+    expect(JsonSerializer.deserialize([null], ctx.listNullableSPoint)).toEqual([null]);
+  });
+
+  test("a struct dictionary value throws", () => {
+    expectJsonException(
+      () => JsonSerializer.deserializeText('{"a":null}', ctx.dictionaryStringSPoint),
+      message,
+    );
+  });
+
+  test("a null struct property still writes null", () => {
+    const holder = { point: null, maybe: null } as unknown as Holder;
+
+    expect(JsonSerializer.serialize(holder, ctx.holder)).toEqual({ P: null, M: null });
   });
 });
 
@@ -334,25 +406,19 @@ describe("deserializeText of a text without a JSON token", () => {
 // ─── Writes ──────────────────────────────────────────────────────────────────
 
 describe("a null value at a root writes JSON null", () => {
-  const objectRoots: readonly Row<TypeSpec<unknown>>[] = [
-    ["class contract", ctx.cls],
-    ["abstract polymorphic base", ctx.clip],
-    ["[PlainObject] contract", ctx.storedNote],
-  ];
-
-  const valueRoots: readonly Row<ValueSpec<unknown>>[] = [
-    ["Nullable<int>", ctx.nullableInt32],
-    ["string", ctx.string],
-    ["List<int>", ctx.listInt32],
-  ];
-
-  test.each(objectRoots)("%s", (_, spec) => {
+  test.each(OBJECT_ROOTS)("%s", (_, spec) => {
     expect(JsonSerializer.serialize(null, spec)).toBeNull();
     expect(JsonSerializer.withContext(ctx).serialize(null, spec)).toBeNull();
   });
 
-  test.each(valueRoots)("%s value root", (_, spec) => {
+  test.each(NULLABLE_VALUE_ROOTS)("%s value root", (_, spec) => {
     expect(JsonSerializer.serialize(null, spec)).toBeNull();
+  });
+
+  test("undefined writes null through a TypeSpec, as a ref property does", () => {
+    const missing = undefined as unknown as Cls;
+
+    expect(JsonSerializer.serialize(missing, ctx.cls)).toBeNull();
   });
 
   test("a non-null value still writes its contract", () => {

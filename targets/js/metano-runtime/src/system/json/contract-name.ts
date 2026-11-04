@@ -1,5 +1,6 @@
-import type { TypeSpec } from "./types.ts";
+import type { JsonTypeInfo, TypeSpec } from "./types.ts";
 import { JsonException } from "./errors.ts";
+import { isValueSpec } from "./spec-kind.ts";
 
 /**
  * The C# type name a contract reports in errors: its constructor's name, the
@@ -10,7 +11,23 @@ export function contractNameOf(spec: TypeSpec): string {
   return spec.type?.name ?? spec.polymorphism?.typeName ?? "Object";
 }
 
-/** System.Text.Json's error for a JSON value that does not fit the contract. */
-export function cannotConvertTo(spec: TypeSpec): JsonException {
-  return new JsonException(`The JSON value could not be converted to ${contractNameOf(spec)}.`);
+/**
+ * The type a conversion error names: the CLR name a value-type spec carries
+ * (`typeName`, as System.Text.Json prints it: `MyApp.SPoint`,
+ * `System.Int32`), else the contract's name (`contractNameOf`), and
+ * `Object` for a value spec without one (a hand-written spec).
+ */
+function convertedTypeNameOf(spec: JsonTypeInfo): string {
+  if (spec.typeName !== undefined) {
+    return spec.typeName;
+  }
+
+  return isValueSpec(spec) ? "Object" : contractNameOf(spec);
+}
+
+/** System.Text.Json's error for a JSON value that does not fit the spec. */
+export function cannotConvertTo(spec: JsonTypeInfo): JsonException {
+  return new JsonException(
+    `The JSON value could not be converted to ${convertedTypeNameOf(spec)}.`,
+  );
 }

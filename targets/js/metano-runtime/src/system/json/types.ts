@@ -193,6 +193,13 @@ export interface TypeSpec<T = unknown> {
    * value type.
    */
   readonly valueType?: boolean;
+  /**
+   * The CLR name System.Text.Json prints for this struct contract
+   * (`MyApp.SPoint`, `MyApp.Outer+Inner`, ``MyApp.Pair`1[System.Int32]``);
+   * the generator emits it next to `valueType`. Errors name the constructor
+   * without it.
+   */
+  readonly typeName?: string;
   /** The context's read behavior; absent when it is System.Text.Json's default. */
   readonly readOptions?: JsonReadOptions;
   /**
@@ -293,6 +300,12 @@ export interface ValueSpec<T = unknown> {
    * root, whose `T` already holds `| null`, and for `Nullable<T>`.
    */
   readonly valueType?: boolean;
+  /**
+   * The CLR name System.Text.Json prints for this value type
+   * (`System.Int32`, `MyApp.Level`); the generator emits it next to
+   * `valueType`. Errors name `Object` without it.
+   */
+  readonly typeName?: string;
   /** The context's read behavior; absent when it is System.Text.Json's default. */
   readonly readOptions?: JsonReadOptions;
 }

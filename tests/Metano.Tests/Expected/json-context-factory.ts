@@ -74,6 +74,7 @@ export class JsonContext extends SerializerContext {
     return this._title ??= this.createValueSpec({
       descriptor: { kind: "branded", create: Title.from },
       valueType: true,
+      typeName: "TestApp.Title",
     });
   }
 
@@ -90,6 +91,7 @@ export class JsonContext extends SerializerContext {
     return this._code ??= this.createValueSpec({
       descriptor: { kind: "branded", create: Episode.Code.from },
       valueType: true,
+      typeName: "TestApp.Episode+Code",
     });
   }
 }
