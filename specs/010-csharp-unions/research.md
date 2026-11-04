@@ -40,7 +40,7 @@ The probes come from the video-studio Phase 4 investigation. They are kept outsi
 - [V] On a machine with **only** .NET 11, 2.6.1 fails to start ("You must install or update .NET … 10.0.0"). With `DOTNET_ROLL_FORWARD=Major` it runs and transpiles.
 - [V] Multi-targeting `net10.0;net11.0` works, but breaks the in-repo build: `Metano.Build.targets` runs `dotnet run --project …` and gets 12× MSB3073 "Your project targets multiple frameworks".
 - **Decision (FR-002)**: keep `net10.0` and add `<RollForward>Major</RollForward>`. **Alternative rejected**: multi-targeting. It costs the `--framework` fix, a bigger package and SDK 11 in release, and it gains only the .NET 11-only machine case, which RollForward already covers.
-- [I] The csproj `<RollForward>Major</RollForward>` route was not built; only the environment variable was verified. The toolchain stage must check this with a local-feed install on a .NET 11-only `DOTNET_ROOT` (see quickstart).
+- [V] The csproj `<RollForward>Major</RollForward>` route (2026-11-04): the built tool started from a `DOTNET_ROOT` holding only the .NET 11 runtime (RC 1, with `DOTNET_ROLL_FORWARD_TO_PRERELEASE=1`) runs; the same tool without `rollForward` in its runtimeconfig fails with "You must install or update .NET". A local-feed `dotnet tool install` on that root was not repeated.
 
 ## R4: Roslyn 5.3.0 → 5.9.0 (D8)
 
