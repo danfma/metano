@@ -1280,7 +1280,9 @@ the former `OPEN-N`.
     scale): the built-in decimal converter never constructs a `Decimal` (the runtime has no
     `decimal.js` dependency, so a JSON number also stays a number). A `Single` read from a string
     keeps double precision, as one read from a JSON number does; only overflow is checked at
-    single precision. `numberType` is emitted on every numeric `primitive` descriptor, dictionary
+    single precision, against the exact text: the threshold `2^128 − 2^103` is itself a double,
+    so a text that parses to it reads only when its exact value is below it (measured:
+    `"3.4028235677973366e38"` reads, `"340282356779733661637539395458142568448"` throws). `numberType` is emitted on every numeric `primitive` descriptor, dictionary
     keys included, and the runtime ignores it there.
   - (g) End-to-end evidence: the TypeScript generated for the Web golden
     (`tests/Metano.Tests/Expected/json-web-context.ts`) was bundled with `bun build` and run under
