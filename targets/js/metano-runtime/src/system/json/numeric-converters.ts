@@ -128,6 +128,7 @@ export function decimalConverterOf(
 type DecimalLike = {
   toNumber(): number;
   toFixed?(): string;
+  isZero?(): boolean;
 };
 
 /**
@@ -146,13 +147,50 @@ function isDecimalLike(value: unknown): value is DecimalLike {
  * scale is not kept: decimal.js holds `1.10` as `1.1` (measured). A value
  * without `toFixed`, or an engine without `JSON.rawJSON`, writes
  * `toNumber()`.
+ *
+ * A value no `System.Decimal` holds (NaN, ±Infinity, beyond `MaxValue`)
+ * throws before any text is built, so `1e400000000` costs no 400 MB string.
+ * A non-zero value below the smallest double is written `0`: System.Text.Json
+ * reads `1e-400` as `0` (measured), and its plain digits would be as long as
+ * its exponent.
  */
 function decimalJsonOf(value: DecimalLike): unknown {
-  if (typeof value.toFixed !== "function") {
-    return value.toNumber();
+  const approximate = value.toNumber();
+
+  if (!isWithinDecimalRange(value, approximate)) {
+    throw new JsonException(
+      `The value ${String(value)} cannot be written as System.Decimal: it is outside the System.Decimal range.`,
+    );
   }
 
-  return writeExactNumber(value.toFixed(), () => value.toNumber());
+  if (typeof value.toFixed !== "function") {
+    return approximate;
+  }
+
+  const text = isBelowDoubleRange(value, approximate) ? "0" : value.toFixed();
+
+  return writeExactNumber(text, () => approximate);
+}
+
+/**
+ * Compared as a double first; only a value that rounds to the bound itself
+ * (`79228162514264337593543950335` and its neighbors) is decided by its
+ * exact text, with the read grammar, so every leaf written is read back.
+ * NaN fails both comparisons.
+ */
+function isWithinDecimalRange(value: DecimalLike, approximate: number): boolean {
+  const magnitude = Math.abs(approximate);
+
+  if (magnitude !== DECIMAL_MAX_AS_DOUBLE) {
+    return magnitude < DECIMAL_MAX_AS_DOUBLE;
+  }
+
+  return isDecimalText(value.toFixed?.() ?? String(approximate));
+}
+
+/** A non-zero value whose double underflows to zero. */
+function isBelowDoubleRange(value: DecimalLike, approximate: number): boolean {
+  return approximate === 0 && value.isZero?.() === false;
 }
 
 /** A finite JSON number within the decimal range, compared as doubles. */
