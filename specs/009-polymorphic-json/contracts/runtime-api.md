@@ -133,8 +133,8 @@ abstract class SerializerContext {
     - invalid JSON text throws `JsonException` with STJ's reader message instead of the engine's
       `SyntaxError`;
     - when the text is tokenized (a spec whose closure holds a `decimal`, and a text that may hold
-      a number of more than 15 significant digits), a container nested past 64 levels throws
-      anywhere in the document (FR-016).
+      a number of more than 15 digits), a text nested past 1 000 levels throws; FR-016's limit of
+      64 counts the containers the contract reads, on every path.
     A spec whose closure holds no `decimal` reads through `JSON.parse` unchanged. Converters other
     than the built-in `decimal` one, custom ones included, see the `number` `JSON.parse` gives.
     `deserialize` keeps reading a parsed tree and is inexact for a `decimal` beyond double

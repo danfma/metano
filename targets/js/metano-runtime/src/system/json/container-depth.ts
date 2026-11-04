@@ -1,7 +1,7 @@
 import { JsonException } from "./errors.ts";
 
 /** System.Text.Json's default `JsonSerializerOptions.MaxDepth`. */
-export const MAX_JSON_DEPTH = 64;
+const MAX_JSON_DEPTH = 64;
 
 /** The STJ metadata-mode message for a write deeper than the maximum depth (FR-016). */
 const WRITE_DEPTH_MESSAGE =
@@ -91,8 +91,8 @@ export function exitContainer(): void {
   openContainers.count--;
 }
 
-/** STJ's reader message for a container past the maximum depth, shared with `json-text-reader.ts`. */
-export function readDepthMessage(container: JsonContainer): string {
+/** STJ's reader message for a container past the maximum depth. */
+function readDepthMessage(container: JsonContainer): string {
   return (
     `The maximum configured depth of ${MAX_JSON_DEPTH} has been exceeded. ` +
     `Cannot read next JSON ${container}.`

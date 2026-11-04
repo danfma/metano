@@ -1,4 +1,4 @@
-import { type JsonContainer, MAX_JSON_DEPTH, readDepthMessage } from "./container-depth.ts";
+import type { JsonContainer } from "./container-depth.ts";
 import { JsonException } from "./errors.ts";
 import { JsonNumberText } from "./exact-json-number.ts";
 
@@ -16,9 +16,19 @@ import { JsonNumberText } from "./exact-json-number.ts";
  * which STJ rejects) and build the same tree: the last of duplicate keys
  * wins at the first key's position, and `__proto__` is an own property. The
  * tokenizer rejects what STJ's reader rejects with its message (measured on
- * .NET 10.0.12, without the `Path` suffix, DECIDED-5), in document order, and
- * a container nested past 64 levels anywhere in the document (FR-016).
+ * .NET 10.0.12, without the `Path` suffix, DECIDED-5), in document order.
+ * FR-016's limit of 64 is left to the contract walk, which counts the
+ * containers it reads, as for a tree `JSON.parse` built; the tokenizer only
+ * bounds its own recursion (`MAX_TEXT_DEPTH`).
  */
+
+/**
+ * The deepest nesting the recursive tokenizer reads: a third of what Node's
+ * default stack held in a measurement (about 3 200 containers; Bun about
+ * 20 000), far past FR-016's 64. `JSON.parse` reads deeper documents, so a
+ * text nested past it is the one case where the two paths differ.
+ */
+const MAX_TEXT_DEPTH = 1000;
 
 /** A number text with at most this many significant digits is exact as a double. */
 const DOUBLE_EXACT_DIGITS = 15;
@@ -78,13 +88,15 @@ const SHOULD_BE_ESCAPED = "The string should be correctly escaped.";
 
 const EXPECTED_DIGIT = "Expected a digit ('0'-'9').";
 
+const AFTER_VALUE = "is invalid after a value. Expected either ',', '}', or ']'.";
+
 /**
- * Whether a number of `text` can have more than 15 significant digits. A
- * mantissa of 16 digits or more is a run of 16 `[0-9.]` characters or more,
- * and every such run covers an index that is 15 modulo 16, so only those
- * indexes are probed: about 5 ms on Node and 3 ms on Bun for 10 MB. A digit
- * run inside a string can answer `true` for a text without such a number,
- * which only costs the slower exact read.
+ * Whether a number of `text` can have a mantissa of more than 15 digits. Such
+ * a mantissa is a run of 16 `[0-9.]` characters or more, and every such run
+ * covers an index that is 15 modulo 16, so only those indexes are probed. A
+ * digit run inside a string (`"card 4111111111111111"`) can answer `true`
+ * for a text without such a number; the tokenizer then reads the same tree
+ * `JSON.parse` would, only more slowly.
  */
 export function mayHoldInexactNumber(text: string): boolean {
   const { length } = text;
@@ -195,7 +207,7 @@ class JsonTextReader {
 
     this.enterContainer("object");
 
-    let code = this.codeInContainer();
+    let code = this.codeAfterOpening();
 
     if (code === CLOSE_BRACE) {
       return this.exitContainer(result);
@@ -236,7 +248,7 @@ class JsonTextReader {
     }
 
     this.position++;
-    setMember(result, name, this.readValue(this.codeInContainer()));
+    setMember(result, name, this.readValue(this.codeAfterOpening()));
   }
 
   private readArray(): unknown[] {
@@ -244,7 +256,7 @@ class JsonTextReader {
 
     this.enterContainer("array");
 
-    let code = this.codeInContainer();
+    let code = this.codeAfterOpening();
 
     if (code === CLOSE_BRACKET) {
       return this.exitContainer(result);
@@ -265,6 +277,20 @@ class JsonTextReader {
       this.position++;
       code = this.codeAfterComma(CLOSE_BRACKET, "array");
     }
+  }
+
+  /**
+   * The next code after `[`, `{` or `:`. STJ's reader takes a `/` there for
+   * the start of a comment after a value, and reports it as such.
+   */
+  private codeAfterOpening(): number {
+    const code = this.codeInContainer();
+
+    if (code === SLASH) {
+      throw this.unexpected(AFTER_VALUE);
+    }
+
+    return code;
   }
 
   /** The next code inside an open container, which the end of the text leaves open. */
@@ -293,10 +319,13 @@ class JsonTextReader {
     return code;
   }
 
-  /** Steps over the opening `{` or `[`; the 65th nested container throws (FR-016). */
+  /** Steps over the opening `{` or `[`, within the tokenizer's own depth bound. */
   private enterContainer(container: JsonContainer): void {
-    if (this.depth >= MAX_JSON_DEPTH) {
-      throw new JsonException(readDepthMessage(container));
+    if (this.depth >= MAX_TEXT_DEPTH) {
+      throw new JsonException(
+        `The JSON text nests containers deeper than ${MAX_TEXT_DEPTH} levels, which ` +
+          `deserializeText does not read. Cannot read next JSON ${container}.`,
+      );
     }
 
     this.depth++;
@@ -317,7 +346,7 @@ class JsonTextReader {
       return this.unexpected("is invalid without a matching open.");
     }
 
-    return this.unexpected("is invalid after a value. Expected either ',', '}', or ']'.");
+    return this.unexpected(AFTER_VALUE);
   }
 
   // ─── Scalars ───────────────────────────────────────────────────────────────

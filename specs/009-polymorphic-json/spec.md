@@ -567,9 +567,11 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   (DECIDED-20 b): 64 nested containers are written and read, the 65th throws; S8 pins them with a
   manifest row. Only containers count: the write side follows the source-generated fast path's
   boundary, while its exception and message are STJ's metadata / reflection mode's, which already
-  throws for a non-null scalar written inside the 64th container (a hybrid, DECIDED-20 b). When
-  `deserializeText` tokenizes the text (FR-048 item 7), the read limit also applies to the whole
-  document, members no contract reads included, as STJ's reader applies it.
+  throws for a non-null scalar written inside the 64th container (a hybrid, DECIDED-20 b). The
+  read limit counts the containers the contract reads, whichever path built the tree:
+  `deserializeText` (FR-048 item 7) applies it the same way whether `JSON.parse` or the
+  runtime's tokenizer read the text. The tokenizer only bounds its own recursion, at 1 000
+  levels, a third of what Node's default stack held (measured).
 - **FR-017**: Under `FallBackToNearestAncestor`, an abstract derived entry MUST be accepted as a
   nearest-ancestor target on serialize (its tag, if any, is written, then the runtime value's
   nearest-registered-ancestor contract). Reading its tag MUST throw what STJ throws (probed in S6,
@@ -931,7 +933,10 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
        `JSON.parse(text)`, exactly as before. A spec with one reads `JSON.parse(text)` too when no
        run of `[0-9.]` in the text is 16 characters long, since every number then has at most 15
        significant digits, which a double holds exactly (the check probes every 16th character:
-       about 5 ms on Node and 4 ms on Bun for 10 MB). Otherwise the runtime's tokenizer builds the
+       about 5 ms on Node and 4 ms on Bun for 10 MB). A digit run inside a string
+       (`"card 4111111111111111"`) can send a text without such a number to the tokenizer, which
+       then builds the tree `JSON.parse` would: only the time differs. Otherwise the runtime's
+       tokenizer builds the
        tree and keeps as its source text each number whose mantissa has more than 15 digits past
        a zero integer part (leading fraction zeros count, since the decimal rounding below
        depends on them; the 16-character run covers them too). Only
@@ -964,7 +969,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
        the first key's position, `__proto__` is an own property, and lone surrogates are
        accepted, which STJ rejects (documented divergence). The text is read whole before the
        contract, so a syntax error is reported before any contract error, where STJ reports the
-       first in document order.
+       first in document order. A `/` right after `[`, `{` or `:` reports STJ's comment message,
+       `'/' is invalid after a value. Expected either ',', '}', or ']'.` (measured).
      - **Cost** (`bun run bench:json`, 10 MB `Order[]`, medians, Node 24.11 / Bun 1.4.2): a spec
        without decimals reads in the same time through `deserializeText` as through
        `JSON.parse` + `deserialize` (76.0 / 54.8 ms against 79.9 / 54.0 ms). The `Order` spec with
@@ -1023,7 +1029,9 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Reading a `decimal` of more than 15 significant digits (`12345678901234567890.123456789`) | its exact digits, rounded to 28 decimal places | exact through `deserializeText`; `JSON.parse` rounds it to a double before `deserialize` sees it (`12345678901234567000`) | Documented (FR-048 item 7, #457) |
 | Lone surrogates in JSON text (`"\ud800"` unescaped, or `"\uD800"` read as a string) | `ArgumentException` / `JsonException` | accepted, as `JSON.parse` accepts them | Documented (FR-048 item 7) |
 | A syntax error after a contract error in the text | the first error in document order | the syntax error: the text is read whole before the contract | Documented (FR-048 item 7) |
-| A container nested past 64 levels in a member no contract reads | `JsonException` (the reader's limit) | throws when `deserializeText` tokenizes the text; accepted through `JSON.parse` | Documented (FR-016, FR-048 item 7) |
+| A container nested past 64 levels in a member no contract reads | `JsonException` (the reader's limit) | accepted on every path: only the containers the contract reads count | Documented (FR-016) |
+| A text nested past 1 000 levels, read by `deserializeText`'s tokenizer | read up to the limit of 64 | `JsonException` "The JSON text nests containers deeper than 1000 levels, …" (`JSON.parse` reads it) | Documented (FR-016, FR-048 item 7) |
+| An invalid text that ends inside more than 64 open containers | the depth-limit message | the open-container message (`Expected depth to be zero …`) | Documented (FR-048 item 7) |
 | Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows compare the prefix |
 | Two properties whose JSON names differ only in case, case-insensitive context | `InvalidOperationException` "The JSON property name for 'Twins.A' collides with another property." at first use | both kept; a key fills the property listed last | Not reported; follow-up with the naming-collision issue (DECIDED-23 e) |
 | Case-insensitive names with characters whose casing differs between the JS engine's and .NET's Unicode version | .NET's tables | the engine's tables (Node 24: U+A7CF, U+A7D3, U+A7D5) | Engine-dependent (DECIDED-23 a) |
