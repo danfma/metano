@@ -1,11 +1,9 @@
 import type {
   TypeDescriptor,
   TypeSpec,
-  PrimitiveDescriptor,
   PropertySpec,
   ArrayDescriptor,
   BrandedDescriptor,
-  DecimalDescriptor,
   EnumDescriptor,
   HashSetDescriptor,
   MapDescriptor,
@@ -15,32 +13,27 @@ import type {
   TemporalDescriptor,
   JsonConverter,
   JsonReadOptions,
+  PolymorphismSpec,
   TypeDiscriminator,
 } from "./types.ts";
+import type { ValueConverter } from "./value-converter.ts";
 import { HashSet } from "../collections/hash-set.ts";
 import { readContainer, writeContainer } from "./container-depth.ts";
 import { cannotConvertTo } from "./contract-name.ts";
 import { JsonException } from "./errors.ts";
-import { isDecimalText, readNumberText } from "./number-from-string.ts";
-import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
+import {
+  decimalConverterOf,
+  nullableTypeName,
+  primitiveConverterOf,
+} from "./numeric-converters.ts";
 import {
   hasTaggedRegistration,
   resolveDeserializeTarget,
   resolveSerializeTarget,
 } from "./polymorphism.ts";
+import { propertyLookupOf } from "./property-lookup.ts";
 
 // ─── Converter Resolution ────────────────────────────────────────────────────
-
-/** The serialize/deserialize pair of one descriptor. */
-type ValueConverter = {
-  serialize: (value: unknown) => unknown;
-  deserialize: (value: unknown) => unknown;
-};
-
-/** How a numeric type is named in a conversion error, from its CLR name. */
-type ErrorTypeNaming = (clrName: string) => string;
-
-const clrNameAsIs: ErrorTypeNaming = (clrName) => clrName;
 
 /**
  * Resolves the serialize/deserialize pair for a given type descriptor, checking
@@ -52,13 +45,18 @@ export function resolveConverter(
   descriptor: TypeDescriptor,
   customConverters?: readonly JsonConverter[],
   readOptions?: JsonReadOptions,
-  errorTypeNaming: ErrorTypeNaming = clrNameAsIs,
 ): ValueConverter {
-  if (customConverters) {
-    const custom = customConverters.find((c) => c.kind === descriptor.kind);
-    if (custom) return custom;
-  }
-  return getBuiltinConverter(descriptor, customConverters, readOptions, errorTypeNaming);
+  return (
+    customConverterFor(descriptor, customConverters) ??
+    getBuiltinConverter(descriptor, customConverters, readOptions)
+  );
+}
+
+function customConverterFor(
+  descriptor: TypeDescriptor,
+  customConverters: readonly JsonConverter[] | undefined,
+): JsonConverter | undefined {
+  return customConverters?.find((converter) => converter.kind === descriptor.kind);
 }
 
 // ─── Built-in Converters ─────────────────────────────────────────────────────
@@ -67,19 +65,14 @@ function getBuiltinConverter(
   descriptor: TypeDescriptor,
   customConverters: readonly JsonConverter[] | undefined,
   readOptions: JsonReadOptions | undefined,
-  errorTypeNaming: ErrorTypeNaming,
 ): ValueConverter {
   switch (descriptor.kind) {
     case "primitive":
-      return withNumberText(
-        primitiveConverter,
-        numberTextOf(descriptor, readOptions),
-        errorTypeNaming,
-      );
+      return primitiveConverterOf(descriptor, readOptions);
     case "temporal":
       return temporalConverter(descriptor);
     case "decimal":
-      return decimalConverter(descriptor, readOptions, errorTypeNaming);
+      return decimalConverterOf(descriptor, readOptions);
     case "map":
       return mapConverter(descriptor, customConverters, readOptions);
     case "array":
@@ -99,75 +92,6 @@ function getBuiltinConverter(
   }
 }
 
-// ─── Primitive ───────────────────────────────────────────────────────────────
-
-const primitiveConverter = {
-  serialize: (value: unknown) => value,
-  deserialize: (value: unknown) => value,
-};
-
-// ─── Numbers read from strings ───────────────────────────────────────────────
-
-/** How a numeric descriptor reads a JSON string (FR-048). */
-interface NumberText {
-  /** The CLR name System.Text.Json reports when the string is rejected. */
-  readonly clrName: string;
-  /** The value `text` spells, or `undefined` when the grammar rejects it. */
-  readonly read: (text: string) => unknown;
-}
-
-function readsNumbersFromStrings(readOptions: JsonReadOptions | undefined): boolean {
-  return readOptions?.numberHandling === "allowReadingFromString";
-}
-
-/** A numeric primitive reads strings when the context allows it and its `numberType` is known. */
-function numberTextOf(
-  descriptor: PrimitiveDescriptor,
-  readOptions: JsonReadOptions | undefined,
-): NumberText | undefined {
-  const { numberType } = descriptor;
-
-  if (numberType === undefined || !readsNumbersFromStrings(readOptions)) {
-    return undefined;
-  }
-
-  return { clrName: numberType, read: (text) => readNumberText(text, numberType) };
-}
-
-/**
- * `converter`, also reading JSON strings by `numberText`'s grammar; a
- * rejected string throws System.Text.Json's conversion error. Other values,
- * and writes, go to `converter` unchanged (FR-048 item 5).
- */
-function withNumberText(
-  converter: ValueConverter,
-  numberText: NumberText | undefined,
-  errorTypeNaming: ErrorTypeNaming,
-): ValueConverter {
-  if (numberText === undefined) {
-    return converter;
-  }
-
-  return {
-    serialize: converter.serialize,
-    deserialize: (value: unknown) => {
-      if (typeof value !== "string") {
-        return converter.deserialize(value);
-      }
-
-      const number = numberText.read(value);
-
-      if (number === undefined) {
-        throw new JsonException(
-          `The JSON value could not be converted to ${errorTypeNaming(numberText.clrName)}.`,
-        );
-      }
-
-      return number;
-    },
-  };
-}
-
 // ─── Temporal ────────────────────────────────────────────────────────────────
 
 function temporalConverter(descriptor: TemporalDescriptor) {
@@ -179,47 +103,6 @@ function temporalConverter(descriptor: TemporalDescriptor) {
     deserialize: (value: unknown) => {
       if (value == null) return null;
       return descriptor.parse(value as string);
-    },
-  };
-}
-
-// ─── Decimal ─────────────────────────────────────────────────────────────────
-
-/**
- * A `System.Decimal`: written with `toNumber()`, read from a JSON number, or
- * from a JSON string when the context reads numbers from strings (FR-048),
- * within the decimal range. The descriptor's `type` (decimal.js `Decimal` in
- * generated contexts) builds the value from the JSON number or the text, so
- * a string keeps every digit; without it the JSON value is returned as is.
- * Anything else throws System.Text.Json's conversion error.
- */
-function decimalConverter(
-  descriptor: DecimalDescriptor,
-  readOptions: JsonReadOptions | undefined,
-  errorTypeNaming: ErrorTypeNaming,
-): ValueConverter {
-  const readsStrings = readsNumbersFromStrings(readOptions);
-
-  const isDecimalValue = (value: unknown): value is string | number =>
-    (typeof value === "number" && isDecimalText(String(value))) ||
-    (typeof value === "string" && readsStrings && isDecimalText(value));
-
-  return {
-    serialize: (value: unknown) => {
-      if (value == null) return null;
-
-      return (value as { toNumber(): number }).toNumber();
-    },
-    deserialize: (value: unknown) => {
-      if (value == null) return null;
-
-      if (!isDecimalValue(value)) {
-        throw new JsonException(
-          `The JSON value could not be converted to ${errorTypeNaming("System.Decimal")}.`,
-        );
-      }
-
-      return descriptor.type ? new descriptor.type(value) : value;
     },
   };
 }
@@ -398,20 +281,38 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
 
 // ─── Nullable ────────────────────────────────────────────────────────────────
 
-/** A rejected number string names `System.Nullable`1[<inner>]`, as System.Text.Json does. */
-const nullableOf: ErrorTypeNaming = (clrName) => `System.Nullable\`1[${clrName}]`;
-
 function nullableConverter(
   descriptor: NullableDescriptor,
   customConverters: readonly JsonConverter[] | undefined,
   readOptions: JsonReadOptions | undefined,
 ) {
-  const innerConv = resolveConverter(descriptor.inner, customConverters, readOptions, nullableOf);
+  const innerConv =
+    customConverterFor(descriptor.inner, customConverters) ??
+    builtinNullableInnerConverter(descriptor.inner, customConverters, readOptions);
 
   return {
     serialize: (value: unknown) => (value == null ? null : innerConv.serialize(value)),
     deserialize: (value: unknown) => (value == null ? null : innerConv.deserialize(value)),
   };
+}
+
+/**
+ * The built-in converter of a nullable's inner type: a numeric one names
+ * ``System.Nullable`1[<CLR name>]`` in its errors, as System.Text.Json does.
+ */
+function builtinNullableInnerConverter(
+  inner: TypeDescriptor,
+  customConverters: readonly JsonConverter[] | undefined,
+  readOptions: JsonReadOptions | undefined,
+): ValueConverter {
+  switch (inner.kind) {
+    case "primitive":
+      return primitiveConverterOf(inner, readOptions, nullableTypeName);
+    case "decimal":
+      return decimalConverterOf(inner, readOptions, nullableTypeName);
+    default:
+      return getBuiltinConverter(inner, customConverters, readOptions);
+  }
 }
 
 // ─── Ref ─────────────────────────────────────────────────────────────────────
@@ -561,12 +462,19 @@ export function deserializeWithSpec<T>(
   }
 
   const target = resolveDeserializeTarget(raw, spec, polymorphism);
-
-  // A tagged hierarchy reads its discriminator as metadata, never as a property.
-  const metadataKey = hasTaggedRegistration(polymorphism) ? polymorphism.discriminator : undefined;
+  const metadataKey = consumedMetadataKeyOf(polymorphism);
 
   // The target is `spec` or one of its registered derived contracts, so it builds a `T`.
   return deserializeContract(raw, target, customConverters, metadataKey) as T;
+}
+
+/**
+ * The discriminator a polymorphic read consumes as metadata, never as a
+ * property; none for a hierarchy without tags, which reads like a
+ * non-polymorphic contract.
+ */
+function consumedMetadataKeyOf(polymorphism: PolymorphismSpec): string | undefined {
+  return hasTaggedRegistration(polymorphism) ? polymorphism.discriminator : undefined;
 }
 
 /** `data` as a JSON object; any other JSON value cannot be converted to the contract. */
@@ -592,7 +500,7 @@ function deserializeContract<T>(
   return readContainer("object", () => {
     const deserialized: Record<string, unknown> = {};
     const properties = collectWireProperties(spec);
-    const jsonValueOf = jsonValueLookupOf(raw, properties, spec.readOptions, metadataKey);
+    const jsonValueOf = propertyLookupOf(raw, properties, spec.readOptions, metadataKey);
 
     for (const prop of properties) {
       const jsonValue = jsonValueOf(prop);
@@ -614,38 +522,4 @@ function deserializeContract<T>(
 
     return spec.factory(deserialized);
   });
-}
-
-/**
- * How a property finds its JSON value: by its exact JSON name, or, under
- * `propertyNameCaseInsensitive`, by every key that matches it ignoring case
- * (`OrdinalIgnoreCase`), applied in document order so that the last match
- * wins (FR-048, measured).
- */
-function jsonValueLookupOf(
-  raw: Record<string, unknown>,
-  properties: readonly PropertySpec[],
-  readOptions: JsonReadOptions | undefined,
-  metadataKey: string | undefined,
-): (property: PropertySpec) => unknown {
-  if (!readOptions?.propertyNameCaseInsensitive) {
-    return (property) => raw[property.json];
-  }
-
-  const propertiesByKey = new Map(
-    properties.map((property) => [ordinalIgnoreCaseKeyOf(property.json), property]),
-  );
-
-  const values = new Map<PropertySpec, unknown>();
-  const dataEntries = Object.entries(raw).filter(([key]) => key !== metadataKey);
-
-  for (const [key, value] of dataEntries) {
-    const property = propertiesByKey.get(ordinalIgnoreCaseKeyOf(key));
-
-    if (property) {
-      values.set(property, value);
-    }
-  }
-
-  return (property) => values.get(property);
 }

@@ -863,6 +863,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Area | STJ | Metano | Status |
 |---|---|---|---|
 | Duplicate tag keys `{"kind":"a","kind":"b"}` | `JsonException` | `JSON.parse` keeps the last value | Undetectable after `JSON.parse` |
+| Duplicate exact data keys around a case variant, case-insensitive context `{"count":1,"COUNT":2,"count":3}` | the last key in the text wins (`3`) | `JSON.parse` keeps the last value at the first key's position, so `COUNT` comes last and wins (`2`) | Undetectable after `JSON.parse` (DECIDED-23 a) |
 | Int tag written `1.0` / `1e0` | `JsonException` "could not be converted" | `JSON.parse` yields `1`, accepted | Undetectable after `JSON.parse` |
 | Number text `1E+21`, `-0` | as shown | `1e+21`, `0` | Fixtures avoid them |
 | Writing `NaN` / `±Infinity` without `AllowNamedFloatingPointLiterals` | `ArgumentException` (measured) | `JSON.stringify` writes `null` | Pre-existing; reachable now that Web contexts read `"NaN"` |
@@ -1254,7 +1255,11 @@ the former `OPEN-N`.
     (`ordinal-ignore-case.ts`) maps each code point with `toUpperCase()` when it yields one code
     point and lists those exceptions; what is left differs only where the engine's Unicode version
     differs from .NET's (Node 24: U+A7CF, U+A7D3, U+A7D5). Measured: `ÉCOLE` matches `école`,
-    `ςigma` matches `Σigma`; `STRASSE`, `ıd`, `İD`, `ſize` and `\u212Aey` match nothing.
+    `ςigma` matches `Σigma`; `STRASSE`, `ıd`, `İD`, `ſize` and `\u212Aey` match nothing. "Last
+    match wins" follows the order of the parsed object's keys: when the text repeats an exact key
+    around a case variant (`{"count":1,"COUNT":2,"count":3}`), `JSON.parse` keeps the repeated
+    key at its first position with its last value, so the runtime reads `2` where STJ reads `3`
+    (documented divergence, undetectable after `JSON.parse`).
   - (b) The discriminator a tagged polymorphic read consumes is never a property, even when a
     property matches it case-insensitively: with `PropertyNameCaseInsensitive = true`, a `kind`
     discriminator and a `KindDer(string Kind)` variant, `{"kind":"k","Kind":"x"}` reads

@@ -99,6 +99,14 @@ internal static class JsonTypeClassifier
     /// names it in errors; <c>null</c> for any other type.
     /// </summary>
     public static string? NumberTypeNameOf(ITypeSymbol type) =>
+        IsNumber(type) ? $"System.{type.MetadataName}" : null;
+
+    private static bool IsPrimitive(ITypeSymbol type) =>
+        IsNumber(type)
+        || type.SpecialType is SpecialType.System_String or SpecialType.System_Boolean;
+
+    /// <summary>The C# numeric types that map to a TS <c>number</c>.</summary>
+    private static bool IsNumber(ITypeSymbol type) =>
         type.SpecialType
             is SpecialType.System_Byte
                 or SpecialType.System_SByte
@@ -109,24 +117,7 @@ internal static class JsonTypeClassifier
                 or SpecialType.System_Int64
                 or SpecialType.System_UInt64
                 or SpecialType.System_Single
-                or SpecialType.System_Double
-            ? $"System.{type.MetadataName}"
-            : null;
-
-    private static bool IsPrimitive(ITypeSymbol type) =>
-        type.SpecialType
-            is SpecialType.System_String
-                or SpecialType.System_Int16
-                or SpecialType.System_Int32
-                or SpecialType.System_Int64
-                or SpecialType.System_UInt16
-                or SpecialType.System_UInt32
-                or SpecialType.System_UInt64
-                or SpecialType.System_Single
-                or SpecialType.System_Double
-                or SpecialType.System_Byte
-                or SpecialType.System_SByte
-                or SpecialType.System_Boolean;
+                or SpecialType.System_Double;
 
     private static JsonPropertyKind ClassifyNamed(INamedTypeSymbol named)
     {

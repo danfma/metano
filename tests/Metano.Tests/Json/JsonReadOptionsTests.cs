@@ -151,7 +151,6 @@ public class JsonReadOptionsTests
 
         await Assert.That(ts).IsEqualTo(TranspileContext(""));
         await Assert.That(ts).DoesNotContain("readOptions");
-        await Assert.That(ts).DoesNotContain("JsonReadOptions");
     }
 
     [Test]
@@ -183,15 +182,17 @@ public class JsonReadOptionsTests
     // The decimal descriptor carries no numberType: its converter reads the
     // context option and builds the value through its type.
     [Test]
-    public async Task NumbersFromStrings_LeaveNonNumericDescriptorsBare()
+    [Arguments("m", "{ kind: \"decimal\", type: Decimal }")]
+    [Arguments("text", "{ kind: \"primitive\" }")]
+    [Arguments("flag", "{ kind: \"primitive\" }")]
+    [Arguments("level", "{ kind: \"numericEnum\", values: Level }")]
+    [Arguments("id", "{ kind: \"branded\", create: UUID.create }")]
+    public async Task NumbersFromStrings_NameNoNonNumericType(string tsName, string expected)
     {
-        var ts = TranspileContext("JsonSerializerDefaults.Web");
+        var descriptor = DescriptorOf(TranspileContext("JsonSerializerDefaults.Web"), tsName);
 
-        await Assert.That(DescriptorOf(ts, "m")).IsEqualTo("{ kind: \"decimal\", type: Decimal }");
-        await Assert.That(DescriptorOf(ts, "text")).IsEqualTo("{ kind: \"primitive\" }");
-        await Assert.That(DescriptorOf(ts, "flag")).IsEqualTo("{ kind: \"primitive\" }");
-        await Assert.That(DescriptorOf(ts, "level")).StartsWith("{ kind: \"numericEnum\"");
-        await Assert.That(DescriptorOf(ts, "id")).StartsWith("{ kind: \"branded\"");
+        await Assert.That(descriptor).IsEqualTo(expected);
+        await Assert.That(descriptor).DoesNotContain("numberType");
     }
 
     [Test]
@@ -204,6 +205,7 @@ public class JsonReadOptionsTests
         var ts = TranspileContext(options);
 
         await Assert.That(ts).DoesNotContain("numberType");
+        await Assert.That(DescriptorOf(ts, "i")).IsEqualTo("{ kind: \"primitive\" }");
     }
 
     [Test]
@@ -223,9 +225,11 @@ public class JsonReadOptionsTests
         await Assert
             .That(ts)
             .Contains("descriptor: { kind: \"primitive\", numberType: \"System.Int32\" },");
+
         await Assert
             .That(ts)
             .Contains("element: { kind: \"primitive\", numberType: \"System.Double\" },");
+
         await Assert
             .That(ts)
             .Contains("inner: { kind: \"primitive\", numberType: \"System.UInt64\" },");

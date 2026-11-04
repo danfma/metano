@@ -6,6 +6,13 @@ import type {
   JsonReadOptions,
 } from "./types.ts";
 
+/** System.Text.Json's default read behavior: no option set. */
+const DEFAULT_READ_OPTIONS: JsonReadOptions = Object.freeze({});
+
+function hasNoOptions(readOptions: JsonReadOptions): boolean {
+  return Object.keys(readOptions).length === 0;
+}
+
 /**
  * Base class for generated serializer contexts. Each context holds options
  * (including custom converters) and a registry of type specs for lookup.
@@ -32,7 +39,7 @@ export abstract class SerializerContext {
    * default.
    */
   protected get readOptions(): JsonReadOptions {
-    return {};
+    return DEFAULT_READ_OPTIONS;
   }
 
   /**
@@ -85,7 +92,7 @@ export abstract class SerializerContext {
   private withReadOptions<S extends { readonly readOptions?: JsonReadOptions }>(spec: S): S {
     const readOptions = { ...this.readOptions, ...spec.readOptions };
 
-    return Object.keys(readOptions).length === 0 ? spec : { ...spec, readOptions };
+    return hasNoOptions(readOptions) ? spec : { ...spec, readOptions };
   }
 
   /**

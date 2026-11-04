@@ -12,8 +12,8 @@ import type { NumberTypeName } from "./types.ts";
  *   or an optional sign, digits with an optional `.` (`"1."`, `".5"` and
  *   `"01.5"` included) and an optional exponent; a value that overflows the
  *   type is rejected, one that underflows reads as zero;
- * - `Decimal`: the same text without the named literals, within ±79228162514264337593543950335
- *   after rounding.
+ * - `Decimal`: the same text without the named literals, within
+ *   ±79228162514264337593543950335 after rounding.
  *
  * No whitespace, hex, digit separator, empty string or other spelling is
  * accepted.
@@ -26,7 +26,10 @@ const SIGNED_INTEGER_PATTERN = /^[+-]?[0-9]+$/;
 const UNSIGNED_INTEGER_PATTERN = /^[0-9]+$/;
 
 /** Floating-point and decimal text: sign, integer digits, fraction digits, exponent. */
-const REAL_NUMBER_PATTERN = /^[+-]?(?:([0-9]+)(?:\.([0-9]*))?|\.([0-9]+))(?:[eE]([+-]?[0-9]+))?$/;
+const REAL_NUMBER_PATTERN =
+  /^[+-]?(?:(?<integer>[0-9]+)(?:\.(?<fraction>[0-9]*))?|\.(?<bareFraction>[0-9]+))(?:[eE](?<exponent>[+-]?[0-9]+))?$/;
+
+const LEADING_ZEROS_PATTERN = /^0+/;
 
 /** The named floating-point literals, matched case-sensitively. */
 const FLOATING_POINT_LITERALS: ReadonlyMap<string, number> = new Map([
@@ -35,11 +38,17 @@ const FLOATING_POINT_LITERALS: ReadonlyMap<string, number> = new Map([
   ["-Infinity", Number.NEGATIVE_INFINITY],
 ]);
 
+/** A positive bound written as `limit × 10^-scale`. */
+interface Bound {
+  readonly limit: bigint;
+  readonly scale: number;
+}
+
 /**
- * `79228162514264337593543950335.5` as `limit × 10^-1`: a decimal text at or
- * past it rounds beyond `System.Decimal.MaxValue` (measured).
+ * `79228162514264337593543950335.5`: a decimal text at or past it rounds
+ * beyond `System.Decimal.MaxValue` (measured).
  */
-const DECIMAL_OVERFLOW = { limit: 792_281_625_142_643_375_935_439_503_355n, scale: 1 };
+const DECIMAL_OVERFLOW: Bound = { limit: 792_281_625_142_643_375_935_439_503_355n, scale: 1 };
 
 /**
  * `2^128 − 2^103`, half-way between `Single.MaxValue` and `2^128`: a `Single`
@@ -47,45 +56,28 @@ const DECIMAL_OVERFLOW = { limit: 792_281_625_142_643_375_935_439_503_355n, scal
  * reads, the exact midpoint throws). It is a double, so a parsed double
  * equal to it is the only case the text itself must decide.
  */
-const SINGLE_OVERFLOW = { limit: 2n ** 128n - 2n ** 103n, scale: 0 };
+const SINGLE_OVERFLOW: Bound = { limit: 2n ** 128n - 2n ** 103n, scale: 0 };
 
 const SINGLE_OVERFLOW_AS_DOUBLE = Number(SINGLE_OVERFLOW.limit);
+
+/** A matched number text as `significand × 10^exponent`, without its sign. */
+interface ExactValue {
+  /** The significant digits without leading zeros; empty for zero. */
+  readonly significand: string;
+  readonly exponent: number;
+}
 
 /** Reads a JSON string as a number, or `undefined` when the grammar rejects it. */
 type NumberTextReader = (text: string) => number | undefined;
 
-const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = {
-  "System.Byte": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 255n),
-  "System.SByte": integerReader(SIGNED_INTEGER_PATTERN, -128n, 127n),
-  "System.Int16": integerReader(SIGNED_INTEGER_PATTERN, -32_768n, 32_767n),
-  "System.UInt16": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 65_535n),
-  "System.Int32": integerReader(SIGNED_INTEGER_PATTERN, -2_147_483_648n, 2_147_483_647n),
-  "System.UInt32": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 4_294_967_295n),
-  "System.Int64": integerReader(
-    SIGNED_INTEGER_PATTERN,
-    -9_223_372_036_854_775_808n,
-    9_223_372_036_854_775_807n,
-  ),
-  "System.UInt64": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 18_446_744_073_709_551_615n),
-  "System.Single": floatingPointReader(fitsSingle),
-  "System.Double": floatingPointReader((_, value) => Number.isFinite(value)),
-};
+/** Whether the matched text, parsed as `value`, stays finite in the target type. */
+type FiniteCheck = (parts: RegExpExecArray, value: number) => boolean;
 
 /**
- * The number `text` spells as a `numberType`, or `undefined` when System.Text.Json
- * rejects it.
+ * Reads the integer grammar within `[min, max]`. The value is a JS `number`,
+ * so an `Int64` / `UInt64` beyond 2^53 loses precision exactly as the same
+ * JSON number does through `JSON.parse`.
  */
-export function readNumberText(text: string, numberType: NumberTypeName): number | undefined {
-  return NUMBER_TEXT_READERS[numberType](text);
-}
-
-/** Whether System.Text.Json reads `text` as a `System.Decimal`. */
-export function isDecimalText(text: string): boolean {
-  const parts = REAL_NUMBER_PATTERN.exec(text);
-
-  return parts !== null && compareMagnitude(exactValueOf(parts), DECIMAL_OVERFLOW) < 0;
-}
-
 function integerReader(pattern: RegExp, min: bigint, max: bigint): NumberTextReader {
   return (text) => {
     if (!pattern.test(text)) {
@@ -94,13 +86,14 @@ function integerReader(pattern: RegExp, min: bigint, max: bigint): NumberTextRea
 
     const value = BigInt(text);
 
-    // `+ 0` turns the `-0` of `"-0"` into `0`, as an integer has no negative zero.
-    return value < min || value > max ? undefined : Number(text) + 0;
+    // The bigint has no negative zero, so `"-0"` reads as `0`.
+    return isWithinRange(value, min, max) ? Number(value) : undefined;
   };
 }
 
-/** Whether the matched text, parsed as `value`, stays finite in the target type. */
-type FiniteCheck = (parts: RegExpExecArray, value: number) => boolean;
+function isWithinRange(value: bigint, min: bigint, max: bigint): boolean {
+  return value >= min && value <= max;
+}
 
 /**
  * Reads the floating-point grammar; `staysFinite` rejects a value that
@@ -127,6 +120,10 @@ function floatingPointReader(staysFinite: FiniteCheck): NumberTextReader {
   };
 }
 
+function fitsDouble(_: RegExpExecArray, value: number): boolean {
+  return Number.isFinite(value);
+}
+
 /**
  * Whether the text stays below the `Single` overflow threshold. The double
  * is already rounded, so it decides every case but one: a double equal to
@@ -139,30 +136,54 @@ function fitsSingle(parts: RegExpExecArray, value: number): boolean {
     return magnitude < SINGLE_OVERFLOW_AS_DOUBLE;
   }
 
-  return compareMagnitude(exactValueOf(parts), SINGLE_OVERFLOW) < 0;
+  return isBelow(exactValueOf(parts), SINGLE_OVERFLOW);
 }
 
-/** A matched number text as `significand × 10^exponent`, without its sign. */
-interface ExactValue {
-  /** The significant digits without leading zeros; empty for zero. */
-  readonly significand: string;
-  readonly exponent: number;
+const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = {
+  "System.Byte": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 255n),
+  "System.SByte": integerReader(SIGNED_INTEGER_PATTERN, -128n, 127n),
+  "System.Int16": integerReader(SIGNED_INTEGER_PATTERN, -32_768n, 32_767n),
+  "System.UInt16": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 65_535n),
+  "System.Int32": integerReader(SIGNED_INTEGER_PATTERN, -2_147_483_648n, 2_147_483_647n),
+  "System.UInt32": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 4_294_967_295n),
+  "System.Int64": integerReader(
+    SIGNED_INTEGER_PATTERN,
+    -9_223_372_036_854_775_808n,
+    9_223_372_036_854_775_807n,
+  ),
+  "System.UInt64": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 18_446_744_073_709_551_615n),
+  "System.Single": floatingPointReader(fitsSingle),
+  "System.Double": floatingPointReader(fitsDouble),
+};
+
+/**
+ * The number `text` spells as a `numberType`, or `undefined` when System.Text.Json
+ * rejects it.
+ */
+export function readNumberText(text: string, numberType: NumberTypeName): number | undefined {
+  return NUMBER_TEXT_READERS[numberType](text);
+}
+
+/** Whether System.Text.Json reads `text` as a `System.Decimal`. */
+export function isDecimalText(text: string): boolean {
+  const parts = REAL_NUMBER_PATTERN.exec(text);
+
+  return parts !== null && isBelow(exactValueOf(parts), DECIMAL_OVERFLOW);
 }
 
 function exactValueOf(parts: RegExpExecArray): ExactValue {
-  const [, integerDigits = "", fractionDigits = "", bareFraction = "", exponentText = "0"] = parts;
-  const fraction = fractionDigits + bareFraction;
+  const { integer = "", fraction = "", bareFraction = "", exponent = "0" } = parts.groups ?? {};
+  const fractionDigits = fraction + bareFraction;
 
   return {
-    significand: (integerDigits + fraction).replace(/^0+/, ""),
-    exponent: Number(exponentText) - fraction.length,
+    significand: (integer + fractionDigits).replace(LEADING_ZEROS_PATTERN, ""),
+    exponent: Number(exponent) - fractionDigits.length,
   };
 }
 
-/** A positive bound written as `limit × 10^-scale`. */
-interface Bound {
-  readonly limit: bigint;
-  readonly scale: number;
+/** Whether `value` is strictly below `bound`. */
+function isBelow(value: ExactValue, bound: Bound): boolean {
+  return compareMagnitude(value, bound) < 0;
 }
 
 /**
@@ -181,12 +202,15 @@ function compareMagnitude(value: ExactValue, bound: Bound): number {
     return Math.sign(digitDifference);
   }
 
-  const significand = BigInt(value.significand);
+  return compareShifted(BigInt(value.significand), shift, bound.limit);
+}
 
+/** The sign of `significand × 10^shift − limit`. */
+function compareShifted(significand: bigint, shift: number, limit: bigint): number {
   const [left, right] =
     shift >= 0
-      ? [significand * 10n ** BigInt(shift), bound.limit]
-      : [significand, bound.limit * 10n ** BigInt(-shift)];
+      ? [significand * 10n ** BigInt(shift), limit]
+      : [significand, limit * 10n ** BigInt(-shift)];
 
   return left === right ? 0 : left < right ? -1 : 1;
 }
