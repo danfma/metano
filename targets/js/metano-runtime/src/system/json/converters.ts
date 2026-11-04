@@ -54,18 +54,20 @@ import { type PropertyLookup, propertyLookupPlanOf } from "./property-lookup.ts"
  * built-in ones. `readOptions` are the read options of the spec being read
  * (FR-048); a `ref` reads with its target spec's own options. Under exact
  * tree numbers, only the built-in converters that read a number's exact
- * text see a `JsonNumberText` leaf (`readingTreeNumbers`).
+ * text see a `JsonNumberText` leaf (`withNumberTextsAsDoubles`).
  */
 function resolveConverter(
   descriptor: TypeDescriptor,
   plans: SpecPlans,
   readOptions?: JsonReadOptions,
 ): ValueConverter {
-  return resolveWith(descriptor, plans, () => getBuiltinConverter(descriptor, plans, readOptions));
+  return customOrBuiltinConverter(descriptor, plans, () =>
+    getBuiltinConverter(descriptor, plans, readOptions),
+  );
 }
 
 /** The custom converter of the descriptor's kind, else `builtinOf()`, under the plans' tree numbers. */
-function resolveWith(
+function customOrBuiltinConverter(
   descriptor: TypeDescriptor,
   plans: SpecPlans,
   builtinOf: () => ValueConverter,
@@ -73,14 +75,14 @@ function resolveWith(
   const custom = customConverterFor(descriptor, plans.customConverters);
 
   if (custom) {
-    return readingTreeNumbers(custom, plans, treeWithDoubles);
+    return withNumberTextsAsDoubles(custom, plans, treeWithDoubles);
   }
 
   const builtin = builtinOf();
 
   return forwardsNumberTexts(descriptor)
     ? builtin
-    : readingTreeNumbers(builtin, plans, numberOfTreeValue);
+    : withNumberTextsAsDoubles(builtin, plans, numberOfTreeValue);
 }
 
 /**
@@ -91,7 +93,7 @@ function resolveWith(
  * whole subtree converted (`treeWithDoubles`). A parsed tree holds no leaf,
  * so its converters stay as they are.
  */
-function readingTreeNumbers(
+function withNumberTextsAsDoubles(
   converter: ValueConverter,
   plans: SpecPlans,
   asDoubles: (value: unknown) => unknown,
@@ -354,7 +356,9 @@ function nullableInnerConverter(
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ): ValueConverter {
-  return resolveWith(inner, plans, () => builtinNullableInnerConverter(inner, plans, readOptions));
+  return customOrBuiltinConverter(inner, plans, () =>
+    builtinNullableInnerConverter(inner, plans, readOptions),
+  );
 }
 
 /**
@@ -784,7 +788,7 @@ export function deserializeWithValueSpec(
   data: unknown,
   spec: ValueSpec,
   customConverters?: readonly JsonConverter[],
-  treeNumbers?: TreeNumbers,
+  treeNumbers: TreeNumbers = "parsed",
 ): unknown {
   return specPlansFor(customConverters, treeNumbers).valueConverterOf(spec).deserialize(data);
 }

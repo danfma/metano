@@ -12,7 +12,7 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "#/system/json";
-import { readsNumberTexts } from "#/system/json/exact-number-reads";
+import { specNeedsExactNumbers } from "#/system/json/exact-number-reads";
 import {
   DECIMAL_READ_ROWS,
   decimalSpec,
@@ -301,7 +301,7 @@ describe("deserializeText — the path chosen per spec", () => {
   });
 });
 
-describe("readsNumberTexts — the closure of a spec", () => {
+describe("specNeedsExactNumbers — the closure of a spec", () => {
   test("a spec reads number texts through properties, bases, derived contracts and collections", () => {
     const leaf = holderSpec([{ ts: "price", json: "price", type: decimal }]);
     const derived: TypeSpec<Holder> = { ...holderSpec([]), base: leaf };
@@ -318,10 +318,10 @@ describe("readsNumberTexts — the closure of a spec", () => {
       descriptor: { kind: "map", key: primitive, value: { kind: "ref", spec: () => polymorphic } },
     };
 
-    expect(readsNumberTexts(leaf)).toBe(true);
-    expect(readsNumberTexts(derived)).toBe(true);
-    expect(readsNumberTexts(polymorphic)).toBe(true);
-    expect(readsNumberTexts(viaMap)).toBe(true);
+    expect(specNeedsExactNumbers(leaf)).toBe(true);
+    expect(specNeedsExactNumbers(derived)).toBe(true);
+    expect(specNeedsExactNumbers(polymorphic)).toBe(true);
+    expect(specNeedsExactNumbers(viaMap)).toBe(true);
   });
 
   test("a recursive spec without decimals does not", () => {
@@ -334,7 +334,7 @@ describe("readsNumberTexts — the closure of a spec", () => {
       },
     ]);
 
-    expect(readsNumberTexts(tree)).toBe(false);
+    expect(specNeedsExactNumbers(tree)).toBe(false);
   });
 });
 

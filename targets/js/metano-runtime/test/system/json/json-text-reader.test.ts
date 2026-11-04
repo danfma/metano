@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { JsonException } from "#/system/json";
 import { JsonNumberText } from "#/system/json/exact-json-number";
 import { mayHoldInexactNumber, parseJsonText, readJsonText } from "#/system/json/json-text-reader";
-import { JSON_TEXT_ROWS } from "./json-text-rows.ts";
+import { expectedTextOutcomeOf, JSON_TEXT_ROWS, textOutcomeOf } from "./json-text-rows.ts";
 
 /** The tree with every `JsonNumberText` leaf read as `JSON.parse` reads it. */
 function asParsed(value: unknown): unknown {
@@ -52,14 +52,10 @@ describe("readJsonText — System.Text.Json's reader messages (#457)", () => {
 });
 
 describe("parseJsonText — JSON.parse with System.Text.Json's errors", () => {
-  test("every row reads as JSON.parse does, or throws the reader's JsonException", () => {
-    for (const row of JSON_TEXT_ROWS) {
-      const expected = row.error
-        ? `JsonException ${row.error}`
-        : `OK ${JSON.stringify(JSON.parse(row.text))}`;
+  test("every row reads, or throws the reader's JsonException", () => {
+    const outcomes = JSON_TEXT_ROWS.map((row) => textOutcomeOf(() => parseJsonText(row.text)));
 
-      expect(outcomeOf(() => parseJsonText(row.text))).toBe(expected);
-    }
+    expect(outcomes).toEqual(JSON_TEXT_ROWS.map(expectedTextOutcomeOf));
   });
 
   test("the error is a JsonException, not the engine's SyntaxError", () => {
@@ -193,6 +189,18 @@ describe("readJsonText — numbers beyond double precision", () => {
   });
 });
 
+/** `seed` with `character` inserted at `at`, the character at `at` deleted, or replaced. */
+function mutate(seed: string, at: number, character: string, kind: number): string {
+  switch (kind) {
+    case 0:
+      return seed.slice(0, at) + character + seed.slice(at);
+    case 1:
+      return seed.slice(0, at) + seed.slice(at + 1);
+    default:
+      return seed.slice(0, at) + character + seed.slice(at + 1);
+  }
+}
+
 /** Seeded mutations of valid documents: `readJsonText` accepts exactly what `JSON.parse` accepts. */
 describe("readJsonText — acceptance equals JSON.parse on mutated documents", () => {
   const SEEDS = [
@@ -208,6 +216,7 @@ describe("readJsonText — acceptance equals JSON.parse on mutated documents", (
 
     const random = (limit: number) => {
       state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff;
+
       return state % limit;
     };
 
@@ -217,14 +226,7 @@ describe("readJsonText — acceptance equals JSON.parse on mutated documents", (
       const seed = SEEDS[random(SEEDS.length)]!;
       const at = random(seed.length);
       const character = ALPHABET[random(ALPHABET.length)]!;
-      const kind = random(3);
-
-      const mutated =
-        kind === 0
-          ? seed.slice(0, at) + character + seed.slice(at)
-          : kind === 1
-            ? seed.slice(0, at) + seed.slice(at + 1)
-            : seed.slice(0, at) + character + seed.slice(at + 1);
+      const mutated = mutate(seed, at, character, random(3));
 
       const parsed = jsonParseOutcomeOf(mutated);
       const read = outcomeOf(() => readJsonText(mutated));

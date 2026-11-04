@@ -23,7 +23,7 @@ export function forwardsNumberTexts(descriptor: TypeDescriptor): boolean {
 }
 
 /** The answer of each spec asked about, computed once on its first exact-capable read. */
-const readsByInfo = new WeakMap<JsonTypeInfo, boolean>();
+const needsByInfo = new WeakMap<JsonTypeInfo, boolean>();
 
 /**
  * Whether reading `info` can reach a descriptor that reads exact text:
@@ -32,18 +32,18 @@ const readsByInfo = new WeakMap<JsonTypeInfo, boolean>();
  * (`ref.spec`, `derived.spec`) are called here, outside every generated
  * getter, as the dispatch index calls them.
  */
-export function readsNumberTexts(info: JsonTypeInfo): boolean {
-  const known = readsByInfo.get(info);
+export function specNeedsExactNumbers(info: JsonTypeInfo): boolean {
+  const known = needsByInfo.get(info);
 
   if (known !== undefined) {
     return known;
   }
 
-  const reads = new ClosureWalk().reachesNumberText(info);
+  const needs = closureReachesNumberText(info);
 
-  readsByInfo.set(info, reads);
+  needsByInfo.set(info, needs);
 
-  return reads;
+  return needs;
 }
 
 /**
@@ -51,32 +51,29 @@ export function readsNumberTexts(info: JsonTypeInfo): boolean {
  * cycle is answered before the walk returns to it, so its own answer may be
  * incomplete.
  */
-class ClosureWalk {
-  private readonly visited = new Set<TypeSpec>();
+function closureReachesNumberText(info: JsonTypeInfo): boolean {
+  const visited = new Set<TypeSpec>();
 
-  reachesNumberText(info: JsonTypeInfo): boolean {
-    return "descriptor" in info ? this.descriptorReaches(info.descriptor) : this.specReaches(info);
-  }
-
-  private specReaches(spec: TypeSpec): boolean {
-    if (this.visited.has(spec)) {
+  const specReaches = (spec: TypeSpec): boolean => {
+    if (visited.has(spec)) {
       return false;
     }
 
-    this.visited.add(spec);
+    visited.add(spec);
 
     const reachesThroughProperties = spec.properties.some((property) =>
-      this.descriptorReaches(property.type),
+      descriptorReaches(property.type),
     );
 
-    return (
-      reachesThroughProperties ||
-      (spec.base !== undefined && this.specReaches(spec.base)) ||
-      (spec.polymorphism?.derived.some((derived) => this.specReaches(derived.spec())) ?? false)
-    );
-  }
+    const reachesThroughBase = () => spec.base !== undefined && specReaches(spec.base);
 
-  private descriptorReaches(descriptor: TypeDescriptor): boolean {
+    const reachesThroughDerived = () =>
+      spec.polymorphism?.derived.some((derived) => specReaches(derived.spec())) ?? false;
+
+    return reachesThroughProperties || reachesThroughBase() || reachesThroughDerived();
+  };
+
+  const descriptorReaches = (descriptor: TypeDescriptor): boolean => {
     if (readsNumberText(descriptor)) {
       return true;
     }
@@ -84,15 +81,17 @@ class ClosureWalk {
     switch (descriptor.kind) {
       case "array":
       case "hashSet":
-        return this.descriptorReaches(descriptor.element);
+        return descriptorReaches(descriptor.element);
       case "map":
-        return this.descriptorReaches(descriptor.value);
+        return descriptorReaches(descriptor.value);
       case "nullable":
-        return this.descriptorReaches(descriptor.inner);
+        return descriptorReaches(descriptor.inner);
       case "ref":
-        return this.specReaches(descriptor.spec());
+        return specReaches(descriptor.spec());
       default:
         return false;
     }
-  }
+  };
+
+  return "descriptor" in info ? descriptorReaches(info.descriptor) : specReaches(info);
 }
