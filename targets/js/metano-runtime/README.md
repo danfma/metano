@@ -265,6 +265,7 @@ const parsed = JsonSerializer.deserialize(json, JsonContext.default.todoItem);
 
 // From JSON text, as .NET's Deserialize(string): decimals keep every digit,
 // invalid text throws JsonException with .NET's message.
+const text = JSON.stringify(json);
 const fromText = JsonSerializer.deserializeText(text, JsonContext.default.todoItem);
 ```
 
