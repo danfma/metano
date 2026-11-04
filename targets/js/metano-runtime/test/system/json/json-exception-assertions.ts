@@ -40,6 +40,11 @@ export function missingDiscriminatorMessage(baseName: string): string {
   );
 }
 
+/** The tag of an abstract registration, which is not itself polymorphic (DECIDED-12). */
+export function abstractTypeMessage(typeName: string): string {
+  return `Deserialization of interface or abstract types is not supported. Type '${typeName}'.`;
+}
+
 /** A runtime type the polymorphic base does not register, under `failSerialization`. */
 export function unsupportedRuntimeTypeMessage(runtimeName: string, baseName: string): string {
   return `Runtime type '${runtimeName}' is not supported by polymorphic type '${baseName}'.`;
