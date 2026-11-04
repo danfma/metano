@@ -19,6 +19,7 @@ internal sealed class JsonPolymorphismValidator(
     JsonPropertyCollector properties,
     JsonContractAdmission admission,
     JsonStructuralVariants structuralVariants,
+    TypeGuardBuilder guards,
     Action<MetanoDiagnostic> report
 )
 {
@@ -32,6 +33,7 @@ internal sealed class JsonPolymorphismValidator(
     private readonly JsonContractAdmission _admission = admission;
     private readonly JsonDiscriminatorConflictDetector _conflicts = new(properties);
     private readonly JsonStructuralVariants _structuralVariants = structuralVariants;
+    private readonly TypeGuardBuilder _guards = guards;
     private readonly Action<MetanoDiagnostic> _report = report;
     private readonly HashSet<MetanoDiagnostic> _reported = [];
 
@@ -151,7 +153,7 @@ internal sealed class JsonPolymorphismValidator(
         if (!_admission.HasObjectContract(registration.Type))
             return JsonPolymorphismMessages.NotTranspiled(registered, owner);
 
-        if (registration.IsStructural && !HasGuard(registration.Type))
+        if (registration.IsStructural && !_guards.CanGenerateGuard(registration.NamedType))
             return JsonPolymorphismMessages.GuardlessRegistration(registered, owner);
 
         var requiresNearestAncestor =
@@ -199,7 +201,7 @@ internal sealed class JsonPolymorphismValidator(
         JsonPolymorphism polymorphism
     )
     {
-        if (!polymorphism.NeedsBaseTest || HasGuard(polymorphism.BaseType))
+        if (!polymorphism.NeedsBaseTest || _guards.CanGenerateGuard(polymorphism.BaseType))
             return [];
 
         return
@@ -210,8 +212,6 @@ internal sealed class JsonPolymorphismValidator(
             ),
         ];
     }
-
-    private bool HasGuard(ITypeSymbol type) => _structuralVariants.HasGuard((INamedTypeSymbol)type);
 
     /// <summary>
     /// The FR-012 message, or the FR-015 one for a constructed generic base,

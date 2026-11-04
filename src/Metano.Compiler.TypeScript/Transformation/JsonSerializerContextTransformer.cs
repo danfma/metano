@@ -141,10 +141,13 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         );
 
         var names = JsonTypeInfoNames.Create(_context, roots, report);
+        var guards = new TypeGuardBuilder(_context);
+
         var polymorphismValidator = new JsonPolymorphismValidator(
             properties,
             admission,
-            new JsonStructuralVariants(new TypeGuardBuilder(_context)),
+            new JsonStructuralVariants(guards),
+            guards,
             report
         );
 

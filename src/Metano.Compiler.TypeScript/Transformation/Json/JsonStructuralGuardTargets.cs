@@ -53,7 +53,7 @@ internal static class JsonStructuralGuardTargets
     /// generic type has none the context could reference (its registrations
     /// are MS0032, and its base spec is a construction).
     /// </summary>
-    public static bool IsGuardedPlainObject(ITypeSymbol type) =>
+    public static bool IsGuardablePlainObject(ITypeSymbol type) =>
         type is INamedTypeSymbol { IsGenericType: false } && SymbolHelper.HasPlainObject(type);
 
     /// <summary>
@@ -64,7 +64,7 @@ internal static class JsonStructuralGuardTargets
     public static bool IsConcretePlainObjectBase(INamedTypeSymbol type) =>
         type.TypeKind is (TypeKind.Class or TypeKind.Struct)
         && !type.IsAbstract
-        && IsGuardedPlainObject(type);
+        && IsGuardablePlainObject(type);
 
     /// <summary>
     /// The <c>[PlainObject]</c> types the polymorphism of
@@ -78,7 +78,7 @@ internal static class JsonStructuralGuardTargets
 
         var registered = polymorphism
             .Registrations.Select(registration => registration.Type)
-            .Where(IsGuardedPlainObject)
+            .Where(IsGuardablePlainObject)
             .Cast<INamedTypeSymbol>();
 
         return IsConcretePlainObjectBase(baseType) ? registered.Append(baseType) : registered;
@@ -88,13 +88,3 @@ internal static class JsonStructuralGuardTargets
         assembly is null
         || SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, assembly);
 }
-
-/// <summary>
-/// The types whose guard is synthesized (original definitions) and their
-/// cross-assembly origin keys, which join the guardable type keys so guard
-/// references resolve to them.
-/// </summary>
-internal sealed record JsonStructuralGuardSet(
-    IReadOnlySet<INamedTypeSymbol> Types,
-    IReadOnlySet<string> OriginKeys
-);

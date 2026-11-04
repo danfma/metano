@@ -20,14 +20,6 @@ internal sealed class JsonStructuralVariants(TypeGuardBuilder guards)
 {
     private readonly TypeGuardBuilder _guards = guards;
 
-    /// <summary>
-    /// Whether <paramref name="type"/> gets a guard the descriptor can
-    /// reference (no guard for <c>[Import]</c>, <c>[ExportedAsModule]</c>,
-    /// <c>[NoContainer]</c>, exception types or types with extension
-    /// members).
-    /// </summary>
-    public bool HasGuard(INamedTypeSymbol type) => _guards.GeneratePredicate(type) is not null;
-
     public JsonStructuralDispatch DispatchOf(JsonPolymorphism polymorphism)
     {
         var variants = StructuralVariantsOf(polymorphism);
@@ -61,7 +53,7 @@ internal sealed class JsonStructuralVariants(TypeGuardBuilder guards)
             .Select(entry => new StructuralVariant(
                 entry.Index,
                 entry.Registration,
-                _guards.GuardedMembersOf((INamedTypeSymbol)entry.Registration.Type)
+                _guards.GuardedMembersOf(entry.Registration.NamedType)
             ))
             .ToList();
 
@@ -108,7 +100,7 @@ internal sealed class JsonStructuralVariants(TypeGuardBuilder guards)
                 JsonPolymorphismMessages.VariantCapturesBase(
                     Display(variant.Registration.Type),
                     owner,
-                    RequiredMembersOfEither(variant.Members, [])
+                    RequiredMembersOf(variant.Members)
                 ),
                 variant.Registration.Location
             ));
@@ -178,9 +170,11 @@ internal sealed class JsonStructuralVariants(TypeGuardBuilder guards)
     private static IReadOnlyList<string> RequiredMembersOfEither(
         IReadOnlyList<GuardedMember> first,
         IReadOnlyList<GuardedMember> second
-    ) =>
-        first
-            .Concat(second)
+    ) => RequiredMembersOf([.. first, .. second]);
+
+    /// <summary>The required members, as the messages list them (<c>name: string</c>).</summary>
+    private static IReadOnlyList<string> RequiredMembersOf(IReadOnlyList<GuardedMember> members) =>
+        members
             .Where(member => member.IsRequired)
             .Select(member => $"{member.Name}: {KindNameOf(member)}")
             .Distinct()

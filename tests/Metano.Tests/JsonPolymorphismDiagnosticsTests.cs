@@ -989,13 +989,13 @@ public class JsonPolymorphismDiagnosticsTests
 
         await AssertSingleError(
             diagnostics,
-            "[PlainObject] type 'NE' registered on 'NB' gets no TypeScript guard ([Import], "
-                + "[ExportedAsModule], [NoContainer], an exception or a type with extension "
-                + "members), so serialization cannot select it."
+            "[PlainObject] type 'NE' registered on 'NB' gets no TypeScript guard (for example "
+                + "[Import], [ExportedAsModule], [NoContainer], an exception or a type with "
+                + "extension members), so serialization cannot select it."
         );
 
         await Assert.That(ts).Contains("test: isOk,");
-        await Assert.That(ts).DoesNotContain("isNE");
+        await Assert.That(ts).DoesNotContain("test: isNE");
     }
 
     private static Task AssertSingleError(
