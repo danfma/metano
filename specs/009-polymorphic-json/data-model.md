@@ -108,6 +108,8 @@ export interface DerivedTypeSpec {
   readonly tag?: TypeDiscriminator;
   /** Lazy: base and derived getters reference each other. */
   readonly spec: () => TypeSpec;
+  /** S6: an abstract registration (FallBackToNearestAncestor only); reading its tag throws (DECIDED-12). */
+  readonly abstract?: boolean;
   /** [PlainObject] variants only: the synthesized guard used on write (FR-019). */
   readonly test?: (value: unknown) => boolean;
 }
@@ -237,7 +239,7 @@ stateDiagram-v2
     Known --> DerivedContract: tag of a derived entry
     Known --> BaseContract: tag of the base's self-registration
     Known --> AbstractEntry: tag of an abstract entry (DECIDED-12)
-    AbstractEntry --> [*]: S6 probe result (interim: NotSupportedException)
+    AbstractEntry --> [*]: NotSupportedException (abstract type, or its own missing tag when polymorphic)
     Abstract --> [*]: NotSupportedException (must specify a type discriminator)
     Unrecognized --> [*]: JsonException (Read unrecognized type discriminator id)
     BadTag --> [*]: JsonException (metadata properties must be JSON strings)

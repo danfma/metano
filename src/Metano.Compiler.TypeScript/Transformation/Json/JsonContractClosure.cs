@@ -16,13 +16,15 @@ internal sealed record JsonContractEntry(
 );
 
 /// <summary>
-/// The contract closure of a context: its entries in emission order, and for
-/// every entry some <c>ref</c> descriptor or <c>base</c> link points at, the
-/// first entry that points at it.
+/// The contract closure of a context: its entries in emission order; for
+/// every entry some <c>ref</c> descriptor, <c>base</c> link or derived link
+/// points at, the first entry that points at it; and the validated
+/// polymorphism of every polymorphic object contract.
 /// </summary>
 internal sealed record JsonContract(
     IReadOnlyList<JsonContractEntry> Entries,
-    IReadOnlyDictionary<ITypeSymbol, ITypeSymbol> Referrers
+    IReadOnlyDictionary<ITypeSymbol, ITypeSymbol> Referrers,
+    IReadOnlyDictionary<ITypeSymbol, JsonPolymorphism> Polymorphisms
 );
 
 /// <summary>
@@ -31,26 +33,32 @@ internal sealed record JsonContract(
 /// their serializable properties (walking the same nullable / array / map /
 /// hash-set shapes the descriptors emit), through their <c>base</c> link, or
 /// through the descriptor of a value root (its element, map value or nullable
-/// inner), in breadth-first discovery order. Like System.Text.Json, the
-/// context therefore carries a spec for every <c>ref</c> descriptor and
-/// <c>base</c> link it emits. Entries are deduplicated by type symbol, so
-/// cycles (<c>A → B → A</c>) terminate and each type is emitted once; name
-/// collisions between distinct types are resolved afterwards by
-/// <see cref="JsonTypeInfoNames"/>.
+/// inner), or through a <c>[JsonDerivedType]</c> of a polymorphic base
+/// (FR-003, attribute order), in breadth-first discovery order. Like
+/// System.Text.Json, the context therefore carries a spec for every
+/// <c>ref</c> descriptor, <c>base</c> link and derived link it emits.
+/// Entries are deduplicated by type symbol, so cycles (<c>A → B → A</c>)
+/// terminate and each type is emitted once; name collisions between distinct
+/// types are resolved afterwards by <see cref="JsonTypeInfoNames"/>.
 /// </summary>
 internal sealed class JsonContractClosure(
     JsonPropertyCollector properties,
-    JsonContractAdmission admission
+    JsonContractAdmission admission,
+    JsonPolymorphismValidator polymorphisms
 )
 {
     private readonly JsonPropertyCollector _properties = properties;
     private readonly JsonContractAdmission _admission = admission;
+    private readonly JsonPolymorphismValidator _polymorphisms = polymorphisms;
 
     public JsonContract Collect(IReadOnlyList<JsonContractRoot> roots)
     {
         var entries = new List<JsonContractEntry>();
         var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var referrers = new Dictionary<ITypeSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
+        var polymorphisms = new Dictionary<ITypeSymbol, JsonPolymorphism>(
+            SymbolEqualityComparer.Default
+        );
         var pending = new Queue<JsonContractEntry>();
 
         foreach (var root in roots)
@@ -63,9 +71,17 @@ internal sealed class JsonContractClosure(
 
             foreach (var target in RefTargetsOf(current).Where(_admission.HasObjectContract))
                 Link(current, target);
+
+            if (PolymorphismOf(current) is not { } polymorphism)
+                continue;
+
+            polymorphisms.Add(current.Type, polymorphism);
+
+            foreach (var derivedType in DerivedTypesOf(polymorphism))
+                Link(current, derivedType);
         }
 
-        return new JsonContract(entries, referrers);
+        return new JsonContract(entries, referrers, polymorphisms);
 
         void Link(JsonContractEntry referrer, ITypeSymbol target)
         {
@@ -91,6 +107,25 @@ internal sealed class JsonContractClosure(
         entry.Kind == JsonPropertyKind.Ref
             ? _properties.LinkedBaseOf((INamedTypeSymbol)entry.Type)
             : null;
+
+    /// <summary>
+    /// The validated polymorphism of an object contract, whose registered
+    /// types the closure adds (FR-003); <c>null</c> for a value root and a
+    /// non-polymorphic contract.
+    /// </summary>
+    private JsonPolymorphism? PolymorphismOf(JsonContractEntry entry) =>
+        entry.Kind == JsonPropertyKind.Ref
+            ? _polymorphisms.Validate((INamedTypeSymbol)entry.Type)
+            : null;
+
+    /// <summary>
+    /// The registered types a polymorphic base links to, leaving out a
+    /// self-registration (the base is already an entry).
+    /// </summary>
+    private static IEnumerable<ITypeSymbol> DerivedTypesOf(JsonPolymorphism polymorphism) =>
+        polymorphism
+            .Derived.Select(registration => registration.Type)
+            .Where(type => !SymbolEqualityComparer.Default.Equals(type, polymorphism.BaseType));
 
     /// <summary>
     /// The object types an entry's <c>ref</c> descriptors point at: for an

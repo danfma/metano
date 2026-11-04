@@ -12,20 +12,34 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// lazy field + getter pair per entry, over a <c>TypeSpec</c> for an object
 /// contract or a <c>ValueSpec</c> for a value root. Descriptors come from
 /// <see cref="JsonTypeDescriptorBuilder"/>; every <c>base</c> link names its
-/// target through <see cref="JsonTypeInfoNames"/>.
+/// target through <see cref="JsonTypeInfoNames"/>; a polymorphic base ends
+/// with its <c>polymorphism</c> member (<see cref="JsonPolymorphismSpecBuilder"/>).
 /// </summary>
-internal sealed class JsonSpecBuilder(
-    TypeScriptTransformContext context,
-    JsonTypeInfoNames names,
-    JsonPropertyCollector properties
-)
+internal sealed class JsonSpecBuilder
 {
     private static readonly TsTypeOrigin RuntimeJsonOrigin = new("metano-runtime", "system/json");
 
-    private readonly TypeScriptTransformContext _context = context;
-    private readonly JsonTypeInfoNames _names = names;
-    private readonly JsonPropertyCollector _properties = properties;
-    private readonly JsonTypeDescriptorBuilder _descriptors = new(context, names);
+    private readonly TypeScriptTransformContext _context;
+    private readonly JsonTypeInfoNames _names;
+    private readonly JsonPropertyCollector _properties;
+    private readonly IReadOnlyDictionary<ITypeSymbol, JsonPolymorphism> _polymorphisms;
+    private readonly JsonTypeDescriptorBuilder _descriptors;
+    private readonly JsonPolymorphismSpecBuilder _polymorphismSpecs;
+
+    public JsonSpecBuilder(
+        TypeScriptTransformContext context,
+        JsonTypeInfoNames names,
+        JsonPropertyCollector properties,
+        IReadOnlyDictionary<ITypeSymbol, JsonPolymorphism> polymorphisms
+    )
+    {
+        _context = context;
+        _names = names;
+        _properties = properties;
+        _polymorphisms = polymorphisms;
+        _descriptors = new JsonTypeDescriptorBuilder(context, names);
+        _polymorphismSpecs = new JsonPolymorphismSpecBuilder(_descriptors);
+    }
 
     /// <summary>
     /// The lazy field + getter pair of one context entry:
@@ -140,12 +154,14 @@ internal sealed class JsonSpecBuilder(
     /// Builds the TypeSpec object literal for a given type:
     /// <c>{ type: T, factory: (p) => new T(...), properties: [...] }</c>.
     /// The factory reads the properties in declaration order; the
-    /// <c>properties</c> list follows the wire order (FR-009).
+    /// <c>properties</c> list follows the wire order (FR-009). A polymorphic
+    /// base adds <c>polymorphism</c> as the last member (FR-004).
     /// </summary>
     private TsObjectLiteral BuildTypeSpecObject(INamedTypeSymbol targetType, string tsTypeName)
     {
         var properties = _properties.DeclarationOrderPropertiesOf(targetType);
         var isPlainObject = SymbolHelper.HasPlainObject(targetType);
+        var polymorphism = _polymorphisms.GetValueOrDefault(targetType);
 
         var factoryParameter = new TsParameter(
             "p",
@@ -157,7 +173,15 @@ internal sealed class JsonSpecBuilder(
             "factory",
             new TsArrowFunction(
                 [factoryParameter],
-                [BuildFactoryStatement(targetType, tsTypeName, isPlainObject, properties)]
+                [
+                    BuildFactoryStatement(
+                        targetType,
+                        tsTypeName,
+                        isPlainObject,
+                        isPolymorphic: polymorphism is not null,
+                        properties
+                    ),
+                ]
             )
         );
 
@@ -175,6 +199,7 @@ internal sealed class JsonSpecBuilder(
             factoryProperty,
             propertiesProperty,
             IgnoredPropertiesProperty(targetType),
+            polymorphism is null ? null : _polymorphismSpecs.Build(polymorphism),
         };
 
         return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());
@@ -223,9 +248,9 @@ internal sealed class JsonSpecBuilder(
     /// <list type="bullet">
     ///   <item><c>[PlainObject]</c> → <c>return { title: p.title as string, ... }</c>;</item>
     ///   <item>abstract class → <c>throw new Error(...)</c>: TypeScript rejects
-    ///     <c>new</c> on an abstract class, and choosing the concrete subtype
-    ///     needs polymorphic-JSON support (<c>[JsonPolymorphic]</c>), which is
-    ///     not modeled yet;</item>
+    ///     <c>new</c> on an abstract class. A polymorphic base never reaches it
+    ///     (its reads dispatch to a derived contract, FR-011); any other
+    ///     abstract class cannot be deserialized directly;</item>
     ///   <item>class → <c>return new TodoItem(p.title as string, ...)</c>, with
     ///     the arguments in the emitted constructor's positional order.</item>
     /// </list>
@@ -234,6 +259,7 @@ internal sealed class JsonSpecBuilder(
         INamedTypeSymbol targetType,
         string tsTypeName,
         bool isPlainObject,
+        bool isPolymorphic,
         IReadOnlyList<JsonSerializableProperty> properties
     )
     {
@@ -241,7 +267,7 @@ internal sealed class JsonSpecBuilder(
             return new TsReturnStatement(BuildPlainObjectLiteral(properties));
 
         if (targetType.IsAbstract)
-            return BuildAbstractFactoryThrow(tsTypeName);
+            return BuildAbstractFactoryThrow(AbstractFactoryMessage(tsTypeName, isPolymorphic));
 
         return new TsReturnStatement(
             new TsNewExpression(
@@ -333,16 +359,17 @@ internal sealed class JsonSpecBuilder(
         return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());
     }
 
-    private static TsThrowStatement BuildAbstractFactoryThrow(string tsTypeName) =>
-        new(
-            new TsNewExpression(
-                new TsIdentifier("Error"),
-                [
-                    new TsStringLiteral(
-                        $"Cannot deserialize abstract type '{tsTypeName}': "
-                            + "polymorphic JSON deserialization is not supported yet."
-                    ),
-                ]
-            )
-        );
+    private static TsThrowStatement BuildAbstractFactoryThrow(string message) =>
+        new(new TsNewExpression(new TsIdentifier("Error"), [new TsStringLiteral(message)]));
+
+    /// <summary>
+    /// The FR-011 text of a polymorphic base; a non-polymorphic abstract type
+    /// keeps the #238 text.
+    /// </summary>
+    private static string AbstractFactoryMessage(string tsTypeName, bool isPolymorphic) =>
+        isPolymorphic
+            ? $"Cannot deserialize abstract type '{tsTypeName}' directly; deserialize it "
+                + "through a polymorphic spec."
+            : $"Cannot deserialize abstract type '{tsTypeName}': polymorphic JSON "
+                + "deserialization is not supported yet.";
 }

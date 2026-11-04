@@ -37,7 +37,7 @@
   mirrored), not implementation choices. Generator units, file layout and runtime internals live in
   plan.md, data-model.md and contracts/.
 - Every STJ behavior the spec mirrors is backed by a measurement in research.md R1/R4; unmeasured
-  corners are either open (OPEN-18) or scheduled probes (DECIDED-12 in S6, DECIDED-15 in S8), not
+  corners are either open (OPEN-18) or scheduled probes (DECIDED-12, probed in S6; DECIDED-15 in S8), not
   assumptions. The decision round added measurements in research.md R8 (Web defaults, interface
   bases, null roots, `[JsonPropertyOrder]`). Known mismatches are
   listed under spec.md "Documented divergences" and marked in the shared conformance manifest.

@@ -59,10 +59,12 @@ exponent/negative-zero number text (not observable after `JSON.parse` / not repr
 spec.md "Documented divergences".
 
 **Gaps not measured**: interface-typed derived entries and interface diamonds under
-`FallBackToNearestAncestor` (OPEN-18, rejected in v1); reading the tag of an abstract derived entry
-under `FallBackToNearestAncestor` (DECIDED-12, probed in S6); the read-side depth limit message and
+`FallBackToNearestAncestor` (OPEN-18, rejected in v1); the read-side depth limit message and
 boundary (DECIDED-15, pinned in S8). Interface bases, Web defaults and null roots are measured in
-R8. Nested polymorphism is measured (rows above), which closed OPEN-9.
+R8. Nested polymorphism is measured (rows above), which closed OPEN-9. Reading the tag of an
+abstract derived entry under `FallBackToNearestAncestor` was probed in S6 (spec.md DECIDED-12):
+`NotSupportedException` "Deserialization of interface or abstract types is not supported. Type
+'AMid'.", or the entry's own missing-tag message when it is itself polymorphic.
 
 ## R2 — Where the generator stands on `main` (post #238 / #250)
 

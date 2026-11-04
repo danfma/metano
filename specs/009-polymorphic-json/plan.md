@@ -85,8 +85,10 @@ diagnostics, 1 sample, ~110 tests
 | `Json/JsonOptionsReader` | Reads `[JsonSourceGenerationOptions]`: the `JsonSerializerDefaults` ctor argument, `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`, `NumberHandling`, `AllowOutOfOrderMetadataProperties` (named options override the Web default); returns the naming policy and `JsonReadOptions`; reports `MS0037` for the FR-046 list. |
 | `Json/JsonReadOptionsEmitter` | Emits the `readOptions` getter override (only when non-default) and the `numberType` hint on numeric `primitive` descriptors when numbers are read from strings (FR-048). |
 | `Json/JsonStructuralVariants` | For `[PlainObject]` variants (FR-019): requests the synthesized guard from `TypeGuardBuilder`, computes required members and coarse kinds from the same field checks the guard emits, the "covers" relation and `testOrder`; reports `MS0032` for variants that cover each other or a cyclic order. |
+| `Json/JsonPolymorphism` | The model: `JsonPolymorphism`, `JsonDerivedType`, `JsonTypeTag` (string / int), `JsonUnknownDerivedTypeHandling` (S6). |
 | `Json/JsonPolymorphismReader` | `TryRead(INamedTypeSymbol) → JsonPolymorphism?`; own attributes only, matched by metadata name. |
-| `Json/JsonPolymorphismValidator` | `MS0032` / `MS0033` rules over the closure (needs final JSON names, so it runs after property collection): assignability (base allowed), abstract derived types, interface-typed entries (OPEN-18), constructed generic bases (FR-015). |
+| `Json/JsonPolymorphismValidator` | `MS0032` / `MS0033` rules over the closure (needs final JSON names, so it runs after property collection): assignability (base allowed), abstract derived types, interface-typed entries (OPEN-18), constructed generic bases (FR-015). Called by the closure per reached object contract; returns the descriptor's valid registrations (S6, DECIDED-22). |
+| `Json/JsonPolymorphismSpecBuilder` | Emits the `polymorphism` member of a base's spec (S6). |
 | `Json/JsonContractClosure` | Extracted `CollectContractClosure`; adds `[JsonDerivedType]` targets, the element types of value roots, closed generic object types (FR-033) and referenced Metano-package types (FR-047); records whether each entry is a link target; dedupes by `JsonTypeInfoNames`. |
 | `Json/JsonPropertyCollector` | Extracted `CollectSerializableProperties`; dedupes by final JSON name against the base chain (FR-009); reports `MS0037` for `[JsonInclude]` members and `byte[]`. |
 | `Json/JsonBrandedFactoryResolver` | Finds and validates `[JsonFactory]`; `MS0034` (incl. operators and `create` / `toString` names); returns the TS member name via `IrToTsNamingPolicy.ToFunctionName`, the function the branded companion declares it with (no parallel rule). |
@@ -181,7 +183,7 @@ specs/001-project-baseline-evolution/baseline/{attribute-catalog,diagnostic-cata
 | S3b | Null-root parity: `T \| null` overloads, `valueType` flags, migration note (FR-034 signatures, FR-037, FR-049). May be held to share one major with the C# unions spec | #270 | `feat!:` (`BREAKING CHANGE:` footer) | S3 |
 | S4 | Derived-first wire order (`collectWireProperties`, FR-009; generator reorders inlined property lists, DECIDED-19 f), `Array.from` iterables (FR-038), `JsonException` for existing errors (FR-045), depth limit (FR-016) | #268 #270 | `fix:` | — |
 | S5 | Runtime polymorphism (types, errors, dispatch) with bun tests | #268 | `feat:` | S4 |
-| S6 | Generator polymorphism for class hierarchies (reader, closure, descriptor, constructed generic bases, `MS0032`/`MS0033`) + golden; first probe DECIDED-12 | #268 | `feat:` | S1, S3, S5 |
+| S6 | Generator polymorphism for class hierarchies (reader, closure, descriptor, constructed generic bases, `MS0032`/`MS0033`) + golden; first probe DECIDED-12. **Implemented** (DECIDED-12 probed, DECIDED-22); adds `DerivedTypeSpec.abstract` to the runtime | #268 | `feat:` | S1, S3, S5 |
 | S6c | Interface bases (FR-018) and `[PlainObject]` variants with synthesized guards, `testOrder` and the indistinguishability rule (FR-019) + goldens; a base-guard member on `PolymorphismSpec` for a concrete, non-self-registered `[PlainObject]` base and the runtime FR-019 rule 5 check, replacing the S5 interim behavior (DECIDED-21 e) | #268 | `feat:` | S6 |
 | S6b | `MS0037` unmirrored options / `[JsonInclude]` / `byte[]` / `[JsonPropertyOrder]` (FR-046) | #268 #270 | `feat:` | S3 |
 | S7 | `[JsonFactory]` (FR-020–FR-026, `MS0034`) + golden | #269 | `feat:` | — |
@@ -316,7 +318,7 @@ no `base:` link and no generic root.
 | **`deserialize(…): T \| null` through `TypeSpec` (FR-034, FR-037) — BREAKING** | Every strict TS caller that assigns the result to `T`, including this repository's hand-written sample tests | Handle `null` or assert with `!`; see spec.md "Migration". Released as a major version (FR-049). |
 | JSON `null` at an object root returns `null` instead of throwing (FR-037) | Code that relied on the throw | Check for `null`. Struct contracts still throw. |
 | Synthesized guards for `[PlainObject]` variants (FR-019) | Files of `[PlainObject]` types reached by a polymorphic spec | They gain an exported `is<Name>` guard; no existing export changes. |
-| Runtime additions | Generated packages using polymorphism or value specs | Require the `metano-runtime` release that ships S3/S5. `PackageJsonWriter` writes no `metano-runtime` dependency (user-managed), so the minimum version is stated in `docs/serialization.md` and the changelog (DECIDED-17); the major version of FR-049 makes the upgrade explicit. |
+| Runtime additions | Generated packages using polymorphism or value specs | Require the `metano-runtime` release that ships S3/S5 (S6 for abstract registrations). Since #411 `PackageJsonWriter` declares `metano-runtime` as a `peerDependency` (`^<compiler version>`, a consumer's own declaration wins) of every generated package that imports it; the minimum version is also stated in `docs/serialization.md` and the changelog (DECIDED-17), and the major version of FR-049 makes the upgrade explicit. |
 | `[JsonFactory]` | Opt-in | None. |
 
 ## Risks
@@ -325,7 +327,7 @@ no `base:` link and no generic root.
   instances (fail-fast under the default handling; documented).
 - **Custom converters for `ref`** bypass dispatch (documented; unchanged rule).
 - **Unmeasured STJ corners** (interface diamonds, abstract-entry tag on read, read depth) — guarded
-  by `MS0032` or probed in a named slice (OPEN-18, DECIDED-12 in S6, DECIDED-15 in S8).
+  by `MS0032` or probed in a named slice (OPEN-18, DECIDED-12 probed in S6, DECIDED-15 in S8).
 - **Structural dispatch** depends on the guard checking at least the required members the
   generator's analysis assumes; `JsonStructuralVariants` derives both from the same field checks to
   keep them aligned (FR-019), and OPEN-19 tracks the difference from the unions overlap rule.

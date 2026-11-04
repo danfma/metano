@@ -135,9 +135,10 @@ When it sees a class that inherits from `JsonSerializerContext`:
    their constructed name (`Page<EpisodeSummary>` → `pageEpisodeSummary`, with
    `TypeSpec<Page<EpisodeSummary>>`). Interfaces are not discovered. Base
    types, including a base declared in a referenced library, are included
-   whenever the spec links to them through `base`.
-   `[JsonDerivedType]` targets are not walked yet; polymorphic JSON is tracked
-   in [#268](https://github.com/danfma/metano/issues/268).
+   whenever the spec links to them through `base`. Every type a reached
+   polymorphic base registers with `[JsonDerivedType]` is added too, in
+   attribute order, with its own base chain and property types, even when no
+   root names it (see [Polymorphism](#polymorphism)).
 
 4. **For each serializable type `T`**, walks its public properties and:
    - Excludes `[JsonIgnore]` and static properties
@@ -303,7 +304,8 @@ your own `JsonConverter`.
 | `[JsonConverter]` | ❌ | Not yet — use custom converters at runtime instead |
 | `[JsonRequired]` | ❌ | Not yet |
 | `[JsonExtensionData]` | ❌ | Not yet |
-| Polymorphic `[JsonDerivedType]` | ❌ | Not yet |
+| `[JsonDerivedType]` / `[JsonPolymorphic]` on a class or record | ✅ | Emits the base's `polymorphism` descriptor and a spec for every registered type ([details](#polymorphism)) |
+| `[JsonDerivedType]` on an interface or a `[PlainObject]` type | ❌ | Not yet: the context is generated as if the attribute were absent ([#268](https://github.com/danfma/metano/issues/268), slice S6c) |
 
 ## Custom converters
 
@@ -371,25 +373,92 @@ hidden members in `ignoredProperties` (TS names, e.g. `ignoredProperties:
 ["name"]`); the base spec keeps the property for its own instances. The
 factory of the derived type then receives no value for it.
 
-## Polymorphism (runtime)
+## Polymorphism
 
-The runtime dispatches `[JsonPolymorphic]` / `[JsonDerivedType]` hierarchies
-as System.Text.Json does. The transpiler does not emit the descriptor yet; that
-comes with the generator slice of
-[#268](https://github.com/danfma/metano/issues/268) (S6), so today only a
-hand-written spec carries it. A polymorphic base spec gets a data-only
-`polymorphism` member:
+A class or record that carries at least one `[JsonDerivedType]` (with or
+without `[JsonPolymorphic]`) is polymorphic, as in System.Text.Json. Only the
+type's **own** attributes count (both are `Inherited = false`).
+
+```csharp
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(ImageClip), "image")]
+[JsonDerivedType(typeof(SilenceClip), "silence")]
+public abstract record Clip(double Seconds);
+
+public sealed record ImageClip(string Path, double Seconds) : Clip(Seconds);
+public sealed record SilenceClip(double Seconds) : Clip(Seconds);
+public sealed record Timeline(string Name, Clip Main, IReadOnlyList<Clip> Clips);
+
+[JsonSerializable(typeof(Timeline))]
+public partial class StudioJsonContext : JsonSerializerContext;
+```
+
+The generated context adds a getter for every registered type (here
+`imageClip` and `silenceClip`, although no root names them) and ends the
+base's spec with a data-only `polymorphism` member:
 
 ```typescript
-polymorphism: {
-  discriminator: "kind",            // verbatim, never renamed by a naming policy
-  abstract: true,                   // abstract class or interface base
-  derived: [
-    { tag: "image", spec: () => this.imageClip },
-    { tag: "silence", spec: () => this.silenceClip },
-  ],
+get clip(): TypeSpec<Clip> {
+  return this._clip ??= this.createSpec({
+    type: Clip,
+    factory: (p: Record<string, unknown>) => {
+      throw new Error("Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.");
+    },
+    properties: [{ ts: "seconds", json: "Seconds", type: { kind: "primitive" } }],
+    polymorphism: {
+      discriminator: "kind",            // verbatim, never renamed by a naming policy
+      abstract: true,                   // the C# base is abstract
+      derived: [
+        { tag: "image", spec: () => this.imageClip },
+        { tag: "silence", spec: () => this.silenceClip },
+      ],
+    },
+  });
 }
 ```
+
+- **Tags.** A string tag prints as a string, an int tag as a number
+  (`[JsonDerivedType(typeof(IntA), 1)]` → `{ tag: 1, … }` and
+  `{"$type":1,"X":5}` on the wire); an untagged registration has no `tag`. A
+  base that registers itself links to its own getter
+  (`{ tag: "b", spec: () => this.sBase }`). The default discriminator is
+  `$type`.
+- **Options.** `unknownDerivedType: "fallBackToBaseType"` /
+  `"fallBackToNearestAncestor"` and `ignoreUnrecognizedTags: true` are emitted
+  only when the attribute sets them. Under `FallBackToNearestAncestor` an
+  abstract registered type is allowed and marked `abstract: true` on its entry:
+  it is a write target for its unregistered subtypes, and reading its tag
+  throws `NotSupportedException` `Deserialization of interface or abstract
+  types is not supported. Type 'AMid'.`, as System.Text.Json does (an abstract
+  registered type that is itself polymorphic reports its own missing tag
+  instead).
+- **Closed generic bases.** `[JsonDerivedType(typeof(GDer), "g")]` on
+  `GBase<T>` with `GDer : GBase<int>`: the attributes are read from
+  `GBase<T>`, and every construction the context reaches gets its own
+  polymorphic spec (`get gBaseInt32(): TypeSpec<GBase<number>>`), which
+  `GDer`'s `base` link names.
+- **Abstract factory.** The factory of an abstract polymorphic base stays a
+  throwing factory, which a polymorphic read never calls; its message tells to
+  read through the polymorphic spec. A non-polymorphic abstract type keeps
+  the message "polymorphic JSON deserialization is not supported yet".
+- **Diagnostics.** `MS0032` (error, at the attribute) rejects a registration
+  that is generic, not assignable to the base (to each construction the
+  context reaches, for a generic base), not transpiled in its declaring
+  assembly, abstract without `FallBackToNearestAncestor`, or a repeated type
+  or tag; the registration is left out of `derived`. A JSON property of the
+  hierarchy named like the discriminator (System.Text.Json throws) or
+  integer-like (JavaScript would write it before the tag) is also `MS0032`,
+  and the base then gets no `polymorphism`. `MS0033` (warning) flags an
+  untagged registration (it reads back as the base) and a registered type that
+  declares its own `[JsonDerivedType]`s (not re-dispatched through the outer
+  base); both behave exactly as in System.Text.Json.
+- **Not yet.** Interface bases and `[PlainObject]` bases or variants come with
+  slice S6c of [#268](https://github.com/danfma/metano/issues/268); until then
+  such hierarchies are generated as if the attributes were absent. The
+  context's `AllowOutOfOrderMetadataProperties` option is mirrored by slice
+  S2b.
+
+### Runtime dispatch
 
 - **Write.** A class instance is matched by its constructor: a registered type
   (the base too, when it registers itself) writes its tag as the first key,
@@ -422,8 +491,13 @@ polymorphism: {
   metadata. …`. These checks apply only to polymorphic specs. JS enumerates
   array-index keys (`"0"`) first, so an index key written before the tag goes
   unnoticed, where STJ rejects it.
+- **Abstract registrations.** An entry marked `abstract: true` is a
+  nearest-ancestor target on write; reading its tag throws the
+  `NotSupportedException` above (`$id`, `$ref` or `$values` right after the
+  tag throw the misplaced-metadata `JsonException` first).
 - Dispatch applies at the root and through `ref`, `array`, `hashSet`, `map` and
-  `nullable` descriptors. A custom converter registered for `kind: "ref"`
+  `nullable` descriptors, so `List<Clip>`, `Clip[]` roots and `Clip`-typed
+  properties all write and read the tag. A custom converter registered for `kind: "ref"`
   replaces it, as before.
 
 ## Errors and limits
