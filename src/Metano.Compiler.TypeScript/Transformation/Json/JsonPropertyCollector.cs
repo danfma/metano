@@ -87,6 +87,33 @@ internal sealed class JsonPropertyCollector(
     }
 
     /// <summary>
+    /// Every property the object literal of a <c>[PlainObject]</c> factory
+    /// sets: the declarations of each spec of the <c>base</c> chain, base-most
+    /// first, each TS member once at its most-derived declaration. A linked
+    /// spec reads its inherited properties through its base spec, and the
+    /// literal must still carry them (FR-019: a <c>[PlainObject]</c> variant
+    /// read through a polymorphic base keeps its inherited members).
+    /// </summary>
+    public List<JsonSerializableProperty> LiteralPropertiesOf(INamedTypeSymbol type)
+    {
+        var mostDerivedFirst = ContractPropertiesOf(type)
+            .DistinctBy(property => property.TsName)
+            .ToList();
+
+        var levels = new List<INamedTypeSymbol>();
+
+        for (var current = type; current is not null; current = LinkedBaseOf(current))
+            levels.Insert(0, current);
+
+        return levels
+            .SelectMany(DeclarationOrderPropertiesOf)
+            .Select(property => property.TsName)
+            .Distinct()
+            .Select(tsName => mostDerivedFirst.First(property => property.TsName == tsName))
+            .ToList();
+    }
+
+    /// <summary>
     /// The TS names of the base declarations a linked spec hides with a
     /// <c>[JsonIgnore]</c> override (DECIDED-19 e). System.Text.Json writes
     /// and reads none of them; the runtime's <c>collectWireProperties</c>
@@ -155,13 +182,18 @@ internal sealed class JsonPropertyCollector(
     /// The visible own declarations of an unlinked spec's type and of each
     /// inlined ancestor, one list per type, most-derived first. A
     /// declaration is hidden when a more-derived type of the chain overrides
-    /// it with <c>[JsonIgnore]</c>.
+    /// it with <c>[JsonIgnore]</c>. An interface (FR-018) has no base class;
+    /// its chain is the interface and every interface it extends, in
+    /// System.Text.Json's order (<see cref="JsonInterfaceHierarchy"/>).
     /// </summary>
     private IReadOnlyList<List<JsonSerializableProperty>> VisibleDeclarationsByType(
         INamedTypeSymbol type
     )
     {
-        var chain = InlinedAncestorsOf(type).Prepend(type).ToList();
+        var chain =
+            type.TypeKind == TypeKind.Interface
+                ? JsonInterfaceHierarchy.Of(type)
+                : InlinedAncestorsOf(type).Prepend(type).ToList();
 
         return chain
             .Select(

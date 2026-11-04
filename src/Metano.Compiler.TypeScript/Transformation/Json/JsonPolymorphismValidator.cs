@@ -11,13 +11,14 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// registration that does not fit <c>GBase&lt;string&gt;</c> is reported only
 /// when the context reaches <c>GBase&lt;string&gt;</c>, as System.Text.Json
 /// throws only then. A diagnostic every construction shares is reported once.
-/// Hierarchies with an interface base or a <c>[PlainObject]</c> base or
-/// variant are left to slice S6c (FR-018, FR-019): they get an <c>MS0033</c>
-/// warning and are emitted as non-polymorphic.
+/// Interface bases (FR-018) follow the class rules; <c>[PlainObject]</c>
+/// variants are ordered by <see cref="JsonStructuralVariants"/>, which also
+/// rejects variants that cannot be told apart on write (FR-019).
 /// </summary>
 internal sealed class JsonPolymorphismValidator(
     JsonPropertyCollector properties,
     JsonContractAdmission admission,
+    JsonStructuralVariants structuralVariants,
     Action<MetanoDiagnostic> report
 )
 {
@@ -30,16 +31,18 @@ internal sealed class JsonPolymorphismValidator(
 
     private readonly JsonContractAdmission _admission = admission;
     private readonly JsonDiscriminatorConflictDetector _conflicts = new(properties);
+    private readonly JsonStructuralVariants _structuralVariants = structuralVariants;
     private readonly Action<MetanoDiagnostic> _report = report;
     private readonly HashSet<MetanoDiagnostic> _reported = [];
 
     /// <summary>
     /// The polymorphism the context emits for <paramref name="baseType"/>:
-    /// its valid registrations in attribute order, or <c>null</c> when the
-    /// type is not polymorphic, belongs to a structural hierarchy (S6c), or
-    /// has an error no descriptor can carry (a sealed base, no registration,
-    /// a reserved discriminator, a property that conflicts with the tag).
-    /// Reports the diagnostics as a side effect.
+    /// its valid registrations in attribute order with their guard test
+    /// order, or <c>null</c> when the type is not polymorphic or has an error
+    /// no descriptor can carry (a sealed base, no registration, a reserved
+    /// discriminator, a property that conflicts with the tag,
+    /// <c>[PlainObject]</c> variants that cannot be told apart). Reports the
+    /// diagnostics as a side effect.
     /// </summary>
     public JsonPolymorphism? ValidatedPolymorphismOf(INamedTypeSymbol baseType)
     {
@@ -52,26 +55,17 @@ internal sealed class JsonPolymorphismValidator(
             return null;
         }
 
-        if (IsStructuralHierarchy(declared))
-        {
-            ReportLossy(
-                JsonPolymorphismMessages.StructuralHierarchyNotSupported(OwnerOf(declared)),
-                declared.Location
-            );
-
-            return null;
-        }
-
         var polymorphism = declared with { Registrations = ValidRegistrationsOf(declared) };
 
         ReportLossyRegistrations(polymorphism);
 
-        var conflicts = _conflicts.ConflictsOf(polymorphism);
+        var structural = _structuralVariants.DispatchOf(polymorphism);
+        var conflicts = _conflicts.ConflictsOf(polymorphism).Concat(structural.Conflicts).ToList();
 
         foreach (var conflict in conflicts)
             ReportInvalid(conflict.Message, conflict.Location);
 
-        return conflicts.Count == 0 ? polymorphism : null;
+        return conflicts.Count == 0 ? polymorphism with { TestOrder = structural.TestOrder } : null;
     }
 
     /// <summary>
@@ -97,18 +91,6 @@ internal sealed class JsonPolymorphismValidator(
 
         return null;
     }
-
-    /// <summary>
-    /// A hierarchy that needs interface-base (FR-018) or <c>[PlainObject]</c>
-    /// (FR-019) dispatch, which slice S6c adds. An interface registered on a
-    /// class base is not assignable to it and is reported as such.
-    /// </summary>
-    private static bool IsStructuralHierarchy(JsonPolymorphism polymorphism) =>
-        polymorphism.BaseType.TypeKind == TypeKind.Interface
-        || polymorphism
-            .Registrations.Select(registration => registration.Type)
-            .Prepend(polymorphism.BaseType)
-            .Any(SymbolHelper.HasPlainObject);
 
     /// <summary>
     /// The registrations the descriptor keeps. Each rejected one is reported;
@@ -150,6 +132,11 @@ internal sealed class JsonPolymorphismValidator(
 
         if (!IsAssignable(registration.Type, polymorphism.BaseType))
             return NotAssignableMessage(polymorphism, registered, owner);
+
+        // OPEN-18: a TS value carries no interface identity, and a guard for
+        // an interface entry would overlap its implementations'.
+        if (registration.Type.TypeKind == TypeKind.Interface)
+            return JsonPolymorphismMessages.InterfaceRegistration(registered, owner);
 
         if (!_admission.HasObjectContract(registration.Type))
             return JsonPolymorphismMessages.NotTranspiled(registered, owner);
@@ -216,11 +203,15 @@ internal sealed class JsonPolymorphismValidator(
     }
 
     /// <summary>
-    /// The type itself or one of its base classes is
-    /// <paramref name="baseType"/> (the base registering itself is valid).
+    /// The type itself, one of its base classes or, for an interface base
+    /// (FR-018), one of its interfaces is <paramref name="baseType"/> (the
+    /// base registering itself is valid).
     /// </summary>
     private static bool IsAssignable(ITypeSymbol type, INamedTypeSymbol baseType)
     {
+        if (baseType.TypeKind == TypeKind.Interface && ImplementsInterface(type, baseType))
+            return true;
+
         for (ITypeSymbol? current = type; current is not null; current = current.BaseType)
         {
             if (SymbolEqualityComparer.Default.Equals(current, baseType))
@@ -229,6 +220,11 @@ internal sealed class JsonPolymorphismValidator(
 
         return false;
     }
+
+    private static bool ImplementsInterface(ITypeSymbol type, INamedTypeSymbol interfaceType) =>
+        type.AllInterfaces.Any(implemented =>
+            SymbolEqualityComparer.Default.Equals(implemented, interfaceType)
+        );
 
     /// <summary>
     /// <c>MS0033</c> for an untagged registration and for a derived type that

@@ -134,8 +134,9 @@ function matchConstructor(
 
 /**
  * The first `[PlainObject]` variant whose guard accepts `value`. With none,
- * a concrete base without a constructor (a `[PlainObject]` base) writes the
- * value as the base itself, with no tag.
+ * a concrete `[PlainObject]` base writes the value as itself, with no tag,
+ * when its own guard (`baseTest`) accepts it (FR-019 rule 5); otherwise the
+ * value is an unregistered runtime type.
  */
 function matchStructuralVariant(
   value: object,
@@ -149,9 +150,7 @@ function matchStructuralVariant(
     return variant;
   }
 
-  const isConcretePlainObjectBase = !polymorphism.abstract && spec.type === undefined;
-
-  return isConcretePlainObjectBase ? { spec } : undefined;
+  return polymorphism.baseTest?.(value) ? { spec } : undefined;
 }
 
 /**
