@@ -15,8 +15,6 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal static class JsonOptionsReader
 {
-    private const string OptionsAttribute = "JsonSourceGenerationOptionsAttribute";
-
     private const string NamingPolicyOption = "PropertyNamingPolicy";
 
     private const string CaseInsensitiveOption = "PropertyNameCaseInsensitive";
@@ -73,7 +71,10 @@ internal static class JsonOptionsReader
         contextType
             .GetAttributes()
             .FirstOrDefault(attribute =>
-                JsonSerializationAttributes.Is(attribute, OptionsAttribute)
+                JsonSerializationAttributes.Is(
+                    attribute,
+                    JsonSerializationAttributes.SourceGenerationOptions
+                )
             );
 
     /// <summary>

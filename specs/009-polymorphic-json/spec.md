@@ -1502,7 +1502,7 @@ the former `OPEN-N`.
 - **DECIDED-25 — Slice S6b decisions (#268, #270).** Taken while implementing FR-046, measured
   with a source-generated context on .NET 10 (SDK 10.0.401, runtime 10.0.12); the rows are quoted
   in `tests/Metano.Tests/Json/JsonMemberOptionsTests.cs`, `JsonUnmirroredOptionTests.cs` and the
-  runtime's `byte-array.test.ts` / `wire-order.test.ts`:
+  runtime's `byte-array-converter.test.ts` / `wire-order.test.ts`:
   - (a) **Mirror instead of report.** The maintainer's S6b brief asked for `[JsonInclude]`,
     `byte[]` and `[JsonPropertyOrder]` to be mirrored, where FR-046 (and DECIDED-3, DECIDED-16)
     reported them with `MS0037`. FR-046 is rewritten accordingly; `MS0037` keeps every option and

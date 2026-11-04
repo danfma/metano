@@ -7,10 +7,42 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// Recognizes the System.Text.Json serialization attributes by their fully
 /// qualified metadata name, so a same-named attribute declared in another
 /// namespace is ignored, and reads the arguments the generated context
-/// mirrors.
+/// mirrors. <c>[JsonIgnore]</c> is the exception: it is matched by its short
+/// name (<see cref="IgnoreConditionOf"/>), so an ignore attribute of another
+/// JSON library also hides the member.
 /// </summary>
 internal static class JsonSerializationAttributes
 {
+    public const string Constructor = "JsonConstructorAttribute";
+
+    public const string Converter = "JsonConverterAttribute";
+
+    public const string DerivedType = "JsonDerivedTypeAttribute";
+
+    public const string ExtensionData = "JsonExtensionDataAttribute";
+
+    public const string Include = "JsonIncludeAttribute";
+
+    public const string NumberHandling = "JsonNumberHandlingAttribute";
+
+    public const string ObjectCreationHandling = "JsonObjectCreationHandlingAttribute";
+
+    public const string Polymorphic = "JsonPolymorphicAttribute";
+
+    public const string PropertyName = "JsonPropertyNameAttribute";
+
+    public const string PropertyOrder = "JsonPropertyOrderAttribute";
+
+    public const string Required = "JsonRequiredAttribute";
+
+    public const string SourceGenerationOptions = "JsonSourceGenerationOptionsAttribute";
+
+    public const string UnmappedMemberHandling = "JsonUnmappedMemberHandlingAttribute";
+
+    private const string IgnoreShortName = "JsonIgnore";
+
+    private const string IgnoreAttribute = "JsonIgnoreAttribute";
+
     private const string SerializationNamespace = "System.Text.Json.Serialization";
 
     /// <summary>
@@ -36,16 +68,14 @@ internal static class JsonSerializationAttributes
     /// <summary>
     /// The <c>Condition</c> of the member's <c>[JsonIgnore]</c>
     /// (<c>Always</c> when the attribute names none), or <c>null</c> without
-    /// the attribute. The attribute is matched by its short name, as before
-    /// spec 009 S6b, so an ignore attribute of another JSON library still
-    /// hides the member.
+    /// the attribute, matched by its short name.
     /// </summary>
     public static JsonIgnoreCondition? IgnoreConditionOf(ISymbol member)
     {
         var attribute = member
             .GetAttributes()
             .FirstOrDefault(candidate =>
-                candidate.AttributeClass?.Name is "JsonIgnore" or "JsonIgnoreAttribute"
+                candidate.AttributeClass?.Name is IgnoreShortName or IgnoreAttribute
             );
 
         if (attribute is null)
@@ -70,10 +100,7 @@ internal static class JsonSerializationAttributes
     /// without one (System.Text.Json's default).
     /// </summary>
     public static int OrderOf(ISymbol member) =>
-        Find(member, "JsonPropertyOrderAttribute")
-            is { ConstructorArguments: [{ Value: int order }] }
-            ? order
-            : 0;
+        Find(member, PropertyOrder) is { ConstructorArguments: [{ Value: int order }] } ? order : 0;
 
     /// <summary>
     /// The enum value of the attribute's single constructor argument
