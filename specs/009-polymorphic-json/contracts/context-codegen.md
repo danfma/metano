@@ -143,6 +143,10 @@ get sq(): TypeSpec<Sq> { /* type: Sq, properties: side, area */ }
 
 - No `type:` member (the TS interface has no constructor), so `resolve(…)` never returns it.
 - `typeName` is the C# simple name, used in the STJ messages (`… abstract type 'IShape' …`).
+- The getter follows the type's resolved TS name: `shape` above assumes the `I` prefix is
+  stripped; without the strip option it is `iShape` (`TypeSpec<IShape>`).
+- The interface's properties are its own, then those of the interfaces it extends in the source
+  generator's topological order (DECIDED-23 f).
 
 ### 1b. `[PlainObject]` variants (FR-019)
 
@@ -194,6 +198,26 @@ get shape(): TypeSpec<Shape> {
 - Variant specs have no `type:`, and their factories return object literals, as `[PlainObject]`
   specs do today.
 - Two variants that cover each other produce `MS0032` and no `polymorphism` member.
+- A `[PlainObject]` factory literal sets the inherited members too (`point3`:
+  `({ x: p.x as number, y: p.y as number, z: p.z as number })`), since a TS interface has no base
+  constructor to fill them (DECIDED-23 i).
+- A nested variant references its guard through the companion namespace (`test: Shape.isCircle`);
+  a library variant imports it from the package (DECIDED-23 a).
+- A concrete `[PlainObject]` base that does not register itself ends the descriptor with its own
+  guard after `testOrder` (FR-019 rule 5, DECIDED-23 b):
+
+```ts
+polymorphism: {
+  discriminator: "$type",
+  typeName: "Animal",
+  derived: [{ tag: "dog", spec: () => this.dog, test: isDog }],
+  baseTest: isAnimal,
+},
+```
+
+- An entry's keys are `tag`, `spec`, `abstract`, `test`, in that order; the descriptor's are
+  `discriminator`, `abstract`, `typeName`, `derived`, `testOrder`, `baseTest`,
+  `unknownDerivedType`, `ignoreUnrecognizedTags`.
 
 ## 2. Non-object roots (#270)
 

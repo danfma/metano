@@ -21,7 +21,7 @@ other change is additive. Behavior also changes in these cases:
 | `TypeDiscriminator` | type | `string \| number` |
 | `UnknownDerivedTypeHandling` | type | `"failSerialization" \| "fallBackToBaseType" \| "fallBackToNearestAncestor"` |
 | `DerivedTypeSpec` | type | `{ tag?, spec: () => TypeSpec, test?, abstract? }` (`test` for `[PlainObject]` variants; `abstract` for an abstract registration, S6) |
-| `PolymorphismSpec` | type | discriminator + options + derived entries (+ `typeName`, `testOrder`) |
+| `PolymorphismSpec` | type | discriminator + options + derived entries (+ `typeName`, `testOrder`, `baseTest`) |
 | `JsonReadOptions` | type | `{ propertyNameCaseInsensitive?, numberHandling?: "allowReadingFromString", allowOutOfOrderMetadataProperties? }` |
 | `NumberTypeName` | type | CLR names of numeric primitives (`"System.Int32"`, …) |
 | `ValueSpec<T>` | type | non-object root: `{ descriptor, valueType?, readOptions? }` |
@@ -144,3 +144,11 @@ message when the entry's spec is polymorphic; without the out-of-order option, `
 non-polymorphic contract, as STJ does: the concrete base reads its own contract (`$`-prefixed keys
 included) and an abstract base throws "Deserialization of interface or abstract types is not
 supported. Type '<base>'."; writes still dispatch (DECIDED-22 k).
+
+## Delivery status (S6c)
+
+S6c adds `PolymorphismSpec.baseTest`, the base-guard member DECIDED-21 e anticipated, and
+replaces the interim rule: a plain object that matches no variant guard is written as the base
+(no tag) only when `baseTest` accepts it, and otherwise follows `unknownDerivedType` with the
+runtime type name `Object` (FR-019 rule 5, DECIDED-23 b). Generated contexts now emit `typeName`,
+`testOrder` and the `test` guards of `[PlainObject]` entries.

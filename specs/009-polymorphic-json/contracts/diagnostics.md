@@ -47,7 +47,6 @@ once.
 |---|---|
 | Untagged registration | `'NA' is registered on 'NBase' without a type discriminator; it serializes without a tag and deserializes as 'NBase' (as in System.Text.Json).` — on an abstract base: `… and cannot be deserialized through the abstract 'UAB' (as in System.Text.Json).` |
 | Derived type is itself polymorphic | `'NMid' declares its own [JsonDerivedType]s; as in System.Text.Json, they apply only through 'NMid' and are not re-dispatched through 'NBase'.` |
-| Interface or `[PlainObject]` hierarchy, until S6c (temporary, S6 review) | `Polymorphism for interface and [PlainObject] types is not supported yet; 'Shape' is emitted without a discriminator.` |
 
 ## `MS0034` `InvalidJsonFactory` — Error
 
@@ -75,7 +74,7 @@ When `MS0034` is raised the descriptor keeps `create: <TsType>.create`.
 | Open generic / type parameter | `typeof(List<>)` |
 | Error type (unresolvable) | `typeof(Missing)` |
 | `object` / `dynamic` | `typeof(object)` |
-| Non-collection interface | `typeof(IShape)` |
+| Non-collection interface without `[JsonDerivedType]` (a polymorphic interface is a root, FR-018) | `typeof(IShape)` |
 | Object-kind root that is not a transpilable class/struct | `typeof(KeyValuePair<string, int>)`, `typeof((int, string))`, a `[NoTranspile]` type, a type from a non-Metano assembly |
 | Array of rank > 1 | `typeof(int[,])` |
 | Dictionary with a non-`string` key anywhere in a value root (until S4 fixes key conversion, #270) | `typeof(Dictionary<int, Leaf>)`, `typeof(List<Dictionary<Guid, Leaf>>)` |

@@ -124,6 +124,8 @@ export interface PolymorphismSpec {
   readonly derived: readonly DerivedTypeSpec[];
   /** Indices into `derived` in guard test order; only when it differs from attribute order. */
   readonly testOrder?: readonly number[];
+  /** S6c: the guard of a concrete, non-self-registered [PlainObject] base (FR-019 rule 5). */
+  readonly baseTest?: (value: unknown) => boolean;
   /** Default "failSerialization". */
   readonly unknownDerivedType?: UnknownDerivedTypeHandling;
   readonly ignoreUnrecognizedTags?: boolean;
@@ -206,7 +208,7 @@ stateDiagram-v2
     Polymorphic --> Contract: class instance, ctor is base, not registered (no tag)
     Polymorphic --> Unknown: class instance, ctor neither registered nor base
     Structural --> Tagged: first guard in test order that accepts the value
-    Structural --> Contract: no variant guard accepts, concrete PlainObject base guard accepts (no tag)
+    Structural --> Contract: no variant guard accepts, baseTest accepts (no tag)
     Structural --> Unknown: no guard accepts (runtime type name Object)
     Unknown --> Fail: failSerialization
     Unknown --> Contract: fallBackToBaseType (base, no tag)
