@@ -1,14 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!--
-            Multi-targeted across the currently supported .NET releases so consumers on
-            each version can reference Metano without forcing a runtime upgrade. The
-            previous netstandard2.0 + net6.0 matrix was dropped: net6.0/.NET 7 are out
-            of support, and netstandard2.0 was only there to keep the IsExternalInit
-            polyfill story simple — irrelevant now that every supported target ships
-            init-only setters and the modern BCL surface (DateOnly, MinBy, MaxBy, …).
+            Targets the supported .NET releases only. .NET 8 and .NET 9 reached end of
+            support in November 2026, so they were dropped; a net10.0 library also loads
+            in .NET 11 applications. net11.0 is added once the .NET 11 SDK is GA and CI
+            builds with it.
         -->
-    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
     <LangVersion>preview</LangVersion>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
