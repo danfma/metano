@@ -19,9 +19,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// }
 /// </code>
 /// The overload signatures mirror every constructor's parameter list in the
-/// order most-specific-first. Each branch opens with the matching
-/// <c>super(...)</c> call (when the IR has base arguments), then inlines the
-/// constructor body via <see cref="IrToTsStatementBridge"/>.
+/// order of <see cref="OverloadDispatchOrder"/>, each branch matching the
+/// arguments as <see cref="OverloadArgumentShape"/> describes. Each branch
+/// opens with the matching <c>super(...)</c> call (when the IR has base
+/// arguments), then inlines the constructor body via
+/// <see cref="IrToTsStatementBridge"/>.
 /// </summary>
 public static class IrToTsConstructorDispatcherBridge
 {
@@ -30,7 +32,6 @@ public static class IrToTsConstructorDispatcherBridge
     /// carries a single constructor (no dispatcher needed).
     /// </summary>
     /// <param name="primary">The primary constructor carrying the overloads.</param>
-    /// <param name="bclRegistry">The declarative BCL mappings.</param>
     /// <param name="baseCall">What every branch's base call depends on.</param>
     internal static TsConstructor? Build(
         IrConstructorDeclaration primary,
@@ -41,25 +42,22 @@ public static class IrToTsConstructorDispatcherBridge
         if (primary.Overloads is not { Count: > 0 })
             return null;
 
-        var all = new List<IrConstructorDeclaration> { primary };
-        all.AddRange(primary.Overloads);
-
-        // Most-specific first so narrower arities guard broader ones — matches
-        // the legacy dispatcher ordering.
-        var sorted = all.OrderByDescending(c => c.Parameters.Count).ToList();
+        var sorted = OverloadDispatchOrder.Sort([primary, .. primary.Overloads], ParametersOf);
 
         // Overload signatures are declaration-only — they do not introduce
         // parameter properties. Set Accessibility=None so the printer emits
         // a plain `n: number` instead of the (invalid-on-overload-sig)
         // `public n: number` form. Same applies to the rest-args impl
-        // parameter further down. (#25.2)
+        // parameter further down. (#25.2) A default cannot appear there
+        // either, so a parameter with one is optional (`n?: number`).
         var overloads = sorted
             .Select(c => new TsConstructorOverload(
                 c.Parameters.Select(p => new TsConstructorParam(
                         IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
                         IrToTsTypeMapper.MapParameterType(p.Parameter),
                         Accessibility: TsAccessibility.None,
-                        Rest: p.Parameter.IsParams
+                        Rest: p.Parameter.IsParams,
+                        Optional: OverloadArgumentShape.IsOptional(p.Parameter)
                     ))
                     .ToList()
             ))
@@ -94,26 +92,16 @@ public static class IrToTsConstructorDispatcherBridge
         );
     }
 
+    private static IReadOnlyList<IrParameter> ParametersOf(IrConstructorDeclaration ctor) =>
+        ctor.Parameters.Select(p => p.Parameter).ToList();
+
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
         DispatcherBaseCall baseCall,
         IrToTsBridgeContext context
     )
     {
-        TsExpression condition = new TsBinaryExpression(
-            new TsPropertyAccess(new TsIdentifier("args"), "length"),
-            "===",
-            new TsLiteral(ctor.Parameters.Count.ToString())
-        );
-        for (var i = 0; i < ctor.Parameters.Count; i++)
-        {
-            condition = new TsBinaryExpression(
-                condition,
-                "&&",
-                IrTypeCheckBuilder.GenerateForParam(ctor.Parameters[i].Parameter.Type, i)
-            );
-        }
-
+        var arguments = new OverloadArgumentShape(ParametersOf(ctor));
         var branch = new List<TsStatement>();
 
         // Bring the original parameter names back into scope as
@@ -125,13 +113,14 @@ public static class IrToTsConstructorDispatcherBridge
         // semantically.
         for (var i = 0; i < ctor.Parameters.Count; i++)
         {
-            var param = ctor.Parameters[i].Parameter;
+            var param = ctor.Parameters[i];
+
             branch.Add(
                 new TsVariableDeclaration(
-                    IrToTsNamingPolicy.ToParameterName(param.Name),
+                    IrToTsNamingPolicy.ToParameterName(param.Parameter.Name),
                     new TsCastExpression(
-                        new TsElementAccess(new TsIdentifier("args"), new TsLiteral(i.ToString())),
-                        IrToTsTypeMapper.Map(param.Type)
+                        BindArgument(arguments, param, i, context),
+                        IrToTsTypeMapper.Map(param.Parameter.Type)
                     )
                 )
             );
@@ -141,7 +130,29 @@ public static class IrToTsConstructorDispatcherBridge
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
-        return new TsIfStatement(condition, branch);
+        return new TsIfStatement(arguments.Guard(), branch);
+    }
+
+    /// <summary>
+    /// The value bound to the parameter at <paramref name="index"/>: its
+    /// argument (the trailing ones for <c>params</c>), or the C# default when
+    /// the call omitted it (<c>args[i] === undefined ? default : args[i]</c>).
+    /// </summary>
+    private static TsExpression BindArgument(
+        OverloadArgumentShape arguments,
+        IrConstructorParameter parameter,
+        int index,
+        IrToTsBridgeContext context
+    )
+    {
+        var argument = arguments.ValueOf(index);
+
+        if (IrToTsClassBridge.ResolveCtorParamDefault(parameter, context) is not { } defaultValue)
+            return argument;
+
+        var omitted = new TsBinaryExpression(argument, "===", new TsIdentifier("undefined"));
+
+        return new TsConditionalExpression(omitted, defaultValue, argument);
     }
 
     /// <summary>

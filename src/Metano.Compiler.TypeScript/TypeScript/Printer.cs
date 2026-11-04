@@ -695,6 +695,8 @@ public sealed class Printer(string indent = "  ")
         if (p.Rest)
             _sb.Write("...");
         _sb.Write(p.Name);
+        if (p.Optional && p.DefaultValue is null)
+            _sb.Write("?");
         _sb.Write(": ");
         PrintType(p.Type);
         if (p.DefaultValue is not null)

@@ -138,7 +138,7 @@ internal static partial class IrToTsClassBridge
     /// literal form matches the legacy convention and avoids the property
     /// access at the call site.
     /// </summary>
-    private static TsExpression? ResolveCtorParamDefault(
+    internal static TsExpression? ResolveCtorParamDefault(
         IrConstructorParameter p,
         IrToTsBridgeContext context
     )

@@ -4,8 +4,8 @@ using Metano.Compiler.TypeScript.AST;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Produces the runtime <see cref="TsExpression"/> that narrows <c>args[i]</c>
-/// to a specific <see cref="IrTypeRef"/> in the overload dispatcher body.
+/// Produces the runtime <see cref="TsExpression"/> that narrows a value to a
+/// specific <see cref="IrTypeRef"/> in the overload dispatcher body.
 /// <para>
 /// Emits <c>metano-runtime</c> type-check helpers (<c>isInt32</c>,
 /// <c>isFloat64</c>, <c>isBool</c>, …) so numeric overloads like
@@ -17,10 +17,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal static class IrTypeCheckBuilder
 {
-    public static TsExpression GenerateForParam(IrTypeRef parameterType, int index) =>
-        Generate(parameterType, ArgAccess(index));
-
-    private static TsExpression Generate(IrTypeRef type, TsExpression value) =>
+    /// <summary>The check that <paramref name="value"/> is a <paramref name="type"/>.</summary>
+    public static TsExpression Generate(IrTypeRef type, TsExpression value) =>
         type switch
         {
             // Nullable → matches either null or the inner check.
@@ -56,6 +54,18 @@ internal static class IrTypeCheckBuilder
             IrNamedTypeRef named => NamedTypeCheck(named, value),
             _ => TypeofObject(value),
         };
+
+    /// <summary>
+    /// The conjunction of the present <paramref name="checks"/>, or
+    /// <c>null</c> when none is.
+    /// </summary>
+    internal static TsExpression? AllOf(IReadOnlyList<TsExpression?> checks) =>
+        checks
+            .OfType<TsExpression>()
+            .Aggregate(
+                (TsExpression?)null,
+                (all, check) => all is null ? check : new TsBinaryExpression(all, "&&", check)
+            );
 
     private static TsExpression NamedTypeCheck(IrNamedTypeRef named, TsExpression value) =>
         named.Semantics?.Kind switch
@@ -190,6 +200,4 @@ internal static class IrTypeCheckBuilder
         new TsCallExpression(new TsIdentifier(helper), [value]);
 
     private static TsExpression TypeofObject(TsExpression value) => TypeofTest(value, "object");
-
-    private static TsExpression ArgAccess(int index) => new TsIdentifier($"args[{index}]");
 }

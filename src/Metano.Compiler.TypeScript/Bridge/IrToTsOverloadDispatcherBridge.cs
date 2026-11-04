@@ -16,6 +16,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   branches on argument count + runtime type checks and delegates to the
 ///   matching fast path with cast arguments.</item>
 /// </list>
+/// The branches follow <see cref="OverloadDispatchOrder"/> and match the
+/// arguments as <see cref="OverloadArgumentShape"/> describes. An omitted
+/// optional argument reaches its fast path as <c>undefined</c>, where the
+/// parameter's own default applies; the overload signatures mark it
+/// optional (<c>a?: number</c>), since they cannot carry the default.
 /// </summary>
 public static class IrToTsOverloadDispatcherBridge
 {
@@ -33,9 +38,6 @@ public static class IrToTsOverloadDispatcherBridge
     /// receiver (<c>ClassName.fastPath(…)</c>). For instance overloads the
     /// dispatcher uses <c>this</c>, so the argument only matters when
     /// <paramref name="primary"/> is static.
-    /// </param>
-    /// <param name="bclRegistry">
-    /// Optional BCL mapping registry threaded through to the body bridge.
     /// </param>
     internal static IReadOnlyList<TsClassMember> BuildMethod(
         IrMethodDeclaration primary,
@@ -171,9 +173,7 @@ public static class IrToTsOverloadDispatcherBridge
         if (overloads.Count < 2)
             return null;
 
-        // Sort by descending parameter count so the most specific overload is
-        // tried first in the dispatcher body (matches legacy behavior).
-        var sorted = overloads.OrderByDescending(m => m.Parameters.Count).ToList();
+        var sorted = OverloadDispatchOrder.Sort(overloads, m => m.Parameters);
         var isAsync = sorted.Any(m => m.Semantics.IsAsync);
 
         return new OverloadGroupPlan(
@@ -220,7 +220,7 @@ public static class IrToTsOverloadDispatcherBridge
 
     private static TsMethodOverload BuildOverloadSignature(IrMethodDeclaration method) =>
         new(
-            MapParameters(method),
+            SignatureParameters(method),
             IrToTsTypeMapper.Map(method.ReturnType),
             MapTypeParameters(method.TypeParameters)
         );
@@ -253,7 +253,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         return new TsMethodMember(
             fastPathName,
-            MapParameters(method),
+            FastPathParameters(method, context),
             IrToTsTypeMapper.Map(method.ReturnType),
             IrToTsStatementBridge.MapBody(method.Body, context),
             Static: isStatic,
@@ -276,21 +276,21 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         string fastPathName,
         DeclarativeMappingRegistry? bclRegistry
-    ) =>
-        new(
+    )
+    {
+        var context = IrToTsBridgeContext.For(bclRegistry);
+
+        return new(
             fastPathName,
-            MapParameters(method),
+            FastPathParameters(method, context),
             IrToTsTypeMapper.Map(method.ReturnType),
-            IrToTsBodyHelpers.LowerOrNotImplemented(
-                method.Body,
-                method.Name,
-                IrToTsBridgeContext.For(bclRegistry)
-            ),
+            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context),
             // Namespace-local: the exported dispatcher is the public entry point.
             Exported: false,
             Async: method.Semantics.IsAsync,
             TypeParameters: MapTypeParameters(method.TypeParameters)
         );
+    }
 
     /// <summary>Maps a method's parameters to TS parameters (local-binding names, rest for <c>params</c>).</summary>
     internal static List<TsParameter> MapParameters(IrMethodDeclaration method) =>
@@ -300,6 +300,42 @@ public static class IrToTsOverloadDispatcherBridge
                 IrToTsTypeMapper.MapParameterType(p),
                 Rest: p.IsParams
             ))
+            .ToList();
+
+    /// <summary>
+    /// The parameters of an overload signature, where TypeScript forbids an
+    /// initializer: a parameter a call may omit is optional instead.
+    /// </summary>
+    private static List<TsParameter> SignatureParameters(IrMethodDeclaration method) =>
+        MapParameters(method)
+            .Select(
+                (parameter, index) =>
+                    parameter with
+                    {
+                        Optional = OverloadArgumentShape.IsOptional(method.Parameters[index]),
+                    }
+            )
+            .ToList();
+
+    /// <summary>
+    /// The parameters of a fast path, carrying the C# defaults the dispatcher
+    /// leaves to it when a call omits an argument.
+    /// </summary>
+    private static List<TsParameter> FastPathParameters(
+        IrMethodDeclaration method,
+        IrToTsBridgeContext context
+    ) =>
+        MapParameters(method)
+            .Select(
+                (parameter, index) =>
+                    parameter with
+                    {
+                        Optional = method.Parameters[index].IsOptional,
+                        DefaultValue = method.Parameters[index].DefaultValue is { } defaultValue
+                            ? IrToTsExpressionBridge.Map(defaultValue, context)
+                            : null,
+                    }
+            )
             .ToList();
 
     private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
@@ -316,37 +352,11 @@ public static class IrToTsOverloadDispatcherBridge
         for (var i = 0; i < sorted.Count; i++)
         {
             var method = sorted[i];
-            var fastPathName = fastPathNames[i];
-            var paramCount = method.Parameters.Count;
-
-            TsExpression condition = new TsBinaryExpression(
-                new TsPropertyAccess(new TsIdentifier("args"), "length"),
-                "===",
-                new TsLiteral(paramCount.ToString())
-            );
-            for (var j = 0; j < paramCount; j++)
-            {
-                condition = new TsBinaryExpression(
-                    condition,
-                    "&&",
-                    IrTypeCheckBuilder.GenerateForParam(method.Parameters[j].Type, j)
-                );
-            }
-
-            var callArgs = new List<TsExpression>();
-            for (var j = 0; j < paramCount; j++)
-            {
-                callArgs.Add(
-                    new TsCastExpression(
-                        new TsIdentifier($"args[{j}]"),
-                        DispatchArgumentType(method, method.Parameters[j].Type)
-                    )
-                );
-            }
+            var arguments = new OverloadArgumentShape(method.Parameters);
 
             var delegateCall = new TsCallExpression(
-                FastPathCallee(receiver, fastPathName),
-                callArgs
+                FastPathCallee(receiver, fastPathNames[i]),
+                DelegatedArguments(method, arguments)
             );
 
             var branchStatements = new List<TsStatement>();
@@ -359,7 +369,7 @@ public static class IrToTsOverloadDispatcherBridge
             {
                 branchStatements.Add(new TsReturnStatement(delegateCall));
             }
-            body.Add(new TsIfStatement(condition, branchStatements));
+            body.Add(new TsIfStatement(arguments.Guard(), branchStatements));
         }
 
         body.Add(
@@ -380,12 +390,37 @@ public static class IrToTsOverloadDispatcherBridge
     }
 
     /// <summary>
+    /// The fast path's arguments: each <c>args[i]</c> cast to its parameter
+    /// type, and the trailing arguments of a <c>params</c> parameter spread
+    /// back into its rest parameter (<c>...(args.slice(i) as T[])</c>).
+    /// </summary>
+    private static List<TsExpression> DelegatedArguments(
+        IrMethodDeclaration method,
+        OverloadArgumentShape arguments
+    ) =>
+        method
+            .Parameters.Select(
+                (parameter, index) =>
+                {
+                    var value = new TsCastExpression(
+                        arguments.ValueOf(index),
+                        DispatchArgumentType(method, parameter)
+                    );
+
+                    return parameter.IsParams ? new TsSpreadExpression(value) : (TsExpression)value;
+                }
+            )
+            .ToList();
+
+    /// <summary>
     /// The cast applied to <c>args[i]</c> before delegating. The dispatcher
     /// body can't name a generic overload's method type parameters, so those
-    /// arguments are cast to <c>any</c> and the fast path infers its own.
+    /// arguments are cast to <c>any</c> and the fast path infers its own. A
+    /// <c>params</c> parameter takes its rest-parameter type, never
+    /// <c>null</c>, since its arguments are spread.
     /// </summary>
-    private static TsType DispatchArgumentType(IrMethodDeclaration method, IrTypeRef type) =>
-        IsGeneric(method) ? new TsAnyType() : IrToTsTypeMapper.Map(type);
+    private static TsType DispatchArgumentType(IrMethodDeclaration method, IrParameter parameter) =>
+        IsGeneric(method) ? new TsAnyType() : IrToTsTypeMapper.MapParameterType(parameter);
 
     /// <summary>
     /// A null receiver means the fast path is a namespace-local function
