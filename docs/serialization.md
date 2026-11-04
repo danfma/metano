@@ -370,10 +370,12 @@ public class OrdDer : OrdBase
 On read, the factory passes the constructor's parameters. Members no parameter
 binds are set as System.Text.Json sets them: an `init` or `required` member
 always, through `Object.assign(new T(…), { … })` (a missing nullable one reads
-`null`), and a member with a `set` accessor or a writable field only when the
-payload carries its key (`assignIfPresent: true` on its property spec; the
-runtime assigns it after construction, in wire order where STJ follows the
-payload's order), so a missing key keeps the C# initializer:
+`null`; a missing non-nullable one throws, where STJ sets `0` / the default),
+and a member with a `set` accessor or a writable field that the contract's own
+constructor does not bind (inherited ones included) only when the payload
+carries its key (the spec's `assignIfPresent: [...]` list; the runtime assigns
+it after construction, in wire order where STJ follows the payload's order),
+so a missing key keeps the constructed value:
 
 ```csharp
 public class Init

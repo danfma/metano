@@ -821,12 +821,15 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      FR-009 order (measured `{"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}`).
   5. **Reads assign unbound members** as System.Text.Json does (measured). An `init` or
      `required` member no constructor parameter binds is always set, through the factory's
-     `Object.assign(new T(…), { … })` (a missing nullable one reads `null`, as in STJ). A member
-     with a `set` accessor (public, or reachable under `[JsonInclude]`) or a writable field is
-     set only when the payload carries its key: its property spec carries
-     `assignIfPresent: true`, the factory does not read it and the runtime assigns it after
-     construction, so a missing key keeps the C# initializer. A get-only property is still
-     written and required on read (FR-045).
+     `Object.assign(new T(…), { … })` (a missing nullable one reads `null`, as in STJ; a missing
+     non-nullable one is `0` / the default in STJ but throws in the runtime, the existing FR-045
+     behavior). A member with a `set` accessor (public, or reachable under `[JsonInclude]`) or a
+     writable field that the contract's own constructor does not bind, inherited ones
+     included, is set only when the payload carries its key: the contract's spec lists it in
+     `TypeSpec.assignIfPresent`, the factory does not read it and the runtime assigns it after
+     construction, so a missing key keeps the constructed value. The list is per contract,
+     not per declaring spec (DECIDED-25 l). A get-only property is still written and required
+     on read (FR-045).
   6. **Member and type attributes.** `MS0037` at the attribute for `[JsonExtensionData]` (the
      member is left out), `[JsonConverter]` on a serialized member or on any type the context
      reaches except a `[Branded]` / `[InlineWrapper]` type, `[JsonNumberHandling]` on a
@@ -1599,7 +1602,7 @@ the former `OPEN-N`.
     (`record R(int A) { string? Note { get; init; } = "x"; }` reads `{"A":1}` as
     `Note = null`; `class CI { string? Note { get; init; } = "x"; int N { get; init; } = 5; }`
     reads `{}` as `{"Note":null,"N":0}`; a `set` member next to them keeps its initializer).
-    Hence `PropertySpec.assignIfPresent`: the reader leaves a missing flagged key out, the
+    Hence `assignIfPresent` (moved to `TypeSpec` by (l)): the reader leaves a missing listed key out, the
     factory never reads it, and the runtime assigns the present ones after construction, in
     wire order (STJ: payload order, visible only through setter side effects; documented).
     A `required` `set` member stays in the factory, so a missing one is still rejected (or,
@@ -1625,6 +1628,19 @@ the former `OPEN-N`.
     parameter makes STJ throw `InvalidOperationException`; the factory passes `null` and the
     member is reported. compiler-man's probe, regenerated with this compiler and run under
     Node, agrees with STJ on every row except these reported or documented ones.
+
+  - (l) **Second review round.** (k) first flagged `assignIfPresent` on the `PropertySpec`
+    of the declaring spec, against that spec's constructor, so a contract linked by `base:`
+    inherited the base's decision: `class BX { BX(int x) { X = x; } int X { get; set; } = 11; }`
+    and `class DX : BX { DX() : base(0) {} int Y { get; set; } = 22; }` read DX
+    `{"X":5,"Y":6}` with `X = 0` and threw "Missing required property" for `{}`, where STJ
+    reads `{"Y":6,"X":5}` and `{"Y":22,"X":0}` (measured), and a base `set` member that a
+    derived constructor binds was assigned twice. The list is now `TypeSpec.assignIfPresent:
+    readonly string[]`, computed per contract from its own constructor over every member of
+    its chain (`["x", "y"]` for DX, none for BX), emitted after `ignoredProperties` only when the
+    factory constructs an instance and the list is not empty; the runtime resolves it per plan,
+    so a base spec read on its own keeps its own list. A missing non-nullable `init` member is
+    `0` / the default in STJ and still throws in the runtime (FR-045).
 
 ## Open questions
 

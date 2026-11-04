@@ -446,10 +446,15 @@ interface SpecPlan {
   readonly readContract: (raw: Record<string, unknown>, metadataKey?: string) => unknown;
 }
 
-/** One property of a plan, with its resolved converter. */
+/**
+ * One property of a plan, with its resolved converter, and whether the
+ * contract sets it after construction only when the payload carries it
+ * (`TypeSpec.assignIfPresent`).
+ */
 interface PropertyPlan {
   readonly property: PropertySpec;
   readonly converter: ValueConverter;
+  readonly assignIfPresent: boolean;
 }
 
 /** The plans compiled under one set of custom converters, each built once. */
@@ -501,9 +506,12 @@ function compileSpecPlan(
 ): SpecPlan {
   const properties = collectWireProperties(spec);
 
+  const assignedIfPresent = new Set(spec.assignIfPresent);
+
   const propertyPlans = properties.map<PropertyPlan>((property) => ({
     property,
     converter: resolveConverter(property.type, customConverters, spec.readOptions),
+    assignIfPresent: assignedIfPresent.has(property.ts),
   }));
 
   const writeContract = contractWriterOf(propertyPlans);
@@ -674,15 +682,15 @@ function contractReaderOf(
 }
 
 /**
- * Sets every `assignIfPresent` member the payload carried on the constructed
- * value, in wire order (System.Text.Json follows the payload's order; the
- * order only shows through setter side effects).
+ * Sets every member of the contract's `assignIfPresent` list the payload
+ * carried on the constructed value, in wire order (System.Text.Json follows
+ * the payload's order; the order only shows through setter side effects).
  */
 function presentMemberAssignerOf(
   propertyPlans: readonly PropertyPlan[],
 ): (value: unknown, deserialized: Record<string, unknown>) => unknown {
   const names = propertyPlans
-    .filter(({ property }) => property.assignIfPresent)
+    .filter(({ assignIfPresent }) => assignIfPresent)
     .map(({ property }) => property.ts);
 
   if (names.length === 0) {
@@ -705,7 +713,8 @@ function presentMemberAssignerOf(
 /**
  * Reads every property through `jsonValueOf` into the factory's input. An
  * absent (missing or `null`) optional property reads as `null`; a missing
- * required one throws; a missing `assignIfPresent` one is left out.
+ * required one throws; a missing one of the contract's `assignIfPresent`
+ * list is left out.
  */
 function propertyReaderOf(
   propertyPlans: readonly PropertyPlan[],
@@ -713,10 +722,10 @@ function propertyReaderOf(
   return (jsonValueOf) => {
     const deserialized: Record<string, unknown> = {};
 
-    for (const { property, converter } of propertyPlans) {
+    for (const { property, converter, assignIfPresent } of propertyPlans) {
       const jsonValue = jsonValueOf(property);
 
-      if (jsonValue === undefined && property.assignIfPresent) {
+      if (jsonValue === undefined && assignIfPresent) {
         continue;
       }
 

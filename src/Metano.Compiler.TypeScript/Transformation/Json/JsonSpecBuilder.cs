@@ -176,17 +176,10 @@ internal sealed class JsonSpecBuilder
             )
         );
 
-        var assignedIfPresent = AssignedIfPresentNamesOf(targetType);
-
         var propertiesProperty = new TsObjectProperty(
             "properties",
             new TsArrayLiteral(
-                _properties
-                    .WirePropertiesOf(targetType)
-                    .Select(property =>
-                        BuildPropertySpec(property, assignedIfPresent.Contains(property.TsName))
-                    )
-                    .ToList()
+                _properties.WirePropertiesOf(targetType).Select(BuildPropertySpec).ToList()
             )
         );
 
@@ -197,6 +190,7 @@ internal sealed class JsonSpecBuilder
             factoryProperty,
             propertiesProperty,
             IgnoredPropertiesProperty(targetType),
+            AssignIfPresentProperty(targetType),
             polymorphism is null ? null : _polymorphismSpecs.Build(polymorphism),
         };
 
@@ -302,7 +296,7 @@ internal sealed class JsonSpecBuilder
     /// <c>{"A":5,"B":6,"C":7}</c> as <c>5, 6, 7</c>, and <c>record R(int A) {
     /// public string? Note { get; init; } = "x"; }</c> reads <c>{"A":1}</c>
     /// with <c>Note = null</c>). Members set only when present are assigned by
-    /// the runtime instead (<see cref="AssignedIfPresentNamesOf"/>).
+    /// the runtime instead (<see cref="AssignIfPresentProperty"/>).
     /// </summary>
     private TsExpression WithAssignedMembers(
         TsNewExpression construction,
@@ -323,27 +317,38 @@ internal sealed class JsonSpecBuilder
     }
 
     /// <summary>
-    /// The TS names of the members whose property spec carries
-    /// <c>assignIfPresent: true</c>: unbound members with a <c>set</c>
-    /// accessor or a writable field (<see cref="JsonReadAssignment.IfPresent"/>),
-    /// which the runtime assigns after construction only when the payload
-    /// carries their key, so a missing key keeps the C# initializer's value
-    /// (measured: <c>class Init { string? Note = "init"; int Count = 5;
-    /// List&lt;int&gt;? Items = [9]; }</c> reads <c>{"Count":1}</c> as
-    /// <c>{"Note":"init","Count":1,"Items":[9]}</c>). A <c>[PlainObject]</c>
-    /// literal or an interface has no constructed value to keep.
+    /// <c>assignIfPresent: ["x", "y"]</c>: the TS names of the members of this
+    /// contract, inherited ones included, that no parameter of its own
+    /// constructor binds and that have a <c>set</c> accessor or are writable
+    /// fields (<see cref="JsonReadAssignment.IfPresent"/>). The runtime
+    /// assigns them after the factory ran, only when the payload carries
+    /// their key, so a missing key keeps the constructed value (measured:
+    /// <c>class Init { string? Note = "init"; int Count = 5; }</c> reads
+    /// <c>{"Count":1}</c> as <c>{"Note":"init","Count":1}</c>, and
+    /// <c>class DX : BX { DX() : base(0) {} }</c> reads <c>{"X":5,"Y":6}</c>
+    /// with <c>X = 5</c> although <c>BX</c>'s constructor binds <c>X</c>).
+    /// The list belongs to the contract, not to the spec declaring the
+    /// member, because each contract's constructor binds different members.
+    /// Absent when the factory constructs nothing (an abstract type, a
+    /// <c>[PlainObject]</c> literal, an interface) or the list is empty.
     /// </summary>
-    private HashSet<string> AssignedIfPresentNamesOf(INamedTypeSymbol targetType)
+    private TsObjectProperty? AssignIfPresentProperty(INamedTypeSymbol targetType)
     {
-        var hasConstructedValue =
-            targetType.TypeKind != TypeKind.Interface && !SymbolHelper.HasPlainObject(targetType);
+        var constructsInstance =
+            targetType.TypeKind != TypeKind.Interface
+            && !targetType.IsAbstract
+            && !SymbolHelper.HasPlainObject(targetType);
 
-        if (!hasConstructedValue)
-            return [];
+        if (!constructsInstance)
+            return null;
 
-        return UnboundMembersOf(targetType, JsonReadAssignment.IfPresent)
-            .Select(property => property.TsName)
-            .ToHashSet(StringComparer.Ordinal);
+        var names = UnboundMembersOf(targetType, JsonReadAssignment.IfPresent)
+            .Select(property => (TsExpression)new TsStringLiteral(property.TsName))
+            .ToList();
+
+        return names.Count == 0
+            ? null
+            : new TsObjectProperty("assignIfPresent", new TsArrayLiteral(names));
     }
 
     /// <summary>
@@ -412,6 +417,7 @@ internal sealed class JsonSpecBuilder
         if (property is null)
             return CastProperty(TypeScriptNaming.ToCamelCase(parameter.Name), parameter.Type);
 
+        // The overflow member is left out of the spec, so p carries no value for it.
         if (JsonSerializationAttributes.Has(property, JsonSerializationAttributes.ExtensionData))
             return new TsLiteral("null");
 
@@ -431,16 +437,11 @@ internal sealed class JsonSpecBuilder
 
     /// <summary>
     /// Builds a property spec object literal:
-    /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true, order?: n, assignIfPresent?: true }</c>,
-    /// where <c>order</c> is a non-zero <c>[JsonPropertyOrder]</c> (the
-    /// runtime sorts the whole base chain by it) and <c>assignIfPresent</c>
-    /// marks a member the runtime sets after construction only when the
-    /// payload carries it (FR-046).
+    /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true, order?: n }</c>,
+    /// where <c>order</c> is a non-zero <c>[JsonPropertyOrder]</c>: the
+    /// runtime sorts the whole base chain by it (FR-046).
     /// </summary>
-    private TsObjectLiteral BuildPropertySpec(
-        JsonSerializableProperty property,
-        bool assignIfPresent
-    )
+    private TsObjectLiteral BuildPropertySpec(JsonSerializableProperty property)
     {
         var type = property.Type;
 
@@ -458,7 +459,6 @@ internal sealed class JsonSpecBuilder
                     "order",
                     new TsLiteral(property.Order.ToString(CultureInfo.InvariantCulture))
                 ),
-            assignIfPresent ? new TsObjectProperty("assignIfPresent", new TsLiteral("true")) : null,
         };
 
         return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());

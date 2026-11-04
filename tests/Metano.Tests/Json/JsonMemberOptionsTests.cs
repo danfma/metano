@@ -24,6 +24,8 @@ namespace Metano.Tests.Json;
 /// Init (set accessors with initializers): {} → {"Note":"init","Count":5,"Items":[9]},
 ///   {"Count":1} → {"Note":"init","Count":1,"Items":[9]}, {"Note":null,"Items":null} → {"Note":null,"Count":5,"Items":null}
 /// Noted(1) (an init member with an initializer): {"A":1} → {"A":1,"Note":null}
+/// BX binds X in its constructor, DX : BX calls base(0): BX {"X":5} → {"X":5};
+///   DX {"X":5,"Y":6} → {"Y":6,"X":5}; DX {} → {"Y":22,"X":0}
 /// </code>
 /// Accessibility under source generation: <c>internal</c> and
 /// <c>protected internal</c> <c>[JsonInclude]</c> members are written and
@@ -114,12 +116,34 @@ public class JsonMemberOptionsTests
         }
 
         [Transpile]
+        public class BX
+        {
+            public BX(int x)
+            {
+                X = x;
+            }
+
+            public int X { get; set; } = 11;
+        }
+
+        [Transpile]
+        public sealed class DX : BX
+        {
+            public DX()
+                : base(0) { }
+
+            public int Y { get; set; } = 22;
+        }
+
+        [Transpile]
         [JsonSerializable(typeof(Blob))]
         [JsonSerializable(typeof(Account))]
         [JsonSerializable(typeof(OrdDer))]
         [JsonSerializable(typeof(byte[]))]
         [JsonSerializable(typeof(Init))]
         [JsonSerializable(typeof(Noted))]
+        [JsonSerializable(typeof(BX))]
+        [JsonSerializable(typeof(DX))]
         """;
 
     [Test]
@@ -601,6 +625,46 @@ public class JsonMemberOptionsTests
             .Contains("factory: (p: Record<string, unknown>) => new Ext(p.a as number, null),");
     }
 
+    // Each contract owns its post-construction list: a base `set` member the
+    // derived constructor binds is passed to it and not assigned again, while
+    // the base's own contract assigns it.
+    [Test]
+    public async Task AssignIfPresent_IsDecidedPerContract()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public class Counted
+            {
+                public int V { get; set; }
+            }
+
+            [Transpile]
+            public sealed class Bound : Counted
+            {
+                public Bound(int v)
+                {
+                    V = v;
+                }
+
+                public int W { get; set; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Bound))]
+            """
+        );
+
+        await Assert.That(PropertiesOfGetter(ts, "bound")).IsEqualTo("w");
+
+        await Assert
+            .That(ts)
+            .Contains("factory: (p: Record<string, unknown>) => new Bound(p.v as number),");
+
+        await Assert.That(ts).Contains("assignIfPresent: [\"w\"],");
+        await Assert.That(ts).Contains("assignIfPresent: [\"v\"],");
+    }
+
     // A base declaration hidden by a [JsonIgnore] override is never read, so
     // it is not assigned either (it would overwrite the default with
     // undefined).
@@ -717,13 +781,14 @@ public class JsonMemberOptionsTests
         return TsNamesOf(end < 0 ? ts[start..] : ts[start..end]);
     }
 
-    /// <summary>The <c>ts</c> names of the property specs with <c>assignIfPresent: true</c>.</summary>
+    /// <summary>The names of every <c>assignIfPresent</c> list, one list per spec, joined.</summary>
     private static string AssignedIfPresentOf(string ts) =>
         string.Join(
             ", ",
             Regex
-                .Matches(ts, "ts: \"([^\"]+)\"(?:(?!ts: )[\\s\\S])*?assignIfPresent: true")
-                .Select(match => match.Groups[1].Value)
+                .Matches(ts, "assignIfPresent: \\[([^\\]]*)\\]")
+                .SelectMany(match => Regex.Matches(match.Groups[1].Value, "\"([^\"]+)\""))
+                .Select(name => name.Groups[1].Value)
         );
 
     /// <summary><c>ts: order</c> for every property spec with an <c>order</c>.</summary>
