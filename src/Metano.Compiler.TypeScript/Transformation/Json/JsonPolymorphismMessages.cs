@@ -8,6 +8,14 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal static class JsonPolymorphismMessages
 {
+    /// <summary>
+    /// Examples of types <c>TypeGuardBuilder</c> emits no guard for; not a
+    /// complete list (it also emits none when no shape applies).
+    /// </summary>
+    private const string GuardlessReasons =
+        "for example [Import], [ExportedAsModule], [NoContainer], an exception or a type with "
+        + "extension members";
+
     public static string SealedBase(string baseType) =>
         $"'{baseType}' does not support polymorphism: polymorphic types cannot be sealed types "
         + "(as in System.Text.Json).";
@@ -102,13 +110,11 @@ internal static class JsonPolymorphismMessages
 
     public static string GuardlessRegistration(string registered, string owner) =>
         $"[PlainObject] type '{registered}' registered on '{owner}' gets no TypeScript guard "
-        + "([Import], [ExportedAsModule], [NoContainer], an exception or a type with extension "
-        + "members), so serialization cannot select it.";
+        + $"({GuardlessReasons}), so serialization cannot select it.";
 
     public static string GuardlessBase(string owner) =>
-        $"[PlainObject] base '{owner}' gets no TypeScript guard ([Import], [ExportedAsModule], "
-        + "[NoContainer], an exception or a type with extension members), so serialization "
-        + "cannot tell its own values from unregistered ones.";
+        $"[PlainObject] base '{owner}' gets no TypeScript guard ({GuardlessReasons}), so "
+        + "serialization cannot tell its own values from unregistered ones.";
 
     public static string UnorderedVariants(IReadOnlyList<string> variants, string owner)
     {

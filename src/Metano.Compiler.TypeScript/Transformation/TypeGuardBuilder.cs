@@ -69,6 +69,13 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     public TsFunction? GeneratePredicate(INamedTypeSymbol type) => TryBuildPredicate(type)?.Guard;
 
     /// <summary>
+    /// Whether <paramref name="type"/> gets a guard at all (see
+    /// <see cref="TryBuildPredicate"/>): the JSON context references only
+    /// guards that are emitted.
+    /// </summary>
+    internal bool CanGenerateGuard(INamedTypeSymbol type) => TryBuildPredicate(type) is not null;
+
+    /// <summary>
     /// The <c>isT</c> function of <paramref name="type"/> and the type it
     /// narrows to, or <c>null</c> when the type gets no guard.
     /// </summary>
@@ -76,12 +83,14 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     {
         if (TypeTransformer.IsExceptionType(type))
             return null;
+
         if (
             SymbolHelper.HasExportedAsModule(type)
             || SymbolHelper.HasNoContainer(type)
             || TypeTransformer.HasExtensionMembers(type)
         )
             return null;
+
         if (SymbolHelper.HasImport(type))
             return null;
 
@@ -547,6 +556,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         // renamed discriminator surfaces on both the short-circuit
         // access and the skip filter below.
         var discriminatorTsName = DiscriminatorTsNameOf(type);
+
         if (discriminatorTsName is not null)
         {
             body.Add(

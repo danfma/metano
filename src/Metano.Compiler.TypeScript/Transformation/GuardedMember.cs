@@ -41,8 +41,10 @@ internal sealed record GuardedMember(
         var differentLiterals =
             Literal is not null && other.Literal is not null && Literal != other.Literal;
 
-        return !differentLiterals
-            && (Kind == other.Kind || AcceptsAnyValue(Kind) || AcceptsAnyValue(other.Kind));
+        var kindsCompatible =
+            Kind == other.Kind || AcceptsAnyValue(Kind) || AcceptsAnyValue(other.Kind);
+
+        return !differentLiterals && kindsCompatible;
     }
 
     private static bool AcceptsAnyValue(GuardTestKind kind) =>

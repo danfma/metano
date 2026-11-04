@@ -82,6 +82,12 @@ internal sealed record JsonDerivedTypeRegistration(
     /// synthesized guard (FR-019).
     /// </summary>
     public bool IsStructural => SymbolHelper.HasPlainObject(Type);
+
+    /// <summary>
+    /// The registered type as a named type: a <c>[PlainObject]</c> class or
+    /// struct, so <see cref="IsStructural"/> implies a named type.
+    /// </summary>
+    public INamedTypeSymbol NamedType => (INamedTypeSymbol)Type;
 }
 
 /// <summary>
