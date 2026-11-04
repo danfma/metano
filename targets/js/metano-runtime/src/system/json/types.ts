@@ -187,6 +187,12 @@ export interface TypeSpec<T = unknown> {
    * derived contract reached by dispatch is never dispatched again.
    */
   readonly polymorphism?: PolymorphismSpec;
+  /**
+   * A C# `struct` contract: JSON `null` at the root throws `JsonException`
+   * instead of reading as `null` (FR-037), as System.Text.Json does for a
+   * value type.
+   */
+  readonly valueType?: boolean;
   /** The context's read behavior; absent when it is System.Text.Json's default. */
   readonly readOptions?: JsonReadOptions;
   /**
@@ -281,6 +287,12 @@ export interface ValueSpec<T = unknown> {
    * like `TypeSpec<T>`, so any `ValueSpec<T>` is a `ValueSpec<unknown>`.
    */
   readonly __type?: () => T;
+  /**
+   * A C# value type (`int`, `Guid`, an enum, a branded type, …): JSON `null`
+   * at the root throws `JsonException` (FR-037). Absent for a reference-type
+   * root, whose `T` already holds `| null`, and for `Nullable<T>`.
+   */
+  readonly valueType?: boolean;
   /** The context's read behavior; absent when it is System.Text.Json's default. */
   readonly readOptions?: JsonReadOptions;
 }

@@ -87,12 +87,34 @@ internal sealed class JsonSpecBuilder
                 [ValueSpecTypeArgument(entry.Type)],
                 JsonRuntimeModule.Origin
             ),
-            ContextFactoryCall(
-                "createValueSpec",
-                new TsObjectLiteral([new TsObjectProperty("descriptor", descriptor)])
-            )
+            ContextFactoryCall("createValueSpec", BuildValueSpecObject(entry.Type, descriptor))
         );
     }
+
+    /// <summary>
+    /// <c>{ descriptor }</c>, plus <c>valueType: true</c> for a value type
+    /// (FR-037).
+    /// </summary>
+    private static TsObjectLiteral BuildValueSpecObject(ITypeSymbol root, TsExpression descriptor)
+    {
+        var descriptorProperty = new TsObjectProperty("descriptor", descriptor);
+
+        return ValueTypeProperty(root) is { } valueType
+            ? new TsObjectLiteral([descriptorProperty, valueType])
+            : new TsObjectLiteral([descriptorProperty]);
+    }
+
+    /// <summary>
+    /// <c>valueType: true</c> for a C# value type, whose JSON <c>null</c> at
+    /// the root throws <c>JsonException</c> as in System.Text.Json (FR-037);
+    /// absent for a reference type and for <c>Nullable&lt;T&gt;</c>, which
+    /// read <c>null</c> as <c>null</c>.
+    /// </summary>
+    private static TsObjectProperty? ValueTypeProperty(ITypeSymbol type) =>
+        RejectsNullRoot(type) ? new TsObjectProperty("valueType", new TsLiteral("true")) : null;
+
+    private static bool RejectsNullRoot(ITypeSymbol type) =>
+        type.IsValueType && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T;
 
     /// <summary>
     /// <c>TypeSpec&lt;T&gt;</c> and its <c>createSpec</c> call, where <c>T</c> is
@@ -189,6 +211,7 @@ internal sealed class JsonSpecBuilder
             BaseLinkProperty(targetType),
             factoryProperty,
             propertiesProperty,
+            ValueTypeProperty(targetType),
             IgnoredPropertiesProperty(targetType),
             AssignIfPresentProperty(targetType),
             polymorphism is null ? null : _polymorphismSpecs.Build(polymorphism),

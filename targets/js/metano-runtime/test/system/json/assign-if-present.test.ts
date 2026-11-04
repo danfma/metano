@@ -169,7 +169,7 @@ describe("assignIfPresent is per contract", () => {
       properties: [],
     };
 
-    expect(JsonSerializer.deserialize({ V: 3 }, boundSpec).v).toBe(3);
+    expect(JsonSerializer.deserialize({ V: 3 }, boundSpec)!.v).toBe(3);
     expect(sets).toBe(1);
   });
 });
