@@ -32,7 +32,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             return;
 
         var contextName = _context.ResolveTsName(type);
-        var specs = new JsonSpecBuilder(_context, plan.Names, plan.Properties);
+        var specs = new JsonSpecBuilder(_context, plan.Names, plan.Properties, plan.Polymorphisms);
         var members = new List<TsClassMember>();
 
         // private static readonly _default = new XxxContext();
@@ -118,9 +118,15 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             ReadNamingPolicy(contextType)
         );
         var names = JsonTypeInfoNames.Create(_context, roots, report);
-        var contract = new JsonContractClosure(properties, admission).Collect(roots);
+        var polymorphisms = new JsonPolymorphismValidator(properties, admission, report);
+        var contract = new JsonContractClosure(properties, admission, polymorphisms).Collect(roots);
 
-        return new JsonContextPlan(names, properties, names.Claim(contract));
+        return new JsonContextPlan(
+            names,
+            properties,
+            names.Claim(contract),
+            contract.Polymorphisms
+        );
     }
 
     /// <summary>

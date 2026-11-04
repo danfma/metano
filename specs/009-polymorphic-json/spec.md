@@ -359,8 +359,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   contract when none is registered. These rows are **write-only**: what they write does not read
   back as the original class (W12 reads as the ancestor; W13 through an abstract base throws).
 - **Abstract derived type**: rejected (`MS0032`) unless the base uses `FallBackToNearestAncestor`,
-  where it serves only as a nearest-ancestor target; reading its tag follows the S6 probe
-  (DECIDED-12).
+  where it serves only as a nearest-ancestor target; reading its tag throws
+  `NotSupportedException` (FR-017, DECIDED-12).
 - **Nested polymorphism** (measured, research.md R1): with `NMid : NBase` both polymorphic, an
   `NMid` through `NBase` writes only the outer tag (`{"t":"mid","B":2,"A":1}`); an `NLeaf`
   registered only on `NMid` fails through `NBase` with `NotSupportedException`; the inner tag is
@@ -538,14 +538,16 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   throws for a non-null scalar written inside the 64th container (a hybrid, DECIDED-20 b).
 - **FR-017**: Under `FallBackToNearestAncestor`, an abstract derived entry MUST be accepted as a
   nearest-ancestor target on serialize (its tag, if any, is written, then the runtime value's
-  nearest-registered-ancestor contract). Reading its tag MUST be probed against STJ before S6 is
-  implemented (DECIDED-12). Until the probe, the runtime treats such a tag as an abstract base with
-  a missing tag (`NotSupportedException` "…must specify a type discriminator." naming the abstract
-  entry), and the probe result replaces this rule and adds a manifest row. Measured in S5 (source
-  generation and reflection, .NET 10): reading `{"$type":"m","M":2,"A":1}` through `AB`, whose
-  abstract `AMid` is registered as `"m"`, throws `NotSupportedException` "Deserialization of
-  interface or abstract types is not supported. Type 'AMid'." S6 implements this text
-  (DECIDED-21 f).
+  nearest-registered-ancestor contract). Reading its tag MUST throw what STJ throws (probed in S6,
+  DECIDED-12): `NotSupportedException` "Deserialization of interface or abstract types is not
+  supported. Type 'AMid'." for `{"$type":"m","M":2,"A":1}` through `AB`, whose abstract `AMid` is
+  registered as `"m"` — also on a concrete base and under `IgnoreUnrecognizedTypeDiscriminators`.
+  An abstract entry that is itself polymorphic reports its own missing tag instead
+  (`NotSupportedException` "The JSON payload for polymorphic interface or abstract type 'PMid'
+  must specify a type discriminator."). Without the out-of-order option, `$id`, `$ref` or
+  `$values` right after the tag throw the "metadata property … not the first property"
+  `JsonException` first; with it, the key walk of DECIDED-21 j runs first. The generator marks the
+  entry `abstract: true` (`DerivedTypeSpec.abstract`). S8 adds the manifest row.
 - **FR-018**: An **interface base** MUST be supported. `[JsonDerivedType]` on a C# interface makes
   it polymorphic as for a class. Its spec has no `type` (the TS interface has no constructor), a
   throwing `factory` with the FR-011 message (`Cannot deserialize interface type 'IShape'
@@ -930,7 +932,20 @@ the former `OPEN-N`.
 - **DECIDED-11 — Conformance sample name.** `samples/SampleJsonContracts` →
   `targets/js/sample-json-contracts`.
 - **DECIDED-12 — Reading the tag of an abstract derived entry** (`FallBackToNearestAncestor` only).
-  Probe STJ in S6 before implementing; FR-017 holds the interim rule.
+  Probed in S6 (.NET SDK 10.0.401, source generation and reflection alike):
+  `{"$type":"m","M":2,"A":1}` and `{"$type":"m"}` through the abstract `AB` throw
+  `NotSupportedException` "Deserialization of interface or abstract types is not supported. Type
+  'AMid'."; so does the same tag through a concrete base (`CB`) and under
+  `IgnoreUnrecognizedTypeDiscriminators` (`IB`). `{"$type":"m","$x":1}` and a data key before a
+  later tag throw it too, while `{"$type":"m","$id":"1"}` and `{"$type":"m","$values":[]}` throw the
+  "metadata property … not the first property" `JsonException`. With
+  `AllowOutOfOrderMetadataProperties`, `{"A":1,"$type":"m"}` throws the `NotSupportedException` and
+  `{"$type":"m","$x":1}` the "Properties that start with '$'" `JsonException`. An abstract entry
+  `QMid` that registers its own variants (discriminator `t`) throws "The JSON payload for
+  polymorphic interface or abstract type 'QMid' must specify a type discriminator." for
+  `{"$type":"m","M":2}` and for `{"$type":"m","t":"x","M":2}`, while `{"$type":"x",…}` (its variant
+  registered on the outer base too) reads `QLeaf`. Writing an unregistered `AOther : AMid` through
+  `AB` writes `{"$type":"m","M":2,"A":1}`. FR-017 states the rule.
 - **DECIDED-13 — Closed generic polymorphic bases.** Supported (FR-015).
 - **DECIDED-14 — Name-collision strategy.** FR-036 as written: STJ names kept; Error when the loser
   is referenced or the name is a reserved `SerializerContext` member, Warning otherwise.
@@ -1136,6 +1151,40 @@ the former `OPEN-N`.
     unknown tag throws "not the first property" on a concrete and on an abstract base alike
     (`{"$values":[],"$type":"zz"}`; measured, the abstract base does not report the missing tag).
 
+- **DECIDED-22 — Slice S6 decisions (#268).** Taken while implementing the generator half of
+  polymorphism for class hierarchies (FR-001, FR-003–FR-006, FR-011–FR-015, FR-017):
+  - (a) `DerivedTypeSpec` gains `abstract?: boolean` (contracts/runtime-api.md), the marker
+    DECIDED-21 f asked for: it is emitted on an abstract registration (valid only under
+    `FallBackToNearestAncestor`) and makes the runtime throw the DECIDED-12 exceptions when the
+    tag is read. A marker on the entry, rather than on `TypeSpec`, keeps non-polymorphic specs
+    unchanged (FR-004).
+  - (b) Interface bases (FR-018) and hierarchies with a `[PlainObject]` base or variant (FR-019)
+    are slice S6c. Until it lands the generator treats them as non-polymorphic: no
+    `polymorphism`, no closure additions and no diagnostics, so their contexts are unchanged. An
+    interface registered on a **class** base is not assignable to it and is `MS0032` now.
+  - (c) An invalid registration (`MS0032`) is left out of `derived`; a repeated type or tag keeps
+    its first registration. A hierarchy-wide `MS0032` (a JSON property named like the
+    discriminator, compared ordinally after the naming policy, or integer-like) leaves the base
+    without `polymorphism`, because no descriptor would match System.Text.Json. The rules are
+    evaluated per constructed base the closure reaches (FR-015), once per context.
+  - (d) The property rules read every contract of the hierarchy: the base and each valid
+    registration, inherited properties included (their linked `base` specs or inlined
+    ancestors). The diagnostic is located at the property.
+  - (e) Closure order: per entry, its `base` link, then the `ref` targets of its properties, then
+    its registrations in attribute order (a self-registration adds nothing). A derived link counts
+    as a link for `MS0036` severity, like `ref` and `base`.
+  - (f) The `polymorphism` member keys follow `PolymorphismSpec`: `discriminator`, `abstract`,
+    `derived`, `unknownDerivedType`, `ignoreUnrecognizedTags`; an entry's are `tag`, `spec`,
+    `abstract`. `typeName` and `testOrder` stay with S6c (class bases have a constructor).
+  - (g) An abstract registration's own spec is not polymorphic, so its factory keeps the #238
+    message (FR-011); the runtime never calls it, as reading its tag throws first.
+  - (h) FR-002 (`AllowOutOfOrderMetadataProperties` read from the context) stays with S2b, which
+    adds the `readOptions` plumbing; S6 emits no read options.
+  - (i) End-to-end evidence: the TypeScript generated for the S6 golden
+    (`tests/Metano.Tests/Expected/json-polymorphic-context.ts`) compiles under `tsgo --strict` and
+    reproduces every probe row its test header quotes (bundled with `bun build`, run under Node and
+    Bun). The permanent cross-runtime check is the S8 manifest.
+
 ## Open questions
 
 These came up while applying the decisions. Each has a recommended default that the spec assumes
@@ -1194,9 +1243,10 @@ until the maintainer decides.
 - .NET 10 STJ behavior (measured on SDK 10.0.401) is the reference; later STJ changes are tracked
   by the conformance manifest failing in CI.
 - Generated packages that use polymorphism or value specs need the `metano-runtime` version that
-  ships these additions. `PackageJsonWriter` does not write a `metano-runtime` dependency today
-  (user-managed), so the requirement is communicated through docs and the changelog
-  (DECIDED-17). The major version of FR-049 makes the upgrade visible.
+  ships these additions. Since #411 `PackageJsonWriter` declares `metano-runtime` as a
+  `peerDependency` of every generated package that imports it, with the compiler's own version
+  range (a consumer's own declaration wins), so the requirement is also communicated through docs
+  and the changelog (DECIDED-17). The major version of FR-049 makes the upgrade visible.
 - Deserialization is fed by `JSON.parse` output, so lexical facts STJ sees (duplicate keys, exact
   number text) are not observable to the runtime.
 - C# 15 `union` types and STJ union support (.NET 11 RC) are specified separately (C# unions

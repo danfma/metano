@@ -73,6 +73,20 @@ internal sealed class JsonPropertyCollector(
     }
 
     /// <summary>
+    /// Every property the contract of <paramref name="type"/> declares: its
+    /// own spec's (<see cref="DeclarationOrderPropertiesOf"/>) and those of
+    /// each spec of its <c>base</c> chain.
+    /// </summary>
+    public IEnumerable<JsonSerializableProperty> ContractPropertiesOf(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = LinkedBaseOf(current))
+        {
+            foreach (var property in DeclarationOrderPropertiesOf(current))
+                yield return property;
+        }
+    }
+
+    /// <summary>
     /// The TS names of the base declarations a linked spec hides with a
     /// <c>[JsonIgnore]</c> override (DECIDED-19 e). System.Text.Json writes
     /// and reads none of them; the runtime's <c>collectWireProperties</c>

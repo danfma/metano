@@ -83,6 +83,9 @@ Rules:
   abstract base keeps the #238 text.
 - A base that registers itself gets an entry pointing at its own getter:
   `{ tag: "b", spec: () => this.sBase }`.
+- An abstract registration (valid only under `FallBackToNearestAncestor`) ends its entry with
+  `abstract: true`: `{ tag: "m", spec: () => this.aMid, abstract: true }` (S6, DECIDED-12,
+  DECIDED-22 a). Its own spec keeps the non-polymorphic abstract factory message.
 - A closed generic polymorphic base (FR-015) uses the constructed name everywhere:
   `get gBaseInt32(): TypeSpec<GBase<number>>`, and `GDer`'s spec links `base: this.gBaseInt32`.
 - Property lists are deduplicated by final JSON name; on the wire an overridden property appears

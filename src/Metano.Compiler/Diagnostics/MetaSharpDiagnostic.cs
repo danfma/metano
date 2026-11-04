@@ -315,6 +315,24 @@ public static class DiagnosticCodes
     /// <c>[Ignore]</c>.</summary>
     public const string ExplicitImplementationConflict = "MS0031";
 
+    /// <summary>MS0032 — a <c>[JsonDerivedType]</c> registration the generated
+    /// TypeScript context cannot honor: a derived type that is generic, not assignable
+    /// to the base (to every constructed base the context reaches, for a generic base),
+    /// not transpiled in its declaring assembly, abstract without
+    /// <c>FallBackToNearestAncestor</c>, or registered twice; a tag registered twice; or
+    /// a JSON property of the hierarchy named like the discriminator or integer-like.
+    /// An error at the attribute (or the property); an invalid registration is left out
+    /// of the descriptor, and a hierarchy-wide error leaves the base without
+    /// <c>polymorphism</c> (spec 009 FR-012, FR-015, FR-047, #268).</summary>
+    public const string InvalidJsonPolymorphism = "MS0032";
+
+    /// <summary>MS0033 — a <c>[JsonDerivedType]</c> registration that does not
+    /// round-trip, exactly as in System.Text.Json: an untagged registration (written
+    /// without a tag, read back as the base), or a derived type that declares its own
+    /// <c>[JsonDerivedType]</c>s (not re-dispatched through the outer base). A warning at
+    /// the attribute (spec 009 FR-013, #268).</summary>
+    public const string LossyJsonPolymorphism = "MS0033";
+
     /// <summary>MS0034 — a <c>[JsonFactory]</c> the generated context cannot call: on an
     /// instance method, an operator, a method of a type that is not
     /// <c>[Branded]</c> / <c>[InlineWrapper]</c>, a method that does not take exactly one

@@ -53,6 +53,21 @@ internal sealed class JsonTypeDescriptorBuilder(
         };
 
     /// <summary>
+    /// The lazy link to the spec of <paramref name="type"/>,
+    /// <c>() =&gt; this.&lt;getter&gt;</c>: getters reference each other, so
+    /// every link to another spec is a thunk.
+    /// </summary>
+    public TsArrowFunction BuildSpecLink(ITypeSymbol type) =>
+        new(
+            [],
+            [
+                new TsReturnStatement(
+                    new TsPropertyAccess(new TsIdentifier("this"), _names.GetterOf(type))
+                ),
+            ]
+        );
+
+    /// <summary>
     /// Wire-format string for the runtime <c>TypeDescriptor.kind</c>
     /// field. Kept as a single-source-of-truth mapping so the on-disk
     /// shape can never drift from the enum.
@@ -183,25 +198,11 @@ internal sealed class JsonTypeDescriptorBuilder(
         ]);
     }
 
-    private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type)
-    {
-        var getterName = _names.GetterOf(type);
-
-        return new TsObjectLiteral([
+    private TsObjectLiteral BuildRefDescriptor(ITypeSymbol type) =>
+        new([
             KindProperty(JsonPropertyKind.Ref),
-            new TsObjectProperty(
-                "spec",
-                new TsArrowFunction(
-                    [],
-                    [
-                        new TsReturnStatement(
-                            new TsPropertyAccess(new TsIdentifier("this"), getterName)
-                        ),
-                    ]
-                )
-            ),
+            new TsObjectProperty("spec", BuildSpecLink(type)),
         ]);
-    }
 
     /// <summary>
     /// Builds a kind-only descriptor for leaf wire kinds with no

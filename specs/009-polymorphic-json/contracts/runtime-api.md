@@ -20,7 +20,7 @@ other change is additive. Behavior also changes in these cases:
 |---|---|---|
 | `TypeDiscriminator` | type | `string \| number` |
 | `UnknownDerivedTypeHandling` | type | `"failSerialization" \| "fallBackToBaseType" \| "fallBackToNearestAncestor"` |
-| `DerivedTypeSpec` | type | `{ tag?, spec: () => TypeSpec, test? }` (`test` for `[PlainObject]` variants) |
+| `DerivedTypeSpec` | type | `{ tag?, spec: () => TypeSpec, test?, abstract? }` (`test` for `[PlainObject]` variants; `abstract` for an abstract registration, S6) |
 | `PolymorphismSpec` | type | discriminator + options + derived entries (+ `typeName`, `testOrder`) |
 | `JsonReadOptions` | type | `{ propertyNameCaseInsensitive?, numberHandling?: "allowReadingFromString", allowOutOfOrderMetadataProperties? }` |
 | `NumberTypeName` | type | CLR names of numeric primitives (`"System.Int32"`, …) |
@@ -130,3 +130,14 @@ other members, the `readOptions` getter and its attachment by `createSpec` arriv
 the null-root and `valueType` rules (guarantee 9, `ValueSpec.valueType`) with S3b. See DECIDED-21
 for the runtime rules S5 settled (number tags, misplaced metadata, the interim concrete
 `[PlainObject]` base until S6c, FR-017's read side deferred to S6).
+
+## Delivery status (S6)
+
+S6 adds `DerivedTypeSpec.abstract`, a deviation from the S5 shape that DECIDED-21 f anticipated:
+the descriptor needed a marker for an abstract registration, and a member on the entry keeps every
+non-polymorphic `TypeSpec` unchanged. With it the runtime implements FR-017's read side
+(DECIDED-12): reading the tag of an abstract entry throws `NotSupportedException` "Deserialization
+of interface or abstract types is not supported. Type '<entry>'.", or the entry's own missing-tag
+message when the entry's spec is polymorphic; without the out-of-order option, `$id`, `$ref` or
+`$values` right after the tag throw the "metadata property … not the first property"
+`JsonException` first (DECIDED-22 a).
