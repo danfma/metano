@@ -33,6 +33,9 @@ import { cannotConvertMessage, expectJsonException } from "./json-exception-asse
  *   `""`, `"1,5"`, `"1d"`, `"1f"`, `"1_0"`, `"∞"`, `"١.٥"` throw; a value
  *   that overflows the type throws (`"1e400"`; `"1.7976931348623159e308"`
  *   for Double; `"3.4028236e38"` and `"1e39"` for Single, whose
+ *   `"3.4028235677973366e38"` and `"340282356779733661637539395458142568447"`
+ *   read while the exact midpoint `"340282356779733661637539395458142568448"`
+ *   (2^128 − 2^103), one past it and `"3.4028235677973367e38"` throw; and
  *   `"3.4028235e38"` reads).
  * - Decimal: the floating-point text without `NaN` / `Infinity`
  *   (`"1.10"`, `"1e2"`, `".5"`, `"1."`, `"+.5"`, `"1.e2"`, `"01.5"` read);
@@ -258,6 +261,24 @@ describe("numbers from strings — floating point", () => {
       "3.5e38",
       "1e39",
       "1.7976931348623157e308",
+    ]);
+  });
+
+  // The overflow threshold 2^128 − 2^103 is itself a double, so these texts
+  // all parse to it; only the exact text tells them apart (measured).
+  test("Single decides the overflow threshold by the exact text", () => {
+    expectReads("System.Single", [
+      ["3.4028235677973366e38", 3.4028235677973366e38],
+      ["-3.4028235677973366e38", -3.4028235677973366e38],
+      ["3.40282356779733661e38", 3.40282356779733661e38],
+      ["340282356779733661637539395458142568447", 3.4028235677973366e38],
+    ]);
+    expectRejects("System.Single", [
+      "340282356779733661637539395458142568448",
+      "-340282356779733661637539395458142568448",
+      "3.40282356779733661637539395458142568448e38",
+      "340282356779733661637539395458142568449",
+      "3.4028235677973367e38",
     ]);
   });
 });

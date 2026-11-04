@@ -35,14 +35,21 @@ const FLOATING_POINT_LITERALS: ReadonlyMap<string, number> = new Map([
   ["-Infinity", Number.NEGATIVE_INFINITY],
 ]);
 
-/** The number of integer digits of `System.Decimal.MaxValue`. */
-const DECIMAL_INTEGER_DIGITS = 29;
+/**
+ * `79228162514264337593543950335.5` as `limit × 10^-1`: a decimal text at or
+ * past it rounds beyond `System.Decimal.MaxValue` (measured).
+ */
+const DECIMAL_OVERFLOW = { limit: 792_281_625_142_643_375_935_439_503_355n, scale: 1 };
 
 /**
- * `2 × 79228162514264337593543950335 + 1`: a decimal text is out of range
- * when twice its magnitude reaches it, as it then rounds past the maximum.
+ * `2^128 − 2^103`, half-way between `Single.MaxValue` and `2^128`: a `Single`
+ * text at or past it rounds to infinity (measured: `"3.4028235677973366e38"`
+ * reads, the exact midpoint throws). It is a double, so a parsed double
+ * equal to it is the only case the text itself must decide.
  */
-const DECIMAL_DOUBLED_OVERFLOW = 158_456_325_028_528_675_187_087_900_671n;
+const SINGLE_OVERFLOW = { limit: 2n ** 128n - 2n ** 103n, scale: 0 };
+
+const SINGLE_OVERFLOW_AS_DOUBLE = Number(SINGLE_OVERFLOW.limit);
 
 /** Reads a JSON string as a number, or `undefined` when the grammar rejects it. */
 type NumberTextReader = (text: string) => number | undefined;
@@ -60,8 +67,8 @@ const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = 
     9_223_372_036_854_775_807n,
   ),
   "System.UInt64": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 18_446_744_073_709_551_615n),
-  "System.Single": floatingPointReader(Math.fround),
-  "System.Double": floatingPointReader((value) => value),
+  "System.Single": floatingPointReader(fitsSingle),
+  "System.Double": floatingPointReader((_, value) => Number.isFinite(value)),
 };
 
 /**
@@ -76,7 +83,7 @@ export function readNumberText(text: string, numberType: NumberTypeName): number
 export function isDecimalText(text: string): boolean {
   const parts = REAL_NUMBER_PATTERN.exec(text);
 
-  return parts !== null && fitsDecimal(parts);
+  return parts !== null && compareMagnitude(exactValueOf(parts), DECIMAL_OVERFLOW) < 0;
 }
 
 function integerReader(pattern: RegExp, min: bigint, max: bigint): NumberTextReader {
@@ -92,12 +99,15 @@ function integerReader(pattern: RegExp, min: bigint, max: bigint): NumberTextRea
   };
 }
 
+/** Whether the matched text, parsed as `value`, stays finite in the target type. */
+type FiniteCheck = (parts: RegExpExecArray, value: number) => boolean;
+
 /**
- * Reads the floating-point grammar; `toTargetPrecision` rounds the value to
- * the target type only to detect an overflow. The value keeps double
- * precision, as a JSON number read into a `Single` does.
+ * Reads the floating-point grammar; `staysFinite` rejects a value that
+ * overflows the target type. The value keeps double precision, as a JSON
+ * number read into a `Single` does.
  */
-function floatingPointReader(toTargetPrecision: (value: number) => number): NumberTextReader {
+function floatingPointReader(staysFinite: FiniteCheck): NumberTextReader {
   return (text) => {
     const literal = FLOATING_POINT_LITERALS.get(text);
 
@@ -105,39 +115,78 @@ function floatingPointReader(toTargetPrecision: (value: number) => number): Numb
       return literal;
     }
 
-    if (!REAL_NUMBER_PATTERN.test(text)) {
+    const parts = REAL_NUMBER_PATTERN.exec(text);
+
+    if (parts === null) {
       return undefined;
     }
 
     const value = Number(text);
 
-    return Number.isFinite(toTargetPrecision(value)) ? value : undefined;
+    return staysFinite(parts, value) ? value : undefined;
   };
 }
 
 /**
- * Whether the matched decimal text fits `System.Decimal` once rounded: its
- * significant digits times a power of ten stay below half past the maximum.
+ * Whether the text stays below the `Single` overflow threshold. The double
+ * is already rounded, so it decides every case but one: a double equal to
+ * the threshold, where the exact text decides.
  */
-function fitsDecimal(parts: RegExpExecArray): boolean {
+function fitsSingle(parts: RegExpExecArray, value: number): boolean {
+  const magnitude = Math.abs(value);
+
+  if (magnitude !== SINGLE_OVERFLOW_AS_DOUBLE) {
+    return magnitude < SINGLE_OVERFLOW_AS_DOUBLE;
+  }
+
+  return compareMagnitude(exactValueOf(parts), SINGLE_OVERFLOW) < 0;
+}
+
+/** A matched number text as `significand × 10^exponent`, without its sign. */
+interface ExactValue {
+  /** The significant digits without leading zeros; empty for zero. */
+  readonly significand: string;
+  readonly exponent: number;
+}
+
+function exactValueOf(parts: RegExpExecArray): ExactValue {
   const [, integerDigits = "", fractionDigits = "", bareFraction = "", exponentText = "0"] = parts;
   const fraction = fractionDigits + bareFraction;
-  const significand = (integerDigits + fraction).replace(/^0+/, "");
 
-  if (significand === "") {
-    return true;
+  return {
+    significand: (integerDigits + fraction).replace(/^0+/, ""),
+    exponent: Number(exponentText) - fraction.length,
+  };
+}
+
+/** A positive bound written as `limit × 10^-scale`. */
+interface Bound {
+  readonly limit: bigint;
+  readonly scale: number;
+}
+
+/**
+ * The sign of `value − bound`, computed exactly: the digit counts decide
+ * first, so a huge exponent never builds a huge power of ten.
+ */
+function compareMagnitude(value: ExactValue, bound: Bound): number {
+  if (value.significand === "") {
+    return -1;
   }
 
-  const exponent = Number(exponentText) - fraction.length;
-  const integerDigitCount = significand.length + exponent;
+  const shift = value.exponent + bound.scale;
+  const digitDifference = value.significand.length + shift - bound.limit.toString().length;
 
-  if (integerDigitCount !== DECIMAL_INTEGER_DIGITS) {
-    return integerDigitCount < DECIMAL_INTEGER_DIGITS;
+  if (digitDifference !== 0) {
+    return Math.sign(digitDifference);
   }
 
-  const doubled = 2n * BigInt(significand);
+  const significand = BigInt(value.significand);
 
-  return exponent >= 0
-    ? doubled * 10n ** BigInt(exponent) < DECIMAL_DOUBLED_OVERFLOW
-    : doubled < DECIMAL_DOUBLED_OVERFLOW * 10n ** BigInt(-exponent);
+  const [left, right] =
+    shift >= 0
+      ? [significand * 10n ** BigInt(shift), bound.limit]
+      : [significand, bound.limit * 10n ** BigInt(-shift)];
+
+  return left === right ? 0 : left < right ? -1 : 1;
 }
