@@ -317,7 +317,7 @@ public static class IrToTsOverloadDispatcherBridge
                 (parameter, index) =>
                     parameter with
                     {
-                        Optional = OverloadArgumentShape.IsOptional(method.Parameters[index]),
+                        Optional = method.Parameters[index].CanBeOmitted,
                     }
             )
             .ToList();
@@ -335,13 +335,22 @@ public static class IrToTsOverloadDispatcherBridge
                 (parameter, index) =>
                     parameter with
                     {
-                        Optional = method.Parameters[index].IsOptional,
-                        DefaultValue = method.Parameters[index].DefaultValue is { } defaultValue
-                            ? IrToTsExpressionBridge.Map(defaultValue, context)
-                            : null,
+                        Optional = method.Parameters[index].CanBeOmitted,
+                        DefaultValue = FastPathDefault(method.Parameters[index], context),
                     }
             )
             .ToList();
+
+    /// <summary>
+    /// The parameter's C# default as a TS initializer; <c>null</c> without one.
+    /// </summary>
+    private static TsExpression? FastPathDefault(
+        IrParameter parameter,
+        IrToTsBridgeContext context
+    ) =>
+        parameter.DefaultValue is { } defaultValue
+            ? IrToTsExpressionBridge.Map(defaultValue, context)
+            : null;
 
     private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters
@@ -355,6 +364,7 @@ public static class IrToTsOverloadDispatcherBridge
     )
     {
         var body = new List<TsStatement>();
+
         for (var i = 0; i < sorted.Count; i++)
         {
             var method = sorted[i];
@@ -366,17 +376,12 @@ public static class IrToTsOverloadDispatcherBridge
                 DelegatedArguments(method, arguments)
             );
 
-            var branchStatements = new List<TsStatement>();
-            if (method.ReturnType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void })
-            {
-                branchStatements.Add(new TsExpressionStatement(delegateCall));
-                branchStatements.Add(new TsReturnStatement());
-            }
-            else
-            {
-                branchStatements.Add(new TsReturnStatement(delegateCall));
-            }
-            body.Add(new TsIfStatement(arguments.Guard(typeParameters), branchStatements));
+            body.Add(
+                new TsIfStatement(
+                    arguments.Guard(typeParameters),
+                    BuildBranchStatements(method, delegateCall)
+                )
+            );
         }
 
         body.Add(
@@ -395,6 +400,18 @@ public static class IrToTsOverloadDispatcherBridge
         );
         return body;
     }
+
+    /// <summary>
+    /// The branch that delegates to the fast path: <c>call; return;</c> for a
+    /// <c>void</c> overload, <c>return call;</c> otherwise.
+    /// </summary>
+    private static List<TsStatement> BuildBranchStatements(
+        IrMethodDeclaration method,
+        TsCallExpression delegateCall
+    ) =>
+        method.ReturnType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void }
+            ? [new TsExpressionStatement(delegateCall), new TsReturnStatement()]
+            : [new TsReturnStatement(delegateCall)];
 
     /// <summary>
     /// The fast path's arguments: each <c>args[i]</c> cast to its parameter

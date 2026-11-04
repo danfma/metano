@@ -50,7 +50,28 @@ public sealed record IrParameter(
     bool IsConstant = false,
     bool IsOut = false,
     IrOutTypesByResult? OutTypesByResult = null
-);
+)
+{
+    /// <summary>
+    /// Whether a call may omit the argument: the parameter has a C# default or
+    /// carries <c>[Optional]</c>.
+    /// </summary>
+    public bool CanBeOmitted => HasDefaultValue || IsOptional;
+
+    /// <summary>
+    /// The element type of a <c>params T[]</c> parameter (nullable or not),
+    /// whose arguments a call passes one by one; <c>null</c> for any other
+    /// parameter, including a <c>params</c> collection the IR models otherwise.
+    /// </summary>
+    public IrTypeRef? ParamsElementType =>
+        this switch
+        {
+            { IsParams: true, Type: IrArrayTypeRef array } => array.ElementType,
+            { IsParams: true, Type: IrNullableTypeRef { Inner: IrArrayTypeRef array } } =>
+                array.ElementType,
+            _ => null,
+        };
+}
 
 /// <summary>
 /// The type of an <c>out</c> value on each result of a <c>bool</c>-returning

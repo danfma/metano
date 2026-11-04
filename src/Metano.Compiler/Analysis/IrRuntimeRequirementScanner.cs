@@ -229,13 +229,7 @@ public static class IrRuntimeRequirementScanner
     /// arrive expanded, otherwise the parameter type.
     /// </summary>
     private static IrTypeRef DispatchedTypeOf(IrParameter parameter) =>
-        parameter switch
-        {
-            { IsParams: true, Type: IrArrayTypeRef array } => array.ElementType,
-            { IsParams: true, Type: IrNullableTypeRef { Inner: IrArrayTypeRef array } } =>
-                array.ElementType,
-            _ => parameter.Type,
-        };
+        parameter.ParamsElementType ?? parameter.Type;
 
     /// <summary>
     /// Mirrors <c>IrTypeCheckBuilder.PrimitiveCheck</c> on the TS side. Returns

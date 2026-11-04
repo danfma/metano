@@ -768,12 +768,12 @@ public sealed class IrToTsClassEmitter(
     /// captured parameters.
     /// </summary>
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
-        IrClassDeclaration ir,
+        IrClassDeclaration owner,
         DispatcherBaseCall baseCall,
         IrToTsBridgeContext lowering
     )
     {
-        var primary = ir.Constructor;
+        var primary = owner.Constructor;
 
         if (!_context.UseIrBodiesWhenCovered)
             return null;
@@ -789,7 +789,7 @@ public sealed class IrToTsClassEmitter(
         return IrToTsConstructorDispatcherBridge.Build(
             primary,
             baseCall,
-            ir.TypeParameters ?? [],
+            owner.TypeParameters ?? [],
             lowering
         );
     }

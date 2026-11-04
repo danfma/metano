@@ -65,7 +65,7 @@ internal static class IrToTsObjectArgsBridge
         var key = TypeScriptNaming.ToCamelCase(parameter.Name);
         var binding = IrToTsNamingPolicy.ToParameterName(parameter.Name);
         var type = IrToTsTypeMapper.Map(parameter.Type);
-        var isOptional = parameter.IsOptional || parameter.HasDefaultValue;
+        var isOptional = parameter.CanBeOmitted;
         var field = new TsObjectTypeField(key, type, isOptional);
 
         var bindingFragment = key == binding ? key : $"{key}: {binding}";
