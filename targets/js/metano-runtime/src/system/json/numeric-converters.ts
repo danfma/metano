@@ -68,7 +68,8 @@ export function primitiveConverterOf(
 }
 
 /**
- * A `System.Decimal`: written with `toNumber()`, read from a JSON number, or
+ * A `System.Decimal`: written with `toNumber()` (a raw value read without a
+ * descriptor `type` is written back as is), read from a JSON number, or
  * from a JSON string when the context reads numbers from strings, within the
  * decimal range. The descriptor's `type` (decimal.js `Decimal` in generated
  * contexts) builds the value from the JSON number or the text, so a string
@@ -92,7 +93,7 @@ export function decimalConverterOf(
     serialize: (value: unknown) => {
       if (value == null) return null;
 
-      return (value as { toNumber(): number }).toNumber();
+      return hasToNumber(value) ? value.toNumber() : value;
     },
     deserialize: (value: unknown) => {
       if (value == null) return null;
@@ -104,6 +105,14 @@ export function decimalConverterOf(
       return descriptor.type ? new descriptor.type(value) : value;
     },
   };
+}
+
+/**
+ * A decimal.js-like value. A descriptor without `type` reads the raw JSON
+ * number or text, which is written back unchanged so it round-trips.
+ */
+function hasToNumber(value: unknown): value is { toNumber(): number } {
+  return typeof (value as { toNumber?: unknown }).toNumber === "function";
 }
 
 /** A finite JSON number within the decimal range, compared as doubles. */
