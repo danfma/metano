@@ -30,8 +30,10 @@ import {
   writeContainer,
 } from "./container-depth.ts";
 import { cannotConvertTo } from "./contract-name.ts";
-import { createConverterSetCache } from "./converter-set-cache.ts";
+import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
+import { numberOfTreeValue } from "./exact-json-number.ts";
+import { forwardsNumberTexts } from "./exact-number-reads.ts";
 import {
   decimalConverterOf,
   nullableTypeName,
@@ -48,19 +50,52 @@ import { type PropertyLookup, propertyLookupPlanOf } from "./property-lookup.ts"
 
 /**
  * Resolves the serialize/deserialize pair for a given type descriptor, checking
- * custom converters first (user overrides), then falling back to built-in ones.
- * `readOptions` are the read options of the spec being read (FR-048); a `ref`
- * reads with its target spec's own options.
+ * the custom converters of `plans` first (user overrides), then falling back to
+ * built-in ones. `readOptions` are the read options of the spec being read
+ * (FR-048); a `ref` reads with its target spec's own options. Under exact
+ * tree numbers, only the built-in converters that read a number's exact
+ * text see a `JsonNumberText` leaf (`readingTreeNumbers`).
  */
 function resolveConverter(
   descriptor: TypeDescriptor,
-  customConverters?: readonly JsonConverter[],
+  plans: SpecPlans,
   readOptions?: JsonReadOptions,
 ): ValueConverter {
-  return (
-    customConverterFor(descriptor, customConverters) ??
-    getBuiltinConverter(descriptor, customConverters, readOptions)
-  );
+  return resolveWith(descriptor, plans, () => getBuiltinConverter(descriptor, plans, readOptions));
+}
+
+/** The custom converter of the descriptor's kind, else `builtinOf()`, under the plans' tree numbers. */
+function resolveWith(
+  descriptor: TypeDescriptor,
+  plans: SpecPlans,
+  builtinOf: () => ValueConverter,
+): ValueConverter {
+  const custom = customConverterFor(descriptor, plans.customConverters);
+
+  if (custom) {
+    return readingTreeNumbers(custom, plans);
+  }
+
+  const builtin = builtinOf();
+
+  return forwardsNumberTexts(descriptor) ? builtin : readingTreeNumbers(builtin, plans);
+}
+
+/**
+ * `converter`, reading a `JsonNumberText` leaf of an exact tree as the
+ * `number` `JSON.parse` gives, so a converter that does not read exact
+ * digits (custom converters included) sees the tree `JSON.parse` builds
+ * (#457). A parsed tree holds no leaf, so its converters stay as they are.
+ */
+function readingTreeNumbers(converter: ValueConverter, plans: SpecPlans): ValueConverter {
+  if (plans.treeNumbers === "parsed") {
+    return converter;
+  }
+
+  return {
+    serialize: converter.serialize,
+    deserialize: (value) => converter.deserialize(numberOfTreeValue(value)),
+  };
 }
 
 function customConverterFor(
@@ -74,7 +109,7 @@ function customConverterFor(
 
 function getBuiltinConverter(
   descriptor: TypeDescriptor,
-  customConverters: readonly JsonConverter[] | undefined,
+  plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ): ValueConverter {
   switch (descriptor.kind) {
@@ -85,11 +120,11 @@ function getBuiltinConverter(
     case "decimal":
       return decimalConverterOf(descriptor, readOptions);
     case "map":
-      return mapConverter(descriptor, customConverters, readOptions);
+      return mapConverter(descriptor, plans, readOptions);
     case "array":
-      return arrayConverter(descriptor, customConverters, readOptions);
+      return arrayConverter(descriptor, plans, readOptions);
     case "hashSet":
-      return hashSetConverter(descriptor, customConverters, readOptions);
+      return hashSetConverter(descriptor, plans, readOptions);
     case "branded":
       return brandedConverter(descriptor);
     case "enum":
@@ -97,9 +132,9 @@ function getBuiltinConverter(
     case "numericEnum":
       return numericEnumConverter(descriptor);
     case "nullable":
-      return nullableConverter(descriptor, customConverters, readOptions);
+      return nullableConverter(descriptor, plans, readOptions);
     case "ref":
-      return refConverter(descriptor, customConverters);
+      return refConverter(descriptor, plans);
   }
 }
 
@@ -126,11 +161,11 @@ function temporalConverter(descriptor: TemporalDescriptor) {
  */
 function mapConverter(
   descriptor: MapDescriptor,
-  customConverters: readonly JsonConverter[] | undefined,
+  plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ) {
-  const keyConv = resolveConverter(descriptor.key, customConverters);
-  const valueConv = resolveConverter(descriptor.value, customConverters, readOptions);
+  const keyConv = resolveConverter(descriptor.key, plans);
+  const valueConv = resolveConverter(descriptor.value, plans, readOptions);
 
   return {
     serialize: (value: unknown) => {
@@ -211,10 +246,10 @@ function deserializeArray(value: unknown, elemConv: ValueConverter): unknown[] |
 
 function arrayConverter(
   descriptor: ArrayDescriptor,
-  customConverters: readonly JsonConverter[] | undefined,
+  plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ) {
-  const elemConv = resolveConverter(descriptor.element, customConverters, readOptions);
+  const elemConv = resolveConverter(descriptor.element, plans, readOptions);
 
   return {
     serialize: (value: unknown) => serializeIterable(value, elemConv),
@@ -226,10 +261,10 @@ function arrayConverter(
 
 function hashSetConverter(
   descriptor: HashSetDescriptor,
-  customConverters: readonly JsonConverter[] | undefined,
+  plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ) {
-  const elemConv = resolveConverter(descriptor.element, customConverters, readOptions);
+  const elemConv = resolveConverter(descriptor.element, plans, readOptions);
 
   return {
     serialize: (value: unknown) => serializeIterable(value, elemConv),
@@ -294,17 +329,24 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
 
 function nullableConverter(
   descriptor: NullableDescriptor,
-  customConverters: readonly JsonConverter[] | undefined,
+  plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ) {
-  const innerConv =
-    customConverterFor(descriptor.inner, customConverters) ??
-    builtinNullableInnerConverter(descriptor.inner, customConverters, readOptions);
+  const innerConv = nullableInnerConverter(descriptor.inner, plans, readOptions);
 
   return {
     serialize: (value: unknown) => (value == null ? null : innerConv.serialize(value)),
     deserialize: (value: unknown) => (value == null ? null : innerConv.deserialize(value)),
   };
+}
+
+/** A nullable's inner converter, resolved as `resolveConverter` does. */
+function nullableInnerConverter(
+  inner: TypeDescriptor,
+  plans: SpecPlans,
+  readOptions: JsonReadOptions | undefined,
+): ValueConverter {
+  return resolveWith(inner, plans, () => builtinNullableInnerConverter(inner, plans, readOptions));
 }
 
 /**
@@ -313,7 +355,7 @@ function nullableConverter(
  */
 function builtinNullableInnerConverter(
   inner: TypeDescriptor,
-  customConverters: readonly JsonConverter[] | undefined,
+  plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ): ValueConverter {
   switch (inner.kind) {
@@ -322,7 +364,7 @@ function builtinNullableInnerConverter(
     case "decimal":
       return decimalConverterOf(inner, readOptions, nullableTypeName);
     default:
-      return getBuiltinConverter(inner, customConverters, readOptions);
+      return getBuiltinConverter(inner, plans, readOptions);
   }
 }
 
@@ -336,8 +378,7 @@ function builtinNullableInnerConverter(
  * The `spec()` thunk is called once and its result kept, so it must return
  * the same spec every time, as the generated `??=` context getters do.
  */
-function refConverter(descriptor: RefDescriptor, customConverters?: readonly JsonConverter[]) {
-  const plans = specPlansFor(customConverters);
+function refConverter(descriptor: RefDescriptor, plans: SpecPlans) {
   const targetPlan = lazy(() => plans.planOf(descriptor.spec()));
 
   return {
@@ -438,33 +479,58 @@ interface PropertyPlan {
   readonly converter: ValueConverter;
 }
 
-/** The plans compiled under one set of custom converters, each built once. */
+/**
+ * How the tree being read holds its numbers: `parsed`, each a `number`, as
+ * `JSON.parse` builds it; `exact`, those with more significant digits than a
+ * double holds as `JsonNumberText` leaves, as `readJsonText` builds it
+ * (#457).
+ */
+export type TreeNumbers = "parsed" | "exact";
+
+/**
+ * The plans compiled under one set of custom converters for one kind of
+ * tree numbers, each built once.
+ */
 interface SpecPlans {
+  readonly customConverters: readonly JsonConverter[];
+  readonly treeNumbers: TreeNumbers;
   planOf(spec: TypeSpec): SpecPlan;
   valueConverterOf(spec: ValueSpec): ValueConverter;
 }
 
 /**
- * The plans of every custom-converter set. A plan holds converters resolved
- * against its set, so the set is part of the key: plans are cached per spec
- * inside each set's entry (`converter-set-cache.ts`).
+ * The plans of every custom-converter set, per kind of tree numbers. A plan
+ * holds converters resolved against its set, so the set is part of the key:
+ * plans are cached per spec inside each set's entry
+ * (`converter-set-cache.ts`). Only `deserializeText` reads exact trees, so
+ * the `exact` plans exist only for the specs it reads that way.
  */
-const specPlansByConverterSet = createConverterSetCache(createSpecPlans);
+const specPlansByTreeNumbers: Readonly<Record<TreeNumbers, ConverterSetCache<SpecPlans>>> = {
+  parsed: createConverterSetCache((converters) => createSpecPlans(converters, "parsed")),
+  exact: createConverterSetCache((converters) => createSpecPlans(converters, "exact")),
+};
 
-function specPlansFor(customConverters: readonly JsonConverter[] | undefined): SpecPlans {
-  return specPlansByConverterSet.entryFor(customConverters);
+function specPlansFor(
+  customConverters: readonly JsonConverter[] | undefined,
+  treeNumbers: TreeNumbers = "parsed",
+): SpecPlans {
+  return specPlansByTreeNumbers[treeNumbers].entryFor(customConverters);
 }
 
-function createSpecPlans(customConverters: readonly JsonConverter[]): SpecPlans {
+function createSpecPlans(
+  customConverters: readonly JsonConverter[],
+  treeNumbers: TreeNumbers,
+): SpecPlans {
   const specPlans = new WeakMap<TypeSpec, SpecPlan>();
   const valueConverters = new WeakMap<ValueSpec, ValueConverter>();
 
   const plans: SpecPlans = {
-    planOf: (spec) =>
-      cachedIn(specPlans, spec, () => compileSpecPlan(spec, customConverters, plans)),
+    customConverters,
+    treeNumbers,
+    planOf: (spec) => cachedIn(specPlans, spec, () => compileSpecPlan(spec, plans)),
     valueConverterOf: (spec) =>
       cachedIn(valueConverters, spec, () =>
-        resolveConverter(spec.descriptor, customConverters, spec.readOptions),
+        resolveConverter(spec.descriptor, plans, spec.readOptions),
       ),
   };
 
@@ -480,16 +546,12 @@ function createSpecPlans(customConverters: readonly JsonConverter[]): SpecPlans 
  * malformed descriptor (a hand-written spec error) fails then, even when the
  * value lacks that property.
  */
-function compileSpecPlan(
-  spec: TypeSpec,
-  customConverters: readonly JsonConverter[],
-  plans: SpecPlans,
-): SpecPlan {
+function compileSpecPlan(spec: TypeSpec, plans: SpecPlans): SpecPlan {
   const properties = collectWireProperties(spec);
 
   const propertyPlans = properties.map<PropertyPlan>((property) => ({
     property,
-    converter: resolveConverter(property.type, customConverters, spec.readOptions),
+    converter: resolveConverter(property.type, plans, spec.readOptions),
   }));
 
   const writeContract = contractWriterOf(propertyPlans);
@@ -591,15 +653,20 @@ function propertyWriterOf(
 /**
  * Deserialize unknown data (from JSON.parse) into a typed instance using the
  * spec. A polymorphic spec reads the derived contract its tag selects
- * (FR-007).
+ * (FR-007). `treeNumbers` says how `data` holds its numbers; a root number
+ * leaf reads as the number it is, which no contract accepts.
  */
 export function deserializeWithSpec<T>(
   data: unknown,
   spec: TypeSpec<T>,
   customConverters?: readonly JsonConverter[],
+  treeNumbers: TreeNumbers = "parsed",
 ): T {
+  const plan = specPlansFor(customConverters, treeNumbers).planOf(spec);
+  const root = treeNumbers === "exact" ? numberOfTreeValue(data) : data;
+
   // The plan reads `spec` or one of its registered derived contracts, so it builds a `T`.
-  return specPlansFor(customConverters).planOf(spec).deserialize(data) as T;
+  return plan.deserialize(root) as T;
 }
 
 function deserializePolymorphic(
@@ -701,13 +768,17 @@ export function serializeWithValueSpec(
   return specPlansFor(customConverters).valueConverterOf(spec).serialize(value);
 }
 
-/** Deserializes a non-object root through its descriptor, under the spec's read options. */
+/**
+ * Deserializes a non-object root through its descriptor, under the spec's
+ * read options. `treeNumbers` says how `data` holds its numbers.
+ */
 export function deserializeWithValueSpec(
   data: unknown,
   spec: ValueSpec,
   customConverters?: readonly JsonConverter[],
+  treeNumbers?: TreeNumbers,
 ): unknown {
-  return specPlansFor(customConverters).valueConverterOf(spec).deserialize(data);
+  return specPlansFor(customConverters, treeNumbers).valueConverterOf(spec).deserialize(data);
 }
 
 // ─── Memoization ─────────────────────────────────────────────────────────────

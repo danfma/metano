@@ -13,7 +13,7 @@ import type { NumberTypeName } from "./types.ts";
  *   `"01.5"` included) and an optional exponent; a value that overflows the
  *   type is rejected, one that underflows reads as zero;
  * - `Decimal`: the same text without the named literals, within
- *   ±79228162514264337593543950335 after rounding.
+ *   ±79228162514264337593543950335 after rounding (`decimal-text.ts`).
  *
  * No whitespace, hex, digit separator, empty string or other spelling is
  * accepted.
@@ -26,7 +26,7 @@ const SIGNED_INTEGER_PATTERN = /^[+-]?[0-9]+$/;
 const UNSIGNED_INTEGER_PATTERN = /^[0-9]+$/;
 
 /** Floating-point and decimal text: sign, integer digits, fraction digits, exponent. */
-const REAL_NUMBER_PATTERN =
+export const REAL_NUMBER_PATTERN =
   /^[+-]?(?:(?<integer>[0-9]+)(?:\.(?<fraction>[0-9]*))?|\.(?<bareFraction>[0-9]+))(?:[eE](?<exponent>[+-]?[0-9]+))?$/;
 
 const LEADING_ZEROS_PATTERN = /^0+/;
@@ -43,12 +43,6 @@ interface Bound {
   readonly limit: bigint;
   readonly scale: number;
 }
-
-/**
- * `79228162514264337593543950335.5`: a decimal text at or past it rounds
- * beyond `System.Decimal.MaxValue` (measured).
- */
-const DECIMAL_OVERFLOW: Bound = { limit: 792_281_625_142_643_375_935_439_503_355n, scale: 1 };
 
 /**
  * `2^128 − 2^103`, half-way between `Single.MaxValue` and `2^128`: a `Single`
@@ -162,13 +156,6 @@ const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = 
  */
 export function readNumberText(text: string, numberType: NumberTypeName): number | undefined {
   return NUMBER_TEXT_READERS[numberType](text);
-}
-
-/** Whether System.Text.Json reads `text` as a `System.Decimal`. */
-export function isDecimalText(text: string): boolean {
-  const parts = REAL_NUMBER_PATTERN.exec(text);
-
-  return parts !== null && isBelow(exactValueOf(parts), DECIMAL_OVERFLOW);
 }
 
 function exactValueOf(parts: RegExpExecArray): ExactValue {
