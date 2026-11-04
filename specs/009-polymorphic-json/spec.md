@@ -564,7 +564,9 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   (DECIDED-20 b): 64 nested containers are written and read, the 65th throws; S8 pins them with a
   manifest row. Only containers count: the write side follows the source-generated fast path's
   boundary, while its exception and message are STJ's metadata / reflection mode's, which already
-  throws for a non-null scalar written inside the 64th container (a hybrid, DECIDED-20 b).
+  throws for a non-null scalar written inside the 64th container (a hybrid, DECIDED-20 b). When
+  `deserializeText` tokenizes the text (FR-048 item 7), the read limit also applies to the whole
+  document, members no contract reads included, as STJ's reader applies it.
 - **FR-017**: Under `FallBackToNearestAncestor`, an abstract derived entry MUST be accepted as a
   nearest-ancestor target on serialize (its tag, if any, is written, then the runtime value's
   nearest-registered-ancestor contract). Reading its tag MUST throw what STJ throws (probed in S6,
@@ -869,6 +871,55 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      **Cost** (`bun run bench:json`, 1 MB `Order[]` with decimal.js prices, medians): writes take
      5.5–5.7 ms against 4.3 ms with `toNumber()` on Bun 1.4.2, and 8.8–9.1 ms against 8.8–9.1 ms
      on Node 24.11.
+  7. **Decimal reads** (#457, DECIDED-23 f): `JsonSerializer.deserializeText(text, spec,
+     converters?)` and `BoundSerializer.deserializeText(text, spec)` read JSON text as STJ's
+     `Deserialize(string, JsonTypeInfo<T>)` does, and build each `decimal` from its source
+     digits. `deserialize(data, spec)` keeps reading the tree `JSON.parse` built, where a number
+     with more than 15 significant digits has already been rounded to a double (documented
+     divergence).
+     - **Path per spec.** On its first text read, the closure of the spec (properties and bases,
+       derived contracts, collection elements, dictionary values, nullables, refs) is searched
+       once for a descriptor whose built-in converter reads a number from its exact text: a
+       `decimal` (`long` / `ulong` as `bigint` join it with #450). A spec without one reads
+       `JSON.parse(text)`, exactly as before. A spec with one reads `JSON.parse(text)` too when no
+       run of `[0-9.]` in the text is 16 characters long, since every number then has at most 15
+       significant digits, which a double holds exactly (the check probes every 16th character:
+       about 5 ms on Node and 4 ms on Bun for 10 MB). Otherwise the runtime's tokenizer builds the
+       tree and keeps each number of more than 15 significant digits as its source text. Only
+       the built-in `decimal` converter reads that text; every other converter, custom ones
+       included, gets the `number` `JSON.parse` gives, so a `double` or `long` property reads as
+       before. A tokenized string is copied out of the text, so the tree never keeps the text
+       alive (on JavaScriptCore a slice of any length does).
+     - **Decimal rounding.** The `decimal` converter reads every number text (a long number, a
+       `rawJSON` leaf, a JSON string under `AllowReadingFromString`) as STJ does: a 96-bit integer
+       and a scale of at most 28. Past them, the digits round half to even, except a tie at the
+       30th significant digit, which rounds up; `1e-29` and smaller read as `0`; a value that
+       rounds past `MaxValue` throws `The JSON value could not be converted to System.Decimal.`.
+       A JSON number already read as a double is rounded the same way from its shortest text when
+       it is non-zero and below `1e-11` (before #457, `1e-29` read as `1e-29`). Measured on .NET
+       10.0.12: the rows of DECIDED-23 f, 30 000 random texts (5 000 of them as JSON strings under
+       Web) and the 20 019 values of the #458 probe all agree on Node 24.11 and Bun 1.4.2.
+     - **Text errors.** Invalid JSON text throws `JsonException` with STJ's reader message,
+       without the `Path` suffix (DECIDED-5), on every path: when `JSON.parse` throws its
+       `SyntaxError`, the tokenizer reads the text again for the message (222 measured
+       messages, e.g. `'}' is an invalid start of a value.`, `Expected depth to be zero at the end
+       of the JSON payload. There is an open JSON object or array that should be closed.`, and
+       non-ASCII characters printed as their first UTF-8 byte, `'0xC3'`). The tokenizer accepts
+       exactly what `JSON.parse` accepts and builds the same tree: the last duplicate key wins at
+       the first key's position, `__proto__` is an own property, and lone surrogates are
+       accepted, which STJ rejects (documented divergence). The text is read whole before the
+       contract, so a syntax error is reported before any contract error, where STJ reports the
+       first in document order.
+     - **Cost** (`bun run bench:json`, 10 MB `Order[]`, medians, Node 24.11 / Bun 1.4.2): a spec
+       without decimals reads in the same time through `deserializeText` as through
+       `JSON.parse` + `deserialize` (76.0 / 54.8 ms against 79.9 / 54.0 ms). The `Order` spec with
+       decimal prices of two decimal places reads in 123.5 / 83.9 ms against 114.7 / 78.1 ms, the
+       cost of the check. With prices of 20 significant digits or more, the exact read takes
+       237.9 / 139.4 ms against 124.0 / 84.1 ms for the inexact tree path. Peak memory of one
+       10 MB read is unchanged for the two-decimal prices (266 / 161 MB) and 316 / 220 MB for the
+       exact read. The alternative, a `JSON.parse` reviver keeping `context.source`, took
+       344 / 192 ms and peaked at 373 / 259 MB on the same payload, and still needed the tokenizer
+       for STJ's messages.
 - **FR-049**: **Breaking change and versioning** (DECIDED-6). FR-034 changes public signatures of
   `metano-runtime/system/json`, so the feature MUST ship as a breaking release: the commit that
   changes the signatures uses `feat!:` with a `BREAKING CHANGE:` footer. `.releaserc.json` maps a
@@ -910,7 +961,11 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | `byte[]` | base64 string | number array | `MS0037`; follow-up issue (DECIDED-16) |
 | Writing a `decimal` with trailing zeros (its scale) | `1.10m` → `1.10`, `1.0m` → `1.0`, `0.00m` → `0.00` | `1.1`, `1`, `0` (decimal.js normalizes trailing zeros; every other digit is exact, FR-048 item 6) | Documented (DECIDED-23 f, #458); keeping it needs a decimal type that keeps the scale |
 | Writing a `decimal` on an engine without `JSON.rawJSON` | its exact digits | `toNumber()` (`7.922816251426434e+28` for `MaxValue`) | Engine-dependent (FR-048 item 6); Node 24 and Bun 1.4.2 have it |
-| JSON number just past `decimal.MaxValue` (`79228162514264337593543950335.5`, `…336`) | `JsonException` | `JSON.parse` rounds it to the double of `MaxValue`, accepted | Undetectable after `JSON.parse` (DECIDED-23 f) |
+| JSON number just past `decimal.MaxValue` (`79228162514264337593543950335.5`, `…336`) | `JsonException` | `deserializeText` throws the same; through `deserialize`, `JSON.parse` rounds it to the double of `MaxValue`, accepted | Undetectable after `JSON.parse`; exact through `deserializeText` (DECIDED-23 f, #457) |
+| Reading a `decimal` of more than 15 significant digits (`12345678901234567890.123456789`) | its exact digits, rounded to 28 decimal places | exact through `deserializeText`; `JSON.parse` rounds it to a double before `deserialize` sees it (`12345678901234567000`) | Documented (FR-048 item 7, #457) |
+| Lone surrogates in JSON text (`"\ud800"` unescaped, or `"\uD800"` read as a string) | `ArgumentException` / `JsonException` | accepted, as `JSON.parse` accepts them | Documented (FR-048 item 7) |
+| A syntax error after a contract error in the text | the first error in document order | the syntax error: the text is read whole before the contract | Documented (FR-048 item 7) |
+| A container nested past 64 levels in a member no contract reads | `JsonException` (the reader's limit) | throws when `deserializeText` tokenizes the text; accepted through `JSON.parse` | Documented (FR-016, FR-048 item 7) |
 | Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows compare the prefix |
 | Two properties whose JSON names differ only in case, case-insensitive context | `InvalidOperationException` "The JSON property name for 'Twins.A' collides with another property." at first use | both kept; a key fills the property listed last | Not reported; follow-up with the naming-collision issue (DECIDED-23 e) |
 | Case-insensitive names with characters whose casing differs between the JS engine's and .NET's Unicode version | .NET's tables | the engine's tables (Node 24: U+A7CF, U+A7D3, U+A7D5) | Engine-dependent (DECIDED-23 a) |
@@ -986,7 +1041,8 @@ this note:
 The same release notes also list these changes, which do not break semantic JSON consumers: the
 derived-first key order (FR-009), the `JsonException` class of the existing errors (FR-045), the
 generic root getter renames (DECIDED-7), camelCase names and lenient reads for Web contexts
-(FR-048), and the minimum `metano-runtime` version (DECIDED-17).
+(FR-048), `deserializeText` with exact decimal reads and decimals rounded to STJ's 28 decimal
+places on read (FR-048 item 7), and the minimum `metano-runtime` version (DECIDED-17).
 
 ## Decisions
 
@@ -1383,6 +1439,30 @@ the former `OPEN-N`.
     so a text that parses to it reads only when its exact value is below it (measured:
     `"3.4028235677973366e38"` reads, `"340282356779733661637539395458142568448"` throws). `numberType` is emitted on every numeric `primitive` descriptor, dictionary
     keys included, and the runtime ignores it there.
+
+    **Revised by #457 (reads):** `JsonSerializer.deserializeText` reads a `decimal` from its
+    source digits (FR-048 item 7), which resolves the read side of the range divergence above
+    for text reads. STJ measured on .NET 10.0.12 (System.Text.Json 10.0.0.0, source-generated
+    context, `Deserialize(string)` then `Serialize`), matched on Node 24.11 and Bun 1.4.2:
+
+    | JSON text | STJ writes back | `deserializeText` then `serialize` |
+    |---|---|---|
+    | `12345678901234567890.123456789`, `79228162514264337593543950335`, `9007199254740993` | the same digits | same (the tree path read `12345678901234567000`, `79228162514264340000000000000`, which is past `MaxValue`, and `9007199254740992`) |
+    | `79228162514264337593543950335.4`, `7.9228162514264337593543950335e28` | `79228162514264337593543950335` | same |
+    | `79228162514264337593543950335.5`, `79228162514264337593543950336`, `1e29` | `JsonException` "could not be converted to System.Decimal." | same (the tree path accepted the first two) |
+    | `0.33333333333333333333333333333333`, `0.66666666666666666666666666666666` | `0.3333333333333333333333333333`, `0.6666666666666666666666666667` | same |
+    | `1e-29`, `1.5e-29`, `5e-29`, `1e-400` | `0.0000000000000000000000000000` | `0` (the scale) |
+    | `9.9e-29`, `1.5e-28`, `2.5e-28`, `3.5e-28` | `1e-28`, `2e-28`, `2e-28`, `4e-28` in plain digits (half to even) | same |
+    | `0.12345678901234567890123456785`, `…775` | `0.1234567890123456789012345678` for both (half to even) | same |
+    | `1.00000000000000000000000000025`, `12345678901234567890123456788.5` | `1.0000000000000000000000000003`, `12345678901234567890123456789` (a tie at the 30th digit rounds up) | same |
+    | `"12345678901234567890.123456789"`, `"0.33333333333333333333333333333333"` (Web) | the same digits, `0.3333333333333333333333333333` | same |
+    | `"1e-29"` (Web) | `0.0000000000000000000000000000` | `0` (the scale) |
+    | `"1.5"` (General), `"79228162514264337593543950335.5"`, `" 1"`, `""`, `"NaN"` (Web) | `JsonException` | same |
+
+    The 20 019 values of the #458 probe, read from STJ's text and written back, match STJ byte for
+    byte (17 855) or differ only in the scale (2 164); through `JSON.parse` + `deserialize`, 8 696
+    differed. A leading byte order mark is rejected by both (`'0xEF' is an invalid start of a
+    value.`).
   - (g) End-to-end evidence: the TypeScript generated for the Web golden
     (`tests/Metano.Tests/Expected/json-web-context.ts`) was bundled with `bun build` and run under
     Node and Bun against 37 STJ rows (8 writes, 29 reads): every write matched byte for byte and

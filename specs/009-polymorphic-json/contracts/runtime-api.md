@@ -38,6 +38,8 @@ class JsonSerializer {
   static serialize<T>(value: T, spec: ValueSpec<T>, converters?: readonly JsonConverter[]): unknown;                             // new overload
   static deserialize<T>(data: unknown, spec: TypeSpec<T>, converters?: readonly JsonConverter[]): T | null;                       // BREAKING (was T)
   static deserialize<T>(data: unknown, spec: ValueSpec<T>, converters?: readonly JsonConverter[]): T;                             // new overload
+  static deserializeText<T>(text: string, spec: TypeSpec<T>, converters?: readonly JsonConverter[]): T | null;                    // new (#457)
+  static deserializeText<T>(text: string, spec: ValueSpec<T>, converters?: readonly JsonConverter[]): T;                          // new (#457)
 }
 
 class BoundSerializer {
@@ -45,6 +47,8 @@ class BoundSerializer {
   serialize<T>(value: T, spec: ValueSpec<T>): unknown;                               // new overload
   deserialize<T>(data: unknown, spec: TypeSpec<T>): T | null;                        // BREAKING
   deserialize<T>(data: unknown, spec: ValueSpec<T>): T;                              // new overload
+  deserializeText<T>(text: string, spec: TypeSpec<T>): T | null;                     // new (#457)
+  deserializeText<T>(text: string, spec: ValueSpec<T>): T;                           // new (#457)
 }
 
 interface TypeSpec<T> {
@@ -122,6 +126,19 @@ abstract class SerializerContext {
     `numberType` and every `decimal` descriptor accept a JSON string by the FR-048 grammar, and
     otherwise throw `JsonException` `The JSON value could not be converted to <numberType>.`.
     Writing is unchanged.
+13. `deserializeText(text, spec)` returns what `deserialize(JSON.parse(text), spec)` returns,
+    except that (FR-048 item 7, #457):
+    - each `decimal` is built from the source digits of its JSON number, rounded as STJ rounds
+      them (28 decimal places, 96 bits), and one past `MaxValue` throws `JsonException`;
+    - invalid JSON text throws `JsonException` with STJ's reader message instead of the engine's
+      `SyntaxError`;
+    - when the text is tokenized (a spec whose closure holds a `decimal`, and a text that may hold
+      a number of more than 15 significant digits), a container nested past 64 levels throws
+      anywhere in the document (FR-016).
+    A spec whose closure holds no `decimal` reads through `JSON.parse` unchanged. Converters other
+    than the built-in `decimal` one, custom ones included, see the `number` `JSON.parse` gives.
+    `deserialize` keeps reading a parsed tree and is inexact for a `decimal` beyond double
+    precision.
 
 ## Delivery status (S5)
 
@@ -163,3 +180,12 @@ replaces the interim rule: a plain object that matches no variant guard is writt
 (no tag) only when `baseTest` accepts it, and otherwise follows `unknownDerivedType` with the
 runtime type name `Object` (FR-019 rule 5, DECIDED-24 b). Generated contexts now emit `typeName`,
 `testOrder` and the `test` guards of `[PlainObject]` entries.
+
+## Delivery status (#457)
+
+#457 adds `deserializeText` to `JsonSerializer` and `BoundSerializer` (guarantee 13). Every
+`decimal` read, on both entry points, now rounds as STJ does: a number or string text past 28
+decimal places or 96 bits rounds (`1e-29` reads as `0`), and the range is decided on the rounded
+value. The tokenizer's number leaf (`JsonNumberText`) is internal: only the built-in `decimal`
+converter receives it, so no exported type or converter signature changes. `long` / `ulong` as
+`bigint` (#450) read exact digits by joining `readsNumberText` in `exact-number-reads.ts`.
