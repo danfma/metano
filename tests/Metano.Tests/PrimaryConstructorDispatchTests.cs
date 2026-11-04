@@ -88,7 +88,7 @@ public class PrimaryConstructorDispatchTests
     [Test]
     public async Task ChainForwardingAParameter_AssignsEveryCapturedField()
     {
-        var files = TranspileHelper.Transpile(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             namespace Probe;
 
@@ -110,6 +110,41 @@ public class PrimaryConstructorDispatchTests
                     + "        this._name = name;\n"
                     + "        this._n = n;\n"
             );
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task PositionalRecordWithASecondaryConstructor_DeclaresItsMembersAsFields()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace Probe;
+
+            [Transpile]
+            public record Pair(int A, int B)
+            {
+                public Pair(int both) : this(both, both) { }
+            }
+            """
+        );
+
+        var output = files["probe/pair.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("export class Pair {\n  readonly a: number;\n\n  readonly b: number;\n");
+        await Assert
+            .That(output)
+            .Contains("  constructor(a: number, b: number);\n  constructor(both: number);\n");
+        await Assert
+            .That(output)
+            .Contains(
+                "        const a = __chain0Arg0;\n"
+                    + "        const b = __chain0Arg1;\n"
+                    + "        this.a = a;\n"
+                    + "        this.b = b;\n"
+            );
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
     private static IEnumerable<MetanoDiagnostic> UnsupportedFeatures(

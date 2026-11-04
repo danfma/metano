@@ -34,6 +34,10 @@ public static class TsConstructorModifier
     public static bool IsNarrowerThan(this TsAccessibility modifier, TsAccessibility other) =>
         RestrictionOf(modifier) > RestrictionOf(other);
 
+    /// <summary>
+    /// Whether <paramref name="modifier"/> restricts construction:
+    /// <c>protected</c> or <c>private</c>.
+    /// </summary>
     public static bool IsNonPublic(this TsAccessibility modifier) =>
         modifier is not TsAccessibility.Public;
 

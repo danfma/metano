@@ -399,6 +399,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);
 
         new JsonBrandedFactoryValidator(transpilableTypes, ReportDiagnostic).Validate();
+
         new JsonReferencedConstructorValidator(compilation.Assembly, ReportDiagnostic).Validate(
             jsonConstructedTypes
         );

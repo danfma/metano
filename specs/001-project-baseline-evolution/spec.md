@@ -247,12 +247,14 @@ Product requirements added after the migration (normative; each one is traced by
   A referenced package decides its own types' constructors: when a consumer's
   `SerializerContext` constructs a referenced class whose constructor rules 1 and 2 make
   non-public, the backend MUST report `MS0062` (`JsonContractConstructorNotPublic`, warning) at
-  the context, since its `TypeSpec` does not type-check. The check reads metadata with the
-  predicate the emitter uses: a record's positional constructor counts as public, and so does an
-  abstract type's `protected` parameterless constructor, the one C# synthesizes. Known false
-  positives, which metadata cannot tell apart: a type its package kept public under rule 3, and
-  an abstract class's C# 12 primary constructor (`protected` in metadata). Known false negative:
-  an abstract type's declared `protected` parameterless constructor.
+  the context, since its `TypeSpec` does not type-check. The check uses the predicate the
+  emitter uses. Known false positive: a type its package kept public under rule 3. A project
+  reference loads as source, so the predicate sees it exactly as the package's own transpile
+  did; only a binary reference (a DLL or a package) is read from metadata, where a record's
+  positional constructor counts as public and so does an abstract type's `protected`
+  parameterless constructor, the one C# synthesizes. There, metadata adds a known false
+  positive, an abstract class's C# 12 primary constructor (`protected` in metadata), and a known
+  false negative, an abstract type's declared `protected` parameterless constructor.
 
 ### Key Entities
 

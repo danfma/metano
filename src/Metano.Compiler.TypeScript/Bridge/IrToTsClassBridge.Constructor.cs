@@ -277,19 +277,20 @@ internal static partial class IrToTsClassBridge
     public static IEnumerable<TsStatement> BuildCapturedAssignments(
         IrConstructorDeclaration ctor
     ) =>
-        ctor
-            .Parameters.Select(p =>
-                p.CapturedFieldName is { } capturedField
-                    ? ThisAssignment(
+        ctor.Parameters.SelectMany(p =>
+            p.CapturedFieldName is { } capturedField
+                ?
+                [
+                    ThisAssignment(
                         IrToTsNamingPolicy.ToDeclaredDataMemberName(
                             capturedField,
                             attributes: null
                         ),
                         IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
-                    )
-                    : null
-            )
-            .OfType<TsStatement>();
+                    ),
+                ]
+                : Array.Empty<TsStatement>()
+        );
 
     /// <summary>
     /// One <c>this.&lt;member&gt; = &lt;paramName&gt;</c> per promoted

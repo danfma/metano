@@ -84,7 +84,10 @@ public sealed class IrToTsClassEmitter(
 
         var explicitCtors = IrConstructorExtractor.AllExplicitConstructors(type);
         var emitsDispatcher = explicitCtors.Count > 1;
-        var promotedMembers = PromotedMembersOf(ir.Constructor, emitsDispatcher);
+        var promotedMemberDeclaration = PromotedMemberDeclarationOf(
+            ir.Constructor,
+            emitsDispatcher
+        );
 
         var constructor = BuildClassConstructor(
             type,
@@ -104,14 +107,16 @@ public sealed class IrToTsClassEmitter(
         if (keepsBaseMessage)
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
 
-        EmitPromotedMemberFields(ir.Constructor, promotedMembers, classMembers);
+        EmitPromotedMemberFields(ir.Constructor, promotedMemberDeclaration, classMembers);
+
         EmitClassMembers(
             ir,
-            PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMembers),
+            PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
             classMembers,
             keepsBaseMessage,
             lowering
         );
+
         EmitDeferredOperatorsAndMethods(type, ir, classMembers, lowering);
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
 
@@ -356,28 +361,38 @@ public sealed class IrToTsClassEmitter(
     }
 
     /// <summary>
-    /// Promoted <c>params T[]</c> ctor params can't carry the parameter-property
-    /// modifier (TS forbids <c>readonly ...x: T[]</c>). The bridge emits the rest
-    /// form on the ctor signature; this helper declares the companion field so
-    /// the public surface still exposes it as a property (#152).
+    /// Declares as class fields the promoted members the constructor cannot
+    /// declare as parameter properties. With parameter properties, only a
+    /// promoted <c>params T[]</c>: TypeScript forbids the modifier on a rest
+    /// parameter (<c>readonly ...x: T[]</c>), so the signature keeps the rest
+    /// form and the field keeps the member on the public surface (#152). With
+    /// <see cref="PromotedMemberDeclaration.Fields"/>, every promoted member:
+    /// a dispatcher's <c>(...args)</c> declares no parameter properties, and
+    /// its branches assign the fields.
     /// </summary>
     private void EmitPromotedMemberFields(
         IrConstructorDeclaration? ctorIr,
-        PromotedMembers promotedMembers,
+        PromotedMemberDeclaration promotedMemberDeclaration,
         List<TsClassMember> classMembers
     )
     {
         var declaredAsFields = (ctorIr?.Parameters ?? []).Where(p =>
-            promotedMembers switch
-            {
-                PromotedMembers.ParameterProperties => IsPromotedParamsParameter(p),
-                PromotedMembers.Fields => p.Promotion is not IrParameterPromotion.None,
-                _ => false,
-            }
+            IsDeclaredAsField(p, promotedMemberDeclaration)
         );
 
-        classMembers.AddRange(declaredAsFields.Select(BuildPromotedParamsCompanionField));
+        classMembers.AddRange(declaredAsFields.Select(BuildPromotedMemberField));
     }
+
+    private static bool IsDeclaredAsField(
+        IrConstructorParameter p,
+        PromotedMemberDeclaration promotedMemberDeclaration
+    ) =>
+        promotedMemberDeclaration switch
+        {
+            PromotedMemberDeclaration.ParameterProperties => IsPromotedParamsParameter(p),
+            PromotedMemberDeclaration.Fields => p.Promotion is not IrParameterPromotion.None,
+            _ => false,
+        };
 
     /// <summary>
     /// The promoted members the constructor declares, which the member walk
@@ -385,9 +400,9 @@ public sealed class IrToTsClassEmitter(
     /// </summary>
     private static IReadOnlySet<string> PromotedNamesDeclaredByConstructor(
         IrConstructorDeclaration? ctorIr,
-        PromotedMembers promotedMembers
+        PromotedMemberDeclaration promotedMemberDeclaration
     ) =>
-        promotedMembers is PromotedMembers.OwnDeclarations
+        promotedMemberDeclaration is PromotedMemberDeclaration.OwnDeclarations
             ? new HashSet<string>(StringComparer.Ordinal)
             : IrToTsClassBridge.PromotedMemberNames(ctorIr);
 
@@ -400,21 +415,25 @@ public sealed class IrToTsClassEmitter(
     /// getter); or by the members' own declarations when a dispatcher runs
     /// explicit constructors whose bodies assign them.
     /// </summary>
-    private static PromotedMembers PromotedMembersOf(
+    private static PromotedMemberDeclaration PromotedMemberDeclarationOf(
         IrConstructorDeclaration? ctorIr,
         bool emitsDispatcher
-    ) =>
-        (emitsDispatcher, ctorIr?.IsPrimary) switch
+    )
+    {
+        var chainsToPrimary = ctorIr?.IsPrimary is true;
+
+        return (emitsDispatcher, chainsToPrimary) switch
         {
-            (false, _) => PromotedMembers.ParameterProperties,
-            (true, true) => PromotedMembers.Fields,
-            _ => PromotedMembers.OwnDeclarations,
+            (false, _) => PromotedMemberDeclaration.ParameterProperties,
+            (true, true) => PromotedMemberDeclaration.Fields,
+            (true, false) => PromotedMemberDeclaration.OwnDeclarations,
         };
+    }
 
     private static bool IsPromotedParamsParameter(IrConstructorParameter p) =>
         p.Parameter.IsParams && p.Promotion is not IrParameterPromotion.None;
 
-    private TsFieldMember BuildPromotedParamsCompanionField(IrConstructorParameter p) =>
+    private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p) =>
         new(
             IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),
             // The field keeps the declared `T[] | null` (`with { Items = null }` is
@@ -862,7 +881,7 @@ public sealed class IrToTsClassEmitter(
     }
 
     /// <summary>How the members a constructor promotes are declared.</summary>
-    private enum PromotedMembers
+    private enum PromotedMemberDeclaration
     {
         ParameterProperties,
         Fields,
