@@ -8,9 +8,11 @@ import { Temporal } from "@js-temporal/polyfill";
 import type { PrimitiveDescriptor, TypeSpec, ValueSpec } from "../../src/system/json/index.ts";
 
 /**
- * A `System.Decimal` stand-in with decimal.js's construction and
- * `toNumber()` surface; the runtime is not allowed a decimal.js dependency,
- * and the benchmark measures the serializer, not the decimal library.
+ * A `System.Decimal` stand-in with decimal.js's construction, `toNumber()`
+ * and `toFixed()` surface; the runtime is not allowed a decimal.js
+ * dependency, and the benchmark measures the serializer, not the decimal
+ * library. The payload's prices print in plain notation, so `toFixed()` is
+ * the text itself.
  */
 export class BenchDecimal {
   readonly text: string;
@@ -21,6 +23,10 @@ export class BenchDecimal {
 
   toNumber(): number {
     return Number(this.text);
+  }
+
+  toFixed(): string {
+    return this.text;
   }
 }
 
