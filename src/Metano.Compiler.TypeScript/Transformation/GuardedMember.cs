@@ -2,12 +2,12 @@ namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// The coarse runtime test a generated shape guard applies to one member
-/// (spec 009 FR-019 rule 3). Two kinds are compatible when they are equal or
-/// either is <see cref="Present"/>, a presence-only check that accepts any
-/// value. <see cref="Unchecked"/> marks a member the guard accepts whatever
-/// it holds, absent included.
+/// (spec 009 FR-019 rule 3). <see cref="Present"/> (a presence-only check)
+/// and <see cref="Unchecked"/> (a member the guard accepts whatever it holds,
+/// absent included) accept any value, so they are compatible with every
+/// kind; any other two kinds are compatible only when equal.
 /// </summary>
-public enum GuardTestKind
+internal enum GuardTestKind
 {
     String,
     Number,
@@ -21,10 +21,33 @@ public enum GuardTestKind
 
 /// <summary>
 /// One member a generated shape guard checks: its TS name, the kind of its
-/// test, and whether the guard rejects the value when the member is absent
-/// (not optional, not nullable, not unchecked).
+/// test, whether the guard rejects the value when the member is absent (not
+/// optional, not nullable, not unchecked), and the string literal it must
+/// equal for a <c>[Discriminator]</c> member (<c>v.kind === "Circle"</c>).
 /// </summary>
-public sealed record GuardedMember(string Name, GuardTestKind Kind, bool IsRequired);
+internal sealed record GuardedMember(
+    string Name,
+    GuardTestKind Kind,
+    bool IsRequired,
+    string? Literal = null
+)
+{
+    /// <summary>
+    /// Whether a value that passes <paramref name="other"/>'s test may pass
+    /// this one: compatible kinds, and equal literals when both have one.
+    /// </summary>
+    public bool IsCompatibleWith(GuardedMember other)
+    {
+        var differentLiterals =
+            Literal is not null && other.Literal is not null && Literal != other.Literal;
+
+        return !differentLiterals
+            && (Kind == other.Kind || AcceptsAnyValue(Kind) || AcceptsAnyValue(other.Kind));
+    }
+
+    private static bool AcceptsAnyValue(GuardTestKind kind) =>
+        kind is GuardTestKind.Present or GuardTestKind.Unchecked;
+}
 
 /// <summary>
 /// The test a shape guard emits for one member: the boolean expression and

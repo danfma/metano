@@ -1,5 +1,6 @@
 using System.Globalization;
 using Metano.Compiler.TypeScript.AST;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation.Json;
 
@@ -75,7 +76,10 @@ internal sealed class JsonPolymorphismSpecBuilder(
             new TsObjectProperty("spec", _descriptors.BuildSpecLink(registration.Type)),
             TrueFlag("abstract", registration.IsAbstract),
             registration.IsStructural
-                ? new TsObjectProperty("test", _guards.Build(registration.Type))
+                ? new TsObjectProperty(
+                    "test",
+                    _guards.GuardReferenceOf((INamedTypeSymbol)registration.Type)
+                )
                 : null,
         };
 
@@ -112,7 +116,7 @@ internal sealed class JsonPolymorphismSpecBuilder(
     /// <summary><c>baseTest: isShape</c> for the rule 5 base guard.</summary>
     private TsObjectProperty? BaseTestProperty(JsonPolymorphism polymorphism) =>
         polymorphism.NeedsBaseTest
-            ? new TsObjectProperty("baseTest", _guards.Build(polymorphism.BaseType))
+            ? new TsObjectProperty("baseTest", _guards.GuardReferenceOf(polymorphism.BaseType))
             : null;
 
     /// <summary>

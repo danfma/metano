@@ -197,7 +197,8 @@ get shape(): TypeSpec<Shape> {
   attribute order.
 - Variant specs have no `type:`, and their factories return object literals, as `[PlainObject]`
   specs do today.
-- Two variants that cover each other produce `MS0032` and no `polymorphism` member.
+- Two variants that cover each other, or a variant whose guard covers the `baseTest` guard,
+  produce `MS0032` and no `polymorphism` member.
 - A `[PlainObject]` factory literal sets the inherited members too (`point3`:
   `({ x: p.x as number, y: p.y as number, z: p.z as number })`), since a TS interface has no base
   constructor to fill them (DECIDED-23 i).

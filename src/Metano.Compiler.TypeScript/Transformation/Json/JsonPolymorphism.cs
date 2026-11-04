@@ -39,22 +39,21 @@ internal sealed record JsonPolymorphism(
     /// <c>[PlainObject]</c> type, FR-019), so the descriptor names it with
     /// <c>typeName</c>.
     /// </summary>
-    public bool HasNoConstructor =>
-        BaseType.TypeKind == TypeKind.Interface || SymbolHelper.HasPlainObject(BaseType);
+    public bool HasNoConstructor => !JsonContractAdmission.HasRuntimeConstructor(BaseType);
+
+    /// <summary>The base registers itself as one of its derived types.</summary>
+    public bool RegistersItself =>
+        Registrations.Any(registration =>
+            SymbolEqualityComparer.Default.Equals(registration.Type, BaseType)
+        );
 
     /// <summary>
     /// A concrete <c>[PlainObject]</c> base that does not register itself: a
     /// plain object no variant guard accepts is written as the base when the
-    /// base's own guard accepts it (FR-019 rule 5, the <c>baseTest</c>). A
-    /// generic base gets no guard (<see cref="JsonStructuralGuardTargets"/>).
+    /// base's own guard accepts it (FR-019 rule 5, the <c>baseTest</c>).
     /// </summary>
     public bool NeedsBaseTest =>
-        !IsAbstractBase
-        && !BaseType.IsGenericType
-        && SymbolHelper.HasPlainObject(BaseType)
-        && !Registrations.Any(registration =>
-            SymbolEqualityComparer.Default.Equals(registration.Type, BaseType)
-        );
+        JsonStructuralGuardTargets.IsConcretePlainObjectBase(BaseType) && !RegistersItself;
 
     /// <summary>
     /// Whether any registration declares a tag. Without one, System.Text.Json

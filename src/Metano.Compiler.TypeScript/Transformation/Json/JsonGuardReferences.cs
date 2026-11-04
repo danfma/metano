@@ -22,27 +22,26 @@ internal sealed class JsonGuardReferences(TypeScriptTransformContext context)
 {
     private readonly TypeScriptTransformContext _context = context;
 
-    public TsExpression Build(ITypeSymbol type)
+    public TsExpression GuardReferenceOf(INamedTypeSymbol type)
     {
-        var named = (INamedTypeSymbol)type;
-        var guardName = $"is{_context.ResolveTsName(named)}";
-        var mapped = JsonTsTypes.MapContract(_context, named) as TsNamedType;
-        var origin = mapped?.Origin;
-        var qualifiers = (mapped?.Name ?? guardName).Split('.')[..^1];
+        var guardName = $"is{_context.ResolveTsName(type)}";
+        var mapped = (TsNamedType)JsonTsTypes.MapContract(_context, type);
+        var qualifiers = mapped.Name.Split('.').SkipLast(1).ToList();
 
-        if (qualifiers.Length == 0)
+        if (qualifiers.Count == 0)
         {
-            return origin is null
-                ? new TsModuleExportReference(guardName, named.Name)
-                : new TsTypeReference(guardName, origin);
+            return mapped.Origin is null
+                ? new TsModuleExportReference(guardName, type.Name)
+                : new TsTypeReference(guardName, mapped.Origin);
         }
 
-        TsExpression container = origin is null
+        TsExpression root = mapped.Origin is null
             ? new TsIdentifier(qualifiers[0])
-            : new TsTypeReference(qualifiers[0], origin);
+            : new TsTypeReference(qualifiers[0], mapped.Origin);
 
-        foreach (var qualifier in qualifiers[1..])
-            container = new TsPropertyAccess(container, qualifier);
+        var container = qualifiers
+            .Skip(1)
+            .Aggregate(root, (outer, qualifier) => new TsPropertyAccess(outer, qualifier));
 
         return new TsPropertyAccess(container, guardName);
     }

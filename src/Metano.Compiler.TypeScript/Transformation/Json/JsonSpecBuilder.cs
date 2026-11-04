@@ -38,14 +38,6 @@ internal sealed class JsonSpecBuilder
     }
 
     /// <summary>
-    /// Whether the TS type of an object contract is a class the spec can name
-    /// in <c>type: T</c> and construct: <c>[PlainObject]</c> types lower to
-    /// TS interfaces, and a C# interface (FR-018) has no constructor either.
-    /// </summary>
-    public static bool HasRuntimeConstructor(INamedTypeSymbol type) =>
-        type.TypeKind != TypeKind.Interface && !SymbolHelper.HasPlainObject(type);
-
-    /// <summary>
     /// The lazy field + getter pair of one context entry:
     /// <c>private _todoItem?: TypeSpec&lt;TodoItem&gt;</c> and
     /// <c>get todoItem() { return this._todoItem ??= this.createSpec({...}); }</c>
@@ -211,7 +203,7 @@ internal sealed class JsonSpecBuilder
     /// getter (e.g., <c>ctx.storedTodo</c>), not via <c>resolve(Class)</c>.
     /// </summary>
     private static TsObjectProperty? TypeProperty(INamedTypeSymbol targetType, string tsTypeName) =>
-        HasRuntimeConstructor(targetType)
+        JsonContractAdmission.HasRuntimeConstructor(targetType)
             ? new TsObjectProperty("type", new TsIdentifier(tsTypeName))
             : null;
 
@@ -381,12 +373,16 @@ internal sealed class JsonSpecBuilder
     private static string PolymorphicAbstractFactoryMessage(
         INamedTypeSymbol targetType,
         string tsTypeName
-    ) =>
-        targetType.TypeKind == TypeKind.Interface
-            ? $"Cannot deserialize interface type '{targetType.Name}' directly; deserialize it "
-                + "through a polymorphic spec."
-            : $"Cannot deserialize abstract type '{tsTypeName}' directly; deserialize it through "
-                + "a polymorphic spec.";
+    )
+    {
+        var (kind, name) =
+            targetType.TypeKind == TypeKind.Interface
+                ? ("interface", targetType.Name)
+                : ("abstract", tsTypeName);
+
+        return $"Cannot deserialize {kind} type '{name}' directly; deserialize it through a "
+            + "polymorphic spec.";
+    }
 
     private static string UnsupportedAbstractFactoryMessage(string tsTypeName) =>
         $"Cannot deserialize abstract type '{tsTypeName}': polymorphic JSON deserialization is "
