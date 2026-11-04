@@ -230,7 +230,11 @@ internal static partial class IrToTsClassBridge
             );
             for (var j = 0; j < argCount; j++)
             {
-                var check = IrTypeCheckBuilder.GenerateForParam(paramTypes[j + paramOffset], j);
+                var check = IrTypeCheckBuilder.Generate(
+                    paramTypes[j + paramOffset],
+                    new TsIdentifier($"args[{j}]")
+                );
+
                 condition = new TsBinaryExpression(condition, "&&", check);
             }
 

@@ -217,11 +217,25 @@ public static class IrRuntimeRequirementScanner
     {
         foreach (var p in parameters)
         {
-            var helper = ResolveTypeCheckHelper(p.Type);
+            var helper = ResolveTypeCheckHelper(DispatchedTypeOf(p));
             if (helper is not null)
                 acc.Add(new IrRuntimeRequirement(helper, IrRuntimeCategory.PrimitiveTypeCheck));
         }
     }
+
+    /// <summary>
+    /// The type a dispatcher checks each argument of the parameter against:
+    /// the element type of a <c>params T[]</c> parameter, whose arguments
+    /// arrive expanded, otherwise the parameter type.
+    /// </summary>
+    private static IrTypeRef DispatchedTypeOf(IrParameter parameter) =>
+        parameter switch
+        {
+            { IsParams: true, Type: IrArrayTypeRef array } => array.ElementType,
+            { IsParams: true, Type: IrNullableTypeRef { Inner: IrArrayTypeRef array } } =>
+                array.ElementType,
+            _ => parameter.Type,
+        };
 
     /// <summary>
     /// Mirrors <c>IrTypeCheckBuilder.PrimitiveCheck</c> on the TS side. Returns
