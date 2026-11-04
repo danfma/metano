@@ -72,6 +72,7 @@ internal sealed class JsonContractClosure(
         );
         var dispatchTargets = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var walked = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        var expanded = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var pending = new Queue<JsonContractEntry>();
 
         foreach (var root in roots)
@@ -120,8 +121,14 @@ internal sealed class JsonContractClosure(
                 ExpandPolymorphism(entries[type]);
         }
 
+        // A type can become a dispatch target while it is being walked (a
+        // self-referencing base reached first through a `base` link), so the
+        // walk and MarkDispatchTarget may both ask for the same expansion.
         void ExpandPolymorphism(JsonContractEntry entry)
         {
+            if (!expanded.Add(entry.Type))
+                return;
+
             if (ValidatedPolymorphismOf(entry) is not { } polymorphism)
                 return;
 

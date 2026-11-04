@@ -256,6 +256,29 @@ public class JsonPolymorphicContextTests
         await Assert.That(ts).Contains("tag: \"g\",\n            spec: () => this.gDer,");
     }
 
+    // A self-referencing base reached first through a `base` link becomes a
+    // dispatch target while it is walked; it must be expanded only once.
+    [Test]
+    public async Task SelfReferencingBase_ReachedThroughABaseLink_IsExpandedOnce()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            [JsonDerivedType(typeof(Leaf), "l")]
+            public abstract record Node(int Id, Node? Parent);
+
+            [Transpile]
+            public sealed record Leaf(int X, int Id, Node? Parent) : Node(Id, Parent);
+
+            [Transpile]
+            [JsonSerializable(typeof(Leaf))]
+            """
+        );
+
+        await Assert.That(ts).Contains("get node(): TypeSpec<Node>");
+        await Assert.That(ts).Contains("tag: \"l\",\n            spec: () => this.leaf,");
+    }
+
     [Test]
     public async Task AssemblyWideTranspile_DiscoversUnlistedDerivedTypes()
     {
