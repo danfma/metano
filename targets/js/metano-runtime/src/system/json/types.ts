@@ -149,14 +149,6 @@ export interface PropertySpec {
    * contract by it, stably, absent counting as `0` (FR-046, slice S6b).
    */
   readonly order?: number;
-  /**
-   * A member the read sets after construction, and only when the payload
-   * carries its key: a missing key keeps the value the factory constructed
-   * (a C# initializer), as System.Text.Json does for a member with a `set`
-   * accessor or a writable field that no constructor parameter binds. The
-   * factory does not read it (FR-046).
-   */
-  readonly assignIfPresent?: boolean;
 }
 
 // ─── Type Spec ───────────────────────────────────────────────────────────────
@@ -197,6 +189,17 @@ export interface TypeSpec<T = unknown> {
   readonly polymorphism?: PolymorphismSpec;
   /** The context's read behavior; absent when it is System.Text.Json's default. */
   readonly readOptions?: JsonReadOptions;
+  /**
+   * TS names of this contract's properties (its base chain's included) that
+   * a read sets after construction, and only when the payload carries their
+   * key: a missing key keeps the value the factory constructed (a C#
+   * initializer or a constructor's assignment), as System.Text.Json does for
+   * a `set` accessor or a writable field that no parameter of this
+   * contract's constructor binds. The generated factory ignores them; the
+   * runtime assigns them after construction (FR-046). Each contract has its
+   * own list: a derived spec's constructor binds different members.
+   */
+  readonly assignIfPresent?: readonly string[];
 }
 
 // ─── Polymorphism ────────────────────────────────────────────────────────────

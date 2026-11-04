@@ -163,12 +163,13 @@ export interface PropertySpec {
   // …existing members unchanged…
   /** S6b: a non-zero [JsonPropertyOrder]; collectWireProperties sorts the chain by it. */
   readonly order?: number;
-  /** S6b: set after construction, only when the payload carries the key (DECIDED-25 k). */
-  readonly assignIfPresent?: boolean;
 }
 
 export interface TypeSpec<T = unknown> {
   // …existing members unchanged…
+  /** S6b: TS names this contract sets after construction, only when the payload carries the key
+   *  (DECIDED-25 k, l); per contract, since each constructor binds different members. */
+  readonly assignIfPresent?: readonly string[];
   readonly polymorphism?: PolymorphismSpec;
   /** FR-037: a C# struct contract; JSON null at the root throws JsonException. */
   readonly valueType?: boolean;

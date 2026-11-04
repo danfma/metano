@@ -451,11 +451,12 @@ get account(): TypeSpec<Account> {
     type: Account,
     factory: (p: Record<string, unknown>) => new Account(),
     properties: [
-      { ts: "name", json: "Name", type: { kind: "primitive" }, assignIfPresent: true },
-      { ts: "version", json: "Version", type: { kind: "primitive" }, assignIfPresent: true },
-      { ts: "id", json: "Id", type: { kind: "primitive" }, order: -1, assignIfPresent: true },
-      { ts: "hits", json: "Hits", type: { kind: "primitive" }, assignIfPresent: true },
+      { ts: "name", json: "Name", type: { kind: "primitive" } },
+      { ts: "version", json: "Version", type: { kind: "primitive" } },
+      { ts: "id", json: "Id", type: { kind: "primitive" }, order: -1 },
+      { ts: "hits", json: "Hits", type: { kind: "primitive" } },
     ],
+    assignIfPresent: ["name", "version", "id", "hits"],
   });
 }
 
@@ -485,10 +486,12 @@ Rules (DECIDED-25):
 - Members no constructor parameter binds (the base chain included) follow System.Text.Json
   (DECIDED-25 k): an `init` or `required` one is set by the factory, which wraps `new T(…)` in
   `Object.assign(…, { … })`; a member with a public `set` accessor (or a reachable one under
-  `[JsonInclude]`) or a writable `[JsonInclude]` field gets `assignIfPresent: true` after
-  `order`, the factory leaves it out, and the runtime assigns it after construction only when
-  the payload carries it. A type without a parameterized constructor is built with `new T()`.
-  `[PlainObject]` literals and interfaces carry no `assignIfPresent`. A constructor parameter
+  `[JsonInclude]`) or a writable `[JsonInclude]` field that the contract's own constructor does
+  not bind is listed in the spec's `assignIfPresent: [...]` (after `ignoredProperties`, base-most
+  first, inherited members included, DECIDED-25 l), the factory leaves it out, and the runtime
+  assigns it after construction only when the payload carries it. A type without a
+  parameterized constructor is built with `new T()`. Abstract types, `[PlainObject]` literals
+  and interfaces carry no `assignIfPresent`; nor does an empty list. A constructor parameter
   bound to a `[JsonExtensionData]` member receives `null`.
 - `[JsonIgnore(Condition = Never)]` keeps the member; `[JsonExtensionData]` is left out.
 - Golden: `tests/Metano.Tests/Expected/json-member-options-context.ts`.

@@ -1,6 +1,8 @@
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Account } from "./account";
 import { Blob } from "./blob";
+import { BX } from "./bx";
+import { DX } from "./dx";
 import { Init } from "./init";
 import { Noted } from "./noted";
 import { OrdBase } from "./ord-base";
@@ -20,6 +22,10 @@ export class JsonContext extends SerializerContext {
   private _init?: TypeSpec<Init>;
 
   private _noted?: TypeSpec<Noted>;
+
+  private _bX?: TypeSpec<BX>;
+
+  private _dX?: TypeSpec<DX>;
 
   private _ordBase?: TypeSpec<OrdBase>;
 
@@ -67,34 +73,30 @@ export class JsonContext extends SerializerContext {
           ts: "name",
           json: "Name",
           type: { kind: "primitive" },
-          assignIfPresent: true,
         },
         {
           ts: "version",
           json: "Version",
           type: { kind: "primitive" },
-          assignIfPresent: true,
         },
         {
           ts: "kept",
           json: "Kept",
           type: { kind: "primitive" },
-          assignIfPresent: true,
         },
         {
           ts: "id",
           json: "Id",
           type: { kind: "primitive" },
           order: -1,
-          assignIfPresent: true,
         },
         {
           ts: "hits",
           json: "Hits",
           type: { kind: "primitive" },
-          assignIfPresent: true,
         },
       ],
+      assignIfPresent: ["name", "version", "kept", "id", "hits"],
     });
   }
 
@@ -138,13 +140,11 @@ export class JsonContext extends SerializerContext {
             inner: { kind: "primitive" },
           },
           optional: true,
-          assignIfPresent: true,
         },
         {
           ts: "count",
           json: "Count",
           type: { kind: "primitive" },
-          assignIfPresent: true,
         },
         {
           ts: "items",
@@ -157,9 +157,9 @@ export class JsonContext extends SerializerContext {
             },
           },
           optional: true,
-          assignIfPresent: true,
         },
       ],
+      assignIfPresent: ["note", "count", "items"],
     });
   }
 
@@ -183,6 +183,36 @@ export class JsonContext extends SerializerContext {
           optional: true,
         },
       ],
+    });
+  }
+
+  get bX(): TypeSpec<BX> {
+    return this._bX ??= this.createSpec({
+      type: BX,
+      factory: (p: Record<string, unknown>) => new BX(p.x as number),
+      properties: [
+        {
+          ts: "x",
+          json: "X",
+          type: { kind: "primitive" },
+        },
+      ],
+    });
+  }
+
+  get dX(): TypeSpec<DX> {
+    return this._dX ??= this.createSpec({
+      type: DX,
+      base: this.bX,
+      factory: (p: Record<string, unknown>) => new DX(),
+      properties: [
+        {
+          ts: "y",
+          json: "Y",
+          type: { kind: "primitive" },
+        },
+      ],
+      assignIfPresent: ["x", "y"],
     });
   }
 
