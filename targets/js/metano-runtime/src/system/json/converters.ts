@@ -19,6 +19,9 @@ import type {
 } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
 import { HashSet } from "../collections/hash-set.ts";
+// Only the contract walks (the hot path: one container per object) open and
+// close containers with enter/exit; the collection converters keep the
+// closure-based `readContainer` / `writeContainer` (#456).
 import {
   enterReadContainer,
   enterWriteContainer,
@@ -39,7 +42,7 @@ import {
   resolveDeserializeTarget,
   resolveSerializeTarget,
 } from "./polymorphism.ts";
-import { propertyLookupPlanOf } from "./property-lookup.ts";
+import { type PropertyLookup, propertyLookupPlanOf } from "./property-lookup.ts";
 
 // ─── Converter Resolution ────────────────────────────────────────────────────
 
@@ -49,7 +52,7 @@ import { propertyLookupPlanOf } from "./property-lookup.ts";
  * `readOptions` are the read options of the spec being read (FR-048); a `ref`
  * reads with its target spec's own options.
  */
-export function resolveConverter(
+function resolveConverter(
   descriptor: TypeDescriptor,
   customConverters?: readonly JsonConverter[],
   readOptions?: JsonReadOptions,
@@ -329,6 +332,9 @@ function builtinNullableInnerConverter(
  * A nested contract. Its spec is resolved on the first value converted, not
  * when the converter is built, so specs that reference each other (a lazy
  * getter, a cycle) compile without recursion; its plan is then reused.
+ *
+ * The `spec()` thunk is called once and its result kept, so it must return
+ * the same spec every time, as the generated `??=` context getters do.
  */
 function refConverter(descriptor: RefDescriptor, customConverters?: readonly JsonConverter[]) {
   const plans = specPlansFor(customConverters);
@@ -343,19 +349,6 @@ function refConverter(descriptor: RefDescriptor, customConverters?: readonly Jso
       if (value == null) return null;
       return targetPlan().deserialize(value);
     },
-  };
-}
-
-/** `create()` on first call, its result afterwards (a failed call is retried). */
-function lazy<T>(create: () => T): () => T {
-  const memo: { value?: T } = {};
-
-  return () => {
-    if (!("value" in memo)) {
-      memo.value = create();
-    }
-
-    return memo.value as T;
   };
 }
 
@@ -478,23 +471,14 @@ function createSpecPlans(customConverters: readonly JsonConverter[]): SpecPlans 
   return plans;
 }
 
-function cachedIn<K extends object, V>(cache: WeakMap<K, V>, key: K, build: () => V): V {
-  const cached = cache.get(key);
-
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  const built = build();
-  cache.set(key, built);
-
-  return built;
-}
-
 /**
  * Compiles `spec` without calling into it: nested specs and derived
  * contracts are resolved when a value first reaches them, so the plan of a
  * recursive spec never compiles itself.
+ *
+ * Every property's converter is resolved here, on the spec's first use, so a
+ * malformed descriptor (a hand-written spec error) fails then, even when the
+ * value lacks that property.
  */
 function compileSpecPlan(
   spec: TypeSpec,
@@ -565,31 +549,41 @@ interface TypeMetadata {
 
 /** Writes a value with exactly the given properties, after the tag when one is given. */
 function contractWriterOf(propertyPlans: readonly PropertyPlan[]): SpecPlan["writeContract"] {
+  const writeProperties = propertyWriterOf(propertyPlans);
+
   return (value, typeMetadata) => {
     enterWriteContainer();
 
     try {
-      const obj = value as Record<string, unknown>;
       const result: Record<string, unknown> = {};
 
       if (typeMetadata) {
         result[typeMetadata.name] = typeMetadata.tag;
       }
 
-      for (const { property, converter } of propertyPlans) {
-        const tsValue = obj[property.ts];
-
-        if (tsValue == null && property.optional) {
-          result[property.json] = null;
-          continue;
-        }
-
-        result[property.json] = converter.serialize(tsValue);
-      }
+      writeProperties(value as Record<string, unknown>, result);
 
       return result;
     } finally {
       exitContainer();
+    }
+  };
+}
+
+/** Writes every property of `source` into `result`, in wire order. */
+function propertyWriterOf(
+  propertyPlans: readonly PropertyPlan[],
+): (source: Record<string, unknown>, result: Record<string, unknown>) => void {
+  return (source, result) => {
+    for (const { property, converter } of propertyPlans) {
+      const tsValue = source[property.ts];
+
+      if (tsValue == null && property.optional) {
+        result[property.json] = null;
+        continue;
+      }
+
+      result[property.json] = converter.serialize(tsValue);
     }
   };
 }
@@ -649,35 +643,47 @@ function contractReaderOf(
 ): SpecPlan["readContract"] {
   const properties = propertyPlans.map(({ property }) => property);
   const lookupPlan = propertyLookupPlanOf(properties, spec.readOptions);
+  const readProperties = propertyReaderOf(propertyPlans);
 
   return (raw, metadataKey) => {
     enterReadContainer("object");
 
     try {
-      const deserialized: Record<string, unknown> = {};
-      const jsonValueOf = lookupPlan(raw, metadataKey);
-
-      for (const { property, converter } of propertyPlans) {
-        const jsonValue = jsonValueOf(property);
-
-        if (jsonValue === undefined || jsonValue === null) {
-          if (property.optional) {
-            deserialized[property.ts] = null;
-            continue;
-          }
-
-          if (jsonValue === undefined) {
-            throw new JsonException(`Missing required property: "${property.json}"`);
-          }
-        }
-
-        deserialized[property.ts] = converter.deserialize(jsonValue);
-      }
-
-      return spec.factory(deserialized);
+      return spec.factory(readProperties(lookupPlan(raw, metadataKey)));
     } finally {
       exitContainer();
     }
+  };
+}
+
+/**
+ * Reads every property through `jsonValueOf` into the factory's input. An
+ * absent (missing or `null`) optional property reads as `null`; a missing
+ * required one throws.
+ */
+function propertyReaderOf(
+  propertyPlans: readonly PropertyPlan[],
+): (jsonValueOf: PropertyLookup) => Record<string, unknown> {
+  return (jsonValueOf) => {
+    const deserialized: Record<string, unknown> = {};
+
+    for (const { property, converter } of propertyPlans) {
+      const jsonValue = jsonValueOf(property);
+      const isAbsent = jsonValue == null;
+
+      if (isAbsent && property.optional) {
+        deserialized[property.ts] = null;
+        continue;
+      }
+
+      if (jsonValue === undefined) {
+        throw new JsonException(`Missing required property: "${property.json}"`);
+      }
+
+      deserialized[property.ts] = converter.deserialize(jsonValue);
+    }
+
+    return deserialized;
   };
 }
 
@@ -702,4 +708,32 @@ export function deserializeWithValueSpec(
   customConverters?: readonly JsonConverter[],
 ): unknown {
   return specPlansFor(customConverters).valueConverterOf(spec).deserialize(data);
+}
+
+// ─── Memoization ─────────────────────────────────────────────────────────────
+
+/** `create()` on first call, its result afterwards (a failed call is retried). */
+function lazy<T>(create: () => T): () => T {
+  const memo: { value?: T } = {};
+
+  return () => {
+    if (!("value" in memo)) {
+      memo.value = create();
+    }
+
+    return memo.value as T;
+  };
+}
+
+function cachedIn<K extends object, V>(cache: WeakMap<K, V>, key: K, build: () => V): V {
+  const cached = cache.get(key);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const built = build();
+  cache.set(key, built);
+
+  return built;
 }

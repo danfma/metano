@@ -14,34 +14,42 @@ import { collectGarbage, peakRssMb, runtimeName } from "./runtime-probe.ts";
 
 const size = process.argv[2] ?? "10m";
 const operation = process.argv[3] === "write" ? "write" : "read";
-const input = { text: payloadTextOf(size) as string | null };
+const measurement = operation === "write" ? measureWrite() : measureRead();
 
-const orders =
-  operation === "write" ? JsonSerializer.deserialize(JSON.parse(input.text!), ordersSpec) : null;
+console.log(JSON.stringify({ runtime: runtimeName(), size, operation, ...measurement }));
 
-if (operation === "write") {
-  input.text = null;
+interface Measurement {
+  readonly peakBeforeMb: number;
+  readonly peakAfterMb: number;
+  readonly growthMb: number;
 }
 
-collectGarbage();
+/** Reads the payload text; the text stays alive, as it would in a caller. */
+function measureRead(): Measurement {
+  const text = payloadTextOf(size);
 
-const before = peakRssMb();
+  return measure(() => JsonSerializer.deserialize(JSON.parse(text), ordersSpec));
+}
 
-const result =
-  operation === "read"
-    ? JsonSerializer.deserialize(JSON.parse(input.text!), ordersSpec)
-    : JSON.stringify(JsonSerializer.serialize(orders!, ordersSpec));
+/** Writes the orders read from the payload; the text is out of scope before measuring. */
+function measureWrite(): Measurement {
+  const orders = JsonSerializer.deserialize(JSON.parse(payloadTextOf(size)), ordersSpec);
 
-const after = peakRssMb();
+  return measure(() => JSON.stringify(JsonSerializer.serialize(orders, ordersSpec)));
+}
 
-console.log(
-  JSON.stringify({
-    runtime: runtimeName(),
-    size,
-    operation,
-    peakBeforeMb: before,
-    peakAfterMb: after,
-    growthMb: after - before,
-    kept: result === null ? 0 : 1,
-  }),
-);
+/** The peak RSS around `operation`, after a full collection of the load phase's garbage. */
+function measure(operation: () => unknown): Measurement {
+  collectGarbage();
+
+  const peakBeforeMb = peakRssMb();
+  const result = operation();
+  const peakAfterMb = peakRssMb();
+
+  // Keeps the result alive until the peak is taken.
+  if (result === undefined) {
+    throw new Error("The operation returned nothing.");
+  }
+
+  return { peakBeforeMb, peakAfterMb, growthMb: peakAfterMb - peakBeforeMb };
+}
