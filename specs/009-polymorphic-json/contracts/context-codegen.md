@@ -449,17 +449,12 @@ get blob(): TypeSpec<Blob> {
 get account(): TypeSpec<Account> {
   return this._account ??= this.createSpec({
     type: Account,
-    factory: (p: Record<string, unknown>) => Object.assign(new Account(), {
-      name: p.name as string,
-      version: p.version as number,
-      id: p.id as string,
-      hits: p.hits as number,
-    }),
+    factory: (p: Record<string, unknown>) => new Account(),
     properties: [
-      { ts: "name", json: "Name", type: { kind: "primitive" } },
-      { ts: "version", json: "Version", type: { kind: "primitive" } },
-      { ts: "id", json: "Id", type: { kind: "primitive" }, order: -1 },
-      { ts: "hits", json: "Hits", type: { kind: "primitive" } },
+      { ts: "name", json: "Name", type: { kind: "primitive" }, assignIfPresent: true },
+      { ts: "version", json: "Version", type: { kind: "primitive" }, assignIfPresent: true },
+      { ts: "id", json: "Id", type: { kind: "primitive" }, order: -1, assignIfPresent: true },
+      { ts: "hits", json: "Hits", type: { kind: "primitive" }, assignIfPresent: true },
     ],
   });
 }
@@ -481,15 +476,19 @@ Rules (DECIDED-25):
 - A single-dimensional `byte[]` is `{ kind: "bytes" }` wherever it appears (property, element,
   dictionary value, nullable inner, value root `ValueSpec<number[] | null>`); `List<byte>` and
   `byte[,]` keep their array descriptors.
-- Each type's properties are listed before its fields, each group in declaration order. A field
-  or a non-public property is listed only with `[JsonInclude]`, and only when the member and its
-  accessors are `public`, `internal` or `protected internal`.
+- Each type's properties are listed before its fields, each group in declaration order. A public
+  property needs a public getter. A field or a non-public property is listed only with
+  `[JsonInclude]`, and only when the member and its accessors are `public`, or `internal` /
+  `protected internal` within the context's assembly or one granting it `InternalsVisibleTo`.
 - `order` follows `optional` and appears only for a non-zero `[JsonPropertyOrder]`; the list stays
   in the FR-009 order and the runtime sorts the chain.
-- The factory wraps `new T(…)` in `Object.assign(…, { … })` when the contract (its base chain
-  included) has members no constructor parameter binds that System.Text.Json assigns on read: a
-  property with a public `set` / `init` accessor, or a reachable one under `[JsonInclude]`, and a
-  writable `[JsonInclude]` field. A type without a parameterized constructor is built with
-  `new T()`. A contract whose members are all constructor-bound keeps `new T(…)` (FR-040).
+- Members no constructor parameter binds (the base chain included) follow System.Text.Json
+  (DECIDED-25 k): an `init` or `required` one is set by the factory, which wraps `new T(…)` in
+  `Object.assign(…, { … })`; a member with a public `set` accessor (or a reachable one under
+  `[JsonInclude]`) or a writable `[JsonInclude]` field gets `assignIfPresent: true` after
+  `order`, the factory leaves it out, and the runtime assigns it after construction only when
+  the payload carries it. A type without a parameterized constructor is built with `new T()`.
+  `[PlainObject]` literals and interfaces carry no `assignIfPresent`. A constructor parameter
+  bound to a `[JsonExtensionData]` member receives `null`.
 - `[JsonIgnore(Condition = Never)]` keeps the member; `[JsonExtensionData]` is left out.
 - Golden: `tests/Metano.Tests/Expected/json-member-options-context.ts`.

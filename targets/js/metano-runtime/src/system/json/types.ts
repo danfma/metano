@@ -149,6 +149,14 @@ export interface PropertySpec {
    * contract by it, stably, absent counting as `0` (FR-046, slice S6b).
    */
   readonly order?: number;
+  /**
+   * A member the read sets after construction, and only when the payload
+   * carries its key: a missing key keeps the value the factory constructed
+   * (a C# initializer), as System.Text.Json does for a member with a `set`
+   * accessor or a writable field that no constructor parameter binds. The
+   * factory does not read it (FR-046).
+   */
+  readonly assignIfPresent?: boolean;
 }
 
 // ─── Type Spec ───────────────────────────────────────────────────────────────

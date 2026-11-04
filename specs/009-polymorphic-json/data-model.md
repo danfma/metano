@@ -163,6 +163,8 @@ export interface PropertySpec {
   // …existing members unchanged…
   /** S6b: a non-zero [JsonPropertyOrder]; collectWireProperties sorts the chain by it. */
   readonly order?: number;
+  /** S6b: set after construction, only when the payload carries the key (DECIDED-25 k). */
+  readonly assignIfPresent?: boolean;
 }
 
 export interface TypeSpec<T = unknown> {

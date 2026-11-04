@@ -354,6 +354,39 @@ public class JsonUnmirroredOptionTests
         );
     }
 
+    // STJ enforces the C# `required` modifier like [JsonRequired]: "JSON
+    // deserialization for type 'App.Req' was missing required properties
+    // including: 'Name'." A non-nullable one is already required on read.
+    [Test]
+    public async Task RequiredModifierOnANullableMember_IsReported()
+    {
+        var diagnostics = UnmirroredOf(
+            """
+            [Transpile]
+            public sealed class Req
+            {
+                public required string? Name { get; set; }
+
+                public required string Title { get; set; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Req))]
+            """
+        );
+
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+
+        await Assert
+            .That(diagnostics[0].Message)
+            .IsEqualTo(
+                "'Req.Name' is required: System.Text.Json rejects a payload without it, the "
+                    + "TypeScript context reads a missing nullable member as null."
+            );
+
+        await Assert.That(SourceTextOf(diagnostics[0])).IsEqualTo("Name");
+    }
+
     [Test]
     public async Task JsonConstructorOnAnotherConstructor_IsReported()
     {

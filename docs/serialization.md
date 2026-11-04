@@ -314,8 +314,8 @@ your own `JsonConverter`.
 | `JsonKnownNamingPolicy.KebabCaseUpper` | ✅ | `FirstName` → `FIRST-NAME` |
 | Default (`null`, `JsonKnownNamingPolicy.Unspecified`) | ✅ | Preserves PascalCase (`FirstName` → `FirstName`) |
 | `[JsonConverter]` | ⚠️ | Not mirrored, `MS0037` — use custom converters at runtime instead. Not reported on a `[Branded]` / `[InlineWrapper]` type, whose descriptor already writes the wrapped value |
-| `[JsonRequired]` | ✅ / ⚠️ | A non-nullable member is already required on read; on a nullable member a missing key reads `null` where STJ throws, `MS0037` |
-| `[JsonExtensionData]` | ⚠️ | Left out of the spec, `MS0037` |
+| `[JsonRequired]`, C# `required` | ✅ / ⚠️ | A non-nullable member is already required on read; on a nullable member a missing key reads `null` where STJ throws, `MS0037` |
+| `[JsonExtensionData]` | ⚠️ | Left out of the spec, `MS0037`; bound to a constructor parameter (STJ throws `InvalidOperationException`), the factory passes `null` |
 | `[JsonNumberHandling]`, `[JsonObjectCreationHandling(Populate)]`, `[JsonUnmappedMemberHandling(Disallow)]` | ⚠️ | Not mirrored, `MS0037` |
 | `[JsonConstructor]` | ✅ / ⚠️ | Mirrored on the constructor the factory calls (the primary one, else the one with the most parameters); on another constructor, `MS0037` |
 | Any other `[JsonSourceGenerationOptions]` option | ⚠️ | `MS0037` when set to a value other than System.Text.Json's default; formatting options (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`) and `DefaultBufferSize` / `GenerationMode` are never reported ([details](#member-selection)) |
@@ -367,21 +367,40 @@ public class OrdDer : OrdBase
 // new OrdDer() → {"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}
 ```
 
-On read, the factory passes the constructor's parameters and then assigns, with
-`Object.assign(new T(…), { … })`, every member no parameter binds that
-System.Text.Json sets: a property with a public `set` / `init` accessor (or a
-reachable one under `[JsonInclude]`) and a writable `[JsonInclude]` field. A
-get-only property is written and still required on read (see
-[Errors and limits](#errors-and-limits)).
+On read, the factory passes the constructor's parameters. Members no parameter
+binds are set as System.Text.Json sets them: an `init` or `required` member
+always, through `Object.assign(new T(…), { … })` (a missing nullable one reads
+`null`), and a member with a `set` accessor or a writable field only when the
+payload carries its key (`assignIfPresent: true` on its property spec; the
+runtime assigns it after construction, in wire order where STJ follows the
+payload's order), so a missing key keeps the C# initializer:
+
+```csharp
+public class Init
+{
+    public string? Note { get; set; } = "init";
+    public int Count { get; set; } = 5;
+}
+
+// {"Count":1} → Note = "init", Count = 1 (STJ and TypeScript alike)
+```
+
+A get-only property is written and still required on read (see
+[Errors and limits](#errors-and-limits)). A public property with a non-public
+getter is not serialized, and an `internal` `[JsonInclude]` member of another
+assembly is reachable only when that assembly grants the context's
+`InternalsVisibleTo`.
 
 A `byte[]` is written as base64 (`[255,254,253]` → `"//79"`) and read back with
 System.Text.Json's rules; `List<byte>` stays a number array. A `null` `byte[]`
-property is written `null`, where a source-generated context's fast path writes
-`""` (which it then reads back as an empty array).
+property, `List<byte[]>` element or `Dictionary<string, byte[]>` value is written
+`null`, where a source-generated context's fast path writes `""` (which it then
+reads back as an empty array).
 
 Everything else System.Text.Json offers is either mirrored or reported with
-warning `MS0037` (`UnmirroredJsonOption`) at the option or attribute, so a
-context never diverges silently: the unmirrored `[JsonSourceGenerationOptions]`
+warning `MS0037` (`UnmirroredJsonOption`) at the option or attribute, so no
+option or attribute is ignored silently (the remaining differences are the
+documented divergences of spec 009): the unmirrored `[JsonSourceGenerationOptions]`
 options set to a non-default value (`DefaultIgnoreCondition`,
 `IgnoreReadOnlyProperties`, `IgnoreReadOnlyFields`, `IncludeFields`,
 `UseStringEnumConverter`, `Converters`, `ReferenceHandler`,
@@ -891,7 +910,7 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 | Input | Message |
 |---|---|
 | A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor) |
-| A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence). A nullable member declared `required` or `[JsonRequired]` reads `null` when missing, where STJ throws (`[JsonRequired]` warns `MS0037`) |
+| A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence). A nullable member declared `required` or `[JsonRequired]` reads `null` when missing, where STJ throws (both warn `MS0037`) |
 | An invalid base64 text, or a non-string JSON value, for a `byte[]` | `The JSON value could not be converted to System.Byte[].` (STJ names the declaring type for a constructor-bound property) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |
 | A non-object JSON value (or an array) for a dictionary | `Expected object for deserialization, got array` |

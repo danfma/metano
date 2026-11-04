@@ -658,12 +658,15 @@ function contractReaderOf(
   const properties = propertyPlans.map(({ property }) => property);
   const lookupPlan = propertyLookupPlanOf(properties, spec.readOptions);
   const readProperties = propertyReaderOf(propertyPlans);
+  const assignPresentMembers = presentMemberAssignerOf(propertyPlans);
 
   return (raw, metadataKey) => {
     enterReadContainer("object");
 
     try {
-      return spec.factory(readProperties(lookupPlan(raw, metadataKey)));
+      const deserialized = readProperties(lookupPlan(raw, metadataKey));
+
+      return assignPresentMembers(spec.factory(deserialized), deserialized);
     } finally {
       exitContainer();
     }
@@ -671,9 +674,38 @@ function contractReaderOf(
 }
 
 /**
+ * Sets every `assignIfPresent` member the payload carried on the constructed
+ * value, in wire order (System.Text.Json follows the payload's order; the
+ * order only shows through setter side effects).
+ */
+function presentMemberAssignerOf(
+  propertyPlans: readonly PropertyPlan[],
+): (value: unknown, deserialized: Record<string, unknown>) => unknown {
+  const names = propertyPlans
+    .filter(({ property }) => property.assignIfPresent)
+    .map(({ property }) => property.ts);
+
+  if (names.length === 0) {
+    return (value) => value;
+  }
+
+  return (value, deserialized) => {
+    const target = value as Record<string, unknown>;
+
+    for (const name of names) {
+      if (name in deserialized) {
+        target[name] = deserialized[name];
+      }
+    }
+
+    return value;
+  };
+}
+
+/**
  * Reads every property through `jsonValueOf` into the factory's input. An
  * absent (missing or `null`) optional property reads as `null`; a missing
- * required one throws.
+ * required one throws; a missing `assignIfPresent` one is left out.
  */
 function propertyReaderOf(
   propertyPlans: readonly PropertyPlan[],
@@ -683,6 +715,11 @@ function propertyReaderOf(
 
     for (const { property, converter } of propertyPlans) {
       const jsonValue = jsonValueOf(property);
+
+      if (jsonValue === undefined && property.assignIfPresent) {
+        continue;
+      }
+
       const isAbsent = jsonValue == null;
 
       if (isAbsent && property.optional) {
