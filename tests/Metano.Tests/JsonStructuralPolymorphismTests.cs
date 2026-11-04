@@ -422,7 +422,7 @@ public class JsonStructuralPolymorphismTests
 
     // FR-047: [PlainObject] variants declared in a referenced Metano package
     // import their guards from the package; the library emits them because
-    // its own [JsonDerivedType] registers them (DECIDED-23 a).
+    // its own [JsonDerivedType] registers them (DECIDED-24 a).
     [Test]
     public async Task PackageVariants_ImportTheirGuardsFromThePackage()
     {

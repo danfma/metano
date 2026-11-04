@@ -146,7 +146,7 @@ get sq(): TypeSpec<Sq> { /* type: Sq, properties: side, area */ }
 - The getter follows the type's resolved TS name: `shape` above assumes the `I` prefix is
   stripped; without the strip option it is `iShape` (`TypeSpec<IShape>`).
 - The interface's properties are its own, then those of the interfaces it extends in the source
-  generator's topological order (DECIDED-23 f).
+  generator's topological order (DECIDED-24 f).
 
 ### 1b. `[PlainObject]` variants (FR-019)
 
@@ -201,11 +201,11 @@ get shape(): TypeSpec<Shape> {
   produce `MS0032` and no `polymorphism` member.
 - A `[PlainObject]` factory literal sets the inherited members too (`point3`:
   `({ x: p.x as number, y: p.y as number, z: p.z as number })`), since a TS interface has no base
-  constructor to fill them (DECIDED-23 i).
+  constructor to fill them (DECIDED-24 i).
 - A nested variant references its guard through the companion namespace (`test: Shape.isCircle`);
-  a library variant imports it from the package (DECIDED-23 a).
+  a library variant imports it from the package (DECIDED-24 a).
 - A concrete `[PlainObject]` base that does not register itself ends the descriptor with its own
-  guard after `testOrder` (FR-019 rule 5, DECIDED-23 b):
+  guard after `testOrder` (FR-019 rule 5, DECIDED-24 b):
 
 ```ts
 polymorphism: {
