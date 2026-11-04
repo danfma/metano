@@ -7,8 +7,11 @@ import { Decimal } from "decimal.js";
 import { exactNumberWriterOf } from "#/system/json/exact-json-number";
 import { JsonSerializer, type ValueSpec } from "#/system/json";
 import {
+  DECIMAL_DOMAIN_ROWS,
   DECIMAL_WRITE_ROWS,
   decimalSpec,
+  domainErrorOf,
+  domainOutcomeOf,
   expectedTextOf,
   treeRoundTripOf,
   writtenTextOf,
@@ -22,6 +25,14 @@ const EXPECTED_TEXTS = DECIMAL_WRITE_ROWS.map(expectedTextOf);
 /** What an engine without `JSON.rawJSON` prints: the double, as before #458. */
 const FALLBACK_TEXTS = DECIMAL_WRITE_ROWS.map((row) =>
   JSON.stringify(new Decimal(row.text).toNumber()),
+);
+
+/** Each domain row's outcome: the error, or the exact text. */
+const EXPECTED_DOMAIN = DECIMAL_DOMAIN_ROWS.map((row) => row.written ?? domainErrorOf(row));
+
+/** The same without `JSON.rawJSON`: the error, or the double. */
+const FALLBACK_DOMAIN = DECIMAL_DOMAIN_ROWS.map((row) =>
+  row.written === undefined ? domainErrorOf(row) : JSON.stringify(new Decimal(row.text).toNumber()),
 );
 
 describe("JsonSerializer — decimal writes match System.Text.Json (#458)", () => {
@@ -70,6 +81,29 @@ describe("JsonSerializer — decimal writes match System.Text.Json (#458)", () =
 
   test("null is written null", () => {
     expect(JsonSerializer.serialize(null, decimalSpec)).toBeNull();
+  });
+});
+
+describe("JsonSerializer — decimal writes within the System.Decimal domain", () => {
+  DECIMAL_DOMAIN_ROWS.forEach((row, index) => {
+    test(`${row.text} gives ${EXPECTED_DOMAIN[index]}`, () => {
+      expect(domainOutcomeOf(row)).toBe(EXPECTED_DOMAIN[index]!);
+    });
+  });
+
+  test("a value without toFixed is checked too", () => {
+    const notANumber = { toNumber: () => Number.NaN, toString: () => "NaN" };
+
+    expect(() => JsonSerializer.serialize(notANumber as unknown as Decimal, decimalSpec)).toThrow(
+      "The value NaN cannot be written as System.Decimal: it is outside the System.Decimal range.",
+    );
+  });
+
+  test("1e400000000 is rejected before its digits are printed", () => {
+    const start = performance.now();
+
+    expect(() => JsonSerializer.serialize(new Decimal("1e400000000"), decimalSpec)).toThrow();
+    expect(performance.now() - start).toBeLessThan(100);
   });
 });
 
@@ -141,32 +175,41 @@ describe("decimal writes on each runtime", () => {
 
   afterAll(() => rmSync(bundleDir, { recursive: true, force: true }));
 
-  const textsOf = (command: string, args: readonly string[]) => {
+  const probeOf = (command: string, args: readonly string[]) => {
     const run = spawnSync(command, args, { encoding: "utf8" });
 
     expect(run.stderr).toBe("");
     expect(run.status).toBe(0);
 
-    return JSON.parse(run.stdout) as string[];
+    return JSON.parse(run.stdout) as { written: string[]; domain: string[] };
   };
 
   test("the probe bundles for Node", () => {
     expect(build.status).toBe(0);
   });
 
-  test("Node writes the System.Text.Json digits", () => {
-    expect(textsOf("node", [bundle])).toEqual(EXPECTED_TEXTS);
+  test("Node writes the System.Text.Json digits and checks the domain", () => {
+    expect(probeOf("node", [bundle])).toEqual({ written: EXPECTED_TEXTS, domain: EXPECTED_DOMAIN });
   });
 
-  test("Node without JSON.rawJSON writes toNumber()", () => {
-    expect(textsOf("node", [bundle, "--without-raw-json"])).toEqual(FALLBACK_TEXTS);
+  test("Node without JSON.rawJSON writes toNumber() and checks the domain", () => {
+    expect(probeOf("node", [bundle, "--without-raw-json"])).toEqual({
+      written: FALLBACK_TEXTS,
+      domain: FALLBACK_DOMAIN,
+    });
   });
 
-  test("Bun writes the System.Text.Json digits", () => {
-    expect(textsOf(process.execPath, [PROBE])).toEqual(EXPECTED_TEXTS);
+  test("Bun writes the System.Text.Json digits and checks the domain", () => {
+    expect(probeOf(process.execPath, [PROBE])).toEqual({
+      written: EXPECTED_TEXTS,
+      domain: EXPECTED_DOMAIN,
+    });
   });
 
-  test("Bun without JSON.rawJSON writes toNumber()", () => {
-    expect(textsOf(process.execPath, [PROBE, "--without-raw-json"])).toEqual(FALLBACK_TEXTS);
+  test("Bun without JSON.rawJSON writes toNumber() and checks the domain", () => {
+    expect(probeOf(process.execPath, [PROBE, "--without-raw-json"])).toEqual({
+      written: FALLBACK_TEXTS,
+      domain: FALLBACK_DOMAIN,
+    });
   });
 });

@@ -481,6 +481,11 @@ Limits:
   when it loads (Node 24 and Bun 1.4.2 have it). Without it, decimals are
   written with `toNumber()`, as before 3.0: `7.922816251426434e+28` for
   `MaxValue`.
+- **Values no `System.Decimal` holds** (NaN, ±Infinity, a magnitude beyond
+  `79228162514264337593543950335`) throw `JsonException` `The value NaN cannot
+  be written as System.Decimal: it is outside the System.Decimal range.`, on
+  every engine. A non-zero value too small for a double (`1e-400000000`) is
+  written `0`, which is what .NET reads for it.
 - A value without `toFixed` is written with `toNumber()`. A hand-written
   descriptor without `type` keeps the raw JSON number or string it read and
   writes it back as is.

@@ -66,6 +66,48 @@ export const DECIMAL_WRITE_ROWS: readonly DecimalWriteRow[] = [
   { csharp: 'decimal.Parse("-0.00")', text: "-0.00", stj: "0.00", metano: "0" },
 ];
 
+/**
+ * Values at and past the edge of the `System.Decimal` domain (#458): a value
+ * no `System.Decimal` holds throws `JsonException` before any text is built;
+ * `written` is the text of an accepted one. `±1e-400000000` underflows a
+ * double and is written `0`, as System.Text.Json reads `1e-400` (measured).
+ */
+export type DecimalDomainRow = {
+  readonly text: string;
+  readonly written?: string;
+};
+
+export const DECIMAL_DOMAIN_ROWS: readonly DecimalDomainRow[] = [
+  { text: "NaN" },
+  { text: "Infinity" },
+  { text: "-Infinity" },
+  { text: "1e29" },
+  { text: "-1e29" },
+  { text: "79228162514264337593543950336" },
+  { text: "-79228162514264337593543950336" },
+  { text: "1e400000000" },
+  { text: "79228162514264337593543950335", written: "79228162514264337593543950335" },
+  { text: "-79228162514264337593543950335", written: "-79228162514264337593543950335" },
+  { text: "1e-400000000", written: "0" },
+  { text: "-1e-400000000", written: "0" },
+];
+
+/** The error a rejected row throws. */
+export function domainErrorOf(row: DecimalDomainRow): string {
+  return `JsonException: The value ${new Decimal(row.text).toString()} cannot be written as System.Decimal: it is outside the System.Decimal range.`;
+}
+
+/** The text written for the row's value, or the error it throws. */
+export function domainOutcomeOf(row: DecimalDomainRow): string {
+  try {
+    return JSON.stringify(JsonSerializer.serialize(new Decimal(row.text), decimalSpec));
+  } catch (error) {
+    const { name, message } = error as Error;
+
+    return `${name}: ${message}`;
+  }
+}
+
 export const decimalSpec: ValueSpec<Decimal | null> = {
   descriptor: { kind: "decimal", type: Decimal },
 };

@@ -851,7 +851,17 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      `type` is written back as is. `deserialize` reads a `rawJSON` leaf from its exact text, so a
      tree passed from `serialize` straight to `deserialize` round-trips. The writer is shared
      (`exact-json-number.ts`), so `long` / `ulong` as `bigint` (#450) write their digits the same
-     way.
+     way. **Domain check** (on both paths, before any text is built): a value no `System.Decimal`
+     holds (NaN, ±Infinity, a magnitude beyond `MaxValue`) throws `JsonException` "The value
+     <value> cannot be written as System.Decimal: it is outside the System.Decimal range."
+     (FR-045). The magnitude is compared as a double (`|toNumber()|` against 2^96); a value whose
+     double is 2^96 itself is decided by its exact `toFixed()` text with the read grammar of item
+     4, so every leaf written is one `deserialize` accepts (`…335.4` is written, STJ reads it as
+     `MaxValue`; `…335.5` and `…336` throw). Without the check, decimal.js NaN / Infinity threw a
+     bare `SyntaxError` from `JSON.rawJSON` (`null` without it), `1e30` was written in full, and
+     `1e400000000` built a 400 MB string. A non-zero value whose double underflows to `0`
+     (`1e-400000000`) is written `0`, as STJ reads `1e-400` (measured), instead of printing its
+     exponent's worth of zeros.
 - **FR-049**: **Breaking change and versioning** (DECIDED-6). FR-034 changes public signatures of
   `metano-runtime/system/json`, so the feature MUST ship as a breaking release: the commit that
   changes the signatures uses `feat!:` with a `BREAKING CHANGE:` footer. `.releaserc.json` maps a
@@ -1355,7 +1365,8 @@ the former `OPEN-N`.
     | `decimal.Negate(0m)` (sign bit set) | `0` | `0` (decimal.js `toFixed()` of `-0` prints `0`) |
     | `1.10m`, `1.0m`, `0.00m`, `1000.000m`, `decimal.Parse("-0.00")` | `1.10`, `1.0`, `0.00`, `1000.000`, `0.00` | `1.1`, `1`, `0`, `1000`, `0` (the scale) |
 
-    Trailing zeros remain a documented divergence. A
+    Trailing zeros remain a documented divergence. Values outside the `System.Decimal` domain
+    (NaN, ±Infinity, beyond `MaxValue`) throw `JsonException` on write (FR-048 item 6). A
     `Single` read from a string
     keeps double precision, as one read from a JSON number does; only overflow is checked at
     single precision, against the exact text: the threshold `2^128 − 2^103` is itself a double,
