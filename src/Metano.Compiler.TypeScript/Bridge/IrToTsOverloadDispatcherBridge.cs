@@ -39,9 +39,14 @@ public static class IrToTsOverloadDispatcherBridge
     /// dispatcher uses <c>this</c>, so the argument only matters when
     /// <paramref name="primary"/> is static.
     /// </param>
+    /// <param name="classTypeParameters">
+    /// The containing class's type parameters, which a parameter's type check
+    /// resolves its type parameters against after the method's own.
+    /// </param>
     internal static IReadOnlyList<TsClassMember> BuildMethod(
         IrMethodDeclaration primary,
         string containingTypeName,
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
         IrToTsBridgeContext context
     )
     {
@@ -74,7 +79,7 @@ public static class IrToTsOverloadDispatcherBridge
                 primaryName,
                 DispatcherParameters(),
                 plan.CommonReturn,
-                BuildDispatcherBody(plan.Sorted, plan.FastPathNames, receiver),
+                BuildDispatcherBody(plan.Sorted, plan.FastPathNames, receiver, classTypeParameters),
                 Static: isStatic,
                 Async: plan.IsAsync,
                 Accessibility: VisibilityToAccessibility(primary.Visibility),
@@ -136,7 +141,7 @@ public static class IrToTsOverloadDispatcherBridge
                 functionName,
                 DispatcherParameters(),
                 plan.CommonReturn,
-                BuildDispatcherBody(plan.Sorted, fastPathNames, receiver: null),
+                BuildDispatcherBody(plan.Sorted, fastPathNames, receiver: null, []),
                 Exported: true,
                 Async: plan.IsAsync,
                 Overloads: plan.Signatures
@@ -345,7 +350,8 @@ public static class IrToTsOverloadDispatcherBridge
     private static List<TsStatement> BuildDispatcherBody(
         IReadOnlyList<IrMethodDeclaration> sorted,
         IReadOnlyList<string> fastPathNames,
-        TsExpression? receiver
+        TsExpression? receiver,
+        IReadOnlyList<IrTypeParameter> classTypeParameters
     )
     {
         var body = new List<TsStatement>();
@@ -353,6 +359,7 @@ public static class IrToTsOverloadDispatcherBridge
         {
             var method = sorted[i];
             var arguments = new OverloadArgumentShape(method.Parameters);
+            var typeParameters = TypeParametersInScope(method, classTypeParameters);
 
             var delegateCall = new TsCallExpression(
                 FastPathCallee(receiver, fastPathNames[i]),
@@ -369,7 +376,7 @@ public static class IrToTsOverloadDispatcherBridge
             {
                 branchStatements.Add(new TsReturnStatement(delegateCall));
             }
-            body.Add(new TsIfStatement(arguments.Guard(), branchStatements));
+            body.Add(new TsIfStatement(arguments.Guard(typeParameters), branchStatements));
         }
 
         body.Add(
@@ -411,6 +418,15 @@ public static class IrToTsOverloadDispatcherBridge
                 }
             )
             .ToList();
+
+    /// <summary>
+    /// The method's own type parameters, then its class's, so a method type
+    /// parameter shadows a class one of the same name.
+    /// </summary>
+    private static IReadOnlyList<IrTypeParameter> TypeParametersInScope(
+        IrMethodDeclaration method,
+        IReadOnlyList<IrTypeParameter> classTypeParameters
+    ) => [.. method.TypeParameters ?? [], .. classTypeParameters];
 
     /// <summary>
     /// The cast applied to <c>args[i]</c> before delegating. The dispatcher

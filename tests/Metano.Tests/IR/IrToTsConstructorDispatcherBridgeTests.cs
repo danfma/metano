@@ -35,6 +35,7 @@ public class IrToTsConstructorDispatcherBridgeTests
             IrToTsConstructorDispatcherBridge.Build(
                 ctor,
                 baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
+                typeParameters: [],
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -73,6 +74,7 @@ public class IrToTsConstructorDispatcherBridgeTests
             IrToTsConstructorDispatcherBridge.Build(
                 ctor,
                 baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
+                typeParameters: [],
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -100,6 +102,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                 IrToTsConstructorDispatcherBridge.Build(
                     ctor,
                     baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
+                    typeParameters: [],
                     IrToTsBridgeContext.For(null)
                 )
             )

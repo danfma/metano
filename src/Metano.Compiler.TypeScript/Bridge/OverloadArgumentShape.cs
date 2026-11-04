@@ -53,16 +53,18 @@ internal sealed class OverloadArgumentShape
     /// The runtime test that the dispatcher's <c>args</c> match this
     /// overload: the argument count, then each argument's type check.
     /// </summary>
-    public TsExpression Guard()
+    /// <param name="typeParameters">The type parameters in scope, innermost
+    /// first (see <see cref="IrTypeCheckBuilder.Generate"/>).</param>
+    public TsExpression Guard(IReadOnlyList<IrTypeParameter> typeParameters)
     {
         var fixedChecks = _parameters
             .Take(FixedCount)
-            .Select((parameter, index) => FixedArgumentCheck(parameter, index));
+            .Select((parameter, index) => FixedArgumentCheck(parameter, index, typeParameters));
 
         var clauses = new List<TsExpression?> { MinimumCountCheck(), MaximumCountCheck() };
 
         clauses.AddRange(fixedChecks);
-        clauses.Add(RestArgumentsCheck());
+        clauses.Add(RestArgumentsCheck(typeParameters));
 
         return IrTypeCheckBuilder.AllOf(clauses) ?? new TsLiteral("true");
     }
@@ -120,10 +122,16 @@ internal sealed class OverloadArgumentShape
     /// The type check of the argument at <paramref name="index"/>; an omitted
     /// optional argument (<c>undefined</c>) skips it.
     /// </summary>
-    private static TsExpression FixedArgumentCheck(IrParameter parameter, int index)
+    private static TsExpression? FixedArgumentCheck(
+        IrParameter parameter,
+        int index,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    )
     {
         var argument = ArgumentAt(index);
-        var check = IrTypeCheckBuilder.Generate(parameter.Type, argument);
+
+        if (IrTypeCheckBuilder.Generate(parameter.Type, argument, typeParameters) is not { } check)
+            return null;
 
         if (!IsOptional(parameter))
             return check;
@@ -135,18 +143,21 @@ internal sealed class OverloadArgumentShape
 
     /// <summary>
     /// <c>args.slice(n).every((value) =&gt; check)</c> over the trailing
-    /// arguments of a <c>params</c> parameter.
+    /// arguments of a <c>params</c> parameter whose element type has a check.
     /// </summary>
-    private TsExpression? RestArgumentsCheck()
+    private TsExpression? RestArgumentsCheck(IReadOnlyList<IrTypeParameter> typeParameters)
     {
         if (Rest is null || ElementTypeOf(Rest) is not { } elementType)
             return null;
 
         var element = new TsIdentifier("value");
 
+        if (IrTypeCheckBuilder.Generate(elementType, element, typeParameters) is not { } check)
+            return null;
+
         var elementCheck = new TsArrowFunction(
             [new TsParameter(element.Name, Type: null)],
-            [new TsReturnStatement(IrTypeCheckBuilder.Generate(elementType, element))]
+            [new TsReturnStatement(check)]
         );
 
         return new TsCallExpression(

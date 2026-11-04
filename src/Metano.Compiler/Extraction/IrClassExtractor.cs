@@ -43,12 +43,10 @@ public static class IrClassExtractor
                 ? emittedInterfaces.Select(i => IrTypeRefMapper.Map(i, originResolver)).ToList()
                 : null;
 
-        var typeParameters =
-            type.TypeParameters.Length > 0
-                ? type
-                    .TypeParameters.Select(tp => ExtractTypeParameter(tp, originResolver))
-                    .ToList()
-                : null;
+        var typeParameters = IrTypeParameterExtractor.ExtractAll(
+            type.TypeParameters,
+            originResolver
+        );
 
         // Detect primary-constructor parameters captured implicitly by
         // member bodies. Walk the type's method/property syntax once
@@ -370,17 +368,6 @@ public static class IrClassExtractor
         var name = baseType.ToDisplayString();
         return name != "System.Object" && name != "System.ValueType";
     }
-
-    private static IrTypeParameter ExtractTypeParameter(
-        ITypeParameterSymbol tp,
-        IrTypeOriginResolver? originResolver
-    ) =>
-        new(
-            tp.Name,
-            tp.ConstraintTypes.Length > 0
-                ? tp.ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver)).ToList()
-                : null
-        );
 
     private static List<IrMemberDeclaration> ExtractMembers(
         INamedTypeSymbol type,

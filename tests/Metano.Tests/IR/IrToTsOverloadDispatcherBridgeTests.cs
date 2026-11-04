@@ -34,6 +34,7 @@ public class IrToTsOverloadDispatcherBridgeTests
         var members = IrToTsOverloadDispatcherBridge.BuildMethod(
             primary,
             containingTypeName,
+            [],
             IrToTsBridgeContext.For(null)
         );
 
@@ -76,6 +77,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             IrToTsOverloadDispatcherBridge.BuildMethod(
                 primary,
                 containingTypeName,
+                [],
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -105,6 +107,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             IrToTsOverloadDispatcherBridge.BuildMethod(
                 primary,
                 containingTypeName,
+                [],
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -134,6 +137,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             IrToTsOverloadDispatcherBridge.BuildMethod(
                 primary,
                 containingTypeName,
+                [],
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -162,6 +166,7 @@ public class IrToTsOverloadDispatcherBridgeTests
         var members = IrToTsOverloadDispatcherBridge.BuildMethod(
             primary,
             containingTypeName,
+            [],
             IrToTsBridgeContext.For(null)
         );
         var printed = PrintMembers(members, containingTypeName);
@@ -199,6 +204,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             IrToTsOverloadDispatcherBridge.BuildMethod(
                 primary,
                 containingTypeName,
+                [],
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -231,6 +237,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             IrToTsOverloadDispatcherBridge.BuildMethod(
                 primary,
                 containingTypeName,
+                [],
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -262,6 +269,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             IrToTsOverloadDispatcherBridge.BuildMethod(
                 primary,
                 containingTypeName,
+                [],
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -287,6 +295,7 @@ public class IrToTsOverloadDispatcherBridgeTests
         var members = IrToTsOverloadDispatcherBridge.BuildMethod(
             primary,
             containingTypeName,
+            [],
             IrToTsBridgeContext.For(null)
         );
         await Assert.That(members).IsEmpty();

@@ -54,21 +54,11 @@ public static class IrMethodExtractor
             )
             .ToList();
 
-        var typeParameters =
-            method.TypeParameters.Length > 0
-                ? method
-                    .TypeParameters.Select(tp => new IrTypeParameter(
-                        tp.Name,
-                        tp.ConstraintTypes.Length > 0
-                            ? tp
-                                .ConstraintTypes.Select(t =>
-                                    IrTypeRefMapper.Map(t, originResolver, target)
-                                )
-                                .ToList()
-                            : null
-                    ))
-                    .ToList()
-                : null;
+        var typeParameters = IrTypeParameterExtractor.ExtractAll(
+            method.TypeParameters,
+            originResolver,
+            target
+        );
 
         var semantics = new IrMethodSemantics(
             IsAsync: hasYield ? false : method.IsAsync,
