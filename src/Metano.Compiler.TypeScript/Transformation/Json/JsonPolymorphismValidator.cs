@@ -1,19 +1,19 @@
-using System.Globalization;
 using Metano.Compiler.Diagnostics;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation.Json;
 
 /// <summary>
-/// Validates the polymorphism of an object contract the closure reaches
-/// against the rules the generated context can honor (spec 009 FR-012,
-/// FR-013, FR-015, FR-047), reporting <c>MS0032</c> / <c>MS0033</c>. A
-/// constructed generic base is validated per construction, so a registration
-/// that does not fit <c>GBase&lt;string&gt;</c> is reported only when the
-/// context reaches <c>GBase&lt;string&gt;</c>, as System.Text.Json throws only
-/// then. A diagnostic every construction shares is reported once. Hierarchies
-/// with an interface base or a <c>[PlainObject]</c> base or variant are left
-/// to slice S6c (FR-018, FR-019) and validated as non-polymorphic.
+/// Validates the polymorphism of an object contract the context dispatches
+/// through against the rules the generated context can honor (spec 009
+/// FR-012, FR-013, FR-015, FR-047), reporting <c>MS0032</c> / <c>MS0033</c>.
+/// A constructed generic base is validated per construction, so a
+/// registration that does not fit <c>GBase&lt;string&gt;</c> is reported only
+/// when the context reaches <c>GBase&lt;string&gt;</c>, as System.Text.Json
+/// throws only then. A diagnostic every construction shares is reported once.
+/// Hierarchies with an interface base or a <c>[PlainObject]</c> base or
+/// variant are left to slice S6c (FR-018, FR-019): they get an <c>MS0033</c>
+/// warning and are emitted as non-polymorphic.
 /// </summary>
 internal sealed class JsonPolymorphismValidator(
     JsonPropertyCollector properties,
@@ -21,10 +21,15 @@ internal sealed class JsonPolymorphismValidator(
     Action<MetanoDiagnostic> report
 )
 {
-    private const ulong MaxArrayIndex = 4_294_967_294;
+    private static readonly HashSet<string> ReservedDiscriminators = new(StringComparer.Ordinal)
+    {
+        "$id",
+        "$ref",
+        "$values",
+    };
 
-    private readonly JsonPropertyCollector _properties = properties;
     private readonly JsonContractAdmission _admission = admission;
+    private readonly JsonDiscriminatorConflictDetector _conflicts = new(properties);
     private readonly Action<MetanoDiagnostic> _report = report;
     private readonly HashSet<MetanoDiagnostic> _reported = [];
 
@@ -32,27 +37,65 @@ internal sealed class JsonPolymorphismValidator(
     /// The polymorphism the context emits for <paramref name="baseType"/>:
     /// its valid registrations in attribute order, or <c>null</c> when the
     /// type is not polymorphic, belongs to a structural hierarchy (S6c), or
-    /// has a hierarchy-wide <c>MS0032</c> (a property named like the
-    /// discriminator or integer-like), which leaves no faithful descriptor.
+    /// has an error no descriptor can carry (a sealed base, no registration,
+    /// a reserved discriminator, a property that conflicts with the tag).
+    /// Reports the diagnostics as a side effect.
     /// </summary>
-    public JsonPolymorphism? Validate(INamedTypeSymbol baseType)
+    public JsonPolymorphism? ValidatedPolymorphismOf(INamedTypeSymbol baseType)
     {
         if (JsonPolymorphismReader.TryRead(baseType) is not { } declared)
             return null;
 
-        if (IsStructuralHierarchy(declared))
+        if (BaseRejectionOf(declared) is { } rejection)
+        {
+            ReportInvalid(rejection, declared.Location);
             return null;
+        }
 
-        var polymorphism = declared with { Derived = ValidRegistrationsOf(declared) };
+        if (IsStructuralHierarchy(declared))
+        {
+            ReportLossy(
+                JsonPolymorphismMessages.StructuralHierarchyNotSupported(OwnerOf(declared)),
+                declared.Location
+            );
+
+            return null;
+        }
+
+        var polymorphism = declared with { Registrations = ValidRegistrationsOf(declared) };
 
         ReportLossyRegistrations(polymorphism);
 
-        var conflicts = WireNameConflictsOf(polymorphism);
+        var conflicts = _conflicts.ConflictsOf(polymorphism);
 
-        foreach (var (message, location) in conflicts)
-            ReportInvalid(message, location);
+        foreach (var conflict in conflicts)
+            ReportInvalid(conflict.Message, conflict.Location);
 
         return conflicts.Count == 0 ? polymorphism : null;
+    }
+
+    /// <summary>
+    /// Why System.Text.Json rejects the base itself (it throws
+    /// <c>InvalidOperationException</c>), or <c>null</c>. A struct cannot
+    /// carry the attributes at all (CS0592).
+    /// </summary>
+    private static string? BaseRejectionOf(JsonPolymorphism polymorphism)
+    {
+        var owner = OwnerOf(polymorphism);
+
+        if (polymorphism.BaseType.IsSealed)
+            return JsonPolymorphismMessages.SealedBase(owner);
+
+        if (polymorphism.Registrations.Count == 0)
+            return JsonPolymorphismMessages.NoRegistration(owner);
+
+        if (ReservedDiscriminators.Contains(polymorphism.Discriminator))
+            return JsonPolymorphismMessages.ReservedDiscriminator(
+                polymorphism.Discriminator,
+                owner
+            );
+
+        return null;
     }
 
     /// <summary>
@@ -63,7 +106,7 @@ internal sealed class JsonPolymorphismValidator(
     private static bool IsStructuralHierarchy(JsonPolymorphism polymorphism) =>
         polymorphism.BaseType.TypeKind == TypeKind.Interface
         || polymorphism
-            .Derived.Select(registration => registration.Type)
+            .Registrations.Select(registration => registration.Type)
             .Prepend(polymorphism.BaseType)
             .Any(SymbolHelper.HasPlainObject);
 
@@ -71,11 +114,11 @@ internal sealed class JsonPolymorphismValidator(
     /// The registrations the descriptor keeps. Each rejected one is reported;
     /// a repeated type or tag keeps its first registration.
     /// </summary>
-    private List<JsonDerivedType> ValidRegistrationsOf(JsonPolymorphism polymorphism)
+    private List<JsonDerivedTypeRegistration> ValidRegistrationsOf(JsonPolymorphism polymorphism)
     {
-        var valid = new List<JsonDerivedType>();
+        var valid = new List<JsonDerivedTypeRegistration>();
 
-        foreach (var registration in polymorphism.Derived)
+        foreach (var registration in polymorphism.Registrations)
         {
             var rejection =
                 RejectionOf(polymorphism, registration)
@@ -94,20 +137,22 @@ internal sealed class JsonPolymorphismValidator(
     }
 
     /// <summary>Why a single registration cannot be honored, or <c>null</c>.</summary>
-    private string? RejectionOf(JsonPolymorphism polymorphism, JsonDerivedType registration)
+    private string? RejectionOf(
+        JsonPolymorphism polymorphism,
+        JsonDerivedTypeRegistration registration
+    )
     {
         var registered = Display(registration.Type);
-        var owner = Display(polymorphism.BaseType.OriginalDefinition);
+        var owner = OwnerOf(polymorphism);
 
         if (registration.Type is INamedTypeSymbol { IsGenericType: true })
-            return $"Generic derived type '{registered}' is not supported.";
+            return JsonPolymorphismMessages.GenericRegistration(registered);
 
         if (!IsAssignable(registration.Type, polymorphism.BaseType))
             return NotAssignableMessage(polymorphism, registered, owner);
 
         if (!_admission.HasObjectContract(registration.Type))
-            return $"'{registered}' registered by [JsonDerivedType] on '{owner}' is not "
-                + "transpiled, so it has no TypeScript contract.";
+            return JsonPolymorphismMessages.NotTranspiled(registered, owner);
 
         var requiresNearestAncestor =
             registration.IsAbstract
@@ -115,9 +160,7 @@ internal sealed class JsonPolymorphismValidator(
                 != JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor;
 
         if (requiresNearestAncestor)
-            return $"'{registered}' is abstract; abstract derived types require "
-                + $"UnknownDerivedTypeHandling = FallBackToNearestAncestor on '{owner}' (as in "
-                + "System.Text.Json).";
+            return JsonPolymorphismMessages.AbstractWithoutNearestAncestor(registered, owner);
 
         return null;
     }
@@ -129,24 +172,21 @@ internal sealed class JsonPolymorphismValidator(
     /// </summary>
     private static string? DuplicateRejectionOf(
         JsonPolymorphism polymorphism,
-        JsonDerivedType registration,
-        IReadOnlyList<JsonDerivedType> kept
+        JsonDerivedTypeRegistration registration,
+        IReadOnlyList<JsonDerivedTypeRegistration> kept
     )
     {
-        var owner = Display(polymorphism.BaseType.OriginalDefinition);
+        var owner = OwnerOf(polymorphism);
 
         var repeatsType = kept.Any(earlier =>
             SymbolEqualityComparer.Default.Equals(earlier.Type, registration.Type)
         );
 
         if (repeatsType)
-            return $"'{Display(registration.Type)}' is registered twice on '{owner}'.";
+            return JsonPolymorphismMessages.RepeatedType(Display(registration.Type), owner);
 
-        var repeatsTag =
-            registration.Tag is not null && kept.Any(earlier => earlier.Tag == registration.Tag);
-
-        if (repeatsTag)
-            return $"Type discriminator '{registration.Tag}' is registered twice on '{owner}'.";
+        if (registration.Tag is { } tag && kept.Any(earlier => earlier.Tag == tag))
+            return JsonPolymorphismMessages.RepeatedTag(tag.ToString(), owner);
 
         return null;
     }
@@ -164,15 +204,21 @@ internal sealed class JsonPolymorphismValidator(
         var baseType = polymorphism.BaseType;
 
         if (baseType.IsGenericType)
-            return $"'{registered}' registered on '{owner}' is not assignable to "
-                + $"'{Display(baseType)}', which this context reaches.";
+        {
+            return JsonPolymorphismMessages.NotAssignableToConstruction(
+                registered,
+                owner,
+                Display(baseType)
+            );
+        }
 
-        return $"'{registered}' registered by [JsonDerivedType] on '{owner}' is not assignable "
-            + $"to '{owner}'.";
+        return JsonPolymorphismMessages.NotAssignable(registered, owner);
     }
 
-    /// <summary>The type itself or one of its base classes is
-    /// <paramref name="baseType"/> (the base registering itself is valid).</summary>
+    /// <summary>
+    /// The type itself or one of its base classes is
+    /// <paramref name="baseType"/> (the base registering itself is valid).
+    /// </summary>
     private static bool IsAssignable(ITypeSymbol type, INamedTypeSymbol baseType)
     {
         for (ITypeSymbol? current = type; current is not null; current = current.BaseType)
@@ -190,90 +236,41 @@ internal sealed class JsonPolymorphismValidator(
     /// </summary>
     private void ReportLossyRegistrations(JsonPolymorphism polymorphism)
     {
-        var owner = Display(polymorphism.BaseType.OriginalDefinition);
+        var owner = OwnerOf(polymorphism);
 
-        foreach (var registration in polymorphism.Derived)
+        foreach (var registration in polymorphism.Registrations)
         {
             var registered = Display(registration.Type);
 
-            if (registration.Tag is null)
+            if (!registration.IsTagged)
+            {
                 ReportLossy(
-                    $"'{registered}' is registered on '{owner}' without a type discriminator; it "
-                        + $"serializes without a tag and deserializes as '{owner}' (as in "
-                        + "System.Text.Json).",
+                    JsonPolymorphismMessages.UntaggedRegistration(
+                        registered,
+                        owner,
+                        polymorphism.IsAbstractBase
+                    ),
                     registration.Location
                 );
+            }
 
             if (IsNestedPolymorphicBase(polymorphism, registration))
+            {
                 ReportLossy(
-                    $"'{registered}' declares its own [JsonDerivedType]s; as in System.Text.Json, "
-                        + $"they apply only through '{registered}' and are not re-dispatched "
-                        + $"through '{owner}'.",
+                    JsonPolymorphismMessages.NestedPolymorphicRegistration(registered, owner),
                     registration.Location
                 );
+            }
         }
     }
 
     private static bool IsNestedPolymorphicBase(
         JsonPolymorphism polymorphism,
-        JsonDerivedType registration
+        JsonDerivedTypeRegistration registration
     ) =>
         registration.Type is INamedTypeSymbol registered
         && !SymbolEqualityComparer.Default.Equals(registered, polymorphism.BaseType)
         && JsonPolymorphismReader.IsPolymorphic(registered);
-
-    /// <summary>
-    /// The <c>MS0032</c> of every JSON property of the hierarchy's contracts
-    /// (the base and each valid registration, inherited properties included)
-    /// whose final name equals the discriminator (System.Text.Json throws
-    /// <c>InvalidOperationException</c>) or is integer-like (JavaScript
-    /// enumerates such keys before the tag).
-    /// </summary>
-    private List<(string Message, Location? Location)> WireNameConflictsOf(
-        JsonPolymorphism polymorphism
-    ) =>
-        polymorphism
-            .Derived.Select(registration => (INamedTypeSymbol)registration.Type)
-            .Prepend(polymorphism.BaseType)
-            .SelectMany(_properties.ContractPropertiesOf)
-            .DistinctBy(property => (property.Property, property.JsonName))
-            .Select(property => WireNameConflictOf(polymorphism, property))
-            .OfType<(string Message, Location? Location)>()
-            .ToList();
-
-    private static (string Message, Location? Location)? WireNameConflictOf(
-        JsonPolymorphism polymorphism,
-        JsonSerializableProperty property
-    )
-    {
-        var member = $"{Display(property.Property.ContainingType)}.{property.Property.Name}";
-        var location = property.Property.Locations.FirstOrDefault(l => l.IsInSource);
-
-        if (property.JsonName == polymorphism.Discriminator)
-            return (
-                $"'{member}' serializes as '{property.JsonName}', which conflicts with the "
-                    + $"discriminator of '{Display(polymorphism.BaseType.OriginalDefinition)}'.",
-                location
-            );
-
-        if (IsIntegerLike(property.JsonName))
-            return (
-                $"JSON property '{property.JsonName}' of '{member}' is integer-like; JavaScript "
-                    + "would order it before the discriminator.",
-                location
-            );
-
-        return null;
-    }
-
-    /// <summary>A canonical array index (<c>0</c>, <c>17</c>, not <c>01</c>),
-    /// which JavaScript enumerates before every other key.</summary>
-    private static bool IsIntegerLike(string name) =>
-        name.Length > 0
-        && name.All(char.IsAsciiDigit)
-        && (name == "0" || name[0] != '0')
-        && ulong.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
-        && index <= MaxArrayIndex;
 
     private void ReportInvalid(string message, Location? location) =>
         Report(
@@ -300,6 +297,13 @@ internal sealed class JsonPolymorphismValidator(
         if (_reported.Add(diagnostic))
             _report(diagnostic);
     }
+
+    /// <summary>
+    /// The base as messages name it: its definition, so every construction of
+    /// a generic base reports the same text (<c>GBase&lt;T&gt;</c>).
+    /// </summary>
+    private static string OwnerOf(JsonPolymorphism polymorphism) =>
+        Display(polymorphism.BaseType.OriginalDefinition);
 
     private static string Display(ITypeSymbol type) =>
         type.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat);

@@ -30,15 +30,24 @@ compilations only and never placed in `samples/SampleJsonContracts`, which build
 | Cycle in the `[PlainObject]` specificity order (FR-019) | three variants whose guards cover each other pairwise in a cycle | `[PlainObject] variants 'A', 'B' and 'C' of 'Base' have no consistent test order.` |
 | Generic derived type | `typeof(Box<int>)` | `Generic derived type 'Box<int>' is not supported.` |
 | Registration invalid for a constructed base reached by the closure (FR-015) | `GDer : GBase<int>` reached through `GBase<string>` | `'GDer' registered on 'GBase<T>' is not assignable to 'GBase<string>', which this context reaches.` |
-| Property name equals discriminator | `KA(string Kind)` under camelCase, tag `kind` | `'KA.Kind' serializes as 'kind', which conflicts with the discriminator of 'KBase'.` |
-| Integer-like JSON property name in the hierarchy | `[JsonPropertyName("1")]` | `JSON property '1' of '…' is integer-like; JavaScript would order it before the discriminator.` |
+| Property name equals discriminator, in a contract written with a tag (a tagged registration, inherited properties included; never an untagged one, S6 review) | `KA(string Kind)` under camelCase, tag `kind` | `'KA.Kind' serializes as 'kind', which conflicts with the discriminator of 'KBase'.` |
+| Integer-like JSON property name in a contract written with a tag | `[JsonPropertyName("1")]` | `JSON property '1' of '…' is integer-like; JavaScript would order it before the discriminator.` |
+| Sealed base (S6 review; a struct cannot carry the attributes, CS0592) | `[JsonDerivedType(typeof(SealedB), "s")] sealed record SealedB` | `'SealedB' does not support polymorphism: polymorphic types cannot be sealed types (as in System.Text.Json).` |
+| `[JsonPolymorphic]` without any `[JsonDerivedType]` (S6 review) | `[JsonPolymorphic] record PolyOnly` | `Polymorphic configuration for type 'PolyOnly' should specify at least one derived type (as in System.Text.Json).` |
+| Reserved discriminator `$id` / `$ref` / `$values` (S6 review) | `TypeDiscriminatorPropertyName = "$id"` | `The discriminator '$id' of 'IdDisc' is reserved: '$id', '$ref' and '$values' cannot be used as custom type discriminator property names (as in System.Text.Json).` |
+
+The base rules (sealed, no registration, reserved discriminator) and the property rules leave the
+base without `polymorphism`; a registration rule leaves out that registration. Messages name a
+generic base by its definition (`GBase<T>`), so a diagnostic every construction shares is reported
+once.
 
 ## `MS0033` `LossyJsonPolymorphism` — Warning
 
 | Rule | Message shape |
 |---|---|
-| Untagged registration | `'NA' is registered on 'NBase' without a type discriminator; it serializes without a tag and deserializes as 'NBase' (as in System.Text.Json).` |
+| Untagged registration | `'NA' is registered on 'NBase' without a type discriminator; it serializes without a tag and deserializes as 'NBase' (as in System.Text.Json).` — on an abstract base: `… and cannot be deserialized through the abstract 'UAB' (as in System.Text.Json).` |
 | Derived type is itself polymorphic | `'NMid' declares its own [JsonDerivedType]s; as in System.Text.Json, they apply only through 'NMid' and are not re-dispatched through 'NBase'.` |
+| Interface or `[PlainObject]` hierarchy, until S6c (temporary, S6 review) | `Polymorphism for interface and [PlainObject] types is not supported yet; 'Shape' is emitted without a discriminator.` |
 
 ## `MS0034` `InvalidJsonFactory` — Error
 

@@ -25,6 +25,9 @@ kept outside the repository by the maintainer; plus a source-generation probe ru
 | `HLeaf(A,B,C) : HMid(A,B) : HBase(A)` | `{"t":"leaf","C":3,"B":2,"A":1}` — most-derived properties first |
 | Non-polymorphic hierarchy | also derived-first: `class CD` → `{"DerP":2,"BaseP":1}` |
 | Untagged derived `[JsonDerivedType(typeof(NA))]` | writes `{"V":1}`; reads back as the base (data lost) |
+| Only untagged registrations (S6 review probe) | no metadata is read: `{"$type":"x","V":1}` and `{"V":1,"$x":1}` read the concrete base; an abstract base throws `NotSupportedException` "Deserialization of interface or abstract types is not supported. Type 'UAB'." |
+| Sealed base, `[JsonPolymorphic]` without registrations, discriminator `$id` / `$ref` / `$values` (S6 review probe) | `InvalidOperationException` (see spec.md FR-012); an empty discriminator `""` is accepted (`{"":"d","V":1}`) |
+| Closed generic registration `typeof(GenD<int>)` (S6 review probe) | accepted: `{"$type":"g","X":1}` |
 | Concrete base instance | no tag (`{}`); missing tag on read → base |
 | Base registers itself `[JsonDerivedType(typeof(SBase), "b")]` | valid; writes `{"$type":"b","V":1}`; reads back as `SBase` (critic probe, net10.0) |
 | Abstract derived type `[JsonDerivedType(typeof(AMid))]` | `InvalidOperationException: … cannot be abstract classes or interfaces unless 'JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor' is specified` (critic probe) |

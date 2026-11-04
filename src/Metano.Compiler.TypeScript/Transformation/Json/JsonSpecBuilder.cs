@@ -177,9 +177,8 @@ internal sealed class JsonSpecBuilder
                     BuildFactoryStatement(
                         targetType,
                         tsTypeName,
-                        isPlainObject,
-                        isPolymorphic: polymorphism is not null,
-                        properties
+                        properties,
+                        AbstractFactoryMessageOf(tsTypeName, polymorphism)
                     ),
                 ]
             )
@@ -258,16 +257,15 @@ internal sealed class JsonSpecBuilder
     private TsStatement BuildFactoryStatement(
         INamedTypeSymbol targetType,
         string tsTypeName,
-        bool isPlainObject,
-        bool isPolymorphic,
-        IReadOnlyList<JsonSerializableProperty> properties
+        IReadOnlyList<JsonSerializableProperty> properties,
+        string abstractFactoryMessage
     )
     {
-        if (isPlainObject)
+        if (SymbolHelper.HasPlainObject(targetType))
             return new TsReturnStatement(BuildPlainObjectLiteral(properties));
 
         if (targetType.IsAbstract)
-            return BuildAbstractFactoryThrow(AbstractFactoryMessage(tsTypeName, isPolymorphic));
+            return BuildAbstractFactoryThrow(abstractFactoryMessage);
 
         return new TsReturnStatement(
             new TsNewExpression(
@@ -363,13 +361,22 @@ internal sealed class JsonSpecBuilder
         new(new TsNewExpression(new TsIdentifier("Error"), [new TsStringLiteral(message)]));
 
     /// <summary>
-    /// The FR-011 text of a polymorphic base; a non-polymorphic abstract type
-    /// keeps the #238 text.
+    /// The text the factory of an abstract type throws: FR-011's for a
+    /// polymorphic base, the #238 one otherwise.
     /// </summary>
-    private static string AbstractFactoryMessage(string tsTypeName, bool isPolymorphic) =>
-        isPolymorphic
-            ? $"Cannot deserialize abstract type '{tsTypeName}' directly; deserialize it "
-                + "through a polymorphic spec."
-            : $"Cannot deserialize abstract type '{tsTypeName}': polymorphic JSON "
-                + "deserialization is not supported yet.";
+    private static string AbstractFactoryMessageOf(
+        string tsTypeName,
+        JsonPolymorphism? polymorphism
+    ) =>
+        polymorphism is null
+            ? UnsupportedAbstractFactoryMessage(tsTypeName)
+            : PolymorphicAbstractFactoryMessage(tsTypeName);
+
+    private static string PolymorphicAbstractFactoryMessage(string tsTypeName) =>
+        $"Cannot deserialize abstract type '{tsTypeName}' directly; deserialize it through a "
+        + "polymorphic spec.";
+
+    private static string UnsupportedAbstractFactoryMessage(string tsTypeName) =>
+        $"Cannot deserialize abstract type '{tsTypeName}': polymorphic JSON deserialization is "
+        + "not supported yet.";
 }

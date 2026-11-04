@@ -6,22 +6,31 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// <summary>
 /// The <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> description of a
 /// polymorphic base (spec 009 FR-001): the discriminator name, written
-/// verbatim, the unknown-type handling, the ignore flag, and the derived
+/// verbatim, the unknown-type handling, the ignore flag, and the
 /// registrations in attribute order. <see cref="BaseType"/> is the base the
-/// context reaches, a constructed type for a closed generic base (FR-015).
+/// context reaches, a constructed type for a closed generic base (FR-015);
+/// <see cref="Location"/> is its <c>[JsonPolymorphic]</c> attribute, else its
+/// first <c>[JsonDerivedType]</c>.
 /// </summary>
 internal sealed record JsonPolymorphism(
     INamedTypeSymbol BaseType,
     string Discriminator,
     JsonUnknownDerivedTypeHandling UnknownDerivedType,
     bool IgnoreUnrecognizedTags,
-    IReadOnlyList<JsonDerivedType> Derived
+    IReadOnlyList<JsonDerivedTypeRegistration> Registrations,
+    Location? Location
 )
 {
     /// <summary>The discriminator System.Text.Json uses when none is set.</summary>
     public const string DefaultDiscriminator = "$type";
 
     public bool IsAbstractBase => BaseType.IsAbstract;
+
+    /// <summary>
+    /// Whether any registration declares a tag. Without one, System.Text.Json
+    /// reads no metadata at all: the base reads like a non-polymorphic type.
+    /// </summary>
+    public bool HasTaggedRegistration => Registrations.Any(registration => registration.IsTagged);
 }
 
 /// <summary>
@@ -29,9 +38,15 @@ internal sealed record JsonPolymorphism(
 /// the base itself), its tag (<c>null</c> for an untagged registration) and
 /// the attribute's location.
 /// </summary>
-internal sealed record JsonDerivedType(ITypeSymbol Type, JsonTypeTag? Tag, Location? Location)
+internal sealed record JsonDerivedTypeRegistration(
+    ITypeSymbol Type,
+    JsonTypeTag? Tag,
+    Location? Location
+)
 {
     public bool IsAbstract => Type.IsAbstract;
+
+    public bool IsTagged => Tag is not null;
 }
 
 /// <summary>

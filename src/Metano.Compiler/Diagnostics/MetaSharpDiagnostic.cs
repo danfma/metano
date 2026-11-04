@@ -315,22 +315,26 @@ public static class DiagnosticCodes
     /// <c>[Ignore]</c>.</summary>
     public const string ExplicitImplementationConflict = "MS0031";
 
-    /// <summary>MS0032 — a <c>[JsonDerivedType]</c> registration the generated
-    /// TypeScript context cannot honor: a derived type that is generic, not assignable
-    /// to the base (to every constructed base the context reaches, for a generic base),
-    /// not transpiled in its declaring assembly, abstract without
-    /// <c>FallBackToNearestAncestor</c>, or registered twice; a tag registered twice; or
-    /// a JSON property of the hierarchy named like the discriminator or integer-like.
-    /// An error at the attribute (or the property); an invalid registration is left out
-    /// of the descriptor, and a hierarchy-wide error leaves the base without
+    /// <summary>MS0032 — a <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c>
+    /// configuration the generated TypeScript context cannot honor, checked for each base
+    /// the context dispatches through. A registration that is generic, not assignable to
+    /// the base (to each construction the context reaches, for a generic base), not
+    /// transpiled in its declaring assembly, abstract without
+    /// <c>FallBackToNearestAncestor</c>, or a repeated type or tag is an error at its
+    /// attribute and is left out of the descriptor. A sealed base, a
+    /// <c>[JsonPolymorphic]</c> without registrations, a reserved discriminator
+    /// (<c>$id</c>, <c>$ref</c>, <c>$values</c>), or a JSON property of a tagged contract
+    /// named like the discriminator or integer-like leaves the base without
     /// <c>polymorphism</c> (spec 009 FR-012, FR-015, FR-047, #268).</summary>
     public const string InvalidJsonPolymorphism = "MS0032";
 
     /// <summary>MS0033 — a <c>[JsonDerivedType]</c> registration that does not
     /// round-trip, exactly as in System.Text.Json: an untagged registration (written
-    /// without a tag, read back as the base), or a derived type that declares its own
-    /// <c>[JsonDerivedType]</c>s (not re-dispatched through the outer base). A warning at
-    /// the attribute (spec 009 FR-013, #268).</summary>
+    /// without a tag, read back as a concrete base or unreadable through an abstract one),
+    /// or a derived type that declares its own <c>[JsonDerivedType]</c>s (not re-dispatched
+    /// through the outer base). Until spec 009 S6c, also an interface or
+    /// <c>[PlainObject]</c> hierarchy emitted without a discriminator. A warning at the
+    /// attribute (spec 009 FR-013, #268).</summary>
     public const string LossyJsonPolymorphism = "MS0033";
 
     /// <summary>MS0034 — a <c>[JsonFactory]</c> the generated context cannot call: on an

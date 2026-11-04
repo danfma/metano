@@ -118,8 +118,13 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             ReadNamingPolicy(contextType)
         );
         var names = JsonTypeInfoNames.Create(_context, roots, report);
-        var polymorphisms = new JsonPolymorphismValidator(properties, admission, report);
-        var contract = new JsonContractClosure(properties, admission, polymorphisms).Collect(roots);
+        var polymorphismValidator = new JsonPolymorphismValidator(properties, admission, report);
+
+        var contract = new JsonContractClosure(
+            properties,
+            admission,
+            polymorphismValidator
+        ).Collect(roots);
 
         return new JsonContextPlan(
             names,

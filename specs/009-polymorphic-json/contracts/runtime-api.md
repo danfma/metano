@@ -140,4 +140,7 @@ non-polymorphic `TypeSpec` unchanged. With it the runtime implements FR-017's re
 of interface or abstract types is not supported. Type '<entry>'.", or the entry's own missing-tag
 message when the entry's spec is polymorphic; without the out-of-order option, `$id`, `$ref` or
 `$values` right after the tag throw the "metadata property … not the first property"
-`JsonException` first (DECIDED-22 a).
+`JsonException` first (DECIDED-22 a). A hierarchy whose entries all lack a `tag` reads like a
+non-polymorphic contract, as STJ does: the concrete base reads its own contract (`$`-prefixed keys
+included) and an abstract base throws "Deserialization of interface or abstract types is not
+supported. Type '<base>'."; writes still dispatch (DECIDED-22 k).

@@ -358,6 +358,10 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   `FallBackToNearestAncestor` writes the nearest registered ancestor's tag and contract, or the base
   contract when none is registered. These rows are **write-only**: what they write does not read
   back as the original class (W12 reads as the ancestor; W13 through an abstract base throws).
+- **Only untagged registrations** (measured): STJ reads no metadata at all — a concrete base reads
+  `{"$type":"x","V":1}`, `{"V":1,"$x":1}` and `{"$x":1,"V":1}` as itself, and an abstract base
+  throws `NotSupportedException` "Deserialization of interface or abstract types is not supported.
+  Type 'UAB'." for any payload. Writes still dispatch (`{"W":2,"V":1}`).
 - **Abstract derived type**: rejected (`MS0032`) unless the base uses `FallBackToNearestAncestor`,
   where it serves only as a nearest-ancestor target; reading its tag throws
   `NotSupportedException` (FR-017, DECIDED-12).
@@ -504,15 +508,29 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   or interfaces unless 'JsonUnknownDerivedTypeHandling.FallBackToNearestAncestor' is specified");
   a derived entry is itself an interface (it has neither a TS constructor nor a guard that STJ's
   nearest-ancestor rules could use; v1, OPEN-18); two `[PlainObject]` variants of one base cannot
-  be told apart on write (FR-019); a derived type is generic (open or closed, v1); a derived type is
-  not assignable to a constructed polymorphic base reached by the closure (FR-015); a data
-  property of any contract in the hierarchy has a final JSON name (after `[JsonPropertyName]` /
-  policy) equal to the discriminator (STJ throws `InvalidOperationException` for this); a JSON
-  property name in the hierarchy is integer-like.
+  be told apart on write (FR-019); a derived type is generic (open or closed, v1 — a known parity
+  gap: STJ accepts a closed generic registration such as `typeof(GenD<int>)` and writes
+  `{"$type":"g","X":1}`, see Documented divergences); a derived type is not assignable to a
+  constructed polymorphic base the context dispatches through (FR-015); a data property of a
+  contract written with a tag (a tagged registration, inherited properties included) has a final
+  JSON name (after `[JsonPropertyName]` / policy) equal to the discriminator (STJ throws
+  `InvalidOperationException` "The type 'KBBD' contains property 'kind' that conflicts with an
+  existing metadata property name."), or such a JSON property name is integer-like — untagged
+  registrations, and hierarchies without any tag, never conflict (STJ writes them, measured);
+  the base is **sealed** (STJ: "Specified type 'SealedB' does not support polymorphism.
+  Polymorphic types cannot be structs, sealed types, generic types or System.Object."; a struct
+  cannot carry the attributes, CS0592); `[JsonPolymorphic]` is present without any
+  `[JsonDerivedType]` (STJ: "Polymorphic configuration for type 'PolyOnly' should specify at least
+  one derived type."); the `TypeDiscriminatorPropertyName` is `$id`, `$ref` or `$values` (STJ:
+  "The metadata property names '$id', '$ref', and '$values' are reserved and cannot be used as
+  custom type discriminator property names."). The three base rules and the property rules leave
+  the base without `polymorphism`; the registration rules leave out that registration only.
 - **FR-013**: The generator MUST report `MS0033` (`LossyJsonPolymorphism`, Warning) when a derived
-  type is registered without a tag (serializes without a tag and reads back as the base, exactly
-  as in STJ), and when a derived type is itself polymorphic (informational: its own
-  `[JsonDerivedType]`s apply only through its own spec, as in STJ).
+  type is registered without a tag (serializes without a tag and reads back as a concrete base, or
+  cannot be read through an abstract base, exactly as in STJ), and when a derived type is itself
+  polymorphic (informational: its own `[JsonDerivedType]`s apply only through its own spec, as in
+  STJ). Until slice S6c, it also reports an interface or `[PlainObject]` hierarchy that carries the
+  attributes, which is emitted without a discriminator (DECIDED-22 b).
 - **FR-014**: The discriminator name and values MUST be emitted verbatim. Data property names keep
   today's rule (`[JsonPropertyName]`, else the context naming policy, else the C# name). The naming
   policy also comes from `JsonSerializerDefaults.Web` (camelCase) when the context passes it, and an
@@ -521,7 +539,11 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   `[JsonDerivedType(typeof(GDer), "g")]` on `GBase<T>`) MUST be supported (DECIDED-13): the attributes
   are read from the original definition; every constructed base the closure reaches gets its own
   spec named by FR-031 (`gBaseInt32`, `TypeSpec<GBase<number>>`); its `base` link, derived links
-  and getter all use the constructed name. For each constructed base, `MS0032` reports every
+  and getter all use the constructed name. A constructed base is polymorphic — gets
+  `polymorphism`, adds its registrations and is validated — only when the context dispatches
+  through it: as a root, a `ref` target (a property, element or value type) or a registered type,
+  never when it is reached only through a derived type's `base` link (STJ builds no polymorphism
+  for such a base, DECIDED-22 j). For each such constructed base, `MS0032` reports every
   registration whose type is not assignable to that construction (STJ throws only when such a
   registration is reached through that closing, e.g. `GBase<string>`).
 - **FR-016**: `serializeContract` and `deserializeContract` MUST track the JSON container depth and
@@ -842,6 +864,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | `[StringEnum]` root/property | number unless `JsonStringEnumConverter` | string | Pre-existing type-mapping contract, unchanged |
 | `[JsonPropertyOrder]` | reorders properties | declaration order | `MS0037` (DECIDED-3) |
 | Missing non-required property | default value | `JsonException` | FR-045 |
+| Closed generic registration `[JsonDerivedType(typeof(GenD<int>), "g")]` | accepted (`{"$type":"g","X":1}`, measured) | `MS0032` | Known gap of v1 (FR-012) |
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
 | Runtime type name of a plain object in `Runtime type '…' is not supported` | the C# type name | `Object` | FR-019 |
 | Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Not measured; fixtures use ASCII names; probed in S8 |
@@ -1160,16 +1183,19 @@ the former `OPEN-N`.
     unchanged (FR-004).
   - (b) Interface bases (FR-018) and hierarchies with a `[PlainObject]` base or variant (FR-019)
     are slice S6c. Until it lands the generator treats them as non-polymorphic: no
-    `polymorphism`, no closure additions and no diagnostics, so their contexts are unchanged. An
-    interface registered on a **class** base is not assignable to it and is `MS0032` now.
+    `polymorphism` and no closure additions, so their contexts are unchanged, but a temporary
+    `MS0033` warning says so ("Polymorphism for interface and [PlainObject] types is not
+    supported yet; 'Shape' is emitted without a discriminator."); S6c removes it. An interface
+    registered on a **class** base is not assignable to it and is `MS0032` now.
   - (c) An invalid registration (`MS0032`) is left out of `derived`; a repeated type or tag keeps
     its first registration. A hierarchy-wide `MS0032` (a JSON property named like the
     discriminator, compared ordinally after the naming policy, or integer-like) leaves the base
     without `polymorphism`, because no descriptor would match System.Text.Json. The rules are
     evaluated per constructed base the closure reaches (FR-015), once per context.
-  - (d) The property rules read every contract of the hierarchy: the base and each valid
-    registration, inherited properties included (their linked `base` specs or inlined
-    ancestors). The diagnostic is located at the property.
+  - (d) The property rules read every contract written with a tag: each valid tagged
+    registration (the base too when it registers itself with a tag), inherited properties
+    included (their linked `base` specs or inlined ancestors). The diagnostic is located at the
+    property (revised in review, (l)).
   - (e) Closure order: per entry, its `base` link, then the `ref` targets of its properties, then
     its registrations in attribute order (a self-registration adds nothing). A derived link counts
     as a link for `MS0036` severity, like `ref` and `base`.
@@ -1184,6 +1210,22 @@ the former `OPEN-N`.
     (`tests/Metano.Tests/Expected/json-polymorphic-context.ts`) compiles under `tsgo --strict` and
     reproduces every probe row its test header quotes (bundled with `bun build`, run under Node and
     Bun). The permanent cross-runtime check is the S8 manifest.
+  - (j) Polymorphism is read only for the closure's dispatch targets: roots, `ref` targets and
+    registered types. A type reached only through a `base` link is never dispatched through, and
+    STJ never builds its polymorphism, so it gets no `polymorphism`, no registrations and no
+    diagnostics; a type that becomes a dispatch target after the walk reached it through `base`
+    is expanded then (FR-015).
+  - (k) A hierarchy whose registrations are all untagged reads like a non-polymorphic contract
+    (measured, see Edge Cases). The runtime decides it (`resolveDeserializeTarget` returns the base,
+    or throws STJ's abstract-type `NotSupportedException` for an abstract base, when no entry has a
+    `tag`), so the descriptor needs no extra member and hand-written specs behave the same; writes
+    still dispatch by constructor.
+  - (l) Review round of S6 (STJ probe, .NET 10): a sealed base, `[JsonPolymorphic]` without
+    registrations and a reserved discriminator (`$id`, `$ref`, `$values`) are `MS0032` at the
+    `[JsonPolymorphic]` attribute (else the first `[JsonDerivedType]`); the property rules check
+    only the contracts written with a tag; a diagnostic shared by several constructions of a
+    generic base is reported once (messages name the definition, `GBase<T>`). An empty
+    discriminator (`""`) is valid in STJ (`{"":"d","V":1}`) and is emitted as is.
 
 ## Open questions
 
