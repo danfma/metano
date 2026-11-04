@@ -870,7 +870,8 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Integer-like property names in a polymorphic hierarchy | allowed | JS key order puts them first | Rejected, `MS0032` |
 | Array-index payload key (`"0"`) written **before** the tag | `JsonException` "The metadata property … not the first property …" (measured) | the tag is read as first (JS enumerates index keys first, so their position is lost) | Undetectable after `JSON.parse`; an index key after the tag reads as in STJ (DECIDED-21 i) |
 | `byte[]` | base64 string | number array | `MS0037`; follow-up issue (DECIDED-16) |
-| Writing a `decimal` | its exact digits as a JSON number (`1.10`, all 29 digits of `MaxValue`) | `toNumber()` (`1.1`, `7.922816251426434e+28`) | Documented (DECIDED-23 f); a string converter keeps every digit |
+| Writing a `decimal` | its exact digits as a JSON number (`1.10`, all 29 digits of `MaxValue`) | `toNumber()` (`1.1`, `7.922816251426434e+28`) | Documented (DECIDED-23 f); a string converter keeps the significant digits |
+| JSON number just past `decimal.MaxValue` (`79228162514264337593543950335.5`, `…336`) | `JsonException` | `JSON.parse` rounds it to the double of `MaxValue`, accepted | Undetectable after `JSON.parse` (DECIDED-23 f) |
 | Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows compare the prefix |
 | Two properties whose JSON names differ only in case, case-insensitive context | `InvalidOperationException` "The JSON property name for 'Twins.A' collides with another property." at first use | both kept; a key fills the property listed last | Not reported; follow-up with the naming-collision issue (DECIDED-23 e) |
 | Case-insensitive names with characters whose casing differs between the JS engine's and .NET's Unicode version | .NET's tables | the engine's tables (Node 24: U+A7CF, U+A7D3, U+A7D5) | Engine-dependent (DECIDED-23 a) |
@@ -1288,7 +1289,14 @@ the former `OPEN-N`.
     function` when written back). The `decimal` descriptor now carries `type` (the mapped
     decimal.js `Decimal`, `{ kind: "decimal", type: Decimal }`, as a temporal descriptor carries
     `parse`), and the converter builds `new Decimal(value)` from a JSON number, or from the JSON
-    text when the context reads numbers from strings, so a string keeps every digit. A JSON
+    text when the context reads numbers from strings, so a string keeps its significant digits;
+    trailing zeros (the scale) are lost on read and on write (`new Decimal("1.10")` prints `1.1`).
+    A JSON number is already a double after `JSON.parse`, so its range is checked as a double
+    (`|value| <= Number("79228162514264337593543950335")`, which is 2^96): STJ reads the numbers
+    `79228162514264337593543950335`, `…335.4` and `7.9228162514264337593543950335e28` as
+    `MaxValue` and so does the runtime, while `…335.5` and `…336`, which STJ rejects, parse to the
+    same double and read (undetectable after `JSON.parse`); the next double
+    (`79228162514264355185729994752`) is rejected on both sides (measured). A JSON
     number outside the decimal range (`1e29`), a string without the option (measured under
     `General`: `"1"` throws) and any other JSON value throw `The JSON value could not be converted
     to System.Decimal.`; a hand-written descriptor without `type` keeps the JSON value. Writing
