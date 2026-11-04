@@ -46,6 +46,9 @@ public sealed class IrToTsClassEmitter(
         constructorAccessFacts,
         context.ReportDiagnostic
     );
+    private readonly CatchAllOverloadReporter _catchAllOverloadReporter = new(
+        context.ReportDiagnostic
+    );
 
     public void Transform(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
@@ -155,6 +158,15 @@ public sealed class IrToTsClassEmitter(
     {
         if (emitsDispatcher)
         {
+            if (ir.Constructor is { } constructor)
+            {
+                _catchAllOverloadReporter.ReportConstructors(
+                    type,
+                    constructor,
+                    ir.TypeParameters ?? []
+                );
+            }
+
             // The IR pipeline owns multi-constructor dispatch. When the body
             // coverage probe flags any overload as uncovered, surface a
             // build-time diagnostic and emit an empty constructor stub —
@@ -483,6 +495,8 @@ public sealed class IrToTsClassEmitter(
                 return null;
             }
 
+            _catchAllOverloadReporter.ReportMethods(type, irMethod, ir.TypeParameters ?? []);
+
             var dispatcher = TryBuildOverloadDispatcherFromIr(irMethod, type.Name, ir, lowering);
             if (dispatcher is null)
             {
@@ -578,6 +592,7 @@ public sealed class IrToTsClassEmitter(
                 perParams,
                 perReturns,
                 perParamIrTypes,
+                new OperatorTypeCheckScope(ir.TypeParameters ?? [], BclOverrides),
                 _context.DeclarativeMappings
             );
         }

@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -139,5 +141,143 @@ public class OverloadDispatchGenericTests
         await Assert
             .That(result["holder.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-generic-methods.ts"));
+    }
+
+    [Test]
+    public async Task ClassConstraint_AdmitsNull()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Slot<T> where T : class?
+            {
+                public Slot(T value) { }
+
+                public Slot(int index) { }
+            }
+            """
+        );
+
+        await Assert
+            .That(result["slot.ts"])
+            .Contains(
+                "args.length === 1 && (typeof args[0] === \"object\" || typeof args[0] === \"function\" || typeof args[0] === \"string\")"
+            );
+    }
+
+    [Test]
+    public async Task Operators_TryTheConcreteOperandBeforeTheTypeParameter()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Box<T>
+            {
+                public string Tag { get; }
+
+                public Box(string tag) { Tag = tag; }
+
+                public static Box<T> operator +(Box<T> a, T b) => new Box<T>("T");
+
+                public static Box<T> operator +(Box<T> a, int b) => new Box<T>("int");
+            }
+            """
+        );
+
+        var output = result["box.ts"];
+        var concrete = output.IndexOf(
+            "args.length === 2 && args[0] instanceof Box && isInt32(args[1])"
+        );
+        var generic = output.IndexOf("args.length === 2 && args[0] instanceof Box)");
+
+        await Assert.That(concrete).IsGreaterThanOrEqualTo(0);
+        await Assert.That(generic).IsGreaterThan(concrete);
+    }
+
+    [Test]
+    public async Task CatchAllOverload_OverlappingConcreteOptionalOrParams_ReportsMs0063()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Ctor<T>
+            {
+                public Ctor(T value) { }
+
+                public Ctor(int a, int b = 9) { }
+
+                public Ctor(string s, params string[] rest) { }
+            }
+
+            public class Calls<T>
+            {
+                public string F(T value) => "T";
+
+                public string F(int a, int b = 9) => "ab";
+            }
+            """
+        );
+
+        var warnings = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch)
+            .ToList();
+
+        await Assert.That(warnings.Count).IsEqualTo(2);
+        await Assert
+            .That(warnings.All(w => w.Severity == MetanoDiagnosticSeverity.Warning))
+            .IsTrue();
+
+        var constructor = warnings.Single(w => w.Message.Contains("Ctor<T>.Ctor(T)"));
+
+        await Assert.That(constructor.Message).Contains("'Ctor<T>.Ctor(int, int)'");
+        await Assert.That(constructor.Message).Contains("'Ctor<T>.Ctor(string, params string[])'");
+        await Assert.That(constructor.Message).Contains("#25");
+        await Assert.That(constructor.Location).IsNotNull();
+
+        var method = warnings.Single(w => w.Message.Contains("Calls<T>.F(T)"));
+
+        await Assert.That(method.Message).Contains("'Calls<T>.F(int, int)'");
+    }
+
+    [Test]
+    public async Task CatchAllOverload_TriedAfterTheConcreteOne_ReportsNothing()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Mixed<T>
+            {
+                public Mixed(T x) { }
+
+                public Mixed(int x) { }
+            }
+
+            public class Bag<T>
+            {
+                public Bag(T item) { }
+
+                public Bag(T item, int count) { }
+            }
+
+            public class Ranged<T> where T : class
+            {
+                public Ranged(T value) { }
+
+                public Ranged(int a, int b = 9) { }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch))
+            .IsEmpty();
     }
 }

@@ -10,7 +10,7 @@ export class RefBox<T> {
       return;
     }
 
-    if (args.length === 1 && ((typeof args[0] === "object" && args[0] !== null) || typeof args[0] === "function" || typeof args[0] === "string")) {
+    if (args.length === 1 && (typeof args[0] === "object" || typeof args[0] === "function" || typeof args[0] === "string")) {
       const x = args[0] as T;
 
       return;

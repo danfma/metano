@@ -24,6 +24,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// generic overload (<c>F(int)</c> over <c>F&lt;T&gt;(T)</c>) and a type
 /// parameter's guard is the loosest. The sort is stable, so remaining ties
 /// keep declaration order.
+/// <para>
+/// No order matches C# when a catch-all overload (no parameter checked) shares
+/// argument counts with a concrete optional or <c>params</c> one, since C#
+/// can rank such sets cyclically; <see cref="CatchAllOverloads"/> reports
+/// them as <c>MS0063</c> until static call-site dispatch (#25) lands.
+/// </para>
 /// </summary>
 internal static class OverloadDispatchOrder
 {

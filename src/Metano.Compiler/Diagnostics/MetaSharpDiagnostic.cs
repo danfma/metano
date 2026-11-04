@@ -405,4 +405,13 @@ public static class DiagnosticCodes
     /// was transpiled, so the context does not type-check. A warning at the context
     /// (FR-049, #432).</summary>
     public const string JsonContractConstructorNotPublic = "MS0062";
+
+    /// <summary>MS0063 — a TypeScript overload dispatcher (constructor or method) holds
+    /// an overload none of whose parameters has a runtime check (each is a type
+    /// parameter without a checkable constraint) ahead of a concrete overload whose
+    /// argument-count range overlaps it, so calls C# binds to the concrete overload can
+    /// reach the catch-all one (ambiguous runtime dispatch). C# ranks such sets at
+    /// compile time, sometimes cyclically, so no dispatch order matches it; static
+    /// call-site dispatch (#25) will. A warning at the catch-all overload (#440).</summary>
+    public const string AmbiguousRuntimeDispatch = "MS0063";
 }

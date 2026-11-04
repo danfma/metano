@@ -154,3 +154,15 @@ Overload groups are produced by the IR extractor folding siblings onto
 `IrMethodDeclaration.Overloads` and `IrConstructorDeclaration.Overloads`
 — backends consume them directly. See
 [ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md).
+
+## Dispatch-order note (2026-11, #438, #440)
+
+Guards now accept omitted defaulted arguments and expanded `params`
+arguments, and check a type-parameter-typed parameter only by its
+constraint, so guards of sibling overloads can overlap. The branches are
+ordered by `OverloadDispatchOrder` (required-only, then optional, then
+`params`; a concrete overload before a same-arity generic one). A
+catch-all overload (no parameter checked) tried before an overlapping
+concrete one cannot be ordered the way C# binds it and reports `MS0063`;
+static call-site dispatch ([issue #25](https://github.com/danfma/metano/issues/25))
+is the real fix.

@@ -81,7 +81,9 @@ internal static partial class IrToTsClassBridge
     /// come pre-resolved from the caller because the legacy
     /// <see cref="TypeMapper"/> still owns <c>[ExportFromBcl]</c> overrides
     /// and <see cref="IrTypeCheckBuilder"/> consumes <see cref="IrTypeRef"/>
-    /// directly.
+    /// directly. The branches follow <see cref="OverloadDispatchOrder"/>, and a
+    /// type-parameter operand resolves against
+    /// <paramref name="typeCheckScope"/>.
     /// </summary>
     public static IReadOnlyList<TsClassMember> BuildOperatorDispatcher(
         IReadOnlyList<IrMethodDeclaration> overloads,
@@ -90,6 +92,7 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<IReadOnlyList<TsParameter>> overloadParameters,
         IReadOnlyList<TsType> overloadReturnTypes,
         IReadOnlyList<IReadOnlyList<IrTypeRef>> overloadParamIrTypes,
+        OperatorTypeCheckScope typeCheckScope,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -97,13 +100,12 @@ internal static partial class IrToTsClassBridge
         var className = new TsIdentifier(containingTypeName);
         var members = new List<TsClassMember>();
 
-        // Sort indices by descending arity to match the legacy "most-specific
-        // first" dispatch order. The three input lists are kept parallel so
-        // the index works on all of them.
-        var indices = Enumerable
-            .Range(0, overloads.Count)
-            .OrderByDescending(i => overloads[i].Parameters.Count)
-            .ToList();
+        // The three input lists are kept parallel, so the sorted index works
+        // on all of them.
+        var indices = OverloadDispatchOrder.Sort(
+            Enumerable.Range(0, overloads.Count),
+            i => overloads[i].Parameters
+        );
         var sharedReturnType = overloadReturnTypes[indices[0]];
 
         var staticOverloadSigs = indices
@@ -150,6 +152,7 @@ internal static partial class IrToTsClassBridge
             fastPathNames,
             className,
             operatorName,
+            typeCheckScope,
             paramOffset: 0,
             includeThis: false
         );
@@ -181,6 +184,7 @@ internal static partial class IrToTsClassBridge
             fastPathNames,
             className,
             operatorName,
+            typeCheckScope,
             paramOffset: 1,
             includeThis: true
         );
@@ -212,6 +216,7 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<string> fastPathNames,
         TsIdentifier className,
         string operatorName,
+        OperatorTypeCheckScope typeCheckScope,
         int paramOffset,
         bool includeThis
     )
@@ -230,12 +235,11 @@ internal static partial class IrToTsClassBridge
             );
             for (var j = 0; j < argCount; j++)
             {
-                // Operators see no type parameter scope, so a type parameter
-                // operand admits any value and adds no check.
                 var check = IrTypeCheckBuilder.Generate(
                     paramTypes[j + paramOffset],
                     OverloadArgumentShape.ArgumentAt(j),
-                    []
+                    typeCheckScope.TypeParameters,
+                    typeCheckScope.TypeOverrides
                 );
 
                 if (check is not null)
@@ -336,3 +340,13 @@ internal static partial class IrToTsClassBridge
             _ => null,
         };
 }
+
+/// <summary>
+/// What an operator dispatcher's runtime checks resolve against: the class's
+/// type parameters and the <c>[ExportFromBcl]</c> type overrides its operand
+/// types were mapped with.
+/// </summary>
+internal sealed record OperatorTypeCheckScope(
+    IReadOnlyList<IrTypeParameter> TypeParameters,
+    IrToTsTypeOverrides? TypeOverrides
+);

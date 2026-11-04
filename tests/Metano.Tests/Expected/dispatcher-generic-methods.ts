@@ -40,7 +40,7 @@ export class Holder<T> {
       return this.refN(args[0] as number);
     }
 
-    if (args.length === 1 && ((typeof args[0] === "object" && args[0] !== null) || typeof args[0] === "function" || typeof args[0] === "string")) {
+    if (args.length === 1 && (typeof args[0] === "object" || typeof args[0] === "function" || typeof args[0] === "string")) {
       return this.refU(args[0] as any);
     }
 

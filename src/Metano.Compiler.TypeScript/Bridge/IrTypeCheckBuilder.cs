@@ -154,22 +154,15 @@ internal static class IrTypeCheckBuilder
         };
 
     /// <summary>
-    /// A C# reference value: an object or a function, or a string, the one
-    /// reference type that lowers to a JS primitive.
+    /// A C# reference value: an object (or <c>null</c>, which
+    /// <c>where T : class?</c> admits and <c>typeof</c> reports as
+    /// <c>"object"</c>), a function, or a string, the one reference type that
+    /// lowers to a JS primitive. Known gap: a boxed primitive
+    /// (<c>R&lt;object&gt;(5)</c>) lowers to the bare primitive and fails it.
     /// </summary>
     private static TsExpression ReferenceCheck(TsExpression value) =>
         new TsBinaryExpression(
-            new TsBinaryExpression(
-                new TsParenthesized(
-                    new TsBinaryExpression(
-                        TypeofObject(value),
-                        "&&",
-                        new TsBinaryExpression(value, "!==", new TsLiteral("null"))
-                    )
-                ),
-                "||",
-                TypeofTest(value, "function")
-            ),
+            new TsBinaryExpression(TypeofObject(value), "||", TypeofTest(value, "function")),
             "||",
             TypeofTest(value, "string")
         );
