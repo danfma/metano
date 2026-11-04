@@ -180,13 +180,14 @@ public class JsonReadOptionsTests
         await Assert.That(NumberTypesOf(ts)).IsEquivalentTo(expected);
     }
 
-    // The decimal descriptor stays bare: its converter reads the context option.
+    // The decimal descriptor carries no numberType: its converter reads the
+    // context option and builds the value through its type.
     [Test]
     public async Task NumbersFromStrings_LeaveNonNumericDescriptorsBare()
     {
         var ts = TranspileContext("JsonSerializerDefaults.Web");
 
-        await Assert.That(DescriptorOf(ts, "m")).IsEqualTo("{ kind: \"decimal\" }");
+        await Assert.That(DescriptorOf(ts, "m")).IsEqualTo("{ kind: \"decimal\", type: Decimal }");
         await Assert.That(DescriptorOf(ts, "text")).IsEqualTo("{ kind: \"primitive\" }");
         await Assert.That(DescriptorOf(ts, "flag")).IsEqualTo("{ kind: \"primitive\" }");
         await Assert.That(DescriptorOf(ts, "level")).StartsWith("{ kind: \"numericEnum\"");

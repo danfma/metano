@@ -53,7 +53,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             ),
             JsonPropertyKind.Ref => BuildRefDescriptor(type),
             JsonPropertyKind.Primitive => BuildPrimitiveDescriptor(type),
-            JsonPropertyKind.Decimal => BuildBareKindDescriptor(kind),
+            JsonPropertyKind.Decimal => BuildDecimalDescriptor((INamedTypeSymbol)type),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
         };
 
@@ -210,6 +210,17 @@ internal sealed class JsonTypeDescriptorBuilder(
         ]);
 
     /// <summary>
+    /// <c>{ kind: "decimal", type: Decimal }</c>: the runtime builds the mapped
+    /// decimal type (decimal.js <c>Decimal</c>) from the JSON number or text, as
+    /// a temporal descriptor parses through its type.
+    /// </summary>
+    private TsObjectLiteral BuildDecimalDescriptor(INamedTypeSymbol type) =>
+        new([
+            KindProperty(JsonPropertyKind.Decimal),
+            new TsObjectProperty("type", QualifiedReference(TypeReferenceName(type))),
+        ]);
+
+    /// <summary>
     /// <c>{ kind: "primitive" }</c>, plus <c>numberType: "System.Int32"</c>
     /// for a numeric type when the context reads numbers from strings: the
     /// runtime needs the type for the grammar and the error text.
@@ -231,7 +242,7 @@ internal sealed class JsonTypeDescriptorBuilder(
 
     /// <summary>
     /// Builds a kind-only descriptor for leaf wire kinds with no
-    /// payload (primitive / decimal). The runtime <c>SerializerContext</c>
+    /// payload (primitive). The runtime <c>SerializerContext</c>
     /// reads the <c>kind</c> field and routes by it without further
     /// fields.
     /// </summary>

@@ -38,8 +38,16 @@ export type TemporalDescriptor = {
   readonly parse: (iso: string) => unknown;
 };
 
-/** decimal.js Decimal — toNumber() by default, overridable via custom converter */
-export type DecimalDescriptor = { readonly kind: "decimal" };
+/**
+ * `System.Decimal` — `toNumber()` on serialize, overridable via a custom
+ * converter. `type` builds the value on deserialize from the JSON number or,
+ * when the context reads numbers from strings, the JSON text (decimal.js
+ * `Decimal` in generated contexts); without it the JSON value is kept as is.
+ */
+export type DecimalDescriptor = {
+  readonly kind: "decimal";
+  readonly type?: new (value: string | number) => unknown;
+};
 
 /** Map<K,V> — Object.fromEntries on serialize, new Map(Object.entries) on deserialize */
 export type MapDescriptor = {

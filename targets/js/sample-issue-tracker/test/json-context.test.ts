@@ -145,6 +145,8 @@ describe("JsonContext — default serialization", () => {
       snapshot.comments[0]?.authorId as unknown,
     );
     expect(deserialized.comments[0]?.message).toBe(snapshot.comments[0]?.message);
+    expect(deserialized.estimatedHours).toBeInstanceOf(Decimal);
+    expect(deserialized.estimatedHours.equals(snapshot.estimatedHours)).toBe(true);
   });
 
   test("deserializes a raw JSON payload (as if it came from HTTP)", () => {
@@ -173,6 +175,21 @@ describe("JsonContext — default serialization", () => {
     expect(issue.sprintKey).toBeNull();
     expect(issue.createdAt.epochMilliseconds).toBe(
       Temporal.ZonedDateTime.from(payload.createdAt).epochMilliseconds,
+    );
+    expect(issue.estimatedHours).toBeInstanceOf(Decimal);
+    expect(issue.estimatedHours.toString()).toBe("2");
+    expect(JsonSerializer.serialize(issue, ctx.issueSnapshot).estimatedHours).toBe(2);
+  });
+
+  // The context keeps System.Text.Json's default NumberHandling (Strict).
+  test("rejects a decimal sent as a JSON string, as System.Text.Json does", () => {
+    const payload = {
+      ...JSON.parse(JSON.stringify(JsonSerializer.serialize(makeSnapshot(), ctx.issueSnapshot))),
+      estimatedHours: "2.5",
+    };
+
+    expect(() => JsonSerializer.deserialize(payload, ctx.issueSnapshot)).toThrow(
+      "The JSON value could not be converted to System.Decimal.",
     );
   });
 });

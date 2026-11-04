@@ -5,6 +5,7 @@ import type {
   PropertySpec,
   ArrayDescriptor,
   BrandedDescriptor,
+  DecimalDescriptor,
   EnumDescriptor,
   HashSetDescriptor,
   MapDescriptor,
@@ -78,7 +79,7 @@ function getBuiltinConverter(
     case "temporal":
       return temporalConverter(descriptor);
     case "decimal":
-      return withNumberText(decimalConverter, decimalTextOf(readOptions), errorTypeNaming);
+      return decimalConverter(descriptor, readOptions, errorTypeNaming);
     case "map":
       return mapConverter(descriptor, customConverters, readOptions);
     case "array":
@@ -134,19 +135,6 @@ function numberTextOf(
 }
 
 /**
- * A decimal reads strings when the context allows it. The accepted text is
- * returned unchanged: the built-in decimal converter never builds a decimal
- * value, and the text keeps its full precision and scale (`"1.10"`).
- */
-function decimalTextOf(readOptions: JsonReadOptions | undefined): NumberText | undefined {
-  if (!readsNumbersFromStrings(readOptions)) {
-    return undefined;
-  }
-
-  return { clrName: "System.Decimal", read: (text) => (isDecimalText(text) ? text : undefined) };
-}
-
-/**
  * `converter`, also reading JSON strings by `numberText`'s grammar; a
  * rejected string throws System.Text.Json's conversion error. Other values,
  * and writes, go to `converter` unchanged (FR-048 item 5).
@@ -198,25 +186,43 @@ function temporalConverter(descriptor: TemporalDescriptor) {
 // ─── Decimal ─────────────────────────────────────────────────────────────────
 
 /**
- * Default decimal converter: serializes via toNumber() (matching C# default),
- * deserializes by constructing a new Decimal. Users who need string precision
- * can override with a custom converter.
+ * A `System.Decimal`: written with `toNumber()`, read from a JSON number, or
+ * from a JSON string when the context reads numbers from strings (FR-048),
+ * within the decimal range. The descriptor's `type` (decimal.js `Decimal` in
+ * generated contexts) builds the value from the JSON number or the text, so
+ * a string keeps every digit; without it the JSON value is returned as is.
+ * Anything else throws System.Text.Json's conversion error.
  */
-const decimalConverter = {
-  serialize: (value: unknown) => {
-    if (value == null) return null;
-    // Decimal from decimal.js has toNumber()
-    return (value as { toNumber(): number }).toNumber();
-  },
-  deserialize: (value: unknown) => {
-    if (value == null) return null;
-    // We don't import Decimal directly to avoid a hard dependency.
-    // The TypeSpec's factory will handle construction. For standalone
-    // deserialize, the user should provide a custom converter or the
-    // generated spec handles it via the factory.
-    return value;
-  },
-};
+function decimalConverter(
+  descriptor: DecimalDescriptor,
+  readOptions: JsonReadOptions | undefined,
+  errorTypeNaming: ErrorTypeNaming,
+): ValueConverter {
+  const readsStrings = readsNumbersFromStrings(readOptions);
+
+  const isDecimalValue = (value: unknown): value is string | number =>
+    (typeof value === "number" && isDecimalText(String(value))) ||
+    (typeof value === "string" && readsStrings && isDecimalText(value));
+
+  return {
+    serialize: (value: unknown) => {
+      if (value == null) return null;
+
+      return (value as { toNumber(): number }).toNumber();
+    },
+    deserialize: (value: unknown) => {
+      if (value == null) return null;
+
+      if (!isDecimalValue(value)) {
+        throw new JsonException(
+          `The JSON value could not be converted to ${errorTypeNaming("System.Decimal")}.`,
+        );
+      }
+
+      return descriptor.type ? new descriptor.type(value) : value;
+    },
+  };
+}
 
 // ─── Map ─────────────────────────────────────────────────────────────────────
 

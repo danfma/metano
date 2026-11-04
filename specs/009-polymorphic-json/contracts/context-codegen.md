@@ -375,6 +375,7 @@ Rules:
 - JSON names are camelCase because the Web default sets the naming policy; the discriminator
   (`kind`) is unchanged.
 - `numberType` is emitted on numeric `primitive` descriptors only when the context reads numbers
-  from strings; the `decimal` descriptor is unchanged and its converter reads the context option.
+  from strings; the `decimal` descriptor carries no `numberType` (its converter reads the context
+  option) and, in every context, names its type: `{ kind: "decimal", type: Decimal }` (DECIDED-23 f).
 - `JsonReadOptions` is a type-only import.
 

@@ -178,7 +178,7 @@ export class JsonContext extends SerializerContext {
 
   get decimal(): ValueSpec<Decimal> {
     return this._decimal ??= this.createValueSpec({
-      descriptor: { kind: "decimal" },
+      descriptor: { kind: "decimal", type: Decimal },
     });
   }
 

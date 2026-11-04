@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import type { Decimal } from "decimal.js";
+import { Decimal } from "decimal.js";
 import { Comment } from "#/sample-issue-tracker/issues/domain/comment";
 import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
 import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
@@ -103,7 +103,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "estimatedHours",
           json: "estimatedHours",
-          type: { kind: "decimal" },
+          type: { kind: "decimal", type: Decimal },
         },
         {
           ts: "comments",
