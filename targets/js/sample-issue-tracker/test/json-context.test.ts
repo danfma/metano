@@ -98,9 +98,9 @@ describe("JsonContext — default serialization", () => {
       estimatedHours: new Decimal("12345678901234567890.123456789"),
     });
 
-    const wire = JSON.stringify(JsonSerializer.serialize(snapshot, ctx.issueSnapshot));
+    const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
-    expect(wire).toContain(`"estimatedHours":12345678901234567890.123456789,`);
+    expect(JSON.stringify(json.estimatedHours)).toBe("12345678901234567890.123456789");
   });
 
   test("emits null for nullable fields when absent", () => {
@@ -189,9 +189,10 @@ describe("JsonContext — default serialization", () => {
     );
     expect(issue.estimatedHours).toBeInstanceOf(Decimal);
     expect(issue.estimatedHours.toString()).toBe("2");
-    expect(JSON.stringify(JsonSerializer.serialize(issue, ctx.issueSnapshot).estimatedHours)).toBe(
-      "2",
-    );
+
+    const written = JsonSerializer.serialize(issue, ctx.issueSnapshot);
+
+    expect(JSON.stringify(written.estimatedHours)).toBe("2");
   });
 
   // The context keeps System.Text.Json's default NumberHandling (Strict).

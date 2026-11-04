@@ -969,7 +969,10 @@ this note:
 > `JsonSerializer.deserialize`, works unchanged. Code that inspects the tree and expects a
 > `number` (`typeof json.price === "number"`, arithmetic on it) sees a frozen object whose
 > `rawJSON` property holds the text: use `JSON.isRawJSON(leaf)` and `Number(leaf.rawJSON)` (lossy)
-> or `new Decimal(leaf.rawJSON)` (exact), or register a custom `decimal` converter. Trailing zeros
+> or `new Decimal(leaf.rawJSON)` (exact), or register a custom `decimal` converter. Only
+> `JSON.stringify` treats the leaf as a number: `structuredClone` and `postMessage` throw
+> `DataCloneError` on a tree that holds one, and `{ ...leaf }` is `{"rawJSON":"2.5"}` (measured
+> on Node 24 and Bun 1.4.2); stringify the tree before cloning or posting it. Trailing zeros
 > are still dropped (`1.10m` → `1.10` in .NET, `1.1` here). Engines without `JSON.rawJSON` keep
 > writing `toNumber()`.
 

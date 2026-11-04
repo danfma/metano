@@ -91,6 +91,15 @@ export function decimalConverterOf(
     (typeof value === "number" && isDecimalNumber(value)) ||
     (typeof value === "string" && readsStrings && isDecimalText(value));
 
+  /** A leaf `serialize` wrote, read from its exact text. */
+  const readRawJsonNumber = (leaf: unknown, text: string): unknown => {
+    if (!isDecimalText(text)) {
+      throw cannotConvert("System.Decimal", errorTypeName);
+    }
+
+    return descriptor.type ? new descriptor.type(text) : leaf;
+  };
+
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
@@ -113,15 +122,6 @@ export function decimalConverterOf(
       return descriptor.type ? new descriptor.type(value) : value;
     },
   };
-
-  /** A leaf `serialize` wrote, read from its exact text. */
-  function readRawJsonNumber(leaf: unknown, text: string): unknown {
-    if (!isDecimalText(text)) {
-      throw cannotConvert("System.Decimal", errorTypeName);
-    }
-
-    return descriptor.type ? new descriptor.type(text) : leaf;
-  }
 }
 
 /** The decimal.js surface the writer uses. */

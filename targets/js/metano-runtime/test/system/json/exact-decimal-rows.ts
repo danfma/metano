@@ -129,10 +129,3 @@ export function treeRoundTripOf(row: DecimalWriteRow): Decimal | null {
     decimalSpec,
   );
 }
-
-/** The rows whose written text differs from the expected one. */
-export function mismatchedRows(): readonly string[] {
-  return DECIMAL_WRITE_ROWS.filter((row) => writtenTextOf(row) !== expectedTextOf(row)).map(
-    (row) => `${row.csharp}: wrote ${writtenTextOf(row)}, expected ${expectedTextOf(row)}`,
-  );
-}

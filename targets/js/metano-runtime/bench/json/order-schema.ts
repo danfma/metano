@@ -1,34 +1,13 @@
 /**
  * The benchmark schema: an `Order` with strings, numbers, a nullable,
  * `PlainDate`, `Decimal`, nested objects and arrays, written as the specs the
- * transpiler generates (the scratch harness of #456, ported unchanged except
- * for `Decimal`, see `BenchDecimal`).
+ * transpiler generates (the scratch harness of #456, ported unchanged).
+ * `Decimal` is decimal.js, a devDependency, so the writes measure its real
+ * `toFixed()` / `toNumber()` cost (#458).
  */
 import { Temporal } from "@js-temporal/polyfill";
+import { Decimal } from "decimal.js";
 import type { PrimitiveDescriptor, TypeSpec, ValueSpec } from "../../src/system/json/index.ts";
-
-/**
- * A `System.Decimal` stand-in with decimal.js's construction, `toNumber()`
- * and `toFixed()` surface; the runtime is not allowed a decimal.js
- * dependency, and the benchmark measures the serializer, not the decimal
- * library. The payload's prices print in plain notation, so `toFixed()` is
- * the text itself.
- */
-export class BenchDecimal {
-  readonly text: string;
-
-  constructor(value: string | number) {
-    this.text = String(value);
-  }
-
-  toNumber(): number {
-    return Number(this.text);
-  }
-
-  toFixed(): string {
-    return this.text;
-  }
-}
 
 export class Address {
   constructor(
@@ -51,7 +30,7 @@ export class OrderItem {
   constructor(
     readonly sku: string,
     readonly quantity: number,
-    readonly unitPrice: BenchDecimal,
+    readonly unitPrice: Decimal,
   ) {}
 }
 
@@ -62,7 +41,7 @@ export class Order {
     readonly active: boolean,
     readonly note: string | null,
     readonly placedOn: Temporal.PlainDate,
-    readonly total: BenchDecimal,
+    readonly total: Decimal,
     readonly sequence: number,
     readonly customer: Customer,
     readonly items: readonly OrderItem[],
@@ -72,7 +51,7 @@ export class Order {
 
 const primitive: PrimitiveDescriptor = { kind: "primitive" };
 
-const decimal = { kind: "decimal", type: BenchDecimal } as const;
+const decimal = { kind: "decimal", type: Decimal } as const;
 
 const addressSpec: TypeSpec<Address> = {
   type: Address,
@@ -108,7 +87,7 @@ const customerSpec: TypeSpec<Customer> = {
 
 const orderItemSpec: TypeSpec<OrderItem> = {
   type: OrderItem,
-  factory: (p) => new OrderItem(p.sku as string, p.quantity as number, p.unitPrice as BenchDecimal),
+  factory: (p) => new OrderItem(p.sku as string, p.quantity as number, p.unitPrice as Decimal),
   properties: [
     { ts: "sku", json: "sku", type: primitive },
     { ts: "quantity", json: "quantity", type: primitive },
@@ -125,7 +104,7 @@ const orderSpec: TypeSpec<Order> = {
       p.active as boolean,
       p.note as string | null,
       p.placedOn as Temporal.PlainDate,
-      p.total as BenchDecimal,
+      p.total as Decimal,
       p.sequence as number,
       p.customer as Customer,
       p.items as OrderItem[],
