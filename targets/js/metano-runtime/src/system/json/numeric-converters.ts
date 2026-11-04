@@ -2,7 +2,7 @@ import type { DecimalDescriptor, JsonReadOptions, PrimitiveDescriptor } from "./
 import type { ValueConverter } from "./value-converter.ts";
 import { JsonException } from "./errors.ts";
 import { isDecimalText, readDecimalText } from "./decimal-text.ts";
-import { exactNumberTextOf, JsonNumberText, writeExactNumber } from "./exact-json-number.ts";
+import { exactNumberTextOf, numberOfTreeValue, writeExactNumber } from "./exact-json-number.ts";
 import { readNumberText } from "./number-from-string.ts";
 
 /**
@@ -28,6 +28,14 @@ export const nullableTypeName: ErrorTypeName = (clrName) => `System.Nullable\`1[
  * System.Text.Json and all parse to this double (measured).
  */
 const DECIMAL_MAX_AS_DOUBLE = Number("79228162514264337593543950335");
+
+/**
+ * A double prints at most 17 significant digits, so one of at least
+ * `1e-11` has none past the 28th decimal place; only a smaller non-zero one
+ * is rounded by the decimal's scale (`1e-29` reads as `0`, `1.5e-28` as
+ * `2e-28`).
+ */
+const SMALLEST_UNROUNDED_DOUBLE = 1e-11;
 
 const passthroughConverter: ValueConverter = {
   serialize: (value: unknown) => value,
@@ -70,18 +78,21 @@ export function primitiveConverterOf(
 }
 
 /**
- * A `System.Decimal`: written with its exact digits (see `decimalJsonOf`;
- * a raw value read without a descriptor `type` is written back as is), read
- * as System.Text.Json reads it (`decimal-text.ts`: rounded to 28 decimal
- * places and 96 bits, out of range past `MaxValue`) from the exact text of a
- * number leaf (a `JsonNumberText` read by `deserializeText`, or a
- * `JSON.rawJSON` leaf `serialize` wrote, #457), from a JSON number, or from a
- * JSON string when the context reads numbers from strings. The descriptor's
- * `type` (decimal.js `Decimal` in generated contexts) builds the value from
- * that text, or from the number itself when no digit rounds away; without
- * it the JSON value is returned as is (a `JsonNumberText` as the `number`
- * `JSON.parse` gives). A JSON number is range-checked as the double it
- * already is. Anything else throws System.Text.Json's conversion error.
+ * A `System.Decimal`.
+ *
+ * - Written with its exact digits (`decimalJsonOf`); a raw value read
+ *   without a descriptor `type` is written back as is.
+ * - Read as System.Text.Json reads it (`decimal-text.ts`: rounded to 28
+ *   decimal places and 96 bits, out of range past `MaxValue`) from:
+ *   - the exact text of a number leaf: a `JsonNumberText` read by
+ *     `deserializeText`, or a `JSON.rawJSON` leaf `serialize` wrote (#457);
+ *   - a JSON number, range-checked as the double it already is;
+ *   - a JSON string, when the context reads numbers from strings.
+ * - The descriptor's `type` (decimal.js `Decimal` in generated contexts)
+ *   builds the value from that text, or from the number itself when no
+ *   digit rounds away; without it the JSON value is returned as is (a
+ *   `JsonNumberText` as the `number` `JSON.parse` gives).
+ * - Anything else throws System.Text.Json's conversion error.
  */
 export function decimalConverterOf(
   descriptor: DecimalDescriptor,
@@ -91,12 +102,14 @@ export function decimalConverterOf(
   const readsStrings = readsNumbersFromStrings(readOptions);
   const { type } = descriptor;
 
+  const notADecimal = () => cannotConvert("System.Decimal", errorTypeName);
+
   /** The decimal `text` holds, or, without `type`, the JSON value it came from. */
   const decimalOfText = (text: string, jsonValue: unknown): unknown => {
     const decimalText = readDecimalText(text);
 
     if (decimalText === undefined) {
-      throw cannotConvert("System.Decimal", errorTypeName);
+      throw notADecimal();
     }
 
     return type ? new type(decimalText) : jsonValue;
@@ -104,7 +117,7 @@ export function decimalConverterOf(
 
   const decimalOfNumber = (value: number): unknown => {
     if (!isDecimalNumber(value)) {
-      throw cannotConvert("System.Decimal", errorTypeName);
+      throw notADecimal();
     }
 
     if (!type) return value;
@@ -128,12 +141,10 @@ export function decimalConverterOf(
       const exactText = exactNumberTextOf(value);
 
       if (exactText === undefined) {
-        throw cannotConvert("System.Decimal", errorTypeName);
+        throw notADecimal();
       }
 
-      const jsonValue = value instanceof JsonNumberText ? Number(exactText) : value;
-
-      return decimalOfText(exactText, jsonValue);
+      return decimalOfText(exactText, numberOfTreeValue(value));
     },
   };
 }
@@ -272,14 +283,6 @@ function errorTextOf(value: DecimalLike): string {
 function isDecimalNumber(value: number): boolean {
   return Math.abs(value) <= DECIMAL_MAX_AS_DOUBLE;
 }
-
-/**
- * A double prints at most 17 significant digits, so one of at least
- * `1e-11` has none past the 28th decimal place; only a smaller non-zero one
- * is rounded by the decimal's scale (`1e-29` reads as `0`, `1.5e-28` as
- * `2e-28`).
- */
-const SMALLEST_UNROUNDED_DOUBLE = 1e-11;
 
 function roundsAwayDigits(value: number): boolean {
   return value !== 0 && Math.abs(value) < SMALLEST_UNROUNDED_DOUBLE;

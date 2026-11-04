@@ -453,14 +453,19 @@ class JsonTextReader {
     const mantissaEnd = this.fractionEnd(integerEnd);
     const end = this.exponentEnd(mantissaEnd);
 
-    this.throwIfNoDelimiterAt(end, mantissaEnd > integerEnd && end === mantissaEnd);
+    const endsAfterFraction = mantissaEnd > integerEnd && end === mantissaEnd;
+
+    this.throwIfNoDelimiterAt(end, endsAfterFraction);
     this.position = end;
 
-    if (end - start - signLength <= DOUBLE_EXACT_DIGITS) {
+    // A text no longer than 15 characters past its sign has at most 15 digits.
+    const fitsInDouble = end - start - signLength <= DOUBLE_EXACT_DIGITS;
+
+    if (fitsInDouble) {
       return Number(text.slice(start, end));
     }
 
-    return numberOf(text, start, start + signLength, mantissaEnd, end);
+    return numberOrNumberText(text, start, start + signLength, mantissaEnd, end);
   }
 
   /** The end of the integer digits at `index`: `0`, or digits without a leading zero. */
@@ -628,7 +633,7 @@ function copiedString(text: string, start: number, end: number, escaped: boolean
  * otherwise. Leading fraction zeros count: the decimal reader rounds a tie
  * by its position in the text (`decimal-text.ts`), which a double loses.
  */
-function numberOf(
+function numberOrNumberText(
   text: string,
   start: number,
   mantissaStart: number,
@@ -641,6 +646,8 @@ function numberOf(
     return Number(source);
   }
 
+  // `source` is a slice of `text`, which a slice keeps alive on
+  // JavaScriptCore; `JSON.parse` of it quoted builds an independent copy.
   return new JsonNumberText(JSON.parse(`"${source}"`) as string);
 }
 
@@ -707,7 +714,12 @@ function printableCodeAt(text: string, index: number): string {
     return `'${String.fromCharCode(code)}'`;
   }
 
-  return `'0x${firstUtf8ByteOf(text.codePointAt(index)!).toString(16).toUpperCase().padStart(2, "0")}'`;
+  return `'0x${utf8LeadByteHex(text.codePointAt(index)!)}'`;
+}
+
+/** The first byte of the code point's UTF-8 encoding, as two uppercase hex digits. */
+function utf8LeadByteHex(codePoint: number): string {
+  return firstUtf8ByteOf(codePoint).toString(16).toUpperCase().padStart(2, "0");
 }
 
 function firstUtf8ByteOf(codePoint: number): number {

@@ -7,7 +7,7 @@ import {
   deserializeWithValueSpec,
   type TreeNumbers,
 } from "./converters.ts";
-import { readsNumberTexts } from "./exact-number-reads.ts";
+import { specNeedsExactNumbers } from "./exact-number-reads.ts";
 import { mayHoldInexactNumber, parseJsonText, readJsonText } from "./json-text-reader.ts";
 
 /** A `ValueSpec` carries a `descriptor`; a `TypeSpec` never does. */
@@ -59,7 +59,7 @@ function deserializeTextWithInfo<T>(
   spec: JsonTypeInfo<T>,
   converters?: readonly JsonConverter[],
 ): T {
-  const readsExactTree = readsNumberTexts(spec) && mayHoldInexactNumber(text);
+  const readsExactTree = specNeedsExactNumbers(spec) && mayHoldInexactNumber(text);
 
   if (readsExactTree) {
     return deserializeWithInfo(readJsonText(text), spec, converters, "exact");
