@@ -228,6 +228,30 @@ describe("deserializeText — the other values of an exact tree read as JSON.par
   });
 });
 
+// A member a C# initializer sets is assigned after construction, only when
+// the payload carries it (`assignIfPresent`, FR-046); a decimal one still
+// reads its exact digits.
+describe("deserializeText — a decimal assigned after construction", () => {
+  class Priced {
+    price = new Decimal(1);
+  }
+
+  const spec: TypeSpec<Priced> = {
+    type: Priced,
+    factory: () => new Priced(),
+    properties: [{ ts: "price", json: "price", type: decimal }],
+    assignIfPresent: ["price"],
+  };
+
+  test("a present member reads its exact digits", () => {
+    expect(JsonSerializer.deserializeText(`{"price":${LONG}}`, spec).price.toFixed()).toBe(LONG);
+  });
+
+  test("a missing member keeps its initializer", () => {
+    expect(JsonSerializer.deserializeText(`{"other":${LONG}}`, spec).price.toFixed()).toBe("1");
+  });
+});
+
 describe("deserializeText — the path chosen per spec", () => {
   const withoutDecimals = holderSpec([
     { ts: "list", json: "list", type: { kind: "array", element: primitive } },
