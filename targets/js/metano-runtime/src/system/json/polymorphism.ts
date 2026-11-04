@@ -17,6 +17,7 @@ type VariantGuard = (value: unknown) => boolean;
 /** One registration with its contract resolved. */
 interface ResolvedVariant extends SerializeTarget {
   readonly test?: VariantGuard;
+  readonly abstract?: boolean;
 }
 
 /** A `[PlainObject]` variant, with the guard that selects it on write. */
@@ -27,12 +28,12 @@ interface StructuralVariant extends ResolvedVariant {
 /**
  * The lookup tables of one polymorphic base, built on first use (never inside
  * a generated getter, whose specs reference each other): class variants by
- * constructor, contracts by tag (a `Map`, so `1` and `"1"` stay distinct),
+ * constructor, registrations by tag (a `Map`, so `1` and `"1"` stay distinct),
  * and `[PlainObject]` variants in guard test order.
  */
 interface DispatchIndex {
   readonly byConstructor: ReadonlyMap<unknown, SerializeTarget>;
-  readonly byTag: ReadonlyMap<TypeDiscriminator, TypeSpec>;
+  readonly byTag: ReadonlyMap<TypeDiscriminator, ResolvedVariant>;
   readonly structural: readonly StructuralVariant[];
 }
 
@@ -56,10 +57,11 @@ function buildDispatchIndex(polymorphism: PolymorphismSpec): DispatchIndex {
     tag: entry.tag,
     spec: entry.spec(),
     test: entry.test,
+    abstract: entry.abstract,
   }));
 
   const byConstructor = new Map<unknown, SerializeTarget>();
-  const byTag = new Map<TypeDiscriminator, TypeSpec>();
+  const byTag = new Map<TypeDiscriminator, ResolvedVariant>();
 
   for (const variant of variants) {
     if (variant.spec.type) {
@@ -67,7 +69,7 @@ function buildDispatchIndex(polymorphism: PolymorphismSpec): DispatchIndex {
     }
 
     if (variant.tag !== undefined) {
-      byTag.set(variant.tag, variant.spec);
+      byTag.set(variant.tag, variant);
     }
   }
 
@@ -300,8 +302,13 @@ function resolveWithLeadingTag(
   }
 
   const tag = hasLeadingTag ? readTag(raw[discriminator], spec) : undefined;
-  const target = contractOfTag(tag, spec, polymorphism);
   const laterKeys = hasLeadingTag ? keys.slice(1) : keys;
+
+  if (isAbstractRegistrationTag(tag, polymorphism)) {
+    throwIfMetadataFollowsTag(laterKeys[0]);
+  }
+
+  const target = contractOfTag(tag, spec, polymorphism);
 
   for (const key of laterKeys) {
     throwIfMetadata(key, discriminator, NOT_FIRST_METADATA_MESSAGE);
@@ -412,6 +419,27 @@ function isArrayIndex(key: string): boolean {
   return ARRAY_INDEX_PATTERN.test(key) && Number(key) <= MAX_ARRAY_INDEX;
 }
 
+/**
+ * Whether `tag` selects an abstract registration (DECIDED-12), whose read
+ * fails once the metadata that directly follows the tag has been read.
+ */
+function isAbstractRegistrationTag(
+  tag: TypeDiscriminator | undefined,
+  polymorphism: PolymorphismSpec,
+): boolean {
+  return tag !== undefined && dispatchIndexOf(polymorphism).byTag.get(tag)?.abstract === true;
+}
+
+/**
+ * `$id` / `$ref` / `$values` right after the tag fail as misplaced metadata
+ * before an abstract registration is reported (measured on .NET 10).
+ */
+function throwIfMetadataFollowsTag(key: string | undefined): void {
+  if (key === VALUES_KEY || (key !== undefined && REFERENCE_METADATA_NAMES.has(key))) {
+    throw new JsonException(NOT_FIRST_METADATA_MESSAGE);
+  }
+}
+
 /** `$id` / `$ref` / `$values` as the first key fail before a missing tag is reported. */
 function throwIfLeadingMetadata(key: string): void {
   if (key === VALUES_KEY) {
@@ -465,15 +493,38 @@ function contractOfTag(
     return contractWithoutTag(spec, polymorphism);
   }
 
-  const derived = dispatchIndexOf(polymorphism).byTag.get(tag);
+  const registration = dispatchIndexOf(polymorphism).byTag.get(tag);
 
-  if (derived) {
-    return derived;
+  if (registration) {
+    return contractOfRegistration(registration);
   }
 
   throwIfUnrecognizedTag(tag, polymorphism);
 
   return contractWithoutTag(spec, polymorphism);
+}
+
+/**
+ * The contract a known tag reads (the base's own for a self-registration).
+ * An abstract registration cannot be read (DECIDED-12, measured on .NET 10):
+ * an abstract type that is itself polymorphic reports its missing tag, as
+ * its own read dispatches again; any other abstract type is unsupported.
+ */
+function contractOfRegistration(registration: ResolvedVariant): TypeSpec {
+  const { spec } = registration;
+
+  if (!registration.abstract) {
+    return spec;
+  }
+
+  if (spec.polymorphism) {
+    throw missingDiscriminatorException(spec);
+  }
+
+  throw new NotSupportedException(
+    "Deserialization of interface or abstract types is not supported. " +
+      `Type '${contractNameOf(spec)}'.`,
+  );
 }
 
 /**
@@ -498,13 +549,17 @@ function throwIfUnrecognizedTag(tag: TypeDiscriminator, polymorphism: Polymorphi
  */
 function contractWithoutTag(spec: TypeSpec, polymorphism: PolymorphismSpec): TypeSpec {
   if (polymorphism.abstract) {
-    throw new NotSupportedException(
-      `The JSON payload for polymorphic interface or abstract type '${contractNameOf(spec)}' ` +
-        "must specify a type discriminator.",
-    );
+    throw missingDiscriminatorException(spec);
   }
 
   return spec;
+}
+
+function missingDiscriminatorException(spec: TypeSpec): NotSupportedException {
+  return new NotSupportedException(
+    `The JSON payload for polymorphic interface or abstract type '${contractNameOf(spec)}' ` +
+      "must specify a type discriminator.",
+  );
 }
 
 /**

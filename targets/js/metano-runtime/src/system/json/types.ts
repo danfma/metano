@@ -163,6 +163,12 @@ export interface DerivedTypeSpec {
   readonly spec: () => TypeSpec;
   /** `[PlainObject]` variants only: the guard that selects this variant on write. */
   readonly test?: (value: unknown) => boolean;
+  /**
+   * The registered type is abstract, which `fallBackToNearestAncestor` alone
+   * allows (FR-017): it is a nearest-ancestor target on write, and reading its
+   * tag throws `NotSupportedException` (DECIDED-12).
+   */
+  readonly abstract?: boolean;
 }
 
 /** The data-only `[JsonPolymorphic]` / `[JsonDerivedType]` description of a base. */

@@ -8,6 +8,7 @@ import {
   type ValueSpec,
 } from "#/system/json/index.ts";
 import {
+  abstractTypeMessage,
   cannotConvertMessage,
   DOLLAR_PROPERTY_MESSAGE,
   expectJsonException,
@@ -47,6 +48,19 @@ import { abstractFactory } from "./spec-fixtures.ts";
 //   IgnoreUnrecognizedTypeDiscriminators            concrete base → base; abstract → NotSupportedException
 //   Nested NMid : NBase (both polymorphic)          → outer tag only; NLeaf (on NMid only) fails via NBase
 //   Interface IShape                               Sq(2) → {"$type":"sq","Side":2}; Other → NotSupportedException
+// DECIDED-12 (S6 probe, source generation and reflection alike), abstract AMid registered "m" on AB
+// under FallBackToNearestAncestor:
+//   {"$type":"m","M":2,"A":1} / {"$type":"m"} / {"$type":"m","$x":1}
+//                                                  → NotSupportedException "Deserialization of interface or
+//                                                    abstract types is not supported. Type 'AMid'."
+//     (also on a concrete base and under IgnoreUnrecognizedTypeDiscriminators)
+//   {"$type":"m","$id":"1"} / {"$type":"m","$values":[]}
+//                                                  → JsonException "The metadata property … not the first property …"
+//   AllowOutOfOrderMetadataProperties: {"A":1,"$type":"m"} → the NotSupportedException above;
+//                                      {"$type":"m","$x":1} → JsonException "Properties that start with '$' …"
+//   abstract QMid registered "m", itself polymorphic: {"$type":"m","M":2}
+//                                                  → NotSupportedException "… abstract type 'QMid' must specify a
+//                                                    type discriminator."
 
 const primitive = { kind: "primitive" } as const;
 
@@ -707,7 +721,7 @@ const uNearSpec: TypeSpec<UNear> = {
     unknownDerivedType: "fallBackToNearestAncestor",
     derived: [
       { tag: "a", spec: () => uNearASpec },
-      { tag: "abs", spec: () => uNearAbstractSpec },
+      { tag: "abs", spec: () => uNearAbstractSpec, abstract: true },
     ],
   },
 };
@@ -724,6 +738,13 @@ const uNearAbstractSpec: TypeSpec<UNearAbstract> = {
   base: uNearSpec,
   factory: abstractFactory,
   properties: [],
+};
+
+const uNearCSpec: TypeSpec<UNearC> = {
+  type: UNearC,
+  base: uNearAbstractSpec,
+  factory: (p) => new UNearC(p.a as number, p.d as number),
+  properties: [{ ts: "d", json: "D", type: primitive }],
 };
 
 abstract class UBaseH {
@@ -784,6 +805,82 @@ describe("polymorphism — unknown derived type handling", () => {
 
   test("fallBackToNearestAncestor accepts an abstract registration (FR-017)", () => {
     expect(write(new UNearC(1, 4), uNearSpec)).toBe('{"$type":"abs","A":1}');
+  });
+
+  test("the tag of an abstract registration cannot be read (DECIDED-12)", () => {
+    for (const json of ['{"$type":"abs","A":1}', '{"$type":"abs"}', '{"$type":"abs","$x":1}']) {
+      expectNotSupportedException(
+        () => read(json, uNearSpec),
+        abstractTypeMessage("UNearAbstract"),
+      );
+    }
+  });
+
+  test("a concrete base that ignores unknown tags still rejects an abstract registration", () => {
+    const spec: TypeSpec<UNear> = {
+      ...uNearSpec,
+      polymorphism: {
+        discriminator: "$type",
+        unknownDerivedType: "fallBackToNearestAncestor",
+        ignoreUnrecognizedTags: true,
+        derived: [{ tag: "abs", spec: () => uNearAbstractSpec, abstract: true }],
+      },
+    };
+
+    expectNotSupportedException(
+      () => read('{"$type":"abs","A":1}', spec),
+      abstractTypeMessage("UNearAbstract"),
+    );
+  });
+
+  test("metadata right after an abstract registration's tag fails first (DECIDED-12)", () => {
+    for (const json of ['{"$type":"abs","$id":"1"}', '{"$type":"abs","$values":[]}']) {
+      expectJsonException(() => read(json, uNearSpec), METADATA_NOT_FIRST_MESSAGE);
+    }
+  });
+
+  test("an out-of-order abstract registration's tag fails after the key walk (DECIDED-12)", () => {
+    const spec: TypeSpec<UNear> = {
+      ...uNearSpec,
+      readOptions: { allowOutOfOrderMetadataProperties: true },
+    };
+
+    expectNotSupportedException(
+      () => read('{"A":1,"$type":"abs"}', spec),
+      abstractTypeMessage("UNearAbstract"),
+    );
+
+    expectJsonException(() => read('{"$type":"abs","$x":1}', spec), DOLLAR_PROPERTY_MESSAGE);
+  });
+
+  test("an abstract registration that is itself polymorphic reports its missing tag", () => {
+    const spec: TypeSpec<UNear> = {
+      ...uNearSpec,
+      polymorphism: {
+        discriminator: "$type",
+        abstract: true,
+        unknownDerivedType: "fallBackToNearestAncestor",
+        derived: [
+          {
+            tag: "abs",
+            abstract: true,
+            spec: () => ({
+              ...uNearAbstractSpec,
+              polymorphism: {
+                discriminator: "t",
+                abstract: true,
+                derived: [{ tag: "c", spec: () => uNearCSpec }],
+              },
+            }),
+          },
+        ],
+      },
+    };
+
+    expectNotSupportedException(
+      () => read('{"$type":"abs","t":"c","A":1}', spec),
+      missingDiscriminatorMessage("UNearAbstract"),
+    );
   });
 
   test("fallBackToNearestAncestor with no registered ancestor writes the base, untagged", () => {
