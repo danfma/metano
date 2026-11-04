@@ -71,16 +71,22 @@ internal static class DartBinaryOperandGrouping
     /// <c>is</c> / <c>as</c> / a constant-pattern <c>==</c>, must be
     /// parenthesized: any binary expression (<c>-(a + b)</c>), a nested
     /// prefix operator (<c>-(-a)</c>, which would otherwise print as the
-    /// decrement <c>--a</c>), a type test or cast (<c>!(o is T)</c>), and
-    /// every shape that binds looser than an operator.
+    /// decrement <c>--a</c>), a negative numeric literal (<c>-(-1)</c>, for
+    /// the same reason), a type test or cast (<c>!(o is T)</c>), and every
+    /// shape that binds looser than an operator.
     /// </summary>
-    public static bool NeedsUnaryOperandParentheses(IrExpression operand) =>
-        DartTransparentNumericNodes.Unwrap(operand)
-            is IrBinaryExpression
-                or IrUnaryExpression { IsPrefix: true }
-                or IrIsPatternExpression
-                or IrCastExpression
-        || BindsLooserThanAnyOperator(operand);
+    public static bool NeedsUnaryOperandParentheses(IrExpression operand)
+    {
+        var printed = DartTransparentNumericNodes.Unwrap(operand);
+
+        return printed
+                is IrBinaryExpression
+                    or IrUnaryExpression { IsPrefix: true }
+                    or IrIsPatternExpression
+                    or IrCastExpression
+            || DartNumericLiterals.IsNegative(printed)
+            || BindsLooserThanAnyOperator(printed);
+    }
 
     /// <summary>
     /// Shapes Dart parses below every binary operator: a conditional, a

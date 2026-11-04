@@ -450,18 +450,23 @@ public static class IrBodyPrinter
     /// selector (<c>.name</c>, <c>[index]</c>, <c>(args)</c>): every
     /// operator expression — binary, prefix unary (<c>-a.abs()</c> negates
     /// the call), <c>as</c> / <c>is</c>, <c>await</c>, <c>throw</c> — and
-    /// the conditional and lambda forms.
+    /// the conditional and lambda forms, and a negative numeric literal.
     /// </summary>
-    private static bool ReceiverRequiresParens(IrExpression expression) =>
-        DartTransparentNumericNodes.Unwrap(expression)
-            is IrBinaryExpression
-                or IrUnaryExpression { IsPrefix: true }
-                or IrCastExpression
-                or IrIsPatternExpression
-                or IrConditionalExpression
-                or IrAwaitExpression
-                or IrThrowExpression
-                or IrLambdaExpression;
+    private static bool ReceiverRequiresParens(IrExpression expression)
+    {
+        var printed = DartTransparentNumericNodes.Unwrap(expression);
+
+        return printed
+                is IrBinaryExpression
+                    or IrUnaryExpression { IsPrefix: true }
+                    or IrCastExpression
+                    or IrIsPatternExpression
+                    or IrConditionalExpression
+                    or IrAwaitExpression
+                    or IrThrowExpression
+                    or IrLambdaExpression
+            || DartNumericLiterals.IsNegative(printed);
+    }
 
     /// <summary>
     /// Dart renders <c>x is Foo</c> natively. A type-with-designator (<c>x is Foo f</c>)
@@ -1088,18 +1093,8 @@ public static class IrBodyPrinter
             case IrLiteralKind.Default:
                 sb.Append("/* default */ null");
                 break;
-            case IrLiteralKind.UInt64:
-                // Dart has no unsigned type: a ulong above long.MaxValue is the
-                // int with the same 64 bits.
-                var sameBits = unchecked((long)(ulong)lit.Value!);
-                sb.Append(sameBits.ToString(CultureInfo.InvariantCulture));
-                break;
             default:
-                sb.Append(
-                    lit.Value is IFormattable f
-                        ? f.ToString(null, CultureInfo.InvariantCulture)
-                        : lit.Value?.ToString() ?? "null"
-                );
+                sb.Append(DartNumericLiterals.TextOf(lit));
                 break;
         }
     }

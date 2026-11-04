@@ -125,6 +125,39 @@ public class IrIntegerArithmeticNodeTests
         await Assert.That(PrintDart(small)).IsEqualTo("42");
     }
 
+    [Test]
+    public async Task Dart_GroupsANegativeLiteralReceiver()
+    {
+        var call = new IrCallExpression(
+            new IrMemberAccess(new IrLiteral(ulong.MaxValue, IrLiteralKind.UInt64), "toString"),
+            []
+        );
+
+        await Assert.That(PrintDart(call)).IsEqualTo("(-1).toString()");
+    }
+
+    [Test]
+    public async Task Dart_GroupsANegativeLiteralOperandOfANegation()
+    {
+        var negated = new IrUnaryExpression(
+            IrUnaryOp.Negate,
+            new IrLiteral(-2128831035, IrLiteralKind.Int32)
+        );
+
+        await Assert.That(PrintDart(negated)).IsEqualTo("-(-2128831035)");
+    }
+
+    [Test]
+    public async Task Dart_LeavesAPositiveLiteralReceiverBare()
+    {
+        var call = new IrCallExpression(
+            new IrMemberAccess(new IrLiteral(5UL, IrLiteralKind.UInt64), "toString"),
+            []
+        );
+
+        await Assert.That(PrintDart(call)).IsEqualTo("5.toString()");
+    }
+
     private static string PrintDart(IrExpression expression)
     {
         var sb = new StringBuilder();
