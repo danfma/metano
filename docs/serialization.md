@@ -233,7 +233,7 @@ handles these kinds:
 |------|---------|-------------|----------------|
 | `primitive` | string, number, boolean | passthrough | passthrough; a JSON string for a numeric `numberType` when the context reads numbers from strings ([details](#web-defaults)) |
 | `temporal` | `Temporal.PlainDate`, etc. | `.toString()` | `Type.from(iso)` |
-| `decimal` | `Decimal` | `.toNumber()` (or string via custom converter) | `new Decimal(value)` from the JSON number, or from the JSON string when the context reads numbers from strings; anything else, or a value outside the decimal range, throws `The JSON value could not be converted to System.Decimal.` |
+| `decimal` | `Decimal` | `JSON.rawJSON(value.toFixed())`: its exact digits as a JSON number ([details](#decimals)) | `new Decimal(value)` from the JSON number, or from the JSON string when the context reads numbers from strings; anything else, or a value outside the decimal range, throws `The JSON value could not be converted to System.Decimal.` |
 | `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
@@ -450,14 +450,61 @@ class MyContext extends SerializerContext {
 }
 ```
 
+## Decimals
+
 The default `decimal` converter reads a JSON number (or, with
 `AllowReadingFromString`, a JSON string) into a `Decimal`, and writes it with
-`.toNumber()`. .NET writes a decimal's exact digits as a JSON number
-(`1.10m` → `1.10`, `79228162514264337593543950335m` → all 29 digits), which
-`JSON.stringify` cannot produce from a JS number: the default converter writes
-`1.1` and `7.922816251426434e+28`, and a JSON number read with more digits than
-a double holds is rounded by `JSON.parse` before the converter sees it. Use the
-custom converter above to serialize as strings when every digit matters.
+its exact digits, as .NET does: `serialize` returns
+`JSON.rawJSON(value.toFixed())`, which `JSON.stringify` prints unquoted and
+without an exponent.
+
+| C# value | .NET writes | Metano writes |
+|----------|-------------|---------------|
+| `19.99m`, `-42m` | `19.99`, `-42` | same |
+| `decimal.MaxValue` | `79228162514264337593543950335` | same |
+| `12345678901234567890.123456789m` | `12345678901234567890.123456789` | same |
+| `0.0000001m` | `0.0000001` | same (decimal.js `toString()` would print `1e-7`) |
+| `decimal.Negate(0m)` | `0` | `0` |
+| `1.10m`, `1.0m`, `0.00m` | `1.10`, `1.0`, `0.00` | `1.1`, `1`, `0` |
+
+The last row is the remaining gap: decimal.js drops trailing zeros (the scale),
+so `1.10m` is written `1.1`. The value is the same; only the text differs.
+
+Limits:
+
+- **Reads still go through `JSON.parse`**, which rounds a JSON number to a
+  double before the converter sees it, so `12345678901234567890.123456789`
+  reads as `12345678901234567000` (#457 tracks exact reads). A `decimal` read
+  from a string (`AllowReadingFromString`, or the string converter above) keeps
+  every digit.
+- **Engines without `JSON.rawJSON`.** The runtime detects `JSON.rawJSON` once
+  when it loads (Node 24 and Bun 1.4.2 have it). Without it, decimals are
+  written with `toNumber()`, as before 3.0: `7.922816251426434e+28` for
+  `MaxValue`.
+- A value without `toFixed` is written with `toNumber()`. A hand-written
+  descriptor without `type` keeps the raw JSON number or string it read and
+  writes it back as is.
+
+### Migrating to 3.0
+
+`JsonSerializer.serialize` used to return a `number` for each decimal; it now
+returns a `JSON.rawJSON` leaf, a frozen object whose `rawJSON` property holds
+the text.
+
+- `JSON.stringify(JsonSerializer.serialize(...))` works unchanged and now
+  writes every digit.
+- Passing the tree straight back to `JsonSerializer.deserialize` works: the
+  converter reads a leaf from its exact text.
+- Code that inspects the tree and expects a `number` (`typeof json.price ===
+  "number"`, arithmetic on it) must handle the leaf:
+
+  ```typescript
+  // TypeScript's lib does not declare JSON.rawJSON / JSON.isRawJSON yet.
+  const { rawJSON } = json.price as { readonly rawJSON: string };
+  const price = new Decimal(rawJSON); // or Number(rawJSON), which rounds
+  ```
+
+  or register a custom `decimal` converter that returns what the code expects.
 
 ## Inheritance
 

@@ -88,8 +88,19 @@ describe("JsonContext — default serialization", () => {
     const snapshot = makeSnapshot();
     const json = JsonSerializer.serialize(snapshot, ctx.issueSnapshot);
 
-    expect(typeof json.estimatedHours).toBe("number");
-    expect(json.estimatedHours).toBe(1.5);
+    expect(JSON.stringify(json.estimatedHours)).toBe("1.5");
+  });
+
+  // System.Text.Json writes 12345678901234567890.123456789m in full; a JS
+  // number would print 12345678901234567000.
+  test("writes a decimal with its exact digits, as System.Text.Json does", () => {
+    const snapshot = makeSnapshot({
+      estimatedHours: new Decimal("12345678901234567890.123456789"),
+    });
+
+    const wire = JSON.stringify(JsonSerializer.serialize(snapshot, ctx.issueSnapshot));
+
+    expect(wire).toContain(`"estimatedHours":12345678901234567890.123456789,`);
   });
 
   test("emits null for nullable fields when absent", () => {
@@ -178,7 +189,9 @@ describe("JsonContext — default serialization", () => {
     );
     expect(issue.estimatedHours).toBeInstanceOf(Decimal);
     expect(issue.estimatedHours.toString()).toBe("2");
-    expect(JsonSerializer.serialize(issue, ctx.issueSnapshot).estimatedHours).toBe(2);
+    expect(JSON.stringify(JsonSerializer.serialize(issue, ctx.issueSnapshot).estimatedHours)).toBe(
+      "2",
+    );
   });
 
   // The context keeps System.Text.Json's default NumberHandling (Strict).
@@ -268,7 +281,7 @@ describe("JsonContext — decimal-as-string custom converter", () => {
     const snapshot = makeSnapshot({ estimatedHours: preciseValue });
     const json = JsonSerializer.serialize(snapshot, JsonContext.default.issueSnapshot);
 
-    expect(typeof json.estimatedHours).toBe("number");
+    expect(JSON.stringify(json.estimatedHours)).toBe("0.3");
   });
 
   test("custom context does not leak the converter into another context", () => {
@@ -284,7 +297,7 @@ describe("JsonContext — decimal-as-string custom converter", () => {
     );
 
     expect(typeof preciseJson.estimatedHours).toBe("string");
-    expect(typeof defaultJson.estimatedHours).toBe("number");
+    expect(JSON.stringify(defaultJson.estimatedHours)).toBe("0.3");
   });
 });
 

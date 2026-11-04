@@ -1,6 +1,7 @@
 import type { DecimalDescriptor, JsonReadOptions, PrimitiveDescriptor } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
 import { JsonException } from "./errors.ts";
+import { rawJsonTextOf, writeExactNumber } from "./exact-json-number.ts";
 import { isDecimalText, readNumberText } from "./number-from-string.ts";
 
 /**
@@ -68,10 +69,11 @@ export function primitiveConverterOf(
 }
 
 /**
- * A `System.Decimal`: written with `toNumber()` (a raw value read without a
- * descriptor `type` is written back as is), read from a JSON number, or
- * from a JSON string when the context reads numbers from strings, within the
- * decimal range. The descriptor's `type` (decimal.js `Decimal` in generated
+ * A `System.Decimal`: written with its exact digits (see `decimalJsonOf`;
+ * a raw value read without a descriptor `type` is written back as is), read
+ * from a JSON number, a `JSON.rawJSON` leaf `serialize` wrote, or a JSON
+ * string when the context reads numbers from strings, within the decimal
+ * range. The descriptor's `type` (decimal.js `Decimal` in generated
  * contexts) builds the value from the JSON number or the text, so a string
  * keeps its significant digits (decimal.js drops trailing zeros); without
  * it the JSON value is returned as is. A JSON number is range-checked as the
@@ -93,10 +95,16 @@ export function decimalConverterOf(
     serialize: (value: unknown) => {
       if (value == null) return null;
 
-      return hasToNumber(value) ? value.toNumber() : value;
+      return isDecimalLike(value) ? decimalJsonOf(value) : value;
     },
     deserialize: (value: unknown) => {
       if (value == null) return null;
+
+      const rawText = rawJsonTextOf(value);
+
+      if (rawText !== undefined) {
+        return readRawJsonNumber(value, rawText);
+      }
 
       if (!isDecimalValue(value)) {
         throw cannotConvert("System.Decimal", errorTypeName);
@@ -105,14 +113,46 @@ export function decimalConverterOf(
       return descriptor.type ? new descriptor.type(value) : value;
     },
   };
+
+  /** A leaf `serialize` wrote, read from its exact text. */
+  function readRawJsonNumber(leaf: unknown, text: string): unknown {
+    if (!isDecimalText(text)) {
+      throw cannotConvert("System.Decimal", errorTypeName);
+    }
+
+    return descriptor.type ? new descriptor.type(text) : leaf;
+  }
+}
+
+/** The decimal.js surface the writer uses. */
+type DecimalLike = {
+  toNumber(): number;
+  toFixed?(): string;
+};
+
+/**
+ * A decimal.js-like object. What a descriptor without `type` reads (a JSON
+ * number, string or `JSON.rawJSON` leaf) is not one, so it is written back
+ * unchanged; a `number` has a `toFixed` of its own, hence the object test.
+ */
+function isDecimalLike(value: unknown): value is DecimalLike {
+  return typeof value === "object" && typeof (value as DecimalLike).toNumber === "function";
 }
 
 /**
- * A decimal.js-like value. A descriptor without `type` reads the raw JSON
- * number or text, which is written back unchanged so it round-trips.
+ * decimal.js `toFixed()` without arguments prints every digit it holds in
+ * plain notation, which is what System.Text.Json writes for the same value
+ * (`79228162514264337593543950335`, `0.0000001`; `-0` prints `0`). The
+ * scale is not kept: decimal.js holds `1.10` as `1.1` (measured). A value
+ * without `toFixed`, or an engine without `JSON.rawJSON`, writes
+ * `toNumber()`.
  */
-function hasToNumber(value: unknown): value is { toNumber(): number } {
-  return typeof (value as { toNumber?: unknown }).toNumber === "function";
+function decimalJsonOf(value: DecimalLike): unknown {
+  if (typeof value.toFixed !== "function") {
+    return value.toNumber();
+  }
+
+  return writeExactNumber(value.toFixed(), () => value.toNumber());
 }
 
 /** A finite JSON number within the decimal range, compared as doubles. */
