@@ -287,7 +287,22 @@ one property per name.]
 The generator's camelCase rule already matched; its snake / kebab word splitter did not
 (`Item_Name` → `item__name`, `Value2` → `value_2`, `A1B` → `a_1_b`, `ABC_D` → `ab_c__d`), so S2
 ports `JsonSeparatorNamingPolicy`. The JSON-name collision is not reported (the existing FR-009
-rule keeps both properties); it is left for a diagnostic slice.
+rule keeps both properties); it is left for a follow-up issue. The same throw happens for an
+explicit `[JsonPropertyName("name")]` next to a `Name` the policy renames
+(`InvalidOperationException: The JSON property name for 'Coll2.name' collides with another
+property.`). The runtime `PropertyNamingPolicy` had the same splitter and is ported too; a
+1.3M-name comparison (every BMP character, plus 200k fuzzed names) against
+`JsonNamingPolicy.*.ConvertName` leaves only 11 characters added in a later Unicode version than
+.NET 10's casing tables (U+A7CE…) whose case JS maps and .NET does not.
+
+**Where the policy comes from.** The generator reads only `[JsonSourceGenerationOptions]` on the
+context class. Options given to the context at runtime override the attribute in .NET and are
+invisible at transpile time: a context with no attribute built with
+`new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }` writes
+`{"firstValue":1,"secondName":"a"}` (measured) while the generated context writes `FirstValue`;
+the same holds for `new Ctx(new JsonSerializerOptions(JsonSerializerDefaults.Web))` and for ASP.NET
+Core's `JsonOptions` / `TypeInfoResolverChain`. The docs recommend putting the defaults on the
+attribute.
 
 **Interface bases.**
 
