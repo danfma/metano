@@ -62,7 +62,7 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 
 ## Reserved codes (specified, not yet implemented)
 
-Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next code after the last reserved one (currently `MS0059`: `MS0038`–`MS0043` are reserved by the C# unions specification, PR #333, `MS0044` is taken by the package-root fix #334 / PR #355, and `MS0045`–`MS0058` by the runtime collections and type descriptors specification, issue #335; `MS0057` and `MS0058` were added after the maintainer decisions of 2026-11-02), so the next free code was `MS0059`; #424 took it for `InvalidSourceCondition`, and #432 took `MS0060`–`MS0062` for constructor access modifiers (FR-049), so the next free code is `MS0063`.
+Codes reserved in a spec PR before any implementation. Nothing raises them yet. A code moves to the table above when its implementation lands. New specs allocate from the next free code after every allocated one (`MS0038`–`MS0043` are reserved by the C# unions specification, PR #333, `MS0044` is taken by the package-root fix #334 / PR #355, and `MS0045`–`MS0058` by the runtime collections and type descriptors specification, issue #335; `MS0057` and `MS0058` were added after the maintainer decisions of 2026-11-02), so the next free code was `MS0059`; #424 took it for `InvalidSourceCondition`, and #432 took `MS0060`–`MS0062` for constructor access modifiers (FR-049), so the next free code is `MS0063`.
 
 | Code | Symbolic name | Severity | Meaning | Spec |
 | --- | --- | --- | --- | --- |
