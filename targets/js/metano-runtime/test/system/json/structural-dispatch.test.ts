@@ -356,7 +356,7 @@ describe("structural dispatch — a variant guard that accepts the base", () => 
     properties: [{ ts: "bark", json: "Bark", type: { kind: "nullable", inner: primitive } }],
   };
 
-  test("captures a base value: {name} is written as the variant", () => {
+  test("a base value is written as the variant whose guard accepts it", () => {
     expect(write<Animal2>({ name: "a" }, animal2Spec)).toBe(
       '{"$type":"dog","Bark":null,"Name":"a"}',
     );

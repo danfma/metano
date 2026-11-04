@@ -76,10 +76,7 @@ internal sealed class JsonPolymorphismSpecBuilder(
             new TsObjectProperty("spec", _descriptors.BuildSpecLink(registration.Type)),
             TrueFlag("abstract", registration.IsAbstract),
             registration.IsStructural
-                ? new TsObjectProperty(
-                    "test",
-                    _guards.GuardReferenceOf((INamedTypeSymbol)registration.Type)
-                )
+                ? new TsObjectProperty("test", _guards.GuardReferenceOf(registration.NamedType))
                 : null,
         };
 

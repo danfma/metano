@@ -101,13 +101,16 @@ internal sealed class JsonPropertyCollector(
         var chain = LinkedChainBaseMostFirst(type);
         var hidden = chain.SelectMany(IgnoredBasePropertiesOf).ToHashSet(StringComparer.Ordinal);
 
-        var mostDerivedByTsName = chain
-            .SelectMany(DeclarationOrderPropertiesOf)
-            .GroupBy(property => property.TsName)
-            .ToDictionary(declarations => declarations.Key, declarations => declarations.Last());
+        var declarations = chain.SelectMany(DeclarationOrderPropertiesOf).ToList();
 
-        return chain
-            .SelectMany(DeclarationOrderPropertiesOf)
+        var mostDerivedByTsName = declarations
+            .GroupBy(property => property.TsName)
+            .ToDictionary(
+                redeclarations => redeclarations.Key,
+                redeclarations => redeclarations.Last()
+            );
+
+        return declarations
             .Select(property => property.TsName)
             .Where(tsName => !hidden.Contains(tsName))
             .Distinct()
