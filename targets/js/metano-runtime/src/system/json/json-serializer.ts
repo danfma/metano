@@ -1,6 +1,11 @@
 import type { TypeSpec, ValueSpec, JsonTypeInfo, JsonConverter } from "./types.ts";
 import type { SerializerContext } from "./serializer-context.ts";
-import { serializeWithSpec, deserializeWithSpec, resolveConverter } from "./converters.ts";
+import {
+  serializeWithSpec,
+  deserializeWithSpec,
+  serializeWithValueSpec,
+  deserializeWithValueSpec,
+} from "./converters.ts";
 
 /** A `ValueSpec` carries a `descriptor`; a `TypeSpec` never does. */
 function isValueSpec<T>(spec: JsonTypeInfo<T>): spec is ValueSpec<T> {
@@ -18,7 +23,7 @@ function serializeWithInfo<T>(
   converters?: readonly JsonConverter[],
 ): unknown {
   if (isValueSpec(spec)) {
-    return resolveConverter(spec.descriptor, converters).serialize(value);
+    return serializeWithValueSpec(value, spec, converters);
   }
 
   return serializeWithSpec(value, spec, converters);
@@ -30,7 +35,7 @@ function deserializeWithInfo<T>(
   converters?: readonly JsonConverter[],
 ): T {
   if (isValueSpec(spec)) {
-    return resolveConverter(spec.descriptor, converters, spec.readOptions).deserialize(data) as T;
+    return deserializeWithValueSpec(data, spec, converters) as T;
   }
 
   return deserializeWithSpec(data, spec, converters);

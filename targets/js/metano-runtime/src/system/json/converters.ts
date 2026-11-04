@@ -15,11 +15,19 @@ import type {
   JsonReadOptions,
   PolymorphismSpec,
   TypeDiscriminator,
+  ValueSpec,
 } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
 import { HashSet } from "../collections/hash-set.ts";
-import { readContainer, writeContainer } from "./container-depth.ts";
+import {
+  enterReadContainer,
+  enterWriteContainer,
+  exitContainer,
+  readContainer,
+  writeContainer,
+} from "./container-depth.ts";
 import { cannotConvertTo } from "./contract-name.ts";
+import { createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
 import {
   decimalConverterOf,
@@ -31,7 +39,7 @@ import {
   resolveDeserializeTarget,
   resolveSerializeTarget,
 } from "./polymorphism.ts";
-import { propertyLookupOf } from "./property-lookup.ts";
+import { propertyLookupPlanOf } from "./property-lookup.ts";
 
 // ─── Converter Resolution ────────────────────────────────────────────────────
 
@@ -317,16 +325,37 @@ function builtinNullableInnerConverter(
 
 // ─── Ref ─────────────────────────────────────────────────────────────────────
 
+/**
+ * A nested contract. Its spec is resolved on the first value converted, not
+ * when the converter is built, so specs that reference each other (a lazy
+ * getter, a cycle) compile without recursion; its plan is then reused.
+ */
 function refConverter(descriptor: RefDescriptor, customConverters?: readonly JsonConverter[]) {
+  const plans = specPlansFor(customConverters);
+  const targetPlan = lazy(() => plans.planOf(descriptor.spec()));
+
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
-      return serializeWithSpec(value, descriptor.spec(), customConverters);
+      return targetPlan().serialize(value);
     },
     deserialize: (value: unknown) => {
       if (value == null) return null;
-      return deserializeWithSpec(value, descriptor.spec(), customConverters);
+      return targetPlan().deserialize(value);
     },
+  };
+}
+
+/** `create()` on first call, its result afterwards (a failed call is retried). */
+function lazy<T>(create: () => T): () => T {
+  const memo: { value?: T } = {};
+
+  return () => {
+    if (!("value" in memo)) {
+      memo.value = create();
+    }
+
+    return memo.value as T;
   };
 }
 
@@ -382,6 +411,124 @@ function* specChainOf(spec: TypeSpec): Generator<TypeSpec> {
   }
 }
 
+// ─── Spec plans ──────────────────────────────────────────────────────────────
+
+/**
+ * Everything the reads and writes of one spec share, compiled on its first
+ * use (#456): the wire properties (`collectWireProperties`, with ignored
+ * overrides), their converters resolved under the spec's read options
+ * (numbers from strings included), and the case-insensitive key index. A
+ * polymorphic base dispatches per value through its own cached dispatch
+ * index (`polymorphism.ts`), then runs the chosen contract's plan.
+ *
+ * Writes use the converters resolved for reads: read options never change
+ * how a value is written (FR-048 item 5).
+ */
+interface SpecPlan {
+  /** Writes through the spec, dispatching a polymorphic base (FR-005, FR-006). */
+  readonly serialize: (value: unknown) => Record<string, unknown>;
+  /** Reads through the spec, dispatching a polymorphic base (FR-007). */
+  readonly deserialize: (data: unknown) => unknown;
+  /** Writes `value` with exactly the spec's properties, after the tag when one is given. */
+  readonly writeContract: (value: unknown, typeMetadata?: TypeMetadata) => Record<string, unknown>;
+  /**
+   * Reads `raw` with exactly the spec's properties and builds it with the
+   * spec's factory. `metadataKey` is the discriminator a polymorphic read
+   * consumed.
+   */
+  readonly readContract: (raw: Record<string, unknown>, metadataKey?: string) => unknown;
+}
+
+/** One property of a plan, with its resolved converter. */
+interface PropertyPlan {
+  readonly property: PropertySpec;
+  readonly converter: ValueConverter;
+}
+
+/** The plans compiled under one set of custom converters, each built once. */
+interface SpecPlans {
+  planOf(spec: TypeSpec): SpecPlan;
+  valueConverterOf(spec: ValueSpec): ValueConverter;
+}
+
+/**
+ * The plans of every custom-converter set. A plan holds converters resolved
+ * against its set, so the set is part of the key: plans are cached per spec
+ * inside each set's entry (`converter-set-cache.ts`).
+ */
+const specPlansByConverterSet = createConverterSetCache(createSpecPlans);
+
+function specPlansFor(customConverters: readonly JsonConverter[] | undefined): SpecPlans {
+  return specPlansByConverterSet.entryFor(customConverters);
+}
+
+function createSpecPlans(customConverters: readonly JsonConverter[]): SpecPlans {
+  const specPlans = new WeakMap<TypeSpec, SpecPlan>();
+  const valueConverters = new WeakMap<ValueSpec, ValueConverter>();
+
+  const plans: SpecPlans = {
+    planOf: (spec) =>
+      cachedIn(specPlans, spec, () => compileSpecPlan(spec, customConverters, plans)),
+    valueConverterOf: (spec) =>
+      cachedIn(valueConverters, spec, () =>
+        resolveConverter(spec.descriptor, customConverters, spec.readOptions),
+      ),
+  };
+
+  return plans;
+}
+
+function cachedIn<K extends object, V>(cache: WeakMap<K, V>, key: K, build: () => V): V {
+  const cached = cache.get(key);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const built = build();
+  cache.set(key, built);
+
+  return built;
+}
+
+/**
+ * Compiles `spec` without calling into it: nested specs and derived
+ * contracts are resolved when a value first reaches them, so the plan of a
+ * recursive spec never compiles itself.
+ */
+function compileSpecPlan(
+  spec: TypeSpec,
+  customConverters: readonly JsonConverter[],
+  plans: SpecPlans,
+): SpecPlan {
+  const properties = collectWireProperties(spec);
+
+  const propertyPlans = properties.map<PropertyPlan>((property) => ({
+    property,
+    converter: resolveConverter(property.type, customConverters, spec.readOptions),
+  }));
+
+  const writeContract = contractWriterOf(propertyPlans);
+  const readContract = contractReaderOf(spec, propertyPlans);
+  const { polymorphism } = spec;
+
+  if (!polymorphism) {
+    return {
+      serialize: (value) => writeContract(value),
+      deserialize: (data) => readContract(requireJsonObject(data, spec)),
+      writeContract,
+      readContract,
+    };
+  }
+
+  return {
+    serialize: (value) => serializePolymorphic(value, spec, polymorphism, plans),
+    deserialize: (data) => deserializePolymorphic(data, spec, polymorphism, plans),
+    writeContract,
+    readContract,
+  };
+}
+
 /**
  * Serialize a TS object to a JSON-safe plain object using the given spec. A
  * polymorphic spec first chooses the derived contract and writes its tag
@@ -393,18 +540,21 @@ export function serializeWithSpec(
   spec: TypeSpec,
   customConverters?: readonly JsonConverter[],
 ): Record<string, unknown> {
-  const { polymorphism } = spec;
+  return specPlansFor(customConverters).planOf(spec).serialize(value);
+}
 
-  if (!polymorphism) {
-    return serializeContract(value, spec, customConverters);
-  }
-
+function serializePolymorphic(
+  value: unknown,
+  spec: TypeSpec,
+  polymorphism: PolymorphismSpec,
+  plans: SpecPlans,
+): Record<string, unknown> {
   const target = resolveSerializeTarget(value, spec, polymorphism);
 
   const typeMetadata =
     target.tag === undefined ? undefined : { name: polymorphism.discriminator, tag: target.tag };
 
-  return serializeContract(value, target.spec, customConverters, typeMetadata);
+  return plans.planOf(target.spec).writeContract(value, typeMetadata);
 }
 
 /** The type discriminator a polymorphic write puts first. */
@@ -413,35 +563,35 @@ interface TypeMetadata {
   readonly tag: TypeDiscriminator;
 }
 
-/** Writes `value` with exactly `spec`'s properties, after the tag when one is given. */
-function serializeContract(
-  value: unknown,
-  spec: TypeSpec,
-  customConverters?: readonly JsonConverter[],
-  typeMetadata?: TypeMetadata,
-): Record<string, unknown> {
-  return writeContainer(() => {
-    const obj = value as Record<string, unknown>;
-    const result: Record<string, unknown> = {};
+/** Writes a value with exactly the given properties, after the tag when one is given. */
+function contractWriterOf(propertyPlans: readonly PropertyPlan[]): SpecPlan["writeContract"] {
+  return (value, typeMetadata) => {
+    enterWriteContainer();
 
-    if (typeMetadata) {
-      result[typeMetadata.name] = typeMetadata.tag;
-    }
+    try {
+      const obj = value as Record<string, unknown>;
+      const result: Record<string, unknown> = {};
 
-    for (const prop of collectWireProperties(spec)) {
-      const tsValue = obj[prop.ts];
-
-      if (tsValue == null && prop.optional) {
-        result[prop.json] = null;
-        continue;
+      if (typeMetadata) {
+        result[typeMetadata.name] = typeMetadata.tag;
       }
 
-      const conv = resolveConverter(prop.type, customConverters);
-      result[prop.json] = conv.serialize(tsValue);
-    }
+      for (const { property, converter } of propertyPlans) {
+        const tsValue = obj[property.ts];
 
-    return result;
-  });
+        if (tsValue == null && property.optional) {
+          result[property.json] = null;
+          continue;
+        }
+
+        result[property.json] = converter.serialize(tsValue);
+      }
+
+      return result;
+    } finally {
+      exitContainer();
+    }
+  };
 }
 
 /**
@@ -454,18 +604,21 @@ export function deserializeWithSpec<T>(
   spec: TypeSpec<T>,
   customConverters?: readonly JsonConverter[],
 ): T {
+  // The plan reads `spec` or one of its registered derived contracts, so it builds a `T`.
+  return specPlansFor(customConverters).planOf(spec).deserialize(data) as T;
+}
+
+function deserializePolymorphic(
+  data: unknown,
+  spec: TypeSpec,
+  polymorphism: PolymorphismSpec,
+  plans: SpecPlans,
+): unknown {
   const raw = requireJsonObject(data, spec);
-  const { polymorphism } = spec;
-
-  if (!polymorphism) {
-    return deserializeContract(raw, spec, customConverters);
-  }
-
   const target = resolveDeserializeTarget(raw, spec, polymorphism);
   const metadataKey = consumedMetadataKeyOf(polymorphism);
 
-  // The target is `spec` or one of its registered derived contracts, so it builds a `T`.
-  return deserializeContract(raw, target, customConverters, metadataKey) as T;
+  return plans.planOf(target).readContract(raw, metadataKey);
 }
 
 /**
@@ -487,39 +640,66 @@ function requireJsonObject(data: unknown, spec: TypeSpec): Record<string, unknow
 }
 
 /**
- * Reads `raw` with exactly `spec`'s properties and builds it with `spec`'s
- * factory, under `spec`'s read options. `metadataKey` is the discriminator a
- * polymorphic read consumed.
+ * Reads a JSON object with exactly the given properties of `spec` and builds
+ * it with `spec`'s factory, under `spec`'s read options.
  */
-function deserializeContract<T>(
-  raw: Record<string, unknown>,
-  spec: TypeSpec<T>,
-  customConverters?: readonly JsonConverter[],
-  metadataKey?: string,
-): T {
-  return readContainer("object", () => {
-    const deserialized: Record<string, unknown> = {};
-    const properties = collectWireProperties(spec);
-    const jsonValueOf = propertyLookupOf(raw, properties, spec.readOptions, metadataKey);
+function contractReaderOf(
+  spec: TypeSpec,
+  propertyPlans: readonly PropertyPlan[],
+): SpecPlan["readContract"] {
+  const properties = propertyPlans.map(({ property }) => property);
+  const lookupPlan = propertyLookupPlanOf(properties, spec.readOptions);
 
-    for (const prop of properties) {
-      const jsonValue = jsonValueOf(prop);
+  return (raw, metadataKey) => {
+    enterReadContainer("object");
 
-      if (jsonValue === undefined || jsonValue === null) {
-        if (prop.optional) {
-          deserialized[prop.ts] = null;
-          continue;
+    try {
+      const deserialized: Record<string, unknown> = {};
+      const jsonValueOf = lookupPlan(raw, metadataKey);
+
+      for (const { property, converter } of propertyPlans) {
+        const jsonValue = jsonValueOf(property);
+
+        if (jsonValue === undefined || jsonValue === null) {
+          if (property.optional) {
+            deserialized[property.ts] = null;
+            continue;
+          }
+
+          if (jsonValue === undefined) {
+            throw new JsonException(`Missing required property: "${property.json}"`);
+          }
         }
 
-        if (jsonValue === undefined) {
-          throw new JsonException(`Missing required property: "${prop.json}"`);
-        }
+        deserialized[property.ts] = converter.deserialize(jsonValue);
       }
 
-      const conv = resolveConverter(prop.type, customConverters, spec.readOptions);
-      deserialized[prop.ts] = conv.deserialize(jsonValue);
+      return spec.factory(deserialized);
+    } finally {
+      exitContainer();
     }
+  };
+}
 
-    return spec.factory(deserialized);
-  });
+// ─── Value specs ─────────────────────────────────────────────────────────────
+
+/**
+ * Serializes a non-object root through its descriptor, exactly as a property
+ * of that type would be (custom converters still match by kind).
+ */
+export function serializeWithValueSpec(
+  value: unknown,
+  spec: ValueSpec,
+  customConverters?: readonly JsonConverter[],
+): unknown {
+  return specPlansFor(customConverters).valueConverterOf(spec).serialize(value);
+}
+
+/** Deserializes a non-object root through its descriptor, under the spec's read options. */
+export function deserializeWithValueSpec(
+  data: unknown,
+  spec: ValueSpec,
+  customConverters?: readonly JsonConverter[],
+): unknown {
+  return specPlansFor(customConverters).valueConverterOf(spec).deserialize(data);
 }

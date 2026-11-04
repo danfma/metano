@@ -1,0 +1,153 @@
+/**
+ * The benchmark schema: an `Order` with strings, numbers, a nullable,
+ * `PlainDate`, `Decimal`, nested objects and arrays, written as the specs the
+ * transpiler generates (the scratch harness of #456, ported unchanged except
+ * for `Decimal`, see `BenchDecimal`).
+ */
+import { Temporal } from "@js-temporal/polyfill";
+import type { PrimitiveDescriptor, TypeSpec, ValueSpec } from "../../src/system/json/index.ts";
+
+/**
+ * A `System.Decimal` stand-in with decimal.js's construction and
+ * `toNumber()` surface; the runtime is not allowed a decimal.js dependency,
+ * and the benchmark measures the serializer, not the decimal library.
+ */
+export class BenchDecimal {
+  readonly text: string;
+
+  constructor(value: string | number) {
+    this.text = String(value);
+  }
+
+  toNumber(): number {
+    return Number(this.text);
+  }
+}
+
+export class Address {
+  constructor(
+    readonly street: string,
+    readonly city: string,
+    readonly zip: string,
+  ) {}
+}
+
+export class Customer {
+  constructor(
+    readonly name: string,
+    readonly email: string,
+    readonly phone: string | null,
+    readonly address: Address,
+  ) {}
+}
+
+export class OrderItem {
+  constructor(
+    readonly sku: string,
+    readonly quantity: number,
+    readonly unitPrice: BenchDecimal,
+  ) {}
+}
+
+export class Order {
+  constructor(
+    readonly id: number,
+    readonly code: string,
+    readonly active: boolean,
+    readonly note: string | null,
+    readonly placedOn: Temporal.PlainDate,
+    readonly total: BenchDecimal,
+    readonly sequence: number,
+    readonly customer: Customer,
+    readonly items: readonly OrderItem[],
+    readonly tags: readonly string[],
+  ) {}
+}
+
+const primitive: PrimitiveDescriptor = { kind: "primitive" };
+
+const decimal = { kind: "decimal", type: BenchDecimal } as const;
+
+const addressSpec: TypeSpec<Address> = {
+  type: Address,
+  factory: (p) => new Address(p.street as string, p.city as string, p.zip as string),
+  properties: [
+    { ts: "street", json: "street", type: primitive },
+    { ts: "city", json: "city", type: primitive },
+    { ts: "zip", json: "zip", type: primitive },
+  ],
+};
+
+const customerSpec: TypeSpec<Customer> = {
+  type: Customer,
+  factory: (p) =>
+    new Customer(
+      p.name as string,
+      p.email as string,
+      p.phone as string | null,
+      p.address as Address,
+    ),
+  properties: [
+    { ts: "name", json: "name", type: primitive },
+    { ts: "email", json: "email", type: primitive },
+    {
+      ts: "phone",
+      json: "phone",
+      type: { kind: "nullable", inner: primitive },
+      optional: true,
+    },
+    { ts: "address", json: "address", type: { kind: "ref", spec: () => addressSpec } },
+  ],
+};
+
+const orderItemSpec: TypeSpec<OrderItem> = {
+  type: OrderItem,
+  factory: (p) => new OrderItem(p.sku as string, p.quantity as number, p.unitPrice as BenchDecimal),
+  properties: [
+    { ts: "sku", json: "sku", type: primitive },
+    { ts: "quantity", json: "quantity", type: primitive },
+    { ts: "unitPrice", json: "unitPrice", type: decimal },
+  ],
+};
+
+const orderSpec: TypeSpec<Order> = {
+  type: Order,
+  factory: (p) =>
+    new Order(
+      p.id as number,
+      p.code as string,
+      p.active as boolean,
+      p.note as string | null,
+      p.placedOn as Temporal.PlainDate,
+      p.total as BenchDecimal,
+      p.sequence as number,
+      p.customer as Customer,
+      p.items as OrderItem[],
+      p.tags as string[],
+    ),
+  properties: [
+    { ts: "id", json: "id", type: primitive },
+    { ts: "code", json: "code", type: primitive },
+    { ts: "active", json: "active", type: primitive },
+    { ts: "note", json: "note", type: { kind: "nullable", inner: primitive }, optional: true },
+    {
+      ts: "placedOn",
+      json: "placedOn",
+      type: { kind: "temporal", parse: (iso) => Temporal.PlainDate.from(iso) },
+    },
+    { ts: "total", json: "total", type: decimal },
+    { ts: "sequence", json: "sequence", type: primitive },
+    { ts: "customer", json: "customer", type: { kind: "ref", spec: () => customerSpec } },
+    {
+      ts: "items",
+      json: "items",
+      type: { kind: "array", element: { kind: "ref", spec: () => orderItemSpec } },
+    },
+    { ts: "tags", json: "tags", type: { kind: "array", element: primitive } },
+  ],
+};
+
+/** The payload root: a JSON array of orders, a `List<Order>` root in C#. */
+export const ordersSpec: ValueSpec<Order[]> = {
+  descriptor: { kind: "array", element: { kind: "ref", spec: () => orderSpec } },
+};
