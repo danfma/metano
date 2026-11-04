@@ -110,7 +110,7 @@ public static class IrConstructorExtractor
     /// <c>Deconstruct</c> the compiler synthesizes with the same parameter types.
     /// </summary>
     public static bool IsPrimaryConstructor(IMethodSymbol constructor) =>
-        constructor.DeclaringSyntaxReferences.IsEmpty
+        IsFromMetadata(constructor)
             ? IsPositionalRecordConstructorInMetadata(constructor)
             : constructor.DeclaringSyntaxReferences.Any(r =>
                 r.GetSyntax() is TypeDeclarationSyntax { ParameterList: not null }
@@ -122,12 +122,14 @@ public static class IrConstructorExtractor
     /// declare one and is public: the <c>protected</c> Roslyn synthesizes for
     /// an abstract type's primary constructor only restates that the type
     /// cannot be instantiated.
-    /// </summary>
     /// <para>
-    /// Read from metadata, the implicit constructor is indistinguishable from
-    /// a declared one: an abstract type's <c>protected</c> parameterless
-    /// constructor, the one C# synthesizes, is taken as implicit and public.
+    /// Read from metadata (a binary reference: a DLL or a package; a project
+    /// reference loads as source), the implicit constructor is
+    /// indistinguishable from a declared one: an abstract type's
+    /// <c>protected</c> parameterless constructor, the one C# synthesizes, is
+    /// taken as implicit and public.
     /// </para>
+    /// </summary>
     public static IrVisibility DeclaredVisibility(IMethodSymbol ctor) =>
         IsPrimaryConstructor(ctor) || IsImplicitAbstractConstructorInMetadata(ctor)
             ? IrVisibility.Public
@@ -189,10 +191,18 @@ public static class IrConstructorExtractor
     /// nothing is implicitly declared, any one taking the record itself.
     /// </summary>
     private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
-        (ctor.IsImplicitlyDeclared || ctor.DeclaringSyntaxReferences.IsEmpty)
+        (ctor.IsImplicitlyDeclared || IsFromMetadata(ctor))
         && ctor.ContainingType.IsRecord
         && ctor.Parameters.Length == 1
         && SymbolEqualityComparer.Default.Equals(ctor.Parameters[0].Type, ctor.ContainingType);
+
+    /// <summary>
+    /// Whether <paramref name="ctor"/> comes from a binary reference (a DLL or
+    /// a package) and so has no syntax: nothing there is implicitly declared,
+    /// and a primary constructor has no parameter list to recognize it by.
+    /// </summary>
+    private static bool IsFromMetadata(IMethodSymbol ctor) =>
+        ctor.DeclaringSyntaxReferences.IsEmpty;
 
     private static bool IsPositionalRecordConstructorInMetadata(IMethodSymbol ctor) =>
         ctor.ContainingType.IsRecord
@@ -208,7 +218,7 @@ public static class IrConstructorExtractor
             );
 
     private static bool IsImplicitAbstractConstructorInMetadata(IMethodSymbol ctor) =>
-        ctor.DeclaringSyntaxReferences.IsEmpty
+        IsFromMetadata(ctor)
         && ctor.ContainingType.IsAbstract
         && ctor.Parameters.IsEmpty
         && ctor.DeclaredAccessibility == Accessibility.Protected;
@@ -245,12 +255,13 @@ public static class IrConstructorExtractor
             .ToList();
 
         var visibility = DeclaredVisibility(ctor);
+        var isPrimary = IsPrimaryConstructor(ctor);
 
         if (compilation is null)
             return new IrConstructorDeclaration(
                 Parameters: parameters,
                 Visibility: visibility,
-                IsPrimary: IsPrimaryConstructor(ctor)
+                IsPrimary: isPrimary
             );
 
         // One map per constructor declaration (#398): the walk's root is the
@@ -278,7 +289,7 @@ public static class IrConstructorExtractor
             ),
             ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context, localNames),
             Visibility: visibility,
-            IsPrimary: IsPrimaryConstructor(ctor)
+            IsPrimary: isPrimary
         );
     }
 

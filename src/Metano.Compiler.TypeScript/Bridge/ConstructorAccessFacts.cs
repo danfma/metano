@@ -24,11 +24,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 public sealed class ConstructorAccessFacts
 {
     private const string OutsideConstructionFact = "outside";
+    private const string ExtendedFact = "extended";
 
     private static readonly IEqualityComparer<INamedTypeSymbol> TypeComparer =
         SymbolEqualityComparer.Default;
-
-    private const string ExtendedFact = "extended";
 
     private readonly Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>> _constructors;
     private readonly Dictionary<INamedTypeSymbol, OutsideConstruction> _outsideConstructions;

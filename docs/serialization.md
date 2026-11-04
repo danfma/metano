@@ -563,10 +563,11 @@ body, so its constructor stays public even when C# declares it `private` or
 `private` / `protected` modifier. A context that claims a type from a referenced
 package with no public constructor does not type-check, because that package
 decided the modifier when it was transpiled; the transpiler reports `MS0062` at
-the context. It reads the package's metadata, which cannot show a type the
-package kept public through `MS0061`, nor tell an abstract class's C# 12 primary
-constructor from a declared `protected` one: both warn although the package
-emitted a public constructor.
+the context. It cannot see a type the package kept public through `MS0061`,
+which warns although the package emitted a public constructor. A project
+reference loads as source and is otherwise judged exactly; a binary reference
+(a DLL or a package) is read from metadata, which also cannot tell an abstract
+class's C# 12 primary constructor from a declared `protected` one.
 
 ## When to use `[PlainObject]` vs `JsonSerializerContext`
 
