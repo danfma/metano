@@ -1639,8 +1639,10 @@ the former `OPEN-N`.
     readonly string[]`, computed per contract from its own constructor over every member of
     its chain (`["x", "y"]` for DX, none for BX), emitted after `ignoredProperties` only when the
     factory constructs an instance and the list is not empty; the runtime resolves it per plan,
-    so a base spec read on its own keeps its own list. A missing non-nullable `init` member is
-    `0` / the default in STJ and still throws in the runtime (FR-045).
+    so a base spec read on its own keeps its own list. FR-045 still applies to a missing
+    non-nullable key: the runtime throws where STJ uses the default (`RInit.N`, an `init` value
+    type, reads `0`) or keeps the initializer (`PlDer.S`, a non-nullable `set` member of a
+    `[PlainObject]` type, keeps `4`; a `[PlainObject]` literal has no initializer to keep).
 
 ## Open questions
 
