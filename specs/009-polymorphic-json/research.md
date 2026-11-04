@@ -271,6 +271,24 @@ object instances.)
 | Writing numbers | still JSON numbers: `{"n":5,"m":7,"d":1.10,"x":2.5,…}` |
 | Writing `double.NaN` | `ArgumentException: .NET number values such as positive and negative infinity cannot be written as valid JSON. …` |
 
+**Naming policies (slice S2).** [Verified, source-gen probe: .NET SDK 10.0.401, runtime 10.0.12;
+one property per name.]
+
+| Context options | Names written |
+|---|---|
+| `Web`, `(JsonSerializerDefaults)1`, `General` + `CamelCase` | `URL`→`url`, `IOStream`→`ioStream`, `HTMLParser`→`htmlParser`, `ID`→`id`, `X`→`x`, `alreadyCamel`, `Value2`→`value2`, `V2Value`→`v2Value`, `Item_Name`→`item_Name`, `_Leading`, `ABC_D`→`abC_D`, `A1B`→`a1B`, `ÉCole`→`éCole`, `MyURLValue`→`myURLValue`; `[JsonPropertyName("Explicit_Name")]` kept |
+| `Web` + `PropertyNamingPolicy = SnakeCaseLower` (same as `SnakeCaseLower` alone) | `url`, `io_stream`, `html_parser`, `id`, `x`, `already_camel`, `value2`, `v2_value`, `item_name`, `_leading`, `abc_d`, `a1_b`, `é_cole`, `my_url_value` |
+| `KebabCaseUpper` | `URL`, `IO-STREAM`, `HTML-PARSER`, `ID`, `X`, `ALREADY-CAMEL`, `VALUE2`, `V2-VALUE`, `ITEM_NAME`, `_LEADING`, `ABC_D`, `A1-B`, `É-COLE`, `MY-URL-VALUE` |
+| `Web` + `PropertyNamingPolicy = Unspecified`, `General`, no argument | names as declared (an explicit `Unspecified` turns the Web policy off) |
+| `Web`, `[JsonDerivedType(typeof(Square), "square")]` | `{"$type":"square","sideLength":2,"fillColor":"red"}` |
+| `Web`, `TypeDiscriminatorPropertyName = "Kind"` | `{"Kind":"image","path":"a.png","seconds":1.5}`; reading `{"kind":"image",…}` → `NotSupportedException` "… must specify a type discriminator." |
+| `Web`, `ID` and `Id` on one type | `InvalidOperationException: The JSON property name for 'Names.id' collides with another property.` |
+
+The generator's camelCase rule already matched; its snake / kebab word splitter did not
+(`Item_Name` → `item__name`, `Value2` → `value_2`, `A1B` → `a_1_b`, `ABC_D` → `ab_c__d`), so S2
+ports `JsonSeparatorNamingPolicy`. The JSON-name collision is not reported (the existing FR-009
+rule keeps both properties); it is left for a diagnostic slice.
+
 **Interface bases.**
 
 | Case | STJ result |

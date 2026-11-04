@@ -177,7 +177,7 @@ specs/001-project-baseline-evolution/baseline/{attribute-catalog,diagnostic-cata
 | # | Slice | Issue | Commit type | Depends on |
 |---|---|---|---|---|
 | S1 | Declaring-assembly transpilability for bases and closure (FR-010, FR-047) + closed generic object types in the closure (FR-033) + property dedupe (FR-009 generator half) | #268 #270 | `fix:` | — |
-| S2 | Web-defaults naming policy (FR-048 item 1) | #268 | `fix:` | — |
+| S2 | Web-defaults naming policy (FR-048 item 1). **Implemented** (`Json/JsonOptionsReader` reads the naming policy only; research R8 naming probe); also ports System.Text.Json's separator policy, since the snake / kebab names diverged from .NET (`Item_Name` → `item__name`) | #268 | `fix:` | — |
 | S2b | Context read options: case-insensitive names, numbers from strings, `numberType` hints (FR-048 items 2–5, FR-002 plumbing) | #268 #270 | `feat:` | S2 |
 | S3 | Naming function + roots + `ValueSpec` runtime (FR-030–FR-036, FR-038 typing, `MS0035`, `MS0036`) | #270 | `feat:` | — |
 | S3b | Null-root parity: `T \| null` overloads, `valueType` flags, migration note (FR-034 signatures, FR-037, FR-049). May be held to share one major with the C# unions spec | #270 | `feat!:` (`BREAKING CHANGE:` footer) | S3 |

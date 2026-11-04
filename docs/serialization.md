@@ -27,7 +27,7 @@ Naming conventions differ at each layer:
 | Layer | Default naming | Example |
 |-------|---------------|---------|
 | C# property | PascalCase | `FirstName` |
-| JSON wire | depends on `JsonSourceGenerationOptions.PropertyNamingPolicy` | `firstName`, `first_name`, `FirstName` |
+| JSON wire | depends on `JsonSourceGenerationOptions` (`PropertyNamingPolicy`, or camelCase under `JsonSerializerDefaults.Web`) | `firstName`, `first_name`, `FirstName` |
 | TypeScript field | camelCase (Metano convention) | `firstName` |
 
 The TypeScript `toJSON()` and `fromJSON()` maps **TS field ↔ JSON wire** — C#
@@ -113,7 +113,9 @@ When it sees a class that inherits from `JsonSerializerContext`:
 
 1. **Reads `[JsonSourceGenerationOptions]`** — resolves the naming policy
    (`CamelCase`, `SnakeCaseLower`, `SnakeCaseUpper`, `KebabCaseLower`,
-   `KebabCaseUpper`, or `null`/default for PascalCase preservation).
+   `KebabCaseUpper`, or `null`/default for PascalCase preservation). The
+   `JsonSerializerDefaults.Web` constructor argument selects `CamelCase`, and a
+   named `PropertyNamingPolicy` overrides it (see [Web defaults](#web-defaults)).
 
 2. **Collects `[JsonSerializable(typeof(T))]` attributes** — each `T` becomes a
    lazy getter on the context class (see [Roots](#roots) for the accepted
@@ -294,6 +296,7 @@ your own `JsonConverter`.
 | `[JsonSerializable(..., TypeInfoPropertyName = "X")]` | ✅ | Names the getter `x` for that type everywhere in the context |
 | `[JsonFactory]` (Metano) | ✅ | On a `[Branded]` type's static method: deserialization calls it instead of `create` ([details](#validating-branded-types)) |
 | `[JsonSourceGenerationOptions]` with `PropertyNamingPolicy` | ✅ | Applies the naming policy to all properties |
+| `[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` | ⚠️ | camelCase names, as .NET writes them; case-insensitive reads and numbers read from strings are not mirrored yet ([details](#web-defaults)) |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
 | `[JsonIgnore]` | ✅ | Excludes the property from the spec; on an override, also hides the base declarations ([details](#inheritance)) |
 | `JsonKnownNamingPolicy.CamelCase` | ✅ | `FirstName` → `firstName` |
@@ -301,12 +304,46 @@ your own `JsonConverter`.
 | `JsonKnownNamingPolicy.SnakeCaseUpper` | ✅ | `FirstName` → `FIRST_NAME` |
 | `JsonKnownNamingPolicy.KebabCaseLower` | ✅ | `FirstName` → `first-name` |
 | `JsonKnownNamingPolicy.KebabCaseUpper` | ✅ | `FirstName` → `FIRST-NAME` |
-| Default (`null`) | ✅ | Preserves PascalCase (`FirstName` → `FirstName`) |
+| Default (`null`, `JsonKnownNamingPolicy.Unspecified`) | ✅ | Preserves PascalCase (`FirstName` → `FirstName`) |
 | `[JsonConverter]` | ❌ | Not yet — use custom converters at runtime instead |
 | `[JsonRequired]` | ❌ | Not yet |
 | `[JsonExtensionData]` | ❌ | Not yet |
 | `[JsonDerivedType]` / `[JsonPolymorphic]` on a class or record | ✅ | Emits the base's `polymorphism` descriptor and a spec for every registered type ([details](#polymorphism)) |
 | `[JsonDerivedType]` on an interface or a `[PlainObject]` type | ❌ | Not yet: the context is generated as if the attribute were absent ([#268](https://github.com/danfma/metano/issues/268), slice S6c) |
+
+## Web defaults
+
+`[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` sets three options
+in .NET: the camelCase naming policy, case-insensitive property names and
+numbers read from strings. Metano mirrors the naming policy today; the two
+read options come in a later slice of
+[#268](https://github.com/danfma/metano/issues/268).
+
+```csharp
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+[JsonSerializable(typeof(Clip))]
+public partial class WebJsonContext : JsonSerializerContext;
+```
+
+- Property names are camel-cased at transpile time by the same rule .NET uses:
+  `URL` → `url`, `IOStream` → `ioStream`, `ABC_D` → `abC_D`, `Item_Name` →
+  `item_Name`; a name that does not start with an uppercase letter
+  (`alreadyCamel`, `_Leading`) is kept.
+- A named `PropertyNamingPolicy` overrides the Web default, as in .NET:
+  `(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)`
+  writes `first_name`, and `PropertyNamingPolicy = JsonKnownNamingPolicy.Unspecified`
+  turns the policy off (`FirstName`).
+- `[JsonPropertyName]` still wins over any policy.
+- The discriminator of a polymorphic type is never renamed: `$type` or the
+  `TypeDiscriminatorPropertyName` you set (`"Kind"` stays `"Kind"`), and it is
+  matched case-sensitively on read.
+
+The snake and kebab policies follow .NET's word splitting too: `Item_Name` →
+`item_name`, `Value2` → `value2`, `A1B` → `a1_b`, `MyURLValue` → `my_url_value`.
+
+Two properties whose names map to the same JSON name (`ID` and `Id` under
+camelCase) make .NET throw `InvalidOperationException` when the context is
+first used; Metano does not report it yet and emits both.
 
 ## Custom converters
 

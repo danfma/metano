@@ -14,7 +14,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <c>SerializerContext</c> subclass with pre-computed spec definitions.
 ///
 /// Orchestrates the <c>Json/</c> units: reads <c>[JsonSourceGenerationOptions]</c>
-/// for the naming policy, the <c>[JsonSerializable]</c> roots
+/// for the naming policy (<see cref="JsonOptionsReader"/>), the <c>[JsonSerializable]</c> roots
 /// (<see cref="JsonContractRoots"/>), their contract closure
 /// (<see cref="JsonContractClosure"/>) and the member names
 /// (<see cref="JsonTypeInfoNames"/>), then emits one lazy getter per entry
@@ -136,8 +136,9 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         var properties = new JsonPropertyCollector(
             _context,
             admission,
-            ReadNamingPolicy(contextType)
+            JsonOptionsReader.NamingPolicyOf(contextType)
         );
+
         var names = JsonTypeInfoNames.Create(_context, roots, report);
         var polymorphismValidator = new JsonPolymorphismValidator(properties, admission, report);
 
@@ -153,48 +154,5 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             names.Claim(contract),
             contract.Polymorphisms
         );
-    }
-
-    /// <summary>
-    /// Reads the PropertyNamingPolicy from [JsonSourceGenerationOptions] if present.
-    /// </summary>
-    private static Func<string, string>? ReadNamingPolicy(INamedTypeSymbol contextType)
-    {
-        foreach (var attr in contextType.GetAttributes())
-        {
-            if (
-                attr.AttributeClass?.Name
-                is not ("JsonSourceGenerationOptionsAttribute" or "JsonSourceGenerationOptions")
-            )
-                continue;
-
-            foreach (var namedArg in attr.NamedArguments)
-            {
-                if (namedArg.Key != "PropertyNamingPolicy")
-                    continue;
-
-                // The value is a JsonKnownNamingPolicy enum member (int).
-                // We need the enum member name, not the int value.
-                var enumValue = namedArg.Value;
-                if (enumValue.Type is INamedTypeSymbol enumType)
-                {
-                    // Get the enum member name from the int value
-                    var intVal = (int)(enumValue.Value ?? 0);
-                    foreach (var member in enumType.GetMembers().OfType<IFieldSymbol>())
-                    {
-                        if (
-                            member.HasConstantValue
-                            && member.ConstantValue is int memberVal
-                            && memberVal == intVal
-                        )
-                        {
-                            return JsonNamingPolicy.FromKnownPolicy(member.Name);
-                        }
-                    }
-                }
-            }
-        }
-
-        return null;
     }
 }
