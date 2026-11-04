@@ -70,28 +70,35 @@ export const DECIMAL_WRITE_ROWS: readonly DecimalWriteRow[] = [
  * Values at and past the edge of the `System.Decimal` domain (#458): a value
  * no `System.Decimal` holds throws `JsonException` before any text is built;
  * `written` is the text of an accepted one. A value below `1e-29` is written
- * `0`, as System.Text.Json reads `1e-40` and `1e-400` (measured).
+ * `0`, as System.Text.Json reads `1e-40` and `1e-400` (measured), on every
+ * path. `rejectedAs` is how the error prints a rejected value: plain
+ * notation, except past the exponent `1e400000000` would expand to.
  */
 export type DecimalDomainRow = {
   readonly text: string;
   readonly written?: string;
+  readonly rejectedAs?: string;
 };
 
 export const DECIMAL_DOMAIN_ROWS: readonly DecimalDomainRow[] = [
-  { text: "NaN" },
-  { text: "Infinity" },
-  { text: "-Infinity" },
-  { text: "1e29" },
-  { text: "-1e29" },
-  { text: "79228162514264337593543950336" },
-  { text: "-79228162514264337593543950336" },
-  { text: "1e400000000" },
+  { text: "NaN", rejectedAs: "NaN" },
+  { text: "Infinity", rejectedAs: "Infinity" },
+  { text: "-Infinity", rejectedAs: "-Infinity" },
+  { text: "1e29", rejectedAs: "100000000000000000000000000000" },
+  { text: "-1e29", rejectedAs: "-100000000000000000000000000000" },
+  { text: "79228162514264337593543950336", rejectedAs: "79228162514264337593543950336" },
+  { text: "-79228162514264337593543950336", rejectedAs: "-79228162514264337593543950336" },
+  { text: "1e400000000", rejectedAs: "1e+400000000" },
   { text: "79228162514264337593543950335", written: "79228162514264337593543950335" },
   { text: "-79228162514264337593543950335", written: "-79228162514264337593543950335" },
-  { text: "79228162514264337593543950335.5" },
+  { text: "79228162514264337593543950335.5", rejectedAs: "79228162514264337593543950335.5" },
   { text: "79228162514264337593543950335.4", written: "79228162514264337593543950335.4" },
   { text: "1e28", written: "10000000000000000000000000000" },
   { text: "1e-29", written: "0.00000000000000000000000000001" },
+  { text: "9.99e-29", written: "0.0000000000000000000000000000999" },
+  { text: "-9.99e-29", written: "-0.0000000000000000000000000000999" },
+  { text: "9.99e-30", written: "0" },
+  { text: "-9.99e-30", written: "0" },
   { text: "1e-40", written: "0" },
   { text: "1e-400000000", written: "0" },
   { text: "-1e-400000000", written: "0" },
@@ -99,7 +106,7 @@ export const DECIMAL_DOMAIN_ROWS: readonly DecimalDomainRow[] = [
 
 /** The error a rejected row throws. */
 export function domainErrorOf(row: DecimalDomainRow): string {
-  return `JsonException: The value ${new Decimal(row.text).toString()} cannot be written as System.Decimal: it is outside the System.Decimal range.`;
+  return `JsonException: The value ${row.rejectedAs} cannot be written as System.Decimal: it is outside the System.Decimal range.`;
 }
 
 /** The text written for the row's value, or the error it throws. */

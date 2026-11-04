@@ -131,7 +131,6 @@ export function decimalConverterOf(
 type DecimalLike = {
   toNumber(): number;
   toFixed?(): string;
-  isZero?(): boolean;
   readonly e?: number;
 };
 
@@ -152,6 +151,16 @@ const DECIMAL_MAX_EXPONENT = 28;
  */
 const DECIMAL_SMALLEST_EXPONENT = -29;
 
+/** `1e-29`, the same bound for a value compared as a double. */
+const DECIMAL_SMALLEST_AS_DOUBLE = 1e-29;
+
+/**
+ * The largest exponent the domain error prints in plain notation; past it
+ * the error keeps decimal.js's exponent form, so `1e400000000` costs no
+ * 400 MB message.
+ */
+const PLAIN_ERROR_MAX_EXPONENT = 64;
+
 /**
  * A decimal.js-like object. What a descriptor without `type` reads (a JSON
  * number, string or `JSON.rawJSON` leaf) is not one, so it is written back
@@ -170,26 +179,28 @@ function isDecimalLike(value: unknown): value is DecimalLike {
  * `toNumber()`.
  *
  * A value no `System.Decimal` holds (NaN, ±Infinity, beyond `MaxValue`)
- * throws before any text is built, so `1e400000000` costs no 400 MB string,
- * and a negligible one is written `0` rather than as its exponent's worth
- * of zeros.
+ * throws before any text is built, so `1e400000000` costs no 400 MB string.
+ * A negligible one is written `0` on every path (exponent or double, with or
+ * without `JSON.rawJSON`) rather than as its exponent's worth of zeros.
  */
 function decimalJsonOf(value: DecimalLike): unknown {
   const position = decimalPositionOf(value);
 
   if (position === "outside" || (position === "edge" && !isDecimalText(exactTextOf(value)))) {
     throw new JsonException(
-      `The value ${String(value)} cannot be written as System.Decimal: it is outside the System.Decimal range.`,
+      `The value ${errorTextOf(value)} cannot be written as System.Decimal: it is outside the System.Decimal range.`,
     );
   }
 
   if (typeof value.toFixed !== "function") {
-    return value.toNumber();
+    return position === "negligible" ? 0 : value.toNumber();
   }
 
-  const text = position === "negligible" ? "0" : value.toFixed();
+  if (position === "negligible") {
+    return writeExactNumber("0", () => 0);
+  }
 
-  return writeExactNumber(text, () => value.toNumber());
+  return writeExactNumber(value.toFixed(), () => value.toNumber());
 }
 
 /**
@@ -212,14 +223,13 @@ function positionOfExponent(exponent: number): DecimalPosition {
 
 /** NaN fails every comparison, so it is `outside`. */
 function positionOfDouble(value: DecimalLike): DecimalPosition {
-  const approximate = value.toNumber();
-  const magnitude = Math.abs(approximate);
+  const magnitude = Math.abs(value.toNumber());
 
   if (magnitude === DECIMAL_MAX_AS_DOUBLE) return "edge";
 
   if (!(magnitude < DECIMAL_MAX_AS_DOUBLE)) return "outside";
 
-  return approximate === 0 && value.isZero?.() === false ? "negligible" : "inside";
+  return magnitude < DECIMAL_SMALLEST_AS_DOUBLE ? "negligible" : "inside";
 }
 
 /**
@@ -229,6 +239,19 @@ function positionOfDouble(value: DecimalLike): DecimalPosition {
  */
 function exactTextOf(value: DecimalLike): string {
   return value.toFixed?.() ?? String(value.toNumber());
+}
+
+/**
+ * The rejected value in plain notation (`100000000000000000000000000000`
+ * for `1e29`), as long as its exponent is small enough to print; `NaN` and
+ * `Infinity` print as such. A value without decimal.js's exponent prints
+ * with `String()`, since the length of its `toFixed()` is unknown.
+ */
+function errorTextOf(value: DecimalLike): string {
+  const { e } = value;
+  const printsPlain = typeof e === "number" && !(e > PLAIN_ERROR_MAX_EXPONENT);
+
+  return printsPlain ? (value.toFixed?.() ?? String(value)) : String(value);
 }
 
 /** A finite JSON number within the decimal range, compared as doubles. */
