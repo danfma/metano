@@ -291,9 +291,12 @@ rule keeps both properties); it is left for a follow-up issue. The same throw ha
 explicit `[JsonPropertyName("name")]` next to a `Name` the policy renames
 (`InvalidOperationException: The JSON property name for 'Coll2.name' collides with another
 property.`). The runtime `PropertyNamingPolicy` had the same splitter and is ported too; a
-1.3M-name comparison (every BMP character, plus 200k fuzzed names) against
-`JsonNamingPolicy.*.ConvertName` leaves only 11 characters added in a later Unicode version than
-.NET 10's casing tables (U+A7CE…) whose case JS maps and .NET does not.
+comparison over every BMP character (in three positions), lone surrogates and 100k fuzzed names
+against `JsonNamingPolicy.*.ConvertName` differs only for characters whose Unicode category or
+casing differs between the JS engine and .NET 10, so the set is engine-dependent (Bun: U+0295
+`ʕ`, an `Ll` in .NET, and U+A7CE…; Node: U+A7D3, U+A7D5). Under Bun, `snakeCaseLower` of `ABʕc` is
+`abʕc` where .NET writes `a_bʕc`. Generated contexts are unaffected: their names are computed in
+.NET at transpile time.
 
 **Where the policy comes from.** The generator reads only `[JsonSourceGenerationOptions]` on the
 context class. Options given to the context at runtime override the attribute in .NET and are

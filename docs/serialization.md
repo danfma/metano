@@ -342,7 +342,9 @@ The snake and kebab policies follow .NET's word splitting too: `Item_Name` →
 `item_name`, `Value2` → `value2`, `A1B` → `a1_b`, `MyURLValue` → `my_url_value`.
 
 The runtime `PropertyNamingPolicy` (`metano-runtime/system/json`) applies the
-same rules to a context built by hand.
+same rules to a context built by hand, except for characters whose Unicode
+category or casing differs between the JS engine and .NET 10 (engine-dependent,
+e.g. U+0295 under Bun).
 
 Two properties whose names map to the same JSON name make .NET throw
 `InvalidOperationException` when the context is first used: `ID` and `Id` under
