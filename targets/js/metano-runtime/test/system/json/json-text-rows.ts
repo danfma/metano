@@ -143,7 +143,7 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   },
   { text: "'a'", error: "''' is an invalid start of a value." },
   { text: " 1", error: "'0xC2' is an invalid start of a value." },
-  { text: " 1", error: "'0xE2' is an invalid start of a value." },
+  { text: "\u20281", error: "'0xE2' is an invalid start of a value." },
   { text: "﻿1", error: "'0xEF' is an invalid start of a value." },
   { text: "1 ", error: "'0xC2' is an invalid end of a number. Expected a delimiter." },
   { text: "\t\n\r 1 \t\n\r" },
