@@ -541,10 +541,9 @@ order.total.toFixed(); // "12345678901234567890.123456789"
   `JSON.parse` accepts, so lone surrogates in strings, which .NET rejects, are
   read. The text is read whole before the contract, so a syntax error is
   reported before a contract error that precedes it in the text.
-- **Depth.** When the text is tokenized, a container nested past 64 levels
-  throws anywhere in the document, as .NET's reader does; through `JSON.parse`,
-  only the containers the contract reads count ([Errors and
-  limits](#errors-and-limits)).
+- **Depth.** The limit of 64 counts the containers the contract reads, whichever
+  path read the text ([Errors and limits](#errors-and-limits)). The tokenizer
+  itself stops at 1 000 levels, short of the stack, where `JSON.parse` reads on.
 
 ### Migrating to 3.0
 
@@ -876,8 +875,8 @@ The depth limit is System.Text.Json's default `MaxDepth` of 64: 64 nested
 objects, arrays and dictionaries are written and read, the 65th throws; scalars
 never count. On read, only the containers the contract visits count; a deeply
 nested value under a key the contract does not declare is skipped without being
-counted, where the STJ reader would throw, unless `deserializeText` tokenizes
-the text ([Exact reads](#exact-reads)), which counts the whole document.
+counted, where the STJ reader would throw, also through `deserializeText`
+([Exact reads](#exact-reads)).
 
 Invalid JSON text passed to `deserializeText` throws `JsonException` with the
 STJ reader's message (`'x' is an invalid start of a value.`); `deserialize`

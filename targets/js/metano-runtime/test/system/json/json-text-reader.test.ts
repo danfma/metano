@@ -4,12 +4,6 @@ import { JsonNumberText } from "#/system/json/exact-json-number";
 import { mayHoldInexactNumber, parseJsonText, readJsonText } from "#/system/json/json-text-reader";
 import { JSON_TEXT_ROWS } from "./json-text-rows.ts";
 
-const READ_OBJECT_DEPTH =
-  "The maximum configured depth of 64 has been exceeded. Cannot read next JSON object.";
-
-const READ_ARRAY_DEPTH =
-  "The maximum configured depth of 64 has been exceeded. Cannot read next JSON array.";
-
 /** The tree with every `JsonNumberText` leaf read as `JSON.parse` reads it. */
 function asParsed(value: unknown): unknown {
   if (value instanceof JsonNumberText) {
@@ -73,27 +67,44 @@ describe("parseJsonText — JSON.parse with System.Text.Json's errors", () => {
   });
 });
 
-describe("readJsonText — depth (FR-016)", () => {
+// FR-016's limit of 64 belongs to the contract walk, on every path; the
+// tokenizer only bounds its own recursion.
+describe("readJsonText — depth", () => {
   const nestedArrays = (depth: number) => `${"[".repeat(depth)}1${"]".repeat(depth)}`;
   const nestedObjects = (depth: number) => `${'{"a":'.repeat(depth)}1${"}".repeat(depth)}`;
 
-  test("64 nested containers are read", () => {
-    expect(asParsed(readJsonText(nestedArrays(64)))).toEqual(JSON.parse(nestedArrays(64)));
-    expect(asParsed(readJsonText(nestedObjects(64)))).toEqual(JSON.parse(nestedObjects(64)));
+  test("documents nested past 64 levels read as JSON.parse reads them", () => {
+    for (const text of [nestedArrays(65), nestedObjects(65), nestedArrays(1000)]) {
+      expect(asParsed(readJsonText(text))).toEqual(JSON.parse(text));
+    }
   });
 
-  test("the 65th container throws STJ's reader message", () => {
-    expect(() => readJsonText(nestedArrays(65))).toThrow(READ_ARRAY_DEPTH);
-    expect(() => readJsonText(nestedObjects(65))).toThrow(READ_OBJECT_DEPTH);
-    expect(() => readJsonText(`${"[".repeat(64)}{}${"]".repeat(64)}`)).toThrow(READ_OBJECT_DEPTH);
+  test("past 1000 levels the tokenizer stops, short of the stack", () => {
+    expect(() => readJsonText(nestedArrays(1001))).toThrow(
+      "The JSON text nests containers deeper than 1000 levels, which deserializeText does not " +
+        "read. Cannot read next JSON array.",
+    );
+
+    expect(() => readJsonText(nestedObjects(1001))).toThrow("Cannot read next JSON object.");
   });
 
-  test("the limit applies to members no contract reads, as STJ's reader does", () => {
-    expect(() => readJsonText(`{"unknown":${nestedArrays(64)}}`)).toThrow(READ_ARRAY_DEPTH);
+  test("an unterminated document reports the open container", () => {
+    expect(() => readJsonText("[".repeat(66))).toThrow("Expected depth to be zero");
   });
+});
 
-  test("an unterminated document past the limit reports the depth first", () => {
-    expect(() => readJsonText("[".repeat(66))).toThrow(READ_ARRAY_DEPTH);
+describe("readJsonText — a slash where a value or property opens", () => {
+  // STJ's reader takes the `/` for a comment after a value (measured).
+  for (const text of ["[/", "{/", '{"a":/', "[ /]", '{"a": /}']) {
+    test(JSON.stringify(text), () => {
+      expect(() => readJsonText(text)).toThrow(
+        "'/' is invalid after a value. Expected either ',', '}', or ']'.",
+      );
+    });
+  }
+
+  test("after a comma it is an invalid start of a value", () => {
+    expect(() => readJsonText("[1,/]")).toThrow("'/' is an invalid start of a value.");
   });
 });
 

@@ -5,6 +5,9 @@
  * `Path` / `LineNumber` suffix (DECIDED-5); a row without one is valid, and
  * `JSON.parse` agrees on every row. Characters other than printable ASCII
  * are printed as the first byte of their UTF-8 encoding (`'0xC3'` for `é`).
+ * Left out: a text that ends inside 66 open arrays, where STJ reports its
+ * depth limit and the runtime the open container (FR-016's limit belongs to
+ * the contract walk, which never sees an invalid text).
  */
 export type JsonTextRow = {
   readonly text: string;
@@ -154,10 +157,6 @@ export const JSON_TEXT_ROWS: readonly JsonTextRow[] = [
   { text: '["a":1]', error: "':' is invalid after a value. Expected either ',', '}', or ']'." },
   { text: '{"a":1]', error: "']' is invalid without a matching open." },
   { text: "[1}", error: "'}' is invalid without a matching open." },
-  {
-    text: "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[",
-    error: "The maximum configured depth of 64 has been exceeded. Cannot read next JSON array.",
-  },
   { text: '{"a":1,"a":2}' },
   { text: '{"__proto__":1}' },
   { text: '"\\/\\b\\f\\n\\r\\t\\"\\\\"' },

@@ -32,6 +32,11 @@ const LONG = "12345678901234567890.123456789";
 
 const nestedArrays = (depth: number) => `${"[".repeat(depth)}${"]".repeat(depth)}`;
 
+/** `depth` nested arrays of numbers, as a descriptor. */
+function nestedListOf(depth: number): TypeSpec["properties"][number]["type"] {
+  return depth === 0 ? { kind: "primitive" } : { kind: "array", element: nestedListOf(depth - 1) };
+}
+
 type Holder = Record<string, unknown>;
 
 const primitive = { kind: "primitive" } as const;
@@ -242,10 +247,9 @@ describe("deserializeText — the path chosen per spec", () => {
     );
   });
 
-  // The limit applies to the containers a contract reads (FR-016) on every
-  // path, and to the whole document when the text is tokenized: a decimal
-  // spec whose text may hold a long number.
-  test("an unread member nested past 64 levels throws only when the text is tokenized", () => {
+  // FR-016's limit counts the containers a contract reads, whichever path
+  // built the tree, so a digit run in a string changes nothing.
+  test("an unread member nested past 64 levels reads on every path", () => {
     const deep = `{"list":[],"unknown":${nestedArrays(65)}`;
 
     expect(JsonSerializer.deserializeText(`${deep}}`, withoutDecimals)).toEqual({ list: [] });
@@ -253,9 +257,29 @@ describe("deserializeText — the path chosen per spec", () => {
       list: [],
       price: null,
     });
-    expect(() => JsonSerializer.deserializeText(`${deep},"price":${LONG}}`, withDecimals)).toThrow(
-      "The maximum configured depth of 64 has been exceeded. Cannot read next JSON array.",
-    );
+    expect(JsonSerializer.deserializeText(`${deep},"price":${LONG}}`, withDecimals)).toEqual({
+      list: [],
+      price: new Decimal(LONG),
+    });
+    expect(
+      JsonSerializer.deserializeText(`${deep},"note":"card 4111111111111111"}`, withDecimals),
+    ).toEqual({ list: [], price: null });
+  });
+
+  test("a read container nested past 64 levels throws on every path", () => {
+    const listOf = (depth: number) => `{"list":${nestedArrays(depth)}`;
+    const message =
+      "The maximum configured depth of 64 has been exceeded. Cannot read next JSON array.";
+    const nested = holderSpec([{ ts: "list", json: "list", type: nestedListOf(64) }]);
+    const nestedWithDecimals = holderSpec([
+      { ts: "list", json: "list", type: nestedListOf(64) },
+      { ts: "price", json: "price", type: decimal },
+    ]);
+
+    expect(() => JsonSerializer.deserializeText(`${listOf(65)}}`, nested)).toThrow(message);
+    expect(() =>
+      JsonSerializer.deserializeText(`${listOf(65)},"price":${LONG}}`, nestedWithDecimals),
+    ).toThrow(message);
   });
 
   test("a bound serializer reads text with its context's converters", () => {
