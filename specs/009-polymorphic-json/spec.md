@@ -937,7 +937,9 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
        depends on them; the 16-character run covers them too). Only
        the built-in `decimal` converter reads that text; every other converter, custom ones
        included, gets the `number` `JSON.parse` gives, so a `double` or `long` property reads as
-       before. A tokenized string is copied out of the text, so the tree never keeps the text
+       before. A custom converter gets its whole subtree that way (a custom `array`, `map`,
+       `hashSet`, `ref` or `nullable` converter reads the elements and members itself): the
+       containers that hold a leaf are copied with the numbers in place. A tokenized string is copied out of the text, so the tree never keeps the text
        alive (on JavaScriptCore a slice of any length does).
      - **Decimal rounding.** The `decimal` converter reads every number text (a long number, a
        `rawJSON` leaf, a JSON string under `AllowReadingFromString`) as STJ does: a 96-bit integer

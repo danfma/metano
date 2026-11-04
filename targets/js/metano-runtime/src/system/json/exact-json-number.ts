@@ -79,3 +79,58 @@ export function exactNumberTextOf(value: unknown): string | undefined {
 export function numberOfTreeValue(value: unknown): unknown {
   return value instanceof JsonNumberText ? Number(value.text) : value;
 }
+
+/**
+ * `value` with every `JsonNumberText` leaf of its subtree read as the
+ * `number` `JSON.parse` gives, for a custom converter, which gets a whole
+ * subtree (a custom `array` or `ref` converter reads the elements and
+ * members itself). Copy-on-write: only the arrays and objects that hold a
+ * leaf, directly or below, are copied; any other value is returned as is.
+ * A spread copy keeps `__proto__` an own property, as `JSON.parse` builds
+ * it.
+ */
+export function treeWithDoubles(value: unknown): unknown {
+  if (value instanceof JsonNumberText) {
+    return Number(value.text);
+  }
+
+  if (Array.isArray(value)) {
+    return arrayWithDoubles(value);
+  }
+
+  if (value !== null && typeof value === "object") {
+    return objectWithDoubles(value as Record<string, unknown>);
+  }
+
+  return value;
+}
+
+function arrayWithDoubles(array: readonly unknown[]): readonly unknown[] {
+  let copy: unknown[] | undefined;
+
+  array.forEach((item, index) => {
+    const converted = treeWithDoubles(item);
+
+    if (converted !== item) {
+      copy ??= array.slice();
+      copy[index] = converted;
+    }
+  });
+
+  return copy ?? array;
+}
+
+function objectWithDoubles(object: Record<string, unknown>): Record<string, unknown> {
+  let copy: Record<string, unknown> | undefined;
+
+  for (const [key, item] of Object.entries(object)) {
+    const converted = treeWithDoubles(item);
+
+    if (converted !== item) {
+      copy ??= { ...object };
+      copy[key] = converted;
+    }
+  }
+
+  return copy ?? object;
+}
