@@ -31,7 +31,7 @@
 - [x] Diagnostic codes reserved (`MS0064`–`MS0066`) in the baseline catalog; next free code `MS0067`
 - [x] Spec directory is `specs/012-long-as-bigint/`
 - [x] Baseline feature-support matrix rows added (Planned)
-- [ ] Open questions OQ-1–OQ-7 answered by the maintainer before `/speckit-tasks` (OQ-3 and OQ-7 carry *Proposed* recommendations revised after the first review)
+- [x] Open questions OQ-1–OQ-7 answered by the maintainer before `/speckit-tasks` (2026-11-04: every recommendation accepted; OQ-3 is (d) on the tree path with #457's `JsonNumberText` leaf)
 - [ ] C# spec section numbers cross-checked against the published ECMA-334 text (the behaviors are pinned by probes; only the citations are unverified)
 - [ ] ADR for "64-bit integers as `bigint` with core-decided conversions and overflow" (recommended alongside slice 012a; not required by this spec PR)
 - [ ] Reference fixtures (FR-064) green from slice 012c on
