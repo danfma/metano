@@ -90,11 +90,11 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     {
         var message = _properties.Access.IncludeProblemOf(member) switch
         {
-            JsonIncludeProblem.Throws when member is IFieldSymbol { IsReadOnly: true } =>
+            JsonIncludeProblem.ReadOnlyField =>
                 $"'{name}' has [JsonInclude] on a read-only field: System.Text.Json writes it "
                     + "and throws InvalidOperationException for a payload that carries it, the "
                     + "TypeScript context does not mirror that.",
-            JsonIncludeProblem.Throws =>
+            JsonIncludeProblem.Inaccessible =>
                 $"'{name}' has [JsonInclude], but the System.Text.Json source generator cannot "
                     + "access it (SYSLIB1038), so its contract throws InvalidOperationException; "
                     + "the TypeScript context does not mirror that.",
@@ -204,7 +204,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     private static MetanoDiagnostic? RequiredModifierWarningOf(ISymbol member, string name)
     {
         var isRequiredNullable =
-            member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true }
+            JsonMemberAccess.HasRequiredModifier(member)
             && JsonTypeClassifier.IsNullable(JsonMemberAccess.TypeOf(member));
 
         if (!isRequiredNullable)
