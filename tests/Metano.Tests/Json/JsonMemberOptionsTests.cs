@@ -661,8 +661,8 @@ public class JsonMemberOptionsTests
             .That(ts)
             .Contains("factory: (p: Record<string, unknown>) => new Bound(p.v as number),");
 
-        await Assert.That(ts).Contains("assignIfPresent: [\"w\"],");
-        await Assert.That(ts).Contains("assignIfPresent: [\"v\"],");
+        await Assert.That(AssignedIfPresentOfGetter(ts, "bound")).IsEqualTo("w");
+        await Assert.That(AssignedIfPresentOfGetter(ts, "counted")).IsEqualTo("v");
     }
 
     // A base declaration hidden by a [JsonIgnore] override is never read, so
@@ -773,12 +773,20 @@ public class JsonMemberOptionsTests
         );
 
     /// <summary>The <c>ts</c> names of the property specs of one getter.</summary>
-    private static string PropertiesOfGetter(string ts, string getter)
+    private static string PropertiesOfGetter(string ts, string getter) =>
+        TsNamesOf(GetterSourceOf(ts, getter));
+
+    /// <summary>The <c>assignIfPresent</c> names of one getter's spec.</summary>
+    private static string AssignedIfPresentOfGetter(string ts, string getter) =>
+        AssignedIfPresentOf(GetterSourceOf(ts, getter));
+
+    /// <summary>The source of one getter, up to the next getter.</summary>
+    private static string GetterSourceOf(string ts, string getter)
     {
         var start = ts.IndexOf($"  get {getter}(", StringComparison.Ordinal);
         var end = ts.IndexOf("\n  get ", start + 1, StringComparison.Ordinal);
 
-        return TsNamesOf(end < 0 ? ts[start..] : ts[start..end]);
+        return end < 0 ? ts[start..] : ts[start..end];
     }
 
     /// <summary>The names of every <c>assignIfPresent</c> list, one list per spec, joined.</summary>

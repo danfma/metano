@@ -115,9 +115,9 @@ const dxSpec: TypeSpec<DX> = {
 
 describe("assignIfPresent is per contract", () => {
   test("the base constructor binds its member", () => {
-    expect(JSON.stringify(JsonSerializer.serialize(JsonSerializer.deserialize({ X: 5 }, bxSpec), bxSpec))).toBe(
-      '{"X":5}',
-    );
+    const value = JsonSerializer.deserialize({ X: 5 }, bxSpec);
+
+    expect(JSON.stringify(JsonSerializer.serialize(value, bxSpec))).toBe('{"X":5}');
   });
 
   test("a derived contract assigns the base member its own constructor does not bind", () => {

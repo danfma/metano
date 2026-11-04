@@ -375,7 +375,10 @@ and a member with a `set` accessor or a writable field that the contract's own
 constructor does not bind (inherited ones included) only when the payload
 carries its key (the spec's `assignIfPresent: [...]` list; the runtime assigns
 it after construction, in wire order where STJ follows the payload's order),
-so a missing key keeps the constructed value:
+so a missing key keeps the constructed value. One FR-045 difference remains on
+both paths: a missing non-nullable key throws in the runtime, where STJ uses the
+default (an `init` value type, `0`) or keeps the initializer (a non-nullable
+`set` member of a `[PlainObject]` type, whose literal has no initializer to keep):
 
 ```csharp
 public class Init
