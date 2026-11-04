@@ -73,7 +73,7 @@ describe("Spec plans: reuse", () => {
     expect(price.propertiesReads()).toBe(1);
   });
 
-  test("a nested spec is compiled once for every element that reaches it", () => {
+  test("a nested spec is compiled once and reused by every element that reaches it", () => {
     const price = counted(priceSpecOf());
 
     const prices: ValueSpec<Price[]> = {
