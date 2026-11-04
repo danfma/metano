@@ -159,9 +159,16 @@ describe("readJsonText — numbers beyond double precision", () => {
     expect(leafTextOf("1000000000000000000")).toBe("1000000000000000000");
   });
 
-  test("one with 15 significant digits or fewer is a number", () => {
+  // A decimal rounds a tie by its position in the text, which a double loses.
+  test("leading fraction zeros count toward the 15 digits", () => {
+    expect(leafTextOf("0.0000000000000025")).toBe("0.0000000000000025");
+    expect(leafTextOf("0.000000000000025")).toBe(0.000000000000025);
+    expect(leafTextOf("-0.000000000000000000001")).toBe("-0.000000000000000000001");
+  });
+
+  test("one with 15 digits or fewer is a number", () => {
     expect(leafTextOf("123456789012345")).toBe(123456789012345);
-    expect(leafTextOf("-0.000000000000000000001")).toBe(-1e-21);
+    expect(leafTextOf("-0.00000000001")).toBe(-1e-11);
     expect(leafTextOf("0.123456789012345e-5")).toBe(0.123456789012345e-5);
   });
 
