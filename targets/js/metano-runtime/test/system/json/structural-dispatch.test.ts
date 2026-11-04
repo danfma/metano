@@ -163,15 +163,59 @@ describe("structural dispatch — unmatched plain objects", () => {
     });
   }
 
-  test("a concrete [PlainObject] base writes an unmatched plain object as itself", () => {
-    const concrete: TypeSpec<Shape> = {
+  // FR-019 rule 5: a concrete [PlainObject] base `Label(string Text)` that does not register
+  // itself. STJ writes an `Animal` through `Animal` as `{"Name":"a"}` (measured, .NET 10).
+  function concreteBase(polymorphism: Partial<PolymorphismSpec>): TypeSpec<Shape> {
+    return {
       factory: (p) => ({ text: p.text as string }),
       properties: [{ ts: "text", json: "Text", type: primitive }],
-      polymorphism: { discriminator: "$type", typeName: "Shape", derived: pointVariants },
+      polymorphism: {
+        discriminator: "$type",
+        typeName: "Label",
+        derived: pointVariants,
+        testOrder: [1, 0],
+        ...polymorphism,
+      },
     };
+  }
+
+  test("a concrete [PlainObject] base writes a value its baseTest accepts as itself", () => {
+    const concrete = concreteBase({ baseTest: isLabel });
 
     expect(write(unmatched, concrete)).toBe('{"Text":"a"}');
     expect(read('{"Text":"a"}', concrete)).toEqual({ text: "a" });
+  });
+
+  test("variant guards run before the baseTest", () => {
+    const concrete = concreteBase({ baseTest: () => true });
+
+    expect(write<Shape>({ x: 1, y: 2, z: 3 }, concrete)).toBe(
+      '{"$type":"point3","Y":2,"Z":3,"X":1}',
+    );
+  });
+
+  test("a value the baseTest rejects is an unregistered runtime type (Object)", () => {
+    const concrete = concreteBase({ baseTest: isLabel });
+    const stranger = { other: true } as unknown as Shape;
+
+    expectNotSupportedException(
+      () => write(stranger, concrete),
+      unsupportedRuntimeTypeMessage("Object", "Label"),
+    );
+  });
+
+  test("a value the baseTest rejects follows fallBackToBaseType", () => {
+    const concrete = concreteBase({ baseTest: isLabel, unknownDerivedType: "fallBackToBaseType" });
+    const stranger = { text: 1 } as unknown as Shape;
+
+    expect(write(stranger, concrete)).toBe('{"Text":1}');
+  });
+
+  test("without a baseTest, a concrete base no longer writes every unmatched plain object", () => {
+    expectNotSupportedException(
+      () => write(unmatched, concreteBase({})),
+      unsupportedRuntimeTypeMessage("Object", "Label"),
+    );
   });
 
   test("a self-registered concrete [PlainObject] base writes its tag through its guard", () => {

@@ -365,6 +365,21 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             typeMappingContext
         );
 
+        // [PlainObject] types a polymorphic JSON hierarchy tests with a
+        // synthesized guard (FR-019): their `isT` is emitted and resolved
+        // like a [GenerateGuard] one.
+        var structuralGuardTypes = JsonStructuralGuardTargets.Collect(
+            transpilableTypes,
+            _assemblyWideTranspile,
+            _currentAssembly
+        );
+
+        var guardableTypeKeys = (
+            ir.GuardableTypeKeys ?? new HashSet<string>(StringComparer.Ordinal)
+        )
+            .Concat(structuralGuardTypes.Select(type => type.GetCrossAssemblyOriginKey()))
+            .ToHashSet(StringComparer.Ordinal);
+
         _context = new TypeScriptTransformContext(
             compilation,
             _currentAssembly,
@@ -373,7 +388,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.ExternalImports,
             ir.BclExports,
             typeNamesBySymbol,
-            ir.GuardableTypeKeys ?? new HashSet<string>(StringComparer.Ordinal),
+            guardableTypeKeys,
             _pathNaming,
             declarativeMappings,
             ReportDiagnostic
@@ -383,6 +398,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
             NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
+            StructuralGuardTypes = structuralGuardTypes,
         };
 
         // Module state of containerless classes (#314): reject the uses the
@@ -700,6 +716,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var registration = guardBuilder.TryBuildVariantRegistration(type);
             if (registration is not null)
                 sink.Add(registration);
+        }
+        else if (Context.StructuralGuardTypes.Contains(type.OriginalDefinition))
+        {
+            // A [PlainObject] variant (or concrete base) of a polymorphic
+            // JSON hierarchy: the serializer selects it with this guard on
+            // write (FR-019 rule 1), so it is synthesized without
+            // [GenerateGuard] — the predicate only, no assert companion.
+            if (new TypeGuardBuilder(Context).GeneratePredicate(type) is { } guard)
+                sink.Add(guard);
         }
 
         // Process nested types — the non-private ones go to a companion namespace

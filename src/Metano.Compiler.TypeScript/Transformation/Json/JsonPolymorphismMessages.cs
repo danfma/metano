@@ -76,7 +76,29 @@ internal static class JsonPolymorphismMessages
         $"'{registered}' declares its own [JsonDerivedType]s; as in System.Text.Json, they apply "
         + $"only through '{registered}' and are not re-dispatched through '{owner}'.";
 
-    public static string StructuralHierarchyNotSupported(string type) =>
-        "Polymorphism for interface and [PlainObject] types is not supported yet; "
-        + $"'{type}' is emitted without a discriminator.";
+    public static string InterfaceRegistration(string registered, string owner) =>
+        $"'{registered}' registered on '{owner}' is an interface; interface-typed derived types "
+        + "are not supported by the TypeScript context.";
+
+    public static string IndistinguishableVariants(
+        string first,
+        string second,
+        string owner,
+        IReadOnlyList<string> members
+    )
+    {
+        var listed = members.Count == 0 ? "none" : string.Join(", ", members);
+
+        return $"[PlainObject] variants '{first}' and '{second}' of '{owner}' have the same "
+            + $"required members ({listed}), so serialization cannot tell them apart. Add a "
+            + "distinguishing required member or use class-backed records.";
+    }
+
+    public static string UnorderedVariants(IReadOnlyList<string> variants, string owner)
+    {
+        var quoted = variants.Select(variant => $"'{variant}'").ToList();
+        var listed = $"{string.Join(", ", quoted[..^1])} and {quoted[^1]}";
+
+        return $"[PlainObject] variants {listed} of '{owner}' have no consistent test order.";
+    }
 }

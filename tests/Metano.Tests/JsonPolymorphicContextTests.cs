@@ -380,42 +380,6 @@ public class JsonPolymorphicContextTests
             .Contains(DiagnosticCodes.LossyJsonPolymorphism);
     }
 
-    // Interface bases and [PlainObject] variants are slice S6c (FR-018,
-    // FR-019): until then their contexts are unchanged, with an MS0033 warning.
-    [Test]
-    public async Task PlainObjectHierarchy_IsLeftForStructuralDispatch()
-    {
-        var (files, diagnostics) = Transpile(
-            """
-            [Transpile, PlainObject]
-            [JsonDerivedType(typeof(Point), "point")]
-            public abstract record Shape;
-
-            [Transpile, PlainObject]
-            public sealed record Point(double X) : Shape;
-
-            [Transpile]
-            [JsonSerializable(typeof(Shape))]
-            """
-        );
-
-        var ts = files[ContextPath];
-        var warnings = diagnostics.Where(IsPolymorphismDiagnostic).ToList();
-
-        await Assert.That(ts).Contains("get shape(): TypeSpec<Shape>");
-        await Assert.That(ts).DoesNotContain("polymorphism: {");
-        await Assert.That(ts).DoesNotContain("get point()");
-        await Assert.That(warnings).Count().IsEqualTo(1);
-        await Assert.That(warnings[0].Code).IsEqualTo(DiagnosticCodes.LossyJsonPolymorphism);
-
-        await Assert
-            .That(warnings[0].Message)
-            .IsEqualTo(
-                "Polymorphism for interface and [PlainObject] types is not supported yet; "
-                    + "'Shape' is emitted without a discriminator."
-            );
-    }
-
     [Test]
     public async Task NonPolymorphicAbstractType_KeepsItsFactoryMessage()
     {

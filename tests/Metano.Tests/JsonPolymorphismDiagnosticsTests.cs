@@ -4,8 +4,9 @@ namespace Metano.Tests;
 
 /// <summary>
 /// <c>MS0032</c> (<c>InvalidJsonPolymorphism</c>) and <c>MS0033</c>
-/// (<c>LossyJsonPolymorphism</c>) for class hierarchies (spec 009 FR-012,
-/// FR-013, FR-015, FR-047; contracts/diagnostics.md), one test per rule.
+/// (<c>LossyJsonPolymorphism</c>) for class, interface and
+/// <c>[PlainObject]</c> hierarchies (spec 009 FR-012, FR-013, FR-015,
+/// FR-018, FR-019, FR-047; contracts/diagnostics.md), one test per rule.
 /// System.Text.Json throws <c>InvalidOperationException</c> for every
 /// <c>MS0032</c> rule it shares (research.md R1); <c>MS0033</c> cases behave
 /// as in System.Text.Json and only warn.
@@ -674,6 +675,222 @@ public class JsonPolymorphismDiagnosticsTests
 
         await Assert.That(ts).Contains("get idDisc(): TypeSpec<IdDisc>");
         await Assert.That(ts).DoesNotContain("polymorphism: {");
+    }
+
+    // OPEN-18 (S6c): an interface entry on an interface base. System.Text.Json
+    // rejects it too unless FallBackToNearestAncestor is set (measured on
+    // .NET 10: "Specified type 'IRound' is not a supported derived type for
+    // the polymorphic type 'IRoundBase'. …").
+    [Test]
+    public async Task InterfaceTypedRegistrationOnAnInterfaceBase_IsReported()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonDerivedType(typeof(IRound), "r")]
+            [JsonDerivedType(typeof(Disc), "d")]
+            public interface IRoundBase { int V { get; } }
+
+            [Transpile]
+            public interface IRound : IRoundBase { }
+
+            [Transpile]
+            public sealed record Disc(int V) : IRound;
+
+            [Transpile]
+            [JsonSerializable(typeof(IRoundBase))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "'IRound' registered on 'IRoundBase' is an interface; interface-typed derived types "
+                + "are not supported by the TypeScript context."
+        );
+
+        await Assert.That(ts).Contains("spec: () => this.disc,");
+        await Assert.That(ts).DoesNotContain("get iRound()");
+    }
+
+    [Test]
+    public async Task TypeNotImplementingTheInterfaceBase_IsNotAssignable()
+    {
+        var (_, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile]
+            [JsonDerivedType(typeof(Sq), "sq")]
+            [JsonDerivedType(typeof(Stranger), "x")]
+            public interface IShape { double Area { get; } }
+
+            [Transpile]
+            public sealed record Sq(double Area) : IShape;
+
+            [Transpile]
+            public sealed record Stranger(double Area);
+
+            [Transpile]
+            [JsonSerializable(typeof(IShape))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "'Stranger' registered by [JsonDerivedType] on 'IShape' is not assignable to 'IShape'."
+        );
+    }
+
+    // FR-019 rule 4: the same required members with the same kinds.
+    [Test]
+    public async Task IndistinguishablePlainObjectVariants_AreReported()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(A), "a")]
+            [JsonDerivedType(typeof(B), "b")]
+            public abstract record Base;
+
+            [Transpile, PlainObject]
+            public sealed record A(string Name) : Base;
+
+            [Transpile, PlainObject]
+            public sealed record B(string Name) : Base;
+
+            [Transpile]
+            [JsonSerializable(typeof(Base))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "[PlainObject] variants 'A' and 'B' of 'Base' have the same required members "
+                + "(name: string), so serialization cannot tell them apart. Add a "
+                + "distinguishing required member or use class-backed records."
+        );
+
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
+    }
+
+    // A guard that requires nothing accepts every plain object.
+    [Test]
+    public async Task PlainObjectVariantsWithoutRequiredMembers_AreReported()
+    {
+        var (_, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(A), "a")]
+            [JsonDerivedType(typeof(B), "b")]
+            public abstract record Base;
+
+            [Transpile, PlainObject]
+            public sealed record A : Base;
+
+            [Transpile, PlainObject]
+            public sealed record B(int? Count) : Base;
+
+            [Transpile]
+            [JsonSerializable(typeof(Base))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "[PlainObject] variants 'A' and 'B' of 'Base' have the same required members "
+                + "(none), so serialization cannot tell them apart. Add a distinguishing "
+                + "required member or use class-backed records."
+        );
+    }
+
+    // A nullable member is not required, but a value may still carry it:
+    // A's guard accepts every B and B's guard accepts an A that has `x`.
+    [Test]
+    public async Task VariantsThatCoverEachOtherThroughAnOptionalMember_AreReported()
+    {
+        var (_, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(A), "a")]
+            [JsonDerivedType(typeof(B), "b")]
+            public abstract record Base;
+
+            [Transpile, PlainObject]
+            public sealed record A(string Name, int? X) : Base;
+
+            [Transpile, PlainObject]
+            public sealed record B(string Name, int X) : Base;
+
+            [Transpile]
+            [JsonSerializable(typeof(Base))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "[PlainObject] variants 'A' and 'B' of 'Base' have the same required members "
+                + "(name: string, x: number), so serialization cannot tell them apart. Add a "
+                + "distinguishing required member or use class-backed records."
+        );
+    }
+
+    // X ⊂ Y ⊂ Z ⊂ X in the "more specific" relation: no order is consistent.
+    [Test]
+    public async Task CyclicSpecificity_IsReported()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(X), "x")]
+            [JsonDerivedType(typeof(Y), "y")]
+            [JsonDerivedType(typeof(Z), "z")]
+            public abstract record Base;
+
+            [Transpile, PlainObject]
+            public sealed record X(string A, string? B) : Base;
+
+            [Transpile, PlainObject]
+            public sealed record Y(string B, string? C) : Base;
+
+            [Transpile, PlainObject]
+            public sealed record Z(string C, string? A) : Base;
+
+            [Transpile]
+            [JsonSerializable(typeof(Base))]
+            """
+        );
+
+        await AssertSingleError(
+            diagnostics,
+            "[PlainObject] variants 'X', 'Y' and 'Z' of 'Base' have no consistent test order."
+        );
+
+        await Assert.That(ts).DoesNotContain("polymorphism: {");
+    }
+
+    // Members of the same name with incompatible kinds tell variants apart.
+    [Test]
+    public async Task VariantsDistinguishedByMemberKind_AreAccepted()
+    {
+        var (ts, diagnostics) = TranspileWithPolymorphismDiagnostics(
+            """
+            [Transpile, PlainObject]
+            [JsonDerivedType(typeof(A), "a")]
+            [JsonDerivedType(typeof(B), "b")]
+            public abstract record Base;
+
+            [Transpile, PlainObject]
+            public sealed record A(string V) : Base;
+
+            [Transpile, PlainObject]
+            public sealed record B(int V) : Base;
+
+            [Transpile]
+            [JsonSerializable(typeof(Base))]
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(ts).Contains("test: isB,");
+        await Assert.That(ts).DoesNotContain("testOrder");
     }
 
     private static Task AssertSingleError(

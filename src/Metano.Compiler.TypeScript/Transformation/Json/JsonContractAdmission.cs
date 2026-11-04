@@ -14,14 +14,15 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
 
     /// <summary>
     /// An object contract: a class or struct (closed generics included,
-    /// FR-033) that is transpiled in its declaring assembly (FR-010) — this
-    /// project, or a referenced <c>[TranspileAssembly]</c> +
-    /// <c>[EmitPackage]</c> library whose types the context imports (FR-047).
-    /// Interfaces need polymorphic JSON and are not admitted.
+    /// FR-033), or a polymorphic interface (FR-018), that is transpiled in
+    /// its declaring assembly (FR-010) — this project, or a referenced
+    /// <c>[TranspileAssembly]</c> + <c>[EmitPackage]</c> library whose types
+    /// the context imports (FR-047). Any other interface has no JSON
+    /// contract the generated context can describe.
     /// </summary>
     public bool HasObjectContract(ITypeSymbol type) =>
         type is INamedTypeSymbol named
-        && IsUserClassOrStruct(named)
+        && (IsUserClassOrStruct(named) || IsPolymorphicInterface(named))
         && IsTranspiledInDeclaringAssembly(named.OriginalDefinition);
 
     /// <summary>
@@ -32,12 +33,12 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
     /// </summary>
     public string? ObjectRootRejectionReasonOf(INamedTypeSymbol type)
     {
-        if (type.TypeKind == TypeKind.Interface)
+        if (type.TypeKind == TypeKind.Interface && !IsPolymorphicInterface(type))
             return "interfaces other than the recognized collection, dictionary and set "
-                + "interfaces need polymorphic JSON, which the TypeScript context does not "
-                + "support yet";
+                + "interfaces have a JSON contract only when they declare [JsonDerivedType] "
+                + "registrations";
 
-        if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+        if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct or TypeKind.Interface))
             return "it is not a class or struct, so it has no JSON object contract";
 
         if (HasObjectContract(type))
@@ -54,6 +55,13 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
     private static bool IsUserClassOrStruct(INamedTypeSymbol type) =>
         type.TypeKind is TypeKind.Class or TypeKind.Struct
         && type.SpecialType != SpecialType.System_Object;
+
+    /// <summary>
+    /// An interface that registers derived types: System.Text.Json
+    /// serializes it polymorphically, as an abstract base (FR-018).
+    /// </summary>
+    private static bool IsPolymorphicInterface(INamedTypeSymbol type) =>
+        type.TypeKind == TypeKind.Interface && JsonPolymorphismReader.IsPolymorphic(type);
 
     /// <summary>
     /// The FR-010 rule, evaluated against the type's declaring assembly: the
