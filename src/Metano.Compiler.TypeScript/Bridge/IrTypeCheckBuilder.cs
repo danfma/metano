@@ -14,19 +14,42 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// named types) use structural checks; anything unmappable collapses to
 /// <c>typeof value === "object"</c>.
 /// </para>
+/// <para>
+/// A type parameter has no runtime test of its own, so its check never
+/// rejects a value C# would accept: an unconstrained <c>T</c> (or a
+/// <c>struct</c> one, whose arguments include primitives) has no check, and
+/// a constrained one combines the checks of its constraints. A <c>null</c>
+/// result means "any value".
+/// </para>
 /// </summary>
 internal static class IrTypeCheckBuilder
 {
-    /// <summary>The check that <paramref name="value"/> is a <paramref name="type"/>.</summary>
-    public static TsExpression Generate(IrTypeRef type, TsExpression value) =>
+    /// <summary>
+    /// The check that <paramref name="value"/> is a <paramref name="type"/>,
+    /// or <c>null</c> when any value matches.
+    /// </summary>
+    /// <param name="typeParameters">The type parameters in scope, innermost
+    /// first, which a type parameter reference resolves against; an
+    /// unresolved one matches any value.</param>
+    public static TsExpression? Generate(
+        IrTypeRef type,
+        TsExpression value,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    ) =>
         type switch
         {
-            // Nullable → matches either null or the inner check.
-            IrNullableTypeRef nullable => new TsBinaryExpression(
-                new TsBinaryExpression(value, "===", new TsLiteral("null")),
-                "||",
-                Generate(nullable.Inner, value)
+            IrNullableTypeRef nullable => NullableCheck(nullable, value, typeParameters),
+            IrTypeParameterRef typeParameter => TypeParameterCheck(
+                typeParameter,
+                value,
+                typeParameters
             ),
+            _ => ConcreteCheck(type, value),
+        };
+
+    private static TsExpression ConcreteCheck(IrTypeRef type, TsExpression value) =>
+        type switch
+        {
             IrPrimitiveTypeRef primitive => PrimitiveCheck(primitive.Primitive, value),
             IrFunctionTypeRef func => FunctionCheck(func, value),
             IrArrayTypeRef => new TsCallExpression(
@@ -54,6 +77,90 @@ internal static class IrTypeCheckBuilder
             IrNamedTypeRef named => NamedTypeCheck(named, value),
             _ => TypeofObject(value),
         };
+
+    /// <summary>
+    /// Matches either <c>null</c> or the inner check; a nullable type
+    /// parameter without a check matches any value.
+    /// </summary>
+    private static TsExpression? NullableCheck(
+        IrNullableTypeRef nullable,
+        TsExpression value,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    ) =>
+        Generate(nullable.Inner, value, typeParameters) is { } innerCheck
+            ? new TsBinaryExpression(
+                new TsBinaryExpression(value, "===", new TsLiteral("null")),
+                "||",
+                innerCheck
+            )
+            : null;
+
+    /// <summary>
+    /// The conjunction of the checks of the type parameter's constraints: a
+    /// <c>class</c> constraint admits any reference value, a base class or
+    /// an emitted interface keeps its own check, and every other constraint
+    /// (<c>struct</c>, a BCL interface a primitive may implement, …) admits
+    /// any value.
+    /// </summary>
+    private static TsExpression? TypeParameterCheck(
+        IrTypeParameterRef typeParameter,
+        TsExpression value,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    )
+    {
+        var declaration = typeParameters.FirstOrDefault(p => p.Name == typeParameter.Name);
+
+        if (declaration is null)
+            return null;
+
+        var constraintChecks = (declaration.Constraints ?? []).Select(constraint =>
+            ConstraintCheck(constraint, value, typeParameters)
+        );
+
+        return AllOf([KindConstraintCheck(declaration.KindConstraint, value), .. constraintChecks]);
+    }
+
+    private static TsExpression? KindConstraintCheck(
+        IrTypeKindConstraint kindConstraint,
+        TsExpression value
+    ) => kindConstraint is IrTypeKindConstraint.ReferenceType ? ReferenceCheck(value) : null;
+
+    private static TsExpression? ConstraintCheck(
+        IrTypeRef constraint,
+        TsExpression value,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    ) =>
+        constraint switch
+        {
+            IrTypeParameterRef typeParameter => TypeParameterCheck(
+                typeParameter,
+                value,
+                typeParameters
+            ),
+            IrNamedTypeRef { Semantics.IsTranspilable: true } named => NamedTypeCheck(named, value),
+            _ => null,
+        };
+
+    /// <summary>
+    /// A C# reference value: an object or a function, or a string, the one
+    /// reference type that lowers to a JS primitive.
+    /// </summary>
+    private static TsExpression ReferenceCheck(TsExpression value) =>
+        new TsBinaryExpression(
+            new TsBinaryExpression(
+                new TsParenthesized(
+                    new TsBinaryExpression(
+                        TypeofObject(value),
+                        "&&",
+                        new TsBinaryExpression(value, "!==", new TsLiteral("null"))
+                    )
+                ),
+                "||",
+                TypeofTest(value, "function")
+            ),
+            "||",
+            TypeofTest(value, "string")
+        );
 
     /// <summary>
     /// The conjunction of the present <paramref name="checks"/>, or

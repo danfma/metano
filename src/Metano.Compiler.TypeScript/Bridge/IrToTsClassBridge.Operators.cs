@@ -230,12 +230,16 @@ internal static partial class IrToTsClassBridge
             );
             for (var j = 0; j < argCount; j++)
             {
+                // Operators see no type parameter scope, so a type parameter
+                // operand admits any value and adds no check.
                 var check = IrTypeCheckBuilder.Generate(
                     paramTypes[j + paramOffset],
-                    new TsIdentifier($"args[{j}]")
+                    new TsIdentifier($"args[{j}]"),
+                    []
                 );
 
-                condition = new TsBinaryExpression(condition, "&&", check);
+                if (check is not null)
+                    condition = new TsBinaryExpression(condition, "&&", check);
             }
 
             var callArgs = new List<TsExpression>();

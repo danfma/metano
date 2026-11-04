@@ -43,21 +43,11 @@ public static class IrDelegateExtractor
             ? new IrPrimitiveTypeRef(IrPrimitive.Void)
             : IrTypeRefMapper.Map(invoke.ReturnType, originResolver, target);
 
-        var typeParameters =
-            type.TypeParameters.Length > 0
-                ? type
-                    .TypeParameters.Select(tp => new IrTypeParameter(
-                        tp.Name,
-                        tp.ConstraintTypes.Length > 0
-                            ? tp
-                                .ConstraintTypes.Select(t =>
-                                    IrTypeRefMapper.Map(t, originResolver, target)
-                                )
-                                .ToList()
-                            : null
-                    ))
-                    .ToList()
-                : null;
+        var typeParameters = IrTypeParameterExtractor.ExtractAll(
+            type.TypeParameters,
+            originResolver,
+            target
+        );
 
         return new IrDelegateDeclaration(
             Name: type.Name,

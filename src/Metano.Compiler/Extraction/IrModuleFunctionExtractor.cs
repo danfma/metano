@@ -477,19 +477,10 @@ public static class IrModuleFunctionExtractor
             OperatorKind: null
         );
 
-        var typeParameters =
-            method.TypeParameters.Length > 0
-                ? method
-                    .TypeParameters.Select(tp => new IrTypeParameter(
-                        tp.Name,
-                        tp.ConstraintTypes.Length > 0
-                            ? tp
-                                .ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver))
-                                .ToList()
-                            : null
-                    ))
-                    .ToList()
-                : null;
+        var typeParameters = IrTypeParameterExtractor.ExtractAll(
+            method.TypeParameters,
+            originResolver
+        );
 
         var body = TryExtractBody(method, context, localNames);
 
@@ -635,19 +626,10 @@ public static class IrModuleFunctionExtractor
             OperatorKind: null
         );
 
-        var typeParameters =
-            method.TypeParameters.Length > 0
-                ? method
-                    .TypeParameters.Select(tp => new IrTypeParameter(
-                        tp.Name,
-                        tp.ConstraintTypes.Length > 0
-                            ? tp
-                                .ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver))
-                                .ToList()
-                            : null
-                    ))
-                    .ToList()
-                : null;
+        var typeParameters = IrTypeParameterExtractor.ExtractAll(
+            method.TypeParameters,
+            originResolver
+        );
 
         var body = TryExtractBody(method, context, localNames);
 
@@ -788,19 +770,10 @@ public static class IrModuleFunctionExtractor
             OperatorKind: null
         );
 
-        var typeParameters =
-            method.TypeParameters.Length > 0
-                ? method
-                    .TypeParameters.Select(tp => new IrTypeParameter(
-                        tp.Name,
-                        tp.ConstraintTypes.Length > 0
-                            ? tp
-                                .ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver))
-                                .ToList()
-                            : null
-                    ))
-                    .ToList()
-                : null;
+        var typeParameters = IrTypeParameterExtractor.ExtractAll(
+            method.TypeParameters,
+            originResolver
+        );
 
         var body = context.Compilation is { } compilation
             ? TryExtractBody(method, context, localNames)

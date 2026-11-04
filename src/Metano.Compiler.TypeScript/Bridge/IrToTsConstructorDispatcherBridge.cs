@@ -33,9 +33,12 @@ public static class IrToTsConstructorDispatcherBridge
     /// </summary>
     /// <param name="primary">The primary constructor carrying the overloads.</param>
     /// <param name="baseCall">What every branch's base call depends on.</param>
+    /// <param name="typeParameters">The class's type parameters, which a
+    /// parameter's type check resolves its type parameters against.</param>
     internal static TsConstructor? Build(
         IrConstructorDeclaration primary,
         DispatcherBaseCall baseCall,
+        IReadOnlyList<IrTypeParameter> typeParameters,
         IrToTsBridgeContext context
     )
     {
@@ -65,7 +68,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         var body = new List<TsStatement>();
         foreach (var ctor in sorted)
-            body.Add(BuildBranch(ctor, baseCall, context));
+            body.Add(BuildBranch(ctor, baseCall, typeParameters, context));
 
         // Unmatched — match the legacy behavior: the bare TS `throw` so a
         // caller that passes an unsupported signature fails loudly at runtime.
@@ -98,6 +101,7 @@ public static class IrToTsConstructorDispatcherBridge
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
         DispatcherBaseCall baseCall,
+        IReadOnlyList<IrTypeParameter> typeParameters,
         IrToTsBridgeContext context
     )
     {
@@ -130,7 +134,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
-        return new TsIfStatement(arguments.Guard(), branch);
+        return new TsIfStatement(arguments.Guard(typeParameters), branch);
     }
 
     /// <summary>

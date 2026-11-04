@@ -160,7 +160,7 @@ public sealed class IrToTsClassEmitter(
             // crashing here would abort the whole transpile for an otherwise
             // valid type, and silently dropping the type would hide the gap.
             return TryBuildConstructorDispatcherFromIr(
-                    ir.Constructor,
+                    ir,
                     new DispatcherBaseCall(extendsType is not null, keepsBaseMessage),
                     lowering
                 )
@@ -482,7 +482,7 @@ public sealed class IrToTsClassEmitter(
                 return null;
             }
 
-            var dispatcher = TryBuildOverloadDispatcherFromIr(irMethod, type.Name, lowering);
+            var dispatcher = TryBuildOverloadDispatcherFromIr(irMethod, type.Name, ir, lowering);
             if (dispatcher is null)
             {
                 _context.ReportUnsupportedBody(
@@ -768,11 +768,13 @@ public sealed class IrToTsClassEmitter(
     /// captured parameters.
     /// </summary>
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
-        IrConstructorDeclaration? primary,
+        IrClassDeclaration ir,
         DispatcherBaseCall baseCall,
         IrToTsBridgeContext lowering
     )
     {
+        var primary = ir.Constructor;
+
         if (!_context.UseIrBodiesWhenCovered)
             return null;
         if (primary is null || primary.Overloads is not { Count: > 0 })
@@ -784,7 +786,12 @@ public sealed class IrToTsClassEmitter(
                 return null;
         }
 
-        return IrToTsConstructorDispatcherBridge.Build(primary, baseCall, lowering);
+        return IrToTsConstructorDispatcherBridge.Build(
+            primary,
+            baseCall,
+            ir.TypeParameters ?? [],
+            lowering
+        );
     }
 
     /// <summary>
@@ -796,6 +803,7 @@ public sealed class IrToTsClassEmitter(
     private IReadOnlyList<TsClassMember>? TryBuildOverloadDispatcherFromIr(
         IrMethodDeclaration primary,
         string typeName,
+        IrClassDeclaration owner,
         IrToTsBridgeContext lowering
     )
     {
@@ -810,7 +818,12 @@ public sealed class IrToTsClassEmitter(
                 return null;
         }
 
-        return IrToTsOverloadDispatcherBridge.BuildMethod(primary, typeName, lowering);
+        return IrToTsOverloadDispatcherBridge.BuildMethod(
+            primary,
+            typeName,
+            owner.TypeParameters ?? [],
+            lowering
+        );
     }
 
     /// <summary>
