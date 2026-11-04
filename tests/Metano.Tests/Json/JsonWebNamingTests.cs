@@ -12,15 +12,10 @@ namespace Metano.Tests.Json;
 /// Measured with a source-generated System.Text.Json context
 /// (.NET SDK 10.0.401, runtime 10.0.12) over a class with one property per name:
 /// <code>
-/// Web (and (JsonSerializerDefaults)1, and General + CamelCase)
-///   {"url","ioStream","htmlParser","id","x","alreadyCamel","value2","v2Value","item_Name",
-///    "_Leading","abC_D","a1B","éCole","myURLValue","Explicit_Name"}
-/// Web + PropertyNamingPolicy = SnakeCaseLower (same as SnakeCaseLower alone)
-///   {"url","io_stream","html_parser","id","x","already_camel","value2","v2_value","item_name",
-///    "_leading","abc_d","a1_b","é_cole","my_url_value","Explicit_Name"}
-/// KebabCaseUpper
-///   {"URL","IO-STREAM","HTML-PARSER","ID","X","ALREADY-CAMEL","VALUE2","V2-VALUE","ITEM_NAME",
-///    "_LEADING","ABC_D","A1-B","É-COLE","MY-URL-VALUE","Explicit_Name"}
+/// Web, (JsonSerializerDefaults)1 and General + CamelCase write the camelCase
+///   column of MeasuredNames; Web + an explicit snake / kebab policy writes that
+///   policy's column, the same as the policy alone (XMLHttpRequest, ΣIGMA and İd
+///   from JsonNamingPolicy.*.ConvertName)
 /// Web + PropertyNamingPolicy = Unspecified, General, no argument → names as declared
 /// Web, [JsonDerivedType(typeof(Square), "square")] Shape
 ///   Square(2, "red") → {"$type":"square","sideLength":2,"fillColor":"red"}
@@ -66,6 +61,9 @@ public class JsonWebNamingTests
             string A1B,
             string ÉCole,
             string MyURLValue,
+            string XMLHttpRequest,
+            string ΣIGMA,
+            string İd,
             [property: JsonPropertyName("Explicit_Name")] string Explicit
         );
         """;
@@ -100,80 +98,68 @@ public class JsonWebNamingTests
         [JsonSerializable(typeof(Stats))]
         """;
 
-    private static readonly string[] WebNames =
-    [
-        "url",
-        "ioStream",
-        "htmlParser",
-        "id",
-        "x",
-        "alreadyCamel",
-        "value2",
-        "v2Value",
-        "item_Name",
-        "_Leading",
-        "abC_D",
-        "a1B",
-        "éCole",
-        "myURLValue",
-        "Explicit_Name",
-    ];
+    private const int Declared = 0;
 
-    private static readonly string[] DeclaredNames =
-    [
-        "URL",
-        "IOStream",
-        "HTMLParser",
-        "ID",
-        "X",
-        "alreadyCamel",
-        "Value2",
-        "V2Value",
-        "Item_Name",
-        "_Leading",
-        "ABC_D",
-        "A1B",
-        "ÉCole",
-        "MyURLValue",
-        "Explicit_Name",
-    ];
+    private const int Camel = 1;
 
-    private static readonly string[] SnakeLowerNames =
-    [
-        "url",
-        "io_stream",
-        "html_parser",
-        "id",
-        "x",
-        "already_camel",
-        "value2",
-        "v2_value",
-        "item_name",
-        "_leading",
-        "abc_d",
-        "a1_b",
-        "é_cole",
-        "my_url_value",
-        "Explicit_Name",
-    ];
+    private const int SnakeLower = 2;
 
-    private static readonly string[] KebabUpperNames =
+    private const int SnakeUpper = 3;
+
+    private const int KebabLower = 4;
+
+    private const int KebabUpper = 5;
+
+    // One row per Names property: the declared name, then the name .NET writes
+    // under camelCase, snake_case lower / upper and kebab-case lower / upper.
+    private static readonly string[][] MeasuredNames =
     [
-        "URL",
-        "IO-STREAM",
-        "HTML-PARSER",
-        "ID",
-        "X",
-        "ALREADY-CAMEL",
-        "VALUE2",
-        "V2-VALUE",
-        "ITEM_NAME",
-        "_LEADING",
-        "ABC_D",
-        "A1-B",
-        "É-COLE",
-        "MY-URL-VALUE",
-        "Explicit_Name",
+        ["URL", "url", "url", "URL", "url", "URL"],
+        ["IOStream", "ioStream", "io_stream", "IO_STREAM", "io-stream", "IO-STREAM"],
+        ["HTMLParser", "htmlParser", "html_parser", "HTML_PARSER", "html-parser", "HTML-PARSER"],
+        ["ID", "id", "id", "ID", "id", "ID"],
+        ["X", "x", "x", "X", "x", "X"],
+        [
+            "alreadyCamel",
+            "alreadyCamel",
+            "already_camel",
+            "ALREADY_CAMEL",
+            "already-camel",
+            "ALREADY-CAMEL",
+        ],
+        ["Value2", "value2", "value2", "VALUE2", "value2", "VALUE2"],
+        ["V2Value", "v2Value", "v2_value", "V2_VALUE", "v2-value", "V2-VALUE"],
+        ["Item_Name", "item_Name", "item_name", "ITEM_NAME", "item_name", "ITEM_NAME"],
+        ["_Leading", "_Leading", "_leading", "_LEADING", "_leading", "_LEADING"],
+        ["ABC_D", "abC_D", "abc_d", "ABC_D", "abc_d", "ABC_D"],
+        ["A1B", "a1B", "a1_b", "A1_B", "a1-b", "A1-B"],
+        ["ÉCole", "éCole", "é_cole", "É_COLE", "é-cole", "É-COLE"],
+        [
+            "MyURLValue",
+            "myURLValue",
+            "my_url_value",
+            "MY_URL_VALUE",
+            "my-url-value",
+            "MY-URL-VALUE",
+        ],
+        [
+            "XMLHttpRequest",
+            "xmlHttpRequest",
+            "xml_http_request",
+            "XML_HTTP_REQUEST",
+            "xml-http-request",
+            "XML-HTTP-REQUEST",
+        ],
+        ["ΣIGMA", "σigma", "σigma", "ΣIGMA", "σigma", "ΣIGMA"],
+        ["İd", "İd", "İd", "İD", "İd", "İD"],
+        [
+            "Explicit_Name",
+            "Explicit_Name",
+            "Explicit_Name",
+            "Explicit_Name",
+            "Explicit_Name",
+            "Explicit_Name",
+        ],
     ];
 
     [Test]
@@ -197,7 +183,7 @@ public class JsonWebNamingTests
     {
         var ts = TranspileNames(options);
 
-        await Assert.That(JsonNamesOf(ts)).IsEqualTo(string.Join(',', WebNames));
+        await Assert.That(JsonNamesOf(ts)).IsEqualTo(MeasuredColumn(Camel));
     }
 
     [Test]
@@ -206,31 +192,64 @@ public class JsonWebNamingTests
     [Arguments(
         "JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.Unspecified"
     )]
-    public async Task ContextsWithoutAPolicy_KeepTheDeclaredNames(string options)
+    public async Task ContextsWithoutAnEffectivePolicy_KeepTheDeclaredNames(string options)
     {
         var ts = TranspileNames(options);
 
-        await Assert.That(JsonNamesOf(ts)).IsEqualTo(string.Join(',', DeclaredNames));
+        await Assert.That(JsonNamesOf(ts)).IsEqualTo(MeasuredColumn(Declared));
+    }
+
+    // Only System.Text.Json's attribute is read; a same-named one elsewhere is not.
+    [Test]
+    public async Task OptionsAttributeOfAnotherNamespace_IsIgnored()
+    {
+        var ts = TranspileContext(
+            $$"""
+            {{NamesRecord}}
+
+            public static class Fake
+            {
+                [AttributeUsage(AttributeTargets.Class)]
+                public sealed class JsonSourceGenerationOptionsAttribute(JsonSerializerDefaults defaults)
+                    : Attribute
+                {
+                    public JsonSerializerDefaults Defaults { get; } = defaults;
+                }
+            }
+
+            [Transpile]
+            [Fake.JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+            [JsonSerializable(typeof(Names))]
+            """
+        );
+
+        await Assert.That(JsonNamesOf(ts)).IsEqualTo(MeasuredColumn(Declared));
     }
 
     [Test]
     [Arguments(
-        "JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower"
+        "JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower",
+        SnakeLower
     )]
-    [Arguments("PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower")]
-    public async Task ExplicitSnakeCasePolicy_OverridesTheWebDefault(string options)
+    [Arguments(
+        "JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseUpper",
+        SnakeUpper
+    )]
+    [Arguments(
+        "JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.KebabCaseLower",
+        KebabLower
+    )]
+    [Arguments(
+        "JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.KebabCaseUpper",
+        KebabUpper
+    )]
+    [Arguments("PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower", SnakeLower)]
+    [Arguments("PropertyNamingPolicy = JsonKnownNamingPolicy.KebabCaseUpper", KebabUpper)]
+    public async Task ExplicitPolicies_OverrideTheWebDefault(string options, int column)
     {
         var ts = TranspileNames(options);
 
-        await Assert.That(JsonNamesOf(ts)).IsEqualTo(string.Join(',', SnakeLowerNames));
-    }
-
-    [Test]
-    public async Task KebabCaseUpperPolicy_NamesLikeSystemTextJson()
-    {
-        var ts = TranspileNames("PropertyNamingPolicy = JsonKnownNamingPolicy.KebabCaseUpper");
-
-        await Assert.That(JsonNamesOf(ts)).IsEqualTo(string.Join(',', KebabUpperNames));
+        await Assert.That(JsonNamesOf(ts)).IsEqualTo(MeasuredColumn(column));
     }
 
     // FR-048 item 1: [JsonPropertyName] wins over the Web default, and the TS
@@ -264,6 +283,9 @@ public class JsonWebNamingTests
             [JsonSerializable(typeof(Names))]
             """
         );
+
+    private static string MeasuredColumn(int column) =>
+        string.Join(',', MeasuredNames.Select(row => row[column]));
 
     private static string JsonNamesOf(string ts) =>
         string.Join(

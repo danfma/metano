@@ -10,8 +10,6 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal static class JsonPolymorphismReader
 {
-    private const string SerializationNamespace = "System.Text.Json.Serialization";
-
     private const string DerivedTypeAttribute = "JsonDerivedTypeAttribute";
 
     private const string PolymorphicAttribute = "JsonPolymorphicAttribute";
@@ -38,7 +36,9 @@ internal static class JsonPolymorphismReader
 
         var polymorphicAttribute = type
             .OriginalDefinition.GetAttributes()
-            .FirstOrDefault(attribute => IsAttribute(attribute, PolymorphicAttribute));
+            .FirstOrDefault(attribute =>
+                JsonSerializationAttributes.Is(attribute, PolymorphicAttribute)
+            );
 
         if (registrations.Count == 0 && polymorphicAttribute is null)
             return null;
@@ -79,12 +79,7 @@ internal static class JsonPolymorphismReader
     private static IEnumerable<AttributeData> DerivedTypeAttributesOf(INamedTypeSymbol type) =>
         type
             .OriginalDefinition.GetAttributes()
-            .Where(attribute => IsAttribute(attribute, DerivedTypeAttribute));
-
-    private static bool IsAttribute(AttributeData attribute, string metadataName) =>
-        attribute.AttributeClass is { } attributeClass
-        && attributeClass.MetadataName == metadataName
-        && attributeClass.ContainingNamespace.ToDisplayString() == SerializationNamespace;
+            .Where(attribute => JsonSerializationAttributes.Is(attribute, DerivedTypeAttribute));
 
     /// <summary>
     /// The <c>(Type)</c>, <c>(Type, string)</c> and <c>(Type, int)</c>

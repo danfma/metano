@@ -341,9 +341,23 @@ public partial class WebJsonContext : JsonSerializerContext;
 The snake and kebab policies follow .NET's word splitting too: `Item_Name` →
 `item_name`, `Value2` → `value2`, `A1B` → `a1_b`, `MyURLValue` → `my_url_value`.
 
-Two properties whose names map to the same JSON name (`ID` and `Id` under
-camelCase) make .NET throw `InvalidOperationException` when the context is
-first used; Metano does not report it yet and emits both.
+The runtime `PropertyNamingPolicy` (`metano-runtime/system/json`) applies the
+same rules to a context built by hand.
+
+Two properties whose names map to the same JSON name make .NET throw
+`InvalidOperationException` when the context is first used: `ID` and `Id` under
+camelCase, or an explicit `[JsonPropertyName("name")]` next to a `Name` property
+the policy renames to `name`. Metano does not report it yet and emits both.
+
+**Where the policy comes from.** Metano reads only the
+`[JsonSourceGenerationOptions]` attribute on the context class. Options given to
+the context at runtime override that attribute in .NET and are invisible to
+Metano: options passed to the context's constructor
+(`new WebJsonContext(new JsonSerializerOptions(JsonSerializerDefaults.Web))`), or
+set through ASP.NET Core's `JsonOptions` / `TypeInfoResolverChain`. A context
+with no attribute that is built with camelCase options writes `firstValue` in
+.NET while Metano emits `FirstValue`. Put `JsonSerializerDefaults.Web` (or the
+`PropertyNamingPolicy`) on the attribute so both sides agree.
 
 ## Custom converters
 
