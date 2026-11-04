@@ -1,5 +1,7 @@
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -31,4 +33,30 @@ public static class TsConstructorModifier
 
     public static bool IsNarrowerThan(this TsAccessibility modifier, TsAccessibility other) =>
         RestrictionOf(modifier) > RestrictionOf(other);
+
+    public static bool IsNonPublic(this TsAccessibility modifier) =>
+        modifier is not TsAccessibility.Public;
+
+    /// <summary>
+    /// The modifier a type's constructor takes from what it declares, before
+    /// the cross-file rules of <see cref="ConstructorAccessPolicy"/>: the most
+    /// permissive over its declared constructors
+    /// (<see cref="IrConstructorExtractor.AllExplicitConstructors"/>, each
+    /// through <see cref="IrConstructorExtractor.DeclaredVisibility"/>, the
+    /// function the IR is built from), public for a value type or a type
+    /// declaring none. Works on source and metadata types alike, so a consumer
+    /// judges a referenced type the way its package emitted it.
+    /// </summary>
+    public static TsAccessibility DeclaredModifierOf(INamedTypeSymbol type) =>
+        type.IsValueType
+            ? TsAccessibility.Public
+            : IrConstructorExtractor
+                .AllExplicitConstructors(type)
+                .Select(OfConstructor)
+                .DefaultIfEmpty(TsAccessibility.Public)
+                .MinBy(RestrictionOf);
+
+    /// <summary>The modifier of one declared constructor.</summary>
+    public static TsAccessibility OfConstructor(IMethodSymbol constructor) =>
+        Of(IrConstructorExtractor.DeclaredVisibility(constructor));
 }

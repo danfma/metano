@@ -395,9 +395,19 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ReportDiagnostic
         ).Validate();
 
-        new JsonBrandedFactoryValidator(transpilableTypes, ReportDiagnostic).Validate();
+        var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
+        var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);
 
-        _constructorAccessFacts = CollectConstructorAccessFacts(transpilableTypes);
+        new JsonBrandedFactoryValidator(transpilableTypes, ReportDiagnostic).Validate();
+        new JsonReferencedConstructorValidator(compilation.Assembly, ReportDiagnostic).Validate(
+            jsonConstructedTypes
+        );
+
+        _constructorAccessFacts = ConstructorAccessFacts.Collect(
+            compilation,
+            emittedTypes,
+            jsonConstructedTypes
+        );
 
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();
@@ -754,35 +764,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// The FR-049 constructor facts over every emitted type, nested ones
-    /// included, and the classes each <c>SerializerContext</c> constructs.
-    /// Reports <c>MS0062</c> for a constructed class of a referenced assembly
-    /// that has no public constructor.
+    /// <paramref name="type"/> and its emitted nested types, transitively.
     /// </summary>
-    private ConstructorAccessFacts CollectConstructorAccessFacts(
-        IReadOnlyList<INamedTypeSymbol> transpilableTypes
-    )
-    {
-        var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
-        var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);
-
-        new JsonReferencedConstructorValidator(compilation.Assembly, ReportDiagnostic).Validate(
-            jsonConstructedTypes
-        );
-
-        return ConstructorAccessFacts.Collect(
-            compilation,
-            emittedTypes,
-            context => jsonConstructedTypes.GetValueOrDefault(context) ?? []
-        );
-    }
-
     private IEnumerable<INamedTypeSymbol> WithEmittedNestedTypes(INamedTypeSymbol type) =>
         type.GetTypeMembers()
             .Where(ShouldEmitNestedType)
             .SelectMany(WithEmittedNestedTypes)
             .Prepend(type);
 
+    /// <summary>
+    /// The classes each emitted <c>SerializerContext</c> constructs through its
+    /// <c>TypeSpec</c>s (FR-049).
+    /// </summary>
     private Dictionary<
         INamedTypeSymbol,
         IReadOnlyList<INamedTypeSymbol>

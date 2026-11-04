@@ -278,16 +278,18 @@ internal static partial class IrToTsClassBridge
         IrConstructorDeclaration ctor
     ) =>
         ctor
-            .Parameters.Where(p => p.CapturedFieldName is not null)
-            .Select(p =>
-                ThisAssignment(
-                    IrToTsNamingPolicy.ToDeclaredDataMemberName(
-                        p.CapturedFieldName!,
-                        attributes: null
-                    ),
-                    IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
-                )
-            );
+            .Parameters.Select(p =>
+                p.CapturedFieldName is { } capturedField
+                    ? ThisAssignment(
+                        IrToTsNamingPolicy.ToDeclaredDataMemberName(
+                            capturedField,
+                            attributes: null
+                        ),
+                        IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
+                    )
+                    : null
+            )
+            .OfType<TsStatement>();
 
     /// <summary>
     /// One <c>this.&lt;member&gt; = &lt;paramName&gt;</c> per promoted

@@ -33,9 +33,10 @@ namespace Metano.Compiler.Extraction;
 /// lambda shares the storage member bodies mutate.
 /// </para>
 /// <para>
-/// Only a type whose sole constructor is the primary one is handled
-/// (<see cref="AppliesTo"/>); with secondary constructors the initializers
-/// stay where they are.
+/// Secondary constructors do not change the move: C# makes each of them
+/// chain to the primary constructor through <c>: this(...)</c>, and only the
+/// primary constructor runs the initializers, so a backend that inlines the
+/// chain runs them exactly once per construction.
 /// </para>
 /// </summary>
 internal static class PrimaryConstructorInitializerDeferral
@@ -51,14 +52,13 @@ internal static class PrimaryConstructorInitializerDeferral
 
     /// <summary>
     /// Whether initializers of <paramref name="type"/> that read a
-    /// primary-constructor parameter run in its constructor: the type's only
-    /// constructor is a primary constructor with parameters. The implicit
-    /// capture scan relies on it to leave initializer reads uncaptured.
+    /// primary-constructor parameter run in its constructor: the type has a
+    /// primary constructor with parameters. The implicit capture scan relies
+    /// on it to leave initializer reads uncaptured.
     /// </summary>
     public static bool AppliesTo(INamedTypeSymbol type) =>
         IrConstructorExtractor.FindPrimaryConstructor(type) is { Parameters.Length: > 0 } primary
-        && IrConstructorExtractor.IsPrimaryConstructor(primary)
-        && IrConstructorExtractor.ExplicitConstructorCount(type) == 1;
+        && IrConstructorExtractor.IsPrimaryConstructor(primary);
 
     /// <summary>
     /// Runs the move on a type <see cref="AppliesTo"/> accepts (the caller

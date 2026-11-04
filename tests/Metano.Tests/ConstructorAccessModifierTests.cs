@@ -372,8 +372,10 @@ public class ConstructorAccessModifierTests
     [Test]
     public async Task JsonContextConstructingAReferencedClassWithoutPublicConstructor_ReportsMs0062()
     {
-        // An abstract positional record's constructor is protected in
-        // metadata, but its package emits it public: no warning for Shape.
+        // Read from metadata, through the predicate the emitter uses: only Tag
+        // emits a non-public constructor. Shape's positional constructor and
+        // AbsNoCtor's implicit one are protected in metadata but emitted
+        // public; PosWithPriv's positional constructor makes it public (MS0060).
         var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
             """
             [assembly: TranspileAssembly]
@@ -391,6 +393,16 @@ public class ConstructorAccessModifierTests
             }
 
             public abstract record Shape(string Kind);
+
+            public abstract class AbsNoCtor
+            {
+                public int A { get; init; }
+            }
+
+            public record PosWithPriv(int A)
+            {
+                private PosWithPriv() : this(0) { }
+            }
             """,
             """
             using System.Text.Json.Serialization;
@@ -401,6 +413,8 @@ public class ConstructorAccessModifierTests
             [JsonSourceGenerationOptions]
             [JsonSerializable(typeof(Shared.Tag))]
             [JsonSerializable(typeof(Shared.Shape))]
+            [JsonSerializable(typeof(Shared.AbsNoCtor))]
+            [JsonSerializable(typeof(Shared.PosWithPriv))]
             public partial class AppJsonContext : JsonSerializerContext
             {
                 public AppJsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
@@ -802,7 +816,9 @@ public class ConstructorAccessModifierTests
         var facts = ConstructorAccessFacts.Collect(
             compilation,
             [baseType, derived, plain],
-            _ => []
+            new Dictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>>(
+                SymbolEqualityComparer.Default
+            )
         );
 
         await Assert.That(facts.FingerprintOf([baseType])).IsEqualTo("App.Base:extended");
