@@ -7,7 +7,12 @@
  */
 import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
-import type { PrimitiveDescriptor, TypeSpec, ValueSpec } from "../../src/system/json/index.ts";
+import type {
+  PrimitiveDescriptor,
+  TypeDescriptor,
+  TypeSpec,
+  ValueSpec,
+} from "../../src/system/json/index.ts";
 
 export class Address {
   constructor(
@@ -85,54 +90,65 @@ const customerSpec: TypeSpec<Customer> = {
   ],
 };
 
-const orderItemSpec: TypeSpec<OrderItem> = {
-  type: OrderItem,
-  factory: (p) => new OrderItem(p.sku as string, p.quantity as number, p.unitPrice as Decimal),
-  properties: [
-    { ts: "sku", json: "sku", type: primitive },
-    { ts: "quantity", json: "quantity", type: primitive },
-    { ts: "unitPrice", json: "unitPrice", type: decimal },
-  ],
-};
+/**
+ * The `Order` specs with `price` as the descriptor of `total` and
+ * `unitPrice`: `decimal` as generated, or `primitive` for a spec whose
+ * closure holds no decimal, which `deserializeText` reads with plain
+ * `JSON.parse` (#457).
+ */
+function ordersSpecOf(price: TypeDescriptor): ValueSpec<Order[]> {
+  const orderItemSpec: TypeSpec<OrderItem> = {
+    type: OrderItem,
+    factory: (p) => new OrderItem(p.sku as string, p.quantity as number, p.unitPrice as Decimal),
+    properties: [
+      { ts: "sku", json: "sku", type: primitive },
+      { ts: "quantity", json: "quantity", type: primitive },
+      { ts: "unitPrice", json: "unitPrice", type: price },
+    ],
+  };
 
-const orderSpec: TypeSpec<Order> = {
-  type: Order,
-  factory: (p) =>
-    new Order(
-      p.id as number,
-      p.code as string,
-      p.active as boolean,
-      p.note as string | null,
-      p.placedOn as Temporal.PlainDate,
-      p.total as Decimal,
-      p.sequence as number,
-      p.customer as Customer,
-      p.items as OrderItem[],
-      p.tags as string[],
-    ),
-  properties: [
-    { ts: "id", json: "id", type: primitive },
-    { ts: "code", json: "code", type: primitive },
-    { ts: "active", json: "active", type: primitive },
-    { ts: "note", json: "note", type: { kind: "nullable", inner: primitive }, optional: true },
-    {
-      ts: "placedOn",
-      json: "placedOn",
-      type: { kind: "temporal", parse: (iso) => Temporal.PlainDate.from(iso) },
-    },
-    { ts: "total", json: "total", type: decimal },
-    { ts: "sequence", json: "sequence", type: primitive },
-    { ts: "customer", json: "customer", type: { kind: "ref", spec: () => customerSpec } },
-    {
-      ts: "items",
-      json: "items",
-      type: { kind: "array", element: { kind: "ref", spec: () => orderItemSpec } },
-    },
-    { ts: "tags", json: "tags", type: { kind: "array", element: primitive } },
-  ],
-};
+  const orderSpec: TypeSpec<Order> = {
+    type: Order,
+    factory: (p) =>
+      new Order(
+        p.id as number,
+        p.code as string,
+        p.active as boolean,
+        p.note as string | null,
+        p.placedOn as Temporal.PlainDate,
+        p.total as Decimal,
+        p.sequence as number,
+        p.customer as Customer,
+        p.items as OrderItem[],
+        p.tags as string[],
+      ),
+    properties: [
+      { ts: "id", json: "id", type: primitive },
+      { ts: "code", json: "code", type: primitive },
+      { ts: "active", json: "active", type: primitive },
+      { ts: "note", json: "note", type: { kind: "nullable", inner: primitive }, optional: true },
+      {
+        ts: "placedOn",
+        json: "placedOn",
+        type: { kind: "temporal", parse: (iso) => Temporal.PlainDate.from(iso) },
+      },
+      { ts: "total", json: "total", type: price },
+      { ts: "sequence", json: "sequence", type: primitive },
+      { ts: "customer", json: "customer", type: { kind: "ref", spec: () => customerSpec } },
+      {
+        ts: "items",
+        json: "items",
+        type: { kind: "array", element: { kind: "ref", spec: () => orderItemSpec } },
+      },
+      { ts: "tags", json: "tags", type: { kind: "array", element: primitive } },
+    ],
+  };
+
+  return { descriptor: { kind: "array", element: { kind: "ref", spec: () => orderSpec } } };
+}
 
 /** The payload root: a JSON array of orders, a `List<Order>` root in C#. */
-export const ordersSpec: ValueSpec<Order[]> = {
-  descriptor: { kind: "array", element: { kind: "ref", spec: () => orderSpec } },
-};
+export const ordersSpec = ordersSpecOf(decimal);
+
+/** The same payload with `total` and `unitPrice` read as plain numbers. */
+export const ordersWithoutDecimalsSpec = ordersSpecOf(primitive);

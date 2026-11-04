@@ -4,8 +4,13 @@
  * is the same for both runtimes and every version of the serializer, so the
  * growth is comparable. Prints one JSON line.
  *
- * Usage: bun memory-probe.ts <size> <read|write>
- *        node --expose-gc --experimental-transform-types memory-probe.ts <size> <read|write>
+ * Operations: `read` (`JSON.parse` + `deserialize`), `read-text`
+ * (`deserializeText`), `read-full` (`deserializeText` of the payload whose
+ * prices have 20+ significant digits, the exact tokenizer path, #457) and
+ * `write`.
+ *
+ * Usage: bun memory-probe.ts <size> <operation>
+ *        node --expose-gc --experimental-transform-types memory-probe.ts <size> <operation>
  */
 import { JsonSerializer } from "../../src/system/json/index.ts";
 import { ordersSpec } from "./order-schema.ts";
@@ -13,8 +18,22 @@ import { payloadTextOf } from "./order-payload.ts";
 import { collectGarbage, peakRssMb, runtimeName } from "./runtime-probe.ts";
 
 const size = process.argv[2] ?? "10m";
-const operation = process.argv[3] === "write" ? "write" : "read";
-const measurement = operation === "write" ? measureWrite() : measureRead();
+const operation = process.argv[3] ?? "read";
+
+const OPERATIONS: Readonly<Record<string, () => Measurement>> = {
+  read: measureRead,
+  "read-text": () => measureTextRead(payloadTextOf(size)),
+  "read-full": () => measureTextRead(payloadTextOf(size, "full")),
+  write: measureWrite,
+};
+
+const measureOperation = OPERATIONS[operation];
+
+if (!measureOperation) {
+  throw new Error(`Unknown operation '${operation}'. Known: ${Object.keys(OPERATIONS)}.`);
+}
+
+const measurement = measureOperation();
 
 console.log(JSON.stringify({ runtime: runtimeName(), size, operation, ...measurement }));
 
@@ -29,6 +48,11 @@ function measureRead(): Measurement {
   const text = payloadTextOf(size);
 
   return measure(() => JsonSerializer.deserialize(JSON.parse(text), ordersSpec));
+}
+
+/** Reads `text` through `deserializeText`; the text stays alive, as it would in a caller. */
+function measureTextRead(text: string): Measurement {
+  return measure(() => JsonSerializer.deserializeText(text, ordersSpec));
 }
 
 /** Writes the orders read from the payload; the text is out of scope before measuring. */

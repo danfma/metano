@@ -1,13 +1,18 @@
 /**
- * Writes a JSON number with its exact digits, as System.Text.Json writes a
- * `decimal` (and, once it maps to `bigint`, a `long`, #450), instead of the
- * double a JS `number` would round it to.
+ * JSON numbers with their exact digits, as System.Text.Json reads and writes
+ * a `decimal` (and, once it maps to `bigint`, a `long`, #450), instead of the
+ * double a JS `number` rounds them to.
  *
- * The leaf is a `JSON.rawJSON(text)` object, which `JSON.stringify` writes
- * as the text itself, unquoted (measured on Node 24.11 and Bun 1.4.2). An
- * engine without `JSON.rawJSON` writes the approximate double instead, the
- * behavior before #458. TypeScript's lib does not declare either function
- * yet, hence the local types.
+ * On write, the leaf is a `JSON.rawJSON(text)` object, which `JSON.stringify`
+ * writes as the text itself, unquoted (measured on Node 24.11 and Bun
+ * 1.4.2). An engine without `JSON.rawJSON` writes the approximate double
+ * instead, the behavior before #458. TypeScript's lib does not declare either
+ * function yet, hence the local types.
+ *
+ * On read (#457), `JsonSerializer.deserializeText` keeps a number with more
+ * significant digits than a double holds as a `JsonNumberText` leaf, which
+ * the converters that read exact digits take from its text and every other
+ * converter reads as the `number` `JSON.parse` gives.
  */
 
 /** Builds the JSON leaf of a number from its exact text. */
@@ -50,4 +55,27 @@ export function rawJsonTextOf(value: unknown): string | undefined {
   const isLeaf = typeof value === "object" && engineIsRawJson?.(value) === true;
 
   return isLeaf ? (value as { readonly rawJSON: string }).rawJSON : undefined;
+}
+
+/**
+ * A JSON number read with more significant digits than a double holds
+ * exactly (#457), kept as its source text. Only the trees
+ * `JsonSerializer.deserializeText` builds hold one; the converters that do not
+ * read exact digits never see it (`numberOfTreeValue`).
+ */
+export class JsonNumberText {
+  constructor(readonly text: string) {}
+}
+
+/**
+ * The exact text of a number leaf: a `JsonNumberText` read from JSON text, or
+ * a `JSON.rawJSON` leaf `serialize` wrote; `undefined` for any other value.
+ */
+export function exactNumberTextOf(value: unknown): string | undefined {
+  return value instanceof JsonNumberText ? value.text : rawJsonTextOf(value);
+}
+
+/** `value`, with a `JsonNumberText` leaf read as the `number` `JSON.parse` gives. */
+export function numberOfTreeValue(value: unknown): unknown {
+  return value instanceof JsonNumberText ? Number(value.text) : value;
 }
