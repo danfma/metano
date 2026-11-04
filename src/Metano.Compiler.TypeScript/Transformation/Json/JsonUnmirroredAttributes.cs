@@ -18,7 +18,8 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// <c>[JsonConverter]</c> on a <c>[Branded]</c> / <c>[InlineWrapper]</c> type,
 /// whose descriptor writes the wrapped value as such converters do.
 /// <c>[JsonStringEnumMemberName]</c> only matters under a string enum
-/// converter, which is itself reported.
+/// converter, which is itself reported. The C# <c>required</c> modifier on a
+/// nullable member is reported like <c>[JsonRequired]</c>.
 /// </summary>
 internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 {
@@ -62,28 +63,51 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 
     /// <summary>
     /// The warnings of one data member: a <c>[JsonInclude]</c> the source
-    /// generator cannot reach, and, on a member System.Text.Json serializes,
+    /// generator cannot use, and, on a member System.Text.Json serializes,
     /// every unmirrored member attribute.
     /// </summary>
-    private static IEnumerable<MetanoDiagnostic> MemberWarningsOf(ISymbol member)
+    private IEnumerable<MetanoDiagnostic> MemberWarningsOf(ISymbol member)
     {
         var name = UnmirroredJsonWarning.MemberName(member);
 
-        if (JsonMemberAccess.HasUnreachableInclude(member))
-        {
-            yield return UnmirroredJsonWarning.Create(
-                $"'{name}' has [JsonInclude], but the System.Text.Json source generator cannot "
-                    + "access it (SYSLIB1038), so its contract throws InvalidOperationException; "
-                    + "the TypeScript context does not mirror that.",
-                UnmirroredJsonWarning.At(member)
-            );
-        }
+        if (IncludeWarningOf(member, name) is { } includeWarning)
+            yield return includeWarning;
 
-        if (!JsonMemberAccess.IsSerialized(member))
+        if (!_properties.Access.IsSerialized(member))
             yield break;
 
         foreach (var warning in SerializedMemberWarningsOf(member, name))
             yield return warning;
+    }
+
+    /// <summary>
+    /// A <c>[JsonInclude]</c> System.Text.Json's source generator cannot use:
+    /// it throws for an inaccessible member and for a payload that carries a
+    /// read-only field, and silently skips an <c>internal</c> member of an
+    /// assembly that does not grant the context's <c>InternalsVisibleTo</c>.
+    /// </summary>
+    private MetanoDiagnostic? IncludeWarningOf(ISymbol member, string name)
+    {
+        var message = _properties.Access.IncludeProblemOf(member) switch
+        {
+            JsonIncludeProblem.Throws when member is IFieldSymbol { IsReadOnly: true } =>
+                $"'{name}' has [JsonInclude] on a read-only field: System.Text.Json writes it "
+                    + "and throws InvalidOperationException for a payload that carries it, the "
+                    + "TypeScript context does not mirror that.",
+            JsonIncludeProblem.Throws =>
+                $"'{name}' has [JsonInclude], but the System.Text.Json source generator cannot "
+                    + "access it (SYSLIB1038), so its contract throws InvalidOperationException; "
+                    + "the TypeScript context does not mirror that.",
+            JsonIncludeProblem.Skipped => $"'{name}' has [JsonInclude], but it is internal to "
+                + $"'{member.ContainingAssembly.Name}', which grants the context's assembly "
+                + "no InternalsVisibleTo: System.Text.Json skips it, and so does the "
+                + "TypeScript context.",
+            _ => null,
+        };
+
+        return message is null
+            ? null
+            : UnmirroredJsonWarning.Create(message, UnmirroredJsonWarning.At(member));
     }
 
     private static IEnumerable<MetanoDiagnostic> SerializedMemberWarningsOf(
@@ -113,6 +137,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
             ),
             PopulateWarningOf(member, name),
             RequiredWarningOf(member, name),
+            RequiredModifierWarningOf(member, name),
             IgnoreConditionWarningOf(member, name),
         }.OfType<MetanoDiagnostic>();
 
@@ -167,6 +192,28 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
             JsonSerializationAttributes.Required,
             $"'{name}' has [JsonRequired]: System.Text.Json rejects a payload without it, the "
                 + "TypeScript context reads a missing nullable member as null."
+        );
+    }
+
+    /// <summary>
+    /// The C# <c>required</c> modifier on a nullable member, which
+    /// System.Text.Json enforces as <c>[JsonRequired]</c> (measured:
+    /// "JSON deserialization for type 'App.Req' was missing required
+    /// properties including: 'Name'.").
+    /// </summary>
+    private static MetanoDiagnostic? RequiredModifierWarningOf(ISymbol member, string name)
+    {
+        var isRequiredNullable =
+            member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true }
+            && JsonTypeClassifier.IsNullable(JsonMemberAccess.TypeOf(member));
+
+        if (!isRequiredNullable)
+            return null;
+
+        return UnmirroredJsonWarning.Create(
+            $"'{name}' is required: System.Text.Json rejects a payload without it, the "
+                + "TypeScript context reads a missing nullable member as null.",
+            UnmirroredJsonWarning.At(member)
         );
     }
 

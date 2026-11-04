@@ -1,6 +1,8 @@
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Account } from "./account";
 import { Blob } from "./blob";
+import { Init } from "./init";
+import { Noted } from "./noted";
 import { OrdBase } from "./ord-base";
 import { OrdDer } from "./ord-der";
 
@@ -14,6 +16,10 @@ export class JsonContext extends SerializerContext {
   private _ordDer?: TypeSpec<OrdDer>;
 
   private _byteArray?: ValueSpec<number[] | null>;
+
+  private _init?: TypeSpec<Init>;
+
+  private _noted?: TypeSpec<Noted>;
 
   private _ordBase?: TypeSpec<OrdBase>;
 
@@ -55,39 +61,38 @@ export class JsonContext extends SerializerContext {
   get account(): TypeSpec<Account> {
     return this._account ??= this.createSpec({
       type: Account,
-      factory: (p: Record<string, unknown>) => Object.assign(new Account(), {
-        name: p.name as string,
-        version: p.version as number,
-        kept: p.kept as number,
-        id: p.id as string,
-        hits: p.hits as number,
-      }),
+      factory: (p: Record<string, unknown>) => new Account(),
       properties: [
         {
           ts: "name",
           json: "Name",
           type: { kind: "primitive" },
+          assignIfPresent: true,
         },
         {
           ts: "version",
           json: "Version",
           type: { kind: "primitive" },
+          assignIfPresent: true,
         },
         {
           ts: "kept",
           json: "Kept",
           type: { kind: "primitive" },
+          assignIfPresent: true,
         },
         {
           ts: "id",
           json: "Id",
           type: { kind: "primitive" },
           order: -1,
+          assignIfPresent: true,
         },
         {
           ts: "hits",
           json: "Hits",
           type: { kind: "primitive" },
+          assignIfPresent: true,
         },
       ],
     });
@@ -117,6 +122,67 @@ export class JsonContext extends SerializerContext {
   get byteArray(): ValueSpec<number[] | null> {
     return this._byteArray ??= this.createValueSpec({
       descriptor: { kind: "bytes" },
+    });
+  }
+
+  get init(): TypeSpec<Init> {
+    return this._init ??= this.createSpec({
+      type: Init,
+      factory: (p: Record<string, unknown>) => new Init(),
+      properties: [
+        {
+          ts: "note",
+          json: "Note",
+          type: {
+            kind: "nullable",
+            inner: { kind: "primitive" },
+          },
+          optional: true,
+          assignIfPresent: true,
+        },
+        {
+          ts: "count",
+          json: "Count",
+          type: { kind: "primitive" },
+          assignIfPresent: true,
+        },
+        {
+          ts: "items",
+          json: "Items",
+          type: {
+            kind: "nullable",
+            inner: {
+              kind: "array",
+              element: { kind: "primitive" },
+            },
+          },
+          optional: true,
+          assignIfPresent: true,
+        },
+      ],
+    });
+  }
+
+  get noted(): TypeSpec<Noted> {
+    return this._noted ??= this.createSpec({
+      type: Noted,
+      factory: (p: Record<string, unknown>) => Object.assign(new Noted(p.a as number), { note: p.note as string | null }),
+      properties: [
+        {
+          ts: "a",
+          json: "A",
+          type: { kind: "primitive" },
+        },
+        {
+          ts: "note",
+          json: "Note",
+          type: {
+            kind: "nullable",
+            inner: { kind: "primitive" },
+          },
+          optional: true,
+        },
+      ],
     });
   }
 

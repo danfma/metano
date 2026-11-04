@@ -801,12 +801,17 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      Mirrored: `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`,
      `NumberHandling = AllowReadingFromString`, the `JsonSerializerDefaults.Web` constructor
      argument that sets those three (FR-048), and `AllowOutOfOrderMetadataProperties` (FR-002).
-  2. **`[JsonInclude]`** is mirrored as the source generator applies it (measured): a field or a
-     non-public property is serialized only with `[JsonInclude]`, and only when the member and
-     its accessors are `public`, `internal` or `protected internal`; each type lists its
-     properties, then its fields. A `[JsonInclude]` member with a `private` / `protected` /
-     `private protected` declaration or accessor makes the STJ contract throw
-     `InvalidOperationException` (SYSLIB1038) and is reported with `MS0037`.
+  2. **Member selection and `[JsonInclude]`** are mirrored as the source generator applies them
+     (measured): a public property is serialized only when its getter is public too; a field or
+     a non-public property only with `[JsonInclude]`, and only when the generated code reaches
+     the member and its accessors: `public`, or `internal` / `protected internal` within the
+     context's assembly or one granting it `InternalsVisibleTo`; each type lists its
+     properties, then its fields. `MS0037` reports a `[JsonInclude]` member with a
+     `private` / `protected` / `private protected` declaration or accessor, or a
+     `protected internal` one of an assembly without that grant (the STJ contract throws
+     `InvalidOperationException`, SYSLIB1038), an `internal` one of such an assembly (STJ
+     skips it, and so does the context), and a read-only field (written; STJ throws for a
+     payload that carries it).
   3. **`byte[]`** is mirrored: a single-dimensional `byte[]` (property, element, dictionary
      value, nullable inner or value root) is a `{ kind: "bytes" }` descriptor whose runtime
      converter writes padded standard base64 and reads it with STJ's measured rules
@@ -814,15 +819,20 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   4. **`[JsonPropertyOrder]`** is mirrored: a non-zero order is emitted as `PropertySpec.order`
      and the runtime sorts the wire properties of the whole base chain by it, stably over the
      FR-009 order (measured `{"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}`).
-  5. **Reads assign unbound members.** A factory assigns, after construction, every member no
-     constructor parameter binds that System.Text.Json sets on read: a property with a public
-     `set` / `init` accessor (or a reachable one under `[JsonInclude]`) and a writable
-     `[JsonInclude]` field. A get-only property is still written and required on read (FR-045).
+  5. **Reads assign unbound members** as System.Text.Json does (measured). An `init` or
+     `required` member no constructor parameter binds is always set, through the factory's
+     `Object.assign(new T(…), { … })` (a missing nullable one reads `null`, as in STJ). A member
+     with a `set` accessor (public, or reachable under `[JsonInclude]`) or a writable field is
+     set only when the payload carries its key: its property spec carries
+     `assignIfPresent: true`, the factory does not read it and the runtime assigns it after
+     construction, so a missing key keeps the C# initializer. A get-only property is still
+     written and required on read (FR-045).
   6. **Member and type attributes.** `MS0037` at the attribute for `[JsonExtensionData]` (the
      member is left out), `[JsonConverter]` on a serialized member or on any type the context
      reaches except a `[Branded]` / `[InlineWrapper]` type, `[JsonNumberHandling]` on a
      serialized member or a contract type, `[JsonObjectCreationHandling(Populate)]`,
-     `[JsonUnmappedMemberHandling(Disallow)]`, `[JsonRequired]` on a nullable member,
+     `[JsonUnmappedMemberHandling(Disallow)]`, `[JsonRequired]` or the C# `required`
+     modifier on a nullable member (at the member for the modifier),
      `[JsonIgnore]` with a condition other than `Always` / `Never` (the member is kept), and
      `[JsonConstructor]` on a constructor other than the one the factory calls. `[JsonIgnore]`
      with `Never` keeps the member and is not reported.
@@ -941,7 +951,9 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Writing `NaN` / `±Infinity` without `AllowNamedFloatingPointLiterals` | `ArgumentException` (measured) | `JSON.stringify` writes `null` | Pre-existing; reachable now that Web contexts read `"NaN"` |
 | Integer-like property names in a polymorphic hierarchy | allowed | JS key order puts them first | Rejected, `MS0032` |
 | Array-index payload key (`"0"`) written **before** the tag | `JsonException` "The metadata property … not the first property …" (measured) | the tag is read as first (JS enumerates index keys first, so their position is lost) | Undetectable after `JSON.parse`; an index key after the tag reads as in STJ (DECIDED-21 i) |
-| `null` in a `byte[]` property (source-generated fast path) | `""` (measured; the metadata / reflection mode writes `null`, and `""` reads back as an empty array) | `null` | Not mirrored: an STJ fast-path defect that breaks its own round trip (DECIDED-25 c) |
+| `null` in a `byte[]` property, `List<byte[]>` element or `Dictionary<string, byte[]>` value (source-generated fast path) | `""` (measured: `{"Maybe":"","List":[""],"Map":{"k":""}}`; the metadata / reflection mode writes `null`, and `""` reads back as an empty array) | `null` | Not mirrored: an STJ fast-path defect that breaks its own round trip (DECIDED-25 c, k) |
+| Order in which a read sets the `assignIfPresent` members | the payload's key order (setter side effects show it: `{"V":3,"Log":"j"}` leaves `Log = "j"`) | wire order after construction (`"j:set3"`) | Documented (DECIDED-25 k) |
+| `[JsonExtensionData]` member bound to a constructor parameter | `InvalidOperationException` "… cannot bind with a parameter in the deserialization constructor." (measured) | the factory passes `null`; `MS0037` | DECIDED-25 k |
 | Rejected base64 in a property bound to a constructor parameter | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names `System.Byte[]` | Documented, as DECIDED-23 c for numbers (DECIDED-25 c) |
 | Writing a `decimal` with trailing zeros (its scale) | `1.10m` → `1.10`, `1.0m` → `1.0`, `0.00m` → `0.00` | `1.1`, `1`, `0` (decimal.js normalizes trailing zeros; every other digit is exact, FR-048 item 6) | Documented (DECIDED-23 f, #458); keeping it needs a decimal type that keeps the scale |
 | Writing a `decimal` on an engine without `JSON.rawJSON` | its exact digits | `toNumber()` (`7.922816251426434e+28` for `MaxValue`) | Engine-dependent (FR-048 item 6); Node 24 and Bun 1.4.2 have it |
@@ -956,7 +968,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | `[Name]` inside a generic member name | `ListUserDto` (CLR name) | `ListUser` (TS name) | DECIDED-18 (a) |
 | `[StringEnum]` root/property | number unless `JsonStringEnumConverter` | string | Pre-existing type-mapping contract, unchanged |
 | Missing non-required property | default value | `JsonException` | FR-045 |
-| Missing nullable member declared with the C# `required` modifier | `JsonException` "… missing required properties including: 'Note'." (measured, as for `[JsonRequired]`) | reads `null` | Documented; not reported, since `required` is a language modifier, not an STJ attribute (DECIDED-25 e) |
+| Missing nullable member declared with the C# `required` modifier or `[JsonRequired]` | `JsonException` "… missing required properties including: 'Note'." (measured) | reads `null` | `MS0037` (DECIDED-25 k) |
 | Closed generic registration `[JsonDerivedType(typeof(GenD<int>), "g")]` | accepted (`{"$type":"g","X":1}`, measured) | `MS0032` | Known gap of v1 (FR-012) |
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
 | Unregistered C# subtype of a concrete `[PlainObject]` base whose shape passes the base's `baseTest` | `NotSupportedException` (measured: `Cat4` through `Animal4`) | written as the base (`{"Name":"c"}`) | FR-019 rule 5, DECIDED-24 b |
@@ -1577,6 +1589,42 @@ the former `OPEN-N`.
     `{"Data":"AQID","Maybe":"//4=","Numbers":[1,2]}`, `"ABD/"`,
     `{"Der2":20,"Der1":10,"Base1":1,"Base2":2}`) and read the STJ payloads back into the same
     values. No sample's generated output changed.
+
+  - (k) **Review round (compiler-man, measured with the probe of `scratchpad/s6b2`).**
+    A read sets an unbound `set` member or writable field only when the payload carries it
+    (`class Init { string? Note = "init"; int Count = 5; List<int>? Items = [9] }` reads `{}` as
+    `{"Note":"init","Count":5,"Items":[9]}` and `{"Count":1}` as
+    `{"Note":"init","Count":1,"Items":[9]}`), while an `init` member is always set through
+    the object initializer, a missing one with its default, whatever the constructor
+    (`record R(int A) { string? Note { get; init; } = "x"; }` reads `{"A":1}` as
+    `Note = null`; `class CI { string? Note { get; init; } = "x"; int N { get; init; } = 5; }`
+    reads `{}` as `{"Note":null,"N":0}`; a `set` member next to them keeps its initializer).
+    Hence `PropertySpec.assignIfPresent`: the reader leaves a missing flagged key out, the
+    factory never reads it, and the runtime assigns the present ones after construction, in
+    wire order (STJ: payload order, visible only through setter side effects; documented).
+    A `required` `set` member stays in the factory, so a missing one is still rejected (or,
+    nullable, read as `null` and reported). Getters: `public int A { private get; set; }`,
+    `{ protected get; set; }` and `{ internal get; set; }` are neither written nor read;
+    with `[JsonInclude]` the private and protected getters throw "Invalid
+    serializable-property configuration specified for type …" on write and read, an internal
+    getter is written and read; `{ get; private set; }` is written, not read, and with
+    `[JsonInclude]` its read throws. `[JsonInclude] public readonly int RO = 7` is written
+    (`{"A":1,"RO":7}`), a payload without `RO` reads, one with it throws "The member 'Ro.RO'
+    has been annotated with the JsonIncludeAttribute but is not visible to the source
+    generator."; reported. Across assemblies: a context in `app` serializing a library type
+    writes `{"A":1}` for `[JsonInclude] internal int B` and `internal int F` (skipped, no
+    error), throws "The property 'C' on type 'Lib.XInc3' which is annotated with
+    'JsonIncludeAttribute' is not accesible by the source generator." for
+    `protected internal int C`, and with `[assembly: InternalsVisibleTo("app")]` writes and
+    reads `{"A":1,"B":2,"F":4}` and `{"A":1,"C":3}`; reachability is now judged from the
+    context's assembly and the unreachable members are reported. The C# `required` modifier
+    on a nullable member is reported (STJ: "JSON deserialization for type 'App.Req' was
+    missing required properties including: 'Name'."). The fast path's `""` for a `null`
+    `byte[]` also hits `List<byte[]>` elements and `Dictionary<string, byte[]>` values
+    (`{"List":[""],"Map":{"k":""}}`). An extension data member bound to a constructor
+    parameter makes STJ throw `InvalidOperationException`; the factory passes `null` and the
+    member is reported. compiler-man's probe, regenerated with this compiler and run under
+    Node, agrees with STJ on every row except these reported or documented ones.
 
 ## Open questions
 

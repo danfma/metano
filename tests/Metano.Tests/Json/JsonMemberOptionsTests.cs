@@ -21,6 +21,9 @@ namespace Metano.Tests.Json;
 /// byte[] { 0, 16, 255 } → "ABD/"
 /// OrdDer(1, 10) { Base2 = 2, Der2 = 20 } → {"Der2":20,"Der1":10,"Base1":1,"Base2":2}
 /// {"Der2":21,"Base1":11,"Der1":12,"Base2":13} → OrdDer { Base1 = 11, Base2 = 13, Der1 = 12, Der2 = 21 }
+/// Init (set accessors with initializers): {} → {"Note":"init","Count":5,"Items":[9]},
+///   {"Count":1} → {"Note":"init","Count":1,"Items":[9]}, {"Note":null,"Items":null} → {"Note":null,"Count":5,"Items":null}
+/// Noted(1) (an init member with an initializer): {"A":1} → {"A":1,"Note":null}
 /// </code>
 /// Accessibility under source generation: <c>internal</c> and
 /// <c>protected internal</c> <c>[JsonInclude]</c> members are written and
@@ -95,10 +98,28 @@ public class JsonMemberOptionsTests
         }
 
         [Transpile]
+        public sealed class Init
+        {
+            public string? Note { get; set; } = "init";
+
+            public int Count { get; set; } = 5;
+
+            public List<int>? Items { get; set; } = new() { 9 };
+        }
+
+        [Transpile]
+        public sealed record Noted(int A)
+        {
+            public string? Note { get; init; } = "x";
+        }
+
+        [Transpile]
         [JsonSerializable(typeof(Blob))]
         [JsonSerializable(typeof(Account))]
         [JsonSerializable(typeof(OrdDer))]
         [JsonSerializable(typeof(byte[]))]
+        [JsonSerializable(typeof(Init))]
+        [JsonSerializable(typeof(Noted))]
         """;
 
     [Test]
@@ -191,16 +212,11 @@ public class JsonMemberOptionsTests
             .That(TsNamesOf(ts))
             .IsEqualTo("pub, internal, protectedInternal, publicField, readOnlyField");
 
+        await Assert.That(ts).Contains("factory: (p: Record<string, unknown>) => new Inc(),");
+
         await Assert
-            .That(ts)
-            .Contains(
-                "factory: (p: Record<string, unknown>) => Object.assign(new Inc(), {\n"
-                    + "        pub: p.pub as number,\n"
-                    + "        internal: p.internal as number,\n"
-                    + "        protectedInternal: p.protectedInternal as number,\n"
-                    + "        publicField: p.publicField as number,\n"
-                    + "      }),"
-            );
+            .That(AssignedIfPresentOf(ts))
+            .IsEqualTo("pub, internal, protectedInternal, publicField");
 
         await Assert
             .That(UnmirroredMessagesOf(diagnostics))
@@ -214,6 +230,9 @@ public class JsonMemberOptionsTests
                         "'Inc.Guarded' has [JsonInclude], but the System.Text.Json source generator "
                             + "cannot access it (SYSLIB1038), so its contract throws "
                             + "InvalidOperationException; the TypeScript context does not mirror that.",
+                        "'Inc.ReadOnlyField' has [JsonInclude] on a read-only field: "
+                            + "System.Text.Json writes it and throws InvalidOperationException for a "
+                            + "payload that carries it, the TypeScript context does not mirror that.",
                     ]
                 )
             );
@@ -245,11 +264,8 @@ public class JsonMemberOptionsTests
 
         await Assert.That(TsNamesOf(ts)).IsEqualTo("count, step, limit");
 
-        await Assert
-            .That(ts)
-            .Contains(
-                "factory: (p: Record<string, unknown>) => Object.assign(new Counter(), { limit: p.limit as number }),"
-            );
+        await Assert.That(ts).Contains("factory: (p: Record<string, unknown>) => new Counter(),");
+        await Assert.That(AssignedIfPresentOf(ts)).IsEqualTo("limit");
 
         await Assert
             .That(UnmirroredMessagesOf(diagnostics))
@@ -432,6 +448,159 @@ public class JsonMemberOptionsTests
             );
     }
 
+    // STJ: `public int A { private get; set; }`, `{ protected get; set; }` and
+    // `{ internal get; set; }` are neither written nor read; `{ get; private
+    // set; }` is written, not read; `[JsonInclude]` with an internal getter is
+    // written and read.
+    [Test]
+    public async Task PropertyWithANonPublicGetter_IsLeftOutUnlessIncluded()
+    {
+        var ts = TranspileContext(
+            """
+            [Transpile]
+            public sealed class Getters
+            {
+                public int Hidden { private get; set; }
+
+                public int Guarded { protected get; set; }
+
+                public int Internal { internal get; set; }
+
+                [JsonInclude]
+                public int Included { internal get; set; }
+
+                public int ReadOnly { get; private set; }
+
+                public int Z { get; set; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Getters))]
+            """
+        );
+
+        await Assert.That(TsNamesOf(ts)).IsEqualTo("included, readOnly, z");
+        await Assert.That(AssignedIfPresentOf(ts)).IsEqualTo("included, z");
+    }
+
+    // STJ, a context of another assembly: an internal [JsonInclude] member of
+    // a library without InternalsVisibleTo is skipped (`{"A":1}`), a
+    // protected internal one throws; with InternalsVisibleTo both are written
+    // and read (`{"A":1,"B":2,"F":4}`, `{"A":1,"C":3}`).
+    [Test]
+    [Arguments("", "a", 3)]
+    [Arguments(
+        "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(\"TestConsumer\")]",
+        "a, b, c, f",
+        0
+    )]
+    public async Task IncludedInternalsOfAnotherAssembly_NeedInternalsVisibleTo(
+        string grant,
+        string tsNames,
+        int warningCount
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            $$"""
+            using System.Text.Json.Serialization;
+
+            {{grant}}
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("shared", Version = "^2.0.0")]
+
+            namespace Shared;
+
+            public class XInc
+            {
+                public int A { get; set; }
+
+                [JsonInclude]
+                internal int B { get; set; }
+
+                [JsonInclude]
+                protected internal int C { get; set; }
+
+                [JsonInclude]
+                internal int F;
+            }
+            """,
+            WrapInNamespace(
+                """
+                [Transpile]
+                [JsonSerializable(typeof(Shared.XInc))]
+                """
+            )
+        );
+
+        await Assert.That(TsNamesOf(files[ContextPath])).IsEqualTo(tsNames);
+
+        await Assert
+            .That(
+                diagnostics.Count(diagnostic =>
+                    diagnostic.Code == DiagnosticCodes.UnmirroredJsonOption
+                )
+            )
+            .IsEqualTo(warningCount);
+    }
+
+    [Test]
+    public async Task IncludedInternalOfAnotherAssembly_IsReportedAsSkipped()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            """
+            using System.Text.Json.Serialization;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("shared", Version = "^2.0.0")]
+
+            namespace Shared;
+
+            public class XInc
+            {
+                public int A { get; set; }
+
+                [JsonInclude]
+                internal int B { get; set; }
+            }
+            """,
+            WrapInNamespace(
+                """
+                [Transpile]
+                [JsonSerializable(typeof(Shared.XInc))]
+                """
+            )
+        );
+
+        await Assert
+            .That(UnmirroredMessagesOf(diagnostics))
+            .IsEqualTo(
+                "'XInc.B' has [JsonInclude], but it is internal to 'TestLibrary', which grants "
+                    + "the context's assembly no InternalsVisibleTo: System.Text.Json skips it, "
+                    + "and so does the TypeScript context."
+            );
+    }
+
+    // STJ throws InvalidOperationException for an extension data member bound
+    // to a constructor parameter ("cannot bind with a parameter in the
+    // deserialization constructor"); the factory passes null.
+    [Test]
+    public async Task ConstructorBoundExtensionData_IsPassedNull()
+    {
+        var (files, _) = Transpile(
+            """
+            [Transpile]
+            public sealed record Ext(int A, [property: JsonExtensionData] Dictionary<string, object>? Extra);
+
+            [Transpile]
+            [JsonSerializable(typeof(Ext))]
+            """
+        );
+
+        await Assert
+            .That(files[ContextPath])
+            .Contains("factory: (p: Record<string, unknown>) => new Ext(p.a as number, null),");
+    }
+
     // A base declaration hidden by a [JsonIgnore] override is never read, so
     // it is not assigned either (it would overwrite the default with
     // undefined).
@@ -443,18 +612,18 @@ public class JsonMemberOptionsTests
             [Transpile]
             public class Root
             {
-                public virtual string Name { get; set; } = "";
+                public virtual string Name { get; init; } = "";
 
-                public int Base { get; set; }
+                public int Base { get; init; }
             }
 
             [Transpile]
             public sealed class Derived : Root
             {
                 [JsonIgnore]
-                public override string Name { get; set; } = "d";
+                public override string Name { get; init; } = "d";
 
-                public int X { get; set; }
+                public int X { get; init; }
             }
 
             [Transpile]
@@ -547,6 +716,15 @@ public class JsonMemberOptionsTests
 
         return TsNamesOf(end < 0 ? ts[start..] : ts[start..end]);
     }
+
+    /// <summary>The <c>ts</c> names of the property specs with <c>assignIfPresent: true</c>.</summary>
+    private static string AssignedIfPresentOf(string ts) =>
+        string.Join(
+            ", ",
+            Regex
+                .Matches(ts, "ts: \"([^\"]+)\"(?:(?!ts: )[\\s\\S])*?assignIfPresent: true")
+                .Select(match => match.Groups[1].Value)
+        );
 
     /// <summary><c>ts: order</c> for every property spec with an <c>order</c>.</summary>
     private static string OrdersOf(string ts) =>

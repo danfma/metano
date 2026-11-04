@@ -175,3 +175,8 @@ than a string throw `JsonException` "The JSON value could not be converted to Sy
 a custom `JsonConverter` of kind `bytes` overrides it. `collectWireProperties` sorts the
 deduplicated chain stably by `order` (absent = 0) when any property has one, so a base spec's
 `order` places its properties among the derived ones as in System.Text.Json.
+
+`PropertySpec.assignIfPresent` (review round, DECIDED-25 k): the reader leaves a missing flagged
+key out of the factory's input instead of requiring it or reading `null`, and after the factory
+returns, the runtime assigns every flagged key the payload carried to the constructed value, in
+wire order, so a missing key keeps the value the constructor set (a C# initializer).

@@ -20,6 +20,13 @@ internal sealed class JsonPropertyCollector(
     private readonly Func<string, string>? _namingPolicy = namingPolicy;
 
     /// <summary>
+    /// System.Text.Json's member rules, judged from the context's assembly
+    /// (an <c>internal</c> member of another assembly is reachable only under
+    /// <c>InternalsVisibleTo</c>).
+    /// </summary>
+    public JsonMemberAccess Access { get; } = new(context.CurrentAssembly);
+
+    /// <summary>
     /// The properties a type's spec declares, in declaration order: the
     /// order the closure walks them and the factory passes them. A spec with
     /// a <c>base</c> link declares only the type's own properties — the
@@ -213,9 +220,8 @@ internal sealed class JsonPropertyCollector(
     /// <c>{"DProp":5,"DProtInt":7,"DField":4,"BProp":1,"BInternal":3,"BField":2}</c>
     /// for a derived type declaring the field <c>DField</c> before the
     /// properties). A member is serialized under
-    /// <see cref="JsonMemberAccess.IsIncluded"/>, unless <c>[JsonIgnore]</c>
-    /// hides it both ways or it is the <c>[JsonExtensionData]</c> overflow
-    /// (reported with <c>MS0037</c>).
+    /// <see cref="JsonMemberAccess.IsSerialized"/>, unless it is the
+    /// <c>[JsonExtensionData]</c> overflow (reported with <c>MS0037</c>).
     /// </summary>
     private List<JsonSerializableProperty> CollectOwnProperties(INamedTypeSymbol type)
     {
@@ -299,14 +305,14 @@ internal sealed class JsonPropertyCollector(
         }
     }
 
-    private static bool IsSerializable(IPropertySymbol property) =>
+    private bool IsSerializable(IPropertySymbol property) =>
         !property.IsIndexer && IsSerializableMember(property);
 
-    private static bool IsSerializable(IFieldSymbol field) =>
+    private bool IsSerializable(IFieldSymbol field) =>
         !field.IsConst && IsSerializableMember(field);
 
-    private static bool IsSerializableMember(ISymbol member) =>
-        JsonMemberAccess.IsSerialized(member)
+    private bool IsSerializableMember(ISymbol member) =>
+        Access.IsSerialized(member)
         && !JsonSerializationAttributes.Has(member, JsonSerializationAttributes.ExtensionData);
 
     private JsonSerializableProperty ToSerializableProperty(ISymbol member)
