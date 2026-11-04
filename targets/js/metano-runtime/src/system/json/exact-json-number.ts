@@ -108,14 +108,15 @@ export function treeWithDoubles(value: unknown): unknown {
 function arrayWithDoubles(array: readonly unknown[]): readonly unknown[] {
   let copy: unknown[] | undefined;
 
-  array.forEach((item, index) => {
+  for (let index = 0; index < array.length; index++) {
+    const item = array[index];
     const converted = treeWithDoubles(item);
 
     if (converted !== item) {
       copy ??= array.slice();
       copy[index] = converted;
     }
-  });
+  }
 
   return copy ?? array;
 }
