@@ -201,7 +201,7 @@ public sealed partial class IrExpressionExtractor
     public IrExpression Extract(ExpressionSyntax expression) =>
         _conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax
             ? new IrConditionalReceiver()
-            : ExtractUnbound(expression);
+            : FoldedCheckedContextConstant(expression) ?? ExtractUnbound(expression);
 
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
         expression switch
@@ -212,9 +212,8 @@ public sealed partial class IrExpressionExtractor
             ThisExpressionSyntax => new IrThisExpression(),
             BaseExpressionSyntax => new IrBaseExpression(),
             ParenthesizedExpressionSyntax paren => Extract(paren.Expression),
-            // `checked(e)` / `unchecked(e)`: Roslyn folds the context into the
-            // IsChecked flag of every operation inside, so the expression
-            // lowers to its operand.
+            // `checked(e)` / `unchecked(e)` lowers to its operand; see
+            // IrExpressionExtractor.CheckedContext.cs.
             CheckedExpressionSyntax context => Extract(context.Expression),
             BinaryExpressionSyntax bin => ExtractBinary(bin),
             AssignmentExpressionSyntax assign => ExtractAssignment(assign),
