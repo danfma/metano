@@ -310,7 +310,10 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
    the tag is treated as missing (`NotSupportedException`): the discriminator stays case-sensitive.
 4. **Given** a Web context and an `int` property, **When** the JSON value is `"5"`, `"+5"` or
    `"007"`, **Then** it reads as `5`; **and** `"5.0"`, `" 5"`, `"5 "`, `""`, `"1e2"` and `"0x10"`
-   throw `JsonException` "The JSON value could not be converted to System.Int32." (FR-048).
+   throw `JsonException` "The JSON value could not be converted to System.Int32." (FR-048). STJ
+   names `System.Int32` for an `int` root, element, dictionary value or settable property, and
+   the declaring type for a constructor-bound property; Metano always names `System.Int32`
+   (documented divergence, DECIDED-23 c).
 5. **Given** a Web context and a `double` property, **When** the JSON value is `"2.5"`, `"1e2"`,
    `"+1.5"`, `"NaN"`, `"Infinity"` or `"-Infinity"`, **Then** it reads as the number; `"nan"` and
    `" 1.5"` throw `JsonException`.
@@ -396,7 +399,9 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   `null`) by guards only, so the two families never overlap.
 - **Case-insensitive reads** (FR-048): when two JSON keys match one property case-insensitively,
   the last one wins; the discriminator is always matched case-sensitively; an exact-case match is
-  not preferred over an earlier case-insensitive one (STJ applies them in document order).
+  not preferred over an earlier case-insensitive one (STJ applies them in document order). The
+  discriminator a polymorphic read consumes is metadata and never fills a property that matches
+  it case-insensitively (measured, DECIDED-23 b).
 - **Numbers read from strings** (FR-048): applies to numeric properties, collection elements,
   dictionary values and numeric roots; never to enums, `Nullable<T>` given `"null"`, dictionary
   keys (already strings) or int tags.
@@ -803,19 +808,26 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      spec of the context, so the static `JsonSerializer` sees them too. A context with default
      options emits no override and stays byte-identical.
   3. **Case-insensitive property matching**: `deserializeContract` matches each JSON key to a
-     property by comparing `toUpperCase()` of both names (STJ: `OrdinalIgnoreCase`); keys are
+     property by comparing both names as STJ's `OrdinalIgnoreCase` does: each code point's simple
+     uppercase mapping, which is `toUpperCase()` where it yields one code point, plus .NET's
+     exceptions (`ı`, `ſ` and the Greek letters with ypogegrammeni; DECIDED-23 a); keys are
      applied in the parsed document order, so the last match wins (measured). The discriminator is
      always matched case-sensitively (measured).
   4. **Numbers read from strings**: when the option is set, the generator adds
      `numberType: "<CLR name>"` (for example `"System.Int32"`, `"System.Double"`) to every
      `primitive` descriptor of a C# numeric type, and the `decimal` converter reads strings too. A
-     JSON string is accepted by STJ's measured grammar: integer types accept `[+-]?[0-9]+`
-     (leading zeros allowed) within the type's range; `Single` / `Double` accept the JSON number
-     grammar with an optional leading `+`, and the exact texts `NaN`, `Infinity` and `-Infinity`;
-     no whitespace, hex, empty string or other spelling. A rejected string throws `JsonException`
-     `The JSON value could not be converted to <CLR name>.` (measured text for `System.Int32`). The
-     option applies to properties, collection elements, dictionary values and roots (measured), and
-     never to enums, `Nullable<T>` given `"null"`, or int discriminators (measured).
+     JSON string is accepted by STJ's measured grammar: signed integer types accept `[+-]?[0-9]+`
+     and unsigned ones `[0-9]+` only (`"+5"` and `"-0"` are rejected), leading zeros allowed,
+     within the type's range; `Single` / `Double` accept an optional sign, digits with an optional
+     `.` (`"1."`, `".5"`, `"01.5"`) and an optional exponent, and the exact texts `NaN`,
+     `Infinity` and `-Infinity`, rejecting a value that overflows the type; `Decimal` accepts the
+     same text without the named literals, within its range after rounding; no whitespace, hex,
+     empty string or other spelling. A rejected string throws `JsonException`
+     `The JSON value could not be converted to <CLR name>.`, ``System.Nullable`1[<CLR name>]`` for a
+     nullable number (measured). The option applies to properties, collection elements,
+     dictionary values and roots (measured), and never to enums, `Nullable<T>` given `"null"`,
+     dictionary keys or int discriminators (measured). The full grammar table is in research.md R8
+     (S2b probe).
   5. Writing is unaffected: `AllowReadingFromString` changes reads only (measured: numbers are
      still written as JSON numbers).
 - **FR-049**: **Breaking change and versioning** (DECIDED-6). FR-034 changes public signatures of
@@ -856,6 +868,9 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Integer-like property names in a polymorphic hierarchy | allowed | JS key order puts them first | Rejected, `MS0032` |
 | Array-index payload key (`"0"`) written **before** the tag | `JsonException` "The metadata property … not the first property …" (measured) | the tag is read as first (JS enumerates index keys first, so their position is lost) | Undetectable after `JSON.parse`; an index key after the tag reads as in STJ (DECIDED-21 i) |
 | `byte[]` | base64 string | number array | `MS0037`; follow-up issue (DECIDED-16) |
+| Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows compare the prefix |
+| Two properties whose JSON names differ only in case, case-insensitive context | `InvalidOperationException` "The JSON property name for 'Twins.A' collides with another property." at first use | both kept; a key fills the property listed last | Not reported; follow-up with the naming-collision issue (DECIDED-23 e) |
+| Case-insensitive names with characters whose casing differs between the JS engine's and .NET's Unicode version | .NET's tables | the engine's tables (Node 24: U+A7CF, U+A7D3, U+A7D5) | Engine-dependent (DECIDED-23 a) |
 | `TimeSpan` | `"01:02:03"` | `Temporal.Duration` string `PT1H2M3S` | Manifest row `divergent`; follow-up issue (DECIDED-16) |
 | `DateTimeOffset` offset text | `+00:00` | per temporal converter | Manifest row; `divergent` if the bytes differ (DECIDED-16) |
 | `Dictionary<int, …>` key order | insertion order | JS enumerates integer-like keys first | Manifest row `divergent` |
@@ -1226,6 +1241,52 @@ the former `OPEN-N`.
     only the contracts written with a tag; a diagnostic shared by several constructions of a
     generic base is reported once (messages name the definition, `GBase<T>`). An empty
     discriminator (`""`) is valid in STJ (`{"":"d","V":1}`) and is emitted as is.
+
+- **DECIDED-23 — Slice S2b decisions (#268).** Taken while implementing the context read options
+  (FR-002, FR-048 items 2–5), measured with source-generated contexts on .NET 10 (SDK 10.0.401,
+  runtime 10.0.12):
+  - (a) `OrdinalIgnoreCase`, not `toUpperCase()`. A comparison over every BMP character showed
+    that `toUpperCase()` differs from .NET's ordinal casing for `ı` → `I`, `ſ` → `S` (.NET keeps
+    both), multi-character full mappings (`ß` → `SS`; .NET keeps `ß`) and the Greek letters with
+    ypogegrammeni (U+1F80–U+1FF3; .NET maps them to their titlecase letter). The runtime
+    (`ordinal-ignore-case.ts`) maps each code point with `toUpperCase()` when it yields one code
+    point and lists those exceptions; what is left differs only where the engine's Unicode version
+    differs from .NET's (Node 24: U+A7CF, U+A7D3, U+A7D5). Measured: `ÉCOLE` matches `école`,
+    `ςigma` matches `Σigma`; `STRASSE`, `ıd`, `İD`, `ſize` and `\u212Aey` match nothing.
+  - (b) The discriminator a tagged polymorphic read consumes is never a property, even when a
+    property matches it case-insensitively: with `PropertyNameCaseInsensitive = true`, a `kind`
+    discriminator and a `KindDer(string Kind)` variant, `{"kind":"k","Kind":"x"}` reads
+    `Kind = "x"`, `{"kind":"k"}` leaves `Kind` unset and `{"Kind":"x","kind":"k"}` throws the
+    "metadata property … not the first property" `JsonException` (measured).
+  - (c) The error of a rejected numeric string names the CLR numeric type (`System.Int32`,
+    ``System.Nullable`1[System.Int32]``, `System.Decimal`). STJ names it so for roots, collection
+    elements, dictionary values and settable properties, but names the declaring type with its
+    namespace for a property bound to a constructor parameter (`TestApp.Stats`, measured), which
+    a `PropertySpec` cannot tell apart without a new member. Documented divergence; the S8
+    manifest compares the prefix `The JSON value could not be converted to `.
+  - (d) Read options travel with each spec: a contract reads its own properties with its own
+    `readOptions`, a `ref` reads with its target spec's, and a value spec with its own. Generated
+    contexts attach the same options to every spec, so this equals STJ's per-call options.
+    `createSpec` / `createValueSpec` attach the context's options under any the spec declares
+    itself, and leave the spec unchanged when both are empty, so default contexts are untouched.
+  - (e) Not mirrored: two properties whose JSON names differ only in case under a case-insensitive
+    context (STJ throws `InvalidOperationException` at first use; Metano keeps both); dictionary
+    keys (STJ parses `{"+5":1}` as key `5` for `Dictionary<int,int>` under any options; the runtime
+    keeps string keys, unchanged); `[JsonNumberHandling]` on members or types; and the
+    `WriteAsString` / `AllowNamedFloatingPointLiterals` flags (FR-046, slice S6b). A
+    `NumberHandling` that combines `AllowReadingFromString` with them still mirrors the reading
+    flag.
+  - (f) A `decimal` read from a string returns the accepted text unchanged (`"1.10"` keeps its
+    scale): the built-in decimal converter never constructs a `Decimal` (the runtime has no
+    `decimal.js` dependency, so a JSON number also stays a number). A `Single` read from a string
+    keeps double precision, as one read from a JSON number does; only overflow is checked at
+    single precision. `numberType` is emitted on every numeric `primitive` descriptor, dictionary
+    keys included, and the runtime ignores it there.
+  - (g) End-to-end evidence: the TypeScript generated for the Web golden
+    (`tests/Metano.Tests/Expected/json-web-context.ts`) was bundled with `bun build` and run under
+    Node and Bun against 37 STJ rows (8 writes, 29 reads): every write matched byte for byte and
+    every read agreed, except the type names of (c) and the namespace in the missing-tag message
+    of a namespaced base (`'TestApp.Clip'`; the runtime names `'Clip'`, which predates S2b).
 
 ## Open questions
 

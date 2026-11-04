@@ -30,6 +30,9 @@ namespace Metano.Tests.Json;
 /// The golden's generated TypeScript was bundled with <c>bun build</c> and
 /// round-tripped under Node against the System.Text.Json output of the same
 /// types: every write matched byte for byte and every STJ payload read back.
+/// Since slice S2b the golden also carries the Web read options and the
+/// <c>numberType</c> hints (<c>Reading</c>, <c>List&lt;uint&gt;</c>,
+/// <c>short?</c>); their evidence is quoted in <see cref="JsonReadOptionsTests"/>.
 /// </summary>
 public class JsonWebNamingTests
 {
@@ -92,10 +95,27 @@ public class JsonWebNamingTests
         public sealed record Stats(int Count, double Ratio, [property: JsonPropertyName("URL")] string Url);
 
         [Transpile]
+        public enum Level { Low, High }
+
+        [Transpile]
+        public sealed record Reading(
+            decimal Amount,
+            long? Total,
+            float Weight,
+            IReadOnlyList<byte> Samples,
+            Dictionary<ushort, sbyte> Offsets,
+            Level Level,
+            bool Valid
+        );
+
+        [Transpile]
         [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
         [JsonSerializable(typeof(Clip))]
         [JsonSerializable(typeof(Shape))]
         [JsonSerializable(typeof(Stats))]
+        [JsonSerializable(typeof(Reading))]
+        [JsonSerializable(typeof(List<uint>))]
+        [JsonSerializable(typeof(short?))]
         """;
 
     private const int Declared = 0;
@@ -324,6 +344,7 @@ public class JsonWebNamingTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             $$"""
+            using System.Collections.Generic;
             using System.Text.Json;
             using System.Text.Json.Serialization;
 

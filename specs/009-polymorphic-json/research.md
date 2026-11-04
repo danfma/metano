@@ -271,6 +271,38 @@ object instances.)
 | Writing numbers | still JSON numbers: `{"n":5,"m":7,"d":1.10,"x":2.5,…}` |
 | Writing `double.NaN` | `ArgumentException: .NET number values such as positive and negative infinity cannot be written as valid JSON. …` |
 
+**Read options (slice S2b).** [Verified, source-gen probe: .NET SDK 10.0.401, runtime 10.0.12;
+`Web` context unless stated; every rejected row throws `JsonException` "The JSON value could not
+be converted to <CLR name>." without the path suffix.]
+
+| Case | STJ result |
+|---|---|
+| `Options` of `General` / `Web` / `Web, PropertyNameCaseInsensitive = false` / `Web, NumberHandling = Strict` | CI `false`/`true`/`false`/`true`; NH `Strict`/`AllowReadingFromString`/`AllowReadingFromString`/`Strict`; `AllowOutOfOrderMetadataProperties` `false` in all four |
+| `Int32` from `"-007"`, `"+007"`, `"0005"`, `"00"`, `"-0"`, `"+0"`, `"000…0002147483647"` | `-7`, `7`, `5`, `0`, `0`, `0`, `2147483647` |
+| `Int32` from `"\t5"`, `"5\n"`, `"05e0"`, `"1_0"`, `"1,000"`, `"١"`, `"--5"`, `"+-5"`, `"-"`, `"+"` | rejected |
+| `SByte`, `Int16`, `Int64` from `"+5"`; `SByte`, `Int64` from `"-0"` | `5`; `0` |
+| `Byte`, `UInt16`, `UInt32`, `UInt64` from `"+5"`, `"-0"`, `"-1"` (`UInt64` also `"+0"`) | rejected (no sign at all) |
+| Ranges: `Byte` 255/256, `SByte` 127/128/-128/-129, `Int16` ±32767/32768/-32769, `UInt16` 65535/65536, `Int32` and `UInt32` limits, `Int64` ±9223372036854775807/…808/…809, `UInt64` 18446744073709551615/…616 | in range reads, one past throws |
+| `Double` / `Single` from `"1."`, `"0."`, `".5"`, `"+.5"`, `"-.5"`, `"1.e5"`, `".5e1"`, `"01.5"`, `"0000.5"`, `"1e+05"`, `"1E-0"`, `"-0.0"`, `"1e00000000000000000002"`, `"1e-400"` | read (`"-0.0"` → `-0`, `"1e-400"` → `0`) |
+| `Double` / `Single` from `"+Infinity"`, `"-NaN"`, `"+NaN"`, `"NAN"`, `"infinity"`, `"Infinity "`, `"."`, `"-."`, `".e1"`, `"+-1"`, `"1e"`, `"1e+"`, `"1.5e+"`, `"e5"`, `"1e2.5"`, `"1,5"`, `"1d"`, `"1f"`, `"1_0"`, `"∞"`, `"١.٥"`, `"1e400"`, `"-1e400"` | rejected |
+| `Double` from `"1.7976931348623159e308"`; `Single` from `"3.4028236e38"`, `"3.5e38"`, `"1e39"` (`"3.4028235e38"` reads) | rejected (overflow) |
+| `Decimal` from `"1e2"`, `".5"`, `"+.5"`, `"1."`, `"1.e2"`, `"01.5"`, `"-0"`, `"±79228162514264337593543950335"`, `"79228162514264337593543950335.4"`, `"7.9228162514264337593543950335e28"`, `"1e28"`, `"1e-30"` | read (`"1e-30"` → `0.0000000000000000000000000000`) |
+| `Decimal` from `"NaN"`, `"Infinity"`, `" 1"`, `"1 "`, `""`, `"0x1"`, `"."`, `"1e"`, `"-"`, `"…336"`, `"-…336"`, `"…335.5"`, `"1e29"` | rejected |
+| `int?` root / settable property / `List<int?>` element from `"x"`, `""`, `"5.5"`, `"null"` | rejected naming ``System.Nullable`1[System.Int32]``; `"5"` reads |
+| Rejected string for a settable `int` property, a `List<long>` element, a `Dictionary<string,int>` value | names `System.Int32` / `System.Int64` / `System.Int32` |
+| Rejected string (or `true`) for a constructor-bound property (`record Holder(int N, …)`, `ImageClip`, `TestApp.Stats`) | names the declaring type (`Holder`, `TestApp.Stats`) |
+| `Dictionary<int,int>` from `{"007":1}`, `{"+5":1}` (Web and General) | key `7`, `5` (keys always parsed) |
+| `General` + `NamedFloatingPointLiterals` only: `Double` `"NaN"` / `"5"` | `NaN` / rejected; `WriteAsString` writes `5` as `"5"` |
+| Case-insensitive: `ÉCOLE` → `école`, `ςigma` → `Σigma`; `STRASSE`, `ß`, `ıd`, `İD`, `ſize`, `\u212Aey` → no match | as listed (`OrdinalIgnoreCase`) |
+| `[JsonPropertyName("a")]` and `("A")` on one type, case-insensitive context | `InvalidOperationException: The JSON property name for 'Twins.A' collides with another property.`; case-sensitive reads both |
+| `PropertyNameCaseInsensitive = true`, `kind` discriminator, `KindDer(string Kind)`: `{"kind":"k","Kind":"x"}`, `{"kind":"k"}`, `{"Kind":"x","kind":"k"}`; `KindDer` read directly from `{"KIND":"x"}` | `Kind = "x"`; `Kind` unset; "metadata property … not the first property"; `Kind = "x"` |
+| `{"$type":"square","SIDELENGTH":"2","FillColor":"r"}` through `Shape`; `{"$TYPE":"square",…}` | `Square(2, "r")`; missing tag |
+| `Web, AllowOutOfOrderMetadataProperties = true`: `{"path":"a","kind":"image","seconds":1}` through `Clip` | `ImageClip("a", 1)` (missing tag without the option) |
+
+A comparison of `char.ToUpperInvariant` under `OrdinalIgnoreCase` with JS `toUpperCase()` over every
+BMP character (DECIDED-23 a) differs for `ı`, `ſ`, U+1F80–U+1FA7, U+1FB3, U+1FC3, U+1FF3 on both
+engines, and for U+A7CF, U+A7D3, U+A7D5 under Node 24 only.
+
 **Naming policies (slice S2).** [Verified, source-gen probe: .NET SDK 10.0.401, runtime 10.0.12;
 one property per name.]
 

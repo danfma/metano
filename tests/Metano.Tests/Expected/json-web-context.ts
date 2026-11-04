@@ -1,6 +1,9 @@
-import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
+import { SerializerContext, type JsonReadOptions, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
+import { Decimal } from "decimal.js";
 import { Clip } from "./clip";
 import { ImageClip } from "./image-clip";
+import { Level } from "./level";
+import { Reading } from "./reading";
 import { Shape } from "./shape";
 import { SilenceClip } from "./silence-clip";
 import { Square } from "./square";
@@ -15,6 +18,12 @@ export class JsonContext extends SerializerContext {
 
   private _stats?: TypeSpec<Stats>;
 
+  private _reading?: TypeSpec<Reading>;
+
+  private _listUInt32?: ValueSpec<number[] | null>;
+
+  private _nullableInt16?: ValueSpec<number | null>;
+
   private _imageClip?: TypeSpec<ImageClip>;
 
   private _silenceClip?: TypeSpec<SilenceClip>;
@@ -23,6 +32,10 @@ export class JsonContext extends SerializerContext {
 
   static get default(): JsonContext {
     return this._default;
+  }
+
+  protected override get readOptions(): JsonReadOptions {
+    return { propertyNameCaseInsensitive: true, numberHandling: "allowReadingFromString" };
   }
 
   get clip(): TypeSpec<Clip> {
@@ -35,7 +48,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "seconds",
           json: "seconds",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
       polymorphism: {
@@ -89,12 +102,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "count",
           json: "count",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "ratio",
           json: "ratio",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "url",
@@ -102,6 +115,79 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive" },
         },
       ],
+    });
+  }
+
+  get reading(): TypeSpec<Reading> {
+    return this._reading ??= this.createSpec({
+      type: Reading,
+      factory: (p: Record<string, unknown>) => new Reading(p.amount as Decimal, p.total as number | null, p.weight as number, p.samples as number[], p.offsets as Map<number, number>, p.level as Level, p.valid as boolean),
+      properties: [
+        {
+          ts: "amount",
+          json: "amount",
+          type: { kind: "decimal" },
+        },
+        {
+          ts: "total",
+          json: "total",
+          type: {
+            kind: "nullable",
+            inner: { kind: "primitive", numberType: "System.Int64" },
+          },
+          optional: true,
+        },
+        {
+          ts: "weight",
+          json: "weight",
+          type: { kind: "primitive", numberType: "System.Single" },
+        },
+        {
+          ts: "samples",
+          json: "samples",
+          type: {
+            kind: "array",
+            element: { kind: "primitive", numberType: "System.Byte" },
+          },
+        },
+        {
+          ts: "offsets",
+          json: "offsets",
+          type: {
+            kind: "map",
+            key: { kind: "primitive", numberType: "System.UInt16" },
+            value: { kind: "primitive", numberType: "System.SByte" },
+          },
+        },
+        {
+          ts: "level",
+          json: "level",
+          type: { kind: "numericEnum", values: Level },
+        },
+        {
+          ts: "valid",
+          json: "valid",
+          type: { kind: "primitive" },
+        },
+      ],
+    });
+  }
+
+  get listUInt32(): ValueSpec<number[] | null> {
+    return this._listUInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "primitive", numberType: "System.UInt32" },
+      },
+    });
+  }
+
+  get nullableInt16(): ValueSpec<number | null> {
+    return this._nullableInt16 ??= this.createValueSpec({
+      descriptor: {
+        kind: "nullable",
+        inner: { kind: "primitive", numberType: "System.Int16" },
+      },
     });
   }
 
@@ -138,7 +224,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "sideLength",
           json: "sideLength",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });

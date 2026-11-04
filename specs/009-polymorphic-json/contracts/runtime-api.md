@@ -144,3 +144,13 @@ message when the entry's spec is polymorphic; without the out-of-order option, `
 non-polymorphic contract, as STJ does: the concrete base reads its own contract (`$`-prefixed keys
 included) and an abstract base throws "Deserialization of interface or abstract types is not
 supported. Type '<base>'."; writes still dispatch (DECIDED-22 k).
+
+## Delivery status (S2b)
+
+S2b completes `JsonReadOptions` (`propertyNameCaseInsensitive`, `numberHandling`), adds
+`ValueSpec.readOptions`, `PrimitiveDescriptor.numberType` and the exported `NumberTypeName`, the
+`SerializerContext.readOptions` getter and its attachment by `createSpec` / `createValueSpec`, and
+guarantees 11 and 12. Keys match properties by `OrdinalIgnoreCase` rather than `toUpperCase()`, the
+discriminator a polymorphic read consumes is never a property, a nullable number names
+``System.Nullable`1[<CLR name>]`` in its error, and a `decimal` read from a string returns the text
+(DECIDED-23).

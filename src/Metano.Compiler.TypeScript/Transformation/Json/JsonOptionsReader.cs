@@ -7,16 +7,23 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// <summary>
 /// Reads a context's <c>[JsonSourceGenerationOptions]</c>. The
 /// <c>JsonSerializerDefaults.Web</c> constructor argument sets the camelCase
-/// naming policy, and a named <c>PropertyNamingPolicy</c> overrides it,
-/// <c>Unspecified</c> included (spec 009 FR-048 item 1, measured on .NET 10).
-/// Only the attribute is read: options passed to the context's constructor at
-/// runtime are invisible here.
+/// naming policy, case-insensitive property names and numbers read from
+/// strings; a named option overrides its Web default, <c>Unspecified</c> /
+/// <c>false</c> / <c>Strict</c> included (spec 009 FR-048, FR-002, measured on
+/// .NET 10). Only the attribute is read: options passed to the context's
+/// constructor at runtime are invisible here.
 /// </summary>
 internal static class JsonOptionsReader
 {
     private const string OptionsAttribute = "JsonSourceGenerationOptionsAttribute";
 
     private const string NamingPolicyOption = "PropertyNamingPolicy";
+
+    private const string CaseInsensitiveOption = "PropertyNameCaseInsensitive";
+
+    private const string NumberHandlingOption = "NumberHandling";
+
+    private const string OutOfOrderMetadataOption = "AllowOutOfOrderMetadataProperties";
 
     /// <summary>
     /// The JSON naming policy of <paramref name="contextType"/>, or <c>null</c>
@@ -28,15 +35,37 @@ internal static class JsonOptionsReader
         if (OptionsAttributeOf(contextType) is not { } attribute)
             return null;
 
-        var options = attribute.NamedArguments.ToDictionary(
-            argument => argument.Key,
-            argument => argument.Value.Value
-        );
-
-        if (!options.TryGetValue(NamingPolicyOption, out var namedPolicy))
-            return DefaultNamingPolicyOf(attribute);
+        if (!NamedOptionsOf(attribute).TryGetValue(NamingPolicyOption, out var namedPolicy))
+            return HasWebDefaults(attribute) ? JsonNamingPolicy.CamelCase : null;
 
         return JsonNamingPolicy.FromKnownPolicy((JsonKnownNamingPolicy)(namedPolicy as int? ?? 0));
+    }
+
+    /// <summary>
+    /// The read options of <paramref name="contextType"/>: the Web defaults
+    /// (<c>PropertyNameCaseInsensitive = true</c>,
+    /// <c>NumberHandling = AllowReadingFromString</c>) unless a named option
+    /// overrides them, and <c>AllowOutOfOrderMetadataProperties</c>, which is
+    /// <c>false</c> under both defaults. Only the <c>AllowReadingFromString</c>
+    /// flag of <c>NumberHandling</c> is mirrored.
+    /// </summary>
+    public static JsonContextReadOptions ReadOptionsOf(INamedTypeSymbol contextType)
+    {
+        if (OptionsAttributeOf(contextType) is not { } attribute)
+            return JsonContextReadOptions.Default;
+
+        var options = NamedOptionsOf(attribute);
+        var webDefaults = HasWebDefaults(attribute);
+
+        return new JsonContextReadOptions(
+            PropertyNameCaseInsensitive: options.TryGetValue(CaseInsensitiveOption, out var named)
+                ? named is true
+                : webDefaults,
+            ReadsNumbersFromStrings: NumberHandlingOf(options, webDefaults)
+                .HasFlag(JsonNumberHandling.AllowReadingFromString),
+            AllowOutOfOrderMetadataProperties: options.GetValueOrDefault(OutOfOrderMetadataOption)
+                is true
+        );
     }
 
     private static AttributeData? OptionsAttributeOf(INamedTypeSymbol contextType) =>
@@ -46,13 +75,29 @@ internal static class JsonOptionsReader
                 JsonSerializationAttributes.Is(attribute, OptionsAttribute)
             );
 
+    private static Dictionary<string, object?> NamedOptionsOf(AttributeData attribute) =>
+        attribute.NamedArguments.ToDictionary(
+            argument => argument.Key,
+            argument => argument.Value.Value
+        );
+
     /// <summary>
-    /// The naming policy the <c>JsonSerializerDefaults</c> constructor argument
-    /// sets: camelCase for <c>Web</c>, none for <c>General</c> or no argument.
+    /// Whether the <c>JsonSerializerDefaults</c> constructor argument is
+    /// <c>Web</c>; <c>General</c> and no argument are not.
     /// </summary>
-    private static Func<string, string>? DefaultNamingPolicyOf(AttributeData attribute) =>
+    private static bool HasWebDefaults(AttributeData attribute) =>
         attribute.ConstructorArguments is [{ Value: int defaults }]
-        && (JsonSerializerDefaults)defaults == JsonSerializerDefaults.Web
-            ? JsonNamingPolicy.CamelCase
-            : null;
+        && (JsonSerializerDefaults)defaults == JsonSerializerDefaults.Web;
+
+    /// <summary>The named <c>NumberHandling</c>, else the defaults' one.</summary>
+    private static JsonNumberHandling NumberHandlingOf(
+        Dictionary<string, object?> options,
+        bool webDefaults
+    )
+    {
+        if (options.TryGetValue(NumberHandlingOption, out var named))
+            return (JsonNumberHandling)(named as int? ?? 0);
+
+        return webDefaults ? JsonNumberHandling.AllowReadingFromString : JsonNumberHandling.Strict;
+    }
 }

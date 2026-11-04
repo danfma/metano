@@ -230,9 +230,9 @@ handles these kinds:
 
 | Kind | TS type | On serialize | On deserialize |
 |------|---------|-------------|----------------|
-| `primitive` | string, number, boolean | passthrough | passthrough |
+| `primitive` | string, number, boolean | passthrough | passthrough; a JSON string for a numeric `numberType` when the context reads numbers from strings ([details](#web-defaults)) |
 | `temporal` | `Temporal.PlainDate`, etc. | `.toString()` | `Type.from(iso)` |
-| `decimal` | `Decimal` | `.toNumber()` (or string via custom converter) | factory wraps `new Decimal(...)` |
+| `decimal` | `Decimal` | `.toNumber()` (or string via custom converter) | the JSON value as is (a JSON string too, validated, when the context reads numbers from strings); wrap it with `new Decimal(...)` in a custom converter |
 | `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
@@ -296,7 +296,8 @@ your own `JsonConverter`.
 | `[JsonSerializable(..., TypeInfoPropertyName = "X")]` | ✅ | Names the getter `x` for that type everywhere in the context |
 | `[JsonFactory]` (Metano) | ✅ | On a `[Branded]` type's static method: deserialization calls it instead of `create` ([details](#validating-branded-types)) |
 | `[JsonSourceGenerationOptions]` with `PropertyNamingPolicy` | ✅ | Applies the naming policy to all properties |
-| `[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` | ⚠️ | camelCase names, as .NET writes them; case-insensitive reads and numbers read from strings are not mirrored yet ([details](#web-defaults)) |
+| `[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` | ✅ | camelCase names, case-insensitive property names and numbers read from strings, as in .NET ([details](#web-defaults)) |
+| `[JsonSourceGenerationOptions]` with `PropertyNameCaseInsensitive`, `NumberHandling = AllowReadingFromString` or `AllowOutOfOrderMetadataProperties` | ✅ | Mirrored in the context's `readOptions` ([details](#web-defaults)); the other `NumberHandling` flags (`WriteAsString`, `AllowNamedFloatingPointLiterals`) are not |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
 | `[JsonIgnore]` | ✅ | Excludes the property from the spec; on an override, also hides the base declarations ([details](#inheritance)) |
 | `JsonKnownNamingPolicy.CamelCase` | ✅ | `FirstName` → `firstName` |
@@ -315,14 +316,35 @@ your own `JsonConverter`.
 
 `[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` sets three options
 in .NET: the camelCase naming policy, case-insensitive property names and
-numbers read from strings. Metano mirrors the naming policy today; the two
-read options come in a later slice of
-[#268](https://github.com/danfma/metano/issues/268).
+numbers read from strings. Metano mirrors all three: names are computed at
+transpile time, and the two read options are emitted once on the context.
 
 ```csharp
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
 [JsonSerializable(typeof(Clip))]
+[JsonSerializable(typeof(Stats))]
 public partial class WebJsonContext : JsonSerializerContext;
+
+public sealed record Stats(int Count, double Ratio);
+```
+
+```ts
+export class WebJsonContext extends SerializerContext {
+  protected override get readOptions(): JsonReadOptions {
+    return { propertyNameCaseInsensitive: true, numberHandling: "allowReadingFromString" };
+  }
+
+  get stats(): TypeSpec<Stats> {
+    return this._stats ??= this.createSpec({
+      type: Stats,
+      factory: (p: Record<string, unknown>) => new Stats(p.count as number, p.ratio as number),
+      properties: [
+        { ts: "count", json: "count", type: { kind: "primitive", numberType: "System.Int32" } },
+        { ts: "ratio", json: "ratio", type: { kind: "primitive", numberType: "System.Double" } },
+      ],
+    });
+  }
+}
 ```
 
 - Property names are camel-cased at transpile time by the same rule .NET uses:
@@ -337,6 +359,50 @@ public partial class WebJsonContext : JsonSerializerContext;
 - The discriminator of a polymorphic type is never renamed: `$type` or the
   `TypeDiscriminatorPropertyName` you set (`"Kind"` stays `"Kind"`), and it is
   matched case-sensitively on read.
+
+**Read options.** The context overrides `readOptions` only when an option
+differs from .NET's default; `createSpec` and `createValueSpec` attach them to
+every spec, so `JsonSerializer.deserialize(data, ctx.stats)` honors them too. A
+named option overrides the Web default, as in .NET:
+`(JsonSerializerDefaults.Web, PropertyNameCaseInsensitive = false)` reads names
+case-sensitively again, and `NumberHandling = JsonNumberHandling.Strict` stops
+reading numbers from strings. `PropertyNameCaseInsensitive = true`,
+`NumberHandling = JsonNumberHandling.AllowReadingFromString` and
+`AllowOutOfOrderMetadataProperties = true` are mirrored on their own too.
+
+- **Case-insensitive names.** JSON keys match property names the way .NET's
+  `OrdinalIgnoreCase` does (`PATH` and `pAtH` read `Path`); keys apply in
+  document order, so with two matching keys the last one wins
+  (`{"path":"a","Path":"b"}` reads `"b"`). The discriminator stays
+  case-sensitive (`{"Kind":"image"}` is a missing `kind` tag) and is never read
+  as a property. `ß`, `ı` and `ſ` do not match `SS`, `I` and `S`, as in .NET;
+  characters whose casing differs between the JS engine's Unicode version and
+  .NET's may compare differently.
+- **Numbers from strings.** Numeric properties, collection elements, dictionary
+  values and roots accept a JSON string by .NET's grammar: signed integers take
+  an optional sign and leading zeros (`"+5"`, `"007"`, `"-0"` → `0`); unsigned
+  integers take digits only (`"+5"` and `"-0"` are rejected for `byte`, `ushort`,
+  `uint` and `ulong`); `float` / `double` take `"1e2"`, `"1."`, `".5"`, `"+1.5"`
+  and the exact `"NaN"`, `"Infinity"`, `"-Infinity"`; `decimal` takes the same
+  text without the named literals. Whitespace, hex, `""`, digit separators and
+  out-of-range values are rejected with `JsonException` `The JSON value could
+  not be converted to System.Int32.` (the CLR name of the type, or
+  ``System.Nullable`1[System.Int32]`` for `int?`). Enums, the text `"null"` for a
+  nullable number, dictionary keys and integer type discriminators never read
+  strings, as in .NET. Writing is unchanged: numbers are written as JSON
+  numbers. A `decimal` read from a string keeps the text (`"1.10"`); the
+  built-in decimal converter never builds a `Decimal`, so register a custom
+  `decimal` converter to get one.
+- **Out-of-order metadata.** `AllowOutOfOrderMetadataProperties = true` lets the
+  type discriminator follow other properties ([details](#runtime-dispatch)).
+- **Divergences.** For a property bound to a constructor parameter (a record's
+  positional property), .NET names the declaring type in the error (`The JSON
+  value could not be converted to TestApp.Stats.`); Metano names the numeric
+  type. A `float` read from a string keeps double precision, as a `float` read
+  from a JSON number already does. Two properties whose names differ only in
+  case make .NET throw `InvalidOperationException` (`The JSON property name for
+  'Twins.A' collides with another property.`) when a case-insensitive context
+  is first used; Metano does not report it.
 
 The snake and kebab policies follow .NET's word splitting too: `Item_Name` →
 `item_name`, `Value2` → `value2`, `A1B` → `a1_b`, `MyURLValue` → `my_url_value`.
@@ -525,8 +591,8 @@ get clip(): TypeSpec<Clip> {
   slice S6c of [#268](https://github.com/danfma/metano/issues/268); until then
   such hierarchies are generated as if the attributes were absent, with an
   `MS0033` warning saying so. The
-  context's `AllowOutOfOrderMetadataProperties` option is mirrored by slice
-  S2b.
+  context's `AllowOutOfOrderMetadataProperties` option is mirrored in its
+  `readOptions` ([details](#web-defaults)).
 
 ### Runtime dispatch
 
@@ -542,7 +608,8 @@ get clip(): TypeSpec<Clip> {
   guards of `[PlainObject]` variants, in `testOrder`. A derived contract
   reached this way is never dispatched again, even when it is polymorphic too.
 - **Read.** The tag counts only under its exact name and only as the first key
-  (anywhere with `readOptions: { allowOutOfOrderMetadataProperties: true }`). A
+  (anywhere with `readOptions: { allowOutOfOrderMetadataProperties: true }`,
+  which a context declaring `AllowOutOfOrderMetadataProperties = true` emits). A
   string tag never matches a number tag (`1` ≠ `"1"`). An unknown tag throws
   `JsonException` `Read unrecognized type discriminator id 'video'.` unless
   `ignoreUnrecognizedTags` is set; a missing tag reads a concrete base and, on
@@ -582,6 +649,7 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 | A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |
 | A non-object JSON value (or an array) for a dictionary | `Expected object for deserialization, got array` |
+| A numeric JSON string the grammar rejects, when the context reads numbers from strings | `The JSON value could not be converted to System.Int32.` (STJ names the declaring type for a constructor-bound property) |
 | An unknown string enum value | `Invalid enum value: …` (STJ: `The JSON value could not be converted to Color.`) |
 | An unknown numeric enum value | `Invalid numeric enum value: …` — a divergence: STJ reads any number (`7` reads as `(Color)7`) |
 | More than 64 nested containers on read | `The maximum configured depth of 64 has been exceeded. Cannot read next JSON object.` (`… JSON array.` for an array) |

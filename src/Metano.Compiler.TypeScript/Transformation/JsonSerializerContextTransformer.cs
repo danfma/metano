@@ -14,7 +14,8 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <c>SerializerContext</c> subclass with pre-computed spec definitions.
 ///
 /// Orchestrates the <c>Json/</c> units: reads <c>[JsonSourceGenerationOptions]</c>
-/// for the naming policy (<see cref="JsonOptionsReader"/>), the <c>[JsonSerializable]</c> roots
+/// for the naming policy and the read options (<see cref="JsonOptionsReader"/>,
+/// emitted by <see cref="JsonReadOptionsEmitter"/>), the <c>[JsonSerializable]</c> roots
 /// (<see cref="JsonContractRoots"/>), their contract closure
 /// (<see cref="JsonContractClosure"/>) and the member names
 /// (<see cref="JsonTypeInfoNames"/>), then emits one lazy getter per entry
@@ -32,7 +33,14 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             return;
 
         var contextName = _context.ResolveTsName(type);
-        var specs = new JsonSpecBuilder(_context, plan.Names, plan.Properties, plan.Polymorphisms);
+        var specs = new JsonSpecBuilder(
+            _context,
+            plan.Names,
+            plan.Properties,
+            plan.Polymorphisms,
+            plan.ReadOptions.ReadsNumbersFromStrings
+        );
+
         var members = new List<TsClassMember>();
 
         // private static readonly _default = new XxxContext();
@@ -56,6 +64,9 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 Static: true
             )
         );
+
+        if (JsonReadOptionsEmitter.Build(plan.ReadOptions) is { } readOptions)
+            members.Add(readOptions);
 
         foreach (var entry in plan.Entries)
             members.AddRange(specs.BuildEntryMembers(entry));
@@ -152,7 +163,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             names,
             properties,
             names.Claim(contract),
-            contract.Polymorphisms
+            contract.Polymorphisms,
+            JsonOptionsReader.ReadOptionsOf(contextType)
         );
     }
 }

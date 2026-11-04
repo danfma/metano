@@ -1,7 +1,30 @@
 // ─── Type Descriptors ────────────────────────────────────────────────────────
 
-/** Primitives that JSON.stringify handles natively (string, number, boolean) */
-export type PrimitiveDescriptor = { readonly kind: "primitive" };
+/**
+ * The CLR name of a C# numeric type that maps to a TS `number`, as
+ * System.Text.Json names it in conversion errors.
+ */
+export type NumberTypeName =
+  | "System.Byte"
+  | "System.SByte"
+  | "System.Int16"
+  | "System.UInt16"
+  | "System.Int32"
+  | "System.UInt32"
+  | "System.Int64"
+  | "System.UInt64"
+  | "System.Single"
+  | "System.Double";
+
+/**
+ * Primitives that JSON.stringify handles natively (string, number, boolean).
+ * `numberType` names the C# numeric type when the context reads numbers from
+ * JSON strings (FR-048); it is absent otherwise.
+ */
+export type PrimitiveDescriptor = {
+  readonly kind: "primitive";
+  readonly numberType?: NumberTypeName;
+};
 
 /** Another spec — recursive serialize/deserialize */
 export type RefDescriptor<T = unknown> = {
@@ -194,6 +217,10 @@ export interface PolymorphismSpec {
  * Every member is optional; an absent member is System.Text.Json's default.
  */
 export interface JsonReadOptions {
+  /** JSON keys match property names ignoring case; the last match wins (FR-048). */
+  readonly propertyNameCaseInsensitive?: boolean;
+  /** Numeric values may also arrive as JSON strings (FR-048). Writes are unaffected. */
+  readonly numberHandling?: "allowReadingFromString";
   /** The type discriminator may appear after other properties (FR-002). */
   readonly allowOutOfOrderMetadataProperties?: boolean;
 }
@@ -214,6 +241,8 @@ export interface ValueSpec<T = unknown> {
    * like `TypeSpec<T>`, so any `ValueSpec<T>` is a `ValueSpec<unknown>`.
    */
   readonly __type?: () => T;
+  /** The context's read behavior; absent when it is System.Text.Json's default. */
+  readonly readOptions?: JsonReadOptions;
 }
 
 /** Any spec the generated context exposes: an object contract or a value root. */

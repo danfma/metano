@@ -93,6 +93,26 @@ internal static class JsonTypeClassifier
         return type;
     }
 
+    /// <summary>
+    /// The CLR name of a C# numeric type that maps to a TS <c>number</c>
+    /// (<c>System.Int32</c>, <c>System.Double</c>, …), as System.Text.Json
+    /// names it in errors; <c>null</c> for any other type.
+    /// </summary>
+    public static string? NumberTypeNameOf(ITypeSymbol type) =>
+        type.SpecialType
+            is SpecialType.System_Byte
+                or SpecialType.System_SByte
+                or SpecialType.System_Int16
+                or SpecialType.System_UInt16
+                or SpecialType.System_Int32
+                or SpecialType.System_UInt32
+                or SpecialType.System_Int64
+                or SpecialType.System_UInt64
+                or SpecialType.System_Single
+                or SpecialType.System_Double
+            ? $"System.{type.MetadataName}"
+            : null;
+
     private static bool IsPrimitive(ITypeSymbol type) =>
         type.SpecialType
             is SpecialType.System_String

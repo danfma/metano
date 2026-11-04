@@ -1,4 +1,10 @@
-import type { TypeSpec, ValueSpec, SerializerContextOptions, JsonConverter } from "./types.ts";
+import type {
+  TypeSpec,
+  ValueSpec,
+  SerializerContextOptions,
+  JsonConverter,
+  JsonReadOptions,
+} from "./types.ts";
 
 /**
  * Base class for generated serializer contexts. Each context holds options
@@ -20,8 +26,19 @@ export abstract class SerializerContext {
   }
 
   /**
-   * Registers a spec in the internal registry and returns it. Intended to
-   * be called from lazy getters in generated subclasses:
+   * The read behavior of every spec this context creates, mirrored from the
+   * C# context's `[JsonSourceGenerationOptions]` (FR-002, FR-048). Generated
+   * contexts override it only when an option differs from System.Text.Json's
+   * default.
+   */
+  protected get readOptions(): JsonReadOptions {
+    return {};
+  }
+
+  /**
+   * Registers a spec in the internal registry and returns it, with the
+   * context's read options attached. Intended to be called from lazy getters
+   * in generated subclasses:
    *
    * ```ts
    * get order(): TypeSpec<Order> {
@@ -30,13 +47,16 @@ export abstract class SerializerContext {
    * ```
    */
   protected createSpec<T>(spec: TypeSpec<T>): TypeSpec<T> {
+    const attached = this.withReadOptions(spec);
+
     // Only register class-backed types (those with a constructor reference).
     // [PlainObject] specs have no `type` field — they're accessed via their
     // getter on the context, not via constructor-keyed resolve().
-    if (spec.type) {
-      this._registry.set(spec.type, spec as TypeSpec);
+    if (attached.type) {
+      this._registry.set(attached.type, attached as TypeSpec);
     }
-    return spec;
+
+    return attached;
   }
 
   /**
@@ -50,10 +70,22 @@ export abstract class SerializerContext {
    * }
    * ```
    *
-   * Nothing is registered: a value spec has no constructor to resolve.
+   * Nothing is registered: a value spec has no constructor to resolve. The
+   * context's read options are attached, as by `createSpec`.
    */
   protected createValueSpec<T>(spec: ValueSpec<T>): ValueSpec<T> {
-    return spec;
+    return this.withReadOptions(spec);
+  }
+
+  /**
+   * `spec` with the context's read options, under any the spec declares
+   * itself. A spec stays as given when neither has one, so default contexts
+   * keep their specs unchanged.
+   */
+  private withReadOptions<S extends { readonly readOptions?: JsonReadOptions }>(spec: S): S {
+    const readOptions = { ...this.readOptions, ...spec.readOptions };
+
+    return Object.keys(readOptions).length === 0 ? spec : { ...spec, readOptions };
   }
 
   /**

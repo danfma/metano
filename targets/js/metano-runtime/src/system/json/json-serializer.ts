@@ -30,7 +30,7 @@ function deserializeWithInfo<T>(
   converters?: readonly JsonConverter[],
 ): T {
   if (isValueSpec(spec)) {
-    return resolveConverter(spec.descriptor, converters).deserialize(data) as T;
+    return resolveConverter(spec.descriptor, converters, spec.readOptions).deserialize(data) as T;
   }
 
   return deserializeWithSpec(data, spec, converters);
