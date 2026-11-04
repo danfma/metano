@@ -24,6 +24,21 @@ public class OverloadDispatchGenericTests
 
                 public Bag(T item, int count) { Log = "count"; }
             }
+            """
+        );
+
+        await Assert
+            .That(result["bag.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-generic-unconstrained.ts"));
+    }
+
+    [Test]
+    public async Task Constructor_ConcreteAndGenericOfSameArity_TriesConcreteFirst()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
 
             public class Mixed<T>
             {
@@ -35,10 +50,6 @@ public class OverloadDispatchGenericTests
             }
             """
         );
-
-        await Assert
-            .That(result["bag.ts"])
-            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-generic-unconstrained.ts"));
 
         await Assert
             .That(result["mixed.ts"])

@@ -34,36 +34,57 @@ internal static class OverloadDispatchOrder
         overloads
             .Select(overload => (Overload: overload, Rank: OverloadRank.Of(parametersOf(overload))))
             .OrderBy(entry => entry.Rank.Tier)
-            .ThenBy(entry => entry.Rank.CountKey)
+            .ThenBy(entry => entry.Rank.ParameterCountOrder)
             .ThenBy(entry => entry.Rank.TypeParameterArguments)
             .Select(entry => entry.Overload)
             .ToList();
 
-    /// <summary>
-    /// The sort keys of one overload: its tier (required-only 0, optional 1,
-    /// <c>params</c> 2), its parameter count (ascending in the optional tier,
-    /// descending otherwise) and its type-parameter-typed parameters.
-    /// </summary>
-    private sealed record OverloadRank(int Tier, int CountKey, int TypeParameterArguments)
+    /// <summary>The tiers, in dispatch order.</summary>
+    private enum DispatchTier
     {
-        private const int RequiredTier = 0;
-        private const int OptionalTier = 1;
-        private const int ParamsTier = 2;
+        /// <summary>Every parameter is required.</summary>
+        Required,
 
+        /// <summary>Some parameter can be omitted, none is <c>params</c>.</summary>
+        Optional,
+
+        /// <summary>The last parameter is <c>params</c>.</summary>
+        Params,
+    }
+
+    /// <summary>
+    /// The sort keys of one overload.
+    /// </summary>
+    /// <param name="Tier">Its <see cref="DispatchTier"/>.</param>
+    /// <param name="ParameterCountOrder">Its parameter count, negated outside
+    /// the optional tier so an ascending sort puts the most parameters first
+    /// there and the fewest first in the optional tier.</param>
+    /// <param name="TypeParameterArguments">Its type-parameter-typed
+    /// parameters.</param>
+    private sealed record OverloadRank(
+        DispatchTier Tier,
+        int ParameterCountOrder,
+        int TypeParameterArguments
+    )
+    {
         public static OverloadRank Of(IReadOnlyList<IrParameter> parameters)
         {
             var tier = TierOf(new OverloadArgumentShape(parameters));
-            var countKey = tier == OptionalTier ? parameters.Count : -parameters.Count;
+            var countOrder = tier is DispatchTier.Optional ? parameters.Count : -parameters.Count;
 
-            return new OverloadRank(tier, countKey, parameters.Count(p => IsTypeParameter(p.Type)));
+            return new OverloadRank(
+                tier,
+                countOrder,
+                parameters.Count(p => IsTypeParameter(p.Type))
+            );
         }
 
-        private static int TierOf(OverloadArgumentShape arguments)
+        private static DispatchTier TierOf(OverloadArgumentShape arguments)
         {
             if (arguments.Rest is not null)
-                return ParamsTier;
+                return DispatchTier.Params;
 
-            return arguments.HasOptionalArguments ? OptionalTier : RequiredTier;
+            return arguments.HasOptionalArguments ? DispatchTier.Optional : DispatchTier.Required;
         }
 
         private static bool IsTypeParameter(IrTypeRef type) =>

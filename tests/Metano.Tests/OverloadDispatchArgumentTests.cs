@@ -109,6 +109,29 @@ public class OverloadDispatchArgumentTests
     }
 
     [Test]
+    public async Task OptionalAttribute_WithoutDefault_AcceptsTheOmittedArgument()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+            [assembly: TranspileAssembly]
+
+            public class Tagger
+            {
+                public string Tag([Optional] string? label) => label ?? "none";
+
+                public string Tag(int count, int extra) => "pair";
+            }
+            """
+        );
+
+        await Assert
+            .That(result["tagger.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("dispatcher-optional-attribute.ts"));
+    }
+
+    [Test]
     public async Task CallSites_OmitDefaultsAndPassParamsExpanded()
     {
         var result = TranspileHelper.Transpile(

@@ -60,7 +60,7 @@ public static class IrToTsConstructorDispatcherBridge
                         IrToTsTypeMapper.MapParameterType(p.Parameter),
                         Accessibility: TsAccessibility.None,
                         Rest: p.Parameter.IsParams,
-                        Optional: OverloadArgumentShape.IsOptional(p.Parameter)
+                        Optional: p.Parameter.CanBeOmitted
                     ))
                     .ToList()
             ))
@@ -154,9 +154,11 @@ public static class IrToTsConstructorDispatcherBridge
         if (IrToTsClassBridge.ResolveCtorParamDefault(parameter, context) is not { } defaultValue)
             return argument;
 
-        var omitted = new TsBinaryExpression(argument, "===", new TsIdentifier("undefined"));
-
-        return new TsConditionalExpression(omitted, defaultValue, argument);
+        return new TsConditionalExpression(
+            OverloadArgumentShape.IsOmitted(argument),
+            defaultValue,
+            argument
+        );
     }
 
     /// <summary>

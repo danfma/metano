@@ -234,7 +234,7 @@ internal static partial class IrToTsClassBridge
                 // operand admits any value and adds no check.
                 var check = IrTypeCheckBuilder.Generate(
                     paramTypes[j + paramOffset],
-                    new TsIdentifier($"args[{j}]"),
+                    OverloadArgumentShape.ArgumentAt(j),
                     []
                 );
 
@@ -252,7 +252,7 @@ internal static partial class IrToTsClassBridge
                 // the dispatcher we always have a real type so the fallback
                 // is just to keep the compiler honest.
                 var paramType = overloadParameters[i][j + paramOffset].Type ?? new TsAnyType();
-                callArgs.Add(new TsCastExpression(new TsIdentifier($"args[{j}]"), paramType));
+                callArgs.Add(new TsCastExpression(OverloadArgumentShape.ArgumentAt(j), paramType));
             }
 
             var delegateCall = new TsCallExpression(

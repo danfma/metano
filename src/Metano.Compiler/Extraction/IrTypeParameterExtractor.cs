@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -16,7 +17,7 @@ public static class IrTypeParameterExtractor
     public static IReadOnlyList<IrTypeParameter>? ExtractAll(
         IReadOnlyList<ITypeParameterSymbol> typeParameters,
         IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target = null
+        TargetLanguage? target = null
     ) =>
         typeParameters.Count > 0
             ? typeParameters.Select(tp => Extract(tp, originResolver, target)).ToList()
@@ -25,7 +26,7 @@ public static class IrTypeParameterExtractor
     public static IrTypeParameter Extract(
         ITypeParameterSymbol typeParameter,
         IrTypeOriginResolver? originResolver,
-        Metano.Annotations.TargetLanguage? target = null
+        TargetLanguage? target = null
     ) =>
         new(
             typeParameter.Name,
