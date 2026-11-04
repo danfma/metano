@@ -885,19 +885,25 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
        run of `[0-9.]` in the text is 16 characters long, since every number then has at most 15
        significant digits, which a double holds exactly (the check probes every 16th character:
        about 5 ms on Node and 4 ms on Bun for 10 MB). Otherwise the runtime's tokenizer builds the
-       tree and keeps each number of more than 15 significant digits as its source text. Only
+       tree and keeps as its source text each number whose mantissa has more than 15 digits past
+       a zero integer part (leading fraction zeros count, since the decimal rounding below
+       depends on them; the 16-character run covers them too). Only
        the built-in `decimal` converter reads that text; every other converter, custom ones
        included, gets the `number` `JSON.parse` gives, so a `double` or `long` property reads as
        before. A tokenized string is copied out of the text, so the tree never keeps the text
        alive (on JavaScriptCore a slice of any length does).
      - **Decimal rounding.** The `decimal` converter reads every number text (a long number, a
        `rawJSON` leaf, a JSON string under `AllowReadingFromString`) as STJ does: a 96-bit integer
-       and a scale of at most 28. Past them, the digits round half to even, except a tie at the
-       30th significant digit, which rounds up; `1e-29` and smaller read as `0`; a value that
+       and a scale of at most 28. Past them, the digits round half to even, except a tie (a 5
+       followed only by zeros) at the 30th digit of the text or later, which rounds up; digits
+       count from the first non-zero integer digit, or, when the integer part is zero, from the
+       first fraction digit, so leading fraction zeros count
+       (`0.0000000000000000000000000000025e2` reads as `3e-28`). `1e-29` and smaller read as
+       `0`; a value that
        rounds past `MaxValue` throws `The JSON value could not be converted to System.Decimal.`.
        A JSON number already read as a double is rounded the same way from its shortest text when
        it is non-zero and below `1e-11` (before #457, `1e-29` read as `1e-29`). Measured on .NET
-       10.0.12: the rows of DECIDED-23 f, 30 000 random texts (5 000 of them as JSON strings under
+       10.0.12: the rows of DECIDED-23 f, about 20 000 ties, 30 000 random texts (5 000 of them as JSON strings under
        Web) and the 20 019 values of the #458 probe all agree on Node 24.11 and Bun 1.4.2.
      - **Text errors.** Invalid JSON text throws `JsonException` with STJ's reader message,
        without the `Path` suffix (DECIDED-5), on every path: when `JSON.parse` throws its
@@ -1454,7 +1460,8 @@ the former `OPEN-N`.
     | `1e-29`, `1.5e-29`, `5e-29`, `1e-400` | `0.0000000000000000000000000000` | `0` (the scale) |
     | `9.9e-29`, `1.5e-28`, `2.5e-28`, `3.5e-28` | `1e-28`, `2e-28`, `2e-28`, `4e-28` in plain digits (half to even) | same |
     | `0.12345678901234567890123456785`, `…775` | `0.1234567890123456789012345678` for both (half to even) | same |
-    | `1.00000000000000000000000000025`, `12345678901234567890123456788.5` | `1.0000000000000000000000000003`, `12345678901234567890123456789` (a tie at the 30th digit rounds up) | same |
+    | `1.00000000000000000000000000025`, `12345678901234567890123456788.5` | `1.0000000000000000000000000003`, `12345678901234567890123456789` (a tie at the 30th digit of the text rounds up) | same |
+    | `0.0123456789012345678901234567850e1`, `0.0000000000000000000000000000025e2` | `0.1234567890123456789012345679`, `0.0000000000000000000000000003` (leading fraction zeros count toward the 30th digit) | same |
     | `"12345678901234567890.123456789"`, `"0.33333333333333333333333333333333"` (Web) | the same digits, `0.3333333333333333333333333333` | same |
     | `"1e-29"` (Web) | `0.0000000000000000000000000000` | `0` (the scale) |
     | `"1.5"` (General), `"79228162514264337593543950335.5"`, `" 1"`, `""`, `"NaN"` (Web) | `JsonException` | same |

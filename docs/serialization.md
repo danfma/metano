@@ -520,7 +520,9 @@ order.total.toFixed(); // "12345678901234567890.123456789"
 
 - **Decimals** are built from their source digits and rounded as .NET rounds
   them: at most 28 decimal places and 96 bits, half to even (`2.5e-28` reads as
-  `2e-28`, `1e-29` as `0`), and a value that rounds past `MaxValue`
+  `2e-28`, `1e-29` as `0`) except for a tie at the 30th digit of the text or
+  later, which rounds up (leading fraction zeros count:
+  `0.0000000000000000000000000000025e2` reads as `3e-28`), and a value that rounds past `MaxValue`
   (`79228162514264337593543950335.5`) throws `The JSON value could not be
   converted to System.Decimal.`. Every other value reads as `JSON.parse` reads
   it, custom converters included: a `double` or `long` property still gets a JS
@@ -528,7 +530,7 @@ order.total.toFixed(); // "12345678901234567890.123456789"
 - **The path is chosen per spec.** A spec with no `decimal` anywhere in its
   closure reads `JSON.parse(text)`, at the same cost as before. A spec with one
   reads `JSON.parse(text)` too unless the text may hold a number of more than
-  15 significant digits, which only the runtime's tokenizer keeps exactly. On a
+  15 digits, which only the runtime's tokenizer keeps exactly. On a
   10 MB `Order[]` (`bun run bench:json`, Node 24.11 / Bun 1.4.2), prices of two
   decimal places read in 123.5 / 83.9 ms against 114.7 / 78.1 ms through
   `JSON.parse` + `deserialize`; prices of 20 or more significant digits read
