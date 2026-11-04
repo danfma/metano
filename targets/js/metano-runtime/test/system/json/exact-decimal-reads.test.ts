@@ -164,6 +164,49 @@ describe("deserializeText — the other values of an exact tree read as JSON.par
     expect(seen).toEqual([0.30000000000000004]);
   });
 
+  // A custom converter matches every descriptor of its kind and reads the
+  // subtree itself, so none of its leaves may reach it.
+  describe("a custom container converter gets no JsonNumberText anywhere in its subtree", () => {
+    const LONG_INTEGER = "12345678901234567890";
+    const inner = holderSpec([{ ts: "n", json: "n", type: primitive }]);
+
+    const cases: readonly [
+      JsonConverter["kind"],
+      TypeSpec["properties"][number]["type"],
+      string,
+    ][] = [
+      ["array", { kind: "array", element: primitive }, `[[${LONG_INTEGER}]]`],
+      ["hashSet", { kind: "hashSet", element: primitive }, `[${LONG_INTEGER}]`],
+      ["map", { kind: "map", key: primitive, value: primitive }, `{"a":{"b":${LONG_INTEGER}}}`],
+      ["ref", { kind: "ref", spec: () => inner }, `{"n":[${LONG_INTEGER}]}`],
+      ["nullable", { kind: "nullable", inner: primitive }, `{"deep":[${LONG_INTEGER}]}`],
+    ];
+
+    for (const [kind, type, json] of cases) {
+      test(kind, () => {
+        const seen: unknown[] = [];
+
+        const spy: JsonConverter = {
+          kind,
+          serialize: (value) => value,
+          deserialize: (value) => {
+            seen.push(value);
+            return value;
+          },
+        };
+
+        const spec = holderSpec([
+          { ts: "price", json: "price", type: decimal },
+          { ts: "value", json: "value", type },
+        ]);
+
+        JsonSerializer.deserializeText(`{"price":${LONG},"value":${json}}`, spec, [spy]);
+
+        expect(seen).toEqual([JSON.parse(json)]);
+      });
+    }
+  });
+
   test("a long number as a polymorphic tag cannot be converted to the base", () => {
     const base: TypeSpec<Holder> = {
       ...holderSpec([{ ts: "price", json: "price", type: decimal }]),

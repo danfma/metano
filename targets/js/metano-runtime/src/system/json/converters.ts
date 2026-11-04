@@ -32,7 +32,7 @@ import {
 import { cannotConvertTo } from "./contract-name.ts";
 import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
-import { numberOfTreeValue } from "./exact-json-number.ts";
+import { numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
 import { forwardsNumberTexts } from "./exact-number-reads.ts";
 import {
   decimalConverterOf,
@@ -73,28 +73,36 @@ function resolveWith(
   const custom = customConverterFor(descriptor, plans.customConverters);
 
   if (custom) {
-    return readingTreeNumbers(custom, plans);
+    return readingTreeNumbers(custom, plans, treeWithDoubles);
   }
 
   const builtin = builtinOf();
 
-  return forwardsNumberTexts(descriptor) ? builtin : readingTreeNumbers(builtin, plans);
+  return forwardsNumberTexts(descriptor)
+    ? builtin
+    : readingTreeNumbers(builtin, plans, numberOfTreeValue);
 }
 
 /**
- * `converter`, reading a `JsonNumberText` leaf of an exact tree as the
- * `number` `JSON.parse` gives, so a converter that does not read exact
- * digits (custom converters included) sees the tree `JSON.parse` builds
- * (#457). A parsed tree holds no leaf, so its converters stay as they are.
+ * `converter`, reading the `JsonNumberText` leaves of an exact tree as the
+ * `number` `JSON.parse` gives (#457), through `asDoubles`: a built-in
+ * converter needs only its own value converted, since it hands each child
+ * to a child converter that converts it in turn; a custom one gets the
+ * whole subtree converted (`treeWithDoubles`). A parsed tree holds no leaf,
+ * so its converters stay as they are.
  */
-function readingTreeNumbers(converter: ValueConverter, plans: SpecPlans): ValueConverter {
+function readingTreeNumbers(
+  converter: ValueConverter,
+  plans: SpecPlans,
+  asDoubles: (value: unknown) => unknown,
+): ValueConverter {
   if (plans.treeNumbers === "parsed") {
     return converter;
   }
 
   return {
     serialize: converter.serialize,
-    deserialize: (value) => converter.deserialize(numberOfTreeValue(value)),
+    deserialize: (value) => converter.deserialize(asDoubles(value)),
   };
 }
 
