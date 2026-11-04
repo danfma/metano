@@ -36,7 +36,13 @@ const openContainers = { count: 0 };
  * written inside the 64th container.
  */
 export function writeContainer<T>(write: () => T): T {
-  return withinContainer(write, () => new JsonException(WRITE_DEPTH_MESSAGE));
+  enterWriteContainer();
+
+  try {
+    return write();
+  } finally {
+    exitContainer();
+  }
 }
 
 /**
@@ -45,7 +51,40 @@ export function writeContainer<T>(write: () => T): T {
  * nested containers are read, the 65th throws).
  */
 export function readContainer<T>(container: JsonContainer, read: () => T): T {
-  return withinContainer(read, () => new JsonException(readDepthMessage(container)));
+  enterReadContainer(container);
+
+  try {
+    return read();
+  } finally {
+    exitContainer();
+  }
+}
+
+/**
+ * Opens one more container for a write, as `writeContainer` does. The
+ * caller closes it with `exitContainer` in a `finally`, which keeps hot
+ * paths free of a closure per container (#456).
+ */
+export function enterWriteContainer(): void {
+  if (openContainers.count >= MAX_JSON_DEPTH) {
+    throw new JsonException(WRITE_DEPTH_MESSAGE);
+  }
+
+  openContainers.count++;
+}
+
+/** Opens one more container for a read, as `readContainer` does; see `enterWriteContainer`. */
+export function enterReadContainer(container: JsonContainer): void {
+  if (openContainers.count >= MAX_JSON_DEPTH) {
+    throw new JsonException(readDepthMessage(container));
+  }
+
+  openContainers.count++;
+}
+
+/** Closes the container the last `enterWriteContainer` / `enterReadContainer` opened. */
+export function exitContainer(): void {
+  openContainers.count--;
 }
 
 /** STJ's reader message for a container past the maximum depth. */
@@ -54,18 +93,4 @@ function readDepthMessage(container: JsonContainer): string {
     `The maximum configured depth of ${MAX_JSON_DEPTH} has been exceeded. ` +
     `Cannot read next JSON ${container}.`
   );
-}
-
-function withinContainer<T>(run: () => T, depthExceeded: () => JsonException): T {
-  if (openContainers.count >= MAX_JSON_DEPTH) {
-    throw depthExceeded();
-  }
-
-  openContainers.count++;
-
-  try {
-    return run();
-  } finally {
-    openContainers.count--;
-  }
 }
