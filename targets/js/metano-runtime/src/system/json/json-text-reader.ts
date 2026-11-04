@@ -26,9 +26,18 @@ import { JsonNumberText } from "./exact-json-number.ts";
  * The deepest nesting the recursive tokenizer reads: a third of what Node's
  * default stack held in a measurement (about 3 200 containers; Bun about
  * 20 000), far past FR-016's 64. `JSON.parse` reads deeper documents, so a
- * text nested past it is the one case where the two paths differ.
+ * text nested past it is the one case where the two paths differ. A caller
+ * already deep in the stack can run out of it sooner; `readJsonText` then
+ * throws the same `JsonException` instead of the `RangeError`. That path has
+ * no test: how many frames remain at a given depth differs between engines
+ * and JIT tiers (a probe that backed off a measured edge read 1000 levels on
+ * Bun at every distance and overflowed in the probe itself on Node).
  */
 const MAX_TEXT_DEPTH = 1000;
+
+const TOO_DEEP =
+  `The JSON text nests containers deeper than ${MAX_TEXT_DEPTH} levels, which ` +
+  "deserializeText does not read.";
 
 /** A number text with at most this many significant digits is exact as a double. */
 const DOUBLE_EXACT_DIGITS = 15;
@@ -146,11 +155,27 @@ export function parseJsonText(text: string): unknown {
 
 /**
  * The tree `JSON.parse(text)` builds, except that a number whose mantissa has
- * more than 15 digits past a zero integer part is a `JsonNumberText` leaf. Strings are copied, so the
- * tree never keeps `text` alive (a slice would, on JavaScriptCore).
+ * more than 15 digits past a zero integer part is a `JsonNumberText` leaf.
+ * Strings are copied, so the tree never keeps `text` alive (a slice would,
+ * on JavaScriptCore). A caller already deep in the stack can run out of it
+ * before `MAX_TEXT_DEPTH`; the stack overflow then throws the same
+ * `JsonException` as the bound.
  */
 export function readJsonText(text: string): unknown {
-  return new JsonTextReader(text).readDocument();
+  try {
+    return new JsonTextReader(text).readDocument();
+  } catch (error) {
+    if (isStackOverflow(error)) {
+      throw new JsonException(TOO_DEEP);
+    }
+
+    throw error;
+  }
+}
+
+/** V8 and JavaScriptCore both say "Maximum call stack size exceeded". */
+function isStackOverflow(error: unknown): boolean {
+  return error instanceof RangeError && /call stack/i.test(error.message);
 }
 
 /** A recursive-descent reader over the UTF-16 code units of one JSON document. */
@@ -207,7 +232,7 @@ class JsonTextReader {
 
     this.enterContainer("object");
 
-    let code = this.codeAfterOpening();
+    let code = this.codeWhereItemStarts();
 
     if (code === CLOSE_BRACE) {
       return this.exitContainer(result);
@@ -248,7 +273,7 @@ class JsonTextReader {
     }
 
     this.position++;
-    setMember(result, name, this.readValue(this.codeAfterOpening()));
+    setMember(result, name, this.readValue(this.codeWhereItemStarts()));
   }
 
   private readArray(): unknown[] {
@@ -256,7 +281,7 @@ class JsonTextReader {
 
     this.enterContainer("array");
 
-    let code = this.codeAfterOpening();
+    let code = this.codeWhereItemStarts();
 
     if (code === CLOSE_BRACKET) {
       return this.exitContainer(result);
@@ -283,7 +308,7 @@ class JsonTextReader {
    * The next code after `[`, `{` or `:`. STJ's reader takes a `/` there for
    * the start of a comment after a value, and reports it as such.
    */
-  private codeAfterOpening(): number {
+  private codeWhereItemStarts(): number {
     const code = this.codeInContainer();
 
     if (code === SLASH) {
@@ -322,10 +347,7 @@ class JsonTextReader {
   /** Steps over the opening `{` or `[`, within the tokenizer's own depth bound. */
   private enterContainer(container: JsonContainer): void {
     if (this.depth >= MAX_TEXT_DEPTH) {
-      throw new JsonException(
-        `The JSON text nests containers deeper than ${MAX_TEXT_DEPTH} levels, which ` +
-          `deserializeText does not read. Cannot read next JSON ${container}.`,
-      );
+      throw new JsonException(`${TOO_DEEP} Cannot read next JSON ${container}.`);
     }
 
     this.depth++;
@@ -452,8 +474,8 @@ class JsonTextReader {
     const integerEnd = this.integerEnd(start + signLength);
     const mantissaEnd = this.fractionEnd(integerEnd);
     const end = this.exponentEnd(mantissaEnd);
-
-    const endsAfterFraction = mantissaEnd > integerEnd && end === mantissaEnd;
+    const hasFraction = mantissaEnd > integerEnd;
+    const endsAfterFraction = hasFraction && end === mantissaEnd;
 
     this.throwIfNoDelimiterAt(end, endsAfterFraction);
     this.position = end;
@@ -465,7 +487,7 @@ class JsonTextReader {
       return Number(text.slice(start, end));
     }
 
-    return numberOrNumberText(text, start, start + signLength, mantissaEnd, end);
+    return numberOrNumberText(text, start, start + signLength, mantissaEnd, end, hasFraction);
   }
 
   /** The end of the integer digits at `index`: `0`, or digits without a leading zero. */
@@ -639,10 +661,11 @@ function numberOrNumberText(
   mantissaStart: number,
   mantissaEnd: number,
   end: number,
+  hasFraction: boolean,
 ): number | JsonNumberText {
   const source = text.slice(start, end);
 
-  if (textDigitsOf(text, mantissaStart, mantissaEnd) <= DOUBLE_EXACT_DIGITS) {
+  if (textDigitsOf(text, mantissaStart, mantissaEnd, hasFraction) <= DOUBLE_EXACT_DIGITS) {
     return Number(source);
   }
 
@@ -656,17 +679,11 @@ function numberOrNumberText(
  * a single `0`): every significant digit, and the zeros before it in the
  * fraction.
  */
-function textDigitsOf(text: string, start: number, end: number): number {
-  const zeroIntegerPart = text.charCodeAt(start) === ZERO ? 1 : 0;
-  let digits = end - start - zeroIntegerPart;
+function textDigitsOf(text: string, start: number, end: number, hasFraction: boolean): number {
+  const zeroIntegerDigits = text.charCodeAt(start) === ZERO ? 1 : 0;
+  const pointLength = hasFraction ? 1 : 0;
 
-  for (let index = start; index < end; index++) {
-    if (text.charCodeAt(index) === DOT) {
-      digits--;
-    }
-  }
-
-  return digits;
+  return end - start - zeroIntegerDigits - pointLength;
 }
 
 function digitsEnd(text: string, index: number): number {

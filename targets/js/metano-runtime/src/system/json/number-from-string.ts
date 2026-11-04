@@ -168,14 +168,17 @@ export function readNumberText(text: string, numberType: NumberTypeName): number
 export function significandPartsOf(parts: RegExpExecArray): SignificandParts {
   const { integer = "", fraction = "", bareFraction = "", exponent = "0" } = parts.groups ?? {};
   const fractionDigits = fraction + bareFraction;
-  const integerIsZero = integer.replace(LEADING_ZEROS_PATTERN, "") === "";
-  const significantFraction = fractionDigits.replace(LEADING_ZEROS_PATTERN, "");
+  const integerIsZero = leadingZerosOf(integer) === integer.length;
 
   return {
     significand: (integer + fractionDigits).replace(LEADING_ZEROS_PATTERN, ""),
     exponent: Number(exponent) - fractionDigits.length,
-    leadingFractionZeros: integerIsZero ? fractionDigits.length - significantFraction.length : 0,
+    leadingFractionZeros: integerIsZero ? leadingZerosOf(fractionDigits) : 0,
   };
+}
+
+function leadingZerosOf(digits: string): number {
+  return LEADING_ZEROS_PATTERN.exec(digits)?.[0].length ?? 0;
 }
 
 /** Whether `value` is strictly below `bound`. */
