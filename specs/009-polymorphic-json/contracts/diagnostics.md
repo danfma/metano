@@ -99,13 +99,35 @@ included, e.g. `TestApp.Anchor.Image`).
 
 ## `MS0037` `UnmirroredJsonOption` — Warning
 
+Every writable property of `JsonSourceGenerationOptionsAttribute` and every attribute of
+`System.Text.Json.Serialization` on .NET 10 is either mirrored, ignored because it does not change
+the JSON value, or reported here (FR-046, DECIDED-25).
+
 | Rule | Location | Message shape |
 |---|---|---|
-| Context sets a wire-affecting option that is not mirrored (FR-046 list; `NumberHandling` only for flags other than `AllowReadingFromString`) | `[JsonSourceGenerationOptions]` | `'DefaultIgnoreCondition' changes the JSON wire format, but the generated TypeScript context does not mirror it.` |
-| `[JsonPropertyOrder]` on a contract member (DECIDED-3) | member | `'Ord.A' has [JsonPropertyOrder]: System.Text.Json reorders the properties, the TypeScript context keeps declaration order.` |
-| `[JsonInclude]` field or non-public property | member | `'Episode._secret' is included by System.Text.Json but not collected by the TypeScript context.` |
-| `byte[]` root or property | attribute / member | `'Blob.Data' is byte[]: System.Text.Json writes base64, the TypeScript context writes a number array.` |
+| Context sets an unmirrored option to a value other than STJ's default: `DefaultIgnoreCondition`, `IgnoreReadOnlyProperties`, `IgnoreReadOnlyFields`, `IncludeFields`, `UseStringEnumConverter`, `Converters` (non-empty), `ReferenceHandler`, `DictionaryKeyPolicy`, `ReadCommentHandling`, `AllowTrailingCommas`, `AllowDuplicateProperties`, `UnmappedMemberHandling`, `UnknownTypeHandling`, `PreferredObjectCreationHandling`, `RespectNullableAnnotations`, `RespectRequiredConstructorParameters`, `MaxDepth` (other than `0` / `64`) | the named argument | `'DefaultIgnoreCondition' changes the JSON wire format, but the generated TypeScript context does not mirror it.` |
+| `NumberHandling` with a flag other than `AllowReadingFromString` (one warning per flag) | the named argument | `'NumberHandling.WriteAsString' changes the JSON wire format, …` |
+| `[JsonInclude]` on a member the source generator cannot reach (`private`, `protected`, `private protected`, or a public property with such an accessor; SYSLIB1038, the STJ contract throws `InvalidOperationException`) | member | `'Inc.Secret' has [JsonInclude], but the System.Text.Json source generator cannot access it (SYSLIB1038), so its contract throws InvalidOperationException; the TypeScript context does not mirror that.` |
+| `[JsonExtensionData]` on a serialized member (left out of the spec) | attribute | `'Open.Extra' is [JsonExtensionData]: System.Text.Json writes its entries as properties of the object and collects unmapped ones into it, the TypeScript context leaves it out.` |
+| `[JsonConverter]` on a serialized member | attribute | `'Doc.Title' has [JsonConverter]: the TypeScript context converts it as its type, without the custom converter.` |
+| `[JsonConverter]` on a type the context reaches, except a `[Branded]` / `[InlineWrapper]` type | attribute | `'Mood' has [JsonConverter]: the TypeScript context converts it with its built-in descriptor, without the custom converter.` |
+| `[JsonNumberHandling]` on a serialized member / on a contract type | attribute | `'Stats.Count' has [JsonNumberHandling]: the TypeScript context applies the context's number handling.` / `'Stats' has [JsonNumberHandling]: … to its members.` |
+| `[JsonObjectCreationHandling(Populate)]` on a serialized member or a contract type | attribute | `'Bag.Items' has [JsonObjectCreationHandling(Populate)]: the TypeScript context replaces the value on read.` |
+| `[JsonUnmappedMemberHandling(Disallow)]` on a contract type | attribute | `'Strict' has [JsonUnmappedMemberHandling(Disallow)]: the TypeScript context skips unmapped JSON properties.` |
+| `[JsonRequired]` on a nullable serialized member | attribute | `'Req.Note' has [JsonRequired]: System.Text.Json rejects a payload without it, the TypeScript context reads a missing nullable member as null.` |
+| `[JsonIgnore(Condition = WhenWritingNull \| WhenWritingDefault \| WhenWriting \| WhenReading)]` (the member is kept) | member | `'Flags.Note' has [JsonIgnore(Condition = WhenWritingNull)]: the TypeScript context always writes and reads it.` |
+| `[JsonConstructor]` on a constructor other than the one the factory calls | constructor | `'Pair' has [JsonConstructor] on a constructor the TypeScript context does not call: it constructs the type through its primary constructor.` |
+
+Each member and type is reported once per context (a generic definition once for all its
+constructions); attributes of a member System.Text.Json does not serialize are not reported.
 
 Not reported, because they are mirrored: `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`,
 `NumberHandling = AllowReadingFromString`, `JsonSerializerDefaults.Web` and
-`AllowOutOfOrderMetadataProperties` (FR-002, FR-048).
+`AllowOutOfOrderMetadataProperties` (FR-002, FR-048); `[JsonPropertyName]`,
+`[JsonPropertyOrder]`, `[JsonInclude]` on a reachable member, `byte[]` (base64),
+`[JsonIgnore]` with `Always` / `Never`, `[JsonRequired]` on a non-nullable member,
+`[JsonConstructor]` on the constructor the factory calls, `[JsonPolymorphic]`,
+`[JsonDerivedType]`, `[JsonSerializable]` (S6b, DECIDED-25). Not reported, because they do not
+change the JSON value: `WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`,
+`DefaultBufferSize`, `GenerationMode`. `[JsonStringEnumMemberName]` only matters under a string
+enum converter, which is reported itself.

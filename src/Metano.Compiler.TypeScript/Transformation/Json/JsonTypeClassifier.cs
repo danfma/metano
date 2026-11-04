@@ -27,6 +27,9 @@ internal static class JsonTypeClassifier
         if (type is INamedTypeSymbol named)
             return ClassifyNamed(named);
 
+        if (IsByteArray(type))
+            return JsonPropertyKind.Bytes;
+
         if (type is IArrayTypeSymbol)
             return JsonPropertyKind.Array;
 
@@ -100,6 +103,14 @@ internal static class JsonTypeClassifier
     /// </summary>
     public static string? NumberTypeNameOf(ITypeSymbol type) =>
         IsNumber(type) ? $"System.{type.MetadataName}" : null;
+
+    /// <summary>
+    /// A single-dimensional <c>byte[]</c>, which System.Text.Json writes as a
+    /// base64 string; <c>List&lt;byte&gt;</c> and <c>byte[,]</c> are not
+    /// (measured: <c>List&lt;byte&gt;</c> writes <c>[1,2]</c>).
+    /// </summary>
+    private static bool IsByteArray(ITypeSymbol type) =>
+        type is IArrayTypeSymbol { Rank: 1, ElementType.SpecialType: SpecialType.System_Byte };
 
     private static bool IsPrimitive(ITypeSymbol type) =>
         IsNumber(type)

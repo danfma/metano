@@ -143,12 +143,15 @@ When it sees a class that inherits from `JsonSerializerContext`:
    too, in attribute order, with its own base chain and property types, even
    when no root names it (see [Polymorphism](#polymorphism)).
 
-4. **For each serializable type `T`**, walks its public properties and:
-   - Excludes `[JsonIgnore]` and static properties
+4. **For each serializable type `T`**, walks the members System.Text.Json's
+   source generator serializes (see [Member selection](#member-selection)) and:
+   - Excludes `[JsonIgnore]` (unless `Condition = Never`), `[JsonExtensionData]`
+     and static members
    - Resolves the JSON name: `[JsonPropertyName]` override wins, otherwise
-     applies the context's naming policy to the C# property name
-   - Classifies the property type (primitive, temporal, decimal, array, map,
-     branded, enum, ref, etc.)
+     applies the context's naming policy to the C# member name
+   - Classifies the member type (primitive, temporal, decimal, bytes, array,
+     map, branded, enum, ref, etc.)
+   - Records a non-zero `[JsonPropertyOrder]` as the property's `order`
 
 5. **Emits a `TypeSpec<T>`** as a lazy getter on the `SerializerContext`
    subclass, with pre-computed `ts`/`json` names, for every object type, and a
@@ -234,6 +237,7 @@ handles these kinds:
 | `primitive` | string, number, boolean | passthrough | passthrough; a JSON string for a numeric `numberType` when the context reads numbers from strings ([details](#web-defaults)) |
 | `temporal` | `Temporal.PlainDate`, etc. | `.toString()` | `Type.from(iso)` |
 | `decimal` | `Decimal` | `JSON.rawJSON(value.toFixed())`: its exact digits as a JSON number ([details](#decimals)) | `new Decimal(value)` from the JSON number, or from the JSON string when the context reads numbers from strings; anything else, or a value outside the decimal range, throws `The JSON value could not be converted to System.Decimal.` |
+| `bytes` | `number[]` (C# `byte[]`) | padded standard base64, one line (`[1,2,3]` → `"AQID"`) | base64 as System.Text.Json reads it: space, tab, CR and LF ignored; anything else invalid throws `The JSON value could not be converted to System.Byte[].` |
 | `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
@@ -300,18 +304,94 @@ your own `JsonConverter`.
 | `[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]` | ✅ | camelCase names, case-insensitive property names and numbers read from strings, as in .NET ([details](#web-defaults)) |
 | `[JsonSourceGenerationOptions]` with `PropertyNameCaseInsensitive`, `NumberHandling = AllowReadingFromString` or `AllowOutOfOrderMetadataProperties` | ✅ | Mirrored in the context's `readOptions` ([details](#web-defaults)); the other `NumberHandling` flags (`WriteAsString`, `AllowNamedFloatingPointLiterals`) are not |
 | `[JsonPropertyName("wire_name")]` | ✅ | Overrides the wire name for that property |
-| `[JsonIgnore]` | ✅ | Excludes the property from the spec; on an override, also hides the base declarations ([details](#inheritance)) |
+| `[JsonIgnore]` | ✅ | Excludes the property from the spec; on an override, also hides the base declarations ([details](#inheritance)). `Condition = Never` keeps it; `WhenWritingNull`, `WhenWritingDefault`, `WhenWriting` and `WhenReading` keep it too, always written and read, and warn `MS0037` |
+| `[JsonInclude]` | ✅ | Serializes a field or an `internal` / `protected internal` property ([details](#member-selection)); on a member the source generator cannot reach, warns `MS0037` |
+| `[JsonPropertyOrder(n)]` | ✅ | Emitted as the property's `order`; the runtime sorts the whole hierarchy by it ([details](#member-selection)) |
 | `JsonKnownNamingPolicy.CamelCase` | ✅ | `FirstName` → `firstName` |
 | `JsonKnownNamingPolicy.SnakeCaseLower` | ✅ | `FirstName` → `first_name` |
 | `JsonKnownNamingPolicy.SnakeCaseUpper` | ✅ | `FirstName` → `FIRST_NAME` |
 | `JsonKnownNamingPolicy.KebabCaseLower` | ✅ | `FirstName` → `first-name` |
 | `JsonKnownNamingPolicy.KebabCaseUpper` | ✅ | `FirstName` → `FIRST-NAME` |
 | Default (`null`, `JsonKnownNamingPolicy.Unspecified`) | ✅ | Preserves PascalCase (`FirstName` → `FirstName`) |
-| `[JsonConverter]` | ❌ | Not yet — use custom converters at runtime instead |
-| `[JsonRequired]` | ❌ | Not yet |
-| `[JsonExtensionData]` | ❌ | Not yet |
+| `[JsonConverter]` | ⚠️ | Not mirrored, `MS0037` — use custom converters at runtime instead. Not reported on a `[Branded]` / `[InlineWrapper]` type, whose descriptor already writes the wrapped value |
+| `[JsonRequired]` | ✅ / ⚠️ | A non-nullable member is already required on read; on a nullable member a missing key reads `null` where STJ throws, `MS0037` |
+| `[JsonExtensionData]` | ⚠️ | Left out of the spec, `MS0037` |
+| `[JsonNumberHandling]`, `[JsonObjectCreationHandling(Populate)]`, `[JsonUnmappedMemberHandling(Disallow)]` | ⚠️ | Not mirrored, `MS0037` |
+| `[JsonConstructor]` | ✅ / ⚠️ | Mirrored on the constructor the factory calls (the primary one, else the one with the most parameters); on another constructor, `MS0037` |
+| Any other `[JsonSourceGenerationOptions]` option | ⚠️ | `MS0037` when set to a value other than System.Text.Json's default; formatting options (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`) and `DefaultBufferSize` / `GenerationMode` are never reported ([details](#member-selection)) |
 | `[JsonDerivedType]` / `[JsonPolymorphic]` on a class or record | ✅ | Emits the base's `polymorphism` descriptor and a spec for every registered type ([details](#polymorphism)) |
 | `[JsonDerivedType]` on an interface or a `[PlainObject]` type | ✅ | Interface bases dispatch class variants by constructor; `[PlainObject]` variants are selected by synthesized guards ([details](#interface-and-plainobject-hierarchies)) |
+
+## Member selection
+
+The context serializes the members System.Text.Json's source generator
+serializes (measured on .NET 10, spec 009 FR-046, DECIDED-25):
+
+- Public instance properties, as before.
+- With `[JsonInclude]`, a field or a non-public property, when the member and
+  its accessors are `public`, `internal` or `protected internal`. A `private` or
+  `protected` `[JsonInclude]` member (or a public property with a `private`
+  setter) makes the System.Text.Json contract throw `InvalidOperationException`
+  (SYSLIB1038); the transpiler warns `MS0037` and leaves a non-public one out.
+  A public field without `[JsonInclude]` is not serialized (`IncludeFields`
+  warns `MS0037`).
+- Each type lists its properties, then its fields; the FR-009 hierarchy order
+  applies across types ([Inheritance](#inheritance)).
+- `[JsonPropertyOrder(n)]` sorts the properties of the whole hierarchy by `n`,
+  stably (absent counts as `0`); the attribute of the most-derived declaration
+  counts, so an override without it has order `0`:
+
+```csharp
+public class OrdBase
+{
+    public int Base1 { get; set; } = 1;
+
+    [JsonPropertyOrder(5)]
+    public int Base2 { get; set; } = 2;
+
+    [JsonPropertyOrder(-5)]
+    public int Base3 { get; set; } = 3;
+}
+
+public class OrdDer : OrdBase
+{
+    public int Der1 { get; set; } = 10;
+
+    [JsonPropertyOrder(-5)]
+    public int Der2 { get; set; } = 20;
+
+    [JsonPropertyOrder(1)]
+    public int Der3 { get; set; } = 30;
+}
+
+// new OrdDer() → {"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}
+```
+
+On read, the factory passes the constructor's parameters and then assigns, with
+`Object.assign(new T(…), { … })`, every member no parameter binds that
+System.Text.Json sets: a property with a public `set` / `init` accessor (or a
+reachable one under `[JsonInclude]`) and a writable `[JsonInclude]` field. A
+get-only property is written and still required on read (see
+[Errors and limits](#errors-and-limits)).
+
+A `byte[]` is written as base64 (`[255,254,253]` → `"//79"`) and read back with
+System.Text.Json's rules; `List<byte>` stays a number array. A `null` `byte[]`
+property is written `null`, where a source-generated context's fast path writes
+`""` (which it then reads back as an empty array).
+
+Everything else System.Text.Json offers is either mirrored or reported with
+warning `MS0037` (`UnmirroredJsonOption`) at the option or attribute, so a
+context never diverges silently: the unmirrored `[JsonSourceGenerationOptions]`
+options set to a non-default value (`DefaultIgnoreCondition`,
+`IgnoreReadOnlyProperties`, `IgnoreReadOnlyFields`, `IncludeFields`,
+`UseStringEnumConverter`, `Converters`, `ReferenceHandler`,
+`DictionaryKeyPolicy`, `ReadCommentHandling`, `AllowTrailingCommas`,
+`AllowDuplicateProperties`, `UnmappedMemberHandling`, `UnknownTypeHandling`,
+`PreferredObjectCreationHandling`, `RespectNullableAnnotations`,
+`RespectRequiredConstructorParameters`, `MaxDepth` other than 64, and each
+`NumberHandling` flag but `AllowReadingFromString`) and the attributes in the
+table above. The full list is in
+[the diagnostics contract](../specs/009-polymorphic-json/contracts/diagnostics.md).
 
 ## Web defaults
 
@@ -811,7 +891,8 @@ Messages follow System.Text.Json without its `Path` / `LineNumber` suffix:
 | Input | Message |
 |---|---|
 | A non-object JSON value (or an array) for an object contract | `The JSON value could not be converted to Episode.` (`Object` for a `[PlainObject]` contract, which has no constructor) |
-| A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence) |
+| A missing non-nullable property | `Missing required property: "title"` (STJ uses the default value unless the member is `required`; a documented divergence). A nullable member declared `required` or `[JsonRequired]` reads `null` when missing, where STJ throws (`[JsonRequired]` warns `MS0037`) |
+| An invalid base64 text, or a non-string JSON value, for a `byte[]` | `The JSON value could not be converted to System.Byte[].` (STJ names the declaring type for a constructor-bound property) |
 | A non-array JSON value for an array, list or set | `Expected array for deserialization, got object` (STJ names the CLR collection type) |
 | A non-object JSON value (or an array) for a dictionary | `Expected object for deserialization, got array` |
 | A numeric JSON string the grammar rejects, when the context reads numbers from strings | `The JSON value could not be converted to System.Int32.` (STJ names the declaring type for a constructor-bound property) |

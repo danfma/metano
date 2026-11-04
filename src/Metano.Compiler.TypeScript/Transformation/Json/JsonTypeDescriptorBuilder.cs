@@ -54,6 +54,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             JsonPropertyKind.Ref => BuildRefDescriptor(type),
             JsonPropertyKind.Primitive => BuildPrimitiveDescriptor(type),
             JsonPropertyKind.Decimal => BuildDecimalDescriptor((INamedTypeSymbol)type),
+            JsonPropertyKind.Bytes => BuildBareKindDescriptor(JsonPropertyKind.Bytes),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown kind."),
         };
 
@@ -84,6 +85,7 @@ internal sealed class JsonTypeDescriptorBuilder(
             JsonPropertyKind.Nullable => "nullable",
             JsonPropertyKind.Branded => "branded",
             JsonPropertyKind.Decimal => "decimal",
+            JsonPropertyKind.Bytes => "bytes",
             JsonPropertyKind.Temporal => "temporal",
             JsonPropertyKind.Map => "map",
             JsonPropertyKind.HashSet => "hashSet",
@@ -242,7 +244,7 @@ internal sealed class JsonTypeDescriptorBuilder(
 
     /// <summary>
     /// Builds a kind-only descriptor for leaf wire kinds with no
-    /// payload (primitive). The runtime <c>SerializerContext</c>
+    /// payload (primitive, bytes). The runtime <c>SerializerContext</c>
     /// reads the <c>kind</c> field and routes by it without further
     /// fields.
     /// </summary>

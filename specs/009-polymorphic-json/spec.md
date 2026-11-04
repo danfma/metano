@@ -69,7 +69,8 @@ R1–R4, R8).
 - One specification covers #268, #269 and #270.
 - **v1 option set**: int and string tags, the three `UnknownDerivedTypeHandling` modes,
   `IgnoreUnrecognizedTypeDiscriminators` and `AllowOutOfOrderMetadataProperties`.
-  `[JsonPropertyOrder]` is out of scope and raises `MS0037` when used (DECIDED-3).
+  `[JsonPropertyOrder]` was left out of v1 with `MS0037` (DECIDED-3); slice S6b mirrors it,
+  with `[JsonInclude]` and `byte[]` (DECIDED-25).
 - **Interface and `[PlainObject]` hierarchies are supported in v1.** Reading dispatches on the
   discriminator, which is authoritative. Writing dispatches on runtime type tests: `instanceof` for
   class-backed variants, and a guard that the generator synthesizes for each `[PlainObject]`
@@ -258,10 +259,12 @@ wire format.
    DECIDED-14). A getter name equal to a `SerializerContext` member is always an Error.
 6. **Given** a context whose `[JsonSourceGenerationOptions]` sets a wire-affecting option the
    generator does not mirror (e.g. `DefaultIgnoreCondition`, `NumberHandling = WriteAsString`,
-   `ReferenceHandler`, `Converters`), a root / property of type `byte[]`, or a contract member
-   with `[JsonPropertyOrder]`, **Then** `MS0037` (Warning) names the option or member (FR-046).
-   `PropertyNameCaseInsensitive` and `NumberHandling = AllowReadingFromString` are mirrored
-   (FR-048) and are not reported.
+   `ReferenceHandler`, `Converters`), or a contract member or type with an unmirrored
+   System.Text.Json attribute (e.g. `[JsonConverter]`, `[JsonExtensionData]`), **Then** `MS0037`
+   (Warning) names the option or member (FR-046). `PropertyNameCaseInsensitive` and
+   `NumberHandling = AllowReadingFromString` are mirrored (FR-048), and `byte[]`,
+   `[JsonInclude]` and `[JsonPropertyOrder]` are mirrored since slice S6b (DECIDED-25); none of
+   them is reported.
 
 ---
 
@@ -746,8 +749,11 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   FR-009 removes a duplicated overridden property, FR-037 adds `valueType: true` to struct
   contracts, FR-048 changes contexts declared with `JsonSerializerDefaults.Web` (camelCase
   names, read options, number hints), and every `decimal` descriptor names its type
-  (`{ kind: "decimal", type: Decimal }`, DECIDED-23 f). The types of call sites change with FR-034 (breaking,
-  FR-049).
+  (`{ kind: "decimal", type: Decimal }`, DECIDED-23 f). Since slice S6b (FR-046, DECIDED-25) a
+  `byte[]` descriptor is `{ kind: "bytes" }` instead of a number array, and a factory wraps
+  `new T(…)` in `Object.assign(…, { … })` when the contract has members no constructor parameter
+  binds that System.Text.Json assigns on read (before S6b they were silently not read). The types
+  of call sites change with FR-034 (breaking, FR-049).
 - **FR-041**: The runtime additions MUST be additive and exported from
   `metano-runtime/system/json` (`ValueSpec`, `JsonTypeInfo`, `PolymorphismSpec`, `DerivedTypeSpec`,
   `TypeDiscriminator`, `UnknownDerivedTypeHandling`, `JsonReadOptions`, `NumberTypeName`,
@@ -776,22 +782,50 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   STJ-style `The JSON value could not be converted to <Type>.`) and a missing non-optional property.
   The **semantics** of a missing property stay as today (Metano throws; STJ uses the default value
   unless the member is `required`) and are listed as a documented divergence.
-- **FR-046**: The generator MUST report `MS0037` (`UnmirroredJsonOption`, Warning) at the context
-  when its `[JsonSourceGenerationOptions]` sets an option that changes the wire and that the
-  generator does not mirror: `DefaultIgnoreCondition`, `IgnoreReadOnlyProperties`,
-  `IgnoreReadOnlyFields`, `IncludeFields`, `NumberHandling` with any flag other than
-  `AllowReadingFromString` (`WriteAsString`, `AllowNamedFloatingPointLiterals`),
-  `UseStringEnumConverter`, `Converters`, `ReferenceHandler`, `DictionaryKeyPolicy`,
-  `ReadCommentHandling`, `AllowTrailingCommas`, `UnmappedMemberHandling`, `RespectNullableAnnotations`,
-  `RespectRequiredConstructorParameters`. Formatting-only options (`WriteIndented`, `Encoder`) are
-  not reported: `JSON.stringify` formatting belongs to the caller. It MUST also report `MS0037` at
-  the member for a `[JsonInclude]` field / non-public property (not collected), for a `byte[]` root
-  or property (STJ writes base64; Metano writes a number array), and for a contract member with
-  `[JsonPropertyOrder]` (STJ reorders the properties, measured `{"b":2,"a":1}`; the generated
-  context keeps declaration order, DECIDED-3). Mirrored options: `PropertyNamingPolicy`,
-  `PropertyNameCaseInsensitive`, `NumberHandling = AllowReadingFromString`, the
-  `JsonSerializerDefaults.Web` constructor argument that sets those three (FR-048), and
-  `AllowOutOfOrderMetadataProperties` (FR-002).
+- **FR-046**: The generator MUST mirror System.Text.Json's member selection and binary encoding,
+  and MUST report `MS0037` (`UnmirroredJsonOption`, Warning) for every option or attribute that
+  changes the wire and that it does not mirror, so that nothing is silently ignored (rewritten by
+  slice S6b, DECIDED-25):
+  1. **Context options.** `MS0037` at the named argument of `[JsonSourceGenerationOptions]` when
+     it sets, to a value other than System.Text.Json's default, `DefaultIgnoreCondition`,
+     `IgnoreReadOnlyProperties`, `IgnoreReadOnlyFields`, `IncludeFields`,
+     `UseStringEnumConverter`, `Converters` (non-empty), `ReferenceHandler`,
+     `DictionaryKeyPolicy`, `ReadCommentHandling`, `AllowTrailingCommas`,
+     `AllowDuplicateProperties`, `UnmappedMemberHandling`, `UnknownTypeHandling`,
+     `PreferredObjectCreationHandling`, `RespectNullableAnnotations`,
+     `RespectRequiredConstructorParameters` or `MaxDepth` (other than `0` / `64`, the runtime's
+     limit), and once per `NumberHandling` flag other than `AllowReadingFromString`
+     (`WriteAsString`, `AllowNamedFloatingPointLiterals`). Formatting and buffering options
+     (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`, `DefaultBufferSize`,
+     `GenerationMode`) are not reported: `JSON.stringify` formatting belongs to the caller.
+     Mirrored: `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`,
+     `NumberHandling = AllowReadingFromString`, the `JsonSerializerDefaults.Web` constructor
+     argument that sets those three (FR-048), and `AllowOutOfOrderMetadataProperties` (FR-002).
+  2. **`[JsonInclude]`** is mirrored as the source generator applies it (measured): a field or a
+     non-public property is serialized only with `[JsonInclude]`, and only when the member and
+     its accessors are `public`, `internal` or `protected internal`; each type lists its
+     properties, then its fields. A `[JsonInclude]` member with a `private` / `protected` /
+     `private protected` declaration or accessor makes the STJ contract throw
+     `InvalidOperationException` (SYSLIB1038) and is reported with `MS0037`.
+  3. **`byte[]`** is mirrored: a single-dimensional `byte[]` (property, element, dictionary
+     value, nullable inner or value root) is a `{ kind: "bytes" }` descriptor whose runtime
+     converter writes padded standard base64 and reads it with STJ's measured rules
+     (`contracts/runtime-api.md`, S6b). `List<byte>` stays a number array, as in STJ.
+  4. **`[JsonPropertyOrder]`** is mirrored: a non-zero order is emitted as `PropertySpec.order`
+     and the runtime sorts the wire properties of the whole base chain by it, stably over the
+     FR-009 order (measured `{"Der2":20,"Base3":3,"Der1":10,"Base1":1,"Der3":30,"Base2":2}`).
+  5. **Reads assign unbound members.** A factory assigns, after construction, every member no
+     constructor parameter binds that System.Text.Json sets on read: a property with a public
+     `set` / `init` accessor (or a reachable one under `[JsonInclude]`) and a writable
+     `[JsonInclude]` field. A get-only property is still written and required on read (FR-045).
+  6. **Member and type attributes.** `MS0037` at the attribute for `[JsonExtensionData]` (the
+     member is left out), `[JsonConverter]` on a serialized member or on any type the context
+     reaches except a `[Branded]` / `[InlineWrapper]` type, `[JsonNumberHandling]` on a
+     serialized member or a contract type, `[JsonObjectCreationHandling(Populate)]`,
+     `[JsonUnmappedMemberHandling(Disallow)]`, `[JsonRequired]` on a nullable member,
+     `[JsonIgnore]` with a condition other than `Always` / `Never` (the member is kept), and
+     `[JsonConstructor]` on a constructor other than the one the factory calls. `[JsonIgnore]`
+     with `Never` keeps the member and is not reported.
 - **FR-047**: Cross-package contracts (DECIDED-10): the closure MUST admit object types declared in a
   referenced `[TranspileAssembly]` + `[EmitPackage]` library (FR-010 rule), with imports resolved
   through the existing `OriginResolver` path and the package added to `package.json#dependencies`
@@ -891,7 +925,7 @@ This spec lists its range under "Reserved codes" in the baseline
 | `MS0034` | `InvalidJsonFactory` | Error | FR-022, FR-023 |
 | `MS0035` | `InvalidJsonSerializableRoot` | Error | FR-035 |
 | `MS0036` | `JsonTypeInfoNameCollision` | Error / Warning | FR-036 |
-| `MS0037` | `UnmirroredJsonOption` | Warning | FR-046 (including `[JsonPropertyOrder]`) |
+| `MS0037` | `UnmirroredJsonOption` | Warning | FR-046 (options and attributes the context does not mirror, DECIDED-25) |
 
 ### Documented divergences
 
@@ -907,7 +941,8 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Writing `NaN` / `±Infinity` without `AllowNamedFloatingPointLiterals` | `ArgumentException` (measured) | `JSON.stringify` writes `null` | Pre-existing; reachable now that Web contexts read `"NaN"` |
 | Integer-like property names in a polymorphic hierarchy | allowed | JS key order puts them first | Rejected, `MS0032` |
 | Array-index payload key (`"0"`) written **before** the tag | `JsonException` "The metadata property … not the first property …" (measured) | the tag is read as first (JS enumerates index keys first, so their position is lost) | Undetectable after `JSON.parse`; an index key after the tag reads as in STJ (DECIDED-21 i) |
-| `byte[]` | base64 string | number array | `MS0037`; follow-up issue (DECIDED-16) |
+| `null` in a `byte[]` property (source-generated fast path) | `""` (measured; the metadata / reflection mode writes `null`, and `""` reads back as an empty array) | `null` | Not mirrored: an STJ fast-path defect that breaks its own round trip (DECIDED-25 c) |
+| Rejected base64 in a property bound to a constructor parameter | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names `System.Byte[]` | Documented, as DECIDED-23 c for numbers (DECIDED-25 c) |
 | Writing a `decimal` with trailing zeros (its scale) | `1.10m` → `1.10`, `1.0m` → `1.0`, `0.00m` → `0.00` | `1.1`, `1`, `0` (decimal.js normalizes trailing zeros; every other digit is exact, FR-048 item 6) | Documented (DECIDED-23 f, #458); keeping it needs a decimal type that keeps the scale |
 | Writing a `decimal` on an engine without `JSON.rawJSON` | its exact digits | `toNumber()` (`7.922816251426434e+28` for `MaxValue`) | Engine-dependent (FR-048 item 6); Node 24 and Bun 1.4.2 have it |
 | JSON number just past `decimal.MaxValue` (`79228162514264337593543950335.5`, `…336`) | `JsonException` | `JSON.parse` rounds it to the double of `MaxValue`, accepted | Undetectable after `JSON.parse` (DECIDED-23 f) |
@@ -920,8 +955,8 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | `Stack<T>` root/property | written top-first, read back reversed (STJ pushes in order) | written and read in array order | DECIDED-18 (d); no code |
 | `[Name]` inside a generic member name | `ListUserDto` (CLR name) | `ListUser` (TS name) | DECIDED-18 (a) |
 | `[StringEnum]` root/property | number unless `JsonStringEnumConverter` | string | Pre-existing type-mapping contract, unchanged |
-| `[JsonPropertyOrder]` | reorders properties | declaration order | `MS0037` (DECIDED-3) |
 | Missing non-required property | default value | `JsonException` | FR-045 |
+| Missing nullable member declared with the C# `required` modifier | `JsonException` "… missing required properties including: 'Note'." (measured, as for `[JsonRequired]`) | reads `null` | Documented; not reported, since `required` is a language modifier, not an STJ attribute (DECIDED-25 e) |
 | Closed generic registration `[JsonDerivedType(typeof(GenD<int>), "g")]` | accepted (`{"$type":"g","X":1}`, measured) | `MS0032` | Known gap of v1 (FR-012) |
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
 | Unregistered C# subtype of a concrete `[PlainObject]` base whose shape passes the base's `baseTest` | `NotSupportedException` (measured: `Cat4` through `Animal4`) | written as the base (`{"Name":"c"}`) | FR-019 rule 5, DECIDED-24 b |
@@ -1001,7 +1036,8 @@ the former `OPEN-N`.
 - **DECIDED-3 — Option coverage in v1.** All of: int and string tags, the three
   `UnknownDerivedTypeHandling` modes, `IgnoreUnrecognizedTypeDiscriminators` and
   `AllowOutOfOrderMetadataProperties`. `[JsonPropertyOrder]` is out of scope (it would need a
-  `PropertySpec.order`) and is reported with `MS0037` on the member (FR-046).
+  `PropertySpec.order`) and is reported with `MS0037` on the member (FR-046). *Superseded for
+  `[JsonPropertyOrder]` by DECIDED-25: slice S6b adds `PropertySpec.order` and mirrors it.*
 - **DECIDED-4 — `JsonSerializerDefaults.Web`.** Full parity: camelCase names, case-insensitive
   property matching and numbers read from strings (FR-048). Research R8 shows these three are the
   complete Web set on .NET 10.
@@ -1050,7 +1086,8 @@ the former `OPEN-N`.
   the limit already (DECIDED-20 b).
 - **DECIDED-16 — Value-root wire mismatches** (`byte[]`, `TimeSpan`, `DateTimeOffset`). Recorded as
   `divergent` manifest rows and documented divergences; `MS0037` for `byte[]`; each converter is
-  fixed in its own follow-up issue.
+  fixed in its own follow-up issue. *`byte[]` was fixed by slice S6b (base64 converter,
+  DECIDED-25), so it is no longer reported; `TimeSpan` and `DateTimeOffset` stay as decided.*
 - **DECIDED-17 — Runtime version skew.** The minimum `metano-runtime` version is stated in
   `docs/serialization.md` and the changelog only. FR-049 makes the release a major version, so a
   consumer that upgrades the tools also sees the runtime's major bump.
@@ -1461,6 +1498,85 @@ the former `OPEN-N`.
     byte-identically and reads each tag back into the expected class or plain object. A read of
     `{"$type":"sq","Side":2}` (no `Area`) throws the FR-045 missing-property `JsonException`,
     while STJ ignores the getter-only `Area` on read (the pre-existing FR-045 divergence).
+
+- **DECIDED-25 — Slice S6b decisions (#268, #270).** Taken while implementing FR-046, measured
+  with a source-generated context on .NET 10 (SDK 10.0.401, runtime 10.0.12); the rows are quoted
+  in `tests/Metano.Tests/Json/JsonMemberOptionsTests.cs`, `JsonUnmirroredOptionTests.cs` and the
+  runtime's `byte-array.test.ts` / `wire-order.test.ts`:
+  - (a) **Mirror instead of report.** The maintainer's S6b brief asked for `[JsonInclude]`,
+    `byte[]` and `[JsonPropertyOrder]` to be mirrored, where FR-046 (and DECIDED-3, DECIDED-16)
+    reported them with `MS0037`. FR-046 is rewritten accordingly; `MS0037` keeps every option and
+    attribute that is still not mirrored, so none is silently ignored. The classification covers
+    every writable property of `JsonSourceGenerationOptionsAttribute` (27 on .NET 10, including
+    `AllowDuplicateProperties`, `IndentCharacter`, `IndentSize`, `NewLine`, `DefaultBufferSize`
+    and `GenerationMode`, which the first draft did not list) and the 16 attributes of
+    `System.Text.Json.Serialization` (read by reflection).
+  - (b) **Spec-silent choices.** An option is reported only when its value differs from STJ's
+    default (`DefaultIgnoreCondition = Never` changes nothing), one warning per unmirrored
+    `NumberHandling` flag, at the named argument. `UnknownTypeHandling`,
+    `PreferredObjectCreationHandling`, `AllowDuplicateProperties` (duplicate keys are invisible
+    after `JSON.parse`) and `MaxDepth` other than `0` / `64` are reported; the formatting and
+    buffering options are not. `[JsonConverter]` on a `[Branded]` / `[InlineWrapper]` type is not
+    reported: its descriptor writes the wrapped value, which is what such converters write by
+    convention (the pattern of the IgnoreReference tests); on any other type or member it is.
+    `[JsonRequired]` on a non-nullable member is mirrored (the runtime already throws for a
+    missing non-optional property, FR-045); on a nullable one it is reported. A conditional
+    `[JsonIgnore]` keeps the member (STJ writes it whenever the condition does not hold) and is
+    reported; `Never` keeps it silently; before S6b every `[JsonIgnore]` hid the member.
+    `[JsonExtensionData]` is reported and left out of the spec (it used to be emitted as an
+    ordinary map property, which STJ never writes). `[JsonConstructor]` is reported only on a
+    constructor other than the one the factory calls. `[JsonStringEnumMemberName]` needs a string
+    enum converter, which is reported itself. Attributes of a member STJ does not serialize are
+    not reported. Each member is reported once per context, a generic definition once for all its
+    constructions.
+  - (c) **`byte[]` wire.** Writes: `[]` → `""`, `[0]` → `"AA=="`, `[1,2]` → `"AQI="`,
+    `[1,2,3]` → `"AQID"`, `[255,254,253]` → `"//79"`, `[251,255]` → `"+/8="`, 100 bytes on one
+    line (no line breaks). Reads accept space, tab, CR and LF anywhere (`"AQ ID"`, `"AQ= ="`,
+    `"  "` → `[]`) and reject, with `The JSON value could not be converted to System.Byte[].`,
+    unpadded or over-padded text (`"AQI"`, `"AQ="`, `"A==="`), padding before the end
+    (`"AQ==AQ=="`), base64url (`"-_8="`), other characters (`"A!ID"`, form feed, vertical tab,
+    no-break space, NUL), non-zero unused bits (`"AR=="`, `"AQJ="`) and every non-string JSON
+    value (`[1,2]`, `1`, `true`, `{}`). `List<byte>` writes `[1,2]`. The source-generated fast
+    path writes a `null` `byte[]` property as `""` (metadata / reflection mode: `null`; a root:
+    `null`), which reads back as an empty array; the runtime writes `null` (documented
+    divergence). A rejected property bound to a constructor parameter names its declaring type in
+    STJ (`P.Blob`), a settable one `System.Byte[]`; the runtime names `System.Byte[]`
+    (as DECIDED-23 c).
+  - (d) **`[JsonInclude]` accessibility.** `internal` and `protected internal` members (fields
+    and properties) are written and read; a public field is written only with `[JsonInclude]`;
+    `private` and `protected` members raise SYSLIB1038 and throw `InvalidOperationException` for
+    the contract ("The property 'Secret' on type 'P.IncPrivate' which is annotated with
+    'JsonIncludeAttribute' is not accesible by the source generator."), on write and read; a
+    public property with a `private` setter is written but its read throws. A property with an
+    `internal` setter and no `[JsonInclude]` is written and not read. Order: each type's
+    properties, then its fields (`{"DOrdField":6,"DProp":5,"DProtInt":7,"GetInternalSet":8,
+    "DField":4,"BProp":1,"BInternal":3,"BField":2}`, `DOrdField` having order `-1`).
+  - (e) **Reads assign unbound members.** Before S6b a factory passed only constructor
+    arguments, so a settable member no parameter binds (`record IncRec(int A) { public int C {
+    get; init; } }`) was written but never read, and a class without a parameterized constructor
+    was called with its properties as arguments (`new Inc(p.pub)` against `constructor()`, a
+    `tsgo` error). STJ reads `{"A":5,"B":6,"C":7,"D":8,"E":9}` as `5,6,7,8` and ignores the
+    get-only `E`. The factory now wraps the construction in `Object.assign` with those members
+    (inherited ones included) and builds a parameterless type with `new T()`. The C# `required`
+    modifier on a nullable member is not reported (it is a language modifier, not an STJ
+    attribute); STJ rejects a payload without it, the runtime reads `null` (documented
+    divergence).
+  - (f) **`[JsonPropertyOrder]`.** Measured: `{"B":2,"E":5,"A":1,"C":3,"D":4}` for orders
+    `0,-1,0,1,-1`; the whole hierarchy is sorted (derived-first within one order); the tag stays
+    first (`{"$type":"d","Y":2,"X":1}`); an override without the attribute has order 0
+    (`{"V":3,"Z":4,"W":2}`, the base declaration's order 2 is not inherited), so the order is
+    read from the most-derived declaration. The generated list keeps the FR-009 order; the
+    runtime sorts once per plan, so a base spec's order places its properties among the derived
+    ones.
+  - (g) A `Converters` option crashed the generator before S6b (`TypedConstant is an array`
+    while reading the context options); the options reader now skips array-valued options.
+  - (h) End-to-end evidence: the TypeScript of the S6b golden
+    (`tests/Metano.Tests/Expected/json-member-options-context.ts`) compiles under
+    `tsgo --strict` and, bundled with `bun build` and run under Node, wrote every probe row byte
+    for byte (`{"Id":"x","Name":"n","Version":3,"Kept":5,"Hits":4}`,
+    `{"Data":"AQID","Maybe":"//4=","Numbers":[1,2]}`, `"ABD/"`,
+    `{"Der2":20,"Der1":10,"Base1":1,"Base2":2}`) and read the STJ payloads back into the same
+    values. No sample's generated output changed.
 
 ## Open questions
 

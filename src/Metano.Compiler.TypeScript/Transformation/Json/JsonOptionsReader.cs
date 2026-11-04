@@ -76,10 +76,15 @@ internal static class JsonOptionsReader
                 JsonSerializationAttributes.Is(attribute, OptionsAttribute)
             );
 
+    /// <summary>
+    /// The scalar named options of <paramref name="attribute"/>. An array
+    /// option (<c>Converters</c>) has no single value and maps to
+    /// <c>null</c>: reading <c>Value</c> of an array constant throws.
+    /// </summary>
     private static Dictionary<string, object?> NamedOptionsOf(AttributeData attribute) =>
         attribute.NamedArguments.ToDictionary(
             argument => argument.Key,
-            argument => argument.Value.Value
+            argument => argument.Value.Kind == TypedConstantKind.Array ? null : argument.Value.Value
         );
 
     /// <summary>

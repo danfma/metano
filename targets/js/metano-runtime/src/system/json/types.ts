@@ -50,6 +50,14 @@ export type DecimalDescriptor = {
   readonly type?: new (value: string | number) => unknown;
 };
 
+/**
+ * `byte[]` — a base64 JSON string, as System.Text.Json writes and reads it
+ * (FR-046, slice S6b). The TS value is the `number[]` a C# `byte[]` maps to.
+ */
+export type BytesDescriptor = {
+  readonly kind: "bytes";
+};
+
 /** Map<K,V> — Object.fromEntries on serialize, new Map(Object.entries) on deserialize */
 export type MapDescriptor = {
   readonly kind: "map";
@@ -116,6 +124,7 @@ export type TypeDescriptor =
   | RefDescriptor
   | TemporalDescriptor
   | DecimalDescriptor
+  | BytesDescriptor
   | MapDescriptor
   | ArrayDescriptor
   | HashSetDescriptor
@@ -135,6 +144,11 @@ export interface PropertySpec {
   readonly type: TypeDescriptor;
   /** Property is optional — null is accepted on deserialize */
   readonly optional?: boolean;
+  /**
+   * `[JsonPropertyOrder]`: the wire order sorts every property of the
+   * contract by it, stably, absent counting as `0` (FR-046, slice S6b).
+   */
+  readonly order?: number;
 }
 
 // ─── Type Spec ───────────────────────────────────────────────────────────────
@@ -157,7 +171,8 @@ export interface TypeSpec<T = unknown> {
   /**
    * Own properties, in wire order (base properties come from the base spec).
    * For a spec without `base` whose C# base has no spec, the inlined
-   * properties of the ancestors follow, nearest first (FR-009).
+   * properties of the ancestors follow, nearest first (FR-009). A property's
+   * `order` then sorts the whole chain (`collectWireProperties`).
    */
   readonly properties: readonly PropertySpec[];
   /**

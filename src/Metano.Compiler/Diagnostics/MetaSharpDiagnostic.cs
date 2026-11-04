@@ -369,6 +369,17 @@ public static class DiagnosticCodes
     /// #270.</summary>
     public const string JsonTypeInfoNameCollision = "MS0036";
 
+    /// <summary>MS0037 — the generated TypeScript context does not mirror a System.Text.Json
+    /// setting that changes the wire: a <c>[JsonSourceGenerationOptions]</c> option set to a
+    /// non-default value (<c>DefaultIgnoreCondition</c>, <c>NumberHandling</c> flags other
+    /// than <c>AllowReadingFromString</c>, <c>Converters</c>, …), or a member- or type-level
+    /// attribute (<c>[JsonConverter]</c>, <c>[JsonExtensionData]</c>,
+    /// <c>[JsonNumberHandling]</c>, <c>[JsonIgnore(Condition = WhenWritingNull)]</c>, a
+    /// <c>[JsonInclude]</c> member the source generator cannot access, …). A warning at the
+    /// option or member; the output keeps its documented behavior (spec 009 FR-046,
+    /// #268).</summary>
+    public const string UnmirroredJsonOption = "MS0037";
+
     /// <summary>MS0044 — without <c>--package-root</c>, the TypeScript CLI found no
     /// <c>package.json</c> inside the output's workspace, and the default root (the
     /// parent of the output directory) lies outside it. An error: the generated files

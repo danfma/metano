@@ -1,3 +1,4 @@
+using System.Globalization;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Extraction;
@@ -159,7 +160,6 @@ internal sealed class JsonSpecBuilder
     /// </summary>
     private TsObjectLiteral BuildTypeSpecObject(INamedTypeSymbol targetType, string tsTypeName)
     {
-        var properties = _properties.DeclarationOrderPropertiesOf(targetType);
         var polymorphism = _polymorphisms.GetValueOrDefault(targetType);
 
         var factoryParameter = new TsParameter(
@@ -172,7 +172,7 @@ internal sealed class JsonSpecBuilder
             "factory",
             new TsArrowFunction(
                 [factoryParameter],
-                [BuildFactoryStatement(targetType, tsTypeName, properties, polymorphism)]
+                [BuildFactoryStatement(targetType, tsTypeName, polymorphism)]
             )
         );
 
@@ -249,13 +249,14 @@ internal sealed class JsonSpecBuilder
     ///     TypeScript rejects <c>new</c> on an abstract class, so it cannot be
     ///     deserialized directly;</item>
     ///   <item>class → <c>return new TodoItem(p.title as string, ...)</c>, with
-    ///     the arguments in the emitted constructor's positional order.</item>
+    ///     the arguments in the emitted constructor's positional order, inside
+    ///     <c>Object.assign(…, { … })</c> when members are assigned after
+    ///     construction.</item>
     /// </list>
     /// </summary>
     private TsStatement BuildFactoryStatement(
         INamedTypeSymbol targetType,
         string tsTypeName,
-        IReadOnlyList<JsonSerializableProperty> properties,
         JsonPolymorphism? polymorphism
     )
     {
@@ -272,12 +273,69 @@ internal sealed class JsonSpecBuilder
         if (targetType.IsAbstract)
             return BuildAbstractFactoryThrow(UnsupportedAbstractFactoryMessage(tsTypeName));
 
-        return new TsReturnStatement(
-            new TsNewExpression(
-                new TsIdentifier(tsTypeName),
-                BuildConstructorArguments(targetType, properties)
-            )
+        var construction = new TsNewExpression(
+            new TsIdentifier(tsTypeName),
+            BuildConstructorArguments(targetType)
         );
+
+        return new TsReturnStatement(WithAssignedMembers(construction, targetType));
+    }
+
+    /// <summary>
+    /// <paramref name="construction"/>, or
+    /// <c>Object.assign(new T(...), { c: p.c as number })</c> when the
+    /// contract has members System.Text.Json assigns after construction
+    /// (<see cref="JsonMemberAccess.IsAssignedOnRead"/>) that no constructor
+    /// parameter binds, each with its most-derived declaration. Inherited
+    /// members count, since a linked spec's factory builds the whole object,
+    /// except the base declarations a <c>[JsonIgnore]</c> override hides,
+    /// which the payload never carries (measured on .NET 10: <c>record IncRec(int A)
+    /// { [JsonInclude] internal int B { get; init; } public int C { get; init; } }</c>
+    /// reads <c>{"A":5,"B":6,"C":7}</c> as <c>5, 6, 7</c>).
+    /// </summary>
+    private TsExpression WithAssignedMembers(
+        TsNewExpression construction,
+        INamedTypeSymbol targetType
+    )
+    {
+        var boundNames = ConstructorBoundMemberNames(targetType);
+
+        var assigned = _properties
+            .LiteralPropertiesOf(targetType)
+            .Where(property => !boundNames.Contains(property.Member.Name))
+            .Where(property => JsonMemberAccess.IsAssignedOnRead(property.Member))
+            .Select(property => new TsObjectProperty(
+                property.TsName,
+                CastProperty(property.TsName, property.Type)
+            ))
+            .ToList();
+
+        if (assigned.Count == 0)
+            return construction;
+
+        return new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("Object"), "assign"),
+            [construction, new TsObjectLiteral(assigned)]
+        );
+    }
+
+    /// <summary>
+    /// The C# names of the members the constructor's parameters bind,
+    /// matched ignoring case as System.Text.Json binds them.
+    /// </summary>
+    private static HashSet<string> ConstructorBoundMemberNames(INamedTypeSymbol targetType)
+    {
+        var parameters =
+            IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
+
+        return parameters
+            .Select(parameter =>
+                SymbolHelper
+                    .FindInstancePropertyInHierarchy(parameter.ContainingType, parameter.Name)
+                    ?.Name
+                ?? parameter.Name
+            )
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private TsObjectLiteral BuildPlainObjectLiteral(
@@ -287,32 +345,26 @@ internal sealed class JsonSpecBuilder
             properties
                 .Select(property => new TsObjectProperty(
                     property.TsName,
-                    CastProperty(property.TsName, property.Property.Type)
+                    CastProperty(property.TsName, property.Type)
                 ))
                 .ToList()
         );
 
     /// <summary>
-    /// Builds the <c>new T(...)</c> arguments. When the type has a
-    /// constructor with parameters, each parameter (in declaration order —
-    /// the order the emitted TS constructor uses) reads the property it
-    /// initializes, searched across the inheritance chain so a parameter
-    /// forwarded to the base (<c>ImageClip(string Path, double Seconds) :
-    /// Clip(Seconds)</c>) reads the inherited <c>seconds</c>. Types without
-    /// a parameterized constructor keep passing their own properties.
+    /// Builds the <c>new T(...)</c> arguments: each parameter of the
+    /// constructor (in declaration order — the order the emitted TS
+    /// constructor uses) reads the property it initializes, searched across
+    /// the inheritance chain so a parameter forwarded to the base
+    /// (<c>ImageClip(string Path, double Seconds) : Clip(Seconds)</c>) reads
+    /// the inherited <c>seconds</c>. A type without a parameterized
+    /// constructor is built with <c>new T()</c> and its members are assigned
+    /// (<see cref="WithAssignedMembers"/>); before spec 009 S6b it passed its
+    /// properties to the parameterless TS constructor, which dropped them.
     /// </summary>
-    private List<TsExpression> BuildConstructorArguments(
-        INamedTypeSymbol targetType,
-        IReadOnlyList<JsonSerializableProperty> properties
-    )
+    private List<TsExpression> BuildConstructorArguments(INamedTypeSymbol targetType)
     {
         var parameters =
             IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
-
-        if (parameters.Length == 0)
-            return properties
-                .Select(property => CastProperty(property.TsName, property.Property.Type))
-                .ToList();
 
         return parameters.Select(BuildConstructorArgument).ToList();
     }
@@ -343,11 +395,13 @@ internal sealed class JsonSpecBuilder
 
     /// <summary>
     /// Builds a property spec object literal:
-    /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true }</c>.
+    /// <c>{ ts: "name", json: "name", type: { kind: "..." }, optional?: true, order?: n }</c>,
+    /// where <c>order</c> is a non-zero <c>[JsonPropertyOrder]</c>: the
+    /// runtime sorts the whole base chain by it (FR-046, slice S6b).
     /// </summary>
     private TsObjectLiteral BuildPropertySpec(JsonSerializableProperty property)
     {
-        var type = property.Property.Type;
+        var type = property.Type;
 
         var specProperties = new[]
         {
@@ -357,6 +411,12 @@ internal sealed class JsonSpecBuilder
             JsonTypeClassifier.IsNullable(type)
                 ? new TsObjectProperty("optional", new TsLiteral("true"))
                 : null,
+            property.Order == 0
+                ? null
+                : new TsObjectProperty(
+                    "order",
+                    new TsLiteral(property.Order.ToString(CultureInfo.InvariantCulture))
+                ),
         };
 
         return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());

@@ -163,3 +163,15 @@ replaces the interim rule: a plain object that matches no variant guard is writt
 (no tag) only when `baseTest` accepts it, and otherwise follows `unknownDerivedType` with the
 runtime type name `Object` (FR-019 rule 5, DECIDED-24 b). Generated contexts now emit `typeName`,
 `testOrder` and the `test` guards of `[PlainObject]` entries.
+
+## Delivery status (S6b)
+
+S6b adds the `bytes` descriptor (`BytesDescriptor`, exported) and `PropertySpec.order`
+(FR-046, DECIDED-25). The built-in `bytes` converter writes a `byte[]` (`number[]`) as padded
+standard base64 without line breaks and reads System.Text.Json's accepted text: whitespace
+(space, tab, CR, LF) is ignored anywhere; a length that is not a multiple of four, a character
+outside the alphabet, misplaced or excess padding, non-zero unused bits and any JSON value other
+than a string throw `JsonException` "The JSON value could not be converted to System.Byte[].";
+a custom `JsonConverter` of kind `bytes` overrides it. `collectWireProperties` sorts the
+deduplicated chain stably by `order` (absent = 0) when any property has one, so a base spec's
+`order` places its properties among the derived ones as in System.Text.Json.

@@ -16,6 +16,7 @@ internal enum JsonPropertyKind
     Nullable,
     Branded,
     Decimal,
+    Bytes,
     Temporal,
     Map,
     HashSet,
