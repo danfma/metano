@@ -208,3 +208,13 @@ decimal places or 96 bits rounds (`1e-29` reads as `0`), and the range is decide
 value. The tokenizer's number leaf (`JsonNumberText`) is internal: only the built-in `decimal`
 converter receives it, so no exported type or converter signature changes. `long` / `ulong` as
 `bigint` (#450) read exact digits by joining `readsNumberText` in `exact-number-reads.ts`.
+
+## Delivery status (S3b)
+
+S3b ships the changed signatures above (`serialize` / `deserialize` / `deserializeText` through a
+`TypeSpec` on `JsonSerializer` and `BoundSerializer`), `TypeSpec.valueType`, `ValueSpec.valueType`
+and guarantee 9. The null-root check lives in `null-root.ts` and runs before any converter; a
+value root names its type from its descriptor when it can (DECIDED-26 d). An empty or blank text
+keeps the reader's "does not contain any JSON tokens" message for every root (DECIDED-26 b).
+`test/system/json/typecheck/null-root-signatures.ts`, compiled by `tsgo` from a bun test, pins the
+return types and the strict-mode errors of the migration.
