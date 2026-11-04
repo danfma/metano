@@ -838,6 +838,20 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      (S2b probe).
   5. Writing is unaffected: `AllowReadingFromString` changes reads only (measured: numbers are
      still written as JSON numbers).
+  6. **Decimal writes** (#458, DECIDED-23 f): under any options, the `decimal` converter writes a
+     decimal.js-like value (one with `toFixed`) as `JSON.rawJSON(value.toFixed())`, so
+     `JSON.stringify` prints the exact digits in plain notation, as STJ does (measured on .NET
+     10.0.12: `decimal.MaxValue` → `79228162514264337593543950335`, `0.0000001m` →
+     `0.0000001`, `decimal.Negate(0m)` → `0`). The tree `serialize` returns therefore holds a
+     `rawJSON` leaf, not a `number`, for each decimal (breaking, see
+     [Migration](#migration-breaking-changes)). The scale is not kept: decimal.js holds `1.10m` as
+     `1.1` (documented divergence). The engine's `JSON.rawJSON` is detected once when the runtime
+     loads; without it the converter writes `toNumber()`, as before. A value without `toFixed`
+     is written with `toNumber()`, and a raw JSON number or string read by a descriptor without
+     `type` is written back as is. `deserialize` reads a `rawJSON` leaf from its exact text, so a
+     tree passed from `serialize` straight to `deserialize` round-trips. The writer is shared
+     (`exact-json-number.ts`), so `long` / `ulong` as `bigint` (#450) write their digits the same
+     way.
 - **FR-049**: **Breaking change and versioning** (DECIDED-6). FR-034 changes public signatures of
   `metano-runtime/system/json`, so the feature MUST ship as a breaking release: the commit that
   changes the signatures uses `feat!:` with a `BREAKING CHANGE:` footer. `.releaserc.json` maps a
@@ -877,7 +891,8 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Integer-like property names in a polymorphic hierarchy | allowed | JS key order puts them first | Rejected, `MS0032` |
 | Array-index payload key (`"0"`) written **before** the tag | `JsonException` "The metadata property … not the first property …" (measured) | the tag is read as first (JS enumerates index keys first, so their position is lost) | Undetectable after `JSON.parse`; an index key after the tag reads as in STJ (DECIDED-21 i) |
 | `byte[]` | base64 string | number array | `MS0037`; follow-up issue (DECIDED-16) |
-| Writing a `decimal` | its exact digits as a JSON number (`1.10`, all 29 digits of `MaxValue`) | `toNumber()` (`1.1`, `7.922816251426434e+28`) | Documented (DECIDED-23 f); a string converter keeps the significant digits |
+| Writing a `decimal` with trailing zeros (its scale) | `1.10m` → `1.10`, `1.0m` → `1.0`, `0.00m` → `0.00` | `1.1`, `1`, `0` (decimal.js normalizes trailing zeros; every other digit is exact, FR-048 item 6) | Documented (DECIDED-23 f, #458); keeping it needs a decimal type that keeps the scale |
+| Writing a `decimal` on an engine without `JSON.rawJSON` | its exact digits | `toNumber()` (`7.922816251426434e+28` for `MaxValue`) | Engine-dependent (FR-048 item 6); Node 24 and Bun 1.4.2 have it |
 | JSON number just past `decimal.MaxValue` (`79228162514264337593543950335.5`, `…336`) | `JsonException` | `JSON.parse` rounds it to the double of `MaxValue`, accepted | Undetectable after `JSON.parse` (DECIDED-23 f) |
 | Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows compare the prefix |
 | Two properties whose JSON names differ only in case, case-insensitive context | `InvalidOperationException` "The JSON property name for 'Twins.A' collides with another property." at first use | both kept; a key fills the property listed last | Not reported; follow-up with the naming-collision issue (DECIDED-23 e) |
@@ -936,6 +951,17 @@ this note:
 > accepts `null` and returns `null` for it. `BoundSerializer` changes the same way. Struct
 > contracts (`record struct`) still throw `JsonException` for `null`. Value roots
 > (`ValueSpec`) are new in this release and already carry `| null` in their type argument.
+
+> **Decimals are written with their exact digits (#458).** `JsonSerializer.serialize` now returns
+> a `JSON.rawJSON` leaf instead of a `number` for each `decimal` value, so `JSON.stringify` writes
+> every digit, as `System.Text.Json` does (`79228162514264337593543950335`, not
+> `7.922816251426434e+28`). Code that passes the tree to `JSON.stringify`, or back to
+> `JsonSerializer.deserialize`, works unchanged. Code that inspects the tree and expects a
+> `number` (`typeof json.price === "number"`, arithmetic on it) sees a frozen object whose
+> `rawJSON` property holds the text: use `JSON.isRawJSON(leaf)` and `Number(leaf.rawJSON)` (lossy)
+> or `new Decimal(leaf.rawJSON)` (exact), or register a custom `decimal` converter. Trailing zeros
+> are still dropped (`1.10m` → `1.10` in .NET, `1.1` here). Engines without `JSON.rawJSON` keep
+> writing `toNumber()`.
 
 The same release notes also list these changes, which do not break semantic JSON consumers: the
 derived-first key order (FR-009), the `JsonException` class of the existing errors (FR-045), the
@@ -1309,11 +1335,27 @@ the former `OPEN-N`.
     number outside the decimal range (`1e29`), a string without the option (measured under
     `General`: `"1"` throws) and any other JSON value throw `The JSON value could not be converted
     to System.Decimal.`; a hand-written descriptor without `type` keeps the JSON value. Writing
-    stays `toNumber()`: STJ writes the decimal's exact digits (measured: `1.10m` → `1.10`, `1.0m`
+    stayed `toNumber()` in S2b: STJ writes the decimal's exact digits (measured: `1.10m` → `1.10`, `1.0m`
     → `1.0`, `0.00m` → `0.00`, `79228162514264337593543950335m` and
     `1.2345678901234567890123456789m` in full, `1e2` read → `100`), which a JS number cannot
-    carry through `JSON.stringify`; trailing zeros and digits beyond a double are a documented
-    divergence (`JSON.rawJSON` could write them but would change what `serialize` returns). A
+    carry through `JSON.stringify`. **Revised by #458 (3.0 major):** the converter writes
+    `JSON.rawJSON(value.toFixed())` (FR-048 item 6), which changes what `serialize` returns. STJ
+    measured on .NET 10.0.12 (System.Text.Json 10.0.0.0, source-generated context) and matched
+    byte for byte on Node 24.11 and Bun 1.4.2, except the scale:
+
+    | C# value | STJ writes | Metano writes |
+    |---|---|---|
+    | `0m`, `1m`, `100m`, `-42m`, `19.99m`, `-0.5m` | `0`, `1`, `100`, `-42`, `19.99`, `-0.5` | same |
+    | `decimal.MaxValue` / `MinValue` | `79228162514264337593543950335` / `-79228162514264337593543950335` | same (`toNumber()` gave `7.922816251426434e+28`) |
+    | `12345678901234567890.123456789m` | `12345678901234567890.123456789` | same (`toNumber()` gave `12345678901234567000`) |
+    | `1.2345678901234567890123456789m` | `1.2345678901234567890123456789` | same |
+    | `1000000000000000000000m`, `10000000000000000000000000000m` | plain digits | same (decimal.js `toString()` prints `1e+21`, `1e+28`; `toFixed()` does not) |
+    | `0.0000001m`, `±0.0000000000000000000000000001m` | plain digits | same (decimal.js `toString()` prints `1e-7`, `1e-28`) |
+    | `decimal.Parse("1.5e3")` | `1500` | same |
+    | `decimal.Negate(0m)` (sign bit set) | `0` | `0` (decimal.js `toFixed()` of `-0` prints `0`) |
+    | `1.10m`, `1.0m`, `0.00m`, `1000.000m`, `decimal.Parse("-0.00")` | `1.10`, `1.0`, `0.00`, `1000.000`, `0.00` | `1.1`, `1`, `0`, `1000`, `0` (the scale) |
+
+    Trailing zeros remain a documented divergence. A
     `Single` read from a string
     keeps double precision, as one read from a JSON number does; only overflow is checked at
     single precision, against the exact text: the threshold `2^128 − 2^103` is itself a double,
