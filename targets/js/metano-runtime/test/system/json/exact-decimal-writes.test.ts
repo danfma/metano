@@ -30,10 +30,12 @@ const FALLBACK_TEXTS = DECIMAL_WRITE_ROWS.map((row) =>
 /** Each domain row's outcome: the error, or the exact text. */
 const EXPECTED_DOMAIN = DECIMAL_DOMAIN_ROWS.map((row) => row.written ?? domainErrorOf(row));
 
-/** The same without `JSON.rawJSON`: the error, or the double. */
-const FALLBACK_DOMAIN = DECIMAL_DOMAIN_ROWS.map((row) =>
-  row.written === undefined ? domainErrorOf(row) : JSON.stringify(new Decimal(row.text).toNumber()),
-);
+/** The same without `JSON.rawJSON`: the error, `0` for a negligible value, or the double. */
+const FALLBACK_DOMAIN = DECIMAL_DOMAIN_ROWS.map((row) => {
+  if (row.written === undefined) return domainErrorOf(row);
+
+  return row.written === "0" ? "0" : JSON.stringify(new Decimal(row.text).toNumber());
+});
 
 describe("JsonSerializer — decimal writes match System.Text.Json (#458)", () => {
   for (const row of DECIMAL_WRITE_ROWS) {
@@ -84,6 +86,26 @@ describe("JsonSerializer — decimal writes within the System.Decimal domain", (
     test(`${row.text} gives ${EXPECTED_DOMAIN[index]}`, () => {
       expect(domainOutcomeOf(row)).toBe(EXPECTED_DOMAIN[index]!);
     });
+  });
+
+  // A decimal-like value without decimal.js's exponent is placed by its double.
+  test("a value without an exponent is negligible below 1e-29 too", () => {
+    const decimalLikeOf = (text: string) =>
+      ({
+        toNumber: () => Number(text),
+        toFixed: () => new Decimal(text).toFixed(),
+      }) as unknown as Decimal;
+
+    const writtenOf = (text: string) =>
+      JSON.stringify(JsonSerializer.serialize(decimalLikeOf(text), decimalSpec));
+
+    expect(writtenOf("9.99e-29")).toBe("0.0000000000000000000000000000999");
+    expect(writtenOf("9.99e-30")).toBe("0");
+    expect(writtenOf("-1e-400")).toBe("0");
+
+    const withoutToFixed = { toNumber: () => 9.99e-30 } as unknown as Decimal;
+
+    expect(JsonSerializer.serialize(withoutToFixed, decimalSpec)).toBe(0);
   });
 
   test("a value without toFixed is checked too", () => {

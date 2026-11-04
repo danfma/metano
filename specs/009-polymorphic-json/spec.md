@@ -861,8 +861,10 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      `…335.5` and `…336` throw). A value without `e` is compared as a double (`|toNumber()|`
      against 2^96, the text deciding at 2^96 itself). Without the check, decimal.js NaN /
      Infinity threw a bare `SyntaxError` from `JSON.rawJSON` (`null` without it), `1e30` was
-     written in full, and `1e400000000` built a 400 MB string. A value below `1e-29` (exponent
-     under -29) is written `0`, as STJ reads `1e-29`, `1e-40` and `1e-400` as `0` (measured),
+     written in full, and `1e400000000` built a 400 MB string. The error prints the value in plain
+     notation (`100000000000000000000000000000` for `1e29`) unless its exponent exceeds 64. A value
+     below `1e-29` (exponent under -29, or a double under `1e-29` for a value without `e`) is
+     written `0` on every path, with or without `JSON.rawJSON`, as STJ reads `1e-29`, `1e-40` and `1e-400` as `0` (measured),
      instead of printing its exponent's worth of zeros (`1e-400000000`).
      **Cost** (`bun run bench:json`, 1 MB `Order[]` with decimal.js prices, medians): writes take
      5.5–5.7 ms against 4.3 ms with `toNumber()` on Bun 1.4.2, and 8.8–9.1 ms against 8.8–9.1 ms
