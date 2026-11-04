@@ -18,6 +18,41 @@ public class IrExpressionExtractionTests
     }
 
     [Test]
+    public async Task ULongLiteral_ExtractsAsUInt64()
+    {
+        var ir = ExtractFromMethod("ulong Get() => 18446744073709551615UL;");
+        var ret = GetAt<IrReturnStatement>(ir, 0);
+
+        await Assert.That(ret.Value).IsEqualTo(new IrLiteral(ulong.MaxValue, IrLiteralKind.UInt64));
+    }
+
+    [Test]
+    [Arguments("checked(a + b)")]
+    [Arguments("unchecked(a + b)")]
+    [Arguments("checked((a + b))")]
+    public async Task CheckedContextExpression_ExtractsAsItsOperand(string body)
+    {
+        var ir = ExtractFromMethod($"long Get(long a, long b) => {body};");
+        var ret = GetAt<IrReturnStatement>(ir, 0);
+
+        await Assert
+            .That(ret.Value)
+            .IsEqualTo(
+                new IrBinaryExpression(new IrIdentifier("a"), IrBinaryOp.Add, new IrIdentifier("b"))
+            );
+    }
+
+    [Test]
+    public async Task CheckedContextStatement_ExtractsAsABlock()
+    {
+        var ir = ExtractFromMethod("void Run(long a) { unchecked { a++; } }");
+        var block = GetAt<IrBlockStatement>(ir, 0);
+
+        await Assert.That(block.Statements).HasSingleItem();
+        await Assert.That(block.Statements[0]).IsTypeOf<IrExpressionStatement>();
+    }
+
+    [Test]
     public async Task StringLiteral_ExtractsAsString()
     {
         var ir = ExtractFromMethod("""string Get() => "hello";""");

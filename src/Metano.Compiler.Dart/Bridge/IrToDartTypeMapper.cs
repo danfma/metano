@@ -84,8 +84,11 @@ public static class IrToDartTypeMapper
         primitive switch
         {
             IrPrimitive.Boolean => new DartNamedType("bool"),
-            IrPrimitive.Byte or IrPrimitive.Int16 or IrPrimitive.Int32 or IrPrimitive.Int64 =>
-                new DartNamedType("int"),
+            IrPrimitive.Byte
+            or IrPrimitive.Int16
+            or IrPrimitive.Int32
+            or IrPrimitive.Int64
+            or IrPrimitive.UInt64 => new DartNamedType("int"),
             IrPrimitive.Float32 or IrPrimitive.Float64 => new DartNamedType("double"),
             IrPrimitive.Decimal => new DartNamedType("Decimal"), // package:decimal
             IrPrimitive.BigInteger => new DartNamedType("BigInt"),

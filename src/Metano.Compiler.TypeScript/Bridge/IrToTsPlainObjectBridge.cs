@@ -275,6 +275,14 @@ public static class IrToTsPlainObjectBridge
             {
                 Expression = RewriteThis(cast.Expression, identifierName),
             },
+            IrNumericConversion conversion => conversion with
+            {
+                Operand = RewriteThis(conversion.Operand, identifierName),
+            },
+            IrIntegerOverflow overflow => overflow with
+            {
+                Value = RewriteThis(overflow.Value, identifierName),
+            },
             IrNullConditionalAccess access => access with
             {
                 Receiver = RewriteThis(access.Receiver, identifierName),

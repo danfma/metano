@@ -494,6 +494,12 @@ public sealed class TypeScriptTransformContext(
     public bool UseIrBodiesWhenCovered { get; init; } = true;
 
     /// <summary>
+    /// How 64-bit integers are represented in the emitted TypeScript; the
+    /// compiler-internal staging switch of spec 012 (DECIDED-22).
+    /// </summary>
+    internal Int64Representation Int64Representation { get; init; } = Int64Representation.Number;
+
+    /// <summary>
     /// The <c>[PlainObject]</c> types (original definitions) whose <c>isT</c>
     /// guard a polymorphic JSON hierarchy synthesizes without
     /// <c>[GenerateGuard]</c> (spec 009 FR-019 rule 1). Their keys are also in

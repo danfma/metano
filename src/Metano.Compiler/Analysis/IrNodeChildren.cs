@@ -73,6 +73,8 @@ public static class IrNodeChildren
                 .. template.Arguments,
             ],
             IrCastExpression cast => [cast.Expression],
+            IrNumericConversion conversion => [conversion.Operand],
+            IrIntegerOverflow overflow => [overflow.Value],
             IrTypeCheck check => [check.Expression],
             IrLinqChain linq => [linq.Source, .. linq.Stages.SelectMany(s => s.Arguments)],
             _ => [],

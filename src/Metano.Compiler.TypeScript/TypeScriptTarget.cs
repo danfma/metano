@@ -66,6 +66,15 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public string? ImportAlias { get; init; }
 
     /// <summary>
+    /// How 64-bit integers are represented in the emitted TypeScript. The
+    /// compiler-internal staging switch of spec 012 (DECIDED-22): it defaults
+    /// to <see cref="Int64Representation.Number"/>, the shipped output, has no
+    /// CLI, MSBuild or attribute surface, and is removed when the native
+    /// <c>bigint</c> mapping becomes the only one.
+    /// </summary>
+    internal Int64Representation Int64Representation { get; init; } = Int64Representation.Number;
+
+    /// <summary>
     /// Cache fingerprint (ADR-0021): pin the emit-affecting flags so
     /// flipping any one invalidates the incremental cache. Format is
     /// kept small + ordered so future additions extend it without
@@ -73,7 +82,12 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// <see cref="TranspilationCache"/> handles structural breaks).
     /// </summary>
     public string ConfigurationFingerprint =>
-        BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix, ImportAlias);
+        BuildConfigurationFingerprint(
+            NamespaceBarrels,
+            StripInterfacePrefix,
+            ImportAlias,
+            Int64Representation
+        );
 
     /// <summary>
     /// Per-target fingerprint pinned into the incremental cache key
@@ -84,9 +98,10 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     private static string BuildConfigurationFingerprint(
         bool namespaceBarrels,
         bool stripInterfacePrefix,
-        string? importAlias
+        string? importAlias,
+        Int64Representation int64Representation
     ) =>
-        $"layout=full-namespace-v1;namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix};importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}";
+        $"layout=full-namespace-v1;namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix};importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)};int64={int64Representation}";
 
     /// <summary>
     /// Builds the cache-fingerprint composite consumed by
@@ -117,6 +132,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             NamespaceBarrels = NamespaceBarrels,
             StripInterfacePrefix = StripInterfacePrefix,
             ImportAlias = ImportAlias,
+            Int64Representation = Int64Representation,
             CacheOutputDir = outputDir,
             CacheFilePrefix = filePrefix,
             CacheConfigurationFingerprint = BuildCacheFingerprint(

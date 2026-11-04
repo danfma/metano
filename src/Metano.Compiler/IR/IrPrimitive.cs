@@ -12,6 +12,14 @@ public enum IrPrimitive
     Int16,
     Int32,
     Int64,
+
+    /// <summary>
+    /// C#'s <c>ulong</c>: an unsigned 64-bit integer, kept apart from
+    /// <see cref="Int64"/> because a backend that renders 64-bit integers
+    /// exactly needs the signedness. The narrower unsigned types keep folding
+    /// into their signed counterparts, whose values fit the same rendering.
+    /// </summary>
+    UInt64,
     Float32,
     Float64,
     Decimal,

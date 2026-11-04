@@ -189,6 +189,7 @@ public static class IrToTsTypeMapper
             IrPrimitive.Int16 => new TsNumberType(),
             IrPrimitive.Int32 => new TsNumberType(),
             IrPrimitive.Int64 => new TsNumberType(),
+            IrPrimitive.UInt64 => new TsNumberType(),
             IrPrimitive.Float32 => new TsNumberType(),
             IrPrimitive.Float64 => new TsNumberType(),
             IrPrimitive.Decimal => new TsNumberType(),

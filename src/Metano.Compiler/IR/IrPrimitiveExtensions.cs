@@ -21,6 +21,7 @@ public static class IrPrimitiveExtensions
                 or IrPrimitive.Int16
                 or IrPrimitive.Int32
                 or IrPrimitive.Int64
+                or IrPrimitive.UInt64
                 or IrPrimitive.Float32
                 or IrPrimitive.Float64
                 or IrPrimitive.Decimal
