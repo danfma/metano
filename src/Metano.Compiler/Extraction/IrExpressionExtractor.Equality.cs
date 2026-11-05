@@ -133,7 +133,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private bool HasSynthesizedValueEquality(ITypeSymbol? type) =>
         type is not null
-        && UnwrapNullable(type) is INamedTypeSymbol { IsRecord: true } record
+        && type.UnwrapNullableValueType() is INamedTypeSymbol { IsRecord: true } record
         && SymbolHelper.IsToolchainDeclared(record, _semantic.Compilation.Assembly)
         && !IsPrimitiveBackedBranded(record);
 

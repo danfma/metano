@@ -4704,7 +4704,7 @@ public sealed partial class IrExpressionExtractor
         if (unwrapsNullable)
         {
             inner = ValueOrThrowWhenMissing(cast.Expression, inner);
-            sourceType = UnwrapNullable(sourceType);
+            sourceType = sourceType.UnwrapNullableValueType();
         }
 
         if (LowerNumericCast(cast, inner, sourceType, targetType, unwrapsNullable) is { } numeric)

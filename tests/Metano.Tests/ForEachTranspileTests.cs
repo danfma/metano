@@ -264,6 +264,11 @@ public class ForEachTranspileTests
             .Contains("const x = x$element == null ? null : int32FromDouble(x$element);");
     }
 
+    /// <summary>
+    /// Dart keeps the same runtime shape the TypeScript loop has: the loop
+    /// variable is declared from the unwrap-or-throw of the raw element,
+    /// read through the underlying type and truncated there.
+    /// </summary>
     [Test]
     public async Task Dart_ForEach_NullableElementIntoNonNullableVariable_ThrowsWhenMissing()
     {
@@ -289,11 +294,18 @@ public class ForEachTranspileTests
 
         var dart = files["sum.dart"];
 
-        await Assert.That(dart).Contains("Nullable object must have a value.");
-        await Assert.That(dart).Contains("toInt().toSigned(32)");
+        await Assert
+            .That(dart)
+            .Contains(
+                "int x = ((x$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as double).toInt().toSigned(32);"
+            );
         await Assert.That(dart).DoesNotContain("? null :");
     }
 
+    /// <summary>
+    /// With the kinds already equal there is no conversion to run after the
+    /// unwrap, so Dart declares the variable from the throw alone.
+    /// </summary>
     [Test]
     public async Task Dart_ForEach_NullableElementOfTheSameKind_StillThrowsWhenMissing()
     {
@@ -319,7 +331,11 @@ public class ForEachTranspileTests
 
         var dart = files["sum.dart"];
 
-        await Assert.That(dart).Contains("Nullable object must have a value.");
+        await Assert
+            .That(dart)
+            .Contains(
+                "int x = (x$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as int;"
+            );
         await Assert.That(dart).DoesNotContain("? null :");
     }
 
