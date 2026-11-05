@@ -212,6 +212,28 @@ public class Int64BclMappingTests
         }
         """;
 
+    private const string BigIntegerSource = """
+        using System.Numerics;
+
+        [Transpile]
+        public class Big
+        {
+            public decimal ToDecimal(BigInteger b) => (decimal)b;
+            public BigInteger FromDecimal(decimal d) => (BigInteger)d;
+            public int ToInt(BigInteger b) => (int)b;
+            public uint ToUInt(BigInteger b) => (uint)b;
+            public short ToShort(BigInteger b) => (short)b;
+            public byte ToByte(BigInteger b) => unchecked((byte)b);
+            public char ToChar(BigInteger b) => (char)b;
+            public double ToDouble(BigInteger b) => (double)b;
+            public float ToSingle(BigInteger b) => (float)b;
+            public BigInteger FromDouble(double d) => (BigInteger)d;
+            public BigInteger FromInt(int i) => i;
+            public long ToLong(BigInteger b) => (long)b;
+            public int? Lifted(BigInteger? b) => (int?)b;
+        }
+        """;
+
     [Test]
     public async Task BigIntMode_MathStatics_CallTheInt64Helpers()
     {
@@ -451,6 +473,42 @@ public class Int64BclMappingTests
 
         await Assert.That(output).Contains("List<int>.filled(n, 0)");
         await Assert.That(output).Contains("List<bool>.filled(n, false)");
+    }
+
+    /// <summary>
+    /// Every <c>BigInteger</c> cast is an <c>IrNumericConversion</c> (FR-003),
+    /// checked in any context with .NET's messages.
+    /// </summary>
+    [Test]
+    public async Task BigIntMode_BigIntegerCasts_CallTheCheckedHelpers()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            BigIntegerSource,
+            Int64Representation.BigInt
+        );
+
+        await Assert
+            .That(files["big.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("int64-big-integer.ts"));
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>The shipped <c>Number</c> mode keeps the 2.x <c>BigInteger</c> casts.</summary>
+    [Test]
+    public async Task NumberMode_BigIntegerCasts_KeepTheShippedLowering()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            BigIntegerSource,
+            Int64Representation.Number
+        );
+
+        var big = files["big.ts"];
+
+        await Assert.That(big).Contains("return new Decimal(b.toString());");
+        await Assert.That(big).Contains("return BigInt(d.toFixed(0));");
+        await Assert.That(big).Contains("return b;");
+        await Assert.That(big).DoesNotContain("FromBigInteger");
     }
 
     private static List<MetanoDiagnostic> UnsupportedFeatures(

@@ -6,6 +6,8 @@
  */
 
 import * as aggregates from "../src/sample-int64-conformance/aggregates.ts";
+import * as bigIntegerConversions from "../src/sample-int64-conformance/big-integer-conversions.ts";
+import { DecimalBigIntegerConversions } from "../src/sample-int64-conformance/big-integer-conversions.ts";
 import * as convertCalls from "../src/sample-int64-conformance/convert-calls.ts";
 import { DecimalConvertCalls } from "../src/sample-int64-conformance/convert-calls.ts";
 import * as conversions from "../src/sample-int64-conformance/conversions.ts";
@@ -26,7 +28,10 @@ export type FixtureRun = { readonly name: string; readonly twin: Twin };
 
 export const FIXTURE_RUNS: readonly FixtureRun[] = [
   { name: "operators.json", twin: [overflow, division, shifts] },
-  { name: "conversions.json", twin: [conversions, DecimalConversions] },
+  {
+    name: "conversions.json",
+    twin: [conversions, DecimalConversions, bigIntegerConversions, DecimalBigIntegerConversions],
+  },
   { name: "math.json", twin: [mathStatics] },
   { name: "aggregates.json", twin: [aggregates] },
   {

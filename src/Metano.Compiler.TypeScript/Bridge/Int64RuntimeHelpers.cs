@@ -30,6 +30,13 @@ internal static class Int64RuntimeHelpers
     public const string DivUInt64 = "divUInt64";
     public const string RemUInt64 = "remUInt64";
     public const string FormatInt64 = "formatInt64";
+    public const string Int32FromBigInteger = "int32FromBigInteger";
+    public const string UInt32FromBigInteger = "uint32FromBigInteger";
+    public const string NarrowFromBigInteger = "narrowFromBigInteger";
+    public const string DoubleFromBigInteger = "doubleFromBigInteger";
+    public const string DecimalTextFromBigInteger = "decimalTextFromBigInteger";
+    public const string BigIntegerFromDouble = "bigIntegerFromDouble";
+    public const string BigIntegerFromDecimal = "bigIntegerFromDecimal";
 
     /// <summary>The range check of <c>long</c> (signed) or <c>ulong</c>.</summary>
     public static string CheckedRange(bool isSigned) => isSigned ? CheckedInt64 : CheckedUInt64;
