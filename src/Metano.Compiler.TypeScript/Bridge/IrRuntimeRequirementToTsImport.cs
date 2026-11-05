@@ -71,8 +71,8 @@ public static class IrRuntimeRequirementToTsImport
 
     /// <summary>
     /// Maps a semantic runtime helper to its concrete import site in the TypeScript
-    /// target. Returning <c>null</c> means "no import needed" (e.g., `Temporal` is
-    /// already imported elsewhere in the current implementation).
+    /// target. Returning <c>null</c> means "no import needed" (an unmapped
+    /// helper; <c>Temporal</c> maps to the polyfill package).
     /// </summary>
     private static (string ModuleName, string Name, bool TypeOnly)? Map(IrRuntimeRequirement req) =>
         req.HelperName switch
