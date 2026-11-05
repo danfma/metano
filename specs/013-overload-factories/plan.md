@@ -144,8 +144,9 @@ reads shapes through a copy with a throwaway ledger, and splitting the mapping f
 left to a later cleanup. FR-027's struct branch zeroes references, numbers, `bool`, `decimal`,
 enums, nullables, `char`, `BigInteger`, branded values and structs whose `new S()` zeroes them; it
 leaves `undefined` with `MS0001` for `Guid` (`UUID.empty` is expressible, not built yet), the date
-and time types, structs with a single declared constructor or a user parameterless one, tuples and
-type parameters constrained to a value type — a follow-up closes these. The factory widening of FR-011 (a factory code outside the class body calls)
+and time types, structs with a single declared constructor or a user parameterless one, tuples,
+`KeyValuePair`, `ValueTask` and type parameters constrained to a value type; a containing type's
+value-constrained type parameter still takes `null` — a follow-up closes these. The factory widening of FR-011 (a factory code outside the class body calls)
 lands with **013c**, the first slice that calls factories.
 
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),

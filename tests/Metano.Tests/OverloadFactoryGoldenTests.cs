@@ -662,4 +662,39 @@ public class OverloadFactoryGoldenTests
             .That(result["app/receipt.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-cross-package.ts"));
     }
+
+    [Test]
+    public async Task StructDefaultBranch_ZeroesRecordStructsAndReportsValueTypeParameters()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record struct Rs(int X)
+            {
+                public Rs(string text) : this(text.Length) { }
+            }
+
+            [Transpile]
+            public struct Gen<T> where T : struct
+            {
+                public T Value;
+
+                public Rs Pair;
+
+                public Gen(T value) { Value = value; Pair = new Rs(1); }
+
+                public Gen(T value, int n) { Value = value; Pair = new Rs(n); }
+            }
+            """
+        );
+
+        await Assert.That(files["gen.ts"]).Contains("      this.pair = new Rs();\n");
+        await Assert.That(files["gen.ts"]).Contains("      this.value = undefined as never;\n");
+
+        var unrepresentable = diagnostics.Where(d =>
+            d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("FR-027")
+        );
+
+        await Assert.That(unrepresentable.Count()).IsEqualTo(1);
+    }
 }

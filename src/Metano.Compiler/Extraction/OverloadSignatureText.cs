@@ -38,6 +38,7 @@ public static class OverloadSignatureText
             { RefKind: RefKind.Ref } => "ref ",
             { RefKind: RefKind.Out } => "out ",
             { RefKind: RefKind.In } => "in ",
+            { RefKind: RefKind.RefReadOnlyParameter } => "ref readonly ",
             _ => "",
         };
 }

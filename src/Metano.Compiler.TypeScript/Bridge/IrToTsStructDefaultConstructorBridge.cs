@@ -99,9 +99,12 @@ internal static class IrToTsStructDefaultConstructorBridge
                 ? null
                 : AssertedNull(),
             IrNamedTypeRef named => NamedDefaultOf(named),
-            IrTupleTypeRef or IrKeyValuePairTypeRef => null,
-            // Every other IR shape (array, map, set, function, promise,
-            // iterable…) lowers a reference type.
+            // Value types the IR folds into structural shapes: a tuple, a
+            // KeyValuePair, a ValueTask (a promise shape, as Task is).
+            IrTupleTypeRef or IrKeyValuePairTypeRef or IrPromiseTypeRef => null,
+            // Every other IR shape (array, map, set, function, iterable…)
+            // lowers a reference type; an ImmutableArray folds into an array,
+            // whose default C# also reads as no array.
             _ => AssertedNull(),
         };
 
@@ -129,6 +132,11 @@ internal static class IrToTsStructDefaultConstructorBridge
             _ => AssertedNull(),
         };
 
+    /// <summary>
+    /// Whether the struct's own type parameter is constrained to a value type;
+    /// a containing type's type parameter is not seen here and takes
+    /// <c>null</c> (plan.md § 013b hand-offs).
+    /// </summary>
     private static bool IsValueConstrained(
         IrTypeParameterRef parameter,
         IReadOnlyList<IrTypeParameter> typeParameters
