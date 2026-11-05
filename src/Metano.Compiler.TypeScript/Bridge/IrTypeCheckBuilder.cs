@@ -72,7 +72,7 @@ internal static class IrTypeCheckBuilder
             IrSetTypeRef => new TsBinaryExpression(
                 value,
                 "instanceof",
-                new TsIdentifier("HashSet")
+                new TsRuntimeHelperReference("HashSet")
             ),
             // Iterable (IReadOnlyCollection<T>) lowers to structural "any object" — legacy
             // emitted the same fallback because it couldn't produce a cheaper runtime test.

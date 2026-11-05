@@ -897,7 +897,20 @@ public static partial class IrToTsExpressionBridge
             var stageArgs = stage.Arguments.Select(a => Map(a, context)).ToList();
             if (stage.Queryable is { } queryable)
                 stageArgs.Add(MapQueryableMeta(queryable, context));
-            args.Add(new TsCallExpression(new TsIdentifier(emittedName), stageArgs));
+
+            // The operator call travels as a helper reference bound to the
+            // pipe subpath, so the printer aliases it together with the
+            // `metano-runtime/system/linq` import when a user declaration
+            // claims the name (#484).
+            args.Add(
+                new TsCallExpression(
+                    new TsRuntimeHelperReference(
+                        emittedName,
+                        TsRuntimeHelperReference.LinqPipeModule
+                    ),
+                    stageArgs
+                )
+            );
         }
 
         return new TsLinqCall(args, importedHelpers);
@@ -1504,7 +1517,7 @@ public static partial class IrToTsExpressionBridge
             // into IrMap/IrSet/IrArray refs, so we reconstruct the JS class
             // names here for `new` targets.
             IrMapTypeRef => new TsIdentifier("Map"),
-            IrSetTypeRef => new TsIdentifier("HashSet"),
+            IrSetTypeRef => new TsRuntimeHelperReference("HashSet"),
             _ => IrToTsTypeMapper.Map(type) switch
             {
                 TsNamedType n => TypeValueReference(n.Name, n.Origin),
