@@ -30,10 +30,10 @@ internal static class IrToTsInt64OperatorBridge
     )
     {
         // STAGING(012k): every 64-bit operator renders once the switch is gone.
-        if (!Int64RepresentationScope.IsBigInt || binary.NumericKind?.IsSixtyFourBit() != true)
+        if (!Int64RepresentationScope.IsBigInt || SixtyFourBitKindOf(binary) is not { } kind)
             return null;
 
-        var isSigned = binary.NumericKind.Value.IsSigned();
+        var isSigned = kind.IsSigned();
 
         return binary.Operator switch
         {
@@ -56,10 +56,13 @@ internal static class IrToTsInt64OperatorBridge
         };
     }
 
+    private static IrNumericKind? SixtyFourBitKindOf(IrBinaryExpression binary) =>
+        binary.NumericKind is { } kind && kind.IsSixtyFourBit() ? kind : null;
+
     private static TsExpression Division(
         IrBinaryExpression binary,
-        string token,
-        string helper,
+        string nativeOperator,
+        string runtimeHelper,
         Func<IrExpression, TsExpression> map
     )
     {
@@ -67,8 +70,8 @@ internal static class IrToTsInt64OperatorBridge
         var divisor = map(binary.Right);
 
         return binary.HasNonThrowingConstantDivisor()
-            ? new TsBinaryExpression(dividend, token, divisor)
-            : RuntimeCall(helper, dividend, divisor);
+            ? new TsBinaryExpression(dividend, nativeOperator, divisor)
+            : RuntimeCall(runtimeHelper, dividend, divisor);
     }
 
     /// <summary>

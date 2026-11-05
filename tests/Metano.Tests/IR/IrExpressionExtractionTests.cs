@@ -82,9 +82,8 @@ public class IrExpressionExtractionTests
     }
 
     /// <summary>
-    /// Under the exact 64-bit lowering a 64-bit shift count is masked with
-    /// 63 as C# reads it, folded when constant (DECIDED-9); a 32-bit shift
-    /// and the shipped <c>Number</c> mode keep the count.
+    /// Under the exact 64-bit lowering a constant 64-bit shift count is
+    /// folded masked with 63, as C# reads it (DECIDED-9).
     /// </summary>
     [Test]
     [Arguments("long Get(long a) => a >> 70;", 6)]
@@ -114,17 +113,24 @@ public class IrExpressionExtractionTests
             );
     }
 
+    /// <summary>A 32-bit shift keeps its count, under the exact 64-bit lowering too.</summary>
     [Test]
-    [Arguments("int Get(int a, int n) => a >> n;", true)]
-    [Arguments("long Get(long a, int n) => a >> n;", false)]
-    public async Task ShiftCount_IsKeptOutsideTheExactSixtyFourBitLowering(
-        string method,
-        bool exact
-    )
+    public async Task NarrowShiftCount_IsKept()
     {
-        var shift = ReturnedBinary(method, exact ? ExactLowering : null);
+        var shift = ReturnedBinary("int Get(int a, int n) => a >> n;", ExactLowering);
 
         await Assert.That(shift.Right).IsEqualTo(new IrIdentifier("n"));
+    }
+
+    /// <summary>The shipped <c>Number</c> mode keeps a 64-bit shift count, constant or not (DECIDED-22).</summary>
+    [Test]
+    public async Task SixtyFourBitShiftCount_IsKeptInTheShippedMode()
+    {
+        var variable = ReturnedBinary("long Get(long a, int n) => a >> n;");
+        var constant = ReturnedBinary("long Get(long a) => a >> 70;");
+
+        await Assert.That(variable.Right).IsEqualTo(new IrIdentifier("n"));
+        await Assert.That(constant.Right).IsEqualTo(new IrLiteral(70, IrLiteralKind.Int32));
     }
 
     [Test]
