@@ -153,4 +153,201 @@ public class ForEachTranspileTests
         var output = result["app/repo.ts"];
         await Assert.That(output).Contains("for (const x of this.getItems())");
     }
+
+    /// <summary>
+    /// <c>foreach (int x in double?[])</c> throws like .NET when an element is
+    /// missing (<c>InvalidOperationException</c> — "Nullable object must have
+    /// a value.", issue #488) instead of lifting the <c>null</c> into the
+    /// non-nullable variable: the loop reads through the same
+    /// unwrap-or-throw the explicit cast (<c>(int)d</c>) lowers to.
+    /// </summary>
+    [Test]
+    public async Task ForEach_NullableElementIntoNonNullableVariable_ThrowsWhenMissing()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(double?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var output = result["app/sum.ts"];
+
+        await Assert.That(output).Contains("const x = int32FromDouble(x$element ?? (() => {");
+        await Assert.That(output).Contains("Nullable object must have a value.");
+        await Assert.That(output).DoesNotContain("x$element == null ? null :");
+    }
+
+    /// <summary>
+    /// <c>foreach (int x in int?[])</c> unwraps the element with the same
+    /// throw even though the kinds match, so a missing value never flows into
+    /// the variable unconverted.
+    /// </summary>
+    [Test]
+    public async Task ForEach_NullableElementOfTheSameKind_StillThrowsWhenMissing()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(int?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var output = result["app/sum.ts"];
+
+        await Assert.That(output).Contains("const x = x$element ?? (() => {");
+        await Assert.That(output).Contains("Nullable object must have a value.");
+    }
+
+    /// <summary>
+    /// <c>foreach (int? x in double?[])</c> keeps the lifted conversion: a
+    /// missing element holds the variable as <c>null</c>, exactly .NET's
+    /// lifted behavior.
+    /// </summary>
+    [Test]
+    public async Task ForEach_NullableElementIntoNullableVariable_Lifts()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Sum
+            {
+                public int? Total(double?[] values)
+                {
+                    int? total = 0;
+
+                    foreach (int? x in values)
+                        total += x;
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var output = result["app/sum.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("const x = x$element == null ? null : int32FromDouble(x$element);");
+    }
+
+    [Test]
+    public async Task Dart_ForEach_NullableElementIntoNonNullableVariable_ThrowsWhenMissing()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(double?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var dart = files["sum.dart"];
+
+        await Assert.That(dart).Contains("Nullable object must have a value.");
+        await Assert.That(dart).Contains("toInt().toSigned(32)");
+        await Assert.That(dart).DoesNotContain("? null :");
+    }
+
+    [Test]
+    public async Task Dart_ForEach_NullableElementOfTheSameKind_StillThrowsWhenMissing()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Sum
+            {
+                public int Total(int?[] values)
+                {
+                    var total = 0;
+
+                    #pragma warning disable CS8629
+                    foreach (int x in values)
+                        total += x;
+                    #pragma warning restore CS8629
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var dart = files["sum.dart"];
+
+        await Assert.That(dart).Contains("Nullable object must have a value.");
+        await Assert.That(dart).DoesNotContain("? null :");
+    }
+
+    [Test]
+    public async Task Dart_ForEach_NullableElementIntoNullableVariable_Lifts()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Sum
+            {
+                public int? Total(double?[] values)
+                {
+                    int? total = 0;
+
+                    foreach (int? x in values)
+                        total += x;
+
+                    return total;
+                }
+            }
+            """
+        );
+
+        var dart = files["sum.dart"];
+
+        // Dart reads the lifted conversion through the nullable-aware `?.`
+        // member chain: a missing element holds the variable as `null`.
+        await Assert.That(dart).Contains("int? x = x$element?.toInt().toSigned(32);");
+    }
 }

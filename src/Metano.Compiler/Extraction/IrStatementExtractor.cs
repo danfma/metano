@@ -384,7 +384,7 @@ public sealed class IrStatementExtractor(
         // cannot collide with a user binding.
         var element = variable + "$element";
 
-        if (ElementConversion(fe, new IrIdentifier(element)) is not { } converted)
+        if (ElementValue(fe, new IrIdentifier(element)) is not { } converted)
             return new IrForEachStatement(variable, variableType, collection, body);
 
         // `foreach (long x in ints)`, `foreach (int x in doubles)`: iterate the
@@ -396,35 +396,57 @@ public sealed class IrStatementExtractor(
     }
 
     /// <summary>
-    /// The numeric conversion of <paramref name="element"/> to the declared
-    /// loop variable, when Roslyn's element conversion lowers explicitly: a
-    /// floating-point truncation in every mode, a 64-bit one under the exact
-    /// lowering. A <c>foreach</c> conversion is explicit, so it checks in a
-    /// checked context; no operation carries that flag, so it comes from the
-    /// enclosing context and the compilation options.
+    /// The value the loop variable is declared from: the numeric conversion
+    /// of <paramref name="element"/> when Roslyn's element conversion lowers
+    /// explicitly (a floating-point truncation in every mode, a 64-bit one
+    /// under the exact lowering). A <c>foreach</c> conversion is explicit, so
+    /// it checks in a checked context; no operation carries that flag, so it
+    /// comes from the enclosing context and the compilation options.
+    /// <para>
+    /// An element the variable cannot hold — a nullable element into a
+    /// non-nullable variable — unwraps with the .NET throw first, the same
+    /// runtime shape the explicit cast lowers to, instead of lifting
+    /// <c>null</c> into the variable (issue #488). The conversion lifts only
+    /// when the variable is nullable too.
+    /// </para>
     /// </summary>
-    private IrNumericConversion? ElementConversion(ForEachStatementSyntax fe, IrExpression element)
+    private IrExpression? ElementValue(ForEachStatementSyntax fe, IrExpression element)
     {
         var info = _semantic.GetForEachStatementInfo(fe);
         var variableType = (_semantic.GetDeclaredSymbol(fe) as ILocalSymbol)?.Type;
 
         if (
             !IsNumericElementConversion(info)
-            || NumericEndpoints.Of(info.ElementType) is not { } from
+            || info.ElementType is not { } elementType
+            || NumericEndpoints.Of(elementType) is not { } from
             || NumericEndpoints.Of(variableType) is not { } to
         )
             return null;
 
+        var elementNullable = elementType.IsNullableValueType();
+        var variableNullable = variableType!.IsNullableValueType();
+        var isChecked = CheckedContexts.IsChecked(fe, _semantic.Compilation);
+
+        if (elementNullable && !variableNullable)
+        {
+            var unwrapped = new IrCastExpression(
+                _expressions.ValueOrThrowWhenMissing(element),
+                IrTypeRefMapper.Map(
+                    NumericEndpoints.UnwrapNullableType(elementType),
+                    _originResolver,
+                    _context.Target
+                )
+            );
+
+            return from == to
+                ? unwrapped
+                : new IrNumericConversion(unwrapped, from, to, isChecked, IsLifted: false);
+        }
+
         if (!NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering))
             return null;
 
-        return new IrNumericConversion(
-            element,
-            from,
-            to,
-            IsChecked: CheckedContexts.IsChecked(fe, _semantic.Compilation),
-            IsLifted: info.ElementType.IsNullableValueType()
-        );
+        return new IrNumericConversion(element, from, to, isChecked, IsLifted: elementNullable);
     }
 
     private static bool IsNumericElementConversion(ForEachStatementInfo info) =>
