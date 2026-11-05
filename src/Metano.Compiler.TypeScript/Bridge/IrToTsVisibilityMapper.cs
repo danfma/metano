@@ -15,8 +15,13 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///     any class of the emitting package may reach the member, and
 ///     <c>stripInternal</c> drops it from the <c>.d.ts</c>;</item>
 ///   <item><c>protected</c> → <c>protected</c>;</item>
-///   <item><c>private</c> / <c>private protected</c> → <c>private</c>.</item>
+///   <item><c>private protected</c> → <c>protected</c> tagged
+///     <c>/** @internal *&#47;</c>: the class and its derived classes of the
+///     package reach the member, and <c>stripInternal</c> drops it;</item>
+///   <item><c>private</c> → <c>private</c>.</item>
 /// </list>
+/// A constructor reads <see cref="MapConstructor"/>, which keeps FR-049's
+/// <c>private</c> for <c>private protected</c>.
 /// </summary>
 public static class IrToTsVisibilityMapper
 {
@@ -32,12 +37,23 @@ public static class IrToTsVisibilityMapper
             ),
             IrVisibility.Internal => new(TsAccessibility.Public, InternalTag),
             IrVisibility.Protected => new(TsAccessibility.Protected, null),
-            IrVisibility.Private or IrVisibility.PrivateProtected => new(
-                TsAccessibility.Private,
-                null
-            ),
+            IrVisibility.PrivateProtected => new(TsAccessibility.Protected, InternalTag),
+            IrVisibility.Private => new(TsAccessibility.Private, null),
             _ => throw new ArgumentOutOfRangeException(nameof(visibility), visibility, null),
         };
+
+    /// <summary>
+    /// The TypeScript accessibility and JSDoc of a constructor declared
+    /// <paramref name="visibility"/>: <see cref="Map"/>, except that a
+    /// <c>private protected</c> constructor emits an untagged
+    /// <c>private constructor</c> (FR-049), which
+    /// <see cref="ConstructorAccessPolicy"/> lowers to <c>protected</c> when
+    /// an emitted class extends the type.
+    /// </summary>
+    public static TsMemberVisibility MapConstructor(IrVisibility visibility) =>
+        visibility is IrVisibility.PrivateProtected
+            ? new(TsAccessibility.Private, null)
+            : Map(visibility);
 
     /// <summary>
     /// The most permissive of the accessibilities that share one TypeScript

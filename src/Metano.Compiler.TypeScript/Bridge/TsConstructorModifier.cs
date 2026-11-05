@@ -90,7 +90,7 @@ public static class TsConstructorModifier
         type.Semantics.IsValueType;
 
     private static TsMemberVisibility Of(IrVisibility visibility) =>
-        IrToTsVisibilityMapper.Map(visibility);
+        IrToTsVisibilityMapper.MapConstructor(visibility);
 
     private static IEnumerable<IrConstructorDeclaration> DeclarationsOf(
         IrConstructorDeclaration constructor
