@@ -63,6 +63,9 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `BigInteger x = l;` | `l` | same |
 | `(long)b` | `int64FromBigInteger(b)` | same (always checked) |
 | `(ulong)b` | `uint64FromBigInteger(b)` (`… for a UInt64.` outside the range, but `Arithmetic operation resulted in an overflow.` for a value in (int.MinValue, −1], as .NET 10 throws) | same (always checked) |
+| `(int)b`, `(uint)b`, `(short)b`, `(char)b` | `int32FromBigInteger(b)`, `uint32FromBigInteger(b)`, `narrowFromBigInteger(b, 16, true)`, `String.fromCharCode(narrowFromBigInteger(b, 16, false))` | same (always checked, slice 012g) |
+| `(double)b`, `(float)b`, `(decimal)b` | `doubleFromBigInteger(b)`, `Math.fround(doubleFromBigInteger(b))`, `new Decimal(decimalTextFromBigInteger(b))` | same |
+| `(BigInteger)d`, `(BigInteger)dm` | `bigIntegerFromDouble(d)`, `bigIntegerFromDecimal(dm)` | same |
 | `(long)e` (enum) | `BigInt(e)` | same |
 | `(IntEnum)l` | `Number(BigInt.asIntN(32, l))` | `Number(checkedNarrow(l, 32, true))` |
 | `(LongEnum)l` | `Number(l)` | same |
@@ -136,7 +139,7 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `xs.LongCount()` | `BigInt(<count terminal>)` |
 | `l.ToString("N0")`, `$"{l:X}"`, `$"{l,8}"` | `formatInt64(l, "N0")`, `formatInt64(l, "X")`, `formatInt64(l, null, 8)` |
 | `long.Parse(s)`, `ulong.Parse(s, NumberStyles.HexNumber)` | `parseInt64(s)`, `parseUInt64(s, 515)` (the folded `NumberStyles` flags) |
-| `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64(s)` |
+| `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64(s)` (`tryParseInt64Value` until 012k) |
 | `Convert.ToInt64(d)`, `Convert.ToInt64(s)`, `Convert.ToInt64(s, 16)` | `convertDoubleToInt64(d)`, `convertStringToInt64(s)`, `convertStringToInt64(s, 16)` |
 | `Convert.ToInt32(l)` | `Number(convertNarrow(l, "Int32"))` |
 | `l.CompareTo(m)`, `l.Equals(m)`, `l.GetHashCode()` | `compareInt64(l, m)`, `l === m`, `valueHashCode(l)` |

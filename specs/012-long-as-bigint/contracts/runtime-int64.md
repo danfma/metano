@@ -81,7 +81,7 @@ export function uint64FromBigInteger(value: bigint): bigint;      // "… for a 
 | `maxInt64(a, b)`, `minInt64(a, b)`, `maxUInt64`, `minUInt64` | `Math.Max` / `Min`, `long.Max` / `Min` | evaluate each argument once |
 | `signInt64(x): number` | `Math.Sign(long)`, `long.Sign` | `-1`, `0`, `1` |
 | `clampInt64(v, lo, hi)`, `clampUInt64` | `Math.Clamp`, `long.Clamp` | `lo > hi` → `ArgumentException("'<lo>' cannot be greater than <hi>.")` |
-| `divRemInt64(a, b): readonly [bigint, bigint]`, `divRemUInt64` | `Math.DivRem`, `long.DivRem` | the division rules above |
+| `divRemInt64(a, b): [quotient: bigint, remainder: bigint]`, `divRemUInt64` (mutable, as C#'s `(long, long)` maps to `[bigint, bigint]`) | `Math.DivRem`, `long.DivRem` | the division rules above |
 | `bigMulInt64(a, b): readonly [high: bigint, low: bigint]`, `bigMulUInt64` | `Math.BigMul(long, long, out long)` / `(ulong, ulong, out ulong)` | high and low 64 bits of the 128-bit product; `low` reinterpreted as `long` for the signed form (R2: `BigMul(long.MaxValue, long.MaxValue)` → `[4611686018427387903n, 1n]`) |
 
 ## Comparison and hashing
@@ -98,7 +98,7 @@ export function hashInt64(value: bigint): number;             // Number(BigInt.a
 ```ts
 /**
  * `value.ToString(format)` / an interpolation hole `{value,alignment:format}` in the invariant culture.
- * `format` null or "" → "G". Supported: G, D[n], N[n] (default 2 decimals), F[n] (default 2), X[n] / x[n],
+ * `format` null or "" → "G". Supported: G[n] (scientific past the precision, rounded half away from zero), D[n], N[n] (default 2 decimals), F[n] (default 2), X[n] / x[n],
  * R. Hex of a negative value prints its 64-bit two's complement. Alignment pads with spaces, left when
  * negative. Any other standard or custom format → NotSupportedException; an invalid one →
  * FormatException("Format specifier was invalid.").
@@ -135,6 +135,7 @@ export function tryParseUInt64(text: string | null | undefined, style?: number):
   `FormatException("The input string '<text>' was not in a correct format.")`; out of range →
   `OverflowException("Value was either too large or too small for an Int64.")` (`a UInt64`). `TryParse`
   returns `[false, 0n]` for each of them.
+- Until slice 012k the signed parser is exported as `tryParseInt64Value`: the 2.x `number` `tryParseInt64` (`system/number-parsing.ts`) still serves the shipped `Number` mode, and replacing it before the flip would break that output. 012k removes it and renames `tryParseInt64Value`.
 - The existing `tryParseInt64` (`system/number-parsing.ts`) moves here and returns `bigint` (breaking for
   hand-written callers; migration notes).
 
@@ -162,6 +163,7 @@ export function minInt64Of<T>(selector?: (item: T) => bigint): MinTerm<T>;      
 export function maxInt64Of<T>(selector?: (item: T) => bigint): MaxTerm<T>;
 export function minNullableInt64Of<T>(selector?: (item: T) => bigint | null): MinTerm<T>; // skips null; null when empty
 export function maxNullableInt64Of<T>(selector?: (item: T) => bigint | null): MaxTerm<T>;
+// As landed (012g): Enumerable has no Sum / Average over ulong, so sumUInt64 and averageUInt64 do not exist.
 // UInt64 twins: averageUInt64, minUInt64Of, maxUInt64Of (ordering is the same; only the checked sum differs)
 ```
 
@@ -186,3 +188,23 @@ export function isInt64(value: unknown): value is bigint;   // typeof bigint and
 export function isUInt64(value: unknown): value is bigint;  // typeof bigint and 0n ≤ v ≤ UINT64_MAX
 export function isBigInt(value: unknown): value is bigint;  // unchanged
 ```
+
+## `BigInteger` conversions (`system/big-integer.ts`, slice 012g)
+
+```ts
+export function int32FromBigInteger(value: bigint): number;     // (int)b
+export function uint32FromBigInteger(value: bigint): number;    // (uint)b
+export function narrowFromBigInteger(value: bigint, bits: 8 | 16, signed: boolean): number; // (short), (ushort), (sbyte), (byte), (char) b: through int first
+export function doubleFromBigInteger(value: bigint): number;    // (double)b: .NET's truncated significand; ±Infinity past 1024 bits; (float)b is Math.fround of it
+export function decimalTextFromBigInteger(value: bigint): string; // the digits of (decimal)b, for new Decimal(…)
+export function bigIntegerFromDouble(value: number): bigint;    // (BigInteger)d / (BigInteger)f: truncate
+export function bigIntegerFromDecimal(value: DecimalLike): bigint; // (BigInteger)m: truncate
+```
+
+Every explicit `BigInteger` conversion is checked in any context. .NET holds a value in
+(`int.MinValue`, `int.MaxValue`] inline and converts it with a checked cast, so `(int)b` for a value in
+[2^31, 2^32), `(uint)b` for a negative inline value, and the narrower targets after the `int` step throw
+`OverflowException("Arithmetic operation resulted in an overflow.")`; the other out-of-range values throw
+`"Value was either too large or too small for an Int32."` (`a UInt32.`). `(decimal)b` beyond ±(2^96 − 1)
+throws `"… for a Decimal."`; `(BigInteger)NaN` throws `"The value is not a number."` and an infinity
+`"BigInteger cannot represent infinity."`.
