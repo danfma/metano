@@ -313,8 +313,14 @@ internal sealed class JsonSpecBuilder
         JsonPolymorphism? polymorphism
     )
     {
-        if (polymorphism is { IsAbstractBase: true })
-            return FactoryBody.Throws(PolymorphicAbstractFactoryMessage(targetType, tsTypeName));
+        if (FactoryOnlyThrows(targetType, polymorphism))
+        {
+            return FactoryBody.Throws(
+                polymorphism is { IsAbstractBase: true }
+                    ? PolymorphicAbstractFactoryMessage(targetType, tsTypeName)
+                    : NonConstructibleFactoryMessage(targetType, tsTypeName)
+            );
+        }
 
         if (SymbolHelper.HasPlainObject(targetType))
         {
@@ -325,9 +331,6 @@ internal sealed class JsonSpecBuilder
                 ReadsPayload: literalProperties.Count > 0
             );
         }
-
-        if (targetType.IsAbstract)
-            return FactoryBody.Throws(NonConstructibleFactoryMessage(targetType, tsTypeName));
 
         var construction = BuildConstruction(targetType, tsTypeName, out var argumentsReadPayload);
         var assignedMembers = UnboundMembersOf(_properties, targetType, JsonReadAssignment.Always)
@@ -491,14 +494,7 @@ internal sealed class JsonSpecBuilder
             var contract = (INamedTypeSymbol)entry.Type;
             var polymorphism = plan.Polymorphisms.GetValueOrDefault(contract);
 
-            // Mirror BuildFactoryBody's throw branches: an abstract
-            // polymorphic base throws, and any other non-<c>[PlainObject]</c>
-            // abstract type (interfaces included — IsAbstract is true for
-            // them) throws instead of constructing.
-            if (
-                polymorphism is { IsAbstractBase: true }
-                || contract.IsAbstract && !SymbolHelper.HasPlainObject(contract)
-            )
+            if (FactoryOnlyThrows(contract, polymorphism))
                 continue;
 
             types.UnionWith(CastTypesOf(plan, contract));
@@ -506,6 +502,20 @@ internal sealed class JsonSpecBuilder
 
         return types;
     }
+
+    /// <summary>
+    /// Whether a contract's factory only throws instead of constructing: an
+    /// abstract polymorphic base, or any other abstract type (interfaces
+    /// included, since Roslyn reports them abstract) that is not a
+    /// [PlainObject], whose factory builds a literal instead. The factory
+    /// build and the cast-type scan both decide through it (#496).
+    /// </summary>
+    private static bool FactoryOnlyThrows(
+        INamedTypeSymbol contract,
+        JsonPolymorphism? polymorphism
+    ) =>
+        polymorphism is { IsAbstractBase: true }
+        || (contract.IsAbstract && !SymbolHelper.HasPlainObject(contract));
 
     /// <summary>
     /// The cast types of one constructible contract: its

@@ -154,5 +154,31 @@ public class JsonContextImportTests
 
         await Assert.That(ts).DoesNotContain("import { HashSet");
         await Assert.That(ts).Contains("factory: () => {");
+        await Assert
+            .That(ts)
+            .Contains("""throw new Error("Cannot construct abstract type 'Base'.");""");
+    }
+
+    /// <summary>
+    /// An abstract, non-polymorphic [PlainObject] still builds a literal
+    /// that casts its members, so its cast types keep their import.
+    /// </summary>
+    [Test]
+    public async Task AbstractPlainObjectWithSetMember_KeepsTheCastImport()
+    {
+        var ts = TranspileHelper.Transpile(
+            Context(
+                """
+                [Transpile, PlainObject]
+                public abstract record Base(HashSet<int> Tags);
+
+                [Transpile]
+                public sealed record Hub(string Title, Base Ranking);
+                """
+            )
+        )[ContextPath];
+
+        await Assert.That(ts).Contains("""import { HashSet } from "metano-runtime";""");
+        await Assert.That(ts).Contains("p.tags as HashSet<number>");
     }
 }
