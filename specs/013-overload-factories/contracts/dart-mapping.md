@@ -6,13 +6,16 @@ contract fixes the **names and the call-site spelling**. The emission lands with
 
 | C# | Dart |
 |---|---|
-| `Dimension(int size)` / `Dimension(int width, int height)` (dispatched) | named constructors `Dimension.fromSize(this.size)` and `Dimension.fromWidthHeight(this.width, this.height)` — the policy's suffixes, Dart's native named-constructor syntax |
-| the selector symbol | **not emitted** — Dart has no `unique symbol` analogue and its named constructors already address one constructor |
-| a method fast path | the same public method name as TypeScript (`addXY`, `fInt32`, `nowDefault`, `kNumericsDecimal`) |
-| `new Money(19.9m)` (direct call site) | `Money.fromAmount(19.9)` |
+| `Dimension(int size)` / `Dimension(int width, int height)` (dispatched) | named constructors `Dimension.fromSize(this.size)` and `Dimension.fromWidthHeight(this.width, this.height)` — the core candidates, Dart's native syntax |
+| the selector symbol | **not emitted** — Dart named constructors already address one constructor |
+| a method fast path | the same candidate as TypeScript (`addXY`, `fInt32`, `nowDefault`, `kNumericsDecimal`), root-anchored (FR-025) |
+| `new Money(19.9m)` (direct call site) | `Money.fromAmount(…)` (the argument is the Dart lowering of the `decimal` literal) |
 | `p.Add(point)` (direct call site) | `p.addP(point)` |
-| a hand-written Dart `Dimension(3, 4)` | n/a — the Dart prototype keeps today's constructor shape; the dispatch/fallback question is RT-02's |
+| a hand-written Dart `Dimension(3, 4)` | n/a — the prototype keeps today's constructor shape; dispatch for hand-written Dart is RT-02's |
 
-Why the names can be shared: the policy lives in the core (DECIDED-1), so both targets render the
-same `IrOverloadName`. Why factories map cleanly: a Dart named constructor is exactly a per-
-overload constructor entry point — the same concept the C# factory expresses.
+**Claims are Dart's own (DECIDED-18).** Dart has one member namespace per class for instance
+members, static members and named constructors, so the Dart bridge runs the claim pass of
+naming.md over one table where TypeScript keeps static and instance names apart. An instance fast
+path `fromCents` beside a factory `fromCents` is legal TypeScript but a Dart conflict; the Dart
+bridge renames it (`fromCents$`) and reports `MS0067`. The two targets may therefore spell the
+same overload differently after claims; the core candidates are identical.

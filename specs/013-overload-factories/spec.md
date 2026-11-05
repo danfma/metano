@@ -2,320 +2,387 @@
 
 **Feature Branch**: `docs/25-overload-factories-spec` (spec directory `013-overload-factories`)
 
-**Created**: 2026-11-04
+**Created**: 2026-11-04 · **Revised**: 2026-11-04 (round 2, after the compiler-man review)
 
-**Status**: Draft (spec change request; the maintainer's decisions of 2026-11-04 on issue #25 are applied)
+**Status**: Draft (spec change request; the maintainer's decisions of 2026-11-04 on issue #25, including the three taken after the first review, are applied)
 
-**Input**: GitHub issue [danfma/metano#25](https://github.com/danfma/metano/issues/25), "Static call-site fast-path optimization" (the sub-item left open after the 2026-05-02 spike closed the inheritance and factories sub-items differently), plus the maintainer's decision comments of 2026-11-04 that reopen and settle constructor factories, selector symbols and direct call sites together. The findings behind every requirement are in [research.md](./research.md) (R1–R7): TypeScript acceptance of protected `unique symbol` selectors (R1), subclass `super(Base.byXxx, …)` across modules on Node and Bun (R2), the outsider rejection (R3), generics (R4), interactions with records, structs, `[PlainObject]`, `[InlineWrapper]`, primary constructors, `this(...)` chains and abstract classes (R5), the Dart mapping (R6), and a snapshot of today's fast-path naming against the new algorithm (R7).
+**Input**: GitHub issue [danfma/metano#25](https://github.com/danfma/metano/issues/25), "Static call-site fast-path optimization" (the sub-item left open after the 2026-05-02 spike), plus the maintainer's decision comments of 2026-11-04 that reopen and settle constructor factories, selector symbols and direct call sites together, and the round-2 decisions on virtual calls, selector names and per-overload visibility. The evidence behind every requirement is in [research.md](./research.md) (R1–R13).
 
-**Traceability**: it extends the baseline overload-dispatch capability — the legacy requirement the issue cites as `FR-042` (overload dispatch) and the two "Method overload dispatch" / "Constructor overload dispatch" rows of the baseline [feature-support matrix](../001-project-baseline-evolution/baseline/feature-support-matrix.md) — and it builds on FR-049 (constructor access modifiers, #432), which already computes the emitted constructor accessibility that factories inherit. It adds a Planned row to the matrix and reserves `MS0067` in the [diagnostic catalog](../001-project-baseline-evolution/baseline/diagnostic-catalog.md) (`MS0064`–`MS0066` are reserved by spec 012). As in features 002–012, the FR identifiers below are local to this feature and are cited as "013 FR-0NN".
+**Traceability**: it extends baseline **FR-050** (overload dispatch, added by this PR to [the baseline spec](../001-project-baseline-evolution/spec.md); the "Method overload dispatch" / "Constructor overload dispatch" rows of the [feature-support matrix](../001-project-baseline-evolution/baseline/feature-support-matrix.md) trace it) and builds on baseline FR-049 (constructor access modifiers, #432). It adds a Planned row to the matrix and reserves `MS0067` and `MS0068` in the [diagnostic catalog](../001-project-baseline-evolution/baseline/diagnostic-catalog.md) (`MS0064`–`MS0066` are spec 012's). As in features 002–012, the FR identifiers below are local to this feature and are cited as "013 FR-0NN".
 
-**Related specs and issues**: [ADR-0008](../../docs/adr/0008-overload-dispatch.md) (dispatcher + private fast paths) is superseded in part by [ADR-0028](../../docs/adr/0028-overload-factories.md); [ADR-0013](../../docs/adr/0013-shared-ir-as-canonical-semantic-representation.md) (shared IR) is where the naming policy lands. The implementation depends on #445 (member visibility bridge), which touches the same accessibility code the factories reuse. Spec 012's OQ-6 (`long` / `ulong` / `BigInteger` dispatch order) becomes moot at call sites resolved by this feature; the runtime dispatcher keeps its documented order.
+**Related specs and issues**: [ADR-0008](../../docs/adr/0008-overload-dispatch.md) (dispatcher + private fast paths) is superseded in part by [ADR-0028](../../docs/adr/0028-overload-factories.md) (Proposed); [ADR-0013](../../docs/adr/0013-shared-ir-as-canonical-semantic-representation.md) (shared IR) hosts the naming policy. The implementation depends on #445 (member visibility bridge). #475 (numeric dispatch order, unsigned folding) and #474 (visibility gaps) are related, not prerequisites. Spec 012 FR-048's `…ULong` suffix becomes `…UInt64` here ([Interaction with other specs](#interaction-with-other-specs)).
 
 ## Overview
 
-Metano lowers C# overload groups to one runtime dispatcher plus one private fast-path method per overload (ADR-0008). Every generated call site pays the dispatcher's runtime arity and type checks even when Roslyn resolved the overload statically; every constructor body is inlined into a dispatcher branch, so hand-written TypeScript cannot address one overload at all; and the private fast-path names are computed by a naming rule that today produces output that does not compile for two shape families (research R7: a type-name fallback that collides into duplicate members, and a zero-arg overload whose fast path shadows the dispatcher's own name).
+Metano lowers C# overload groups to one runtime dispatcher plus one private fast path per overload (ADR-0008). Every generated call site pays the dispatcher's arity and type checks even when Roslyn resolved the overload statically; constructor bodies live in dispatcher branches, so hand-written TypeScript cannot address one overload; and the naming emits non-compiling output for several shape families (R7: duplicate fast paths for `uint`/`int`, `List<int>`/`int[]` and same-named types; a zero-argument fast path named like its dispatcher; overloaded extension methods; a derived override that replaces the whole dispatcher, R8).
 
-This feature makes the statically known call site the normal path, gives every constructor overload an addressable TypeScript identity, and replaces the ad-hoc naming with one deterministic algorithm shared by factories, selector symbols and method fast paths:
+This feature makes the statically known call site the normal path, gives every constructor overload an addressable TypeScript identity, anchors virtual calls on one name per overload, and replaces the ad-hoc naming with one deterministic algorithm:
 
 ```mermaid
 flowchart LR
   subgraph csharp [C# source]
-    N["new Money(19.9m) / base(19.9m)"]
-    M["Shapes.Add(1, 2) / p.Add(point)"]
+    N["new Money(19.9m) / base(amount)"]
+    M["b.Add(1) / sh.Area(2) / Shapes.Add(1, 2)"]
   end
-  subgraph core [Metano.Compiler core IR]
-    R["Roslyn GetSymbolInfo: the resolved overload"]
-    P["OverloadNamePolicy: one name per overload (core, target-agnostic)"]
+  subgraph core [Metano.Compiler core]
+    R["Roslyn: resolved overload + its root declaration"]
+    P["OverloadNamePolicy: candidate names from Roslyn spellings"]
   end
   subgraph ts [TypeScript target]
-    F["static fromAmount(...): Money (factory)"]
-    S["protected static readonly byAmount: unique symbol (selector)"]
-    FP["static addXY(...): number, /** @internal */ (fast path)"]
-    D["public dispatcher: the fallback for hand-written TS"]
+    C["Claim pass: final names per member table"]
+    F["static fromAmount(...): Money"]
+    S["protected static readonly byMoneyAmount: unique symbol"]
+    FP["addX(...) / override addX(...)"]
+    D["public dispatcher: fallback for hand-written TS"]
   end
-  N --> R --> P --> F
-  N --> R --> S
-  M --> R --> P --> FP
-  R --> D
+  N --> R --> P --> C
+  M --> R
+  C --> F
+  C --> S
+  C --> FP
+  FP --> D
   F --> S
 ```
 
-The dispatcher survives, public, as the fallback for hand-written TypeScript: `new Money(19.9)` and `money.add(point)` keep compiling and running by arity and type. What changes is that code Metano generates never reaches for it when Roslyn knows the answer.
+The dispatcher survives as the fallback for hand-written TypeScript: `new Money(new Decimal("19.9"))` and `money.add(point)` keep compiling and running by arity and type. What changes is that code Metano generates never reaches for it when Roslyn knows the answer.
 
 ## Maintainer decisions (normative)
 
-- **D1 — Constructor factories.** Every overload of a dispatched constructor (two or more declared instance constructors) gets a static factory `fromXxx(...)` returning the type — public in the common case; its accessibility follows the constructor's emitted FR-049 modifier (DECIDED-8), so a private constructor set does not leak construction C# forbids. A type without constructor overloads is unchanged: `new T(args)` stays `new T(args)` (maintainer, 2026-11-04, issue #25).
-- **D2 — Selector symbols.** Every constructor overload gets `protected static readonly byXxx: unique symbol = Symbol("<C# signature>")`. The symbol description carries the full C# signature (`Symbol("Money(decimal amount)")`) for debugging only. The constructor gains one overload signature `constructor(overload: typeof T.byXxx, ...params)` per overload; the implementation dispatches on `args[0] === T.byXxx` first, with no type checks; a call without a selector falls back to the existing dispatcher; a derived class picks the exact base overload with `super(Base.byXxx, ...)` (maintainer, 2026-11-04).
-- **D3 — Direct call sites.** Metano-generated code never goes through the runtime dispatcher when Roslyn has resolved the overload: C# `new T(args)` becomes `T.fromXxx(args)` (or `super(Base.byXxx, ...)` in a constructor chain), and an overloaded method call goes straight to its fast path (maintainer, 2026-11-04).
-- **D4 — Methods share the scheme.** Method fast paths become public, use the same naming rules, and are called directly from generated code. The dispatcher stays public for hand-written TS (maintainer, 2026-11-04).
-- **D5 — One naming algorithm** for factories, selector suffixes and method fast paths: parameter names first; on any collision the whole group switches to C# type names; on a remaining collision it climbs containing type and namespaces; a user-member collision falls back to `$` ([Naming](#naming) below, with the spellings and the joiner checked against today's `ComputeFastPathNames` output in R7).
-- **D6 — The breaking change ships in 3.0.0.** User code that relied on the old private fast-path names, or on generated call shapes that went through the dispatcher, changes ([Migration (3.0.0)](#migration-300)).
-- **D7 — Name stability is documented.** Renaming a C# parameter renames the TypeScript factory and fast-path names; a refactor that only renames a parameter becomes a TypeScript API change ([Migration (3.0.0)](#migration-300), item 7).
+- **D1 — Constructor factories.** Every overload of a dispatched constructor (two or more declared instance constructors) gets a static factory `fromXxx(...)` returning the type, with its own overload's accessibility (DECIDED-17). A type without constructor overloads is unchanged (maintainer, 2026-11-04, issue #25).
+- **D2 — Selector symbols.** Every constructor overload gets a `protected static readonly …: unique symbol = Symbol("<C# signature>")` (named per DECIDED-16); the description is for debugging only. The constructor gains one overload signature `constructor(overload: typeof T.by…, ...params)` per overload; the implementation dispatches on the selector first, with no type checks; a call without a selector falls back to the existing dispatcher; a derived class picks the exact base overload with `super(Base.by…, ...)` (maintainer, 2026-11-04).
+- **D3 — Direct call sites.** Metano-generated code never goes through the runtime dispatcher when Roslyn has resolved the overload (maintainer, 2026-11-04).
+- **D4 — Methods share the scheme.** Method fast paths become addressable members, use the same naming rules, and are called directly from generated code. The dispatcher stays public for hand-written TS (maintainer, 2026-11-04).
+- **D5 — One naming algorithm** for factories, selector suffixes and fast paths: parameter names first; on any collision the whole group switches to C# type names; on a remaining collision the colliding overloads climb their parameter types' containing types and namespaces; a remaining clash falls back to `$` ([Naming](#naming)).
+- **D6 — The breaking change ships in 3.0.0** ([Migration (3.0.0)](#migration-300)).
+- **D7 — Name stability is documented.** Renaming a C# parameter renames the TypeScript factory and fast-path names.
+- **D8 — Virtual calls use root-anchored names** (round 2): DECIDED-15.
+- **D9 — Selectors are type-qualified** (round 2): DECIDED-16.
+- **D10 — Per-overload visibility** (round 2): DECIDED-17.
 
 ## Decisions taken by this spec (DECIDED)
 
-Each decision states the rule and the rejected alternative. The open questions that remain for the maintainer are listed in [Open questions](#open-questions).
+Each decision states the rule and the rejected alternative. Entries marked [M] record a maintainer decision.
 
-- **DECIDED-1 — The naming policy lives in the core.** `Metano.Compiler` computes, once per overload of a group, the suffix shared by the factory and the selector and the fast-path name, from the IR alone; the targets render them (NFR-002, as 012's DECIDED-1). `ComputeFastPathNames` moves out of `IrToTsOverloadDispatcherBridge` into a core `OverloadNamePolicy` the expression extractor can also call — the exact restructuring the 2026-05-02 spike listed as a requirement of sub-item 3. Rejected: duplicating the rule in the TS bridge and again in `IrExpressionExtractor` (two copies diverge; Dart needs the same names for its named constructors).
-- **DECIDED-2 — No `And` joiner.** The parameter-name suffix is the capitalized parameter names concatenated: `Add(int width, int height)` → `addWidthHeight`, factory `fromWidthHeight`. The maintainer's `fromWidthAndHeight` example is corrected to the joiner today's `ComputeFastPathNames` already produces (R7: `addXY`, `formatFmtArgs` — no joiner anywhere), so names that are already stable stay byte-identical where the algorithm agrees. Rejected: introducing `And` (every existing parameter-name-based fast path renames, for no gain).
-- **DECIDED-3 — The type fallback uses exact C# type names.** On any collision inside a group, the whole group switches to type-based suffixes spelled with the C# type's name: `fromInt32`, `fromDecimal`, `fromString`, `fromBoolean`, `fromInt64`. The legacy shortenings (`Int32 → Int`, `Int64 → Long`, `Boolean → Bool`, `Single → Float`) are retired: the names become public API (DECIDED-8), and `fromInt` is ambiguous between `int` and `uint`, `fromLong` between `long` and `BigInteger`-adjacent spellings. This renames today's fallback names (`fInt` → `fInt32`, `gLong` → `gInt64`, R7) — a 3.0 break (D6). Rejected: keeping the lossy spellings on public API.
-- **DECIDED-4 — The climb is uniform and stops at the first distinct level.** When type-based suffixes still collide, every overload of the group climbs one level at a time — containing type first (for nested types), then namespace segments from nearest to farthest, up to the global namespace (`Global`) — and the group uses the first depth at which all suffixes are distinct: `K(Numerics.Decimal)` / `K(Other.Decimal)` → `fromNumericsDecimal` / `fromOtherDecimal`. Climbing applies only to suffixes built from type names (parameter names have no containing type). Today's algorithm stops here and emits duplicate members instead (R7: two `kDecimal` private methods, TS2393). Rejected: climbing only the colliding overloads (mixed depths are harder to read and to specify) or jumping straight to full names (needlessly long).
-- **DECIDED-5 — The zero-argument suffix is `Default`.** A parameterless overload gets suffix `Default`: factory `fromDefault`, selector `byDefault`, fast path `nowDefault`. Today its fast path is the bare method name, which is the dispatcher's own name and makes the class fail to compile (R7: `private static now()` next to the `now` dispatcher, TS2393 + TS2385). Rejected: a positional suffix (`from0`) — unreadable.
-- **DECIDED-6 — Fast paths are public with `/** @internal */`; factories are documented API.** Direct call sites from any file of the package — including a nested type emitted outside its container's class body and a cross-package consumer's generated code — target the fast path, so `private` is wrong. `/** @internal */` documents the intent (the name is the compiler's business, spelled out only so generated code can call it) without blocking those calls: JSDoc `@internal` is advisory, and the emitted `.d.ts` keeps the member (stripping it would break cross-package call sites that reference the package's declarations). Factories, by contrast, are the public construction API — they are what C# `new T(...)` lowers to, they appear in every `.d.ts` by design, and they are documented in the migration notes. Selectors stay `protected`: a non-derived caller is rejected by TS2445 (R3), which is exactly the access level C# gives `new T(...)` against a private/protected constructor set. The namespace fast paths of companion modules and `[ExportedAsModule]` (non-exported functions today, `BuildNamespaceFunctions`) become exported `/** @internal */` functions for the same reason. Rejected: documented public fast paths (the C# member is the API; the suffix is an emission detail) and `private` with `(obj as any)` casts at call sites (loses every type check).
-- **DECIDED-7 — Factories delegate to the selector branch; bodies stay single-homed.** `static fromSize(size: number): Dimension { return new Dimension(Dimension.bySize, size); }`. The constructor implementation keeps one branch per overload: the selector branch first (`args[0] === T.byXxx`, no type checks, parameters rebound from `args[1..]`), which holds the overload's body with its `this(...)` / `base(...)` chains inlined exactly as today's bridge lowers them; then today's arity-and-type fallback branches, whose `super(...)` calls now name the statically resolved base overload's selector (`super(Base.bySize, ...)`, D3); then the throw. A hand-written `new T(...)` hits the fallback and behaves as today; the body of each overload still lives in exactly one place (ADR-0008's diff discipline, kept). Rejected: delegating fallback branches to the factories (a factory call inside a derived constructor would construct a second instance instead of running `super`) and keeping two body copies (the duplication ADR-0008 rejected).
-- **DECIDED-8 — Factory accessibility follows the emitted constructor accessibility.** The factory's TS modifier is the constructor's emitted modifier under FR-049: the mapped accessibility of the overload's constructor, the most permissive one when constructors mix (`MS0060`), and the widened public one when code outside the class body constructs the type (`MS0061`). A private constructor gets a private factory (usable inside the class body, as in C#); a `protected` one a protected factory. Selector symbols are `protected` regardless, because they are addressed by derived classes, which C# allows for any non-private constructor set and which cost nothing when unused. Rejected: always-public factories (they would expose construction C# makes impossible) and mirroring per-overload accessibility (TS allows one constructor accessibility; the factories would disagree with the constructor they call).
-- **DECIDED-9 — Abstract dispatched classes get selectors but no factories.** A static factory on an abstract class would have to `new` its own abstract type, which tsgo rejects (TS2511, R5). Abstract classes emit the selector symbols and the selector branches (subclasses pick the base overload with `super(Base.byXxx, ...)`, which is the only way to construct the abstract part anyway) and skip the factories. Rejected: factories typed `T` that throw at runtime (a compile-time lie) and emitting a factory that calls `new.target` (static methods do not receive it).
-- **DECIDED-10 — Shapes without a dispatched constructor keep today's behavior.** `[PlainObject]` (an interface plus object literals — today its secondary constructors are dropped silently, R5), `[InlineWrapper]` / `[Branded]` (a brand alias whose `create` casts; today its secondary constructors are dropped silently, R5), `[External]` / `[NoEmit]` interfaces and `[JsCallable]` members get no factories and no selectors. Single-constructor types keep `new T(args)` (D1). Records and C# 12 primary constructors participate like any class: a record positional constructor with secondary constructors is a dispatched constructor (it already is, R5), so every overload — the primary included — gets a factory. `this(...)` chains need no special case: the chain stays inlined in the target's selector branch, and the chaining overload's factory calls its own selector (DECIDED-7). Whether the dropped secondary constructors of `[PlainObject]` and branded types should instead surface as a diagnostic is a separate gap this spec only records (OQ-5).
-- **DECIDED-11 — Direct call sites need a statically resolved receiver and overload.** `IrExpressionExtractor` rewrites the call when Roslyn resolved it: `new T(args)` → `T.fromXxx(args)` (or the `super(Base.byXxx, ...)` of the chain), `Type.M(args)` / `obj.M(args)` → the fast path with the receiver evaluated once in place. A call whose receiver is `dynamic` / `any`, whose symbol is unresolved, or that resolves to a BCL mapping rather than a transpiled overload keeps today's dispatcher call. Overloads of `[Emit]` / `[Import]` members and BCL-mapped members are untouched (they have no fast path). Generic call sites carry their type arguments to the fast path (`Shapes.identityValue<string>(s)`); a call whose type arguments are not statically known keeps the dispatcher. Rejected: rewriting every call and re-dispatching at runtime when the rewrite misses (that is what the dispatcher already does).
-- **DECIDED-12 — The dispatcher stays public and complete.** Overload signatures, guards, ordering (`OverloadDispatchOrder`), the `MS0063` catch-all rule and the error messages are unchanged: hand-written TypeScript keeps today's contract, including its documented order for the `long` / `ulong` / `BigInteger` overlap (012 OQ-6). The generated code simply stops being its customer. `MS0063` keeps firing — it names a hazard hand-written callers still face. Rejected: removing the dispatcher (breaks hand-written TS for no compile-time gain) or downgrading `MS0063` (the hazard is real for the public API).
-- **DECIDED-13 — `MS0067` (`OverloadNameShadowed`, warning).** When the `$` fallback of the name policy renames a factory, a selector suffix or a now-public fast path away from its computed name because a user-written member claims it, the compiler reports `MS0067` at the colliding overload, naming the claimed name, the winner and the emitted name. Silent public-API renames are what the `$` fallback was allowed to do while the names were private; public names must be visible (FR-020). The next free code was `MS0067` (after spec 012's `MS0064`–`MS0066`); no other codes are needed.
-- **DECIDED-14 — The Dart target maps factories to named constructors.** Dart has native named constructors: `Dimension.fromSize(...)` is spelled `Dimension.fromSize(...)` exactly as C# reads. Selector symbols have no Dart counterpart and are not emitted (the Dart constructor keeps its current shape-only form); method fast paths get the same public names and the same direct call sites (DECIDED-6). Scope: the Dart target is a shape-only prototype (no bodies), so this spec fixes the names and the call-site spelling only — the emission lands with the rest of Dart parity (roadmap RT-02). Rejected: inventing a Dart selector analogue (no Dart construct needs it).
+- **DECIDED-1 — Candidates in the core, captured from Roslyn.** `Metano.Compiler`'s `OverloadNamePolicy` computes, once per overload, the suffix and the candidate names (NFR-002), from a naming spelling captured from the Roslyn symbols at extraction time, next to `SignatureText` (`IrNamingSpelling`, data-model.md). The IR type refs are not enough: they erase collections (`List<int>` and `int[]` are one array), delegates, unsigned primitives (`uint` folds into `Int32`, #475) and containing types (R7). `ComputeFastPathNames` and both spelling tables (`IrToTsOverloadDispatcherBridge.SimpleTypeName` / `PrimitiveSuffix` and `IrToTsClassBridge.Operators.SimpleTypeName`) are deleted. Rejected: computing from the IR (the collisions of R7 cannot be separated there) and a per-target rule (two copies diverge; Dart needs the same candidates).
+- **DECIDED-2 — No `And` joiner.** `Add(int width, int height)` → `addWidthHeight`, factory `fromWidthHeight`; today's names (`addXY`, `formatFmtArgs`) stay. Rejected: `And` (every existing name renames, for no gain).
+- **DECIDED-3 — Exact CLR type names.** On any collision the whole group switches to type spellings: `fromInt32`, `fromUInt32`, `fromInt64`, `fromUInt64`, `fromBoolean`, `fromListOfInt32`. The legacy shortenings (`Int`, `Long`, `ULong`, `Bool`, `Float`) are retired — the names are public API now, and `Int` cannot tell `int` from `uint`. This renames 012 FR-048's `…ULong` to `…UInt64`. Rejected: keeping the lossy spellings.
+- **DECIDED-4 — The climb qualifies parameter types, colliding overloads only.** When type spellings still collide, every overload of each colliding set qualifies every parameter's spelling one level of **that parameter type's** containing types and then namespaces (nearest first, `Global` last), repeating until the group is distinct (`K(Numerics.Decimal)` / `K(Other.Decimal)` → `kNumericsDecimal` / `kOtherDecimal`). Primitives never climb (their CLR name is their identity); generic arguments, array elements and nullable inners climb with their parameter, never on their own. Rejected: round 1's uniform climb of the declaring type's namespace (it qualified the wrong type and renamed overloads that did not collide).
+- **DECIDED-5 — The zero-argument suffix is `Default`.** `fromDefault`, `byTDefault`, `nowDefault`. Today `Now()`'s fast path is the dispatcher's own name (TS2393 + TS2385, R7). Rejected: `from0`.
+- **DECIDED-6 — Fast paths are ordinary addressable members; `@internal` keeps #445's meaning.** A fast path is emitted with its overload's visibility (DECIDED-17), so a public overload's fast path is a public, untagged member that same-package and cross-package generated code calls. Round 1 tagged every fast path `/** @internal */`, which contradicts #445: `stripInternal` would delete members that cross-package direct calls need. `@internal` now means exactly what #445 says (C# `internal`, `private protected`, a dispatcher signature narrower than its group). Consequence: `stripInternal` is safe for a package consumed by hand-written TypeScript, but **unsupported for a package consumed by other Metano packages** — a consumer granted `[InternalsVisibleTo]` emits direct calls to `internal` factories and fast paths, which the flag deletes, and #445's tags already make the same true of internal members (R10). OQ-6 records the alternative. Rejected: a separate tag (`@generated`) — it would document the names but buys nothing tooling uses.
+- **DECIDED-7 — Factories delegate to the selector branch; bodies stay single-homed.** `static fromSize(size: number): Dimension { return new Dimension(Dimension.byDimensionSize, size); }`. The constructor keeps one branch per overload: the guarded selector branches first (holding the body, chains inlined as today), then today's fallback branches, then the throw. Rejected: fallback branches that call the factories (a derived constructor would build a second instance) and two body copies (ADR-0008's discipline).
+- **DECIDED-8 — Replaced by DECIDED-17.** Round 1 gave every factory the constructor's single emitted accessibility, reasoning that TS allows one constructor accessibility. That binds only the constructor's own signatures; factories are separate statics (R10).
+- **DECIDED-9 — Abstract dispatched classes get selectors but no factories.** A factory would `new` the abstract type (TS2511, R5). Rejected: throwing factories typed `T`.
+- **DECIDED-10 — Shapes without a dispatched class constructor keep today's behavior.** `[PlainObject]`, `[InlineWrapper]` / `[Branded]`, `[External]` / `[NoEmit]` and `[JsCallable]` get no factories and no selectors (their secondary constructors are dropped silently today, R5, OQ-5). Records and primary constructors participate like any class.
+- **DECIDED-11 — Direct call sites need a statically resolved receiver and overload, and the declaring type's IR.** `IrExpressionExtractor` rewrites a call Roslyn resolved into a dispatched group of a type whose IR is available (source, or a project reference, DECIDED-24). `dynamic` receivers, unresolved symbols, BCL mappings, `[Emit]` / `[Import]` members, unresolved type arguments and metadata-only references keep today's dispatcher call. Rejected: rewriting everything and re-dispatching on a miss.
+- **DECIDED-12 — The dispatcher stays public and complete.** Signatures, guards, messages and the `MS0063` rule are unchanged; hand-written TS keeps today's contract. The one carve-out is #475: its numeric-specificity ordering and its unsigned unfolding change the dispatcher's branch order and checks, and may land before, during or after this feature (NFR-006). Rejected: removing the dispatcher.
+- **DECIDED-13 — `MS0067` (`OverloadNameShadowed`, warning) reports every claim rename** — by a user member (reason 1) or by an earlier synthesized name (reason 2, the `From(decimal)` / `From(int)` fast paths claimed by the factories of `Cash(decimal)` / `Cash(int)`, R11). Round 1 left synthesized clashes unreported; they rename public API just the same.
+- **DECIDED-14 — Dart maps factories to named constructors** (`Dimension.fromSize(...)`); no selectors; fast paths share the core candidates; Dart claims in its own single member namespace (DECIDED-18). Names and call-site spelling only (RT-02 brings bodies).
+- **DECIDED-15 [M] — Virtual calls use root-anchored names.** A fast-path name comes from the overload's root declaration — the `OverriddenMethod` chain's first declaration, or the implemented interface member — so every override and implementation shares it:
+  - an override emits the root's fast path as `override addX(...)`, so a direct call `b.addX(1)` dispatches virtually;
+  - a type that only overrides emits no dispatcher: the inherited dispatcher keeps calling `this.addX(...)`, which fixes today's bug where `Derived` overriding one overload replaces the whole dispatcher (TS2416, and `d.add("abc")` returns `NaN` instead of `3`, R8);
+  - an interface declares the fast-path signatures beside the dispatcher signatures, and implementing classes emit them under the root's names;
+  - abstract overloads declare `abstract addX(...)`, and the abstract class keeps the concrete dispatcher (today the whole group is skipped with `MS0001`, R5);
+  - `base.M(...)` becomes `super.addX(...)`; a method group keeps the receiver binding (`b.addX.bind(b)`);
+  - a derived type that adds new overloads names them over its whole visible group and emits a dispatcher covering every visible overload.
+  Migration (a): hand-written TS implementing a generated interface must implement the fast paths (TS2420, R8); a hand-written subclass that overrides a generated dispatcher is bypassed by direct calls. Rejected: per-type names (an override would emit a different name than the call site the base type's static type selects).
+- **DECIDED-16 [M] — Selectors are type-qualified; factories qualify only on an incompatible inherited static.** Selectors are `protected static readonly by<TypeName><Suffix>: unique symbol` (`Money.byMoneyAmount`): two `unique symbol` types are never assignable, so a derived class repeating a base suffix would break the static side (TS2417, R2). Factories keep `from<Suffix>`; a factory becomes `from<TypeName><Suffix>` only when an emitted base declares a static of that name whose parameter list differs (FR-026; `GiftReceipt.fromGiftReceiptAmount`, R2). A derived class inherits the base factories it does not redeclare, and they return the base type (`GiftReceipt.fromAmount(1)` is a `Receipt`, R2; Migration (d)). Rejected: qualifying every factory (noisy, and `Money.fromMoneyAmount` reads badly) and redeclaring inherited factories (C# offers no such constructor).
+- **DECIDED-17 [M] — Per-overload visibility.** Each factory and each fast path keeps its own C# overload's visibility, mapped by #445's member rule: `private` → `private`, `protected` → `protected`, `internal` → public + `/** @internal */`, `protected internal` → public untagged (the #445 round-3 rule: `stripInternal` must not hide members that cross-package subclasses use), `private protected` → `protected` + `/** @internal */`. The constructor keeps FR-049's most permissive accessibility (`MS0060`). A factory constructed from outside the class body (a JSON `TypeSpec`, a nested type) is widened public with `MS0061`, as FR-049 rule 3 widens the constructor. Selectors stay `protected` regardless: a `private` selector loses its `unique symbol` type in the `.d.ts`, which turns the selector signature into `any` for consumers (R10, closing round 1's OQ-2). Rejected: the constructor's accessibility on every factory (round 1's DECIDED-8, which exposed private overloads).
+- **DECIDED-18 — Names are claimed by each target bridge.** The core computes candidates; each target resolves them against its own member tables — TypeScript keeps one static and one instance table per class plus one table per namespace barrel for module functions; Dart one table per class for everything (R6). One claim order holds for every generated name: user members, dispatchers, selectors, factories, method and module fast paths, operator fast paths, then inherited statics (naming.md § Claim pass). Claims are **per suffix**: when a factory or its selector is taken, the overload's suffix takes the `$`, so the pair stays aligned (`fromCents$` / `byMoneyCents$`). `IrDirectOverloadCall` carries the overload's root identity, never a final string; the bridge resolves it through the declaring type's cached claim results. Rejected: claiming in the core (it cannot know a target's member tables; TS and Dart disagree on scopes).
+- **DECIDED-19 — Selectors initialize first and selector branches are guarded.** Selectors are the first static members, before every other static field and static block, and each selector branch tests `typeof args[0] === "symbol" && args[0] === T.by…`. Without the order, `static readonly Zero = Money.fromCents(0)` declared first runs the **wrong** branch silently (`undefined === undefined`); with the guard alone it throws; with both it is correct (R9). ESM cycles add no new hazard: selectors are read while constructors run, never while modules evaluate (R9: the same `ReferenceError` with and without selectors).
+- **DECIDED-20 — A struct's implicit parameterless constructor gets a branch, not a factory.** `new S()` keeps emitting `new S()`; the dispatcher gains `constructor();` and a first branch that assigns every instance field its type's default value and returns, as `default(S)` does (today: TS2554, R5; probe R11). An explicit parameterless struct constructor is an ordinary overload (`fromDefault`). Rejected: a `fromDefault` factory for the implicit one (C# has no such member to name).
+- **DECIDED-21 — `params`.** Factories and fast paths declare the `params` parameter as a rest parameter. A direct call site passes the arguments in Roslyn's bound form: an expanded call's elements as arguments (`Extra.P(1, 2, 3)` → `Extra.pParts(1, 2, 3)`), a normal-form array spread into the rest (`Extra.P(arr)` → `Extra.pParts(...arr)`, as today's dispatcher call site already does, R11).
+- **DECIDED-22 — Overloaded module functions are in scope.** Extension methods, `[ExportedAsModule]` functions and companion-namespace functions use the same naming: one exported fast path per overload plus an exported dispatcher. Today overloaded extension methods emit two `export function twice` (TS2393, R7). Call sites import the fast path from the declaring module; module fast paths are claimed in the namespace barrel's scope, because a barrel re-exporting two modules' `twiceX` is TS2300 (R11).
+- **DECIDED-23 — Operators share the policy.** Operator fast paths take the policy's type spellings (`__addMoneyInt32`, `__addAcctUInt64`), which deletes `IrToTsClassBridge.Operators.SimpleTypeName`; they are public; resolved operator calls in an overloaded operator group target them directly.
+- **DECIDED-24 — Cross-package direct calls need a project reference.** The consumer resolves the producer's names from the producer's IR, which a project reference (`CompilationReference`, loaded as source) provides. For a metadata-only reference (a DLL or a package), call sites fall back to the dispatcher (`new T(...)`, `super(args)`, `obj.method(...)`) — correct, only slower, and needing no persisted names. No diagnostic: an info would fire on every call into every packaged dependency and has no action attached. Overrides and implementations across a metadata-only reference are OQ-7.
+- **DECIDED-25 — JSON constructs through the factory of the `[JsonConstructor]` overload.** The `TypeSpec` factory of a dispatched type keeps today's argument list and changes only the callee: `factory: (p) => Money.fromAmount(p.amount as Decimal)` (and `Object.assign(Money.fromAmount(…), { … })` for init members). The overload is the one marked `[JsonConstructor]`, as System.Text.Json picks it, now that factories make every overload addressable; without the attribute, the one `IrConstructorExtractor.FindPrimaryConstructor` picks today (the primary constructor, else the one with most parameters). The `MS0037` reason for an uncalled `[JsonConstructor]` (`JsonUnmirroredAttributes.UncalledJsonConstructorWarningOf`) is retired for dispatched types. Round 1's `T.fromXxx(...p)` was wrong (`p` is a record, not an array).
+- **DECIDED-26 — `MS0068` (`OverloadFastPathHijacked`, error).** A user member of a derived type whose TypeScript name equals an inherited fast path it does not override would override it in TypeScript and hijack the inherited dispatcher (DECIDED-15). Neither name can move, so the build fails with a fix-it message.
+- **DECIDED-27 — The climb's dead end emits valid TypeScript.** When a colliding set cannot climb further (same full name from two assemblies, an extern alias, identical `[Name]` values), `MS0003` (error) is reported and each overload of the set gets a deterministic positional marker in declaration order (`$1`, `$2`). The output never contains duplicate members.
 
 ### Naming
 
 The algorithm (normative text in [contracts/naming.md](./contracts/naming.md)):
 
-1. **Parameter names** (D2, DECIDED-2): the capitalized parameter names concatenated, no joiner — `fromSize`, `addXY`, `formatFmtArgs`. Parameter defaults, nullability and `params` do not change the suffix; `params int[] args` contributes the parameter's name.
-2. **Type names** (DECIDED-3): on any collision within the group, every overload switches to type-based suffixes from its parameter types: `fromInt32`, `fromDecimal`. Arrays append `Array` (`Int32Array`), nullable appends `OrNull` (`Int32OrNull`), generic types read `Name` + `Of` + argument spellings (`ListOfInt32`, `DictionaryOfStringInt32`), tuples read `TupleOf` + element spellings, `params` expands to its element spelling, and `ref` / `out` parameters (which report `MS0001` in the TypeScript target today) have the spellings `RefOfInt32` / `OutInt32` reserved for the Dart future.
-3. **The climb** (DECIDED-4): `fromNumericsDecimal` / `fromOtherDecimal`; containing type first, then namespaces nearest first, `Global` last.
-4. **`Default`** (DECIDED-5) for the parameterless overload.
-5. **`$`** (DECIDED-13): the user-member collision fallback (`ClaimName`), now with `MS0067`.
-6. **`[Name("…")]`** on an overload overrides the generated suffix — proposed scope in [Open questions](#open-questions) OQ-1.
+1. **Parameter names** (DECIDED-2), `Default` for the parameterless overload (DECIDED-5).
+2. **Type spellings** (DECIDED-3), from Roslyn (DECIDED-1).
+3. **The climb** of the colliding overloads' parameter types (DECIDED-4); dead end `MS0003` + `$1` / `$2` (DECIDED-27).
+4. **Candidates**: `by<TypeName><Suffix>` (DECIDED-16), `from<Suffix>` or `from<TypeName><Suffix>` (FR-026), the camelCased member + suffix for fast paths, from the root declaration (DECIDED-15).
+5. **Claims** per target, per suffix, in one order, `$` + `MS0067` (DECIDED-13, DECIDED-18); `MS0068` for a hijack (DECIDED-26).
+6. **`[Name("…")]`** on an overload overrides the suffix (OQ-1).
 
-**Name stability (D7).** The suffix of an overload is a function of its C# declaration: renaming a parameter renames the factory, the selector and the fast path; moving a type between namespaces can rename it through the climb; adding an overload can flip a whole group from parameter names to type names. All three are 3.0-documented behavior: generated names are stable across compilations of the same source (NFR-005), and they are part of the package's public surface the moment a factory or fast path appears in its `.d.ts`.
+**Name stability (D7).** A suffix is a function of the C# declaration: renaming a parameter renames the factory, the selector and the fast path; moving a parameter type between namespaces can rename a climbed suffix; renaming a type renames its selectors; adding an overload can flip a group from parameter names to type names. Names are stable across compilations of the same source (NFR-005), and they are public surface once they appear in a `.d.ts`.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Constructors become addressable (Priority: P1)
 
-A developer writes `new Money(19.9m)` in C# and consumes `Money.fromAmount(19.9)` from hand-written TypeScript; another overload is reachable as `Money.fromCents(1990)`. The `.d.ts` advertises both factories and both selector-guarded constructor overloads.
+A developer writes `new Money(19.9m)` in C# and consumes `Money.fromAmount(new Decimal("19.9"))` from hand-written TypeScript; `Money.fromCents(1990)` reaches the other overload. The `.d.ts` advertises both factories and both selector signatures beside the plain ones.
 
-**Why this priority**: today the only TypeScript-visible construction API is an untyped dispatcher; the factories are the visible half of the whole feature.
+**Why this priority**: today the only TypeScript-visible construction API is an untyped dispatcher.
 
-**Independent Test**: transpile a class with two constructor overloads, build the output with `tsgo --strict --declaration`, assert both factories and both selector overload signatures in the `.d.ts`, and call each factory under Node.
+**Independent Test**: transpile a class with two constructor overloads, build it with `tsgo --strict --declaration`, assert the factories and both kinds of signatures in the `.d.ts`, and call each factory under Node.
 
 **Acceptance Scenarios**:
 
-1. **Given** `Money(decimal amount)` and `Money(int cents)`, **When** transpiled, **Then** the class declares `protected static readonly byAmount: unique symbol = Symbol("Money(decimal amount)")`, `byCents` likewise, the two selector overload signatures, and `static fromAmount(amount: Decimal): Money` / `static fromCents(cents: number): Money` (R1; pass 1 names the suffixes from the parameter names).
-2. **Given** the same class, **When** a consumer writes `new Money(19.9)` in TypeScript, **Then** it still type-checks through the retained overload signatures and runs through the fallback dispatcher (D2).
-3. **Given** `new Money(Money.byAmount, 19.9)` written outside the class, **When** compiled, **Then** tsgo rejects it with TS2445 (R3) — outsiders must use the factories.
-4. **Given** a type with a single constructor, **When** transpiled, **Then** the output is byte-identical to today: no factory, no selector, no selector signature (D1).
+1. **Given** `Money(decimal amount)` and `Money(int cents)`, **When** transpiled, **Then** the class declares `protected static readonly byMoneyAmount: unique symbol = Symbol("Money(decimal amount)")` and `byMoneyCents` first among its static members, the selector signatures, the plain signatures, and `static fromAmount(amount: Decimal): Money` / `static fromCents(cents: number): Money` (R1).
+2. **Given** the same class, **When** hand-written TypeScript calls `new Money(1990)`, **Then** it type-checks through the retained signatures and runs through the fallback (D2).
+3. **Given** `new Money(Money.byMoneyAmount, x)` outside the class hierarchy, **When** compiled, **Then** tsgo rejects it with TS2445 (R3).
+4. **Given** a private overload `Money(string code)`, **When** transpiled, **Then** its factory is `private static fromCode` and an outsider gets TS2341 (DECIDED-17, R10).
+5. **Given** `static readonly Money Zero = new Money(0);` declared before the constructors, **When** the module loads under Node, **Then** `Zero` was built by the `int` overload (DECIDED-19, R9).
+6. **Given** a type with a single constructor, **When** transpiled, **Then** the output is byte-identical to today (D1).
 
 ---
 
 ### User Story 2 - Derived classes pick the base overload (Priority: P1)
 
-A derived class's constructor chain `: base(19.9m)` compiles to `super(Money.byAmount, amount)`, and the generated code in the derived module compiles and runs on Node and Bun.
+A derived constructor `: base(amount)` compiles to `super(Money.byMoneyAmount, amount)`, and a three-level hierarchy whose classes repeat the same suffixes compiles and runs on Node and Bun.
 
-**Why this priority**: inheritance with overloads is the spike-closed sub-item 2; the selector must reach across modules.
+**Why this priority**: inheritance with overloads is the spike-closed sub-item 2; the selector must reach across modules without breaking the static side.
 
-**Independent Test**: two modules (base class, derived class) compiled with `tsgo --strict`, run under Node and Bun, asserting the base overload selected and field values set (R2).
+**Independent Test**: the base / derived / grand-derived golden of plan.md, compiled with `tsgo --strict`, run under Node and Bun (R2).
 
 **Acceptance Scenarios**:
 
-1. **Given** `class Receipt : Money { public Receipt(decimal amount) : base(amount) { … } }`, **When** transpiled, **Then** the branch calls `super(Money.byAmount, amount)`; `typeof Money.byAmount` is accepted in the derived module (R2).
-2. **Given** the derived module imported before the base's other consumers, **When** run under Node (the runtime that exposes load-order issues; Bun hides some), **Then** the selector is initialized when the derived constructor runs (R2).
-3. **Given** an abstract dispatched base, **When** transpiled, **Then** the selectors and selector branches are emitted and no factory is (DECIDED-9, R5: TS2511).
+1. **Given** `Receipt : Money` with `Receipt(decimal amount) : base(amount)`, **When** transpiled, **Then** the branch calls `super(Money.byMoneyAmount, amount)` and `Receipt` declares `byReceiptAmount` (R2).
+2. **Given** `GiftReceipt : Receipt` whose `GiftReceipt(string amount)` repeats the suffix with another parameter list, **When** transpiled, **Then** its factory is `fromGiftReceiptAmount` and the static side compiles (FR-026, R2).
+3. **Given** `: base(1)` to `Base(int a, int b = 5)`, **When** transpiled, **Then** the call is `super(Base.byBaseAB, 1, 5)` (FR-017).
+4. **Given** an abstract dispatched base, **When** transpiled, **Then** selectors and selector branches are emitted and no factory is (DECIDED-9).
 
 ---
 
 ### User Story 3 - Generated calls skip the dispatcher (Priority: P1)
 
-A hot loop calling an overloaded method in C# transpiles to direct fast-path calls: `shapes.addXY(x, y)`, `p.addP(point)` — no arity checks, no type checks, one property read.
+A hot loop calling an overloaded method transpiles to direct fast-path calls: `Shapes.addXY(x, y)`, `p.addP(point)`.
 
-**Why this priority**: this is issue #25's original ask (sub-item 3), and the cost ADR-0008 named as its open optimization.
+**Why this priority**: issue #25's original ask, and the cost ADR-0008 named as its open optimization.
 
-**Independent Test**: transpile a class whose method calls an overload of another class in a loop; assert the emitted call targets the fast path; type-check the whole package with `tsgo --strict`; run the bun test of the sample consumer.
-
-**Acceptance Scenarios**:
-
-1. **Given** `Shapes.Add(1, 2)` (resolved to `Add(int, int)`), **When** transpiled, **Then** the call is `Shapes.addXY(1, 2)`.
-2. **Given** `p.Add(point)` on an instance, **When** transpiled, **Then** the receiver is evaluated once and the call is `p.addP(point)`.
-3. **Given** `new Money(19.9m)` inside a method body, **When** transpiled, **Then** the call is `Money.fromAmount(19.9)`, and the constructor's runtime checks do not run.
-4. **Given** a call on a `dynamic` receiver or to an unresolved symbol, **When** transpiled, **Then** the dispatcher call is kept (DECIDED-11).
-
----
-
-### User Story 4 - Names are predictable (Priority: P2)
-
-A developer reading the emitted `.d.ts` can derive every factory and fast-path name from the C# signatures alone: parameter names, else type names, else namespace-qualified type names, `Default` for parameterless, `$` only on a reported collision (`MS0067`).
-
-**Independent Test**: the naming goldens of plan.md § Test strategy — one golden per row of contracts/naming.md, including the R7 collision families, each built with `tsgo --strict` (today's equivalents do not compile, R7).
+**Independent Test**: transpile a class whose method calls overloads of another class; assert the fast-path calls; build with `tsgo --strict`; run the sample consumer's bun tests and a Node run.
 
 **Acceptance Scenarios**:
 
-1. **Given** `F(int a)` / `F(string a)` (same parameter name), **When** transpiled, **Then** the fast paths are `fInt32` / `fString` (type fallback, DECIDED-3).
-2. **Given** `K(Numerics.Decimal)` / `K(Other.Decimal)`, **When** transpiled, **Then** the fast paths are `kNumericsDecimal` / `kOtherDecimal` and the class compiles (DECIDED-4; today: duplicate `kDecimal`, TS2393).
-3. **Given** `Now()` / `Now(int tick)`, **When** transpiled, **Then** the fast paths are `nowDefault` / `nowTick` and the dispatcher `now` no longer has a same-named private twin (DECIDED-5; today: TS2393 + TS2385).
-4. **Given** a user-written member `fromCents` on a class whose constructors would synthesize `fromCents`, **When** transpiled, **Then** the factory is `fromCents$` and `MS0067` warns (DECIDED-13).
+1. **Given** `Shapes.Add(1, 2)`, **When** transpiled, **Then** the call is `Shapes.addXY(1, 2)`.
+2. **Given** `new Money(19.9m)` inside a method body, **When** transpiled, **Then** the call is `Money.fromAmount(new Decimal("19.9"))` and no runtime check runs.
+3. **Given** `object o = "s"; F(o);` with `F(object a)` / `F(string a)`, **When** transpiled, **Then** the call is `fObject(o)` — C#'s static binding, where today's dispatcher picks `F(string)` by runtime type (R12, Migration (b)).
+4. **Given** a call on a `dynamic` receiver, an unresolved symbol or a member of a metadata-only reference, **When** transpiled, **Then** the dispatcher call is kept (DECIDED-11, DECIDED-24).
+5. **Given** `Extra.P(1, 2, 3)` and `Extra.P(arr)` for `P(params int[] parts)`, **When** transpiled, **Then** the calls are `Extra.pParts(1, 2, 3)` and `Extra.pParts(...arr)` (DECIDED-21).
 
 ---
 
-### User Story 5 - Migration is guided (Priority: P2)
+### User Story 4 - Virtual and interface overloads behave like C# (Priority: P1)
 
-A 2.x consumer upgrades with the migration notes: hand-written `new T(...)` calls keep working; the old `as any` fast-path hacks break; packages and their consumers upgrade together.
+A base class with `virtual Add(int)` / `Add(string)` and a derived class overriding one of them dispatch exactly as C# does, through the dispatcher and through direct calls; interface overloads are callable directly.
 
-**Independent Test**: each item of [Migration (3.0.0)](#migration-300) has a test or a diagnostic reason behind it.
+**Why this priority**: today's output for a partial override does not compile and misdispatches (R8).
+
+**Independent Test**: the override / abstract / interface goldens of plan.md, built with `tsgo --strict --noImplicitOverride`, run under Node.
 
 **Acceptance Scenarios**:
 
-1. **Given** hand-written TS calling `new Money(19.9)`, **When** the package is rebuilt with 3.0, **Then** the call still type-checks and dispatches by arity and type (D2).
-2. **Given** hand-written TS calling `(money as any).addXY(p)`, **When** rebuilt, **Then** the name may have changed (DECIDED-3/4/5); the migration notes say how to derive the new name and `[Name]` pins it (OQ-1).
-3. **Given** a 2.x-built package consumed by a 3.0 consumer's generated code, **When** compiled, **Then** the missing factory fails at `tsc` with a missing-export error; the notes require upgrading producer and consumer together.
+1. **Given** `Derived : Base` overriding `Add(int x)`, **When** transpiled, **Then** `Derived` emits `override addX(x)` and no dispatcher, and `new Derived().add("abc")` returns `3` (R8).
+2. **Given** `b.Add(1)` with `b` typed `Base`, **When** transpiled, **Then** the call is `b.addX(1)` and runs `Derived.addX` for a `Derived` (R8).
+3. **Given** `abstract Run(int x)` / `abstract Run(string s)`, **When** transpiled, **Then** the class declares `abstract runX` / `abstract runS` and a concrete dispatcher (today `MS0001`, R5).
+4. **Given** `IShape.Area(int s)` / `Area(int w, int h)` implemented by `Sq.Area(int side)`, **When** transpiled, **Then** `IShape` declares `areaS` / `areaWH`, `Sq` emits `areaS(side)`, and `sh.Area(2)` emits `sh.areaS(2)`.
+5. **Given** a derived user method `AddX()` beside an inherited root group with fast path `addX`, **When** transpiled, **Then** `MS0068` fails the build (DECIDED-26).
 
 ---
 
-### User Story 6 - Dart gets named constructors (Priority: P3)
+### User Story 5 - Names are predictable (Priority: P2)
 
-The same C# source transpiled to Dart produces `Dimension.fromSize(3)` — Dart's native named-constructor spelling — and the same fast-path names for methods.
+A developer reading the `.d.ts` can derive every factory and fast-path name from the C# signatures: parameter names, else type names, else qualified parameter types, `Default` for parameterless, `$` only on a reported claim.
 
-**Independent Test**: the Dart unit tests of plan.md § Test strategy on the prototype transformer (names only; bodies are out of scope until Dart parity, RT-02).
+**Independent Test**: the naming goldens of plan.md, one per row of contracts/naming.md, each built with `tsgo --strict` (today's equivalents of several do not compile, R7).
+
+**Acceptance Scenarios**:
+
+1. **Given** `F(int a)` / `F(string a)`, **Then** `fInt32` / `fString`.
+2. **Given** `U(int a)` / `U(uint a)` and `L(List<int> xs)` / `L(int[] xs)`, **Then** `uInt32` / `uUInt32` and `lListOfInt32` / `lInt32Array` (today: duplicates, TS2393).
+3. **Given** `K(Numerics.Decimal)` / `K(Other.Decimal)`, **Then** `kNumericsDecimal` / `kOtherDecimal`.
+4. **Given** `Now()` / `Now(int tick)`, **Then** `nowDefault` / `nowTick`.
+5. **Given** `Cash(decimal amount)` / `Cash(int cents)` and `static From(decimal amount)` / `From(int cents)`, **Then** factories `fromAmount` / `fromCents`, fast paths `fromAmount$` / `fromCents$`, and two `MS0067` reason-2 warnings (R11).
+
+---
+
+### User Story 6 - Migration is guided (Priority: P2)
+
+A 2.x consumer upgrades with the migration notes: hand-written `new T(...)` calls keep working; overrides of generated dispatchers and implementations of generated interfaces are flagged; packages and their consumers upgrade together.
+
+**Independent Test**: each item of [Migration (3.0.0)](#migration-300) has a test, a probe or a diagnostic behind it.
+
+---
+
+### User Story 7 - Dart gets named constructors (Priority: P3)
+
+The same C# source transpiled to Dart produces `Dimension.fromSize(3)` and the same fast-path candidates.
+
+**Independent Test**: the Dart unit tests of plan.md on the prototype transformer (names only, RT-02).
 
 ---
 
 ### Edge Cases
 
-- **A group with one overload** is not dispatched: no factory, no selector, no fast path, byte-identical output (D1).
-- **A constructor overload with all-optional or `params` parameters**: the selector branch binds exactly what the factory passes (`fromXxx(a?)` passes `undefined` for an omitted optional; a `params` factory takes `...rest` and spreads), while the fallback keeps today's omitted-default rebinding (#438, #440).
-- **A zero-argument constructor overload**: `fromDefault()` / `byDefault` (DECIDED-5).
-- **Two overloads whose C# signatures differ only by `out` / `ref`**: `MS0001` today; the spellings of contracts/naming.md § Spellings exist for the Dart future but no TS output reaches them.
-- **A class whose constructors mix accessibility** (FR-049, `MS0060`): one emitted constructor accessibility, and every factory carries it (DECIDED-8).
-- **A private constructor set with code outside the class body constructing the type** (`MS0061` widening): the widened accessibility applies to the factories too, so a JSON `SerializerContext`'s `factory: (p) => new T(...)`-shaped emission can target `T.fromXxx(p)` once the direct-call rewrite reaches the JSON generator (slice 013c; the `TypeSpec` keeps `new T(...)` when the constructors were not dispatched).
-- **An abstract class** (DECIDED-9, R5): selectors yes, factories no; a derived class compiles and runs `super(Base.byXxx, ...)`.
-- **A nested type with overloads**: emitted outside the container's class body (FR-049 § 3); its factories and selectors are emitted on its own class, and the climb can name them `fromOwnerTypeName` when a simple name collides.
-- **A `[PlainObject]` or branded type with secondary constructors**: unchanged — the secondary constructors are dropped today (R5) and stay dropped (DECIDED-10, OQ-5).
-- **A static method overload group in a companion module / `[ExportedAsModule]` class**: the fast paths become exported `/** @internal */` namespace functions; the dispatcher stays the only exported-with-overloads name (DECIDED-6). The package's export surface gains those names.
-- **A call to an overload group from a cross-package consumer**: the consumer's generated code names the producer's fast path or factory; both sides must be built with 3.0 (Migration item 4).
-- **`nameof` and attribute arguments**: never rewritten (they do not lower to calls).
-- **A call site inside the same class** (`this.Add(...)` / bare `Add(...)`): rewritten to the fast path like any other (`this.addXY(...)`), except inside the dispatcher's own branches, which are emitted, not extracted.
-- **Constructors with `this(...)` chains** (R5): the chain stays inlined in the target's selector branch; the chaining overload's factory calls its own selector (`new Temp()` → `Temp.fromDefault()` → selector branch → inlined chain).
-- **A generic class's static factory** (R4): `static fromValue<V>(value: V): Box<V>` — the factory carries its own type parameters, not the class's; the selector `typeof Box.byValue` needs no instantiation (R4).
-- **A dispatched class consumed via `[EmitPackage]` with a `Version`**: factories are ordinary public statics; `package.json` and barrels are unchanged; the `.d.ts` grows (selectors + factories).
-- **Record `with` / `equals` / `hashCode` synthesis**: untouched; they call the promoted fields, not the constructors.
+- **A group with one overload** is not dispatched: no factory, no selector, no fast path (D1, NFR-001).
+- **All-optional or `params` constructor overloads**: the selector branch binds what the factory passes; the fallback keeps today's omitted-default rebinding (#438, #440); `params` per DECIDED-21.
+- **A zero-argument constructor overload**: `fromDefault()` / `byTDefault` (DECIDED-5). A struct's **implicit** one: DECIDED-20.
+- **Overloads differing only by `ref` / `out`**: `MS0001` in TypeScript today; the `RefOf…` / `OutOf…` spellings are for Dart.
+- **Mixed constructor accessibility** (FR-049, `MS0060`): one constructor accessibility; each factory keeps its own (DECIDED-17).
+- **A non-public overload constructed outside the class body** (`MS0061`): the JSON `TypeSpec` or the nested type calls that overload's factory, which is widened public.
+- **An abstract class**: selectors yes, factories no; `abstract` fast paths for abstract method overloads.
+- **A nested type with overloads**: emitted outside its container's class body (FR-049 § 3); its selectors use its emitted class name (`Inner`, or `Owner$Inner` when module-local); a `new` of the container inside it calls the container's factory, which is widened public if non-public (`MS0061`).
+- **A generic class**: factories re-declare the class type parameters with their constraints (FR-028, R4).
+- **A generic base whose derived class closes the type parameter** (`IntBox : Box<int>`): `IntBox(int value)` has different parameter types than `Box<T>.fromValue<T>(value: T)`, so its factory is `fromIntBoxValue` (FR-026).
+- **A derived class that adds overloads to an inherited group**: the new overloads are named over the whole visible group and the derived class emits a dispatcher covering all of them (DECIDED-15).
+- **A derived class that overloads an inherited non-overloaded virtual method**: OQ-8.
+- **A method implementing two roots with different names**: the body under the first root's name, a forwarding member for each other name (naming.md § Root anchoring).
+- **Explicit interface implementations**: emitted under the root's names (the only way TypeScript can reach them).
+- **`nameof` and attribute arguments**: never rewritten.
+- **A call inside the dispatcher's own branches**: emitted by the bridge, not extracted, so unchanged.
+- **`this(...)` chains**: inlined in the target's selector branch; `new Temp()` → `Temp.fromDefault()` → selector branch → inlined chain.
+- **Record `with` / `equals` / `hashCode`**: untouched; they do not call constructors.
+- **Static constructors and static blocks**: emitted after the selectors (DECIDED-19).
+- **Module fast paths in barrels**: claimed in the barrel scope; user-versus-user barrel clashes are pre-existing and out of scope.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-#### A. Naming (core)
+#### A. Naming (core candidates, target claims)
 
-- **FR-001 — One policy.** The core MUST compute, for every overload of every dispatched group, one suffix shared by the factory and the selector and one fast-path name, with the algorithm of [contracts/naming.md](./contracts/naming.md) (DECIDED-1). The computation MUST read the IR only — parameter names, parameter types with their spellings, and the declaring type's containing-type / namespace chain.
-- **FR-002 — Spellings.** The type-name suffixes MUST use the table of contracts/naming.md § Spellings (primitives as exact C# names, `…Array`, `…OrNull`, `…Of…` for generics, `TupleOf…`, `Default`, `RefOf…` / `OutOf…`) (DECIDED-3, DECIDED-5). The legacy shortenings (`Int`, `Long`, `Bool`, `Float`, `Double`) MUST be retired from new emission.
-- **FR-003 — The climb.** On a remaining type-name collision the group MUST climb containing type, then namespaces nearest-first, to `Global`, at one uniform depth, stopping at the first depth where all suffixes are distinct (DECIDED-4). A group that still collides at `Global` is not constructible from distinct C# declarations and MUST report the existing `MS0003` (`AmbiguousConstruct`).
-- **FR-004 — `ClaimName` and `MS0067`.** A computed name that a user-written member of the same scope claims MUST get the `$` suffix until free, and the compiler MUST report `MS0067` naming the claimed name and the emitted one (DECIDED-13). The existing `ClaimName` of the namespace-function path is the single implementation; the class path (which today skips it, R7's duplicate `now`) MUST use it too.
-- **FR-005 — `[Name]` on an overload.** `[Name]` applied to a constructor or method overload MUST override the generated suffix per OQ-1's decision (recommended: the suffix only — `from` + `Name`, `by` + `Name`, and the fast path keeps its camelCased method base; on a single, non-overloaded method `[Name]` keeps today's full-name behavior). An invalid identifier MUST report `MS0003`.
-- **FR-006 — Determinism.** Names MUST be stable across runs for the same source (NFR-005), and the ordering of any tie-break (declaration order) MUST be explicit in the policy.
+- **FR-001 — One policy.** The core MUST compute, for every overload of every dispatched group (constructors, methods, operators, module functions), one suffix and the candidate names, with the algorithm of [contracts/naming.md](./contracts/naming.md) (DECIDED-1). It MUST read the naming spellings captured from Roslyn at extraction time (`IrNamingSpelling`) and the parameter names, never the IR type refs.
+- **FR-002 — Spellings.** Type spellings MUST be the exact CLR names of contracts/naming.md § Spellings (`Int32`, `UInt32`, `Int64`, `UInt64`, `Boolean`, `ListOfInt32`, `Int32Array`, `Int32OrNull`, `TupleOf…`, the type parameter's name, `Value` for an error type) (DECIDED-3). The legacy shortenings MUST be retired, including 012 FR-048's `…ULong`.
+- **FR-003 — The climb.** On a remaining collision, every overload of each colliding set MUST qualify every parameter's spelling one level of that parameter type's containing types, then namespaces nearest first, then `Global`, repeating until the group is distinct. Primitives MUST NOT climb; generic arguments, array elements and nullable inners MUST climb with their parameter only (DECIDED-4).
+- **FR-004 — Claims.** Each target bridge MUST resolve the candidates against its own member tables in the order of naming.md § Claim pass, per suffix, appending `$` until free and reporting `MS0067` for each rename (DECIDED-13, DECIDED-18). The class path MUST run the claim pass too (today only `BuildNamespaceFunctions` runs `ClaimName`, R7).
+- **FR-005 — `[Name]` on an overload.** `[Name]` on a constructor or method overload MUST override the generated suffix per OQ-1's decision (recommended: the suffix only). An invalid identifier MUST report `MS0003`.
+- **FR-006 — Determinism.** Candidates and claims MUST be pure functions of the source, iterating in declaration order (NFR-005).
+- **FR-024 — Dead end.** A colliding set that cannot climb further MUST report `MS0003` and get the positional markers `$1`, `$2`, … in declaration order; the output MUST NOT contain duplicate members (DECIDED-27).
+- **FR-025 — Root anchoring.** A method overload's names MUST come from its root declaration (`OverriddenMethod` chain or implemented interface member, `OriginalDefinition`); a `new` method is its own root (DECIDED-15, naming.md § Root anchoring).
+- **FR-026 — Factory names against inherited statics.** A factory MUST keep `from<Suffix>` unless an emitted base declares a static of that name; then it MUST keep the name only if that static is a generated factory whose overload has the same parameter types in the same order with the same `params` / optional shape, and MUST become `from<TypeName><Suffix>` otherwise (DECIDED-16).
 
 #### B. Constructor factories and selector symbols
 
-- **FR-007 — Factories.** Every overload of a dispatched constructor MUST get a static factory `from<Suffix>(...)` returning the type, with the overload's parameter list (local-binding names, `params` as rest, defaults kept) and the body `return new T(T.by<Suffix>(...));` (DECIDED-7). A type with fewer than two declared instance constructors MUST NOT gain a factory (D1).
-- **FR-008 — Selectors.** Every overload of a dispatched constructor MUST get `protected static readonly by<Suffix>: unique symbol = Symbol("<C# signature>")`, the description being the overload's full C# signature text (debug only, D2). The symbol MUST be emitted even when no generated call site uses it (it is the derived-class contract).
-- **FR-009 — Constructor emission.** Per C# overload, the emitted constructor MUST declare the selector signature `constructor(overload: typeof T.by<Suffix>, ...params)` beside today's plain signature (both coexist in the output and in the `.d.ts`, R1); the implementation MUST try the selector branches first — `args[0] === T.by<Suffix>`, no type checks, parameters rebound from `args[1..]`, body with chains inlined — then today's fallback branches unchanged, then the throw (DECIDED-7). Parameter properties on overload signatures and rest parameters stay forbidden (the 2026-05-02 spike's fixes stand).
-- **FR-010 — Fallback preserved.** A constructor call without a selector MUST keep today's behavior: the retained runtime signatures type-check it, the arity-and-type branches dispatch it, the omitted defaults bind (#438, #440), and the error message is unchanged (DECIDED-12).
-- **FR-011 — Factory accessibility.** The factory's TS accessibility MUST equal the emitted constructor accessibility under FR-049's mapping — including the most-permissive resolution of `MS0060` and the `MS0061` widening (DECIDED-8). The implementation MUST start after #445 merges (it touches the same visibility bridge).
+- **FR-007 — Factories.** Every overload of a dispatched constructor of a concrete class MUST get a static factory returning the type, with the overload's parameter list (local-binding names, `params` as rest, defaults kept) and the body `return new T(T.by<TypeName><Suffix>, ...);` (DECIDED-7). A type with fewer than two declared instance constructors MUST NOT gain one (D1), and a struct's implicit parameterless constructor MUST NOT (DECIDED-20).
+- **FR-008 — Selectors.** Every overload of a dispatched constructor MUST get `protected static readonly by<TypeName><Suffix>: unique symbol = Symbol("<C# signature>")`, also when no generated call site uses it (DECIDED-16, DECIDED-17).
+- **FR-009 — Constructor emission.** Per overload, the constructor MUST declare `constructor(overload: typeof T.by…, ...params)` before today's plain signatures (both kept, R1); the implementation MUST try the selector branches first, each guarded by `typeof args[0] === "symbol" && args[0] === T.by…`, binding from `args[1..]` with no other checks, then today's fallback branches, then the throw (DECIDED-7, DECIDED-19). Parameter properties on overload signatures and rest parameters stay forbidden.
+- **FR-010 — Fallback preserved.** A call without a selector MUST keep today's behavior: signatures, arity-and-type branches, omitted defaults (#438, #440), message (DECIDED-12).
+- **FR-011 — Factory accessibility.** Each factory MUST carry its own overload's accessibility under #445's member mapping; a factory that code outside the class body calls MUST be widened public with `MS0061`; the constructor MUST keep FR-049's most permissive accessibility (DECIDED-17). The implementation MUST start after #445 merges.
 - **FR-012 — Abstract classes.** A dispatched abstract class MUST emit selectors and selector branches and MUST NOT emit factories (DECIDED-9).
-- **FR-013 — Excluded shapes.** `[PlainObject]`, `[InlineWrapper]` / `[Branded]`, `[External]`, `[NoEmit]` and `[JsCallable]` types MUST keep today's emission — no factories, no selectors (DECIDED-10).
-- **FR-014 — Records and primary constructors.** A record positional constructor or C# 12 primary constructor participating in a dispatched set MUST get its factory like every overload; the branch keeps the promoted-member assignments the constructor bridge emits today (R5).
+- **FR-013 — Excluded shapes.** `[PlainObject]`, `[InlineWrapper]` / `[Branded]`, `[External]`, `[NoEmit]` and `[JsCallable]` types MUST keep today's emission (DECIDED-10).
+- **FR-014 — Records and primary constructors.** A record positional or C# 12 primary constructor in a dispatched set MUST get its factory; its branch keeps the promoted-member assignments (R5).
+- **FR-027 — Struct parameterless construction.** A dispatched struct MUST declare `constructor();` and a first branch that assigns every instance field the default value of its type and returns; `new S()` MUST keep emitting `new S()` (DECIDED-20).
+- **FR-028 — Generic factories.** A factory of a generic class MUST re-declare the class type parameters with their constraints (R4).
+- **FR-029 — Static order.** Selectors MUST be the first static members of the class, before every other static field and static block (DECIDED-19, R9).
 
-#### C. Method fast paths
+#### C. Fast paths
 
-- **FR-015 — Public `/** @internal */` fast paths.** Every fast-path method of a dispatched method group MUST be emitted public with a `/** @internal */` JSDoc comment and the policy's name (DECIDED-6); the class-path naming MUST go through `ClaimName` (FR-004). Namespace fast paths (companion modules, `[ExportedAsModule]`) MUST become exported with the same JSDoc.
-- **FR-016 — Dispatcher stays public.** The dispatcher method MUST stay public with its overload signatures, guards, ordering and messages unchanged (DECIDED-12).
+- **FR-015 — Addressable fast paths.** Every fast path MUST carry its overload's accessibility under #445's member mapping, with no tag beyond #445's (DECIDED-6, DECIDED-17), and the root's name (FR-025).
+- **FR-016 — Dispatcher stays public.** The dispatcher MUST keep its overload signatures, guards and messages; its order and checks change only with #475 (DECIDED-12).
+- **FR-030 — Overrides and abstract overloads.** An override MUST emit the root's fast path with `override` and, when it adds no overloads, no dispatcher; an abstract overload MUST emit `abstract <fastPath>(...)` beside the concrete dispatcher; a type that adds overloads MUST emit a dispatcher covering every visible overload (DECIDED-15).
+- **FR-031 — Interfaces.** An interface MUST declare the fast-path signatures of its overload groups beside the dispatcher signatures; an implementing class MUST emit them under the root's names, with forwarding members for further roots (DECIDED-15).
+- **FR-032 — Module groups.** An overloaded extension method, `[ExportedAsModule]` function or companion function group MUST emit one exported fast path per overload and one exported dispatcher, claimed in the namespace barrel's scope, and the barrel MUST re-export them (DECIDED-22).
+- **FR-033 — Operators.** Operator fast paths MUST use the policy's type spellings and be public; `IrToTsClassBridge.Operators.SimpleTypeName` MUST be deleted (DECIDED-23).
+- **FR-034 — `MS0068`.** A user member whose TypeScript name equals an inherited fast path it does not override MUST report `MS0068` (DECIDED-26).
 
 #### D. Direct call sites
 
-- **FR-017 — Constructor call sites.** A C# `new T(args)` whose constructor Roslyn resolved inside a dispatched set MUST emit `T.fromXxx(args)` (DECIDED-11, D3). A constructor-initializer `: base(args)` / the `super(...)` of a derived branch MUST emit `super(Base.byXxx, ...)` with the statically resolved base overload (D2, R2).
-- **FR-018 — Method call sites.** A call Roslyn resolved to an overload of a transpiled type MUST emit the fast-path call with the receiver evaluated once in place; statics use the type as receiver; companion-module functions use the bare exported name (DECIDED-11). Unresolved, `dynamic`, BCL-mapped and `[Emit]` / `[Import]` calls MUST keep today's shape; calls with unresolved type arguments MUST keep the dispatcher.
-- **FR-019 — Cross-package call sites.** A consumer resolving an overload declared in a referenced `[EmitPackage]` package MUST emit the same factory / fast-path names; the producer's `.d.ts` carries them, and the version-skew failure mode is `tsc`'s missing member (Migration item 4).
+- **FR-017 — Constructor call sites.** A C# `new T(args)` resolved into a dispatched set MUST emit `T.from…(args)`; a constructor initializer `: base(args)` resolved into a dispatched base set MUST emit `super(Base.by…, ...)` with Roslyn's bound arguments, default values explicit, in every branch that chains to it (D3).
+- **FR-018 — Method and operator call sites.** A call resolved to an overload of a dispatched group MUST emit the fast-path call with the receiver evaluated once (statics: the type; module functions: the imported bare name; `base.M(...)`: `super.<fastPath>`; operators: `T.__<op><Suffix>`); a method group MUST emit the fast path bound to its receiver (`.bind(receiver)`) for an instance method; `params` per DECIDED-21; generic calls carry their type arguments. Unresolved, `dynamic`, BCL-mapped and `[Emit]` / `[Import]` calls, and calls with unresolved type arguments, MUST keep today's shape (DECIDED-11).
+- **FR-019 — Cross-package call sites.** A consumer MUST emit direct calls into a referenced `[EmitPackage]` package only when the reference is a project reference; for a metadata-only reference it MUST keep the dispatcher call and report nothing (DECIDED-24).
+- **FR-035 — JSON.** A JSON `TypeSpec` of a dispatched type MUST construct through the factory of its `[JsonConstructor]` overload, else of the overload `FindPrimaryConstructor` picks, keeping today's argument list (DECIDED-25).
 
 #### E. Diagnostics, release, documentation
 
-- **FR-020 — `MS0067`.** `MS0067` (`OverloadNameShadowed`, warning) MUST be implemented per [contracts/diagnostics.md](./contracts/diagnostics.md), with a test per reason asserting code, severity and location (DECIDED-13).
-- **FR-021 — Goldens.** Every emission rule of [contracts/ts-emission.md](./contracts/ts-emission.md) MUST have a golden under `tests/Metano.Tests/Expected/`, each compiled with `tsgo --strict` in its consumer (FR-063-style), and every existing golden that changes MUST be regenerated in the slice that changes it.
-- **FR-022 — Dart.** The Dart target MUST map factories to named constructors (`Dimension.fromSize(...)`), skip selectors, and give method fast paths the same names (DECIDED-14) — names and call-site spelling only; emission bodies stay out of scope until Dart parity (RT-02).
-- **FR-023 — Documentation.** The feature-support-matrix rows move to Implemented as the slices land; `docs/` gains the naming rule and the migration notes; the CHANGELOG lists the breaking items of [Migration (3.0.0)](#migration-300).
+- **FR-020 — Diagnostics.** `MS0067` (warning, two reasons) and `MS0068` (error) MUST be implemented per [contracts/diagnostics.md](./contracts/diagnostics.md), with a test per reason asserting code, severity and location.
+- **FR-021 — Goldens.** Every emission rule of [contracts/ts-emission.md](./contracts/ts-emission.md) MUST have a golden under `tests/Metano.Tests/Expected/`, each compiled with `tsgo --strict` in its consumer, the planned goldens of plan.md included; every existing golden that changes MUST be regenerated in the slice that changes it.
+- **FR-022 — Dart.** The Dart target MUST map factories to named constructors, skip selectors, use the core candidates for fast paths and run its own claim pass (DECIDED-14) — names and call-site spelling only.
+- **FR-023 — Documentation.** The matrix rows move to Implemented as the slices land; `docs/` gains the naming rule and the migration notes; the CHANGELOG lists the breaking items of [Migration (3.0.0)](#migration-300).
 
 ### Non-Functional Requirements
 
-- **NFR-001 (no churn)**: output changes only where an overload group exists (or a call resolves into one). Sources without overload groups MUST stay byte-identical; single-constructor and single-method types are untouched.
-- **NFR-002 (target-agnostic core)**: the naming policy and every direct-call decision are computed in `Metano.Compiler` from the IR; the TS and Dart targets only render (DECIDED-1, DECIDED-11).
-- **NFR-003 (single body home)**: an overload's body appears exactly once in the output (ADR-0008's discipline); factories and dispatchers delegate.
+- **NFR-001 (no churn)**: output changes only where an overload group exists (or a call resolves into one). Sources without overload groups MUST stay byte-identical.
+- **NFR-002 (target-agnostic core)**: candidates and direct-call decisions are computed in `Metano.Compiler`; the targets claim and render (DECIDED-1, DECIDED-18).
+- **NFR-003 (single body home)**: an overload's body appears exactly once in the output; factories, forwarding members and dispatchers delegate.
 - **NFR-004 (no IIFE)**: no lowering of this feature emits an immediately invoked function.
-- **NFR-005 (determinism)**: names, symbol descriptions, import order and diagnostic order are stable across runs.
-- **NFR-006 (hand-written TS contract)**: the dispatcher's public contract — signatures, order, messages — does not change (DECIDED-12).
+- **NFR-005 (determinism)**: names, symbol descriptions, member and import order and diagnostic order are stable across runs.
+- **NFR-006 (hand-written TS contract)**: the dispatcher's signatures and messages do not change; its branch order and runtime checks change only through #475, which this feature neither requires nor blocks (DECIDED-12).
 
 ### Key Entities
 
-- **Overload name policy**: the core algorithm producing one suffix and one fast-path name per overload of a group.
-- **Factory**: the static `fromXxx` member that constructs one overload through its selector.
-- **Selector symbol**: the protected `unique symbol` naming one constructor overload at runtime and in the type system.
-- **Direct call site**: a generated call lowered to the Roslyn-resolved overload's factory or fast path.
-- **Claimed name**: a computed name a user member owns, resolved by `$` and reported as `MS0067`.
+- **Overload name policy**: the core algorithm producing one suffix and the candidate names per overload.
+- **Naming spelling**: the Roslyn-captured spelling of a parameter type with its qualifier chains.
+- **Root declaration**: the first declaration of a virtual method chain, or the implemented interface member.
+- **Claim pass**: a target's resolution of candidates against its member tables.
+- **Factory**: the static member that constructs one overload through its selector.
+- **Selector symbol**: the protected `unique symbol` naming one constructor overload.
+- **Direct call site**: a generated call lowered to the resolved overload's factory or fast path.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: every golden of contracts/ts-emission.md builds with `tsgo --strict --declaration`, and the `.d.ts` shows the factories, the selector symbols and the overload signatures as specified.
-- **SC-002**: the three R7 collision families (type-name fallback, namespace-qualified names, zero-arg) each have a golden whose equivalent under `main` fails `tsgo` (research R7), proving the fix.
-- **SC-003**: a two-module base/derived pair compiles and runs under Node and Bun with `super(Base.byXxx, ...)` selecting the exact base overload (R2).
-- **SC-004**: sources without overload groups are byte-identical between `main` and the feature branch (NFR-001), checked by transpiling every sample and diffing.
-- **SC-005**: every `MS0067` reason has a test asserting code, severity and location.
-- **SC-006**: the sample consumer's bun tests pass against output whose overloaded calls are all direct call sites.
+- **SC-001**: every golden of contracts/ts-emission.md builds with `tsgo --strict --declaration`, and the `.d.ts` shows the factories, selectors and both kinds of constructor signatures.
+- **SC-002**: every R7 / R8 family whose output fails `tsgo` on `main` (duplicate fast paths for `uint`/`int`, `List<int>`/`int[]` and same-named types; `now`; overloaded extensions; the partial override; struct `new S()`) has a golden that compiles.
+- **SC-003**: the base / derived / grand-derived golden compiles and runs under Node and Bun (R2).
+- **SC-004**: sources without overload groups are byte-identical between `main` and each slice (NFR-001), checked by transpiling every sample and diffing.
+- **SC-005**: every `MS0067` / `MS0068` reason has a test asserting code, severity and location.
+- **SC-006**: the sample consumer's bun tests pass against output whose overloaded calls are all direct, and the same output runs under Node with a static field initialized through a factory (R9).
+- **SC-007**: the override golden returns C#'s results under Node through both the dispatcher and direct calls (R8).
 
 ## Divergences from C# (documented)
 
 | Construct | C# | TypeScript after this feature | Why |
 |---|---|---|---|
-| `new Money(Money.byAmount, …)` from outside the class | n/a (no such syntax) | rejected by TS2445 (R3) | Selectors are `protected`; outsiders use the factories |
-| Renaming a C# parameter | private refactor | renames the public factory / fast path | D7; the names are derived from the declaration |
-| Calling a specific overload from hand-written TS | overload resolution | `T.fromXxx(...)` (the spelling is Metano's) | TS has no per-overload address; D1 |
-| A factory name colliding with a user member | compile error if truly ambiguous | `$` suffix + `MS0067` warning | One emitted namespace; FR-004 |
-| Abstract class construction | impossible | selectors let subclasses construct the base part; no factory | TS2511 (R5); DECIDED-9 |
+| `new Money(Money.byMoneyAmount, …)` from outside the hierarchy | no such syntax | TS2445 at compile time; reachable at run time through casts or `Reflect.construct` (R3) | Selectors are an access convention, not a security boundary |
+| Renaming a C# parameter | private refactor | renames the public factory / fast path | D7 |
+| A derived class's inherited factory | C# has no inherited constructors | `GiftReceipt.fromAmount(1)` returns a `Receipt` (R2) | Static members are inherited in TypeScript |
+| A factory name claimed by another member | n/a | `$` suffix + `MS0067` | One emitted namespace per table |
+| Abstract class construction | impossible | selectors let subclasses construct the base part; no factory | TS2511 (R5) |
+| Hand-written overrides of a generated dispatcher | n/a | bypassed by generated direct calls | DECIDED-15; override the fast path |
 
 ## Interaction with other specs
 
 | Spec / issue | Requirement | Change | Why both stay satisfiable |
 |---|---|---|---|
-| ADR-0008 | dispatcher + private fast paths | Superseded in part by [ADR-0028](../../docs/adr/0028-overload-factories.md): public fast paths, factories, selectors, direct call sites | The dispatcher contract ADR-0008 guarantees for consumers is unchanged (DECIDED-12) |
-| FR-049 (#432) | constructor accessibility | Factories inherit the emitted accessibility (DECIDED-8) | The accessibility predicate is already computed; #445 lands first |
-| #445 | member visibility bridge | Implementation dependency (same files) | 013's slices start after #445 merges |
-| #438 / #440 | guards, ordering, `MS0063` | Unchanged for the dispatcher; `MS0063` stays (hand-written callers) | DECIDED-12 |
-| 012 OQ-6 | `long` / `ulong` / `BigInteger` dispatch order | Generated call sites resolve statically; the dispatcher order only governs hand-written TS | DECIDED-12 |
-| 010 FR-042 | union companion namespace | Companion fast paths become exported `/** @internal */` functions | The companion's public names (members, guards) are unchanged |
-| 005 | deterministic output layout | New members appear in the deterministic member order (fields, constructors, properties, methods; statics first) | The layout algorithm orders the new members like any other |
+| Baseline FR-050 (new) | overload dispatch | Extended by this feature; the matrix rows trace it | FR-050 states today's contract; this spec states the extension |
+| ADR-0008 | dispatcher + private fast paths | Superseded in part by ADR-0028 | The dispatcher contract stands (DECIDED-12) |
+| Baseline FR-049 (#432) | constructor accessibility | The constructor keeps it; factories use per-overload accessibility and FR-049 rule 3's widening (DECIDED-17) | The predicate already exists; #445 lands first |
+| #445 | member visibility bridge | Factories and fast paths use its member mapping; `@internal` keeps its meaning (DECIDED-6) | Implementation dependency |
+| #474 | visibility gaps | none (`[PlainObject]` and type-level tags are not touched) | — |
+| #475 | numeric dispatch order, unsigned folding | Carved out of NFR-006 / DECIDED-12; spellings come from Roslyn, so 013 does not wait for it | Each changes a different thing (branch order vs names) |
+| 012 FR-048 | `UInt64` overloads named `…ULong` | Becomes `…UInt64` with slice 013a (DECIDED-3); 012 carries a cross-reference note | Same overloads, exact spelling |
+| 012 OQ-6 | `long` / `ulong` / `BigInteger` dispatch order | Moot at generated call sites; the dispatcher order (or #475's) governs hand-written TS | DECIDED-12 |
+| 010 FR-042 | union companion namespace (spec-local number, **unrelated** to overload dispatch) | Overloaded companion functions follow FR-032 | The companion's other names are unchanged |
+| 005 | deterministic output layout (files, barrels) | Barrels gain module fast paths (FR-032) | The layout algorithm is unchanged; barrels list more names |
 
 ## Migration (3.0.0)
 
-1. **Generated call shapes change.** C# `new T(...)` over dispatched constructors emits `T.fromXxx(...)`; overloaded method calls emit the fast-path name. Hand-written TypeScript that reads the generated sources as documentation should follow the new shapes.
-2. **Hand-written `new T(...)` keeps working.** The retained runtime signatures and the fallback dispatcher behave exactly as before (D2); selector signatures are additive.
-3. **Old fast-path names are gone.** The `as any` escape hatch of ADR-0008 (`(obj as any).addXY(...)`) breaks wherever the name changed: type fallbacks rename (`fInt` → `fInt32`, `gLong` → `gInt64`), the zero-arg overload gains `Default`, and collisions now climb namespaces. Derive the new name from contracts/naming.md, or pin it with `[Name]` (OQ-1).
-4. **Upgrade packages and consumers together.** A consumer built with 3.0 emits factory and fast-path calls into the packages it references; a package still built with 2.x has neither. Rebuild the producer first; the consumer's `tsc` failure is a missing member of the stale `.d.ts`.
-5. **Fast paths are public `/** @internal */`.** Subclass or extension code that declared a same-named member may now collide; the compiler renames the generated member with `$` and reports `MS0067`.
-6. **The `.d.ts` grows**: `protected static readonly byXxx: unique symbol` per constructor overload, one selector constructor signature per overload, one static factory per overload (public for a public constructor set), and the formerly private fast paths.
-7. **Names are API.** Renaming a C# parameter, moving a type in namespace space, or adding an overload can rename generated names (D7). Treat the generated names as reviewed surface.
-8. **`MS0067`** is new (a warning; DECIDED-13).
+- **(a) Hand-written code that extends or implements generated types.** A hand-written subclass that overrides a generated dispatcher (`add(...)`) is bypassed by generated direct calls (`b.addX(1)`) — override the fast path instead. A hand-written class implementing a generated interface must also implement its fast paths (TS2420, R8).
+- **(b) Static binding replaces runtime-type dispatch in generated code.** With `F(object a)` / `F(string a)`, `object o = "s"; F(o);` now calls `F(object)`, as C# does; today's dispatcher calls `F(string)`. Generated code that relied on the runtime choice changes behavior (R12). Hand-written dispatcher calls keep the runtime choice.
+- **(c) Renamed generated names.** Fast-path renames: `fInt` → `fInt32`, `gLong` → `gInt64`, `wLong` / `wULong` → `wInt64` / `wUInt64`, `pickLong` / `pickULong` → `pickInt64` / `pickUInt64`, `sumIntArray` → `sumInt32Array`, `hIntOrNull` → `hInt32OrNull`, `identityValue` → `identityT`, `now` → `nowDefault`, `areaSide` → `areaS` (root-anchored), duplicate names split (`uInt32` / `uUInt32`, `lListOfInt32` / `lInt32Array`, `kNumericsDecimal` / `kOtherDecimal`); operator renames `__addAcctLong` / `__addAcctULong` → `__addAcctInt64` / `__addAcctUInt64` (every `Int`, `Long`, `ULong`, `Bool`, `Float` spelling becomes the CLR name); `From`-style method fast paths that a factory claims take `$` (`fromAmount$`). New names: factories, selectors, exported module fast paths. Derive any name from contracts/naming.md or pin it with `[Name]` (OQ-1).
+- **(d) Inherited factories.** A derived class inherits the base factories it does not redeclare; they return the base type.
+- **(e) `stripInternal`.** Supported for packages consumed only by hand-written TypeScript; unsupported for packages consumed by other Metano packages (DECIDED-6, OQ-6).
+- **(f) Larger `.d.ts` and barrels.** Per constructor overload: a selector, a selector signature and a factory; per method overload: an addressable fast path; per module group: exported fast paths re-exported from the barrel.
+- **(g) Upgrade packages and consumers together.** A 3.0 consumer with a project reference emits factory and fast-path calls into the producer; a producer still built with 2.x lacks them (`tsc` reports the missing member). A metadata-only reference keeps dispatcher calls (DECIDED-24).
+- **(h) Names are API** (D7).
+- **(i) New diagnostics**: `MS0067` (warning) and `MS0068` (error).
 
 ## Open questions
 
-Each question has a recommendation; the plan proceeds with the recommendation unless the maintainer decides otherwise.
+Each question has a recommendation; the plan proceeds with it unless the maintainer decides otherwise.
 
-- **OQ-1 — What `[Name]` controls on an overload.** (a) The suffix only: `[Name("cents")]` on `Money(int cents)` yields `fromCents` and `byCents`, and on an overloaded method it yields the fast path with the method base kept (`Add` + `cents` → `addCents`) — the `from` / `by` prefixes and the method base stay compiler-owned, so `[Name]` can never produce a name that dodges the scheme. (b) The full member name: `[Name("pickCents")]` yields factory `pickCents` and selector `byPickCents`, breaking the scheme's symmetry for a case the `$` fallback and the climb already cover. **Recommendation: (a)**; it keeps one spelling per concept, matches how `[Name]` reads today (the emitted name of one member), and the escape hatch's real job — pinning a name against parameter renames (D7) — needs exactly the suffix.
-- **OQ-2 — Selectors on private constructor sets.** (a) Always `protected` (uniform; a derived class is impossible in C# for a `private` set, but the symbol costs nothing and keeps one shape). (b) `private` when every constructor is `private`, `protected` otherwise (smaller surface in the `.d.ts`, one more rule). **Recommendation: (a)**; the `.d.ts` noise is one line per overload and the uniform shape keeps the emission testable.
-- **OQ-3 — Factories for the excluded shapes.** `[PlainObject]` and branded types drop their secondary constructors today (R5); factories would give those constructors a home without reintroducing a class. (a) Out of scope here (DECIDED-10); file the gap. (b) Emit `static fromXxx(...): T` object-literal factories for `[PlainObject]` in this feature. **Recommendation: (a)**; it grows this feature's blast radius into the JSON and interop shapes for a need no issue records, and (b) deserves its own spec slice after the baseline lands.
-- **OQ-4 — Do the fallback branches of the constructor stay after 013c?** Every generated call site is direct, so the fallback serves hand-written TS only; dropping it would shrink every dispatched class. (a) Keep (DECIDED-12: the public contract stands). (b) A follow-up spec drops the fallback and keeps only selector signatures (hand-written TS must then use factories). **Recommendation: (a) for 3.0**; (b) is a plausible 4.0 direction once the factories have been public for a cycle.
-- **OQ-5 — The silently dropped secondary constructors of `[PlainObject]` and branded types** (R5). (a) Document as a known gap (DECIDED-10). (b) A warning diagnostic that a declared constructor is not emitted. **Recommendation: (b) as a small follow-up issue**, not in this feature — the diagnostic belongs to the type-shape rules, not to overload dispatch.
+- **OQ-1 — What `[Name]` controls on an overload.** (a) The suffix only (`[Name("cents")]` → `fromCents`, `byMoneyCents`, `addCents`). (b) The full member name. **Recommendation: (a)** — one spelling per concept, and the escape hatch's job (pinning against parameter renames) needs exactly the suffix.
+- **OQ-2 — Closed (DECIDED-17).** Selectors stay `protected`: a `private` selector erases to `any` in the `.d.ts` (R10).
+- **OQ-3 — Factories for the excluded shapes.** (a) Out of scope here; file the gap. (b) Object-literal factories for `[PlainObject]` now. **Recommendation: (a).**
+- **OQ-4 — Do the constructor's fallback branches stay after 013c?** (a) Keep (DECIDED-12). (b) A follow-up drops them. **Recommendation: (a) for 3.0**; (b) is a 4.0 direction.
+- **OQ-5 — The silently dropped secondary constructors of `[PlainObject]` and branded types.** **Recommendation: a warning, as a small follow-up issue** (it belongs to the type-shape rules).
+- **OQ-6 — `stripInternal` and Metano consumers.** (a) Unsupported for packages consumed by other Metano packages, documented (DECIDED-6). (b) Supported, with an info diagnostic in the producer when `[InternalsVisibleTo]` names a Metano consumer — the only path by which a consumer's generated code reaches a tagged member. **Recommendation: (a) now, (b) if a user asks**: (b) is precise but needs the consumer list at producer build time, which only `[InternalsVisibleTo]` gives.
+- **OQ-7 — Overrides across a metadata-only reference.** A derived class whose base lives in a DLL or package must emit `override <rootName>`, but DECIDED-24 gives it no producer IR. (a) Compute the root's candidates from the metadata symbols (the policy reads Roslyn symbols, which metadata provides, `[Name]` included); the blind spot is a producer-side claim rename (`$`), which the producer's own `MS0067` reported, and private claimants a reference assembly strips. (b) Require a project reference: report a warning and emit an override of the dispatcher (today's broken shape). **Recommendation: (a)**, documenting the blind spot; it keeps virtual dispatch correct in the common case.
+- **OQ-8 — A derived class that overloads an inherited non-overloaded virtual method.** `Base.Add(int)` (no group, plain name `add`) plus `Derived.Add(string)`: the derived dispatcher `add` would replace the inherited method, and a further override of `Add(int)` would replace the dispatcher. (a) Pin today's behavior with a golden and file a follow-up. (b) Treat any virtual method as a group of one (give it a fast path from day one), which renames every virtual method's emission. **Recommendation: (a)**; (b) changes output for sources with no overloads (NFR-001).
 
 ## Assumptions
 
-- `tsgo` 7.0.0-dev (the pinned preview) accepts `protected static readonly …: unique symbol` referenced from constructor overload signatures, preserves both in `.d.ts`, and rejects outsider use with TS2445 (R1, R3).
-- The `super(Base.byXxx, ...)` pattern compiles across modules and runs under Node and Bun (R2).
-- #445 (member visibility) merges before the implementation starts; the factory accessibility rule reuses its bridge (FR-011).
-- The TypeScript target's `.d.ts` emission prints `/** @internal */` comments verbatim (they are advisory; nothing strips them).
-- The Dart target remains shape-only; FR-022 covers names and call-site spelling, not bodies.
+- `tsgo` 7.0.0-dev (the pinned preview) behaves as in R1–R11; the probes are re-run in each slice's goldens.
+- #445 merges before slice 013b; its member mapping is the one DECIDED-17 cites.
+- The Dart target remains shape-only; FR-022 covers names and call-site spelling.
 
 ## Dependencies
 
-- #445 (member visibility bridge) — implementation start gate (FR-011).
-- #432 / FR-049 (landed) — the constructor accessibility predicate factories inherit (DECIDED-8).
-- ADR-0008 (superseded in part), ADR-0013 (shared IR hosts the policy), ADR-0009 (the runtime checks the fallback keeps using).
-- Spec 012 OQ-6 — unaffected for the dispatcher; moot for generated call sites (DECIDED-12).
+- #445 (member visibility bridge) — start gate for 013b and 013d.
+- #432 / baseline FR-049 (landed) — the constructor accessibility.
+- ADR-0008 (superseded in part), ADR-0013, ADR-0009.
+- #475 — related (NFR-006 carve-out), not a prerequisite.

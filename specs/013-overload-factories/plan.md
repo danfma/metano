@@ -1,157 +1,204 @@
 # Implementation Plan: Overload factories, selector symbols and direct call sites
 
-**Branch**: `docs/25-overload-factories-spec` (spec directory `013-overload-factories`) | **Date**: 2026-11-04 | **Spec**: [spec.md](./spec.md) | **Issue**: [#25](https://github.com/danfma/metano/issues/25)
+**Branch**: `docs/25-overload-factories-spec` (spec directory `013-overload-factories`) | **Date**: 2026-11-04 (revised after review) | **Spec**: [spec.md](./spec.md) | **Issue**: [#25](https://github.com/danfma/metano/issues/25)
 
 ## Summary
 
-The core gains one naming policy for overload groups (DECIDED-1) and the IR carries the computed
-names; the TS target emits constructor factories and selector symbols (DECIDED-6, DECIDED-7,
-DECIDED-8), rewrites resolved call sites to them and to the method fast paths (DECIDED-11), and
-makes the fast paths public `/** @internal */` members (DECIDED-6). The dispatcher stays public
-and unchanged as the hand-written fallback (DECIDED-12). `MS0067` reports shadowed names
-(DECIDED-13). Dart inherits the names and maps factories to named constructors (DECIDED-14).
-Six slices, each one PR; the implementation starts after #445 merges (FR-011).
+The core gains one naming policy that computes candidate names from Roslyn-captured spellings,
+anchored on each overload's root declaration (DECIDED-1, DECIDED-15). Each target bridge claims the
+candidates against its own member tables in one order (DECIDED-18). The TS target emits
+type-qualified selector symbols first among the statics, guarded selector branches and
+per-overload-visibility factories (DECIDED-16, DECIDED-17, DECIDED-19); it makes fast paths
+addressable members with their overload's visibility, emitted as `override` / `abstract` members
+and declared on interfaces; and it rewrites resolved call sites — constructors, `base(...)`,
+methods, `base.M`, method groups, operators, module functions, JSON factories — to them
+(DECIDED-11). The dispatcher stays public as the hand-written fallback (DECIDED-12). `MS0067` and
+`MS0068` report renames and hijacks. Dart inherits the candidates. Seven slices; 013b and 013d
+start after #445 merges.
 
 ## Technical Context
 
-- **Language/Version**: C# 14 on .NET 10 for the compiler; TypeScript for the runtime and generated
-  code, built with `tsgo`; Bun for tests (Node for the load-order checks of R2).
-- **Primary Dependencies**: Roslyn 5.3.0 (`GetSymbolInfo` for call-site resolution — already the
-  mechanism behind `[Emit]` inlining and `ResolveMemberNameOverride`); #445's visibility bridge for
-  the factory accessibility rule.
-- **Testing**: TUnit goldens (`tests/Metano.Tests/Expected/`), the naming unit tests on the core
-  policy, diagnostic tests for `MS0067`, bun tests in the sample consumer, and
-  `git diff --exit-code targets/` for the no-churn check (NFR-001).
-- **Constraints**: `TreatWarningsAsErrors`; NFR-001 (no churn outside overload groups); NFR-002
-  (decisions in the core); NFR-003 (single body home); NFR-006 (dispatcher contract unchanged).
-- **Scale/Scope**: 1 new core file (`OverloadNamePolicy`), IR fields for the computed names, edits
-  in the two dispatcher bridges, the class bridge, the expression extractor, `MS0067`, ~15 goldens,
-  and the sample scenario. No runtime (`metano-runtime`) changes — factories, selectors and direct
-  call sites are pure emission.
+- **Language/Version**: C# 14 on .NET 10 for the compiler; TypeScript built with `tsgo`; Bun for
+  tests; Node for the load-order runs (R2, R9).
+- **Primary Dependencies**: Roslyn 5.3.0 (`GetSymbolInfo`, `IMethodSymbol.OverriddenMethod`,
+  `FindImplementationForInterfaceMember`, `IInvocationOperation.Arguments` for bound `params` /
+  default arguments); #445's visibility mapper (`IrToTsVisibilityMapper.MapMember`).
+- **Testing**: TUnit goldens (`tests/Metano.Tests/Expected/`), naming unit tests on the core
+  policy, diagnostic tests, bun tests plus a Node run in the sample consumer,
+  `bash scripts/verify-targets-clean.sh` for the no-churn check (NFR-001).
+- **Constraints**: `TreatWarningsAsErrors`; NFR-001–NFR-006.
+- **Scale/Scope**: 1 new core file (`OverloadNamePolicy`) plus the spelling capture; IR fields
+  (data-model.md); a TS claim resolver; edits in both dispatcher bridges, the class and interface
+  bridges, the operator bridge, the namespace / module emission, the expression extractor and the
+  JSON spec builder; `MS0067`, `MS0068`; ~30 goldens; the sample scenario. No runtime
+  (`metano-runtime`) changes.
 
 ## Constitution Check
 
 | Principle | Status | Notes |
 |---|---|---|
-| Spec as source of truth | ✅ | This spec lands before code; the matrix row and the `MS0067` reservation are updated in this PR. |
-| Clean Code / expressive names | ✅ | `OverloadNamePolicy` (naming), the existing bridges gain one method each; `ClaimName` stays the single collision resolver (FR-004). |
-| Ports & Adapters | ✅ | The policy reads the IR only (NFR-002); both targets render. |
-| Pragmatism | ✅ | The dispatcher survives unchanged (DECIDED-12); chains stay inlined (DECIDED-7); no dead-code stripping (OQ-4). |
-| DX | ✅ | Outsiders are rejected by TS2445 (R3); factories are the documented construction API; `MS0067` names every shadowed rename; migration notes list every break. |
+| Spec as source of truth | ✅ | This spec lands before code; baseline FR-050, the matrix rows and the `MS0067` / `MS0068` reservations are updated in this PR. |
+| Clean Code / expressive names | ✅ | `OverloadNamePolicy` (candidates), one claim resolver per target, the bridges gain focused members; both spelling tables are deleted. |
+| Ports & Adapters | ✅ | Candidates in the core; claims and rendering in each target (DECIDED-18). |
+| Pragmatism | ✅ | The dispatcher survives (DECIDED-12); chains stay inlined (DECIDED-7); metadata-only references fall back (DECIDED-24). |
+| DX | ✅ | TS2445 / TS2341 enforce access; factories are the construction API; every rename is reported; every break is in the migration notes. |
 
 **Required by gates**: dual-agent review (`compiler-man` + `bob`) on every slice; the global
-reviewers (backend / frontend / architecture) on every code slice; the implementation starts after
-#445 merges.
+reviewers on every code slice; #445 merged before 013b and 013d.
 
 ## Code survey (what each slice touches)
 
-All paths repo-relative, line numbers on `5c084f50`.
+All paths repo-relative, on `f520be36`.
 
 ### Core (`src/Metano.Compiler/`)
 
 | File | Today | Change |
 |---|---|---|
-| `Extraction/OverloadNamePolicy.cs` (new) | — | the algorithm of contracts/naming.md: parameter names, type spellings, the climb, `Default`, `ClaimName` (FR-001–FR-004, FR-006) |
-| `IR/IrMethodDeclaration.cs`, `IR/IrConstructorDeclaration.cs` | overload lists without names | per-overload computed names (data-model.md): the suffix shared by factory and selector, the fast-path name, the C# signature text of a constructor overload (for the symbol description) |
-| `Extraction/IrConstructorExtractor.cs` | builds overload sets | threads the policy over each set; carries the signature text |
-| `Extraction/IrExpressionExtractor.cs` | emits dispatcher calls for every overload call | resolves the overload via `GetSymbolInfo` and emits the direct-call nodes (`IrDirectOverloadCall` / the constructor factory node, data-model.md) when the receiver and the type arguments are static (DECIDED-11); leaves dynamic / unresolved / BCL-mapped calls alone |
-| `Diagnostics/MetaSharpDiagnostic.cs` | codes up to `MS0066` | `MS0067` (FR-020) |
+| `Extraction/OverloadNamePolicy.cs` (new) | — | stage 1 of contracts/naming.md: passes, spellings, climb, `Default`, root anchoring, dead end (FR-001–FR-003, FR-006, FR-024, FR-025) |
+| `Extraction/IrTypeRefMapper.cs` and the parameter extraction | maps types, folding `uint` → `Int32` (lines 75–83) and `List<T>` → array | captures `IrNamingSpelling` from the Roslyn symbol beside the mapped type (FR-002); the folding itself is #475's |
+| `IR/IrMemberDeclaration.cs` (`IrMethodDeclaration`), `IR/IrConstructorDeclaration.cs`, `IR/IrParameter.cs` | overload lists without names | `OverloadName`, `SignatureText`, `NamingSpelling`, `IsOverride`, `BaseOverload` / `BaseArguments` (data-model.md) |
+| `Extraction/IrConstructorExtractor.cs` | builds overload sets; `FindPrimaryConstructor` (line 97) | threads the policy; records the resolved base overload and bound arguments (FR-017) |
+| `Extraction/IrExpressionExtractor.cs` | dispatcher calls for every overload call | `IrDirectOverloadCall` / `IrDirectOverloadGroupReference` when DECIDED-11 holds (FR-017, FR-018) |
+| `Extraction/` (method-group extraction) | abstract overload groups report `MS0001` and are skipped (R5) | extracts them with `IsAbstract` fast paths (FR-030) |
+| `Diagnostics/MetaSharpDiagnostic.cs` | codes up to `MS0063` (`MS0064`–`MS0066` reserved by 012) | `MS0067`, `MS0068` (FR-020) |
 
 ### TypeScript target (`src/Metano.Compiler.TypeScript/`)
 
 | File | Today | Change |
 |---|---|---|
-| `Bridge/IrToTsOverloadDispatcherBridge.cs` | owns `ComputeFastPathNames` / `SimpleTypeName` / `PrimitiveSuffix`; class fast paths private, no `ClaimName`; namespace fast paths non-exported | consumes the IR names; fast paths public + `/** @internal */` (FR-015); `ClaimName` on the class path; namespace fast paths exported + `/** @internal */`; `ComputeFastPathNames` and its helpers deleted |
-| `Bridge/IrToTsConstructorDispatcherBridge.cs` | one dispatcher constructor, bodies in branches, no selectors, no factories | selector fields + selector overload signatures + selector-first branches (FR-008, FR-009); factories as static members (FR-007); `super(Base.byXxx, ...)` in the fallback branches (FR-017); factory accessibility from FR-049's predicate (FR-011) |
-| `Bridge/IrToTsClassBridge.cs` | member assembly and ordering | places the new members (static fields first, then factories, per the layout of spec 005); abstract classes skip factories (FR-012) |
-| `Bridge/IrToTsExpressionBridge.cs` | renders call nodes | renders the direct-call nodes (factory call, fast-path call with the receiver evaluated once) |
-| `Bridge/IrToTsNamingPolicy.cs` | member name overrides | `[Name]` on an overload overrides the suffix per OQ-1's decision (FR-005) |
-| `Transformation/Json/JsonSerializerContextTransformer.cs` | `factory: (p) => new T(...)` in the `TypeSpec` | targets `T.fromXxx(p)` for dispatched types when the widening of `MS0061` applies (FR-017 scope in slice 013c) |
+| `Bridge/TsOverloadClaims.cs` (new) | — | the claim pass per class (static and instance tables) and per barrel; cached per declaring type; `MS0067` / `MS0068` (FR-004, FR-034) |
+| `Bridge/IrToTsOverloadDispatcherBridge.cs` | `ComputeFastPathNames` / `SimpleTypeName` / `PrimitiveSuffix` (lines 501–545); private fast paths; `ClaimName` only on the namespace path (line 137); `internal` → `private` (line 555) | consumes the claimed names; fast paths with #445's per-overload visibility, `override` / `abstract`; no dispatcher for override-only types; namespace fast paths exported (FR-015, FR-030, FR-032); the naming helpers deleted |
+| `Bridge/IrToTsClassBridge.Operators.cs` | its own `SimpleTypeName` (line 287); private operator fast paths | policy names, public (FR-033); the table deleted |
+| `Bridge/IrToTsConstructorDispatcherBridge.cs` | one dispatcher constructor, bodies in branches | selectors, selector signatures, guarded selector branches, factories, struct zero-argument branch, `super(Base.by…, …)` (FR-007–FR-012, FR-017, FR-026–FR-028) |
+| `Bridge/IrToTsClassBridge.cs` | member assembly and ordering | selectors first among statics (FR-029); abstract classes skip factories (FR-012) |
+| `Bridge/IrToTsInterfaceBridge.cs` | dispatcher signatures only | fast-path signatures (FR-031) |
+| `Bridge/IrToTsExpressionBridge.cs` | call nodes | renders the direct-call nodes through `TsOverloadClaims` |
+| `Bridge/IrToTsNamingPolicy.cs` | member name overrides | `[Name]` on an overload (FR-005) |
+| `Transformation/Json/JsonSpecBuilder.cs`, `JsonUnmirroredAttributes.cs` | `factory: (p) => new T(...)`; `MS0037` for an uncalled `[JsonConstructor]` | factory call of the `[JsonConstructor]` overload; that `MS0037` reason retired for dispatched types (FR-035) |
+| barrel emission (spec 005) | re-exports declared names | re-exports module fast paths (FR-032) |
 
 ### Dart target (`src/Metano.Compiler.Dart/`)
 
 | File | Change |
 |---|---|
-| `Bridge/IrToDartNamingPolicy.cs`, `Transformation/DartTransformer.cs` | render the core names: named constructors for factories, no selectors, same fast-path names (FR-022) |
+| `Bridge/IrToDartNamingPolicy.cs`, `Transformation/DartTransformer.cs` | named constructors for factories, no selectors, the core candidates, a single-namespace claim pass (FR-022) |
 
 ### Tests and samples
 
-| Path | Today | Change |
-|---|---|---|
-| `tests/Metano.Tests/MethodOverloadFastPathTests.cs`, `ConstructorOverloadTests.cs`, `PrimaryConstructorDispatchTests.cs` | private fast-path and dispatcher expectations | regenerated per slice (goldens + assertions) |
-| `tests/Metano.Tests/OverloadNamePolicyTests.cs` (new) | — | the naming table of contracts/naming.md, unit-level |
-| `tests/Metano.Tests/OverloadNameShadowTests.cs` (new) | — | `MS0067` reasons (FR-020) |
-| `tests/Metano.Tests/Expected/overload-*.ts` (new) | — | the goldens of contracts/ts-emission.md (FR-021) |
-| `samples/SampleIssueTracker` / `targets/js/sample-issue-tracker` | dispatcher-based output | an overloaded constructor + method exercised by bun tests through factories and direct call sites (SC-006) |
+| Path | Change |
+|---|---|
+| `tests/Metano.Tests/MethodOverloadFastPathTests.cs`, `ConstructorOverloadTests.cs`, `PrimaryConstructorDispatchTests.cs`, `Int64OverloadNamingTests.cs`, `OperatorTranspileTests.cs` | regenerated per slice |
+| `tests/Metano.Tests/OverloadNamePolicyTests.cs` (new) | the naming table of contracts/naming.md, unit-level |
+| `tests/Metano.Tests/OverloadNameClaimTests.cs` (new) | `MS0067` reasons, `MS0068`, `MS0003` dead end |
+| `tests/Metano.Tests/Expected/overload-*.ts` (new) | the planned goldens below |
+| `samples/SampleIssueTracker` / `targets/js/sample-issue-tracker` | an overloaded constructor, a virtual overload group and an extension group exercised by bun tests and a Node run (SC-006) |
 
 ## Slices
 
 Each slice is one PR with dual-agent review, merged into `main`, kept green: the full TUnit suite,
-every bun sample, `git diff --exit-code targets/`. There is no staging switch: 3.0 is unreleased
-(the repo already carries breaking commits on `main`; 012 OQ-7), so each slice lands its output
-change and regenerates the goldens it breaks. **The implementation starts after #445 merges** —
-slice 013b reuses its visibility bridge (FR-011).
+every bun sample, `bash scripts/verify-targets-clean.sh`. **No staging switch**: 3.0.0 is not
+released yet, so every slice lands its output change directly and regenerates the goldens it
+breaks; the CHANGELOG collects the breaks for the release.
 
 | Slice | Commit type | Scope | FRs | Depends on |
 |---|---|---|---|---|
-| **013a — Naming policy in the core** | `feat:` | `OverloadNamePolicy` + the IR name fields; the TS bridge consumes them (fast paths still private); the naming unit tests; the two R7 collision families (`kDecimal`, `now`) start compiling. | FR-001–FR-006 | — |
-| **013b — Constructor factories and selectors** | `feat:` | selector fields, selector overload signatures, selector-first branches, factories, factory accessibility (FR-049 predicate), abstract-class exclusion; goldens `overload-factory-*`. | FR-007–FR-014 | 013a, #445 |
-| **013c — Direct constructor call sites** | `feat:` | `new T(...)` → `T.fromXxx(...)`; `: base(...)` → `super(Base.byXxx, ...)`; the JSON `TypeSpec` factory of dispatched types; goldens for the call-site shapes. | FR-017, FR-019 (ctor half) | 013b |
-| **013d — Public fast paths and direct method call sites** | `feat:` | fast paths public + `/** @internal */`, `ClaimName` on the class path, exported namespace fast paths; method calls → fast path; statics and companion modules; generic call sites carry their type arguments. | FR-015, FR-016, FR-018, FR-019 (method half) | 013a |
-| **013e — `MS0067`** | `feat:` | the diagnostic, its tests, `[Name]` suffix override (OQ-1 decision). | FR-005, FR-020 | 013b, 013d |
-| **013f — Dart names, docs, samples** | `feat:` + `docs:` | Dart named-constructor mapping (names + call-site spelling); `docs/` naming rule; CHANGELOG migration notes; the sample scenario; matrix rows → Implemented. | FR-022, FR-023 | 013b, 013d, 013e |
+| **013a — Naming policy in the core** | `feat!:` | Roslyn spelling capture; `OverloadNamePolicy` (passes, exact CLR spellings, the climb, `Default`, dead end + `MS0003`); the TS bridges consume the candidates for today's private fast paths and operator helpers; both spelling tables deleted. The R7 duplicate families compile. | FR-001–FR-003, FR-006, FR-024, FR-033 | — |
+| **013b — Claim pass, factories and selectors** | `feat!:` | `TsOverloadClaims` (order, per-suffix `$`, `MS0067` both reasons); type-qualified selectors first among statics; guarded selector branches; factories with per-overload visibility and FR-026; abstract exclusion; struct zero-argument branch; generic factory constraints. | FR-004, FR-007–FR-014, FR-020 (`MS0067`), FR-026–FR-029 | 013a, #445 |
+| **013c — Direct constructor call sites** | `feat!:` | `new T(...)` → factory; every `: base(...)` (selector and fallback branches alike) → `super(Base.by…, …)` with explicit defaults; the JSON factory of the `[JsonConstructor]` overload; project-reference-only cross-package resolution. | FR-017, FR-019 (constructor half), FR-035 | 013b |
+| **013d — Root-anchored fast paths** | `feat!:` | addressable fast paths with per-overload visibility; root anchoring; `override` fast paths and no dispatcher for override-only types; `abstract` fast paths (lifting today's `MS0001`); interface fast-path signatures and implementer forwarding; `MS0068`. | FR-015, FR-016, FR-025, FR-030, FR-031, FR-034, FR-020 (`MS0068`) | 013a, 013b (claim pass), #445 |
+| **013e — Direct method call sites** | `feat!:` | method, `base.M`, method-group, operator and module-function call sites; overloaded module groups with exported fast paths and barrel claims; `params` forms; generic type arguments; project-reference-only cross-package resolution. | FR-018, FR-019 (method half), FR-032 | 013d |
+| **013f — `[Name]` on overloads** | `feat:` | the OQ-1 decision. | FR-005 | 013b, 013d |
+| **013g — Dart names, docs, samples** | `feat:` + `docs:` | Dart named-constructor mapping and claim pass; `docs/` naming rule; CHANGELOG migration notes; the sample scenario with its Node run; matrix rows → Implemented. | FR-021 (sample), FR-022, FR-023 | 013c, 013e, 013f |
 
 ```mermaid
 flowchart LR
-  a[013a naming policy] --> b[013b factories + selectors]
+  a[013a naming policy] --> b[013b claims, factories, selectors]
   i445[#445 visibility bridge] -. gate .-> b
+  i445 -. gate .-> d
   b --> c[013c direct ctor call sites]
-  a --> d[013d public fast paths + direct method calls]
-  b --> e[013e MS0067 + Name]
-  d --> e
-  c --> f[013f Dart names, docs, samples]
-  e --> f
+  a --> d[013d root-anchored fast paths]
+  b --> d
+  d --> e[013e direct method call sites]
+  b --> f[013f Name on overloads]
+  d --> f
+  c --> g[013g Dart, docs, samples]
+  e --> g
+  f --> g
 ```
 
-Deferred / follow-ups: the `[PlainObject]` / branded dropped-secondary-constructor warning (OQ-5);
-dropping the constructor fallback for hand-written TS (OQ-4, a 4.0 direction); factories for
-`[PlainObject]` object literals (OQ-3).
+Ownership notes the review asked for: the selector `super(...)` calls belong to **013c** (013b
+emits the selectors and branches but leaves derived classes on today's `super(args)`); the
+root-anchoring rule belongs to **013d**; the claim pass belongs to **013b**, and 013d / 013e extend
+its tables (instance fast paths, barrels).
+
+Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
+OQ-5 (dropped secondary constructors warning), OQ-8 (overloading an inherited single virtual), the
+two unrelated bugs of research R7 and R12's `object` check.
 
 ## Test strategy
 
-- **Core units**: `OverloadNamePolicyTests` over the full table of contracts/naming.md — parameter
-  names, every spelling row, every climb depth, `Default`, `ClaimName`, determinism (same input →
-  same output).
-- **Goldens**: `overload-factory-basic` (R1's `Money`), `overload-factory-generic` (R4's `Box`),
-  `overload-factory-abstract` (selectors, no factories), `overload-factory-record` (primary +
-  secondary), `overload-factory-chain` (`this(...)`), `overload-factory-accessibility` (private /
-  protected / mixed / widened), `overload-names-types` (`fInt32`…), `overload-names-climb`
-  (`kNumericsDecimal`…), `overload-names-default` (`nowDefault`), `overload-calls-new`
-  (`Money.fromDecimal(...)`), `overload-calls-super` (`super(Money.byDecimal, ...)`),
-  `overload-calls-methods` (`Shapes.addXY(...)`, `p.addP(...)`), `overload-calls-namespace`
-  (companion exported fast paths), `overload-dispatcher-fallback` (hand-written `new T(...)` keeps
-  the runtime signatures and branches). Every golden's consumer is built with `tsgo --strict
-  --declaration` (FR-021).
-- **Diagnostics**: one test per `MS0067` reason (user member claims factory, selector suffix, fast
-  path), asserting code, severity, location, and that the `$`-renamed output is still emitted.
-- **Behavior**: bun tests in the sample consumer exercising factories and direct call sites at
-  runtime (SC-006); the R2 two-module pattern as a golden pair plus a Node run in CI (load order).
-- **Regression**: the full TUnit suite; `git diff --exit-code targets/` per slice; the no-churn
-  check of NFR-001 by transpiling every sample and diffing against `main` for sources without
-  overload groups.
-- **SC-002 check**: the three R7 families' `main`-equivalents are captured once in the first PR's
-  description (the R7 tsgo output) as the before/after evidence.
+- **Core units**: `OverloadNamePolicyTests` over contracts/naming.md — every pass, every spelling
+  row (unsigned, `List<int>` vs `int[]`, delegates, tuples, type parameters), every climb case
+  (nested, namespace, generic argument, primitive not climbing, partial-set climbing), `Default`,
+  the dead end, root anchoring, determinism.
+- **Planned goldens** (each built with `tsgo --strict --declaration` in its consumer, FR-021):
+  - `overload-factory-basic` (`Money`, R1) and `overload-dispatcher-fallback` (hand-written
+    `new T(...)` keeps the runtime signatures and branches);
+  - `overload-factory-hierarchy` — base / derived / grand-derived with identical suffixes, the
+    FR-026 kept and qualified factories (`Receipt.fromAmount`, `GiftReceipt.fromGiftReceiptAmount`)
+    and an inherited factory (R2);
+  - `overload-factory-generic` (constraints re-declared, R4) and `overload-factory-generic-closed`
+    (`IntBox : Box<int>` → `fromIntBoxValue`);
+  - `overload-factory-abstract`, `overload-factory-record`, `overload-factory-chain`;
+  - `overload-factory-accessibility` — per-overload `private` / `protected` / `internal` /
+    `protected internal` / `private protected` factories, the most permissive constructor with
+    `MS0060`, and a widened factory (`MS0061`) from a nested type and from a JSON `TypeSpec` (R10);
+  - `overload-factory-struct` — `new S()` with the zero-argument branch; an explicit
+    parameterless struct constructor as `fromDefault` (R11);
+  - `overload-factory-params` — a `params` constructor overload;
+  - `overload-static-init` — `static readonly Zero = new Money(0)` declared before the
+    constructors, selectors first, plus a Node run of the emitted module (R9);
+  - `overload-static-init-cycle` — two modules whose static initializers reach each other's
+    factories, run under Node from both entries (R9: the pre-existing TDZ error, no new one);
+  - `overload-names-types` (`fInt32`, `uInt32` / `uUInt32`, `wInt64` / `wUInt64`,
+    `lListOfInt32` / `lInt32Array`, `sumInt32Array`, `hInt32OrNull`, `identityT`),
+    `overload-names-climb` (`kNumericsDecimal`, nested types, generic arguments, primitives not
+    climbing), `overload-names-default` (`nowDefault`);
+  - `overload-names-claims` — the `Cash` `From` group colliding with its factories
+    (`fromAmount$`, `MS0067` reason 2) and a user member claiming a factory (`fromCents$` /
+    `byMoneyCents$`, reason 1);
+  - `overload-virtual` — partial override, full override, `base.Add` → `super.addX`, a method
+    group with `.bind`, a derived type adding an overload; plus a Node run returning C#'s results
+    (R8, SC-007);
+  - `overload-abstract-methods` — `abstract` fast paths and the concrete dispatcher;
+  - `overload-interface` — interface fast-path signatures, an implementer with different
+    parameter names, a method implementing two roots (forwarding member), an explicit
+    implementation, and the interface receiver call `sh.areaS(2)`;
+  - `overload-calls-new`, `overload-calls-super` (with explicit default arguments),
+    `overload-calls-methods`, `overload-calls-static-binding` (`F(object)` / `F(string)`, R12),
+    `overload-calls-params` (expanded and normal forms, R11), `overload-calls-operators`;
+  - `overload-module-extension` — exported fast paths, the dispatcher, the cross-file import at the
+    call site, and two modules sharing a barrel (R11);
+  - `overload-json-factory` — the `[JsonConstructor]` overload's factory in the `TypeSpec`;
+  - `overload-cross-package` — `TranspileWithLibrary` with a project reference (direct calls) and
+    a metadata-only reference (dispatcher fallback).
+- **Diagnostics**: one test per `MS0067` reason, `MS0068`, and the `MS0003` dead end, asserting
+  code, severity, location, and that the renamed output still compiles.
+- **Behavior**: the sample consumer's bun tests and a Node run of the same output (SC-006).
+- **Regression**: the full TUnit suite; `verify-targets-clean.sh`; the NFR-001 sample diff.
+- **SC-002 check**: research R7's `tsgo` output is the before; each slice's goldens are the after.
 
 ## Risks
 
 | ID | Risk | Mitigation |
 |---|---|---|
-| K1 | A rewritten call site misses a semantics detail (receiver evaluation order, `params` expansion) | The rewrite emits an ordinary call node — the existing call lowering handles evaluation order; goldens pin `params` and optional arguments |
-| K2 | Factory/fast-path names collide across a package's files after the `$` fallback | `ClaimName` runs per scope (class, namespace) exactly as today's namespace path does; `MS0067` makes every rename visible |
-| K3 | Version skew: a 3.0 consumer against a 2.x package fails at `tsc` | Migration item 4; `tsc`'s missing-member error is loud and points at the stale `.d.ts` |
-| K4 | `.d.ts` surface growth surprises consumers | Migration item 6; the selectors are `protected` and the fast paths `/** @internal */` — only factories are new public API |
-| K5 | #445 slips | Only 013b (and 013e's accessibility-adjacent tests) wait for it; 013a and 013d are independent of the visibility bridge |
-| K6 | The climb renames types that moved namespaces (D7) | Documented name stability; `[Name]` pins a name (OQ-1) |
+| K1 | A rewritten call site misses an evaluation detail (receiver order, `params`, defaults) | The rewrite uses Roslyn's bound arguments; goldens pin `params` forms and explicit defaults |
+| K2 | Claims differ between the declaring file and a cross-file call site | Claims are cached per declaring type and resolved through `IrOverloadRef` (DECIDED-18) |
+| K3 | Version skew: a 3.0 consumer against a 2.x package | Migration (g); `tsc` reports the missing member; metadata-only references keep the dispatcher |
+| K4 | Root anchoring renames members of types that only override | Override-only types now emit just the fast paths; Migration (a) |
+| K5 | #445 slips | 013a and 013c's design are independent; 013b and 013d wait |
+| K6 | A user member hijacks an inherited fast path | `MS0068` (error) |
+| K7 | Static initialization order regresses in a later refactor of member ordering | FR-029 golden plus the guard of FR-009 makes any regression throw instead of misdispatching (R9) |
 
 ## Project Structure
 

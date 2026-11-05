@@ -2,6 +2,10 @@
 
 **Status:** Accepted
 **Date:** 2026-03-08
+**Superseded in part by:** [ADR-0028](0028-overload-factories.md) (Proposed) — public dispatcher
+contract kept; private fast paths, heuristic naming and dispatcher-bound generated call sites
+replaced by root-anchored fast paths, constructor factories, selector symbols and direct call
+sites (spec 013).
 
 ## Context
 

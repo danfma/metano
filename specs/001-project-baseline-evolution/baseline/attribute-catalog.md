@@ -76,7 +76,7 @@ Nothing in `Metano.Annotations` defines these yet; they are specified by [spec 0
 | Attribute | Target | Purpose | Spec |
 | --- | --- | --- | --- |
 | `[EmitRuntimeType]` | Type, or `[assembly: EmitRuntimeType]` for every public type | Forces runtime type-descriptor emission, i.e. marks the type as reached for `RuntimeTypeReachability` (FR-027, FR-053); for libraries whose consumers will ask runtime questions (OD-6). | 011 FR-027, FR-053 |
-| `[assembly: DisableBoxing]` | Assembly | Disables boxing of enum / `[InlineWrapper]` values at C# boxing conversions (FR-050); with it, type questions on such values in `object` report `MS0058`. | 011 FR-050, OD-23 |
+| `[assembly: DisableBoxing]` | Assembly | Disables boxing of enum / `[InlineWrapper]` values at C# boxing conversions (011 FR-050); with it, type questions on such values in `object` report `MS0058`. | 011 FR-050, OD-23 |
 
 ### Support enums (not attributes)
 
