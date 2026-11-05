@@ -4,12 +4,14 @@ namespace Metano.Compiler.TypeScript.AST;
 /// A class method: <c>name(params): ReturnType { body }</c>.
 /// </summary>
 /// <param name="ComputedKey">When set, the method is declared under the computed
-/// property key <c>[expression]</c> (<c>[Symbol.iterator]</c>) and
+/// property key <c>[expression]</c> (<c>[Symbol.iterator]()</c>) and
 /// <see cref="Name"/> only labels the member; a computed-key method has no overload
 /// signatures.</param>
-/// <param name="JSDoc">The JSDoc comment printed ahead of the member — the
-/// <c>/** @internal *&#47;</c> tag of the assembly-wide visibility band
-/// (issue #445).</param>
+/// <param name="JSDoc">The JSDoc comment printed ahead of a method with no
+/// overload signatures — the <c>/** @internal *&#47;</c> tag of an
+/// <c>internal</c> / <c>protected internal</c> member. With overloads, each
+/// <see cref="TsMethodOverload.JSDoc"/> prints ahead of its own signature and
+/// the implementation carries none.</param>
 public sealed record TsMethodMember(
     string Name,
     IReadOnlyList<TsParameter> Parameters,
@@ -30,10 +32,12 @@ public sealed record TsMethodMember(
 /// <summary>
 /// An overload signature for a method: methodName&lt;T&gt;(param: Type): ReturnType;
 /// <paramref name="TypeParameters"/> carries the overload's own method type
-/// parameters, printed per signature.
+/// parameters, printed per signature. <paramref name="JSDoc"/> prints ahead
+/// of the signature, taken from the C# method it declares.
 /// </summary>
 public sealed record TsMethodOverload(
     IReadOnlyList<TsParameter> Parameters,
     TsType ReturnType,
-    IReadOnlyList<TsTypeParameter>? TypeParameters = null
+    IReadOnlyList<TsTypeParameter>? TypeParameters = null,
+    TsJSDoc? JSDoc = null
 );

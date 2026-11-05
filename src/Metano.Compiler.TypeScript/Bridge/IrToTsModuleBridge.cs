@@ -113,7 +113,7 @@ public static class IrToTsModuleBridge
             Const: isReadonly && value is not null,
             Exported: member.Visibility is not IrVisibility.Private,
             Type: IrToTsTypeMapper.Map(type, typeOverrides),
-            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(member.Visibility)
+            JSDoc: IrToTsVisibilityMapper.Map(member.Visibility).JSDoc
         );
     }
 

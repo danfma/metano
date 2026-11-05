@@ -37,10 +37,13 @@ public sealed class ConstructorAccessPolicy(
     /// </summary>
     public TsAccessibility ResolveAndReport(INamedTypeSymbol type, IrClassDeclaration ir)
     {
-        if (ir.Constructor is not { } constructor || ir.Semantics.IsValueType)
+        if (
+            ir.Constructor is not { } constructor
+            || TsConstructorModifier.KeepsPublicConstructor(ir)
+        )
             return TsAccessibility.Public;
 
-        var mostPermissive = MostPermissive(constructor);
+        var mostPermissive = TsConstructorModifier.MostPermissiveOf(constructor);
         ReportNarrowerConstructors(type, mostPermissive);
 
         if (mostPermissive is TsAccessibility.Public)
@@ -100,10 +103,4 @@ public sealed class ConstructorAccessPolicy(
                     ?.Location
             )
         );
-
-    private static TsAccessibility MostPermissive(IrConstructorDeclaration constructor) =>
-        new[] { constructor }
-            .Concat(constructor.Overloads ?? [])
-            .Select(declaration => TsConstructorModifier.Of(declaration.Visibility))
-            .MinBy(TsConstructorModifier.RestrictionOf);
 }

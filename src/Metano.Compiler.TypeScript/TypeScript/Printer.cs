@@ -420,8 +420,8 @@ public sealed class Printer(string indent = "  ")
     }
 
     /// <summary>
-    /// Prints a member's JSDoc: one <c>/** text *&#47;</c> line per entry,
-    /// ahead of the member it annotates.
+    /// Prints a declaration's JSDoc: one <c>/** text *&#47;</c> line per entry,
+    /// ahead of the declaration it annotates.
     /// </summary>
     private void PrintJSDoc(TsJSDoc? jsdoc)
     {
@@ -437,14 +437,27 @@ public sealed class Printer(string indent = "  ")
         }
     }
 
+    /// <summary>
+    /// Prints a JSDoc inline, ahead of a parameter property on the same line:
+    /// <c>/** text *&#47; </c> per entry.
+    /// </summary>
+    private void PrintInlineJSDoc(TsJSDoc? jsdoc)
+    {
+        if (jsdoc is null)
+            return;
+
+        foreach (var line in jsdoc.Lines)
+        {
+            _sb.Write("/** ");
+            _sb.Write(line);
+            _sb.Write(" */ ");
+        }
+    }
+
     private void PrintFunction(TsFunction func)
     {
-        // With overloads the tag prints ahead of each signature; a single
-        // declaration prints it ahead of the implementation itself.
         if (func.Overloads is { Count: > 0 } overloads)
             PrintFunctionOverloadSignatures(func, overloads);
-        else
-            PrintJSDoc(func.JSDoc);
 
         if (func.Exported)
             _sb.Write("export ");
@@ -479,7 +492,7 @@ public sealed class Printer(string indent = "  ")
     {
         foreach (var overload in overloads)
         {
-            PrintJSDoc(func.JSDoc);
+            PrintJSDoc(overload.JSDoc);
             if (func.Exported)
                 _sb.Write("export ");
             _sb.Write("function ");
@@ -659,14 +672,14 @@ public sealed class Printer(string indent = "  ")
             // Print overload signatures first
             foreach (var overload in ctor.Overloads)
             {
-                PrintJSDoc(ctor.JSDoc);
+                PrintJSDoc(overload.JSDoc);
                 PrintConstructorHead(ctor.Accessibility, overload.Parameters);
                 _sb.Write(";");
                 _sb.WriteLn();
             }
 
-            // Print dispatcher implementation
-            PrintJSDoc(ctor.JSDoc);
+            // Print dispatcher implementation — untagged: each signature
+            // carries its own declaration's JSDoc.
             PrintConstructorHead(ctor.Accessibility, ctor.Parameters);
             PrintBody(ctor.Body);
         }
@@ -709,6 +722,8 @@ public sealed class Printer(string indent = "  ")
         // — TS rejects `public ...args` / `readonly ...args` as a syntax
         // error. Skip the modifier prefix for those defensively in case the
         // bridge wired one up.
+        PrintInlineJSDoc(p.JSDoc);
+
         if (p.Rest || p.Accessibility == TsAccessibility.None)
         { /* no modifier — plain parameter */
         }
@@ -799,11 +814,11 @@ public sealed class Printer(string indent = "  ")
             case TsMethodMember method:
                 if (method.Overloads is { Count: > 0 })
                 {
-                    // Print overload signatures first, each carrying the tag —
-                    // every declaration lands in the .d.ts a consumer reads.
+                    // Print overload signatures first, each carrying its own
+                    // declaration's JSDoc; the implementation carries none.
                     foreach (var overload in method.Overloads)
                     {
-                        PrintJSDoc(method.JSDoc);
+                        PrintJSDoc(overload.JSDoc);
                         PrintAccessibility(method.Accessibility);
                         if (method.Static)
                             _sb.Write("static ");
@@ -1106,7 +1121,6 @@ public sealed class Printer(string indent = "  ")
 
             case TsVariableDeclaration varDecl:
                 PrintJSDoc(varDecl.JSDoc);
-
                 if (varDecl.Exported)
                     _sb.Write("export ");
                 _sb.Write(varDecl.Const ? "const " : "let ");

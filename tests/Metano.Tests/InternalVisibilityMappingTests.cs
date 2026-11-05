@@ -50,7 +50,7 @@ public class InternalVisibilityMappingTests
         "  private steps: number = 0;",
         "  private reset(): void"
     )]
-    public async Task FieldPropertyAndMethod_MapThroughTheSharedTable(
+    public async Task FieldPropertyAndMethod_EmitTheirMappedModifierAndInternalTag(
         string accessibility,
         string fieldLine,
         string propertyLine,
@@ -72,7 +72,10 @@ public class InternalVisibilityMappingTests
     [Arguments("internal", "  /** @internal */\n  static value: number = 0;")]
     [Arguments("protected internal", "  /** @internal */\n  static value: number = 0;")]
     [Arguments("private", "  private static value: number = 0;")]
-    public async Task StaticField_MapsThroughTheSharedTable(string accessibility, string fieldLine)
+    public async Task StaticField_EmitsItsMappedModifierAndInternalTag(
+        string accessibility,
+        string fieldLine
+    )
     {
         var files = TranspileHelper.Transpile(
             $$"""
@@ -94,14 +97,16 @@ public class InternalVisibilityMappingTests
     [Test]
     [Arguments(
         "internal",
-        "  /** @internal */\n  add(a: number, b: number): number;\n  /** @internal */\n  add(text: string): number;",
+        "  /** @internal */\n  add(a: number, b: number): number;\n  /** @internal */\n  add(text: string): number;\n"
+            + "  add(...args: unknown[]): number {",
         "  add(...args: unknown[]): number {",
         "  private addAB(a: number, b: number): number {",
         "  private addText(text: string): number {"
     )]
     [Arguments(
         "protected internal",
-        "  /** @internal */\n  add(a: number, b: number): number;\n  /** @internal */\n  add(text: string): number;",
+        "  /** @internal */\n  add(a: number, b: number): number;\n  /** @internal */\n  add(text: string): number;\n"
+            + "  add(...args: unknown[]): number {",
         "  add(...args: unknown[]): number {",
         "  private addAB(a: number, b: number): number {",
         "  private addText(text: string): number {"
@@ -113,7 +118,7 @@ public class InternalVisibilityMappingTests
         "  private addAB(a: number, b: number): number {",
         "  private addText(text: string): number {"
     )]
-    public async Task OverloadedMethod_MapsTheDispatcherThroughTheSharedTable(
+    public async Task OverloadedMethod_TagsEachSignatureAndLeavesTheImplementationUntagged(
         string accessibility,
         string signatures,
         string dispatcherHead,
@@ -219,7 +224,7 @@ public class InternalVisibilityMappingTests
     [Arguments("public", "  constructor(x: number) { }")]
     [Arguments("private", "  private constructor(x: number) { }")]
     [Arguments("private protected", "  private constructor(x: number) { }")]
-    public async Task Constructor_MapsThroughTheSharedTable(
+    public async Task Constructor_EmitsItsMappedModifierAndInternalTag(
         string accessibility,
         string expectedLine
     )
@@ -238,9 +243,9 @@ public class InternalVisibilityMappingTests
     }
 
     [Test]
-    public async Task InternalConstructorOverloads_ShareOnePublicTaggedDispatcher()
+    public async Task InternalConstructorOverloads_TagEachSignatureAndLeaveTheImplementationUntagged()
     {
-        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var files = TranspileHelper.Transpile(
             """
             [Transpile]
             public class Gauge
@@ -258,7 +263,7 @@ public class InternalVisibilityMappingTests
             .Contains(
                 "  /** @internal */\n  constructor(value: number);\n"
                     + "  /** @internal */\n  constructor(text: string);\n"
-                    + "  /** @internal */\n  constructor(...args: unknown[]) {"
+                    + "  constructor(...args: unknown[]) {"
             );
         await Assert.That(output).DoesNotContain("private constructor");
     }
@@ -285,6 +290,287 @@ public class InternalVisibilityMappingTests
         await Assert
             .That(files["limits.ts"])
             .Contains("/** @internal */\nexport const max: number = 5;");
+    }
+
+    [Test]
+    public async Task MixedMethodGroup_TagsOnlyTheInternalSignature()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Engine
+            {
+                public int Add(int a) => a;
+
+                internal int Add(int a, int b) => a + b;
+            }
+            """
+        );
+
+        await Assert
+            .That(files["app/engine.ts"])
+            .Contains(
+                "  /** @internal */\n  add(a: number, b: number): number;\n"
+                    + "  add(a: number): number;\n"
+                    + "  add(...args: unknown[]): number {"
+            );
+    }
+
+    [Test]
+    [Arguments("private")]
+    [Arguments("protected")]
+    [Arguments("internal")]
+    public async Task MixedMethodGroup_EmitsTheMostPermissiveDispatcher(string widerOverload)
+    {
+        var files = TranspileHelper.Transpile(
+            $$"""
+            namespace App;
+
+            [Transpile]
+            public class Engine
+            {
+                public int Add(int a) => a;
+
+                {{widerOverload}} int Add(int a, int b) => a + b;
+            }
+            """
+        );
+        var output = files["app/engine.ts"];
+
+        await Assert.That(output).Contains("\n  add(...args: unknown[]): number {");
+        await Assert.That(output).DoesNotContain($"{widerOverload} add(");
+    }
+
+    [Test]
+    public async Task ProtectedAndInternalMethodGroup_EmitsAPublicDispatcher()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Engine
+            {
+                protected int Add(int a) => a;
+
+                internal int Add(int a, int b) => a + b;
+            }
+            """
+        );
+        var output = files["app/engine.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                "  /** @internal */\n  add(a: number, b: number): number;\n"
+                    + "  add(a: number): number;\n"
+                    + "  add(...args: unknown[]): number {"
+            );
+        await Assert.That(output).DoesNotContain("protected add(");
+    }
+
+    [Test]
+    [Arguments("public Gauge(int value) { }", "internal Gauge(string text) { }")]
+    [Arguments("internal Gauge(string text) { }", "public Gauge(int value) { }")]
+    public async Task MixedConstructorGroup_TagsOnlyTheInternalSignatureInEitherOrder(
+        string first,
+        string second
+    )
+    {
+        var files = TranspileHelper.Transpile(
+            $$"""
+            [Transpile]
+            public class Gauge
+            {
+                {{first}}
+
+                {{second}}
+            }
+            """
+        );
+
+        var output = files["gauge.ts"];
+
+        await Assert.That(output).Contains("  /** @internal */\n  constructor(text: string);\n");
+        await Assert.That(output).Contains("  constructor(value: number);\n");
+        await Assert.That(output).DoesNotContain("/** @internal */\n  constructor(value");
+        await Assert.That(output).DoesNotContain("/** @internal */\n  constructor(...args");
+    }
+
+    [Test]
+    public async Task ProtectedAndInternalConstructorGroup_EmitsAPublicDispatcher()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Gauge
+            {
+                protected Gauge(int value) { }
+
+                internal Gauge(string text) { }
+            }
+            """
+        );
+        var output = files["gauge.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                "  constructor(value: number);\n"
+                    + "  /** @internal */\n  constructor(text: string);\n"
+                    + "  constructor(...args: unknown[]) {"
+            );
+        await Assert.That(output).DoesNotContain("protected constructor");
+    }
+
+    [Test]
+    public async Task InternalValueTypeConstructor_StaysPublicAndUntagged()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Meter
+            {
+                public int Value;
+
+                internal Meter(int value) { Value = value; }
+            }
+            """
+        );
+        var output = files["meter.ts"];
+
+        await Assert.That(output).Contains("  constructor(value: number)");
+        await Assert.That(output).DoesNotContain("/** @internal */\n  constructor");
+    }
+
+    [Test]
+    public async Task InternalEvent_TagsItsAddAndRemoveAccessors()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace App;
+
+            [Transpile]
+            public class Clock
+            {
+                internal event Action? Ticked;
+
+                public void Tick() => Ticked?.Invoke();
+            }
+            """
+        );
+        var output = files["app/clock.ts"];
+
+        await Assert.That(output).Contains("  /** @internal */\n  ticked$add(handler:");
+        await Assert.That(output).Contains("  /** @internal */\n  ticked$remove(handler:");
+        await Assert.That(output).Contains("  private ticked:");
+    }
+
+    [Test]
+    public async Task ProtectedInternalPromotedParameter_TagsTheParameterProperty()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Probe(int x)
+            {
+                protected internal int X { get; } = x;
+            }
+            """
+        );
+
+        await Assert
+            .That(files["app/probe.ts"])
+            .Contains("  constructor(/** @internal */ readonly x: number) { }");
+    }
+
+    [Test]
+    public async Task PrivateProtectedPromotedParameter_EmitsAProtectedParameterProperty()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Probe(int x)
+            {
+                private protected int X { get; } = x;
+            }
+
+            [Transpile]
+            public class DerivedProbe(int x) : Probe(x)
+            {
+                public int Twice() => X * 2;
+            }
+            """
+        );
+
+        await Assert
+            .That(files["app/probe.ts"])
+            .Contains("  constructor(protected readonly x: number) { }");
+        await Assert.That(files["app/derived-probe.ts"]).Contains("return this.x * 2;");
+    }
+
+    [Test]
+    public async Task PrivateProtectedMembers_AreStillSkipped()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace App;
+
+            [Transpile]
+            public class Widget
+            {
+                private protected int Count;
+
+                private protected int Steps { get; set; }
+
+                private protected event Action? Changed;
+
+                private protected void Reset() { }
+
+                public int Read() => 1;
+            }
+            """
+        );
+        var output = files["app/widget.ts"];
+
+        await Assert.That(output).DoesNotContain("count");
+        await Assert.That(output).DoesNotContain("steps");
+        await Assert.That(output).DoesNotContain("changed");
+        await Assert.That(output).DoesNotContain("reset");
+        await Assert.That(output).Contains("  read(): number {");
+    }
+
+    [Test]
+    public async Task InternalModuleFunction_IsNotEmitted()
+    {
+        // Known limitation (FR-049 note / matrix): module-function extraction
+        // admits public members only, so an internal function of an
+        // [ExportedAsModule] class is dropped rather than tagged.
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Counters
+            {
+                public static int Twice(int value) => value * 2;
+
+                internal static int Inc(int value) => value + 1;
+            }
+            """
+        );
+        var output = files["counters.ts"];
+
+        await Assert.That(output).Contains("export function twice(value: number): number {");
+        await Assert.That(output).DoesNotContain("inc(");
     }
 
     [Test]
@@ -338,5 +624,35 @@ public class InternalVisibilityMappingTests
         await Assert.That(square).DoesNotContain("protected ");
         await Assert.That(triangle).Contains("  /** @internal */\n  corners(): number {");
         await Assert.That(triangle).DoesNotContain("protected ");
+    }
+
+    [Test]
+    public async Task MixedVisibilityOverloadsAndConstructors_MatchTheGolden()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Ledger
+            {
+                public Ledger(int seed) { }
+
+                internal Ledger(string name) { }
+
+                public int Post(int amount) => amount;
+
+                internal int Post(int amount, string memo) => amount + memo.Length;
+
+                protected internal int Audit(int amount) => amount;
+
+                protected internal int Audit(string memo) => memo.Length;
+            }
+            """
+        );
+
+        await Assert
+            .That(files["app/ledger.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("mixed-visibility-overloads.ts"));
     }
 }

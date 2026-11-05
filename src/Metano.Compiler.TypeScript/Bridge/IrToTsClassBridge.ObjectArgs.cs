@@ -37,6 +37,8 @@ internal static partial class IrToTsClassBridge
         var body = new List<TsStatement> { destructureHeader };
         body.AddRange(IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context));
 
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(method.Visibility);
+
         return new TsMethodMember(
             name,
             [argsParam],
@@ -45,10 +47,10 @@ internal static partial class IrToTsClassBridge
             Static: method.IsStatic,
             Async: method.Semantics.IsAsync,
             Generator: method.Semantics.IsGenerator,
-            Accessibility: IrToTsVisibilityMapper.Of(method.Visibility),
+            Accessibility: accessibility,
             TypeParameters: typeParameters,
             Abstract: false,
-            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(method.Visibility)
+            JSDoc: jsdoc
         );
     }
 

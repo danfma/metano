@@ -12,9 +12,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <list type="number">
 ///   <item>A private fast-path method per overload (real body via
 ///   <see cref="IrToTsStatementBridge"/>), named uniquely within the group.</item>
-///   <item>A public dispatcher method taking <c>...args: unknown[]</c> that
+///   <item>A dispatcher method taking <c>...args: unknown[]</c> that
 ///   branches on argument count + runtime type checks and delegates to the
-///   matching fast path with cast arguments.</item>
+///   matching fast path with cast arguments. It takes the accessibility of the
+///   group's most permissive overload; each overload signature carries the
+///   JSDoc of its own declaration, so <c>stripInternal</c> drops only the
+///   <c>internal</c> ones.</item>
 /// </list>
 /// The branches follow <see cref="OverloadDispatchOrder"/> and match the
 /// arguments as <see cref="OverloadArgumentShape"/> describes. An omitted
@@ -75,6 +78,10 @@ public static class IrToTsOverloadDispatcherBridge
 
         var receiver = DispatchReceiver(isStatic, containingTypeName);
 
+        var dispatcherVisibility = IrToTsVisibilityMapper.MostPermissiveOf(
+            plan.Sorted.Select(method => method.Visibility)
+        );
+
         members.Add(
             new TsMethodMember(
                 primaryName,
@@ -88,9 +95,10 @@ public static class IrToTsOverloadDispatcherBridge
                 ),
                 Static: isStatic,
                 Async: plan.IsAsync,
-                Accessibility: IrToTsVisibilityMapper.Of(primary.Visibility),
-                Overloads: plan.Signatures,
-                JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(primary.Visibility)
+                // The implementation is untagged: each overload signature
+                // carries its own declaration's JSDoc.
+                Accessibility: IrToTsVisibilityMapper.Map(dispatcherVisibility).Accessibility,
+                Overloads: plan.Signatures
             )
         );
 
@@ -168,7 +176,7 @@ public static class IrToTsOverloadDispatcherBridge
     /// <summary>
     /// The target-shape-independent part of a dispatcher: the overloads in
     /// dispatch order, their fast-path names, the async flag, the
-    /// implementation return type and the public overload signatures.
+    /// implementation return type and the overload signatures.
     /// </summary>
     private sealed record OverloadGroupPlan(
         IReadOnlyList<IrMethodDeclaration> Sorted,
@@ -246,7 +254,8 @@ public static class IrToTsOverloadDispatcherBridge
         new(
             SignatureParameters(method, typeOverrides),
             IrToTsTypeMapper.Map(method.ReturnType, typeOverrides),
-            MapTypeParameters(method.TypeParameters)
+            MapTypeParameters(method.TypeParameters),
+            IrToTsVisibilityMapper.Map(method.Visibility).JSDoc
         );
 
     private static List<TsParameter> DispatcherParameters() =>

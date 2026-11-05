@@ -105,7 +105,7 @@ public sealed class IrToTsClassEmitter(
         ) with
         {
             Accessibility = _constructorAccessPolicy.ResolveAndReport(type, ir),
-            JSDoc = ConstructorInternalJSDoc(ir),
+            JSDoc = ConstructorJSDoc(ir, emitsDispatcher),
         };
 
         var classMembers = new List<TsClassMember>();
@@ -449,21 +449,21 @@ public sealed class IrToTsClassEmitter(
         p.Parameter.IsParams && p.Promotion is not IrParameterPromotion.None;
 
     /// <summary>
-    /// The <c>@internal</c> JSDoc of the assembly-wide visibility band
-    /// (issue #445): a constructor whose most permissive declaration is
-    /// <c>internal</c> or <c>protected internal</c> emits public and tagged.
-    /// A value type never carries the tag — its implicit parameterless
-    /// constructor is public regardless of what it declares (FR-049).
+    /// The JSDoc of a constructor with no overload signatures, taken from
+    /// its one declaration (<see cref="TsConstructorModifier.JSDocOf"/>). A
+    /// dispatcher's implementation carries none: each overload signature
+    /// carries its own declaration's.
     /// </summary>
-    private static TsJSDoc? ConstructorInternalJSDoc(IrClassDeclaration ir) =>
-        ir.Constructor is { } declaredConstructor && !ir.Semantics.IsValueType
-            ? IrToTsVisibilityMapper.InternalJSDocOf(
-                TsConstructorModifier.MostPermissiveVisibilityOf(declaredConstructor)
-            )
+    private static TsJSDoc? ConstructorJSDoc(IrClassDeclaration ir, bool emitsDispatcher) =>
+        ir.Constructor is { } declaredConstructor && !emitsDispatcher
+            ? TsConstructorModifier.JSDocOf(ir, declaredConstructor)
             : null;
 
-    private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p) =>
-        new(
+    private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p)
+    {
+        var (accessibility, jsdoc) = IrToTsClassBridge.PromotedMemberVisibility(p);
+
+        return new TsFieldMember(
             IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),
             // The field keeps the declared `T[] | null` (`with { Items = null }` is
             // valid C#); only the rest parameter drops it (MapParameterType).
@@ -471,11 +471,10 @@ public sealed class IrToTsClassEmitter(
             Initializer: null,
             Readonly: p.Promotion is IrParameterPromotion.ReadonlyProperty,
             Static: false,
-            Accessibility: IrToTsVisibilityMapper.Of(p.PromotedVisibility ?? IrVisibility.Public),
-            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(
-                p.PromotedVisibility ?? IrVisibility.Public
-            )
+            Accessibility: accessibility,
+            JSDoc: jsdoc
         );
+    }
 
     // ─── Method / operator emission ───────────────────────────
 
@@ -827,7 +826,8 @@ public sealed class IrToTsClassEmitter(
             primary,
             baseCall,
             owner.TypeParameters ?? [],
-            lowering
+            lowering,
+            signature => TsConstructorModifier.JSDocOf(owner, signature)
         );
     }
 

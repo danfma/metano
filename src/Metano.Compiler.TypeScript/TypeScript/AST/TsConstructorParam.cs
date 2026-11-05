@@ -8,7 +8,8 @@ namespace Metano.Compiler.TypeScript.AST;
 /// both shapes on the same parameter. <see cref="Optional"/> renders the
 /// <c>?</c> suffix (<c>name?: T</c>) a declaration-only overload signature
 /// uses for a parameter with a default, since TypeScript forbids an
-/// initializer there.
+/// initializer there. <see cref="JSDoc"/> prints ahead of a parameter
+/// property (<c>/** @internal *&#47; readonly x: number</c>).
 /// </summary>
 public sealed record TsConstructorParam(
     string Name,
@@ -17,5 +18,6 @@ public sealed record TsConstructorParam(
     TsAccessibility Accessibility = TsAccessibility.Public,
     TsExpression? DefaultValue = null,
     bool Rest = false,
-    bool Optional = false
+    bool Optional = false,
+    TsJSDoc? JSDoc = null
 );
