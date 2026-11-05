@@ -13,6 +13,12 @@ import { checkedInt64 } from "../int64.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 import type { AverageInt64Term, MaxInt64Term, MinInt64Term, SumInt64Term } from "./types.ts";
 
+/** The shape `MinInt64Term` and `MaxInt64Term` share, keyed by their `kind`. */
+type ExtremumTerm<T, K extends "min" | "max", R extends bigint | null> = Omit<
+  MinInt64Term<T, R>,
+  "kind"
+> & { readonly kind: K };
+
 /** .NET's message for `Average`, `Min` and `Max` over an empty non-nullable sequence. */
 const NO_ELEMENTS_MESSAGE = "Sequence contains no elements";
 
@@ -130,12 +136,7 @@ function extremum<T, K extends "min" | "max", R extends bigint | null>(
   queryable: QueryableMeta | undefined,
   replaces: (candidate: bigint, current: bigint) => boolean,
   finish: (value: bigint | null) => R,
-): {
-  kind: K;
-  selector?: (item: T) => bigint | null;
-  queryable?: QueryableMeta;
-  apply: (source: Iterable<T>) => R;
-} {
+): ExtremumTerm<T, K, R> {
   return {
     kind,
     selector,

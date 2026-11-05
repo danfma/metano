@@ -28,7 +28,7 @@ export type ConvertTarget =
   | "Char";
 
 /** The decimal.js surface `Convert` reads; structural, so the runtime never imports decimal.js. */
-type DecimalLike = {
+type RoundableDecimal = {
   toDecimalPlaces(decimalPlaces: number, rounding: number): { toFixed(): string };
 };
 
@@ -95,12 +95,12 @@ export function convertDoubleToUInt64(value: number): bigint {
  *
  * @throws OverflowException("Value was either too large or too small for an Int64.") outside it.
  */
-export function convertDecimalToInt64(value: DecimalLike): bigint {
+export function convertDecimalToInt64(value: RoundableDecimal): bigint {
   return convertNarrow(roundedDecimal(value, CONVERT_RANGES.Int64), "Int64");
 }
 
 /** `Convert.ToUInt64(decimal)`: rounds half to even, then checks the range ("… for a UInt64."). */
-export function convertDecimalToUInt64(value: DecimalLike): bigint {
+export function convertDecimalToUInt64(value: RoundableDecimal): bigint {
   return convertNarrow(roundedDecimal(value, CONVERT_RANGES.UInt64), "UInt64");
 }
 
@@ -118,7 +118,7 @@ export function convertStringToInt64(text: string | null | undefined, fromBase?:
     return text == null ? 0n : parseInt64(text);
   }
 
-  return BigInt.asIntN(64, stringToInteger(text, fromBase, false));
+  return BigInt.asIntN(64, stringToInteger(text, fromBase, "Int64"));
 }
 
 /** `Convert.ToUInt64(string)` and `Convert.ToUInt64(string, fromBase)`; see {@link convertStringToInt64}. */
@@ -127,7 +127,7 @@ export function convertStringToUInt64(text: string | null | undefined, fromBase?
     return text == null ? 0n : parseUInt64(text);
   }
 
-  return stringToInteger(text, fromBase, true);
+  return stringToInteger(text, fromBase, "UInt64");
 }
 
 /**
@@ -165,15 +165,19 @@ function convertObject(value: unknown, target: "Int64" | "UInt64"): bigint {
       return value ? 1n : 0n;
   }
 
-  if (isDecimalLike(value)) {
+  if (isRoundableDecimal(value)) {
     return unsigned ? convertDecimalToUInt64(value) : convertDecimalToInt64(value);
   }
 
   throw new InvalidCastException();
 }
 
-function isDecimalLike(value: unknown): value is DecimalLike {
-  return typeof (value as Partial<DecimalLike>).toDecimalPlaces === "function";
+function isRoundableDecimal(value: unknown): value is RoundableDecimal {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Partial<RoundableDecimal>).toDecimalPlaces === "function"
+  );
 }
 
 function checkedRoundedDouble(value: number, min: number, maxExclusive: number): number {
@@ -185,6 +189,7 @@ function checkedRoundedDouble(value: number, min: number, maxExclusive: number):
     throw new OverflowException();
   }
 
+  // C# integers have no negative zero: `+ 0` turns the `-0` of rounding `-0.5` into `0`.
   return rounded + 0;
 }
 
@@ -200,7 +205,7 @@ function roundHalfToEven(value: number): number {
 }
 
 /** `value` rounded half to even as a `bigint`; a NaN or infinite decimal.js value overflows `range`. */
-function roundedDecimal(value: DecimalLike, range: ConvertRange): bigint {
+function roundedDecimal(value: RoundableDecimal, range: ConvertRange): bigint {
   const text = value.toDecimalPlaces(0, DECIMAL_ROUND_HALF_EVEN).toFixed();
 
   if (!INTEGER_TEXT.test(text)) {
@@ -218,8 +223,10 @@ function roundedDecimal(value: DecimalLike, range: ConvertRange): bigint {
 function stringToInteger(
   text: string | null | undefined,
   radix: number,
-  unsigned: boolean,
+  target: "Int64" | "UInt64",
 ): bigint {
+  const unsigned = target === "UInt64";
+
   if (!SUPPORTED_BASES.has(radix)) {
     throw new ArgumentException("Invalid Base.");
   }
@@ -241,7 +248,7 @@ function stringToInteger(
   }
 
   const signLength = negative || text[0] === "+" ? 1 : 0;
-  const prefixLength = radix === 16 && /^0[xX]/.test(text.slice(signLength)) ? 2 : 0;
+  const prefixLength = hexPrefixLength(text.slice(signLength), radix);
   const digits = leadingDigits(text.slice(signLength + prefixLength), radix);
 
   requireDigits(text, signLength + prefixLength, digits);
@@ -273,15 +280,16 @@ function requireDigits(text: string, start: number, digits: string): void {
   }
 }
 
+/** The length of the `0x` / `0X` prefix base 16 accepts at the start of `text`, or `0`. */
+function hexPrefixLength(text: string, radix: number): number {
+  return radix === 16 && /^0[xX]/.test(text) ? 2 : 0;
+}
+
 /** The longest prefix of `text` made of digits of `radix`. */
 function leadingDigits(text: string, radix: number): string {
-  let end = 0;
+  const end = [...text].findIndex((character) => !isDigitOf(character, radix));
 
-  while (end < text.length && isDigitOf(text.charAt(end), radix)) {
-    end += 1;
-  }
-
-  return text.slice(0, end);
+  return end < 0 ? text : text.slice(0, end);
 }
 
 function isDigitOf(character: string, radix: number): boolean {

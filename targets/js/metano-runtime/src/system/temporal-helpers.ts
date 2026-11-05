@@ -57,13 +57,15 @@ export function durationTicks(duration: Temporal.Duration): bigint {
 /** `TimeSpan.FromTicks(ticks)` and `new TimeSpan(ticks)`: a duration balanced from days down to nanoseconds. */
 export function durationFromTicks(ticks: bigint): Temporal.Duration {
   const sign = ticks < 0n ? -1n : 1n;
-  let remainder = ticks * NANOSECONDS_PER_TICK * sign;
-  const fields: Partial<Record<(typeof TIME_UNITS)[number][0], number>> = {};
+  const nanoseconds = ticks * NANOSECONDS_PER_TICK * sign;
+  const fields = Object.fromEntries(
+    TIME_UNITS.map(([unit, size], index) => {
+      const larger = index === 0 ? null : TIME_UNITS[index - 1]?.[1];
+      const withinLarger = larger == null ? nanoseconds : nanoseconds % larger;
 
-  for (const [unit, size] of TIME_UNITS) {
-    fields[unit] = Number((remainder / size) * sign);
-    remainder %= size;
-  }
+      return [unit, Number((withinLarger / size) * sign)];
+    }),
+  );
 
   return Temporal.Duration.from(fields);
 }

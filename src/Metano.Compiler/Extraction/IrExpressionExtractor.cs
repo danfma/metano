@@ -650,7 +650,11 @@ public sealed partial class IrExpressionExtractor
                 ),
             ElementAccessExpressionSyntax ea
                 when RebindAssignmentTarget(ea.Expression, receiver) is { } inner =>
-                new IrElementAccess(inner, Extract(ea.ArgumentList.Arguments[0].Expression)),
+                new IrElementAccess(
+                    inner,
+                    Extract(ea.ArgumentList.Arguments[0].Expression),
+                    IndexKind: ArrayIndexKind(ea.Expression, ea.ArgumentList)
+                ),
             _ => null,
         };
 
@@ -3313,14 +3317,14 @@ public sealed partial class IrExpressionExtractor
                     parts.Add(new IrInterpolationText(CookedInterpolationText(text)));
                     break;
                 case InterpolationSyntax hole:
-                    parts.Add(ExtractInterpolationPart(hole));
+                    parts.Add(ExtractInterpolationExpression(hole));
                     break;
             }
         }
         return new IrStringInterpolation(parts);
     }
 
-    private IrInterpolationExpression ExtractInterpolationPart(InterpolationSyntax hole) =>
+    private IrInterpolationExpression ExtractInterpolationExpression(InterpolationSyntax hole) =>
         new(
             ExtractInterpolationHole(hole),
             hole.FormatClause?.FormatStringToken.ValueText,

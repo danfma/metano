@@ -154,6 +154,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// A cast of a nullable value type to its non-nullable value (<c>(int)ni</c>),
     /// other than a user-defined conversion, which takes the nullable itself.
+    /// Under the exact 64-bit lowering a user-defined operator over the
+    /// non-nullable type (<c>(int)nullableBigInteger</c>) unwraps too, as C#
+    /// reads <c>.Value</c> before it (STAGING(012k): always).
     /// </summary>
     private bool IsNullableUnwrapCast(
         CastExpressionSyntax cast,
@@ -161,8 +164,16 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol targetType
     ) =>
         UnwrapsNullableValue(sourceType, targetType)
-        && _semantic.GetOperation(cast)
-            is not IConversionOperation { Conversion.IsUserDefined: true };
+        && _semantic.GetOperation(cast) switch
+        {
+            IConversionOperation { Conversion.IsUserDefined: true } conversion =>
+                _context.ExactInt64Lowering && TakesNonNullableOperand(conversion),
+            _ => true,
+        };
+
+    private static bool TakesNonNullableOperand(IConversionOperation conversion) =>
+        conversion.Conversion.MethodSymbol?.Parameters is [{ Type: var operand }]
+        && !operand.IsNullableValueType();
 
     /// <summary>
     /// The conversion an explicit cast from <paramref name="sourceType"/> to

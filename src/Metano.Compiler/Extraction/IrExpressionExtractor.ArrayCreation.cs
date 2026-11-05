@@ -16,6 +16,7 @@ public sealed partial class IrExpressionExtractor
     /// an enum member, <c>Guid.Empty</c>); <c>null</c> for any other shape,
     /// which stays unsupported. Produced under the exact 64-bit lowering only,
     /// so the 2.x output keeps reporting it (STAGING(012k): every mode).
+    /// Dart prints <c>List&lt;T&gt;.filled</c>, which has no <c>null</c> slots.
     /// </summary>
     private IrArrayCreation? TryExtractSizedArray(ArrayCreationExpressionSyntax creation)
     {
@@ -30,7 +31,7 @@ public sealed partial class IrExpressionExtractor
 
         var elementDefault = DefaultValueLiterals.For(array.ElementType, BuildOrigin);
 
-        if (elementDefault is IrLiteral { Kind: IrLiteralKind.Default })
+        if (!IsShareableElementDefault(elementDefault))
             return null;
 
         return new IrArrayCreation(
@@ -40,4 +41,19 @@ public sealed partial class IrExpressionExtractor
             SixtyFourBitKindOf(size)
         );
     }
+
+    /// <summary>
+    /// A default every slot can share: not the opaque struct marker, and not
+    /// <c>null</c> for Dart, whose sound null safety rejects a
+    /// <c>List&lt;T&gt;</c> filled with <c>null</c> where C# types the slots
+    /// as <c>T</c>.
+    /// </summary>
+    private bool IsShareableElementDefault(IrExpression elementDefault) =>
+        elementDefault switch
+        {
+            IrLiteral { Kind: IrLiteralKind.Default } => false,
+            IrLiteral { Kind: IrLiteralKind.Null } => _target
+                is not Metano.Annotations.TargetLanguage.Dart,
+            _ => true,
+        };
 }

@@ -21,6 +21,15 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static partial class IrToTsExpressionBridge
 {
+    /// <summary>
+    /// The expression-tree names of the 64-bit types, read by
+    /// <c>metano-runtime</c>'s <c>expr-tree-visitor.ts</c>
+    /// (<c>INT64_TYPE_NAME</c> / <c>UINT64_TYPE_NAME</c>).
+    /// </summary>
+    private const string ExprTreeInt64TypeName = "System.Int64";
+
+    private const string ExprTreeUInt64TypeName = "System.UInt64";
+
     /// <summary>The <c>metano-runtime</c> helper backing C# integer division.</summary>
     private static readonly string IntegerDivisionHelper =
         IrRuntimeRequirementToTsImport.ImportedNameOf("IntegerDivision");
@@ -434,15 +443,10 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        IReadOnlyList<TsType>? elementType = creation.ElementDefault
-            is IrLiteral { Kind: IrLiteralKind.Null }
-            ? null
-            : [IrToTsTypeMapper.Map(creation.ElementType)];
-
         var array = new TsNewExpression(
             new TsIdentifier("Array"),
             [AsArrayIndex(Map(creation.Length, context), creation.LengthKind)],
-            elementType
+            ArrayElementTypeArguments(creation)
         );
 
         return new TsCallExpression(
@@ -450,6 +454,11 @@ public static partial class IrToTsExpressionBridge
             [Map(creation.ElementDefault, context)]
         );
     }
+
+    private static IReadOnlyList<TsType>? ArrayElementTypeArguments(IrArrayCreation creation) =>
+        creation.ElementDefault is IrLiteral { Kind: IrLiteralKind.Null }
+            ? null
+            : [IrToTsTypeMapper.Map(creation.ElementType)];
 
     /// <summary>
     /// An array index or length as the <c>number</c> JS arrays take:
@@ -732,7 +741,7 @@ public static partial class IrToTsExpressionBridge
 
         if (context.Bcl is not null && call.Origin is not null)
         {
-            Int64Formatting.InspectCall(call);
+            Int64Formatting.ReportUnsupportedFormatOrStyle(call);
 
             // Lower the receiver separately so the BCL mapper sees it as the raw
             // value (no .methodName suffix applied yet). For unqualified calls the
@@ -958,7 +967,7 @@ public static partial class IrToTsExpressionBridge
 
         var call = new TsLinqCall(args, importedHelpers);
 
-        return Int64LinqTerminals.CountsInInt64(chain) ? Int64TsExpressions.BigInt(call) : call;
+        return Int64LinqTerminals.EndsInLongCount(chain) ? Int64TsExpressions.BigInt(call) : call;
     }
 
     /// <summary>
@@ -1198,9 +1207,9 @@ public static partial class IrToTsExpressionBridge
             // is named by its .NET type, so a provider tells `long` from
             // `ulong` (spec 012 FR-044).
             IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 }
-                when Int64RepresentationScope.IsBigInt => new("System.Int64", null),
+                when Int64RepresentationScope.IsBigInt => new(ExprTreeInt64TypeName, null),
             IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 }
-                when Int64RepresentationScope.IsBigInt => new("System.UInt64", null),
+                when Int64RepresentationScope.IsBigInt => new(ExprTreeUInt64TypeName, null),
             IrNamedTypeRef named => new(named.Name, named.Origin?.PackageId),
             _ => new(Printer.RenderType(IrToTsTypeMapper.Map(type)), null),
         };

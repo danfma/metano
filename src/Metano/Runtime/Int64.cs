@@ -3,8 +3,9 @@
 // 64-bit integers map to `bigint` (`WhenInt64IsBigInt`, a staging filter).
 //
 // ToString(format) / ToString(format, provider): `formatInt64` implements .NET's
-// invariant-culture standard formats; the provider is ignored (#308). The overloads
-// without a format keep the native `toString()`.
+// invariant-culture standard formats; the provider is ignored (#308) and, as in every
+// provider overload, not evaluated. ToString(provider) is the native `toString()`, which
+// would otherwise read the provider as a radix; ToString() keeps the native call.
 //
 // CompareTo(long) / Equals(long): `compareInt64` returns `-1`, `0` or `1`, as C# does;
 // `===` compares two `bigint` values exactly. `Equals(object)` goes through
@@ -96,5 +97,19 @@ using Metano.Annotations;
     typeof(Array),
     nameof(Array.LongLength),
     JsTemplate = "BigInt($this.length)",
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(long),
+    nameof(long.ToString),
+    JsTemplate = "$this.toString()",
+    WhenParameterTypes = [typeof(IFormatProvider)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(ulong),
+    nameof(ulong.ToString),
+    JsTemplate = "$this.toString()",
+    WhenParameterTypes = [typeof(IFormatProvider)],
     WhenInt64IsBigInt = true
 )]

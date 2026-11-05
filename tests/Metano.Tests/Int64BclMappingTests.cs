@@ -60,7 +60,7 @@ public class Int64BclMappingTests
         {
             public string Format(long l, ulong u, string format) =>
                 l.ToString("N0") + u.ToString("X", CultureInfo.InvariantCulture) + l.ToString(format);
-            public string Plain(long l) => l.ToString() + $"{l}";
+            public string Plain(long l) => l.ToString() + $"{l}" + l.ToString(CultureInfo.InvariantCulture);
             public string Holes(long l, ulong u) => $"{l:X}|{l,8}|{u,-4:D2}";
             public string NullableHole(long? l) => $"{l:N0}";
             public string IntHole(int i) => $"{i:X}";
@@ -119,6 +119,7 @@ public class Int64BclMappingTests
             public string Invalid(long l) => l.ToString("Q");
             public long Float(string s) => long.Parse(s, NumberStyles.Float);
             public string Supported(long l) => l.ToString("x8") + $"{l,5:N2}";
+            public int IntStyles(string s) => int.Parse(s, NumberStyles.HexNumber);
         }
         """;
 
@@ -195,7 +196,7 @@ public class Int64BclMappingTests
         using System.Linq;
 
         [Transpile]
-        public record Row(long Size, int Count, double Weight);
+        public record Row(long Size, int Count, double Weight, long? Optional);
 
         [Transpile]
         public class Rows
@@ -207,12 +208,14 @@ public class Int64BclMappingTests
                         && (long)r.Count == 2
                         && r.Weight > cap
                         && r.Size < limit
+                        && r.Optional + r.Count > 10
                     )
                     .ToList();
         }
         """;
 
     private const string BigIntegerSource = """
+        #nullable enable
         using System.Numerics;
 
         [Transpile]
@@ -231,6 +234,7 @@ public class Int64BclMappingTests
             public BigInteger FromInt(int i) => i;
             public long ToLong(BigInteger b) => (long)b;
             public int? Lifted(BigInteger? b) => (int?)b;
+            public int Unwrapped(BigInteger? b) => (int)b;
         }
         """;
 
@@ -328,6 +332,9 @@ public class Int64BclMappingTests
             .All(d => d.Severity == MetanoDiagnosticSeverity.Warning);
         await Assert.That(files["unsupported.ts"]).Contains("return formatInt64(l, \"C\");");
         await Assert.That(files["unsupported.ts"]).Contains("return parseInt64(s, 167);");
+        await Assert
+            .That(files["unsupported.ts"])
+            .Contains("Int32.parse(s, NumberStyles.HexNumber)");
     }
 
     /// <summary>
@@ -449,9 +456,35 @@ public class Int64BclMappingTests
     }
 
     /// <summary>
+    /// <c>Min</c> / <c>Max</c> with an <c>IComparer</c> order by it, so they
+    /// keep the generic terminal instead of the <c>bigint</c> one.
+    /// </summary>
+    [Test]
+    public async Task BigIntMode_MaxWithAComparer_KeepsTheGenericTerminal()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile]
+            public class Ordered
+            {
+                public long Highest(long[] ids, IComparer<long> order) => ids.Max(order);
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        await Assert.That(files["ordered.ts"]).Contains("linq(ids, max(order))");
+    }
+
+    /// <summary>
     /// Dart, which always lowers 64-bit integers exactly, fills a sized
     /// array with the element default; its 64-bit <c>int</c> takes a
-    /// <c>long</c> length as is.
+    /// <c>long</c> length as is. A <c>null</c> default stays unsupported
+    /// (sound null safety), and only a 64-bit parser's <c>NumberStyles</c>
+    /// folds.
     /// </summary>
     [Test]
     public async Task Dart_SizedArray_FillsTheElementDefault()
@@ -465,6 +498,8 @@ public class Int64BclMappingTests
             {
                 public long[] Zeros(long n) => new long[n];
                 public bool[] Flags(int n) => new bool[n];
+                public string[] Names(int n) => new string[n];
+                public int Hex(string s) => int.Parse(s, System.Globalization.NumberStyles.HexNumber);
             }
             """
         );
@@ -473,6 +508,9 @@ public class Int64BclMappingTests
 
         await Assert.That(output).Contains("List<int>.filled(n, 0)");
         await Assert.That(output).Contains("List<bool>.filled(n, false)");
+        await Assert.That(output).DoesNotContain("filled(n, null)");
+        await Assert.That(output).Contains("NumberStyles.hexNumber");
+        await Assert.That(output).Contains("Unsupported expression: ArrayCreationExpression");
     }
 
     /// <summary>

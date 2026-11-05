@@ -30,7 +30,7 @@ const NOT_A_NUMBER_MESSAGE = "The value is not a number.";
 const INFINITY_MESSAGE = "BigInteger cannot represent infinity.";
 
 /** The decimal.js surface {@link bigIntegerFromDecimal} reads. */
-type DecimalLike = {
+type TruncatableDecimal = {
   trunc(): { toFixed(): string };
 };
 
@@ -46,9 +46,9 @@ export function int32FromBigInteger(value: bigint): number {
     return Number(value);
   }
 
-  throw value > INT32_MAX && value <= UINT32_MAX
-    ? new OverflowException()
-    : new OverflowException(INT32_RANGE_MESSAGE);
+  const oneUnsignedWord = value > INT32_MAX && value <= UINT32_MAX;
+
+  throw oneUnsignedWord ? new OverflowException() : new OverflowException(INT32_RANGE_MESSAGE);
 }
 
 /**
@@ -63,9 +63,9 @@ export function uint32FromBigInteger(value: bigint): number {
     return Number(value);
   }
 
-  throw value < 0n && value > INT32_MIN
-    ? new OverflowException()
-    : new OverflowException(UINT32_RANGE_MESSAGE);
+  const negativeHeldInline = value < 0n && value > INT32_MIN;
+
+  throw negativeHeldInline ? new OverflowException() : new OverflowException(UINT32_RANGE_MESSAGE);
 }
 
 /**
@@ -129,6 +129,6 @@ export function bigIntegerFromDouble(value: number): bigint {
 }
 
 /** `(BigInteger)m`: truncates toward zero; every `decimal` fits. */
-export function bigIntegerFromDecimal(value: DecimalLike): bigint {
+export function bigIntegerFromDecimal(value: TruncatableDecimal): bigint {
   return BigInt(value.trunc().toFixed());
 }

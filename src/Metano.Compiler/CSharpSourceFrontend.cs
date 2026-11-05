@@ -2213,10 +2213,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 switch (attr.AttributeClass?.Name)
                 {
                     case "MapMethodAttribute":
-                        TryRegisterMapping(attr, "JsMethod", methods, diagnostics);
+                        TryRegisterMapping(attr, "JsMethod", assembly, methods, diagnostics);
                         break;
                     case "MapPropertyAttribute":
-                        TryRegisterProperty(attr, "JsProperty", properties, diagnostics);
+                        TryRegisterProperty(attr, "JsProperty", assembly, properties, diagnostics);
                         break;
                 }
             }
@@ -2253,6 +2253,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static void TryRegisterMapping(
         AttributeData attr,
         string renameNamedArg,
+        IAssemblySymbol declaringAssembly,
         Dictionary<(string, string), List<DeclarativeMappingEntry>> target,
         List<MetanoDiagnostic> diagnostics
     )
@@ -2261,7 +2262,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         if (key is null)
             return;
 
-        var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
+        var entry = ReadMappingEntry(attr, renameNamedArg, declaringAssembly, diagnostics);
         if (entry is null)
             return;
 
@@ -2276,6 +2277,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static void TryRegisterProperty(
         AttributeData attr,
         string renameNamedArg,
+        IAssemblySymbol declaringAssembly,
         Dictionary<(string, string), DeclarativeMappingEntry> target,
         List<MetanoDiagnostic> diagnostics
     )
@@ -2284,7 +2286,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         if (key is null)
             return;
 
-        var entry = ReadMappingEntry(attr, renameNamedArg, diagnostics);
+        var entry = ReadMappingEntry(attr, renameNamedArg, declaringAssembly, diagnostics);
         if (entry is null)
             return;
 
@@ -2307,6 +2309,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     private static DeclarativeMappingEntry? ReadMappingEntry(
         AttributeData attr,
         string renameNamedArg,
+        IAssemblySymbol declaringAssembly,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -2326,6 +2329,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         int? whenArgCount = null;
         IReadOnlyList<string>? whenParameterTypes = null;
         var whenInt64IsBigInt = false;
+
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
@@ -2365,7 +2369,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     whenParameterTypes = ReadParameterTypes(named.Value);
                     break;
                 case "WhenInt64IsBigInt":
-                    whenInt64IsBigInt = named.Value.Value is true;
+                    whenInt64IsBigInt =
+                        named.Value.Value is true
+                        && DeclaresTheAnnotations(declaringAssembly, attr);
                     break;
             }
         }
@@ -2409,6 +2415,21 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             whenInt64IsBigInt
         );
     }
+
+    /// <summary>
+    /// Whether <paramref name="declaringAssembly"/> is the assembly that
+    /// defines the mapping attribute itself (Metano's own BCL mappings). The
+    /// staging filter <c>WhenInt64IsBigInt</c> (spec 012 DECIDED-22) is honored
+    /// there only, so a user mapping cannot opt into the staging behavior.
+    /// </summary>
+    private static bool DeclaresTheAnnotations(
+        IAssemblySymbol declaringAssembly,
+        AttributeData attr
+    ) =>
+        SymbolEqualityComparer.Default.Equals(
+            declaringAssembly,
+            attr.AttributeClass?.ContainingAssembly
+        );
 
     /// <summary>
     /// Reads a <c>WhenParameterTypes</c> <c>Type[]</c> argument into the

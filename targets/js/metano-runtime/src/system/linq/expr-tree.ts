@@ -174,7 +174,6 @@ export interface ExprRef {
   readonly name: string;
 }
 
-/** Discriminated union of every supported node. */
 /**
  * A numeric conversion into or out of a 64-bit integer (spec 012 FR-044):
  * `(long)x.count`, or the implicit widening of an `int` operand. `type` is
@@ -186,6 +185,7 @@ export interface ExprConvert {
   readonly type: ExprTypeRef;
 }
 
+/** Discriminated union of every supported node. */
 export type ExprTree =
   | ExprConvert
   | ExprParam

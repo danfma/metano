@@ -37,6 +37,15 @@ internal static class Int64RuntimeHelpers
     public const string DecimalTextFromBigInteger = "decimalTextFromBigInteger";
     public const string BigIntegerFromDouble = "bigIntegerFromDouble";
     public const string BigIntegerFromDecimal = "bigIntegerFromDecimal";
+    public const string SumInt64 = "sumInt64";
+    public const string AverageInt64 = "averageInt64";
+    public const string AverageNullableInt64 = "averageNullableInt64";
+    public const string MinInt64Of = "minInt64Of";
+    public const string MinUInt64Of = "minUInt64Of";
+    public const string MinNullableInt64Of = "minNullableInt64Of";
+    public const string MaxInt64Of = "maxInt64Of";
+    public const string MaxUInt64Of = "maxUInt64Of";
+    public const string MaxNullableInt64Of = "maxNullableInt64Of";
 
     /// <summary>The range check of <c>long</c> (signed) or <c>ulong</c>.</summary>
     public static string CheckedRange(bool isSigned) => isSigned ? CheckedInt64 : CheckedUInt64;
