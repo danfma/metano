@@ -21,8 +21,9 @@ import { temporalTextOf } from "./temporal-text.ts";
  * - `DateOnly` (`Temporal.PlainDate`): `yyyy-MM-dd` exactly, a valid
  *   calendar date of the years 1–9999.
  * - `DateTime` (`Temporal.PlainDateTime`): `yyyy-MM-dd` with an optional
- *   `THH:mm[:ss[.f]]` — two digit fields except the fraction, which accepts
- *   any number of digits truncated to the 7 a `DateTime` holds. `Z` and the
+ *   `THH:mm[:ss[.f]]` — two digit fields except the fraction, which takes
+ *   1-16 digits truncated to the 7 a `DateTime` holds; a longer run rejects,
+ *   as System.Text.Json rejects it. `Z` and the
  *   offsetless text keep the wall time written; an explicit offset converts
  *   the instant to the system's local wall time, as System.Text.Json's
  *   `Kind=Local` read does (so the value depends on the machine's time zone).

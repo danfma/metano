@@ -700,6 +700,27 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   T22: {
     assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30+02:00[+02:00]"),
   },
+  T41: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30.9999999"),
+  },
+  T43: {
+    assertRead: (value) => {
+      // A DateTime read of an explicit offset is the instant's local wall
+      // time (STJ's Kind=Local read), so the expectation is computed.
+      const instant = new Date(Date.parse("2024-01-31T10:20:30+14:00"));
+      const pad = (field: number) => String(field).padStart(2, "0");
+      expect(String(value)).toBe(
+        `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}` +
+          `T${pad(instant.getHours())}:${pad(instant.getMinutes())}:${pad(instant.getSeconds())}`,
+      );
+    },
+  },
+  T45: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30+14:00[+14:00]"),
+  },
+  T47: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30.9999999+02:00[+02:00]"),
+  },
   T25: {
     assertRead: (value) => expect(String(value)).toBe("PT10H20M"),
   },
