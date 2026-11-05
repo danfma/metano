@@ -24,7 +24,7 @@ internal static class DartBinaryOperandGrouping
         if (binary.Operator.IsAssignment())
             return false;
 
-        var left = DartTransparentNumericNodes.Unwrap(binary.Left);
+        var left = DartNumericConversions.Unwrap(binary.Left);
 
         if (BindsLooserThanAnyOperator(left))
             return true;
@@ -51,7 +51,7 @@ internal static class DartBinaryOperandGrouping
         if (binary.Operator.IsAssignment())
             return false;
 
-        var right = DartTransparentNumericNodes.Unwrap(binary.Right);
+        var right = DartNumericConversions.Unwrap(binary.Right);
 
         if (BindsLooserThanAnyOperator(right))
             return true;
@@ -77,7 +77,7 @@ internal static class DartBinaryOperandGrouping
     /// </summary>
     public static bool NeedsUnaryOperandParentheses(IrExpression operand)
     {
-        var printed = DartTransparentNumericNodes.Unwrap(operand);
+        var printed = DartNumericConversions.Unwrap(operand);
 
         return printed
                 is IrBinaryExpression
@@ -94,7 +94,7 @@ internal static class DartBinaryOperandGrouping
     /// expression, and an assignment is the loosest binary operator.
     /// </summary>
     public static bool BindsLooserThanAnyOperator(IrExpression operand) =>
-        DartTransparentNumericNodes.Unwrap(operand) switch
+        DartNumericConversions.Unwrap(operand) switch
         {
             IrConditionalExpression or IrThrowExpression or IrLambdaExpression => true,
             IrBinaryExpression { Operator: var op } => op.IsAssignment(),

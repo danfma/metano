@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Numerics;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
@@ -59,10 +58,13 @@ public static class IrToTsEnumBridge
     /// <c>MS0064</c> names (spec 012 FR-058); the <c>Number</c> mode keeps the
     /// shipped digits. STAGING(012k).
     /// </summary>
-    private static string NumericMemberValue(object? value) =>
-        value is long or ulong && Int64RepresentationScope.IsBigInt
-            ? Int64EnumPrecision
-                .NearestDouble(value is ulong unsigned ? unsigned : (long)value)
-                .ToString(CultureInfo.InvariantCulture)
-            : value?.ToString() ?? "";
+    private static string NumericMemberValue(object? value)
+    {
+        if (value is not (long or ulong) || !Int64RepresentationScope.IsBigInt)
+            return value?.ToString() ?? "";
+
+        var nearest = Int64EnumPrecision.NearestDouble(Int64EnumPrecision.ToBigInteger(value));
+
+        return nearest.ToString(CultureInfo.InvariantCulture);
+    }
 }

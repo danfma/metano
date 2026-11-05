@@ -58,7 +58,7 @@ internal static class IrToTsNumericConversionBridge
             [new TsReturnStatement(RenderConversion(from, to, isChecked, value))]
         );
 
-        return Helper(Int64RuntimeHelpers.MapNullable, operand, convert);
+        return RuntimeCall(Int64RuntimeHelpers.MapNullable, operand, convert);
     }
 
     private static TsExpression RenderConversion(
@@ -126,7 +126,7 @@ internal static class IrToTsNumericConversionBridge
                 Number(Narrowed(value, bits: 16, signed: false, isChecked))
             ),
             IrNumericKind.Double => Number(value),
-            IrNumericKind.Single => Helper(Int64RuntimeHelpers.Int64ToSingle, value),
+            IrNumericKind.Single => RuntimeCall(Int64RuntimeHelpers.Int64ToSingle, value),
             IrNumericKind.Decimal => new TsNewExpression(
                 new TsIdentifier("Decimal"),
                 [new TsCallExpression(new TsPropertyAccess(value, "toString"), [])]
@@ -149,13 +149,13 @@ internal static class IrToTsNumericConversionBridge
         var isSigned = to.Kind.IsSigned();
 
         if (from.Kind is IrNumericKind.BigInteger)
-            return Helper(Int64RuntimeHelpers.FromBigInteger(isSigned), value);
+            return RuntimeCall(Int64RuntimeHelpers.FromBigInteger(isSigned), value);
 
         if (from.Kind == to.Kind)
             return value;
 
         return isChecked
-            ? Helper(Int64RuntimeHelpers.CheckedRange(isSigned), value)
+            ? RuntimeCall(Int64RuntimeHelpers.CheckedRange(isSigned), value)
             : AsIntN(isSigned, 64, value);
     }
 
@@ -167,15 +167,17 @@ internal static class IrToTsNumericConversionBridge
         TsExpression value
     )
     {
+        // BigInteger counts as signed: only a ulong target picks the
+        // unsigned helper.
         var isSigned = to.Kind is not IrNumericKind.UInt64;
 
         return from.Kind switch
         {
-            IrNumericKind.Double or IrNumericKind.Single => Helper(
+            IrNumericKind.Double or IrNumericKind.Single => RuntimeCall(
                 Int64RuntimeHelpers.FromDouble(isSigned, isChecked),
                 value
             ),
-            IrNumericKind.Decimal => Helper(Int64RuntimeHelpers.FromDecimal(isSigned), value),
+            IrNumericKind.Decimal => RuntimeCall(Int64RuntimeHelpers.FromDecimal(isSigned), value),
             IrNumericKind.Char => BigInt(
                 new TsCallExpression(
                     new TsPropertyAccess(value, "charCodeAt"),
@@ -205,7 +207,7 @@ internal static class IrToTsNumericConversionBridge
             return widened;
 
         return isChecked
-            ? Helper(Int64RuntimeHelpers.CheckedRange(isSigned: false), widened)
+            ? RuntimeCall(Int64RuntimeHelpers.CheckedRange(isSigned: false), widened)
             : AsIntN(isSigned: false, 64, widened);
     }
 
@@ -221,9 +223,9 @@ internal static class IrToTsNumericConversionBridge
     )
     {
         if (to.Kind is IrNumericKind.UInt32)
-            return Helper(Int64RuntimeHelpers.UInt32FromDouble(isChecked), value);
+            return RuntimeCall(Int64RuntimeHelpers.UInt32FromDouble(isChecked), value);
 
-        var asInt32 = Helper(Int64RuntimeHelpers.Int32FromDouble(isChecked), value);
+        var asInt32 = RuntimeCall(Int64RuntimeHelpers.Int32FromDouble(isChecked), value);
 
         var narrowed = (to.Kind, isChecked) switch
         {
@@ -231,8 +233,10 @@ internal static class IrToTsNumericConversionBridge
             (_, true) => Number(
                 Narrowed(BigInt(asInt32), to.Kind.BitWidth(), to.Kind.IsSigned(), isChecked: true)
             ),
-            (IrNumericKind.SByte, false) => SignExtended(asInt32, 24),
-            (IrNumericKind.Int16, false) => SignExtended(asInt32, 16),
+            (IrNumericKind.SByte or IrNumericKind.Int16, false) => SignExtended(
+                asInt32,
+                32 - to.Kind.BitWidth()
+            ),
             (IrNumericKind.Byte, false) => LowBits(asInt32, "0xFF"),
             (IrNumericKind.UInt16 or IrNumericKind.Char, false) => LowBits(asInt32, "0xFFFF"),
             _ => throw new InvalidOperationException(
@@ -263,7 +267,7 @@ internal static class IrToTsNumericConversionBridge
         var width = new TsLiteral(bits.ToString(CultureInfo.InvariantCulture));
 
         return isChecked
-            ? Helper(
+            ? RuntimeCall(
                 Int64RuntimeHelpers.CheckedNarrow,
                 value,
                 width,
@@ -284,7 +288,7 @@ internal static class IrToTsNumericConversionBridge
     private static TsExpression Number(TsExpression value) => Global("Number", value);
 
     /// <summary>A call of a <c>metano-runtime</c> helper, imported through its reference node.</summary>
-    private static TsCallExpression Helper(string name, params TsExpression[] arguments) =>
+    private static TsCallExpression RuntimeCall(string name, params TsExpression[] arguments) =>
         new(new TsRuntimeHelperReference(name), arguments);
 
     /// <summary>

@@ -122,6 +122,49 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// A numeric cast that lowers to an <see cref="IrNumericConversion"/>
+    /// (<see cref="ExplicitNumericConversion"/>), or its folded constant;
+    /// <c>null</c> when the cast keeps its other lowerings. A cast that
+    /// unwrapped a nullable value converts it as its underlying type, so a
+    /// target that keeps the cast (Dart) reads it through that type.
+    /// </summary>
+    private IrExpression? LowerNumericCast(
+        CastExpressionSyntax cast,
+        IrExpression inner,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType,
+        bool unwrapsNullable
+    )
+    {
+        var operand = unwrapsNullable
+            ? new IrCastExpression(inner, IrTypeRefMapper.Map(sourceType, _originResolver, _target))
+            : inner;
+
+        var conversion = ExplicitNumericConversion(
+            cast,
+            operand,
+            sourceType,
+            targetType,
+            ExtractTargetType(cast)
+        );
+
+        return conversion is null ? null : FoldedConstantCast(cast) ?? (IrExpression)conversion;
+    }
+
+    /// <summary>
+    /// A cast of a nullable value type to its non-nullable value (<c>(int)ni</c>),
+    /// other than a user-defined conversion, which takes the nullable itself.
+    /// </summary>
+    private bool IsNullableUnwrapCast(
+        CastExpressionSyntax cast,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType
+    ) =>
+        UnwrapsNullableValue(sourceType, targetType)
+        && _semantic.GetOperation(cast)
+            is not IConversionOperation { Conversion.IsUserDefined: true };
+
+    /// <summary>
     /// The conversion an explicit cast from <paramref name="sourceType"/> to
     /// <paramref name="targetType"/> lowers to: a floating-point value cast
     /// to a 32-bit or narrower integer in every mode (FR-070), and every cast
@@ -142,10 +185,7 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var isExact =
-            _context.ExactInt64Lowering && NumericEndpoints.NeedsExactConversion(from, to);
-
-        if (!isExact && !IrNumericConversion.IsFloatingPointTruncation(from, to))
+        if (!NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering))
             return null;
 
         var isChecked = _semantic.GetOperation(cast) is IConversionOperation { IsChecked: true };
@@ -185,14 +225,14 @@ public sealed partial class IrExpressionExtractor
     /// and <c>BigInteger</c> carry their digits, as their literals do; an enum
     /// value and the types narrower than <c>int</c> carry a plain integer.
     /// </summary>
-    // TODO(012k): merge ClassifyNumericForConvertedType into this once the
-    // literal path no longer has a Number mode to keep byte-identical.
     private static IrLiteral ConstantLiteral(
         object value,
         ITypeSymbol? type,
         ITypeSymbol? convertedType
     )
     {
+        // TODO(012k): merge ClassifyNumericForConvertedType into this once the
+        // literal path no longer has a Number mode to keep byte-identical.
         var target = NumericEndpoints.Of(convertedType) ?? NumericEndpoints.Of(type);
         var number = value is char character ? (int)character : value;
 
