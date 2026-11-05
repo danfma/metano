@@ -47,3 +47,4 @@ second-guess when they meet the code without the context that led to it.
 | [ADR-0024](0024-per-group-skip-integration.md)                   | Per-group skip integration: stub `TsSourceFile` + cache bypass for hit content |
 | [ADR-0025](0025-full-namespace-output-layout.md)                 | Full-namespace output layout with self-cleaning incremental builds             |
 | [ADR-0027](0027-runtime-collections-and-type-descriptors.md)     | Own runtime collections and runtime type descriptors (3.0.0); 0026 reserved by spec 010 |
+| [ADR-0028](0028-overload-factories.md)                           | Overload factories, selector symbols and direct call sites (supersedes ADR-0008 in part) |
