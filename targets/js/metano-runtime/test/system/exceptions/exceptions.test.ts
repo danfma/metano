@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  ArgumentException,
+  ArgumentNullException,
   ArithmeticException,
   DivideByZeroException,
   Exception,
+  FormatException,
+  InvalidOperationException,
+  NotSupportedException,
   OverflowException,
   SystemException,
 } from "#/system/exceptions/index.ts";
@@ -19,6 +24,15 @@ describe("exceptions", () => {
     ],
     ["OverflowException", () => new OverflowException(), "Arithmetic operation resulted in an overflow."],
     ["DivideByZeroException", () => new DivideByZeroException(), "Attempted to divide by zero."],
+    ["ArgumentException", () => new ArgumentException(), "Value does not fall within the expected range."],
+    ["ArgumentNullException", () => new ArgumentNullException(), "Value cannot be null."],
+    ["FormatException", () => new FormatException(), "One of the identified items was in an invalid format."],
+    [
+      "InvalidOperationException",
+      () => new InvalidOperationException(),
+      "Operation is not valid due to the current state of the object.",
+    ],
+    ["NotSupportedException", () => new NotSupportedException(), "Specified method is not supported."],
   ];
 
   test.each(defaults)("%s carries .NET's default message and its class name", (name, create, message) => {
@@ -28,6 +42,18 @@ describe("exceptions", () => {
     expect(exception.message).toBe(message);
     expect(exception.innerException).toBeNull();
     expect(exception.toString()).toBe(`System.${name}: ${message}`);
+  });
+
+  test("an argument exception appends its parameter name as .NET does", () => {
+    const argument = new ArgumentException("'10' cannot be greater than 1.", "min");
+    const argumentNull = new ArgumentNullException("s");
+
+    expect(argument.message).toBe("'10' cannot be greater than 1. (Parameter 'min')");
+    expect(argument.paramName).toBe("min");
+    expect(new ArgumentException("bad").paramName).toBeNull();
+    expect(argumentNull.message).toBe("Value cannot be null. (Parameter 's')");
+    expect(argumentNull).toBeInstanceOf(ArgumentException);
+    expect(argumentNull.toString()).toBe("System.ArgumentNullException: Value cannot be null. (Parameter 's')");
   });
 
   test("a null message falls back to the default, an empty one is kept", () => {

@@ -2325,6 +2325,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         string? dartRuntimeImports = null;
         int? whenArgCount = null;
         IReadOnlyList<string>? whenParameterTypes = null;
+        var whenInt64IsBigInt = false;
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
@@ -2362,6 +2363,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     break;
                 case "WhenParameterTypes":
                     whenParameterTypes = ReadParameterTypes(named.Value);
+                    break;
+                case "WhenInt64IsBigInt":
+                    whenInt64IsBigInt = named.Value.Value is true;
                     break;
             }
         }
@@ -2401,7 +2405,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             dartTemplate,
             dartRuntimeImports,
             whenArgCount,
-            whenParameterTypes
+            whenParameterTypes,
+            whenInt64IsBigInt
         );
     }
 

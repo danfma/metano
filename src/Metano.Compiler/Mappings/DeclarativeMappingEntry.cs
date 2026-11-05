@@ -28,6 +28,10 @@ namespace Metano.Compiler.Mappings;
 /// entry to specific overloads (see <see cref="MatchesOverload"/>).
 /// <see cref="WhenParameterTypes"/> holds the stable full names
 /// (<c>SymbolHelper.GetStableFullName</c>) of the overload's parameter types.
+///
+/// <see cref="WhenInt64IsBigInt"/> marks a <c>bigint</c> template of spec 012's
+/// staging (DECIDED-22): a target that still maps 64-bit integers to
+/// <c>number</c> skips the entry.
 /// </summary>
 public sealed record DeclarativeMappingEntry(
     string? JsName,
@@ -39,7 +43,8 @@ public sealed record DeclarativeMappingEntry(
     string? DartTemplate = null,
     string? DartRuntimeImports = null,
     int? WhenArgCount = null,
-    IReadOnlyList<string>? WhenParameterTypes = null
+    IReadOnlyList<string>? WhenParameterTypes = null,
+    bool WhenInt64IsBigInt = false
 )
 {
     /// <summary>

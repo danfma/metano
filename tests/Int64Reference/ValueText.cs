@@ -16,6 +16,7 @@ internal static class ValueText
         value switch
         {
             null => null,
+            string text => text,
             bool flag => flag ? "true" : "false",
             char character => ((int)character).ToString(CultureInfo.InvariantCulture),
             double number => number.ToString("R", CultureInfo.InvariantCulture),
