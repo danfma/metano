@@ -899,7 +899,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      key type by this same grammar in every context, `Strict` included (measured on .NET 10:
      `"+5"` and `"007"` read as `int` keys `5` and `7`, `"x"` throws `The JSON value could not be
      converted to System.Int32.`). A numeric key descriptor therefore always carries `numberType`,
-     and a `bool`, enum, `Guid` or temporal key carries its CLR `typeName`; the runtime parses
+     a numeric enum key carries its underlying type the same way, and a `bool`, enum, `Guid` or
+     temporal key carries its CLR `typeName`; the runtime parses
      each property name into the key type (contracts/runtime-api.md, guarantee 8b).
   5. Writing is unaffected: `AllowReadingFromString` changes reads only (measured: numbers are
      still written as JSON numbers).
@@ -1055,7 +1056,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | `TimeSpan` | `"01:02:03"` | `Temporal.Duration` string `PT1H2M3S` | Not mutually readable: STJ rejects `PT1H2M3S`, Temporal rejects `01:02:03` (row V12, `crossReadable: false`); follow-up issue (DECIDED-16) |
 | `DateTimeOffset` offset text | `2026-01-02T03:04:05+00:00` | `Temporal.ZonedDateTime` string `2026-01-02T03:04:05+00:00[UTC]` | Not mutually readable: STJ rejects the `[UTC]` annotation, `ZonedDateTime.from` requires it (row V11, `crossReadable: false`); follow-up issue (DECIDED-16) |
 | `Dictionary<int, …>` key order | insertion order | JS enumerates integer-like keys first | Cosmetic: mutually readable (row V17, `crossReadable: true`) |
-| Dictionary key text (#479) | `double` keys `1E+21` / `-0`, a `NaN` key throws, `decimal` keys keep their scale, a `[Flags]` combination is written `A, B`; reads range-check an enum key by its underlying type, read a member's number for any enum and apply `[JsonStringEnumMemberName]` | `String()` text (`1e+21`, `0`), a `NaN` key is written, `decimal` drops trailing zeros, a combination is written as its number; an enum key is range-checked as an `int`, a `[StringEnum]` key does not read a number, member names are the TS names | Documented; every key STJ writes is read back (rows V17, V20, V21, E26) |
+| Dictionary key text (#479) | `double` keys `1E+21` / `-0`, a `NaN` key throws, `decimal` keys keep their scale, a `[Flags]` combination is written `A, B`; reads take a member's number for any enum, apply `[JsonStringEnumMemberName]`, and keep the last of two names that parse to one key (`{"01":1,"1":2}` → `2`) | `String()` text (`1e+21`, `0`), a `NaN` key is written, `decimal` drops trailing zeros, a combination is written as its number; a `[StringEnum]` key does not read a number, member names are the TS names (`[Name]` / `[JsonStringEnumMemberName]` not applied), and JS enumeration order decides between two such names (integer-like first: `1`) | Documented; mutually readable except renamed enum members (rows V17, V20, V21, E26) |
 | `Stack<T>` root/property | written top-first, read back reversed (STJ pushes in order) | written and read in array order | DECIDED-18 (d); no code |
 | `[Name]` inside a generic member name | `ListUserDto` (CLR name) | `ListUser` (TS name) | DECIDED-18 (a) |
 | `[StringEnum]` root/property | number unless `JsonStringEnumConverter` | string | Pre-existing type-mapping contract, unchanged; not mutually readable (row V14, `crossReadable: false`) |

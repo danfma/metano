@@ -27,24 +27,39 @@ const GUID = "0f8fad5b-d9cb-469f-a165-70867728950e";
 
 const LEVEL_TYPE_NAME = "MyApp.Level";
 
+enum Alias {
+  First = 1,
+  Second = 1,
+}
+
+/** A `Dictionary<K, int>` spec. */
+type IntValuedMapSpec = ValueSpec<Map<unknown, number> | null>;
+
 /** A `Dictionary<K, int>` whose key descriptor is `key`. */
-function mapSpec(key: TypeDescriptor): ValueSpec<Map<unknown, number> | null> {
+function mapSpec(key: TypeDescriptor): IntValuedMapSpec {
   return { descriptor: { kind: "map", key, value: { kind: "primitive" } } };
 }
 
 const INT32_KEY = mapSpec({ kind: "primitive", numberType: "System.Int32" });
 
+const BYTE_LEVEL_KEY = mapSpec({
+  kind: "numericEnum",
+  values: Level,
+  typeName: "MyApp.ByteLevel",
+  numberType: "System.Byte",
+});
+
 const reads = {
-  tree: (json: string, spec: ValueSpec<Map<unknown, number> | null>) =>
+  tree: (json: string, spec: IntValuedMapSpec) =>
     JsonSerializer.deserialize(JSON.parse(json), spec),
-  text: (json: string, spec: ValueSpec<Map<unknown, number> | null>) =>
+  text: (json: string, spec: IntValuedMapSpec) =>
     JsonSerializer.deserializeText(json, spec),
 };
 
 /** The keys a read of `name` gives, on the `path` read. */
 function keysOf(
   path: keyof typeof reads,
-  spec: ValueSpec<Map<unknown, number> | null>,
+  spec: IntValuedMapSpec,
   name: string,
 ): unknown[] {
   return [...(reads[path](JSON.stringify({ [name]: 1 }), spec)?.keys() ?? [])];
@@ -52,14 +67,14 @@ function keysOf(
 
 interface KeyReadRow {
   readonly label: string;
-  readonly spec: ValueSpec<Map<unknown, number> | null>;
+  readonly spec: IntValuedMapSpec;
   readonly name: string;
   readonly key: unknown;
 }
 
 interface KeyErrorRow {
   readonly label: string;
-  readonly spec: ValueSpec<Map<unknown, number> | null>;
+  readonly spec: IntValuedMapSpec;
   readonly name: string;
   readonly typeName: string;
 }
@@ -136,6 +151,14 @@ const KEY_READS: readonly KeyReadRow[] = [
     name: "High,Low",
     key: Level.High,
   },
+  { label: "byte enum with a plus sign", spec: BYTE_LEVEL_KEY, name: "+5", key: Level.High },
+  { label: "byte enum negative zero", spec: BYTE_LEVEL_KEY, name: "-0", key: Level.Low },
+  {
+    label: "uint enum at its maximum",
+    spec: mapSpec({ kind: "numericEnum", values: Level, numberType: "System.UInt32" }),
+    name: "4294967295",
+    key: 4294967295,
+  },
   {
     label: "string enum in any case",
     spec: mapSpec({ kind: "enum", values: Flavor, typeName: "MyApp.Flavor" }),
@@ -211,6 +234,12 @@ const KEY_ERRORS: readonly KeyErrorRow[] = [
     typeName: LEVEL_TYPE_NAME,
   },
   {
+    label: "byte enum out of range",
+    spec: BYTE_LEVEL_KEY,
+    name: "256",
+    typeName: "MyApp.ByteLevel",
+  },
+  {
     label: "string enum unknown name",
     spec: mapSpec({ kind: "enum", values: Flavor, typeName: "MyApp.Flavor" }),
     name: "x",
@@ -265,9 +294,12 @@ describe("dictionary keys — reads", () => {
   }
 
   test("the context's read options do not change how a key reads", () => {
-    const spec = { ...INT32_KEY, readOptions: { numberHandling: "allowReadingFromString" } };
+    const spec: IntValuedMapSpec = {
+      ...INT32_KEY,
+      readOptions: { numberHandling: "allowReadingFromString" },
+    };
 
-    expect(keysOf("tree", spec as typeof INT32_KEY, "+5")).toEqual([5]);
+    expect(keysOf("tree", spec, "+5")).toEqual([5]);
   });
 
   test("a decimal key reads into the descriptor's type", () => {
@@ -290,13 +322,15 @@ describe("dictionary keys — reads", () => {
     expect(String(key)).toBe("2024-01-02");
   });
 
-  test("two names that read as one key keep the last value", () => {
-    const map = reads.text('{"1":1,"01":2}', INT32_KEY);
+  test("two names that read as one key keep the one JS enumerates last", () => {
+    expect([...(reads.text('{"1":1,"01":2}', INT32_KEY) ?? [])]).toEqual([[1, 2]]);
 
-    expect([...(map ?? [])]).toEqual([[1, 2]]);
+    // JS lists integer-like names first, so `"1"` comes before `"01"` here
+    // too; .NET keeps the last name in the text (`2`).
+    expect([...(reads.text('{"01":1,"1":2}', INT32_KEY) ?? [])]).toEqual([[1, 1]]);
   });
 
-  test("a key without a type reads as the JSON property name", () => {
+  test("a numeric enum key without a typeName still parses, and reports Object when it fails", () => {
     expect(keysOf("tree", mapSpec({ kind: "numericEnum", values: Level }), "High")).toEqual([
       Level.High,
     ]);
@@ -310,7 +344,7 @@ describe("dictionary keys — reads", () => {
 
 describe("dictionary keys — writes", () => {
   /** The JSON text a `Map` of `key` → `1` writes. */
-  function writtenText(spec: ValueSpec<Map<unknown, number> | null>, key: unknown): string {
+  function writtenText(spec: IntValuedMapSpec, key: unknown): string {
     return JSON.stringify(JsonSerializer.serialize(new Map([[key, 1]]), spec));
   }
 
@@ -346,6 +380,12 @@ describe("dictionary keys — writes", () => {
     });
 
     expect(writtenText(spec, Temporal.PlainDate.from("2024-01-02"))).toBe('{"2024-01-02":1}');
+  });
+
+  test("an aliased numeric enum value by its first member", () => {
+    expect(writtenText(mapSpec({ kind: "numericEnum", values: Alias }), Alias.Second)).toBe(
+      '{"First":1}',
+    );
   });
 
   test("a written key reads back to the same key", () => {

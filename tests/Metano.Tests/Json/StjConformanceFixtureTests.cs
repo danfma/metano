@@ -39,6 +39,9 @@ public class StjConformanceFixtureTests
 
     private const string PositionMarker = " | ";
 
+    /// <summary>The <c>Guid</c> key of row V21.</summary>
+    private const string V21Guid = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
     private static readonly ConformanceCase[] Cases = LoadCases();
 
     private static readonly bool UpdateFixtures =
@@ -775,21 +778,13 @@ public class StjConformanceFixtureTests
                 }
             ),
             ["V21"] = Roundtrip(
-                () =>
-                    new GuidMapHolder(
-                        new Dictionary<Guid, string>
-                        {
-                            [new Guid("0f8fad5b-d9cb-469f-a165-70867728950e")] = "a",
-                        }
-                    ),
+                () => new GuidMapHolder(new Dictionary<Guid, string> { [new Guid(V21Guid)] = "a" }),
                 async value =>
-                    await Assert
-                        .That(
-                            ((GuidMapHolder)value!).ById[
-                                new Guid("0f8fad5b-d9cb-469f-a165-70867728950e")
-                            ]
-                        )
-                        .IsEqualTo("a")
+                {
+                    var holder = (GuidMapHolder)value!;
+
+                    await Assert.That(holder.ById[new Guid(V21Guid)]).IsEqualTo("a");
+                }
             ),
             ["N1"] = Roundtrip(() => null, async value => await Assert.That(value).IsNull()),
             ["N2"] = Roundtrip(() => null, async value => await Assert.That(value).IsNull()),

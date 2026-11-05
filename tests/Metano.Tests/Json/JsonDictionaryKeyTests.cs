@@ -6,8 +6,8 @@ namespace Metano.Tests.Json;
 /// The key descriptor of a dictionary property (#479, spec 009 FR-030): the
 /// value descriptor of the key type, plus what the runtime needs to parse a
 /// JSON property name into it as System.Text.Json does. A numeric key always
-/// names its <c>numberType</c>, whatever the context's read options; a
-/// <c>bool</c>, enum, <c>Guid</c> or temporal key names its CLR
+/// names its <c>numberType</c>, whatever the context's read options, as
+/// does a numeric enum key for its underlying type; a <c>bool</c>, enum, <c>Guid</c> or temporal key names its CLR
 /// <c>typeName</c>; a <c>string</c>, <c>decimal</c> or <c>[Branded]</c> key
 /// keeps the value descriptor. The golden is <c>json-dictionary-keys.ts</c>.
 /// </summary>
@@ -25,6 +25,9 @@ public class JsonDictionaryKeyTests
         [Transpile]
         public enum Level { Low, High }
 
+        [Transpile]
+        public enum Shade : byte { Light, Dark }
+
         [Transpile, StringEnum]
         public enum Mood { Calm, Loud }
 
@@ -41,6 +44,7 @@ public class JsonDictionaryKeyTests
             Dictionary<double, string> ByDouble,
             Dictionary<bool, string> ByFlag,
             Dictionary<Level, string> ByLevel,
+            Dictionary<Shade, string> ByShade,
             Dictionary<Mood, string> ByMood,
             Dictionary<Guid, string> ById,
             Dictionary<DateOnly, string> ByDay,
@@ -81,6 +85,8 @@ public class JsonDictionaryKeyTests
             "[JsonSourceGenerationOptions(NumberHandling = JsonNumberHandling.AllowReadingFromString)]"
                 + "[JsonSerializable(typeof(Keys))]"
         );
+
+        await Assert.That(source).IsNotEqualTo(Source);
 
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(source);
 

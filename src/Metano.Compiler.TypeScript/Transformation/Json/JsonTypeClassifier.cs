@@ -104,22 +104,8 @@ internal static class JsonTypeClassifier
     public static string? NumberTypeNameOf(ITypeSymbol type) =>
         IsNumber(type) ? $"System.{type.MetadataName}" : null;
 
-    /// <summary>
-    /// Whether a dictionary key of <paramref name="type"/> names its CLR type
-    /// in its descriptor (<c>typeName</c>, #479): the non-numeric keys whose
-    /// JSON property name the runtime parses, a <c>bool</c>, an enum, a
-    /// <c>Guid</c> or a temporal type, so a rejected name reports the type
-    /// as System.Text.Json does.
-    /// </summary>
-    public static bool KeyNamesItsType(ITypeSymbol type, JsonPropertyKind kind) =>
-        kind switch
-        {
-            JsonPropertyKind.Primitive => type.SpecialType == SpecialType.System_Boolean,
-            JsonPropertyKind.Enum or JsonPropertyKind.NumericEnum or JsonPropertyKind.Temporal =>
-                true,
-            JsonPropertyKind.Branded => type.ToDisplayString() is "System.Guid",
-            _ => false,
-        };
+    /// <summary><c>System.Guid</c>, which maps to the runtime's branded <c>UUID</c>.</summary>
+    public static bool IsGuid(ITypeSymbol type) => type.ToDisplayString() is "System.Guid";
 
     /// <summary>
     /// A single-dimensional <c>byte[]</c>, which System.Text.Json writes as a
@@ -153,7 +139,7 @@ internal static class JsonTypeClassifier
 
         // Guid → UUID branded type. At runtime it's a string (JSON wire:
         // primitive string), but the deserialize side wraps via UUID.create.
-        if (fullName is "System.Guid")
+        if (IsGuid(named))
             return JsonPropertyKind.Branded;
 
         // Uri → primitive string (no special handling needed).

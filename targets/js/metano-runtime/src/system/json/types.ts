@@ -16,13 +16,16 @@ export type NumberTypeName =
   | "System.Single"
   | "System.Double";
 
+/** The CLR names of the integer types among `NumberTypeName`. */
+export type IntegerTypeName = Exclude<NumberTypeName, "System.Single" | "System.Double">;
+
 /**
  * The CLR name a dictionary key descriptor carries (`typeName`) so a JSON
  * property name that does not parse into the key's type reports it as
  * System.Text.Json does (#479): `System.Boolean`, `System.Guid`,
  * `System.DateOnly`, `MyApp.Level`. Absent outside key positions.
  */
-type KeyTypeName = {
+type WithKeyTypeName = {
   readonly typeName?: string;
 };
 
@@ -33,7 +36,7 @@ type KeyTypeName = {
  * name is parsed into the number (#479); it is absent otherwise. A
  * `System.Boolean` key names its `typeName`.
  */
-export type PrimitiveDescriptor = KeyTypeName & {
+export type PrimitiveDescriptor = WithKeyTypeName & {
   readonly kind: "primitive";
   readonly numberType?: NumberTypeName;
 };
@@ -48,7 +51,7 @@ export type RefDescriptor<T = unknown> = {
  * Temporal types — `toString()` to serialize (`Temporal.PlainTime` in the
  * STJ `TimeOnly` form, `temporal-text.ts`), `parse()` to deserialize.
  */
-export type TemporalDescriptor = KeyTypeName & {
+export type TemporalDescriptor = WithKeyTypeName & {
   readonly kind: "temporal";
   readonly parse: (iso: string) => unknown;
 };
@@ -111,13 +114,13 @@ export type HashSetDescriptor = {
  * for no real benefit, since consumers always call `UserId.create("abc")`
  * with a typed string, never with raw parsed JSON.
  */
-export type BrandedDescriptor = KeyTypeName & {
+export type BrandedDescriptor = WithKeyTypeName & {
   readonly kind: "branded";
   readonly create: (value: any) => unknown;
 };
 
 /** String enum — passthrough on serialize, validate on deserialize */
-export type EnumDescriptor = KeyTypeName & {
+export type EnumDescriptor = WithKeyTypeName & {
   readonly kind: "enum";
   readonly values: Record<string, string>;
 };
@@ -127,8 +130,13 @@ export type EnumDescriptor = KeyTypeName & {
  * whose reverse mapping (`Level[0] === "Low"`) adds string values; only the
  * numbers are valid members.
  */
-export type NumericEnumDescriptor = KeyTypeName & {
+export type NumericEnumDescriptor = WithKeyTypeName & {
   readonly kind: "numericEnum";
+  /**
+   * The enum's underlying integer type, set on a dictionary key: an integer
+   * key name is range-checked by it (#479). `System.Int32` when absent.
+   */
+  readonly numberType?: IntegerTypeName;
   readonly values: Record<string, string | number>;
 };
 

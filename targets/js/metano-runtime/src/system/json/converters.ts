@@ -182,11 +182,7 @@ function mapConverter(
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ) {
-  const keyConv = customOrBuiltinConverter(descriptor.key, plans, () =>
-    dictionaryKeyConverterOf(descriptor.key, () =>
-      getBuiltinConverter(descriptor.key, plans, undefined),
-    ),
-  );
+  const keyConv = keyConverterOf(descriptor.key, plans);
   const valueConv = resolveConverter(descriptor.value, plans, readOptions);
 
   return {
@@ -223,6 +219,13 @@ function mapConverter(
       });
     },
   };
+}
+
+/** A custom converter of the key's kind, else the System.Text.Json key parser (#479). */
+function keyConverterOf(key: TypeDescriptor, plans: SpecPlans): ValueConverter {
+  return customOrBuiltinConverter(key, plans, () =>
+    dictionaryKeyConverterOf(key, () => getBuiltinConverter(key, plans, undefined)),
+  );
 }
 
 // ─── Collection input ────────────────────────────────────────────────────────
