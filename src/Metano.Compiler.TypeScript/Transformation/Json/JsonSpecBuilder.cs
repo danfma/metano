@@ -332,7 +332,7 @@ internal sealed class JsonSpecBuilder
         }
 
         if (targetType.IsAbstract)
-            return FactoryBody.Throws(NonConstructibleFactoryMessage(tsTypeName));
+            return FactoryBody.Throws(NonConstructibleFactoryMessage(targetType, tsTypeName));
 
         var construction = BuildConstruction(targetType, tsTypeName, out var argumentsReadPayload);
         var assignedMembers = UnboundMembersOf(targetType, JsonReadAssignment.Always)
@@ -686,8 +686,23 @@ internal sealed class JsonSpecBuilder
     /// (<c>Deserialization of interface or abstract types is not supported.
     /// Type 'X'.</c>, measured on .NET 10) when a read dispatches here, so
     /// this generated throw is unreachable and states only why the spec
-    /// cannot build.
+    /// cannot build. The kind-aware naming mirrors FR-018 because
+    /// <see cref="INamedTypeSymbol.IsAbstract"/> is true for interfaces too:
+    /// no non-polymorphic interface entry exists today for this branch to
+    /// build a factory from (an interface root is rejected with
+    /// <c>MS0035</c>, and a ref to an interface member claims no entry), but
+    /// an interface that ever reaches it must not read as abstract.
     /// </summary>
-    private static string NonConstructibleFactoryMessage(string tsTypeName) =>
-        $"Cannot construct abstract type '{tsTypeName}'.";
+    private static string NonConstructibleFactoryMessage(
+        INamedTypeSymbol targetType,
+        string tsTypeName
+    )
+    {
+        var (kind, name) =
+            targetType.TypeKind == TypeKind.Interface
+                ? ("interface", targetType.Name)
+                : ("abstract", tsTypeName);
+
+        return $"Cannot construct {kind} type '{name}'.";
+    }
 }
