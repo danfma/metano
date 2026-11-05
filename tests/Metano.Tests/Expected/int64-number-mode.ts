@@ -1,4 +1,4 @@
-import { intDiv, isInt32, isInt64 } from "metano-runtime";
+import { intDiv, isInt32, isInt64, isUInt64 } from "metano-runtime";
 
 export class Ops {
   static readonly max: number = UInt64.maxValue;
@@ -47,7 +47,7 @@ export class Ops {
     return "long";
   }
 
-  private overLong(x: number): string {
+  private overULong(x: number): string {
     return "ulong";
   }
 
@@ -63,8 +63,8 @@ export class Ops {
       return this.overLong(args[0] as number);
     }
 
-    if (args.length === 1 && isInt64(args[0])) {
-      return this.overLong(args[0] as number);
+    if (args.length === 1 && isUInt64(args[0])) {
+      return this.overULong(args[0] as number);
     }
 
     if (args.length === 1 && isInt32(args[0])) {

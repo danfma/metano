@@ -259,8 +259,8 @@ public static class IrRuntimeRequirementScanner
             IrPrimitive.Byte => "isByte",
             IrPrimitive.Int16 => "isInt16",
             IrPrimitive.Int32 => "isInt32",
-            // ulong shares long's check while both lower to a TS number.
-            IrPrimitive.Int64 or IrPrimitive.UInt64 => "isInt64",
+            IrPrimitive.Int64 => "isInt64",
+            IrPrimitive.UInt64 => "isUInt64",
             IrPrimitive.Float32 => "isFloat32",
             IrPrimitive.Float64 => "isFloat64",
             IrPrimitive.Boolean => "isBool",
