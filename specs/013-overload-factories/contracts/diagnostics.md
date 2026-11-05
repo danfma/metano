@@ -62,6 +62,8 @@ so the type keeps runtime dispatch for those names and gets no per-implementatio
 
 `'C' implements 'IConv<T>' more than once; calls to 'Conv' keep runtime dispatch (spec 013 FR-036).`
 
+When two constructions are indistinguishable at run time (`IConv<List<int>>` and `IConv<int[]>`, both arrays), the message adds: `the constructions 'IConv<List<int>>' and 'IConv<int[]>' cannot be told apart at run time; the first branch wins.` — the same outcome as today's dispatcher.
+
 ## `MS0003` (dead end)
 
 `Overloads 'K(Lib1::N.Decimal d)' and 'K(Lib2::N.Decimal d)' have the same naming spelling at every qualification level; they are emitted as 'kGlobalNDecimal$1' and 'kGlobalNDecimal$2' (spec 013 FR-024).`

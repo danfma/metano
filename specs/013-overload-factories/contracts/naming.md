@@ -100,6 +100,10 @@ the spelling.
   implementation reuses them. For an interface implementation the root is the **constructed**
   interface member (`IConv<int>.Conv(int x)`); a type that implements one generic interface more
   than once has two constructed roots per name and follows DECIDED-30 (runtime dispatch, `MS0069`).
+  In claim step 7, a derived type's implementation of a construction its base did not implement
+  (`D : C, IConv<string>` with `C : IConv<int>`, `D.Conv(string)`) is an **implementation** of a
+  root, not a non-root candidate and not an override: it takes the root's name and joins the
+  DECIDED-30 dispatcher for that name.
 - An override's fast path takes the root's mapped visibility (#445's root walk): a cross-assembly
   `protected override` of a `protected internal` root is public, as the root is (TS2415 otherwise,
   R14).
@@ -176,19 +180,26 @@ depth) has a static member of the same TypeScript name. Then:
   **the same parameter types in the same order, with the same `params` / optional shape** —
   compared on the **constructed** base constructor (for `Box2<T> : Box<T>`, `Box<T>`'s `T` is
   `Box2`'s `T`; for `IntBox : Box<int>`, it is `int`) — and whose accessibility `T`'s factory
-  matches or widens (public ≥ protected), then `T`'s factory keeps `from<S>` and is emitted
+  matches or widens (public ≥ protected), and — for a generic class — whose type parameters, on
+  the same constructed mapping, carry **the same constraints** as the base's (`SortedBox<T> :
+  Box<T> where T : IComparable<T>` adds a constraint, so TypeScript's static side rejects the
+  kept `fromValue<T extends Comparable<T>>`: TS2417, R15; a different type-parameter count is
+  fine, `Pair<K, V> : Box<K>` keeps `fromValue`), then `T`'s factory keeps `from<S>` and is emitted
   `static override` (TS4114 under `noImplicitOverride` otherwise, R14): same parameters, a
   covariant return type and no narrowing keep the static side compatible (R2:
   `Receipt.fromAmount`, `GiftReceipt.fromCents`);
 - otherwise — a different parameter list, a `private` base factory (TS2417: a private member
   cannot be redeclared, R14 / reviewer p2), a narrower derived accessibility (a `protected`
-  factory against a public one, R14 / reviewer p3), or an inherited user static — the factory
-  becomes `from` + `T` + `S` (R2: `GiftReceipt.fromGiftReceiptAmount`; R14:
-  `Receipt.fromReceiptCode`, `Receipt.fromReceiptId`). The qualified name then goes through the
+  factory against a public one, R14 / reviewer p3), different type-parameter constraints (R15),
+  or an inherited user static — the factory becomes `from` + `T` + `S` (R2:
+  `GiftReceipt.fromGiftReceiptAmount`; R14: `Receipt.fromReceiptCode`, `Receipt.fromReceiptId`;
+  R15: `SortedBox.fromSortedBoxValue`). The qualified name then goes through the
   claim pass like any other.
 
-The rule reads declarations only, so it is deterministic and needs no TypeScript assignability
-check. The reverse direction — a derived **user** static against an inherited generated factory —
+The rule reads declarations only (parameter types, accessibility and type-parameter constraints
+on the constructed mapping), so it is deterministic. It is a conservative stand-in for
+TypeScript's static-side assignability check, not a replacement for it: for generic classes that
+check also compares constraints, which is why constraints are part of the rule (R15). The reverse direction — a derived **user** static against an inherited generated factory —
 cannot be qualified (user names never move) and is `MS0068`.
 
 ## Worked examples

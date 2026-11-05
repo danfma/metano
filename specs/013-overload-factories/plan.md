@@ -176,7 +176,7 @@ unrelated bugs of research R7 and R12's `object` check.
     group with `.bind`, a derived type adding an overload (the `override` superset dispatcher, a
     base `private` overload reached through `super`), a cross-assembly `protected override` of a
     `protected internal` root (public), a `new` hiding method (`addX$`), a new overload whose
-    candidate meets a base `private` fast path (`addS$`); plus a Node run returning C#'s results
+    candidate meets a base `private` fast path (`addS$`, with the derived dispatcher's own `Add(short)` branch calling `this.addS$` before forwarding to `super` — the `s013r2/r3/privfast.ts` probe omits that branch; the golden must not); plus a Node run returning C#'s results
     (R8, R14, SC-007);
   - `overload-virtual-single` — an inherited non-overloaded virtual that a derived type overloads:
     today's emission pinned (DECIDED-29);
@@ -187,6 +187,8 @@ unrelated bugs of research R7 and R12's `object` check.
     parameter names, a method implementing two roots (forwarding member), explicit
     implementations beside a class overload (`Plot`, R14) and an `MS0031` same-signature conflict,
     and the interface receiver call `sh.areaS(2)`;
+  - `overload-interface-multiple-inherited` — (a) `D : C` with `C` multiply-constructed, overriding `Conv(int)`; (b) `D : C, IConv<string>` with `C : IConv<int>`: `override` root-name dispatchers with every constructed signature, forwarding to `super` (R15);
+  - `overload-factory-generic-constraints` — `SortedBox<T> : Box<T> where T : IComparable<T>` → `fromSortedBoxValue` (qualified), and `Pair<K, V> : Box<K>` → `static override fromValue` (R15);
   - `overload-interface-multiple` — `C : IConv<int>, IConv<string>`: runtime-dispatched root names
     and `MS0069` (R14);
   - `overload-calls-new`, `overload-calls-super` (with explicit default arguments), `overload-calls-defaults` (a method call site passing the static overload's default, DECIDED-32),

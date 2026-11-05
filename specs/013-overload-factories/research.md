@@ -449,3 +449,20 @@ Explicit implementations (`r3/explicit.ts`): `Plot` with `IShape.Area(int s)` / 
 int h)` explicit and its own `Area(bool big)` emits `areaS`, `areaWH`, `areaBig` and a dispatcher
 `area` with all three signatures; `sh.areaS(3)` → `9`, `sh.area(2, 5)` → `10`, `area(true)` → `1`
 (FR-037).
+
+## R15 — Generic constraints and inherited multiply-constructed interfaces (third review, `rev013c`)
+
+Reviewer probes `rev013c/q1`–`q6` (`run.sh`, `--strict --noImplicitOverride`) [V]:
+
+| Probe | Result | Rule |
+|---|---|---|
+| `q1` — `Box<T> { Box(T value); Box(int n); }`, `SortedBox<T> : Box<T> where T : IComparable<T>` keeping `static override fromValue<T extends Comparable<T>>` / `fromN` | `TS2417: Class static side 'typeof SortedBox' incorrectly extends base class static side 'typeof Box'.` | FR-026 compares type-parameter constraints on the constructed mapping; different constraints → qualified (`fromSortedBoxValue`) |
+| `q2` — widening | no error | — |
+| `q3` — `D : C` (`C` multiply-constructed) overriding `Conv(int)` with a single-signature `convX` | `TS2416: Property 'convX' in type 'D' is not assignable to the same property in base type 'C'.` | DECIDED-30 inheritance: `override`, every constructed signature, forward to `super` |
+| `q4` — `D : C, IConv<string>` with `C : IConv<int>` | `TS2420: Class 'D' incorrectly implements interface 'IConv<string>'.` + TS4114 ×6 | same; `D.Conv(string)` is an implementation in claim step 7 |
+| `q6` — the fixed shapes (`SortedBox.fromSortedBoxValue`, `Pair<K, V> : Box<K>` with `static override fromValue`, `D3`, `D4`) | no error | — |
+
+`s013r2/r4/fixes.ts` (q6 plus a run) [V]: `exit=0`; Node prints `10 2 1 2 2 true true` —
+`D3` handles its own `Conv(int)` (`10`) and forwards `Conv(string)` to `C` (`2`); `D4` forwards
+`Conv(int)` to `C1` (`1`) and implements `Conv(string)` (`2`, also through its `conv`
+dispatcher); `SortedBox.fromSortedBoxValue` and the kept `Pair.fromValue` build their own types.
