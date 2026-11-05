@@ -173,12 +173,17 @@ internal sealed class JsonTypeDescriptorBuilder(
     {
         var (typeName, member) = BrandedFactoryTarget((INamedTypeSymbol)type);
 
+        // The Guid factory points at the runtime's `UUID` class — a helper
+        // reference, so the printer aliases it together with the import when
+        // a user declaration claims the name (#484); any other companion is
+        // an emitted module member reached by its plain name.
+        TsExpression factoryTarget = typeName is "UUID"
+            ? new TsRuntimeHelperReference("UUID")
+            : QualifiedReference(typeName);
+
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Branded),
-            new TsObjectProperty(
-                "create",
-                new TsPropertyAccess(QualifiedReference(typeName), member)
-            ),
+            new TsObjectProperty("create", new TsPropertyAccess(factoryTarget, member)),
             new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
         ]);
     }
