@@ -41,7 +41,7 @@ public sealed record IrNumericConversion(
     public static bool IsFloatingPointTruncation(IrNumericEndpoint from, IrNumericEndpoint to) =>
         !from.IsEnum
         && from.Kind.IsFloatingPoint()
-        && (to.Kind.IsInteger() || to.Kind is IrNumericKind.Char)
+        && to.Kind.IsIntegerOrChar()
         && to.Kind.BitWidth() <= 32;
 }
 

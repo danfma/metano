@@ -74,4 +74,49 @@ public class FloatingPointTruncationTests
 
         await Assert.That(files["unwrap.dart"]).Contains("(d as double).toInt().toSigned(32)");
     }
+
+    private const string ForEachSource = """
+        [Transpile]
+        public class Loops
+        {
+            public int Last(double[] doubles)
+            {
+                var last = 0;
+                foreach (int x in doubles)
+                    last = x;
+                return last;
+            }
+
+            public int LastChecked(double[] doubles)
+            {
+                var last = 0;
+                checked
+                {
+                    foreach (int x in doubles)
+                        last = x;
+                }
+                return last;
+            }
+        }
+        """;
+
+    /// <summary>
+    /// A <c>foreach</c> variable converted from a floating-point element
+    /// truncates too, in both modes (FR-070's "every source"), and checks
+    /// inside a <c>checked</c> block.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ForEach_FloatingPointElement_Truncates(bool bigIntMode)
+    {
+        var mode = bigIntMode ? Int64Representation.BigInt : Int64Representation.Number;
+
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ForEachSource, mode);
+
+        var output = files["loops.ts"];
+
+        await Assert.That(output).Contains("const x = int32FromDouble(x$element);");
+        await Assert.That(output).Contains("const x = int32FromDoubleChecked(x$element);");
+    }
 }
