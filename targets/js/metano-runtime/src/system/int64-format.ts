@@ -22,6 +22,12 @@ const UNSUPPORTED_STANDARD_FORMATS = new Set(["B", "C", "E", "P"]);
 /** The digits of a thousands group. */
 const GROUP_SIZE = 3;
 
+/** `G[n]` rounds half away from zero: a dropped digit of 5 or more carries. */
+const ROUND_UP_DIGIT = 5;
+
+/** The minimum digits of a `G[n]` exponent (`E+06`). */
+const MIN_EXPONENT_DIGITS = 2;
+
 /** `N` and `F` print two decimals when the format gives no precision. */
 const DEFAULT_DECIMALS = 2;
 
@@ -71,10 +77,11 @@ function formatStandard(
 ): string {
   const sign = value < 0n ? "-" : "";
   const magnitude = (value < 0n ? -value : value).toString();
+  const standardLetter = letter.toUpperCase();
 
-  switch (letter.toUpperCase()) {
+  switch (standardLetter) {
     case "G":
-      return sign + general(magnitude, precision, letter === "g" ? "e" : "E");
+      return sign + generalFormat(magnitude, precision, letter === "g" ? "e" : "E");
     case "R":
       return sign + magnitude;
     case "D":
@@ -87,7 +94,7 @@ function formatStandard(
       return hexadecimal(value, precision ?? 0, letter === "x");
   }
 
-  throw UNSUPPORTED_STANDARD_FORMATS.has(letter.toUpperCase())
+  throw UNSUPPORTED_STANDARD_FORMATS.has(standardLetter)
     ? unsupported(format)
     : new FormatException(INVALID_FORMAT_MESSAGE);
 }
@@ -97,8 +104,15 @@ function formatStandard(
  * notation rounded half away from zero to `precision` significant digits,
  * trailing zeros dropped and a two-digit exponent (`1.2346E+06`).
  */
-function general(magnitude: string, precision: number | null, exponentLetter: string): string {
-  if (precision === null || precision === 0 || precision >= magnitude.length) {
+function generalFormat(
+  magnitude: string,
+  precision: number | null,
+  exponentLetter: string,
+): string {
+  const fitsWithoutExponent =
+    precision === null || precision === 0 || precision >= magnitude.length;
+
+  if (fitsWithoutExponent) {
     return magnitude;
   }
 
@@ -108,13 +122,13 @@ function general(magnitude: string, precision: number | null, exponentLetter: st
   const mantissa =
     significand.length > 1 ? `${significand[0]}.${significand.slice(1)}` : significand;
 
-  return `${mantissa}${exponentLetter}+${String(exponent).padStart(2, "0")}`;
+  return `${mantissa}${exponentLetter}+${String(exponent).padStart(MIN_EXPONENT_DIGITS, "0")}`;
 }
 
 /** The first `precision` digits of `magnitude`, rounded half away from zero (one digit longer on a carry). */
 function roundedSignificantDigits(magnitude: string, precision: number): string {
   const kept = BigInt(magnitude.slice(0, precision));
-  const roundsUp = Number(magnitude[precision]) >= 5;
+  const roundsUp = Number(magnitude[precision]) >= ROUND_UP_DIGIT;
 
   return (roundsUp ? kept + 1n : kept).toString();
 }

@@ -16,11 +16,15 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal sealed partial class IrExpressionTreeExtractor
 {
-    private bool IsSixtyFourBitConversion(CastExpressionSyntax cast) =>
+    // STAGING(012k): every member below drops its _exactInt64Lowering gate.
+    private bool IsSixtyFourBitCast(CastExpressionSyntax cast) =>
         _exactInt64Lowering
         && _semantic.GetOperation(cast)
-            is IConversionOperation { Conversion.IsNumeric: true } conversion
-        && NeedsConvertNode(conversion.Operand.Type, conversion.Type);
+            is IConversionOperation
+            {
+                Conversion: { IsNumeric: true } or { IsNullable: true }
+            } conversion
+        && CrossesSixtyFourBits(conversion.Operand.Type, conversion.Type);
 
     private IrExprTreeNode? WalkSixtyFourBitCast(CastExpressionSyntax cast)
     {
@@ -35,47 +39,67 @@ internal sealed partial class IrExpressionTreeExtractor
 
     /// <summary>
     /// Wraps <paramref name="node"/> in the implicit numeric conversion Roslyn
-    /// reports for <paramref name="syntax"/> when it crosses a 64-bit integer.
-    /// A parenthesized expression's operand carries the conversion, so the
-    /// parentheses are not wrapped twice.
+    /// reports for <paramref name="syntax"/> when it crosses a 64-bit integer,
+    /// lifted (<c>int</c> → <c>long?</c>) or not. A parenthesized
+    /// expression's operand carries the conversion, so the parentheses are
+    /// not wrapped twice.
     /// </summary>
     private IrExprTreeNode? WithImplicitSixtyFourBitConversion(
         ExpressionSyntax syntax,
         IrExprTreeNode? node
     )
     {
-        if (node is null || !_exactInt64Lowering || syntax is ParenthesizedExpressionSyntax)
+        if (node is null || syntax is ParenthesizedExpressionSyntax)
             return node;
 
-        var conversion = _semantic.GetConversion(syntax);
         var typeInfo = _semantic.GetTypeInfo(syntax);
 
-        if (!conversion.IsImplicit || !conversion.IsNumeric)
+        if (!ConvertedTypeCrossesSixtyFourBits(syntax, typeInfo))
             return node;
 
-        if (!NeedsConvertNode(typeInfo.Type, typeInfo.ConvertedType))
+        if (MapTypeSymbol(typeInfo.ConvertedType) is not { } target)
             return node;
-
-        var target = MapTypeSymbol(typeInfo.ConvertedType)!;
 
         return node is IrExprLiteral { Value: { } value }
             ? new IrExprLiteral(ConvertedConstant(value, typeInfo.ConvertedType!), target)
             : new IrExprConvert(node, target);
     }
 
-    private bool ConvertsAcrossSixtyFourBits(TypeInfo info) =>
-        _exactInt64Lowering && NeedsConvertNode(info.Type, info.ConvertedType);
+    /// <summary>
+    /// Whether <paramref name="syntax"/> has an implicit numeric conversion,
+    /// lifted or not, across a 64-bit integer: the conversion a
+    /// <see cref="IrExprConvert"/> node carries, so the operand keeps its own
+    /// type.
+    /// </summary>
+    private bool ConvertedTypeCrossesSixtyFourBits(ExpressionSyntax syntax, TypeInfo info)
+    {
+        if (!_exactInt64Lowering)
+            return false;
+
+        var conversion = _semantic.GetConversion(syntax);
+
+        return conversion.IsImplicit
+            && IsNumericOrLifted(conversion)
+            && CrossesSixtyFourBits(info.Type, info.ConvertedType);
+    }
 
     /// <summary>
-    /// A capture's value without the 64-bit conversion the value extractor
-    /// applies in its position: the tree converts the capture itself.
+    /// A capture's value without the 64-bit conversion, lifted or not, the
+    /// value extractor applies in its position: the tree converts the capture
+    /// itself.
     /// </summary>
     private IrExpression WithoutSixtyFourBitConversion(IrExpression value) =>
-        _exactInt64Lowering && value is IrNumericConversion { IsLifted: false } conversion
-            ? conversion.Operand
-            : value;
+        _exactInt64Lowering && value is IrNumericConversion conversion ? conversion.Operand : value;
 
-    private static bool NeedsConvertNode(ITypeSymbol? from, ITypeSymbol? to) =>
+    /// <summary>
+    /// A numeric conversion, or a lifted one (<c>int?</c> → <c>long?</c>):
+    /// <see cref="CrossesSixtyFourBits"/> then requires numeric endpoints on
+    /// both sides.
+    /// </summary>
+    private static bool IsNumericOrLifted(Conversion conversion) =>
+        conversion.IsNumeric || conversion.IsNullable;
+
+    private static bool CrossesSixtyFourBits(ITypeSymbol? from, ITypeSymbol? to) =>
         NumericEndpoints.Of(from) is { } source
         && NumericEndpoints.Of(to) is { } target
         && (source.IsSixtyFourBitValue() || target.IsSixtyFourBitValue())

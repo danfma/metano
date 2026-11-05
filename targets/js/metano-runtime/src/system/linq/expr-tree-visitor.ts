@@ -24,6 +24,7 @@
  * exported because real providers usually need a parameter alias and a
  * heterogeneous primitive ordering that matches the JS engine.
  */
+import { int64FromDouble, uint64FromDouble } from "../int64.ts";
 import type {
   ExprBinary,
   ExprCall,
@@ -342,27 +343,30 @@ function evaluateRef(node: ExprRef, scope: ExprTreeScope): unknown {
 }
 
 /**
- * Evaluates a `convert` node in memory: into `System.Int64` / `System.UInt64`
- * the value becomes a `bigint` (a fraction truncated, wrapped to 64 bits as
- * an unchecked cast does); into any other type a `bigint` becomes a
- * `number`. Narrowing below 64 bits is not wrapped (the documented
- * divergence of in-memory evaluation; providers translate the tree).
+ * Evaluates a `convert` node in memory as an unchecked C# cast: into
+ * `System.Int64` / `System.UInt64` a `bigint` wraps to 64 bits and a `number`
+ * truncates and saturates (.NET 9+); into any other type a `bigint` becomes a
+ * `number`; `null` (a lifted conversion) stays `null`. Narrowing below 64
+ * bits is not wrapped (the documented divergence of in-memory evaluation;
+ * providers translate the tree).
  */
 function evaluateConvert(node: ExprConvert, scope: ExprTreeScope): unknown {
   const value = evaluateExprTree(node.operand, scope);
 
+  if (value == null) {
+    return null;
+  }
+
   switch (node.type.name) {
     case INT64_TYPE_NAME:
-      return BigInt.asIntN(64, toBigInt(value));
+      return typeof value === "bigint" ? BigInt.asIntN(64, value) : int64FromDouble(Number(value));
     case UINT64_TYPE_NAME:
-      return BigInt.asUintN(64, toBigInt(value));
+      return typeof value === "bigint"
+        ? BigInt.asUintN(64, value)
+        : uint64FromDouble(Number(value));
     default:
       return typeof value === "bigint" ? Number(value) : value;
   }
-}
-
-function toBigInt(value: unknown): bigint {
-  return typeof value === "bigint" ? value : BigInt(Math.trunc(Number(value)));
 }
 
 function evaluateUnary(node: ExprUnary, scope: ExprTreeScope): unknown {

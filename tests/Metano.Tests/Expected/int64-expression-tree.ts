@@ -5,7 +5,7 @@ export class Rows {
   constructor() { }
 
   filter(rows: Iterable<Row>, cap: bigint, limit: number): Row[] {
-    return linq(rows, where((r: Row) => r.size > cap && r.count < 5n && BigInt(r.count) === 2n && r.weight > Number(cap) && r.size < limit, {
+    return linq(rows, where((r: Row) => r.size > cap && r.count < 5n && BigInt(r.count) === 2n && r.weight > Number(cap) && r.size < limit && ((receiver$temp$0) => receiver$temp$0 != null && receiver$temp$0 > 10n)(r.optional == null ? null : BigInt.asIntN(64, r.optional + BigInt(r.count))), {
       tree: {
         kind: "let",
         bindings: [
@@ -24,16 +24,20 @@ export class Rows {
           {
             name: "$1",
             value: {
-              kind: "convert",
-              operand: {
-                kind: "member",
-                target: {
-                  kind: "param",
-                  name: "r",
-                  type: { name: "Row" },
-                },
-                member: "count",
+              kind: "member",
+              target: {
+                kind: "param",
+                name: "r",
+                type: { name: "Row" },
               },
+              member: "count",
+            },
+          },
+          {
+            name: "$2",
+            value: {
+              kind: "convert",
+              operand: { kind: "ref", name: "$1" },
               type: { name: "System.Int64" },
             },
           },
@@ -52,39 +56,83 @@ export class Rows {
                 op: "&&",
                 left: {
                   kind: "binary",
-                  op: ">",
-                  left: { kind: "ref", name: "$0" },
+                  op: "&&",
+                  left: {
+                    kind: "binary",
+                    op: ">",
+                    left: { kind: "ref", name: "$0" },
+                    right: {
+                      kind: "capture",
+                      name: "cap",
+                      type: { name: "System.Int64" },
+                    },
+                  },
                   right: {
-                    kind: "capture",
-                    name: "cap",
-                    type: { name: "System.Int64" },
+                    kind: "binary",
+                    op: "<",
+                    left: { kind: "ref", name: "$2" },
+                    right: {
+                      kind: "literal",
+                      value: 5n,
+                      type: { name: "System.Int64" },
+                    },
                   },
                 },
                 right: {
                   kind: "binary",
-                  op: "<",
-                  left: { kind: "ref", name: "$1" },
+                  op: "==",
+                  left: { kind: "ref", name: "$2" },
                   right: {
                     kind: "literal",
-                    value: 5n,
+                    value: 2n,
                     type: { name: "System.Int64" },
                   },
                 },
               },
               right: {
                 kind: "binary",
-                op: "==",
-                left: { kind: "ref", name: "$1" },
+                op: ">",
+                left: {
+                  kind: "member",
+                  target: {
+                    kind: "param",
+                    name: "r",
+                    type: { name: "Row" },
+                  },
+                  member: "weight",
+                },
                 right: {
-                  kind: "literal",
-                  value: 2n,
-                  type: { name: "System.Int64" },
+                  kind: "convert",
+                  operand: {
+                    kind: "capture",
+                    name: "cap",
+                    type: { name: "System.Int64" },
+                  },
+                  type: { name: "number" },
                 },
               },
             },
             right: {
               kind: "binary",
-              op: ">",
+              op: "<",
+              left: { kind: "ref", name: "$0" },
+              right: {
+                kind: "convert",
+                operand: {
+                  kind: "capture",
+                  name: "limit",
+                  type: { name: "number" },
+                },
+                type: { name: "System.Int64" },
+              },
+            },
+          },
+          right: {
+            kind: "binary",
+            op: ">",
+            left: {
+              kind: "binary",
+              op: "+",
               left: {
                 kind: "member",
                 target: {
@@ -92,30 +140,17 @@ export class Rows {
                   name: "r",
                   type: { name: "Row" },
                 },
-                member: "weight",
+                member: "optional",
               },
               right: {
                 kind: "convert",
-                operand: {
-                  kind: "capture",
-                  name: "cap",
-                  type: { name: "System.Int64" },
-                },
-                type: { name: "number" },
+                operand: { kind: "ref", name: "$1" },
+                type: { name: "System.Int64" },
               },
             },
-          },
-          right: {
-            kind: "binary",
-            op: "<",
-            left: { kind: "ref", name: "$0" },
             right: {
-              kind: "convert",
-              operand: {
-                kind: "capture",
-                name: "limit",
-                type: { name: "number" },
-              },
+              kind: "literal",
+              value: 10n,
               type: { name: "System.Int64" },
             },
           },

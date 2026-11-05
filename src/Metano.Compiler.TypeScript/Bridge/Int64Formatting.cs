@@ -25,13 +25,20 @@ internal static partial class Int64Formatting
     /// <summary>The standard formats .NET defines for integers that <c>formatInt64</c> does not implement.</summary>
     private static readonly HashSet<char> UnsupportedStandardFormats = ['B', 'C', 'E', 'P'];
 
-    /// <summary><c>Integer</c>, <c>HexNumber</c>, <c>Integer | AllowThousands</c> and <c>Number</c>.</summary>
-    private static readonly HashSet<int> SupportedNumberStyles = [7, 515, 71, 111];
+    /// <summary>The styles <c>int64-parsing.ts</c> implements.</summary>
+    private static readonly HashSet<int> SupportedNumberStyles =
+    [
+        (int)NumberStyles.Integer,
+        (int)NumberStyles.HexNumber,
+        (int)(NumberStyles.Integer | NumberStyles.AllowThousands),
+        (int)NumberStyles.Number,
+    ];
 
     /// <summary>
     /// <c>formatInt64(value, format, alignment)</c> for a 64-bit hole with a
-    /// format or an alignment; <c>null</c> for any other hole, which keeps the
-    /// plain template-literal hole.
+    /// format or an alignment, reporting <c>MS0066</c> for an unsupported
+    /// constant format; <c>null</c> for any other hole, which keeps the plain
+    /// template-literal hole.
     /// </summary>
     public static TsExpression? TryFormatHole(IrInterpolationExpression hole, TsExpression value)
     {
@@ -50,14 +57,11 @@ internal static partial class Int64Formatting
             ? new TsStringLiteral(specifier)
             : new TsLiteral("null");
 
-        return hole.Alignment is { } alignment
-            ? Int64TsExpressions.RuntimeCall(
-                Int64RuntimeHelpers.FormatInt64,
-                value,
-                format,
-                new TsLiteral(alignment.ToString(CultureInfo.InvariantCulture))
-            )
-            : Int64TsExpressions.RuntimeCall(Int64RuntimeHelpers.FormatInt64, value, format);
+        TsExpression[] arguments = hole.Alignment is { } alignment
+            ? [value, format, new TsLiteral(alignment.ToString(CultureInfo.InvariantCulture))]
+            : [value, format];
+
+        return Int64TsExpressions.RuntimeCall(Int64RuntimeHelpers.FormatInt64, arguments);
     }
 
     /// <summary>
@@ -65,7 +69,7 @@ internal static partial class Int64Formatting
     /// <c>Parse</c> or <c>TryParse</c> on <c>long</c> / <c>ulong</c> whose
     /// constant format or <c>NumberStyles</c> the runtime does not implement.
     /// </summary>
-    public static void InspectCall(IrCallExpression call)
+    public static void ReportUnsupportedFormatOrStyle(IrCallExpression call)
     {
         // STAGING(012k): every mode once the switch is gone.
         if (!Int64RepresentationScope.IsBigInt || !IsSixtyFourBitMember(call.Origin))
@@ -112,7 +116,11 @@ internal static partial class Int64Formatting
             || UnsupportedStandardFormats.Contains(char.ToUpperInvariant(format[0]));
     }
 
-    /// <summary>The second argument of a <c>Parse</c> / <c>TryParse</c> with a style, folded to its flags value by the core.</summary>
+    /// <summary>
+    /// Reports <c>MS0066</c> for a constant <c>NumberStyles</c> (the second
+    /// argument, folded to its flags value by the core) the runtime does not
+    /// implement.
+    /// </summary>
     private static void ReportIfUnsupportedStyle(IReadOnlyList<IrArgument> arguments)
     {
         if (arguments is not [_, { Value: IrLiteral { Value: int style } }, ..])
