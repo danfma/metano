@@ -14,6 +14,7 @@ export * from "./int64-math.ts";
 export * from "./int64-format.ts";
 export * from "./int64-parsing.ts";
 export * from "./int64-convert.ts";
+export * from "./big-integer.ts";
 export * from "./exceptions/index.ts";
 export * from "./math.ts";
 export * from "./number-parsing.ts";

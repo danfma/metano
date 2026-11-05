@@ -129,6 +129,19 @@ internal static class BoundaryOperands
         new BigInteger(long.MinValue) - 1,
         new BigInteger(ulong.MaxValue),
         new BigInteger(ulong.MaxValue) + 1,
+        new BigInteger(255),
+        new BigInteger(256),
+        new BigInteger(-129),
+        new BigInteger(65536),
+        new BigInteger(int.MaxValue),
+        new BigInteger(int.MaxValue) + 1,
+        new BigInteger(uint.MaxValue),
+        new BigInteger(uint.MaxValue) + 1,
+        -(BigInteger.One << 40),
+        (BigInteger.One << 60) + (BigInteger.One << 36) + 1,
+        BigInteger.Pow(10, 30),
+        -(BigInteger.One << 96),
+        BigInteger.One << 1024,
     ];
 
     private static readonly object?[] BooleanValues = [false, true];
