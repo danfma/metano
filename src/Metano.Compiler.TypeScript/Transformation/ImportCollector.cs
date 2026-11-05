@@ -328,10 +328,14 @@ public sealed class ImportCollector(
                 continue;
 
             // BCL export mapping (e.g., decimal → Decimal from "decimal.js").
-            // Not bucketed: each BCL mapping can land on a distinct external package,
-            // and the cross-package merge strategy doesn't apply here.
+            // A transpilable type whose emitted name matches the export's
+            // name — a user `Numerics.Decimal` against `System.Decimal`'s
+            // `Decimal` — resolves to its own module below: only the full
+            // BCL symbol maps to the package (issue #477). Not bucketed: each
+            // BCL mapping can land on a distinct external package, and the
+            // cross-package merge strategy doesn't apply here.
             var bclEntry = _context.BclExportMap.Values.FirstOrDefault(e =>
-                e.ExportedName == typeName
+                e.ExportedName == typeName && !_context.TranspilableTypes.ContainsKey(typeName)
             );
             if (
                 bclEntry is not null
