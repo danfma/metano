@@ -101,7 +101,14 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         string? importAlias,
         Int64Representation int64Representation
     ) =>
-        $"layout=full-namespace-v1;namespaceBarrels={namespaceBarrels};stripInterfacePrefix={stripInterfacePrefix};importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)};int64={int64Representation}";
+        string.Join(
+            ';',
+            "layout=full-namespace-v1",
+            $"namespaceBarrels={namespaceBarrels}",
+            $"stripInterfacePrefix={stripInterfacePrefix}",
+            $"importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}",
+            $"int64={int64Representation}"
+        );
 
     /// <summary>
     /// Builds the cache-fingerprint composite consumed by

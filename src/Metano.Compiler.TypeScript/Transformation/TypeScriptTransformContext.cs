@@ -495,7 +495,9 @@ public sealed class TypeScriptTransformContext(
 
     /// <summary>
     /// How 64-bit integers are represented in the emitted TypeScript; the
-    /// compiler-internal staging switch of spec 012 (DECIDED-22).
+    /// compiler-internal staging switch of spec 012 (DECIDED-22). Nothing reads
+    /// it yet: slice 012b's type mapping and 64-bit lowering are its first
+    /// readers.
     /// </summary>
     internal Int64Representation Int64Representation { get; init; } = Int64Representation.Number;
 
