@@ -30,11 +30,11 @@ export class Money {
     return Money.__subtract(this, right);
   }
 
-  private static __multiplyMoneyBigInteger(left: Money, factor: bigint): Money {
+  static __multiplyMoneyBigInteger(left: Money, factor: bigint): Money {
     return left.with({ cents: left.cents * factor });
   }
 
-  private static __multiplyMoneyMoney(left: Money, right: Money): Money {
+  static __multiplyMoneyMoney(left: Money, right: Money): Money {
     Money.expectSameCurrency(left, right);
 
     return left.with({ cents: left.cents * right.cents });
@@ -68,11 +68,11 @@ export class Money {
     throw new Error("No matching overload for multiply");
   }
 
-  private static __divideMoneyBigInteger(left: Money, divisor: bigint): Money {
+  static __divideMoneyBigInteger(left: Money, divisor: bigint): Money {
     return left.with({ cents: left.cents / divisor });
   }
 
-  private static __divideMoneyMoney(left: Money, divisor: Money): Money {
+  static __divideMoneyMoney(left: Money, divisor: Money): Money {
     Money.expectSameCurrency(left, divisor);
 
     return left.with({ cents: left.cents / divisor.cents });

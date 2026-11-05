@@ -7,7 +7,7 @@ export class Holder<T> {
     return "string";
   }
 
-  private putValue(x: T): string {
+  private putT(x: T): string {
     return "T";
   }
 
@@ -19,7 +19,7 @@ export class Holder<T> {
     }
 
     if (args.length === 1) {
-      return this.putValue(args[0] as T);
+      return this.putT(args[0] as T);
     }
 
     throw new Error("No matching overload for put");

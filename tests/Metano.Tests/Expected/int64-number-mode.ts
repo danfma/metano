@@ -43,15 +43,15 @@ export class Ops {
     return typeof o === "number";
   }
 
-  private overLong(x: number): string {
+  private overInt64(x: number): string {
     return "long";
   }
 
-  private overULong(x: number): string {
+  private overUInt64(x: number): string {
     return "ulong";
   }
 
-  private overInt(x: number): string {
+  private overInt32(x: number): string {
     return "int";
   }
 
@@ -60,15 +60,15 @@ export class Ops {
   over(x: number): string;
   over(...args: unknown[]): string {
     if (args.length === 1 && isInt64(args[0])) {
-      return this.overLong(args[0] as number);
+      return this.overInt64(args[0] as number);
     }
 
     if (args.length === 1 && isUInt64(args[0])) {
-      return this.overULong(args[0] as number);
+      return this.overUInt64(args[0] as number);
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      return this.overInt(args[0] as number);
+      return this.overInt32(args[0] as number);
     }
 
     throw new Error("No matching overload for over");

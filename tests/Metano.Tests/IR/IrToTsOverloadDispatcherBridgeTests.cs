@@ -143,11 +143,11 @@ public class IrToTsOverloadDispatcherBridgeTests
             ),
             containingTypeName
         );
-        // Both overloads share the same parameter name (`value`), so the bridge
-        // falls back to type-based naming. The type parameter falls through
-        // SimpleTypeName to the "Value" fallback, so the generic fast path is
-        // still distinguishable and declares its type parameter.
-        await Assert.That(printed).Contains("identityValue<T>(value: T): T");
+        // Both overloads share the same parameter name (`value`), so the naming
+        // policy falls back to the type spellings. A type parameter spells its
+        // own name (spec 013 FR-002), so the generic fast path is still
+        // distinguishable and declares its type parameter.
+        await Assert.That(printed).Contains("identityT<T>(value: T): T");
     }
 
     [Test]
@@ -173,9 +173,9 @@ public class IrToTsOverloadDispatcherBridgeTests
         var printed = PrintMembers(members, containingTypeName);
         await Assert.That(printed).Contains("static abs(...args: unknown[])");
         // Static overloads delegate through the class name, not `this`. Both
-        // overloads share the parameter name `x`, so the bridge falls back to
-        // type-based suffixes — matching the legacy dispatcher.
-        await Assert.That(printed).Contains("MathUtils.absInt(");
+        // overloads share the parameter name `x`, so the naming policy falls
+        // back to the exact CLR type spellings (spec 013 FR-002).
+        await Assert.That(printed).Contains("MathUtils.absInt32(");
         await Assert.That(printed).Contains("MathUtils.absDouble(");
     }
 
@@ -322,16 +322,10 @@ public class IrToTsOverloadDispatcherBridgeTests
         var model = compilation.GetSemanticModel(tree);
         var typeSymbol = (INamedTypeSymbol)model.GetDeclaredSymbol(typeDecl)!;
 
-        var overloads = typeSymbol
-            .GetMembers(methodName)
-            .OfType<IMethodSymbol>()
-            .Where(m => m.MethodKind == MethodKind.Ordinary)
-            .OrderByDescending(m => m.Parameters.Length)
-            .Select(m =>
-                IrMethodExtractor.Extract(m, new IrExtractionContext(Compilation: compilation))
-            )
-            .ToList();
-        var primary = overloads[0] with { Overloads = overloads.Skip(1).ToList() };
+        var primary = IrClassExtractor
+            .Extract(typeSymbol, new IrExtractionContext(Compilation: compilation))
+            .Members!.OfType<IrMethodDeclaration>()
+            .Single(m => m.Name == methodName);
         return (primary, typeSymbol.Name);
     }
 

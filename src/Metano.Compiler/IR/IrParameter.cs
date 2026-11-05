@@ -53,6 +53,12 @@ public sealed record IrParameter(
 )
 {
     /// <summary>
+    /// The parameter type's spelling in an overload name, captured from Roslyn
+    /// (spec 013 FR-002); <c>null</c> outside a dispatched overload group.
+    /// </summary>
+    public IrNamingSpelling? NamingSpelling { get; init; }
+
+    /// <summary>
     /// Whether a call may omit the argument: the parameter has a C# default or
     /// carries <c>[Optional]</c>.
     /// </summary>

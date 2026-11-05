@@ -306,7 +306,7 @@ public static class IrToTsOverloadDispatcherBridge
             // Fast paths are private — the dispatcher is the public entry point.
             Accessibility: TsAccessibility.Private,
             // Propagate method type parameters so a generic overload like
-            // `Identity<T>(T value)` emits as `identityValue<T>(value: T): T`
+            // `Identity<T>(T value)` emits as `identityT<T>(value: T): T`
             // instead of referencing an undeclared T.
             TypeParameters: MapTypeParameters(method.TypeParameters)
         );
@@ -512,60 +512,8 @@ public static class IrToTsOverloadDispatcherBridge
             ? new TsIdentifier(fastPathName)
             : new TsPropertyAccess(receiver, fastPathName);
 
-    // ── Fast-path naming ─────────────────────────────────────────────────
-
-    /// <summary>
-    /// First attempt uses parameter names (<c>addTitle</c> from <c>Add(string title)</c>);
-    /// on collision (two overloads sharing parameter names is impossible in C# with
-    /// different signatures, but a zero-arg overload + any single named one collide on
-    /// the base name), fall back to a type-based suffix.
-    /// </summary>
     private static List<string> ComputeFastPathNames(
-        string baseName,
+        string dispatcherName,
         IReadOnlyList<IrMethodDeclaration> overloads
-    )
-    {
-        var byParamName = overloads
-            .Select(m => baseName + string.Concat(m.Parameters.Select(p => Capitalize(p.Name))))
-            .ToList();
-        if (byParamName.Distinct(StringComparer.Ordinal).Count() == byParamName.Count)
-            return byParamName;
-
-        return overloads
-            .Select(m =>
-                baseName
-                + string.Concat(m.Parameters.Select(p => Capitalize(SimpleTypeName(p.Type))))
-            )
-            .ToList();
-    }
-
-    private static string SimpleTypeName(IrTypeRef type) =>
-        type switch
-        {
-            IrPrimitiveTypeRef p => PrimitiveSuffix(p.Primitive),
-            IrArrayTypeRef a => SimpleTypeName(a.ElementType) + "Array",
-            IrNullableTypeRef n => SimpleTypeName(n.Inner) + "OrNull",
-            IrNamedTypeRef n => n.Name,
-            _ => "Value",
-        };
-
-    /// <summary>
-    /// C#-alias spelling of a primitive used in fast-path helper names when
-    /// param-name naming isn't usable (Int, Long, ULong, Float, ...).
-    /// </summary>
-    private static string PrimitiveSuffix(IrPrimitive primitive) =>
-        primitive switch
-        {
-            IrPrimitive.Int32 => "Int",
-            IrPrimitive.Int64 => "Long",
-            IrPrimitive.UInt64 => "ULong",
-            IrPrimitive.String => "String",
-            IrPrimitive.Boolean => "Bool",
-            IrPrimitive.Float64 => "Double",
-            IrPrimitive.Float32 => "Float",
-            _ => primitive.ToString(),
-        };
-
-    private static string Capitalize(string s) =>
-        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
+    ) => overloads.Select(method => OverloadFastPathName.Of(dispatcherName, method)).ToList();
 }

@@ -436,20 +436,43 @@ public static class IrClassExtractor
             // Pick the widest overload as the primary to match the dispatcher
             // convention (most specific arity first); siblings become the
             // Overloads payload.
-            var ordered = group.OrderByDescending(m => m.Parameters.Length).ToList();
-            var primary = ExtractMethod(ordered[0], context);
+            var widestFirst = group.OrderByDescending(m => m.Parameters.Length).ToList();
 
-            if (ordered.Count == 1)
+            if (widestFirst.Count == 1)
             {
-                result.Add(primary);
+                result.Add(ExtractMethod(widestFirst[0], context));
                 continue;
             }
 
-            var siblings = ordered.Skip(1).Select(m => ExtractMethod(m, context)).ToList();
-            result.Add(primary with { Overloads = siblings });
+            var named = ExtractNamedOverloads(group, widestFirst, context);
+            result.Add(named[0] with { Overloads = named.Skip(1).ToList() });
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Extracts an overload group widest overload first, as before, and names
+    /// it in declaration order (<see cref="OverloadGroupNaming"/>, spec 013
+    /// FR-006), returning the named declarations widest first.
+    /// </summary>
+    private static List<IrMethodDeclaration> ExtractNamedOverloads(
+        List<IMethodSymbol> declarationOrder,
+        List<IMethodSymbol> widestFirst,
+        IrExtractionContext context
+    )
+    {
+        var extracted = widestFirst.ToDictionary(
+            method => method,
+            method => ExtractMethod(method, context),
+            (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
+        );
+
+        var named = OverloadGroupNaming.Apply(
+            declarationOrder.Select(method => (method, extracted[method])).ToList()
+        );
+
+        return widestFirst.Select(method => named[method]).ToList();
     }
 
     private static bool IsUserMethod(IMethodSymbol method) =>
