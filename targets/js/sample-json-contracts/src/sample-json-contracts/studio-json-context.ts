@@ -1193,9 +1193,7 @@ export class StudioJsonContext extends SerializerContext {
       type: UNearAbs,
       base: this.uNear,
       factory: () => {
-        throw new Error(
-          "Cannot deserialize abstract type 'UNearAbs': polymorphic JSON deserialization is not supported yet.",
-        );
+        throw new Error("Cannot construct abstract type 'UNearAbs'.");
       },
       properties: [],
     }));

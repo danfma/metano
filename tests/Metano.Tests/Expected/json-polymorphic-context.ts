@@ -331,7 +331,7 @@ export class JsonContext extends SerializerContext {
       type: AMid,
       base: this.aB,
       factory: () => {
-        throw new Error("Cannot deserialize abstract type 'AMid': polymorphic JSON deserialization is not supported yet.");
+        throw new Error("Cannot construct abstract type 'AMid'.");
       },
       properties: [
         {

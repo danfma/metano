@@ -426,11 +426,11 @@ public class JsonSerializerContextTests
         await Assert.That(ts).DoesNotContain("factory: (p: Record<string, unknown>) => {");
         await Assert.That(ts).Contains("factory: () => {");
 
+        // The reason is the abstractness itself, not polymorphism (#489);
+        // System.Text.Json rejects the type the same way.
         await Assert
             .That(ts)
-            .Contains(
-                "throw new Error(\"Cannot deserialize abstract type 'Clip': polymorphic JSON deserialization is not supported yet.\");"
-            );
+            .Contains("throw new Error(\"Cannot construct abstract type 'Clip'.\");");
     }
 
     [Test]
