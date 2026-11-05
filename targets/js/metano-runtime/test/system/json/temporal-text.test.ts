@@ -32,31 +32,21 @@ describe("temporalTextOf — TimeOnly (Temporal.PlainTime)", () => {
     expect(temporalTextOf(Temporal.PlainTime.from("03:04:05.000000099"))).toBe("03:04:05");
   });
 
-  test("recognizes the native Temporal.PlainTime too", () => {
-    const native = (globalThis as { Temporal?: typeof Temporal }).Temporal;
+  const native = (globalThis as { Temporal?: typeof Temporal }).Temporal;
 
-    if (native === undefined) {
-      return;
-    }
-
-    expect(temporalTextOf(native.PlainTime.from("03:04:05.678"))).toBe("03:04:05.6780000");
+  test.skipIf(native === undefined)("recognizes the native Temporal.PlainTime too", () => {
+    expect(temporalTextOf(native!.PlainTime.from("03:04:05.678"))).toBe("03:04:05.6780000");
   });
 });
 
 describe("temporalTextOf — other temporal kinds keep toString()", () => {
-  test("DateTime trims trailing fraction zeros, as STJ does", () => {
-    expect(temporalTextOf(Temporal.PlainDateTime.from("2026-01-02T03:04:05.678"))).toBe(
-      "2026-01-02T03:04:05.678",
-    );
-    expect(temporalTextOf(Temporal.PlainDateTime.from("2026-01-02T03:04:05.100"))).toBe(
-      "2026-01-02T03:04:05.1",
-    );
-    expect(temporalTextOf(Temporal.PlainDateTime.from("2026-01-02T03:04:05"))).toBe(
-      "2026-01-02T03:04:05",
-    );
-    expect(temporalTextOf(Temporal.PlainDateTime.from("2026-01-02T03:04:05.1234567"))).toBe(
-      "2026-01-02T03:04:05.1234567",
-    );
+  test.each([
+    ["2026-01-02T03:04:05.678", "2026-01-02T03:04:05.678"],
+    ["2026-01-02T03:04:05.100", "2026-01-02T03:04:05.1"],
+    ["2026-01-02T03:04:05", "2026-01-02T03:04:05"],
+    ["2026-01-02T03:04:05.1234567", "2026-01-02T03:04:05.1234567"],
+  ])("DateTime %s trims trailing fraction zeros, as STJ does (%s)", (input, expected) => {
+    expect(temporalTextOf(Temporal.PlainDateTime.from(input))).toBe(expected);
   });
 
   test("DateOnly", () => {

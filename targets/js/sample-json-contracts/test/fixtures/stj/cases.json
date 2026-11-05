@@ -538,7 +538,7 @@
     "json": "null",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to Level."
+      "message": "The JSON value could not be converted to SampleJsonContracts.Level."
     }
   },
   {
@@ -563,7 +563,7 @@
     "json": "null",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to Title."
+      "message": "The JSON value could not be converted to SampleJsonContracts.Title."
     }
   },
   {
@@ -596,7 +596,8 @@
     "json": "{\"Seconds\":2}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator."
+      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -608,7 +609,8 @@
     "json": "{\"Path\":\"a\",\"kind\":\"image\",\"Seconds\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator."
+      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -686,7 +688,8 @@
     "json": "{\"k\":\"zzz\",\"V\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type 'IgnAbs' must specify a type discriminator."
+      "message": "The JSON payload for polymorphic interface or abstract type 'IgnAbs' must specify a type discriminator.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -697,7 +700,8 @@
     "direction": "write",
     "error": {
       "class": "NotSupportedException",
-      "message": "Runtime type 'UFailX' is not supported by polymorphic type 'UFail'."
+      "message": "Runtime type 'UFailX' is not supported by polymorphic type 'UFail'.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -708,7 +712,8 @@
     "direction": "write",
     "error": {
       "class": "NotSupportedException",
-      "message": "Runtime type 'NLeaf' is not supported by polymorphic type 'NBase'."
+      "message": "Runtime type 'NLeaf' is not supported by polymorphic type 'NBase'.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -731,7 +736,7 @@
     "json": "null",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to SPoint."
+      "message": "The JSON value could not be converted to SampleJsonContracts.SPoint."
     }
   },
   {
@@ -752,7 +757,8 @@
     "json": "{\"Side\":2}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type 'IShape' must specify a type discriminator."
+      "message": "The JSON payload for polymorphic interface or abstract type 'IShape' must specify a type discriminator.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -763,7 +769,8 @@
     "direction": "write",
     "error": {
       "class": "NotSupportedException",
-      "message": "Runtime type 'Other' is not supported by polymorphic type 'IShape'."
+      "message": "Runtime type 'Other' is not supported by polymorphic type 'IShape'.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -789,7 +796,8 @@
     "json": "{\"Kind\":\"image\",\"path\":\"a\",\"seconds\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator."
+      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
@@ -801,7 +809,7 @@
     "json": "{\"n\":\"5.0\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
       "stjPath": "$.n"
     },
@@ -815,7 +823,7 @@
     "json": "{\"n\":\" 5\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
       "stjPath": "$.n"
     },
@@ -829,7 +837,7 @@
     "json": "{\"n\":\"5 \"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
       "stjPath": "$.n"
     },
@@ -843,7 +851,7 @@
     "json": "{\"n\":\"\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
       "stjPath": "$.n"
     },
@@ -857,7 +865,7 @@
     "json": "{\"n\":\"1e2\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
       "stjPath": "$.n"
     },
@@ -871,7 +879,7 @@
     "json": "{\"n\":\"0x10\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
       "stjPath": "$.n"
     },
@@ -885,7 +893,7 @@
     "json": "{\"x\":\"nan\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Double].",
       "stjPath": "$.x"
     },
@@ -899,7 +907,7 @@
     "json": "{\"x\":\" 1.5\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Double].",
       "stjPath": "$.x"
     },
@@ -913,7 +921,7 @@
     "json": "{\"x\":\"0x1\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Double].",
       "stjPath": "$.x"
     },
@@ -927,7 +935,7 @@
     "json": "{\"c\":\"1\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "Invalid numeric enum value: \"1\". Expected one of: 0, 1, 2",
       "stjPath": "$.c"
     },
@@ -941,7 +949,7 @@
     "json": "{\"n\":\"null\"}",
     "error": {
       "class": "JsonException",
-      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "stjMessage": "The JSON value could not be converted to SampleJsonContracts.SoftNums.",
       "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
       "stjPath": "$.n"
     },
@@ -974,7 +982,7 @@
     "context": "StudioJsonContext",
     "getter": "clip",
     "direction": "read",
-    "json": "{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"image\",\"Path\":\"p\",\"Seconds\":1}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+    "json": "{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"image\",\"Path\":\"p\",\"Seconds\":1}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}",
     "error": {
       "class": "JsonException",
       "message": "The maximum configured depth of 64 has been exceeded. Cannot read next JSON object."
@@ -1227,7 +1235,8 @@
     "json": "{\"$type\":\"abs\",\"A\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "Deserialization of interface or abstract types is not supported. Type 'UNearAbs'."
+      "message": "Deserialization of interface or abstract types is not supported. Type 'UNearAbs'.",
+      "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   }

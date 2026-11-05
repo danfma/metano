@@ -1,3 +1,17 @@
+/**
+ * The TypeScript half of the shared System.Text.Json conformance manifest
+ * (spec 009, User Story 5, contracts/wire-format.md). Every row whose
+ * `sides` include `ts` runs against the generated contexts: write and
+ * roundtrip rows compare `JSON.stringify` of the serialized tree byte for
+ * byte, read and roundtrip rows assert the expected class and the builder's
+ * field values, and error rows assert the thrown class and the whole
+ * message (without the sample namespace on `namespaceInsensitive` rows, as
+ * the STJ side compares them). Rows with a `divergence` note carry the STJ
+ * text in `stjJson`; the TypeScript side compares its own `json` text and,
+ * when the row is `crossReadable`, also reads `stjJson` back to the same
+ * value and text.
+ */
+
 import { describe, expect, test } from "bun:test";
 
 import { JsonException, JsonSerializer, NotSupportedException } from "metano-runtime/system/json";
@@ -42,18 +56,6 @@ import { WebJsonContext } from "#/sample-json-contracts/web-json-context";
 import { builderIds, type CaseBuilder, caseBuilders } from "./builders";
 import manifest from "./fixtures/stj/cases.json";
 
-/**
- * The TypeScript half of the shared System.Text.Json conformance manifest
- * (spec 009, User Story 5, contracts/wire-format.md). Every row whose
- * `sides` include `ts` runs against the generated contexts: write and
- * roundtrip rows compare `JSON.stringify` of the serialized tree byte for
- * byte, read and roundtrip rows assert the expected class and the builder's
- * field values, and error rows assert the thrown class and the whole
- * message, normalized as the STJ side normalizes it. Rows with a
- * `divergence` note carry the STJ text in `stjJson`; the TypeScript side
- * compares its own `json` text and, when the row is `crossReadable`, also
- * reads `stjJson` back to the same value and text.
- */
 type Side = "stj" | "ts";
 
 interface ConformanceError {
@@ -62,6 +64,7 @@ interface ConformanceError {
   readonly stjMessage?: string;
   readonly tsMessage?: string;
   readonly stjPath?: string;
+  readonly namespaceInsensitive?: boolean;
 }
 
 interface ConformanceCase {
@@ -78,7 +81,7 @@ interface ConformanceCase {
   readonly divergence?: string;
 }
 
-/** STJ prints the sample's namespace in some messages; both sides drop it. */
+/** STJ prints it in its polymorphic messages (DECIDED-23 g); those rows drop it. */
 const SAMPLE_NAMESPACE = "SampleJsonContracts.";
 
 const NO_BUILDER: CaseBuilder = {};
@@ -175,7 +178,11 @@ function runsOn(row: ConformanceCase, side: Side): boolean {
  * only for a flag (`viaText`).
  */
 function requiresBuilder(row: ConformanceCase): boolean {
-  return !(row.error !== undefined && row.direction === "read");
+  return !isReadError(row);
+}
+
+function isReadError(row: ConformanceCase): boolean {
+  return row.error !== undefined && row.direction === "read";
 }
 
 function runTsCase(row: ConformanceCase): void {
@@ -264,13 +271,13 @@ function expectError(
   spec: unknown,
 ): void {
   const thrown = caught(() =>
-    row.direction === "read"
+    isReadError(row)
       ? readValue(jsonOf(row), spec, builder)
       : writeText(requireBuild(row, builder), spec),
   );
 
   expect(thrown).toBeInstanceOf(errorClassOf(row, error));
-  expect(normalizedMessage(thrown as Error)).toBe(expectedTsMessage(row, error));
+  expect(normalizedMessage(thrown as Error, error)).toBe(expectedTsMessage(row, error));
 }
 
 function expectedTsMessage(row: ConformanceCase, error: ConformanceError): string {
@@ -293,8 +300,10 @@ function errorClassOf(row: ConformanceCase, error: ConformanceError): new () => 
   return errorClass;
 }
 
-function normalizedMessage(error: Error): string {
-  return error.message.replaceAll(SAMPLE_NAMESPACE, "");
+function normalizedMessage(thrown: Error, error: ConformanceError): string {
+  return error.namespaceInsensitive === true
+    ? thrown.message.replaceAll(SAMPLE_NAMESPACE, "")
+    : thrown.message;
 }
 
 function caught(action: () => unknown): unknown {

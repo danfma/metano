@@ -22,8 +22,9 @@ The manifest records the divergences listed in spec 009 "Documented divergences"
 text in `json`, and says with `crossReadable` whether each side reads the other's text (`true`
 for cosmetic differences such as V17 and WEB7, `false` for V11, V12 and V14). A message
 divergence records `stjMessage` and `tsMessage`. Messages are compared after removing STJ's
-`Path: …` suffix (DECIDED-5) and the `SampleJsonContracts.` namespace on both sides; `stjPath`
-pins STJ's JSON path where its message names only the declaring type (DECIDED-23 c).
+`Path: …` suffix (DECIDED-5); only `namespaceInsensitive` rows (STJ's polymorphic messages,
+DECIDED-23 g) also drop the `SampleJsonContracts.` namespace. `stjPath` pins STJ's JSON path where
+its message names only the declaring type (DECIDED-23 c).
 
 The `biome.json` override that turns off `noUnusedFunctionParameters` for the generated `src/`
 covers the unused `p` parameter of the throwing factories of abstract and interface bases; it
