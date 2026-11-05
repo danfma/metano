@@ -86,7 +86,7 @@ public static class IrPropertyExtractor
 
         return new IrPropertyDeclaration(
             prop.Name,
-            IrVisibilityMapper.Map(prop.DeclaredAccessibility),
+            IrVisibilityMapper.MapMember(prop),
             prop.IsStatic,
             IrTypeRefMapper.Map(prop.Type, originResolver, target),
             accessors,

@@ -502,7 +502,7 @@ public static class IrConstructorExtractor
                 : IrParameterPromotion.MutableProperty;
         return (
             promotion,
-            IrVisibilityMapper.Map(prop.DeclaredAccessibility),
+            IrVisibilityMapper.MapMember(prop),
             SymbolHelper.GetNameOverride(prop, context.Target)
         );
     }

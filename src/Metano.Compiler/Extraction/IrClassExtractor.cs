@@ -491,7 +491,7 @@ public static class IrClassExtractor
     ) =>
         new(
             evt.Name,
-            IrVisibilityMapper.Map(evt.DeclaredAccessibility),
+            IrVisibilityMapper.MapMember(evt),
             evt.IsStatic,
             IrTypeRefMapper.Map(evt.Type, originResolver)
         )
