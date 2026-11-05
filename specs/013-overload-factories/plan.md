@@ -30,7 +30,7 @@ start after #445 merges.
 - **Scale/Scope**: 1 new core file (`OverloadNamePolicy`) plus the spelling capture; IR fields
   (data-model.md); a TS claim resolver; edits in both dispatcher bridges, the class and interface
   bridges, the operator bridge, the namespace / module emission, the expression extractor and the
-  JSON spec builder; `MS0067`, `MS0068`; ~30 goldens; the sample scenario. No runtime
+  JSON spec builder; `MS0067`–`MS0069`; ~35 goldens; the sample scenario. No runtime
   (`metano-runtime`) changes.
 
 ## Constitution Check
@@ -103,10 +103,10 @@ breaks; the CHANGELOG collects the breaks for the release.
 | Slice | Commit type | Scope | FRs | Depends on |
 |---|---|---|---|---|
 | **013a — Naming policy in the core** | `feat!:` | Roslyn spelling capture; `OverloadNamePolicy` (passes, exact CLR spellings, the climb, `Default`, dead end + `MS0003`); the TS bridges consume the candidates for today's private fast paths and operator helpers; both spelling tables deleted. The R7 duplicate families compile. | FR-001–FR-003, FR-006, FR-024, FR-033 | — |
-| **013b — Claim pass, factories and selectors** | `feat!:` | `TsOverloadClaims` (order, per-suffix `$`, `MS0067` both reasons); type-qualified selectors first among statics; guarded selector branches; factories with per-overload visibility and FR-026; abstract exclusion; struct zero-argument branch; generic factory constraints. | FR-004, FR-007–FR-014, FR-020 (`MS0067`), FR-026–FR-029 | 013a, #445 |
+| **013b — Claim pass, factories and selectors** | `feat!:` | `TsOverloadClaims` (order, per-suffix `$`, `MS0067` reasons 1–2); type-qualified selectors first among statics; guarded selector branches; factories with per-overload visibility and FR-026 (constructed-base comparison, accessibility, `static override` for kept names); `MS0068` reason 2 (a derived user static against an inherited factory); abstract exclusion; struct zero-argument branch; generic factory constraints. | FR-004, FR-007–FR-014, FR-020 (`MS0067`, `MS0068` reason 2), FR-026–FR-029, FR-034 (statics) | 013a, #445 |
 | **013c — Direct constructor call sites** | `feat!:` | `new T(...)` → factory; every `: base(...)` (selector and fallback branches alike) → `super(Base.by…, …)` with explicit defaults; the JSON factory of the `[JsonConstructor]` overload; project-reference-only cross-package resolution. | FR-017, FR-019 (constructor half), FR-035 | 013b |
-| **013d — Root-anchored fast paths** | `feat!:` | addressable fast paths with per-overload visibility; root anchoring; `override` fast paths and no dispatcher for override-only types; `abstract` fast paths (lifting today's `MS0001`); interface fast-path signatures and implementer forwarding; `MS0068`. | FR-015, FR-016, FR-025, FR-030, FR-031, FR-034, FR-020 (`MS0068`) | 013a, 013b (claim pass), #445 |
-| **013e — Direct method call sites** | `feat!:` | method, `base.M`, method-group, operator and module-function call sites; overloaded module groups with exported fast paths and barrel claims; `params` forms; generic type arguments; project-reference-only cross-package resolution. | FR-018, FR-019 (method half), FR-032 | 013d |
+| **013d — Root-anchored fast paths** | `feat!:` | addressable fast paths with per-overload visibility (overrides: the root's); root anchoring on constructed roots; `override` fast paths and no dispatcher for override-only types; `override` superset dispatchers forwarding to `super` for types adding overloads; claim step 7 (`MS0067` reason 3) for `new` methods and new overloads; `abstract` fast paths (lifting today's `MS0001`); interface fast-path signatures, implementer forwarding, explicit implementations; multiply-constructed interfaces with `MS0069`; root names from metadata symbols for DLL / package bases (DECIDED-28); `MS0068` reason 1. | FR-015, FR-016, FR-025, FR-030, FR-031, FR-034, FR-036, FR-037, FR-020 (`MS0067` reason 3, `MS0068` reason 1, `MS0069`) | 013a, 013b (claim pass), #445 |
+| **013e — Direct method call sites** | `feat!:` | method, `base.M`, method-group, operator and module-function call sites, with Roslyn's bound defaults passed explicitly (DECIDED-32); overloaded module groups with exported fast paths and barrel claims; `params` forms; generic type arguments; project-reference-only cross-package resolution. | FR-018, FR-019 (method half), FR-032 | 013d |
 | **013f — `[Name]` on overloads** | `feat:` | the OQ-1 decision. | FR-005 | 013b, 013d |
 | **013g — Dart names, docs, samples** | `feat:` + `docs:` | Dart named-constructor mapping and claim pass; `docs/` naming rule; CHANGELOG migration notes; the sample scenario with its Node run; matrix rows → Implemented. | FR-021 (sample), FR-022, FR-023 | 013c, 013e, 013f |
 
@@ -132,8 +132,10 @@ root-anchoring rule belongs to **013d**; the claim pass belongs to **013b**, and
 its tables (instance fast paths, barrels).
 
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
-OQ-5 (dropped secondary constructors warning), OQ-8 (overloading an inherited single virtual), the
-two unrelated bugs of research R7 and R12's `object` check.
+OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an
+inherited single virtual, today's emission pinned) and DECIDED-30 (full support for
+multiply-constructed interfaces); default interface methods (bodies dropped today); the two
+unrelated bugs of research R7 and R12's `object` check.
 
 ## Test strategy
 
@@ -141,12 +143,15 @@ two unrelated bugs of research R7 and R12's `object` check.
   row (unsigned, `List<int>` vs `int[]`, delegates, tuples, type parameters), every climb case
   (nested, namespace, generic argument, primitive not climbing, partial-set climbing), `Default`,
   the dead end, root anchoring, determinism.
-- **Planned goldens** (each built with `tsgo --strict --declaration` in its consumer, FR-021):
+- **Planned goldens** (each built with `tsgo --strict --noImplicitOverride --declaration` in its consumer, FR-021, SC-008):
   - `overload-factory-basic` (`Money`, R1) and `overload-dispatcher-fallback` (hand-written
     `new T(...)` keeps the runtime signatures and branches);
   - `overload-factory-hierarchy` — base / derived / grand-derived with identical suffixes, the
-    FR-026 kept and qualified factories (`Receipt.fromAmount`, `GiftReceipt.fromGiftReceiptAmount`)
-    and an inherited factory (R2);
+    FR-026 kept (`static override Receipt.fromAmount`) and qualified factories
+    (`GiftReceipt.fromGiftReceiptAmount`), an inherited factory (R2), and the accessibility cases —
+    a `private` base factory (`fromReceiptCode`) and a narrower derived one (`fromReceiptId`) (R14);
+  - `overload-factory-user-static` — a derived user static against an inherited factory, `MS0068`
+    (R14);
   - `overload-factory-generic` (constraints re-declared, R4) and `overload-factory-generic-closed`
     (`IntBox : Box<int>` → `fromIntBoxValue`);
   - `overload-factory-abstract`, `overload-factory-record`, `overload-factory-chain`;
@@ -168,13 +173,23 @@ two unrelated bugs of research R7 and R12's `object` check.
     (`fromAmount$`, `MS0067` reason 2) and a user member claiming a factory (`fromCents$` /
     `byMoneyCents$`, reason 1);
   - `overload-virtual` — partial override, full override, `base.Add` → `super.addX`, a method
-    group with `.bind`, a derived type adding an overload; plus a Node run returning C#'s results
-    (R8, SC-007);
+    group with `.bind`, a derived type adding an overload (the `override` superset dispatcher, a
+    base `private` overload reached through `super`), a cross-assembly `protected override` of a
+    `protected internal` root (public), a `new` hiding method (`addX$`), a new overload whose
+    candidate meets a base `private` fast path (`addS$`); plus a Node run returning C#'s results
+    (R8, R14, SC-007);
+  - `overload-virtual-single` — an inherited non-overloaded virtual that a derived type overloads:
+    today's emission pinned (DECIDED-29);
+  - `overload-virtual-metadata` — a base read from metadata only: root names from the metadata
+    symbols, `override` fast paths (DECIDED-28);
   - `overload-abstract-methods` — `abstract` fast paths and the concrete dispatcher;
   - `overload-interface` — interface fast-path signatures, an implementer with different
-    parameter names, a method implementing two roots (forwarding member), an explicit
-    implementation, and the interface receiver call `sh.areaS(2)`;
-  - `overload-calls-new`, `overload-calls-super` (with explicit default arguments),
+    parameter names, a method implementing two roots (forwarding member), explicit
+    implementations beside a class overload (`Plot`, R14) and an `MS0031` same-signature conflict,
+    and the interface receiver call `sh.areaS(2)`;
+  - `overload-interface-multiple` — `C : IConv<int>, IConv<string>`: runtime-dispatched root names
+    and `MS0069` (R14);
+  - `overload-calls-new`, `overload-calls-super` (with explicit default arguments), `overload-calls-defaults` (a method call site passing the static overload's default, DECIDED-32),
     `overload-calls-methods`, `overload-calls-static-binding` (`F(object)` / `F(string)`, R12),
     `overload-calls-params` (expanded and normal forms, R11), `overload-calls-operators`;
   - `overload-module-extension` — exported fast paths, the dispatcher, the cross-file import at the
@@ -182,7 +197,7 @@ two unrelated bugs of research R7 and R12's `object` check.
   - `overload-json-factory` — the `[JsonConstructor]` overload's factory in the `TypeSpec`;
   - `overload-cross-package` — `TranspileWithLibrary` with a project reference (direct calls) and
     a metadata-only reference (dispatcher fallback).
-- **Diagnostics**: one test per `MS0067` reason, `MS0068`, and the `MS0003` dead end, asserting
+- **Diagnostics**: one test per `MS0067` reason (1–3), `MS0068` reason (1–2), `MS0069` and the `MS0003` dead end, asserting
   code, severity, location, and that the renamed output still compiles.
 - **Behavior**: the sample consumer's bun tests and a Node run of the same output (SC-006).
 - **Regression**: the full TUnit suite; `verify-targets-clean.sh`; the NFR-001 sample diff.

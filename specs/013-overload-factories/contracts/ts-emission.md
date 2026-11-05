@@ -1,7 +1,7 @@
 # Contract: TypeScript emission for overload factories, selectors and direct call sites
 
-**Normative for**: 013 FR-007–FR-019, FR-021, FR-025–FR-035. Every emission row below is a golden
-(FR-021); names follow [naming.md](./naming.md). Probes: research R1–R13.
+**Normative for**: 013 FR-007–FR-019, FR-021, FR-025–FR-037. Every emission row below is a golden
+(FR-021); names follow [naming.md](./naming.md). Probes: research R1–R14.
 
 ## A dispatched constructor (`Dimension(int size)` / `Dimension(int width, int height)`)
 
@@ -82,7 +82,9 @@ Rules:
 | Per-overload accessibility (FR-011) | each factory carries the #445 member mapping of **its** overload: `private static fromCode`, `protected static fromIdCode`, `/** @internal */ static fromFlag` (internal), `static fromX` (protected internal, untagged) (R10). The constructor keeps FR-049's most permissive modifier and `MS0060` |
 | A factory constructed from outside the class body (a JSON `TypeSpec`, a `new` in a nested type) | that factory is emitted public and reports `MS0061`, as FR-049 rule 3 does for the constructor |
 | An abstract dispatched class | selectors + selector signatures + selector branches; **no factories** (FR-012, TS2511) |
-| A derived class whose factory would break the static side | `from` + type name + suffix (FR-026, R2) |
+| A derived factory that keeps an inherited name (FR-026: same constructed parameter list, base factory not `private`, accessibility at least as wide) | `static override fromAmount(amount: Decimal): Receipt` — `override` is required under `noImplicitOverride` (TS4114, R14) |
+| A derived class whose factory would break the static side (different list, `private` base factory, narrower accessibility) | `from` + type name + suffix, no `override` (FR-026; `GiftReceipt.fromGiftReceiptAmount` R2; `Receipt.fromReceiptCode` / `protected static fromReceiptId` R14) |
+| A derived user static with an inherited factory's name | `MS0068` (error; DECIDED-26) |
 | A struct with constructor overloads (FR-027) | adds `constructor();` and a first branch `if (args.length === 0) { <every instance field> = <default of its type>; return; }`; no factory, no selector for the implicit parameterless constructor; `new S()` keeps emitting `new S()` (R11). An **explicit** parameterless struct constructor is an ordinary overload (`fromDefault` / `bySDefault`) |
 | A `this(...)` chain | the chain stays inlined in the target's selector branch; `static fromDefault(): Temp { return new Temp(Temp.byTempDefault); }` |
 | A record positional constructor with a secondary constructor | every overload gets selector + factory; the primary's selector branch keeps the promoted-member assignments (FR-014) |
@@ -133,12 +135,39 @@ export class Derived extends Base {
 - **Fast paths (FR-015).** Public for a public overload, with no JSDoc tag; every other overload
   keeps its own accessibility under #445's member mapping (`private`, `protected`, `internal` →
   public + `/** @internal */`, `protected internal` → public untagged, `private protected` →
-  `protected` + `/** @internal */`). The dispatcher keeps the group accessibility and #445's
-  narrower-signature tagging.
+  `protected` + `/** @internal */`). An override's fast path takes its **root's** mapped
+  visibility (a cross-assembly `protected override` of a `protected internal` root is public;
+  TS2415 otherwise, R14). The dispatcher keeps the group accessibility and #445's final
+  mixed-group rule: only signatures no other package can reach — `internal`, `private protected`,
+  or `private` inside a wider group — are tagged `/** @internal */`; a `protected` signature in a
+  wider group is widened and left untagged.
 - **Overrides (FR-030).** An override emits the root's fast path with `override`; a type that only
   overrides emits **no** dispatcher and inherits the root's, whose branches call `this.<fastPath>`
-  and so dispatch virtually (R8). A type that declares new overloads emits a dispatcher covering
-  every visible overload (a superset of the base signatures, so TS2416 stays satisfied).
+  and so dispatch virtually (R8). A type that declares new overloads emits an `override`
+  dispatcher (TS4114 otherwise) whose signatures are a **superset of the base dispatcher's**,
+  including base overloads the derived type cannot see (`private`, or `internal` to another
+  assembly, tagged as #445 tags them); its branches for its own overloads call their fast paths,
+  and every other call forwards to `super.<dispatcher>(...args)` (TS2416 otherwise, R14):
+
+  ```ts
+  export class Derived extends Base {         // Base: add(x: number) public, add(s: string) private
+    addFlag(flag: boolean): number { … }
+    override add(x: number): number;
+    /** @internal */
+    override add(s: string): number;
+    override add(flag: boolean): number;
+    override add(...args: unknown[]): number {
+      if (args.length === 1 && isBoolean(args[0])) {
+        return this.addFlag(args[0] as boolean);
+      }
+
+      return super.add(...(args as [never]));
+    }
+  }
+  ```
+- **Non-root candidates (claim step 7).** A `new` (hiding) method or a derived type's new overload
+  whose candidate equals an inherited instance member of any visibility takes `$` (`addX$`,
+  `addS$`, `MS0067` reason 3, R14); it never overrides a base fast path by accident.
 - **Abstract groups (FR-030).** `abstract addX(x: number): number;` per abstract overload; the
   abstract class still emits the concrete dispatcher (today `MS0001`, R5).
 - **`base.M(...)`** → `super.<fastPath>(...)`.
@@ -163,6 +192,39 @@ export class Sq implements IShape {
 ```
 
 A hand-written implementer must now declare `areaS` / `areaWH` (TS2420, R8 — Migration (a)).
+Default interface methods are out of scope (their bodies are dropped today).
+
+### Explicit implementations (FR-037)
+
+```ts
+export class Plot implements IShape {      // int IShape.Area(int s); int IShape.Area(int w, int h); public int Area(bool big)
+  areaS(s: number): number { … }           // explicit, under the root's name
+  areaWH(w: number, h: number): number { … }
+  areaBig(big: boolean): number { … }      // the class's own overload
+  area(s: number): number;
+  area(w: number, h: number): number;
+  area(big: boolean): number;
+  area(...args: unknown[]): number { … }   // covers the explicit and the class overloads
+}
+```
+
+An explicit overload whose signature equals a class member's keeps today's `MS0031` (dropped).
+
+### Multiply-constructed interfaces (FR-036)
+
+```ts
+export class C implements IConv<number>, IConv<string> {   // MS0069
+  convX(x: number): number;
+  convX(x: string): number;
+  convX(...args: unknown[]): number { … }   // runtime dispatch over Conv(int x) / Conv(string x)
+  convXN(x: number, n: number): number;
+  convXN(x: string, n: number): number;
+  convXN(...args: unknown[]): number { … }
+  conv(...args: unknown[]): number { … }    // today's dispatcher
+}
+```
+
+No per-implementation fast paths; direct calls into `C` use these dispatchers (R14).
 
 ## Module groups (FR-032)
 
@@ -198,6 +260,7 @@ operators are always public static).
 | `: base(1)` to `Base(int a, int b = 5)` | `super(Base.byBaseAB, 1, 5)` — Roslyn's default-value arguments are passed explicitly |
 | `: this(42)` | unchanged — inlined in the target's selector branch |
 | `Shapes.Add(1, 2)` | `Shapes.addXY(1, 2)` |
+| `s.Scale(2)` to `Scale(int f, int d = 10)` | `s.scaleFD(2, 10)` — the statically resolved overload's default passed explicitly (DECIDED-32) |
 | `p.Add(point)` / `this.Add(point)` | `p.addP(point)` / `this.addP(point)` — the receiver evaluated once in place |
 | `b.Add(1)` where `b` is `Base` and `Derived` overrides `Add(int)` | `b.addX(1)` (virtual, root name) |
 | `sh.Area(2)` on an `IShape` | `sh.areaS(2)` |
@@ -232,6 +295,7 @@ export declare class Base {
 }
 ```
 
-`@internal` appears only where #445 puts it (C# `internal`, `private protected`, narrower dispatcher
-signatures); a public overload's factory and fast path are untagged, so `stripInternal` keeps them
+`@internal` appears only where #445 puts it (C# `internal`, `private protected`, a `private`
+signature inside a wider dispatcher group; a `protected` one in a wider group is widened untagged);
+a public overload's factory and fast path are untagged, so `stripInternal` keeps them
 (R10, DECIDED-17).

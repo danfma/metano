@@ -35,7 +35,12 @@ runtime-comparable, type-level-distinct, subclass-visible name for one construct
 - **Root-anchored names.** A method overload is named after its root declaration (the overridden
   chain's first declaration, or the interface member). Overrides emit `override <fastPath>`,
   abstract overloads `abstract <fastPath>`, interfaces declare the fast paths, and the inherited
-  dispatcher keeps calling `this.<fastPath>`.
+  dispatcher keeps calling `this.<fastPath>`. An override takes the root's visibility; a type that
+  adds overloads emits an `override` dispatcher over a superset of the base signatures that
+  forwards unmatched calls to `super`; non-root candidates (`new` methods, new overloads) claim
+  against inherited members. A type implementing one generic interface twice keeps runtime
+  dispatch (`MS0069`). Bases read from metadata are named by running the producer's pipeline over
+  the metadata symbols.
 - **Constructor factories and type-qualified selectors.** A dispatched constructor emits, per
   overload, `protected static readonly by<TypeName><Suffix>: unique symbol` (first among the
   statics) and a static factory `from<Suffix>` with its overload's own accessibility (qualified as
@@ -76,7 +81,7 @@ runtime-comparable, type-level-distinct, subclass-visible name for one construct
 ## References
 
 - Spec: [specs/013-overload-factories/spec.md](../../specs/013-overload-factories/spec.md)
-  (research R1–R13 holds the probe evidence).
+  (research R1–R14 holds the probe evidence).
 - Superseded in part: [ADR-0008](0008-overload-dispatch.md) — its dispatcher contract stands; its
   private fast paths and heuristic naming do not.
 - [ADR-0009](0009-type-guards.md), [ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md),
