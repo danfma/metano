@@ -32,6 +32,12 @@ enum Alias {
   Second = 1,
 }
 
+/** A `uint` enum with members past 2^31. */
+enum Wide {
+  Top = 2147483648,
+  Max = 4294967295,
+}
+
 /** A `Dictionary<K, int>` spec. */
 type IntValuedMapSpec = ValueSpec<Map<unknown, number> | null>;
 
@@ -160,6 +166,24 @@ const KEY_READS: readonly KeyReadRow[] = [
     key: 4294967295,
   },
   {
+    label: "uint enum member past 2^31 by name",
+    spec: mapSpec({ kind: "numericEnum", values: Wide, numberType: "System.UInt32" }),
+    name: "top",
+    key: Wide.Top,
+  },
+  {
+    label: "uint enum members past 2^31 by a list of names",
+    spec: mapSpec({ kind: "numericEnum", values: Wide, numberType: "System.UInt32" }),
+    name: "Top, Max",
+    key: Wide.Max,
+  },
+  {
+    label: "sbyte enum at its minimum",
+    spec: mapSpec({ kind: "numericEnum", values: Level, numberType: "System.SByte" }),
+    name: "-128",
+    key: -128,
+  },
+  {
     label: "string enum in any case",
     spec: mapSpec({ kind: "enum", values: Flavor, typeName: "MyApp.Flavor" }),
     name: "salty",
@@ -238,6 +262,17 @@ const KEY_ERRORS: readonly KeyErrorRow[] = [
     spec: BYTE_LEVEL_KEY,
     name: "256",
     typeName: "MyApp.ByteLevel",
+  },
+  {
+    label: "sbyte enum below its minimum",
+    spec: mapSpec({
+      kind: "numericEnum",
+      values: Level,
+      typeName: "MyApp.SmallLevel",
+      numberType: "System.SByte",
+    }),
+    name: "-129",
+    typeName: "MyApp.SmallLevel",
   },
   {
     label: "string enum unknown name",

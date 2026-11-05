@@ -151,30 +151,45 @@ const INTEGER_RANGES: Readonly<Record<IntegerTypeName, readonly [min: bigint, ma
   "System.UInt64": [0n, 18_446_744_073_709_551_615n],
 };
 
-/** Signed types take an optional sign; unsigned types take digits only. */
+/** The unsigned integer types, read from digits only. */
+const UNSIGNED_INTEGER_TYPES: ReadonlySet<IntegerTypeName> = new Set([
+  "System.Byte",
+  "System.UInt16",
+  "System.UInt32",
+  "System.UInt64",
+]);
+
+/** A reader of the integers in `numberType`'s range, spelled as `pattern` allows. */
 function integerTextReader(numberType: IntegerTypeName, pattern: RegExp): NumberTextReader {
   const [min, max] = INTEGER_RANGES[numberType];
 
   return integerReader(pattern, min, max);
 }
 
-/** Every integer type read with an optional sign (`readSignedIntegerText`). */
-const SIGNED_INTEGER_READERS = Object.fromEntries(
-  Object.keys(INTEGER_RANGES).map((numberType) => [
-    numberType,
-    integerTextReader(numberType as IntegerTypeName, SIGNED_INTEGER_PATTERN),
-  ]),
-) as Readonly<Record<IntegerTypeName, NumberTextReader>>;
+/** Every integer type read by `patternOf` its type (`integerTextReader`). */
+function integerReadersOf(
+  patternOf: (numberType: IntegerTypeName) => RegExp,
+): Readonly<Record<IntegerTypeName, NumberTextReader>> {
+  const numberTypes = Object.keys(INTEGER_RANGES) as IntegerTypeName[];
+
+  return Object.fromEntries(
+    numberTypes.map((numberType) => [
+      numberType,
+      integerTextReader(numberType, patternOf(numberType)),
+    ]),
+  ) as Record<IntegerTypeName, NumberTextReader>;
+}
+
+/** Signed integer types take an optional sign; unsigned ones digits only. */
+const STRICT_INTEGER_READERS = integerReadersOf((numberType) =>
+  UNSIGNED_INTEGER_TYPES.has(numberType) ? UNSIGNED_INTEGER_PATTERN : SIGNED_INTEGER_PATTERN,
+);
+
+/** Every integer type with an optional sign, as `Enum.TryParse` reads one (`readEnumIntegerText`). */
+const ENUM_INTEGER_READERS = integerReadersOf(() => SIGNED_INTEGER_PATTERN);
 
 const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = {
-  "System.Byte": integerTextReader("System.Byte", UNSIGNED_INTEGER_PATTERN),
-  "System.SByte": integerTextReader("System.SByte", SIGNED_INTEGER_PATTERN),
-  "System.Int16": integerTextReader("System.Int16", SIGNED_INTEGER_PATTERN),
-  "System.UInt16": integerTextReader("System.UInt16", UNSIGNED_INTEGER_PATTERN),
-  "System.Int32": integerTextReader("System.Int32", SIGNED_INTEGER_PATTERN),
-  "System.UInt32": integerTextReader("System.UInt32", UNSIGNED_INTEGER_PATTERN),
-  "System.Int64": integerTextReader("System.Int64", SIGNED_INTEGER_PATTERN),
-  "System.UInt64": integerTextReader("System.UInt64", UNSIGNED_INTEGER_PATTERN),
+  ...STRICT_INTEGER_READERS,
   "System.Single": floatingPointReader(fitsSingle),
   "System.Double": floatingPointReader(fitsDouble),
 };
@@ -188,15 +203,12 @@ export function readNumberText(text: string, numberType: NumberTypeName): number
 }
 
 /**
- * The integer `text` spells within the range of `numberType`, with an
- * optional sign whatever the type (`Enum.TryParse` reads an enum key so:
- * `"+5"` and `"-0"` read for a `byte` enum); `undefined` otherwise.
+ * The integer an enum key `text` spells within the range of its underlying
+ * `numberType`, with an optional sign whatever the type, as `Enum.TryParse`
+ * reads it (`"+5"` and `"-0"` read for a `byte` enum); `undefined` otherwise.
  */
-export function readSignedIntegerText(
-  text: string,
-  numberType: IntegerTypeName,
-): number | undefined {
-  return SIGNED_INTEGER_READERS[numberType](text);
+export function readEnumIntegerText(text: string, numberType: IntegerTypeName): number | undefined {
+  return ENUM_INTEGER_READERS[numberType](text);
 }
 
 /** The digits of a matched number text as `significand × 10^exponent`, without its sign. */

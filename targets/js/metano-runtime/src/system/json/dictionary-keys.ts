@@ -10,7 +10,7 @@ import type {
 import type { ValueConverter } from "./value-converter.ts";
 import { readDecimalText } from "./decimal-text.ts";
 import { cannotConvertToTypeName } from "./contract-name.ts";
-import { readNumberText, readSignedIntegerText } from "./number-from-string.ts";
+import { readNumberText, readEnumIntegerText } from "./number-from-string.ts";
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 
@@ -27,9 +27,6 @@ const BOOLEAN_KEYS: ReadonlyMap<string, boolean> = new Map([
 
 /** `Guid` property names are read in the `D` format only (`8-4-4-4-12`). */
 const GUID_D_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** `Enum.TryParse` takes integer text when the name starts like a number. */
-const ENUM_INTEGER_PATTERN = /^[+-]?[0-9]+$/;
 
 /** The underlying type of an enum key whose descriptor names none, the C# default. */
 const DEFAULT_ENUM_INTEGER_TYPE: IntegerTypeName = "System.Int32";
@@ -141,21 +138,27 @@ function readNumericEnumKey(
   integerType: IntegerTypeName,
   valueOfName: (name: string) => number | undefined,
 ): number | undefined {
-  return ENUM_INTEGER_PATTERN.test(text)
-    ? readSignedIntegerText(text, integerType)
-    : readEnumNameList(text, valueOfName);
+  // No member name spells an integer, so the name list never reads one.
+  return readEnumIntegerText(text, integerType) ?? readEnumNameList(text, valueOfName);
 }
 
-/** The member names of `text`, OR-ed; `undefined` when one is not a member. */
+/**
+ * The member names of `text`, OR-ed as 64-bit integers so a `uint` or `long`
+ * member past 2^31 keeps its value; `undefined` when one is not a member.
+ */
 function readEnumNameList(
   text: string,
   valueOfName: (name: string) => number | undefined,
 ): number | undefined {
   const values = text.split(ENUM_NAME_SEPARATOR).map((name) => valueOfName(name.trim()));
 
-  return values.every((value) => value !== undefined)
-    ? values.reduce((combined, value) => combined | value, 0)
-    : undefined;
+  if (!values.every((value): value is number => value !== undefined)) {
+    return undefined;
+  }
+
+  return values.length === 1
+    ? values[0]
+    : Number(values.reduce((combined, value) => combined | BigInt(value), 0n));
 }
 
 function stringEnumKeyConverter(descriptor: EnumDescriptor): ValueConverter {

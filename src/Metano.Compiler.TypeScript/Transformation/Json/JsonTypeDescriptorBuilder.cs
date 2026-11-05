@@ -123,10 +123,10 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// what the runtime needs to parse the JSON property name into it the way
     /// System.Text.Json does (#479). A numeric key always names its
     /// <c>numberType</c>, whatever the context's read options, and so does a
-    /// numeric enum key for its underlying type; a <c>bool</c>, enum,
-    /// <c>Guid</c> or temporal key names its CLR <c>typeName</c> for the
-    /// error text. A <c>string</c> key and any other
-    /// key keep the value descriptor unchanged.
+    /// numeric enum key for its underlying type. A <c>bool</c>, enum,
+    /// <c>Guid</c> or temporal key names its CLR <c>typeName</c> for the error
+    /// text. A <c>string</c> key and any other key keep the value descriptor
+    /// unchanged.
     /// </summary>
     private TsObjectLiteral BuildKeyDescriptor(ITypeSymbol keyType)
     {
@@ -308,10 +308,15 @@ internal sealed class JsonTypeDescriptorBuilder(
         JsonPropertyKind kind
     ) =>
         kind == JsonPropertyKind.NumericEnum
-        && keyType is INamedTypeSymbol { EnumUnderlyingType: { } underlying }
-        && JsonTypeClassifier.NumberTypeNameOf(underlying) is { } numberType
+        && EnumUnderlyingNumberTypeOf(keyType) is { } numberType
             ? WithStringProperty(descriptor, "numberType", numberType)
             : descriptor;
+
+    /// <summary>The CLR name of an enum's underlying integer type; <c>null</c> for any other type.</summary>
+    private static string? EnumUnderlyingNumberTypeOf(ITypeSymbol type) =>
+        type is INamedTypeSymbol { EnumUnderlyingType: { } underlying }
+            ? JsonTypeClassifier.NumberTypeNameOf(underlying)
+            : null;
 
     /// <summary><paramref name="descriptor"/> with one more string-valued property.</summary>
     private static TsObjectLiteral WithStringProperty(
