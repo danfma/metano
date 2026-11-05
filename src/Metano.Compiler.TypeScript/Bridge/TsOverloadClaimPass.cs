@@ -406,8 +406,13 @@ internal sealed class TsOverloadClaimPass
     {
         var signature = DispatchedOverload.SignatureOf(overload);
         var table = TableOf(overload.IsStatic);
+        var names = forwarders.Prepend(fastPath).ToList();
 
-        foreach (var name in forwarders.Prepend(fastPath))
+        var overridden = names
+            .Where(name => ReimplementsInheritedMember(overload, name))
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var name in names)
         {
             table[name] = new TsClaimedMember(
                 TsClaimedMemberKind.FastPath,
@@ -418,22 +423,39 @@ internal sealed class TsOverloadClaimPass
         }
 
         _methods[new TsMethodOverloadKey(overload.Name, overload.DeclarationOrdinal)] =
-            new TsMethodOverloadNames(
-                fastPath,
-                forwarders,
-                ReimplementsInheritedFastPath(overload, fastPath)
-            );
+            new TsMethodOverloadNames(fastPath, forwarders, overridden);
     }
 
     /// <summary>
-    /// An interface implementation whose root name an emitted base already
-    /// declares as a fast path — a <c>new</c> method or an explicit
-    /// re-implementation — overrides it in TypeScript.
+    /// An interface implementation whose root name (or a further root's) an
+    /// emitted base already declares as a fast path of the same parameter
+    /// types — a <c>new</c> method or an explicit re-implementation —
+    /// overrides it in TypeScript. A base fast path of that name for other
+    /// parameter types is a different overload the anchored name cannot move
+    /// away from: <c>MS0068</c>.
     /// </summary>
-    private bool ReimplementsInheritedFastPath(IrMethodDeclaration overload, string fastPath) =>
-        overload.Anchor is { Kind: IrOverloadAnchorKind.Implementation }
-        && !overload.IsStatic
-        && InheritedFastPathAt(fastPath) is not null;
+    private bool ReimplementsInheritedMember(IrMethodDeclaration overload, string name)
+    {
+        if (overload is not { Anchor.Kind: IrOverloadAnchorKind.Implementation, IsStatic: false })
+            return false;
+
+        // A constructed root's runtime dispatcher overrides the inherited
+        // name itself, over every construction (FR-036).
+        if (_input.Ir.ConstructedRootOf(overload) is not null)
+            return false;
+
+        if (InheritedFastPathAt(name) is not { } inherited)
+            return false;
+
+        var signature = DispatchedOverload.SignatureOf(overload);
+
+        if (OverloadParameterTypes.Match(inherited.Declaration, signature))
+            return true;
+
+        ReportHijack(overload.Name, name, inherited);
+
+        return false;
+    }
 
     private TsCollision? FastPathCollisionOf(string name, bool isStatic) =>
         HolderOfFastPath(name, isStatic) is { } holder

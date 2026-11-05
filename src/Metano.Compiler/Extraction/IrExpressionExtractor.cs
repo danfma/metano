@@ -2735,7 +2735,7 @@ public sealed partial class IrExpressionExtractor
         if (IsDartTarget || symbol is null)
             return null;
 
-        if (!IsBaseMemberCall(inv) || !IsDispatchedGroupMethod(symbol))
+        if (!IsBaseMemberCall(inv) || !IsDispatchedOnEmittedBase(symbol))
             return null;
 
         var bound = ExtractBoundCall(
@@ -2760,7 +2760,7 @@ public sealed partial class IrExpressionExtractor
     private static bool IsBaseMemberCall(InvocationExpressionSyntax inv) =>
         inv.Expression is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax };
 
-    private bool IsDispatchedGroupMethod(IMethodSymbol symbol) =>
+    private bool IsDispatchedOnEmittedBase(IMethodSymbol symbol) =>
         MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
         && MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _target)
             is { IsDispatched: true };

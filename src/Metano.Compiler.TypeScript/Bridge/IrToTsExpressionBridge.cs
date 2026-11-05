@@ -1624,16 +1624,16 @@ public static partial class IrToTsExpressionBridge
         );
     }
 
+    /// <summary>The overload a <c>base.M(...)</c> call was bound to; <c>null</c> for any other call.</summary>
+    private static IrSelectedOverload? BaseOverloadOf(IrCallExpression call) =>
+        call.Target is IrMemberAccess { Target: IrBaseExpression } ? call.Overload : null;
+
     /// <summary>
     /// <c>base.M(...)</c> resolved into a dispatched group (spec 013 FR-018):
     /// <c>super.addX(x)</c>, the base overload's fast path, with Roslyn's
     /// bound arguments in C#'s evaluation order. <c>null</c> when the call
     /// has no resolved overload or its declaring type is not visible.
     /// </summary>
-    /// <summary>The overload a <c>base.M(...)</c> call was bound to; <c>null</c> for any other call.</summary>
-    private static IrSelectedOverload? BaseOverloadOf(IrCallExpression call) =>
-        call.Target is IrMemberAccess { Target: IrBaseExpression } ? call.Overload : null;
-
     private static TsExpression? BaseFastPathCallOf(
         IrCallExpression call,
         IReadOnlyList<TsExpression> loweredArgs,
