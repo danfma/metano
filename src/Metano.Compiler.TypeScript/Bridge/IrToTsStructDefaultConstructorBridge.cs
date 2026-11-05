@@ -19,7 +19,7 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   not admit it;</item>
 ///   <item>a number, <c>bool</c>, <c>decimal</c>, enum or nullable: its
 ///   implicit initializer (for an enum without a zero member, its smallest
-///   member, the class emitter's existing rule, not C#'s <c>0</c>); <c>char</c>: <c>"\0"</c>; <c>BigInteger</c>:
+///   member — the class emitter's existing rule, not C#'s <c>0</c>); <c>char</c>: <c>"\0"</c>; <c>BigInteger</c>:
 ///   <c>0n</c>; a branded value: its underlying zero;</item>
 ///   <item>a struct that <c>new S()</c> zeroes — one declaring no constructor
 ///   (its implicit initializer), or one with an implicit parameterless
@@ -50,19 +50,28 @@ internal static class IrToTsStructDefaultConstructorBridge
     )
     {
         if (!ir.Semantics.IsValueType || DeclaresParameterless(ir))
+        {
             return null;
+        }
 
         var typeParameters = ir.TypeParameters ?? [];
 
         return StorageOf(ir)
-            .Select(storage =>
-                Assignment(
-                    storage,
-                    DefaultValueOf(storage.Type, typeParameters)
-                        ?? Unrepresentable(storage, type, report)
-                )
-            )
+            .Select(storage => DefaultAssignment(storage, typeParameters, type, report))
             .ToList();
+    }
+
+    private static TsStatement DefaultAssignment(
+        StructStorage storage,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        INamedTypeSymbol type,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var value =
+            DefaultValueOf(storage.Type, typeParameters) ?? Unrepresentable(storage, type, report);
+
+        return Assignment(storage, value);
     }
 
     private static bool DeclaresParameterless(IrClassDeclaration ir) =>
@@ -91,6 +100,8 @@ internal static class IrToTsStructDefaultConstructorBridge
                 : AssertedNull(),
             IrNamedTypeRef named => NamedDefaultOf(named),
             IrTupleTypeRef or IrKeyValuePairTypeRef => null,
+            // Every other IR shape (array, map, set, function, promise,
+            // iterable…) lowers a reference type.
             _ => AssertedNull(),
         };
 
@@ -115,14 +126,7 @@ internal static class IrToTsStructDefaultConstructorBridge
             { BrandedUnderlyingPrimitive: { } underlying } => BrandedZeroOf(underlying),
             { HasImplicitParameterlessOverload: true } => ParameterlessNewOf(named),
             { IsValueType: true } => null,
-            {
-                Kind: IrNamedTypeKind.Class
-                    or IrNamedTypeKind.Record
-                    or IrNamedTypeKind.Interface
-                    or IrNamedTypeKind.Delegate
-                    or IrNamedTypeKind.Exception
-            } => AssertedNull(),
-            _ => null,
+            _ => AssertedNull(),
         };
 
     private static bool IsValueConstrained(
@@ -145,6 +149,14 @@ internal static class IrToTsStructDefaultConstructorBridge
     private static TsExpression AssertedNull() =>
         new TsCastExpression(new TsLiteral("null"), new TsNamedType("never"));
 
+    private static ITypeSymbol? TypeOf(ISymbol? member) =>
+        member switch
+        {
+            IFieldSymbol field => field.Type,
+            IPropertySymbol property => property.Type,
+            _ => null,
+        };
+
     private static TsExpression Unrepresentable(
         StructStorage storage,
         INamedTypeSymbol type,
@@ -152,7 +164,9 @@ internal static class IrToTsStructDefaultConstructorBridge
     )
     {
         var member = type.GetMembers(storage.MemberName).FirstOrDefault();
-        var typeName = Printer.RenderType(IrToTsTypeMapper.Map(storage.Type));
+        var typeName =
+            TypeOf(member)?.ToDisplayString()
+            ?? Printer.RenderType(IrToTsTypeMapper.Map(storage.Type));
 
         report(
             new MetanoDiagnostic(

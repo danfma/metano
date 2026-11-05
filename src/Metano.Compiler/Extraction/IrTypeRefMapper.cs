@@ -377,7 +377,8 @@ public static class IrTypeRefMapper
                     StringEnumValues: values,
                     IsTranspilable: IsTranspilableType(named, target),
                     IsIgnored: SymbolHelper.HasIgnore(named, target),
-                    EnumDefaultMember: ExtractEnumDefaultMember(named, target)
+                    EnumDefaultMember: ExtractEnumDefaultMember(named, target),
+                    IsValueType: true
                 );
             }
             return new IrNamedTypeSemantics(
@@ -385,7 +386,8 @@ public static class IrTypeRefMapper
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 EnumDefaultMember: ExtractEnumDefaultMember(named, target),
-                IsExternal: SymbolHelper.HasExternal(named)
+                IsExternal: SymbolHelper.HasExternal(named),
+                IsValueType: true
             );
         }
 
@@ -411,7 +413,8 @@ public static class IrTypeRefMapper
                 BrandedUnderlyingPrimitive: primitive,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named)
+                IsExternal: SymbolHelper.HasExternal(named),
+                IsValueType: named.IsValueType
             );
         }
 

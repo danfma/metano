@@ -413,7 +413,7 @@ public sealed class IrToTsClassEmitter(
         if (ctorsWithObjectArgs.Count == 0)
             return null;
 
-        if (explicitCtors.Count > 1)
+        if (IrConstructorExtractor.IsDispatchedSet(type))
         {
             _context.ReportUnsupportedBody(
                 type,

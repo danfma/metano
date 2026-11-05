@@ -100,13 +100,13 @@ public sealed record IrNamedTypeRef(
 /// <c>[JsTuple]</c>, <c>[External]</c> or <c>[Import]</c> struct, a BCL struct, and
 /// every non-struct type.</param>
 /// <param name="IsValueType">The referenced type is a value type: a struct, a
-/// record struct, an enum. Its <c>default</c> is a zeroed value, never
-/// <c>null</c>.</param>
+/// record struct, an enum, a branded struct. Its <c>default</c> is a zeroed
+/// value, never <c>null</c>.</param>
 /// <param name="HasImplicitParameterlessOverload">The referenced type is a
 /// transpiled struct with a runtime class (the exclusions of
 /// <paramref name="IsDefaultConstructible"/>) whose declared constructors form
-/// a dispatched set (<see cref="Extraction.IrConstructorExtractor.IsDispatchedSet"/>)
-/// with no parameterless one, so C#'s implicit parameterless constructor — the
+/// a dispatched set (two or more declared constructors, spec 013 D1) with no
+/// parameterless one, so C#'s implicit parameterless constructor — the
 /// zero value — joins the set as one more overload (spec 013 FR-027).</param>
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,

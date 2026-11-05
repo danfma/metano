@@ -312,7 +312,7 @@ public class OverloadNameClaimTests
     }
 
     [Test]
-    public async Task SwappedTypeParameters_RenameEveryNameAtOnce()
+    public async Task InheritedFactory_SwappedBaseTypeParameters_RebindsBothAtOnce()
     {
         var files = TranspileHelper.Transpile(
             """
@@ -337,6 +337,7 @@ public class OverloadNameClaimTests
         await Assert
             .That(files["b.ts"])
             .Contains("static override fromKV<K, V>(k: V, v: K): B<K, V> {");
+        await Assert.That(files["b.ts"]).DoesNotContain("(k: K, v: V): B<K, V>");
     }
 
     /// <summary>
