@@ -1006,6 +1006,43 @@ public class StjConformanceFixtureTests
             ["T22"] = ReadOnly(async value =>
                 await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(2, 0, 0))
             ),
+            ["T41"] = ReadOnly(async value =>
+                await Assert
+                    .That((DateTime)value!)
+                    .IsEqualTo(new DateTime(2024, 1, 31, 10, 20, 30).AddTicks(9999999))
+            ),
+            ["T43"] = ReadOnly(async value =>
+                await Assert
+                    .That((DateTime)value!)
+                    .IsEqualTo(
+                        new DateTimeOffset(
+                            2024,
+                            1,
+                            31,
+                            10,
+                            20,
+                            30,
+                            new TimeSpan(14, 0, 0)
+                        ).LocalDateTime
+                    )
+            ),
+            ["T45"] = ReadOnly(async value =>
+                await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(14, 0, 0))
+            ),
+            ["T47"] = ReadOnly(async value =>
+            {
+                var moment = (DateTimeOffset)value!;
+
+                await Assert.That(moment.Offset).IsEqualTo(new TimeSpan(2, 0, 0));
+
+                await Assert
+                    .That(moment)
+                    .IsEqualTo(
+                        new DateTimeOffset(2024, 1, 31, 10, 20, 30, new TimeSpan(2, 0, 0)).AddTicks(
+                            9999999
+                        )
+                    );
+            }),
             ["T25"] = ReadOnly(async value =>
                 await Assert.That((TimeSpan)value!).IsEqualTo(new TimeSpan(10, 20, 0))
             ),

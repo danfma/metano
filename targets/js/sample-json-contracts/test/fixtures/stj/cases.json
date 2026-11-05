@@ -1671,6 +1671,78 @@
     }
   },
   {
+    "id": "T41",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.9999999999999999\""
+  },
+  {
+    "id": "T42",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.99999999999999999\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "T43",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+14:00\""
+  },
+  {
+    "id": "T44",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+14:01\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "T45",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+14:00\""
+  },
+  {
+    "id": "T46",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+99:00\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTimeOffset."
+    }
+  },
+  {
+    "id": "T47",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.9999999999999999+02:00\""
+  },
+  {
+    "id": "T48",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.99999999999999999+02:00\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTimeOffset."
+    }
+  },
+  {
     "id": "NU1",
     "context": "StudioJsonContext",
     "getter": "holderInt",
