@@ -260,6 +260,13 @@ generic types that use it as an argument. Type arguments use the same rule, so
 **Divergences:** `Stack<T>` is written and read in array order (System.Text.Json
 writes it top-first and reverses it on read); the `[Name]` naming above.
 
+**Getter renames (#270):** every getter now comes from the naming rule above.
+A type whose camel-cased name is a JavaScript reserved word keeps the bare
+name, because getters sit in property position: `Delete` → `get delete()`
+(previously `get delete_()`), `Default` → `get default()` (previously
+`default_`; it does not clash with the static `JsonContext.default`). Update
+call sites such as `ctx.delete_` to `ctx.delete`.
+
 ### Null roots
 
 JSON `null` at a root reads and writes as System.Text.Json does (measured on
@@ -299,13 +306,6 @@ JSON `null` at a root reads and writes as System.Text.Json does (measured on
 - An empty or blank text has no JSON token: `deserializeText("", …)` throws
   `The input does not contain any JSON tokens. Expected the input to start with
   a valid JSON token, when isFinalBlock is true.` for every root, as STJ does.
-
-**Getter renames (#270):** every getter now comes from the naming rule above.
-A type whose camel-cased name is a JavaScript reserved word keeps the bare
-name, because getters sit in property position: `Delete` → `get delete()`
-(previously `get delete_()`), `Default` → `get default()` (previously
-`default_`; it does not clash with the static `JsonContext.default`). Update
-call sites such as `ctx.delete_` to `ctx.delete`.
 
 ## Supported type descriptors
 
@@ -852,9 +852,30 @@ Stringify the tree before cloning or posting it.
 
   or register a custom `decimal` converter that returns what the code expects.
 
-**Other changes.** Spec 009 changed these too; they do not change what a
-semantic JSON consumer reads, and the first, second and fourth already shipped
-in 2.x:
+**Wire format changes (2.10.1 → 3.0).** These change the JSON a 3.0 context
+writes or accepts, so a payload exchanged with a 2.x build can differ:
+
+- **`byte[]`** is written as base64, as .NET writes it (`[1,2,3]` →
+  `"AQID"`). 2.x wrote a number array; a 2.x payload such as
+  `{"Data":[1,2,3]}` now throws `The JSON value could not be converted to
+  System.Byte[].` ([Member selection](#member-selection)).
+- **Conditional `[JsonIgnore]`** (`WhenWritingNull`, `WhenWritingDefault`,
+  `WhenWriting`, `WhenReading`): 2.x left these members out; 3.0 writes and
+  reads them (warning `MS0037`), so a payload without a non-nullable one throws
+  `Missing required property: "Count"`.
+- **`JsonSerializerDefaults.Web`**: 2.x ignored it; 3.0 writes camelCase names
+  (`FirstName` → `firstName`) and reads case-insensitively, numbers from
+  strings included ([Web defaults](#web-defaults)).
+- **`[JsonDerivedType]`** on an existing hierarchy: 2.x ignored it; 3.0 writes
+  the tag (`{"$type":"cat","Name":"c"}`), requires it to read an abstract or
+  interface base, and fails the build with `MS0032` for a registration it
+  cannot honor ([Polymorphism](#polymorphism)).
+- **JSON `null` for a struct** property, list or set element, or dictionary
+  value now throws `The JSON value could not be converted to MyApp.SPoint.`,
+  as .NET does ([Null roots](#null-roots)).
+
+**Other changes.** Spec 009 changed these too; the first, second and fourth
+already shipped in 2.x:
 
 - Properties are written most-derived first, as .NET writes them
   ([Inheritance](#inheritance), 2.10.0); compare JSON semantically, not as
@@ -863,9 +884,9 @@ in 2.x:
   `NotSupportedException` for polymorphism), with .NET's messages
   ([Errors and limits](#errors-and-limits), 2.10.0). Catch `Error` or the new
   classes instead of matching `Expected object for deserialization`.
-- Contexts declared with `JsonSerializerDefaults.Web` write camelCase names and
-  read case-insensitively, numbers from strings included
-  ([Web defaults](#web-defaults)).
+- Text-only changes, read back the same: `TimeOnly` with a fraction is written
+  with seven digits, as .NET writes it (`"03:04:05.678"` → `"03:04:05.6780000"`),
+  and `[JsonPropertyOrder]` reorders the keys.
 - Generic roots are named after System.Text.Json's `JsonTypeInfo` names
   (`ctx.list` → `ctx.listEpisodeSummary`; [Roots](#roots), 2.8.0); set
   `TypeInfoPropertyName` to choose another name.
@@ -1321,7 +1342,7 @@ position (STJ writes the base value at the redeclaration's position).
 Constructor access: a class with a `TypeSpec` in the context is passed as
 `type: T` and built by `factory: (p) => new T(...)`, both outside its class
 body, so its constructor stays public even when C# declares it `private` or
-`protected` (warning `MS0061`, FR-049). Other classes keep their constructor's
+`protected` (warning `MS0061`, baseline FR-049, #432). Other classes keep their constructor's
 `private` / `protected` modifier. A context that claims a type from a referenced
 package with no public constructor does not type-check, because that package
 decided the modifier when it was transpiled; the transpiler reports `MS0062` at
@@ -1451,7 +1472,7 @@ Both are valid ways to handle JSON data:
 
 ## See also
 
-- [Attribute Reference](attributes.md#PlainObject) — `[PlainObject]` details
+- [Attribute Reference](attributes.md#plainobject--record--interface) — `[PlainObject]` details
 - [BCL Type Mappings](bcl-mappings.md) — how types are classified
 - [Spec 009](../specs/009-polymorphic-json/spec.md) — System.Text.Json-faithful JSON contracts: requirements, decisions and the documented divergences
 - [Diagnostic catalog](../specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md) — `MS0032`–`MS0037`
