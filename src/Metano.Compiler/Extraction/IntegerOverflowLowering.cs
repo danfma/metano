@@ -22,8 +22,8 @@ internal static class IntegerOverflowLowering
     /// <c>+=</c>, <c>-=</c>, <c>*=</c> on a 64-bit integer (lifted forms
     /// included); <c>~</c> on <c>ulong</c> and <c>&lt;&lt;</c> (and
     /// <c>&lt;&lt;=</c>), which always wrap; <c>null</c> for any other
-    /// operation, a user-defined
-    /// operator, or one narrower than 64 bits (OQ-4).
+    /// operation, a user-defined operator, or one narrower than 64 bits
+    /// (OQ-4).
     /// </summary>
     public static IntegerOverflowReduction? ReductionOf(IOperation? operation) =>
         operation switch
