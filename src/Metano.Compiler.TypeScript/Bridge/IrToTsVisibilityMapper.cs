@@ -21,7 +21,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   <item><c>private</c> → <c>private</c>.</item>
 /// </list>
 /// A constructor reads <see cref="MapConstructor"/>, which keeps FR-049's
-/// <c>private</c> for <c>private protected</c>.
+/// <c>private</c> for <c>private protected</c>. A single constructor, or a
+/// constructor group whose every signature would be tagged, stays untagged,
+/// so the <c>.d.ts</c> never loses every constructor signature.
 /// </summary>
 public static class IrToTsVisibilityMapper
 {
@@ -69,13 +71,24 @@ public static class IrToTsVisibilityMapper
 
     /// <summary>
     /// The JSDoc of one overload signature of a group emitted
-    /// <paramref name="group"/>: its own tag, or <c>@internal</c> when the
-    /// signature is narrower than the group. TypeScript makes every signature
-    /// share the group's accessibility (TS2385), so <c>stripInternal</c>
-    /// hides the narrower one instead.
+    /// <paramref name="groupAccessibility"/>: its own tag, or <c>@internal</c>
+    /// for a <c>private</c> signature of a wider group, which no other package
+    /// can reach. TypeScript makes every signature share the group's
+    /// accessibility (TS2385), so <c>stripInternal</c> hides that one instead.
+    /// A <c>protected</c> signature of a public group is widened and left
+    /// untagged: a derived class in another package may call it.
     /// </summary>
-    public static TsJSDoc? SignatureJSDocOf(TsMemberVisibility signature, TsAccessibility group) =>
-        signature.JSDoc ?? (signature.Accessibility.IsNarrowerThan(group) ? InternalTag : null);
+    public static TsJSDoc? SignatureJSDocOf(
+        TsMemberVisibility signature,
+        TsAccessibility groupAccessibility
+    ) =>
+        signature.JSDoc
+        ?? (
+            signature.Accessibility is TsAccessibility.Private
+            && groupAccessibility is not TsAccessibility.Private
+                ? InternalTag
+                : null
+        );
 
     /// <summary>How restrictive a modifier is: public 0, protected 1, private 2.</summary>
     private static int RestrictionOf(TsAccessibility modifier) =>

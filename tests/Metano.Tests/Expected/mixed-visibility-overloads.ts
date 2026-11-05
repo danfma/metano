@@ -52,7 +52,6 @@ export class Ledger {
   }
 
   audit(amount: number): number;
-  /** @internal */
   audit(memo: string): number;
   audit(...args: unknown[]): number {
     if (args.length === 1 && isInt32(args[0])) {

@@ -308,14 +308,17 @@ public class InternalVisibilityMappingTests
     }
 
     [Test]
-    [Arguments("private")]
-    [Arguments("protected")]
-    [Arguments("internal")]
-    [Arguments("private protected")]
-    public async Task MixedMethodGroup_TagsTheNarrowerSignatureOfAPublicDispatcher(
-        string narrowerOverload
+    [Arguments("private", "  /** @internal */\n  add(a: number, b: number): number;\n")]
+    [Arguments("internal", "  /** @internal */\n  add(a: number, b: number): number;\n")]
+    [Arguments("private protected", "  /** @internal */\n  add(a: number, b: number): number;\n")]
+    [Arguments("protected", "}\n\n  add(a: number, b: number): number;\n")]
+    public async Task MixedMethodGroup_TagsOnlyTheSignaturesNoOtherPackageReaches(
+        string narrowerOverload,
+        string narrowerSignature
     )
     {
+        // A protected overload of a public group is widened and left untagged:
+        // a derived class in another package may call it.
         var files = TranspileHelper.Transpile(
             $$"""
             namespace App;
@@ -333,7 +336,7 @@ public class InternalVisibilityMappingTests
         await Assert
             .That(files["app/engine.ts"])
             .Contains(
-                "  /** @internal */\n  add(a: number, b: number): number;\n"
+                narrowerSignature
                     + "  add(a: number): number;\n"
                     + "  add(...args: unknown[]): number {"
             );
@@ -366,7 +369,7 @@ public class InternalVisibilityMappingTests
     }
 
     [Test]
-    public async Task ProtectedAndInternalMethodGroup_TagsBothSignaturesOfAPublicDispatcher()
+    public async Task ProtectedAndInternalMethodGroup_TagsOnlyTheInternalSignature()
     {
         var files = TranspileHelper.Transpile(
             """
@@ -387,7 +390,7 @@ public class InternalVisibilityMappingTests
             .That(output)
             .Contains(
                 "  /** @internal */\n  add(a: number, b: number): number;\n"
-                    + "  /** @internal */\n  add(a: number): number;\n"
+                    + "  add(a: number): number;\n"
                     + "  add(...args: unknown[]): number {"
             );
         await Assert.That(output).DoesNotContain("protected add(");
@@ -422,9 +425,12 @@ public class InternalVisibilityMappingTests
     }
 
     [Test]
-    [Arguments("protected")]
-    [Arguments("private")]
-    public async Task MixedConstructorGroup_TagsTheNarrowerSignature(string narrower)
+    [Arguments("private", "  /** @internal */\n  constructor(text: string);\n")]
+    [Arguments("protected", "  constructor(value: number);\n  constructor(text: string);\n")]
+    public async Task MixedConstructorGroup_TagsOnlyAPrivateNarrowerSignature(
+        string narrower,
+        string narrowerSignature
+    )
     {
         var files = TranspileHelper.Transpile(
             $$"""
@@ -440,15 +446,11 @@ public class InternalVisibilityMappingTests
 
         await Assert
             .That(files["gauge.ts"])
-            .Contains(
-                "  constructor(value: number);\n"
-                    + "  /** @internal */\n  constructor(text: string);\n"
-                    + "  constructor(...args: unknown[]) {"
-            );
+            .Contains(narrowerSignature + "  constructor(...args: unknown[]) {");
     }
 
     [Test]
-    public async Task ProtectedAndInternalConstructorGroup_KeepsEverySignatureUntagged()
+    public async Task ProtectedAndInternalConstructorGroup_TagsOnlyTheInternalSignature()
     {
         var files = TranspileHelper.Transpile(
             """
@@ -463,17 +465,15 @@ public class InternalVisibilityMappingTests
         );
         var output = files["gauge.ts"];
 
-        // Both signatures would be tagged (the internal one, and the protected
-        // one as narrower than the public group), so neither is: the .d.ts
-        // keeps them rather than an implicit public `new Gauge()`.
+        // The protected constructor is widened and stays in the .d.ts, so a
+        // derived class in another package can still call `super(1)`.
         await Assert
             .That(output)
             .Contains(
                 "  constructor(value: number);\n"
-                    + "  constructor(text: string);\n"
+                    + "  /** @internal */\n  constructor(text: string);\n"
                     + "  constructor(...args: unknown[]) {"
             );
-        await Assert.That(output).DoesNotContain("@internal");
         await Assert.That(output).DoesNotContain("protected constructor(");
     }
 
@@ -770,6 +770,68 @@ public class InternalVisibilityMappingTests
         await Assert.That(baseOutput).DoesNotContain("/** @internal */\n  v(");
         await Assert.That(baseOutput).Contains("\n  p: number = 0;");
         await Assert.That(baseOutput).DoesNotContain("/** @internal */\n  p:");
+    }
+
+    [Test]
+    public async Task CrossPackageSubclass_CallsProtectedOverloadAndConstructorOfMixedGroups()
+    {
+        // tsgo probe (recorded in the commit): the consumer type-checks
+        // against the library's stripInternal .d.ts, which keeps the
+        // protected `q(a: string)` signature and `constructor()`.
+        var library = """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            namespace Lib;
+
+            public class Base
+            {
+                public Base(int seed) { }
+
+                protected Base() { }
+
+                public int Q(int a) => a;
+
+                protected int Q(string a) => a.Length;
+            }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Derived : Lib.Base
+            {
+                public Derived() : base() { }
+
+                public int Go() => Q("x") + Q(1);
+            }
+            """;
+
+        var derived = TranspileHelper.TranspileWithLibrary(library, consumer)["app/derived.ts"];
+
+        await Assert.That(derived).Contains("super();");
+        await Assert.That(derived).Contains("this.q(\"x\") + this.q(1)");
+
+        var baseOutput = TranspileHelper.Transpile(library)["lib/base.ts"];
+
+        await Assert
+            .That(baseOutput)
+            .Contains(
+                "  constructor(seed: number);\n"
+                    + "  constructor();\n"
+                    + "  constructor(...args: unknown[]) {"
+            );
+        await Assert
+            .That(baseOutput)
+            .Contains(
+                "}\n\n  q(a: number): number;\n"
+                    + "  q(a: string): number;\n"
+                    + "  q(...args: unknown[]): number {"
+            );
+        await Assert.That(baseOutput).DoesNotContain("@internal");
     }
 
     [Test]
