@@ -67,7 +67,7 @@ export function int64FromDecimal(value: DecimalLike): bigint;
 export function uint64FromDecimal(value: DecimalLike): bigint;    // "… for a UInt64."
 /** `(long)b`: OverflowException("Value was either too large or too small for an Int64.") outside the range, in every context. */
 export function int64FromBigInteger(value: bigint): bigint;
-export function uint64FromBigInteger(value: bigint): bigint;      // "… for a UInt64."
+export function uint64FromBigInteger(value: bigint): bigint;      // "… for a UInt64."; a value in (int.MinValue, −1] throws "Arithmetic operation resulted in an overflow." instead, as .NET 10 does (BigInteger keeps it inline and converts it with a checked cast)
 ```
 
 `DecimalLike` is the decimal.js surface the helpers read: `trunc()`, `toFixed()` and `e` (the same type
