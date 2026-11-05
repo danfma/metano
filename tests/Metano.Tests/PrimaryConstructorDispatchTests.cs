@@ -132,7 +132,13 @@ public class PrimaryConstructorDispatchTests
 
         await Assert
             .That(output)
-            .Contains("export class Pair {\n  readonly a: number;\n\n  readonly b: number;\n");
+            .Contains(
+                "  protected static readonly byPairBoth: unique symbol = Symbol(\"Pair(int both)\");\n"
+                    + "\n"
+                    + "  readonly a: number;\n"
+                    + "\n"
+                    + "  readonly b: number;\n"
+            );
         await Assert
             .That(output)
             .Contains("  constructor(a: number, b: number);\n  constructor(both: number);\n");

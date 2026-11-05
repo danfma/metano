@@ -30,6 +30,12 @@ public sealed record IrMethodDeclaration(
     /// <c>null</c> when the method is not part of one.
     /// </summary>
     public IrOverloadName? OverloadName { get; init; }
+
+    /// <summary>
+    /// The overload's C# signature (<c>From(decimal amount)</c>), which a
+    /// target's diagnostics name it by; <c>null</c> outside a dispatched group.
+    /// </summary>
+    public string? SignatureText { get; init; }
 }
 
 /// <summary>

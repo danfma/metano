@@ -5,14 +5,20 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Names the overloads of one dispatched method group (spec 013 FR-001):
-/// captures each parameter's <see cref="IrNamingSpelling"/> from its Roslyn
-/// symbol, runs <see cref="OverloadNamePolicy"/> and records the result on each
-/// <see cref="IrMethodDeclaration.OverloadName"/>. A set of overloads the climb
-/// cannot separate reports <c>MS0003</c> at its later overload (FR-024).
+/// Names the overloads of one dispatched group (spec 013 FR-001), a method
+/// group or a type's constructors: captures each parameter's
+/// <see cref="IrNamingSpelling"/> from its Roslyn symbol, runs
+/// <see cref="OverloadNamePolicy"/> and records the result on each
+/// declaration's <c>OverloadName</c>. A set of overloads the climb cannot
+/// separate reports <c>MS0003</c> at its later overload (FR-024).
 /// </summary>
 internal static class OverloadGroupNaming
 {
+    private static readonly SymbolDisplayFormat SignatureTextTypeFormat =
+        SymbolDisplayFormat.MinimallyQualifiedFormat.AddMiscellaneousOptions(
+            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
+        );
+
     /// <param name="overloads">The group's methods and their extracted
     /// declarations, in declaration order.</param>
     /// <returns>Each method's declaration carrying its parameters' spellings and
@@ -23,70 +29,126 @@ internal static class OverloadGroupNaming
     {
         var symbols = overloads.Select(overload => overload.Symbol).ToList();
 
-        var spelled = overloads
-            .Select(overload => WithNamingSpellings(overload.Symbol, overload.Declaration))
-            .ToList();
-
-        var suffixes = OverloadNamePolicy.Compute(
-            spelled
-                .Select((declaration, index) => SignatureOf(symbols[index], declaration))
-                .ToList(),
+        var named = Name(
+            symbols,
+            overloads.Select(overload => overload.Declaration.Parameters).ToList(),
             KindOf(symbols)
         );
-
-        foreach (var deadEnd in suffixes.DeadEnds)
-            ReportDeadEnd(deadEnd, symbols, suffixes.Suffixes);
 
         return symbols
             .Select(
                 (symbol, index) =>
                     (
                         Symbol: symbol,
-                        Declaration: spelled[index] with
+                        Declaration: overloads[index].Declaration with
                         {
-                            OverloadName = new IrOverloadName(suffixes.Suffixes[index]),
+                            Parameters = named.Parameters[index],
+                            OverloadName = new IrOverloadName(named.Suffixes[index]),
+                            SignatureText = SignatureTextOf(symbol),
                         }
                     )
             )
             .ToDictionary(
-                named => named.Symbol,
-                named => named.Declaration,
+                pair => pair.Symbol,
+                pair => pair.Declaration,
                 (IEqualityComparer<IMethodSymbol>)SymbolEqualityComparer.Default
             );
     }
 
-    private static IrMethodDeclaration WithNamingSpellings(
-        IMethodSymbol symbol,
-        IrMethodDeclaration declaration
+    /// <summary>
+    /// Names the declared constructors of a type, a dispatched set of two or
+    /// more (spec 013 FR-007, FR-008).
+    /// </summary>
+    /// <param name="constructors">The constructors and their extracted
+    /// declarations, in declaration order.</param>
+    /// <returns>The declarations in the same order, each carrying its
+    /// parameters' spellings, its overload name, its signature text and its
+    /// declaration ordinal.</returns>
+    public static IReadOnlyList<IrConstructorDeclaration> ApplyToConstructors(
+        IReadOnlyList<(IMethodSymbol Symbol, IrConstructorDeclaration Declaration)> constructors
     )
     {
-        if (symbol.Parameters.Length != declaration.Parameters.Count)
+        var symbols = constructors.Select(constructor => constructor.Symbol).ToList();
+
+        var named = Name(
+            symbols,
+            constructors.Select(constructor => constructor.Declaration.PlainParameters).ToList(),
+            OverloadGroupKind.Method
+        );
+
+        return constructors
+            .Select(
+                (constructor, index) =>
+                    constructor.Declaration with
+                    {
+                        Parameters = constructor
+                            .Declaration.Parameters.Zip(
+                                named.Parameters[index],
+                                (parameter, spelled) => parameter with { Parameter = spelled }
+                            )
+                            .ToList(),
+                        OverloadName = new IrOverloadName(named.Suffixes[index]),
+                        SignatureText = SignatureTextOf(constructor.Symbol),
+                        DeclarationOrdinal = index,
+                    }
+            )
+            .ToList();
+    }
+
+    /// <summary>
+    /// Spells every overload's parameters and computes the group's suffixes,
+    /// reporting each dead end.
+    /// </summary>
+    private static NamedGroup Name(
+        IReadOnlyList<IMethodSymbol> symbols,
+        IReadOnlyList<IReadOnlyList<IrParameter>> parameters,
+        OverloadGroupKind kind
+    )
+    {
+        var spelled = symbols
+            .Select((symbol, index) => WithNamingSpellings(symbol, parameters[index]))
+            .ToList();
+
+        var suffixes = OverloadNamePolicy.Compute(
+            spelled.Select((overload, index) => SignatureOf(symbols[index], overload)).ToList(),
+            kind
+        );
+
+        foreach (var deadEnd in suffixes.DeadEnds)
+            ReportDeadEnd(deadEnd, symbols, suffixes.Suffixes);
+
+        return new NamedGroup(spelled, suffixes.Suffixes);
+    }
+
+    private static IReadOnlyList<IrParameter> WithNamingSpellings(
+        IMethodSymbol symbol,
+        IReadOnlyList<IrParameter> parameters
+    )
+    {
+        if (symbol.Parameters.Length != parameters.Count)
             throw new InvalidOperationException(
-                $"'{symbol.Name}' was extracted with {declaration.Parameters.Count} of its "
+                $"'{symbol.Name}' was extracted with {parameters.Count} of its "
                     + $"{symbol.Parameters.Length} parameters."
             );
 
-        return declaration with
-        {
-            Parameters = symbol
-                .Parameters.Zip(
-                    declaration.Parameters,
-                    (parameterSymbol, parameter) =>
-                        parameter with
-                        {
-                            NamingSpelling = IrNamingSpellingExtractor.Extract(parameterSymbol),
-                        }
-                )
-                .ToList(),
-        };
+        return symbol
+            .Parameters.Zip(
+                parameters,
+                (parameterSymbol, parameter) =>
+                    parameter with
+                    {
+                        NamingSpelling = IrNamingSpellingExtractor.Extract(parameterSymbol),
+                    }
+            )
+            .ToList();
     }
 
     private static OverloadSignature SignatureOf(
         IMethodSymbol symbol,
-        IrMethodDeclaration declaration
+        IReadOnlyList<IrParameter> parameters
     ) =>
         new(
-            declaration.Parameters,
+            parameters,
             symbol.MethodKind == MethodKind.Conversion
                 ? IrNamingSpellingExtractor.Extract(symbol.ReturnType)
                 : null
@@ -128,8 +190,27 @@ internal static class OverloadGroupNaming
             $"{parameter.Type.ToDisplayString()} {parameter.Name}"
         );
 
-        return $"{method.Name}({string.Join(", ", parameters)})";
+        return $"{DeclaredNameOf(method)}({string.Join(", ", parameters)})";
     }
+
+    /// <summary>
+    /// The overload as C# declares it, for a selector's description and a
+    /// target's diagnostics: <c>Money(decimal amount)</c>,
+    /// <c>Opt(string s, params int[] rest)</c>.
+    /// </summary>
+    private static string SignatureTextOf(IMethodSymbol method)
+    {
+        var parameters = method.Parameters.Select(parameter =>
+            (parameter.IsParams ? "params " : "")
+            + $"{parameter.Type.ToDisplayString(SignatureTextTypeFormat)} {parameter.Name}"
+        );
+
+        return $"{DeclaredNameOf(method)}({string.Join(", ", parameters)})";
+    }
+
+    /// <summary>The method's name, or a constructor's type name.</summary>
+    private static string DeclaredNameOf(IMethodSymbol method) =>
+        method.MethodKind == MethodKind.Constructor ? method.ContainingType.Name : method.Name;
 
     /// <summary>Requires two or more items: a dead end holds at least two overloads.</summary>
     private static string JoinQuoted(IEnumerable<string> items)
@@ -138,4 +219,10 @@ internal static class OverloadGroupNaming
 
         return string.Join(", ", quoted.Take(quoted.Count - 1)) + $" and {quoted[^1]}";
     }
+
+    /// <summary>The spelled parameters and the suffix of each overload of a group.</summary>
+    private sealed record NamedGroup(
+        IReadOnlyList<IReadOnlyList<IrParameter>> Parameters,
+        IReadOnlyList<string> Suffixes
+    );
 }

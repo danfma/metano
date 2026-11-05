@@ -49,15 +49,30 @@ public static class IrConstructorExtractor
             return ImplicitConstructorWithObservableBaseCall(type, context.Target);
 
         var promotionContext = new PromotionContext(type, context, promotion);
-        var primaryDecl = BuildFromMethod(primary, context.OriginResolver, promotionContext);
+
+        if (explicitCtors.Count < 2)
+            return BuildFromMethod(primary, context.OriginResolver, promotionContext);
+
+        var named = OverloadGroupNaming.ApplyToConstructors(
+            explicitCtors
+                .Select(ctor =>
+                    (ctor, BuildFromMethod(ctor, context.OriginResolver, promotionContext))
+                )
+                .ToList()
+        );
+
+        var primaryIndex = explicitCtors
+            .Select((ctor, index) => (ctor, index))
+            .First(entry => SymbolEqualityComparer.Default.Equals(entry.ctor, primary))
+            .index;
 
         // Other constructors become overloads (without nested Overloads of their own).
-        var overloads = explicitCtors
-            .Where(c => !SymbolEqualityComparer.Default.Equals(c, primary))
-            .Select(c => BuildFromMethod(c, context.OriginResolver, promotionContext))
-            .ToList();
+        var overloads = named.Where((_, index) => index != primaryIndex).ToList();
 
-        return overloads.Count > 0 ? primaryDecl with { Overloads = overloads } : primaryDecl;
+        return named[primaryIndex] with
+        {
+            Overloads = overloads,
+        };
     }
 
     /// <summary>

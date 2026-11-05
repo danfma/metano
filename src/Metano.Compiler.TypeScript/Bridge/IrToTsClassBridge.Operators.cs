@@ -93,6 +93,7 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<TsType> overloadReturnTypes,
         IReadOnlyList<IReadOnlyList<IrTypeRef>> overloadParamIrTypes,
         TypeCheckScope typeCheckScope,
+        Func<IrMethodDeclaration, string> fastPathNameOf,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
@@ -113,10 +114,9 @@ internal static partial class IrToTsClassBridge
             .ToList();
 
         // The core's naming policy spells operator overloads by their parameter
-        // types: <staticName><Suffix> (__addMoneyInt32, spec 013 FR-033).
-        var fastPathNames = indices
-            .Select(i => OverloadFastPathName.Of(staticName, overloads[i]))
-            .ToList();
+        // types: <staticName><Suffix> (__addMoneyInt32, spec 013 FR-033), and
+        // the class's claim pass resolves the name.
+        var fastPathNames = indices.Select(i => fastPathNameOf(overloads[i])).ToList();
 
         // Fast-path static methods — one per overload, real body via
         // IrToTsStatementBridge. Public, unlike method fast paths, so resolved

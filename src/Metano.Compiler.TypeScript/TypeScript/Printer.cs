@@ -901,6 +901,15 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write("any");
                 break;
 
+            case TsUniqueSymbolType:
+                _sb.Write("unique symbol");
+                break;
+
+            case TsTypeQuery query:
+                _sb.Write("typeof ");
+                _sb.Write(query.EntityName);
+                break;
+
             case TsNamedType named:
                 _sb.Write(named.Name);
                 if (named.TypeArguments is { Count: > 0 })

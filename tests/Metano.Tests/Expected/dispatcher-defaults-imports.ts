@@ -3,11 +3,31 @@ import { Decimal } from "decimal.js";
 import { Color } from "./color";
 
 export class Painter {
+  protected static readonly byPainterC: unique symbol = Symbol("Painter(Color c)");
+
+  protected static readonly byPainterFlag: unique symbol = Symbol("Painter(bool flag)");
+
   readonly log: string = "";
 
+  constructor(overload: typeof Painter.byPainterC, c?: Color);
+  constructor(overload: typeof Painter.byPainterFlag, flag: boolean);
   constructor(flag: boolean);
   constructor(c?: Color);
   constructor(...args: unknown[]) {
+    if (typeof args[0] === "symbol" && args[0] === Painter.byPainterC) {
+      const c = (args[1] === undefined ? Color.Green : args[1]) as Color;
+      this.log = "color:" + c;
+
+      return;
+    }
+
+    if (typeof args[0] === "symbol" && args[0] === Painter.byPainterFlag) {
+      const flag = args[1] as boolean;
+      this.log = "bool";
+
+      return;
+    }
+
     if (args.length === 1 && isBool(args[0])) {
       const flag = args[0] as boolean;
       this.log = "bool";
@@ -23,6 +43,14 @@ export class Painter {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  static fromC(c: Color = Color.Green): Painter {
+    return new Painter(Painter.byPainterC, c);
+  }
+
+  static fromFlag(flag: boolean): Painter {
+    return new Painter(Painter.byPainterFlag, flag);
   }
 
   private dB(b: boolean): string {

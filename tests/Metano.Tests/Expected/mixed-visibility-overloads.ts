@@ -1,10 +1,29 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Ledger {
+  protected static readonly byLedgerSeed: unique symbol = Symbol("Ledger(int seed)");
+
+  protected static readonly byLedgerName: unique symbol = Symbol("Ledger(string name)");
+
+  constructor(overload: typeof Ledger.byLedgerSeed, seed: number);
+  /** @internal */
+  constructor(overload: typeof Ledger.byLedgerName, name: string);
   constructor(seed: number);
   /** @internal */
   constructor(name: string);
   constructor(...args: unknown[]) {
+    if (typeof args[0] === "symbol" && args[0] === Ledger.byLedgerSeed) {
+      const seed = args[1] as number;
+
+      return;
+    }
+
+    if (typeof args[0] === "symbol" && args[0] === Ledger.byLedgerName) {
+      const name = args[1] as string;
+
+      return;
+    }
+
     if (args.length === 1 && isInt32(args[0])) {
       const seed = args[0] as number;
 
@@ -18,6 +37,15 @@ export class Ledger {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  static fromSeed(seed: number): Ledger {
+    return new Ledger(Ledger.byLedgerSeed, seed);
+  }
+
+  /** @internal */
+  static fromName(name: string): Ledger {
+    return new Ledger(Ledger.byLedgerName, name);
   }
 
   private postAmountMemo(amount: number, memo: string): number {

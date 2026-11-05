@@ -44,6 +44,37 @@ public sealed record IrConstructorDeclaration(
     /// </summary>
     public IReadOnlyList<IrParameter> PlainParameters =>
         Parameters.Select(p => p.Parameter).ToList();
+
+    /// <summary>
+    /// The constructor's name in its dispatched set (spec 013 FR-001), from
+    /// which a target derives its selector and factory candidates;
+    /// <c>null</c> when the type declares fewer than two constructors.
+    /// </summary>
+    public IrOverloadName? OverloadName { get; init; }
+
+    /// <summary>
+    /// The constructor's C# signature (<c>Money(decimal amount)</c>), the
+    /// description of its selector symbol (spec 013 D2); <c>null</c> outside a
+    /// dispatched set.
+    /// </summary>
+    public string? SignatureText { get; init; }
+
+    /// <summary>
+    /// The constructor's position among the type's declared constructors, in
+    /// declaration order; <c>0</c> outside a dispatched set. A target emits
+    /// selectors and factories in this order (spec 013 FR-006).
+    /// </summary>
+    public int DeclarationOrdinal { get; init; }
+
+    /// <summary>
+    /// Every constructor of a dispatched set — this one and its
+    /// <see cref="Overloads"/> — in declaration order.
+    /// </summary>
+    public IReadOnlyList<IrConstructorDeclaration> DeclarationsInOrder =>
+        new[] { this }
+            .Concat(Overloads ?? [])
+            .OrderBy(declaration => declaration.DeclarationOrdinal)
+            .ToList();
 }
 
 /// <summary>

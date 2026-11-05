@@ -36,6 +36,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                 ctor,
                 baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                 typeParameters: [],
+                SelectorsOf(ctor),
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -75,6 +76,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                 ctor,
                 baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                 typeParameters: [],
+                SelectorsOf(ctor),
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -103,6 +105,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                     ctor,
                     baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                     typeParameters: [],
+                    SelectorsOf(ctor),
                     IrToTsBridgeContext.For(null)
                 )
             )
@@ -126,6 +129,36 @@ public class IrToTsConstructorDispatcherBridgeTests
             typeSymbol,
             new IrExtractionContext(Compilation: compilation)
         )!;
+    }
+
+    /// <summary>
+    /// The selectors of a class named <c>T</c> whose constructor is
+    /// <paramref name="ctor"/>, claimed with nothing else in the class.
+    /// </summary>
+    private static ConstructorSelectors SelectorsOf(IrConstructorDeclaration ctor)
+    {
+        var type = new IrClassDeclaration(
+            "T",
+            IrVisibility.Public,
+            new IrTypeSemantics(),
+            Constructor: ctor
+        );
+
+        var claims = TsOverloadClaimPass.Run(
+            new TsClaimPassInput(
+                type,
+                "T",
+                new Dictionary<string, TsClaimedMember>(),
+                constructor =>
+                    IrToTsConstructorFactoryBridge.SignatureOf(
+                        type,
+                        constructor,
+                        typeOverrides: null
+                    )
+            )
+        );
+
+        return new ConstructorSelectors("T", claims, ImplicitParameterlessBody: null);
     }
 
     private static string PrintConstructor(TsConstructor ctor)
