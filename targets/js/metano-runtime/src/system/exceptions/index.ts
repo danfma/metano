@@ -3,3 +3,8 @@ export * from "./system-exception.ts";
 export * from "./arithmetic-exception.ts";
 export * from "./overflow-exception.ts";
 export * from "./divide-by-zero-exception.ts";
+export { ArgumentException } from "./argument-exception.ts";
+export * from "./argument-null-exception.ts";
+export * from "./format-exception.ts";
+export * from "./invalid-operation-exception.ts";
+export * from "./not-supported-exception.ts";

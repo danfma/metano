@@ -8,6 +8,7 @@
 import * as conversions from "../src/sample-int64-conformance/conversions.ts";
 import { DecimalConversions } from "../src/sample-int64-conformance/conversions.ts";
 import * as division from "../src/sample-int64-conformance/division.ts";
+import * as mathStatics from "../src/sample-int64-conformance/math-statics.ts";
 import * as overflow from "../src/sample-int64-conformance/overflow.ts";
 import * as shifts from "../src/sample-int64-conformance/shifts.ts";
 
@@ -21,4 +22,5 @@ export type FixtureRun = { readonly name: string; readonly twin: Twin };
 export const FIXTURE_RUNS: readonly FixtureRun[] = [
   { name: "operators.json", twin: [overflow, division, shifts] },
   { name: "conversions.json", twin: [conversions, DecimalConversions] },
+  { name: "math.json", twin: [mathStatics] },
 ];

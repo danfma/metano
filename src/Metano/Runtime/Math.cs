@@ -46,6 +46,207 @@ using Metano.Annotations;
     FromPackage = "metano-runtime"
 )]
 
+// The 64-bit overloads (spec 012 FR-035): JS `Math.max` and its siblings throw a
+// `TypeError` for a `bigint`, so the `long` / `ulong` overloads of `Math` and the
+// matching `long` / `ulong` statics lower to the `metano-runtime` helpers, which
+// evaluate each argument once and throw .NET's exceptions. They precede the name-only
+// renames below, which the first matching declaration overrides, and apply only while
+// 64-bit integers are `bigint` values (`WhenInt64IsBigInt`, a staging filter). The
+// `out` forms keep their `out` slot unread: the helper returns `[result, out]`.
+// `Math.BigMul(long, long)` (an `Int128`) and the bit-twiddling statics stay unmapped.
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Abs),
+    JsTemplate = "absInt64($0)",
+    RuntimeImports = "absInt64",
+    WhenParameterTypes = [typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Max),
+    JsTemplate = "maxInt64($0, $1)",
+    RuntimeImports = "maxInt64",
+    WhenParameterTypes = [typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Max),
+    JsTemplate = "maxUInt64($0, $1)",
+    RuntimeImports = "maxUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Min),
+    JsTemplate = "minInt64($0, $1)",
+    RuntimeImports = "minInt64",
+    WhenParameterTypes = [typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Min),
+    JsTemplate = "minUInt64($0, $1)",
+    RuntimeImports = "minUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Sign),
+    JsTemplate = "signInt64($0)",
+    RuntimeImports = "signInt64",
+    WhenParameterTypes = [typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Clamp),
+    JsTemplate = "clampInt64($0, $1, $2)",
+    RuntimeImports = "clampInt64",
+    WhenParameterTypes = [typeof(long), typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Clamp),
+    JsTemplate = "clampUInt64($0, $1, $2)",
+    RuntimeImports = "clampUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.DivRem),
+    JsTemplate = "divRemInt64($0, $1)",
+    RuntimeImports = "divRemInt64",
+    WhenParameterTypes = [typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.DivRem),
+    JsTemplate = "divRemUInt64($0, $1)",
+    RuntimeImports = "divRemUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.DivRem),
+    JsTemplate = "divRemInt64($0, $1)",
+    RuntimeImports = "divRemInt64",
+    WhenParameterTypes = [typeof(long), typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.BigMul),
+    JsTemplate = "bigMulInt64($0, $1)",
+    RuntimeImports = "bigMulInt64",
+    WhenParameterTypes = [typeof(long), typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.BigMul),
+    JsTemplate = "bigMulUInt64($0, $1)",
+    RuntimeImports = "bigMulUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(long),
+    nameof(long.Abs),
+    JsTemplate = "absInt64($0)",
+    RuntimeImports = "absInt64",
+    WhenParameterTypes = [typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(long),
+    nameof(long.Max),
+    JsTemplate = "maxInt64($0, $1)",
+    RuntimeImports = "maxInt64",
+    WhenParameterTypes = [typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(long),
+    nameof(long.Min),
+    JsTemplate = "minInt64($0, $1)",
+    RuntimeImports = "minInt64",
+    WhenParameterTypes = [typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(long),
+    nameof(long.Sign),
+    JsTemplate = "signInt64($0)",
+    RuntimeImports = "signInt64",
+    WhenParameterTypes = [typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(long),
+    nameof(long.Clamp),
+    JsTemplate = "clampInt64($0, $1, $2)",
+    RuntimeImports = "clampInt64",
+    WhenParameterTypes = [typeof(long), typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(long),
+    nameof(long.DivRem),
+    JsTemplate = "divRemInt64($0, $1)",
+    RuntimeImports = "divRemInt64",
+    WhenParameterTypes = [typeof(long), typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(ulong),
+    nameof(ulong.Max),
+    JsTemplate = "maxUInt64($0, $1)",
+    RuntimeImports = "maxUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(ulong),
+    nameof(ulong.Min),
+    JsTemplate = "minUInt64($0, $1)",
+    RuntimeImports = "minUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(ulong),
+    nameof(ulong.Sign),
+    JsTemplate = "signInt64($0)",
+    RuntimeImports = "signInt64",
+    WhenParameterTypes = [typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(ulong),
+    nameof(ulong.Clamp),
+    JsTemplate = "clampUInt64($0, $1, $2)",
+    RuntimeImports = "clampUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(ulong),
+    nameof(ulong.DivRem),
+    JsTemplate = "divRemUInt64($0, $1)",
+    RuntimeImports = "divRemUInt64",
+    WhenParameterTypes = [typeof(ulong), typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
+
 [assembly: MapMethod(typeof(Math), nameof(Math.Floor), JsMethod = "floor")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Ceiling), JsMethod = "ceil")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Truncate), JsMethod = "trunc")]
