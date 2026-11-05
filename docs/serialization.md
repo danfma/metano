@@ -901,9 +901,10 @@ writes or accepts, so a payload exchanged with a 2.x build can differ:
   (`FirstName` → `firstName`) and reads case-insensitively, numbers from
   strings included ([Web defaults](#web-defaults)).
 - **`[JsonDerivedType]`** on an existing hierarchy: 2.x ignored it; 3.0 writes
-  the tag (`{"$type":"cat","Name":"c"}`), requires it to read an abstract or
-  interface base, and fails the build with `MS0032` for a registration it
-  cannot honor ([Polymorphism](#polymorphism)).
+  the tag (`{"$type":"cat","Name":"c"}`) and requires it only when reading
+  through an abstract or interface base — a concrete base reads without one.
+  A registration the context cannot honor fails the build with `MS0032`
+  ([Polymorphism](#polymorphism)).
 - **JSON `null` for a struct** property, list or set element, or dictionary
   value now throws `The JSON value could not be converted to MyApp.SPoint.`,
   as .NET does ([Null roots](#null-roots)).
