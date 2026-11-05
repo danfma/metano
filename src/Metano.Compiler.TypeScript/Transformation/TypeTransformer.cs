@@ -1058,7 +1058,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // imported canonical name.
             var primaryType = group.Types[0];
             var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
-            var imports = new ImportCollector(Context, irRequirements).Collect(
+            var (imports, helperAliases) = new ImportCollector(Context, irRequirements).Collect(
                 primaryType,
                 statements
             );
@@ -1070,7 +1070,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 group.FileName,
                 isJsx
             );
-            return new TsSourceFile(relativePath, statements, group.Namespace);
+            return new TsSourceFile(relativePath, statements, group.Namespace)
+            {
+                RuntimeHelperAliases = helperAliases.Count > 0 ? helperAliases : null,
+            };
         }
         finally
         {
