@@ -16,10 +16,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   branches on argument count + runtime type checks and delegates to the
 ///   matching fast path with cast arguments. It takes the accessibility of the
 ///   group's most permissive overload; each overload signature carries the
-///   JSDoc its declaration gets in the group
+///   JSDoc its group gives it
 ///   (<see cref="IrToTsVisibilityMapper.SignatureJSDocOf"/>), so
-///   <c>stripInternal</c> drops only the <c>internal</c> and the narrower
-///   ones.</item>
+///   <c>stripInternal</c> drops only the signatures no other package can
+///   reach: the <c>internal</c> ones and the <c>private</c> ones of a wider
+///   group.</item>
 /// </list>
 /// The branches follow <see cref="OverloadDispatchOrder"/> and match the
 /// arguments as <see cref="OverloadArgumentShape"/> describes. An omitted
