@@ -714,6 +714,8 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintConstructorParam(TsConstructorParam p)
     {
+        PrintInlineJSDoc(p.JSDoc);
+
         // In TS, constructor params without any modifier (public/readonly/etc) don't create properties.
         // Emit explicit "public" when not readonly but the param should still be a property.
         // None = plain parameter, no property created (used for exception constructors).
@@ -721,8 +723,6 @@ public sealed class Printer(string indent = "  ")
         // — TS rejects `public ...args` / `readonly ...args` as a syntax
         // error. Skip the modifier prefix for those defensively in case the
         // bridge wired one up.
-        PrintInlineJSDoc(p.JSDoc);
-
         if (p.Rest || p.Accessibility == TsAccessibility.None)
         { /* no modifier — plain parameter */
         }

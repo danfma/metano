@@ -63,6 +63,7 @@ public static class IrToTsVisibilityMapper
     public static TsAccessibility MostPermissiveOf(IEnumerable<TsAccessibility> accessibilities) =>
         accessibilities.MinBy(RestrictionOf);
 
+    /// <summary>Whether <paramref name="modifier"/> restricts more than <paramref name="other"/>.</summary>
     public static bool IsNarrowerThan(this TsAccessibility modifier, TsAccessibility other) =>
         RestrictionOf(modifier) > RestrictionOf(other);
 

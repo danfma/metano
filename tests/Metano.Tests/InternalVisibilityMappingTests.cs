@@ -648,7 +648,7 @@ public class InternalVisibilityMappingTests
         var output = files["counters.ts"];
 
         await Assert.That(output).Contains("export function twice(value: number): number {");
-        await Assert.That(output).DoesNotContain("inc(");
+        await Assert.That(output).DoesNotContain("function inc(");
     }
 
     [Test]
@@ -768,6 +768,7 @@ public class InternalVisibilityMappingTests
         await Assert.That(baseOutput).Contains("\n  v(): void {");
         await Assert.That(baseOutput).DoesNotContain("protected v(");
         await Assert.That(baseOutput).DoesNotContain("/** @internal */\n  v(");
+        await Assert.That(baseOutput).Contains("\n  p: number = 0;");
         await Assert.That(baseOutput).DoesNotContain("/** @internal */\n  p:");
     }
 

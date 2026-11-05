@@ -275,6 +275,7 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<TsStatement> body = method.Semantics.IsAbstract
             ? []
             : IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context);
+
         var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(method.Visibility);
 
         return new TsMethodMember(

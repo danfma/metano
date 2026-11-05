@@ -453,9 +453,7 @@ public sealed class IrToTsClassEmitter(
 
     private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p)
     {
-        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(
-            p.PromotedVisibility ?? IrVisibility.Public
-        );
+        var (accessibility, jsdoc) = IrToTsClassBridge.PromotedMemberVisibility(p);
 
         return new TsFieldMember(
             IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),
