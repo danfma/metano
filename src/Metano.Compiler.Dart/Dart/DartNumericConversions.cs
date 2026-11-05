@@ -16,7 +16,7 @@ namespace Metano.Compiler.Dart;
 /// read every node through <see cref="Unwrap"/>, so a wrapped operand keeps
 /// the parentheses its own shape needs.
 /// </summary>
-internal static class DartTransparentNumericNodes
+internal static class DartNumericConversions
 {
     /// <summary>The expression Dart actually prints for <paramref name="expression"/>.</summary>
     public static IrExpression Unwrap(IrExpression expression) =>

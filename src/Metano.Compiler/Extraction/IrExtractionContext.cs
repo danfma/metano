@@ -32,8 +32,11 @@ public sealed record IrExtractionContext(
     public bool ExactInt64Lowering { get; init; }
 
     /// <summary>
-    /// The context of a constant parameter default: only the origin resolver
-    /// and the 64-bit lowering reach it, since it names no local.
+    /// The context of a constant parameter default: the origin resolver and
+    /// the 64-bit lowering. It names no local, so it needs no local naming,
+    /// and it drops the target and the compilation as defaults always have:
+    /// a constant needs neither a target-specific rewrite (the Temporal
+    /// comparisons) nor a second semantic model.
     /// </summary>
     public IrExtractionContext ForConstantDefault() =>
         new(OriginResolver) { ExactInt64Lowering = ExactInt64Lowering };

@@ -4588,39 +4588,16 @@ public sealed partial class IrExpressionExtractor
         if (sourceType is null || targetType is null)
             return new IrCastExpression(inner, ExtractTargetType(cast));
 
-        var unwrapsNullable = false;
+        var unwrapsNullable = IsNullableUnwrapCast(cast, sourceType, targetType);
 
-        if (
-            UnwrapsNullableValue(sourceType, targetType)
-            && _semantic.GetOperation(cast)
-                is not IConversionOperation { Conversion.IsUserDefined: true }
-        )
+        if (unwrapsNullable)
         {
             inner = ValueOrThrowWhenMissing(cast.Expression, inner);
             sourceType = UnwrapNullable(sourceType);
-            unwrapsNullable = true;
         }
 
-        // The unwrapped value converts as its underlying type; a target that
-        // keeps the cast (Dart) reads it through that type.
-        var convertedOperand = unwrapsNullable
-            ? new IrCastExpression(inner, IrTypeRefMapper.Map(sourceType, _originResolver, _target))
-            : inner;
-
-        var conversion = ExplicitNumericConversion(
-            cast,
-            convertedOperand,
-            sourceType,
-            targetType,
-            ExtractTargetType(cast)
-        );
-
-        if (conversion is not null)
-        {
-            IrExpression? folded = FoldedConstantCast(cast);
-
-            return folded ?? conversion;
-        }
+        if (LowerNumericCast(cast, inner, sourceType, targetType, unwrapsNullable) is { } numeric)
+            return numeric;
 
         var sourceSpecial = sourceType.SpecialType;
         var targetSpecial = targetType.SpecialType;

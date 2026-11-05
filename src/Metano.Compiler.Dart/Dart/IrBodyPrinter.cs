@@ -343,12 +343,12 @@ public static class IrBodyPrinter
                 PrintExpression(sb, th.Expression);
                 break;
             case IrNumericConversion conversion
-                when DartTransparentNumericNodes.ConversionSelector(conversion) is { } selector:
+                when DartNumericConversions.ConversionSelector(conversion) is { } selector:
                 PrintOperand(sb, conversion.Operand, ReceiverRequiresParens(conversion.Operand));
                 sb.Append(selector);
                 break;
             case IrIntegerOverflow or IrNumericConversion:
-                PrintExpression(sb, DartTransparentNumericNodes.Unwrap(expr));
+                PrintExpression(sb, DartNumericConversions.Unwrap(expr));
                 break;
             case IrCastExpression cast:
                 // Dart uses `expr as Type` for downcasts.
@@ -459,7 +459,7 @@ public static class IrBodyPrinter
     /// </summary>
     private static bool ReceiverRequiresParens(IrExpression expression)
     {
-        var printed = DartTransparentNumericNodes.Unwrap(expression);
+        var printed = DartNumericConversions.Unwrap(expression);
 
         return printed
                 is IrBinaryExpression

@@ -32,12 +32,15 @@ internal static class Int64EnumPrecision
             if (member.ConstantValue is not { } constant)
                 continue;
 
-            if (Problem(enumType, member, ToBigInteger(constant), isFlags) is { } message)
+            if (
+                PrecisionWarningMessage(enumType, member, ToBigInteger(constant), isFlags) is
+                { } message
+            )
                 report(Warning(member, message));
         }
     }
 
-    private static string? Problem(
+    private static string? PrecisionWarningMessage(
         INamedTypeSymbol enumType,
         IFieldSymbol member,
         BigInteger value,
@@ -74,6 +77,8 @@ internal static class Int64EnumPrecision
             member.Locations.FirstOrDefault()
         );
 
+    // Reads the Roslyn symbol, not an IR endpoint: the enum is emitted from
+    // its declaration, so the core's endpoint classification is not at hand.
     private static bool IsSixtyFourBit(ITypeSymbol? type) =>
         type?.SpecialType
             is SpecialType.System_Int64
@@ -88,7 +93,8 @@ internal static class Int64EnumPrecision
                 attribute.AttributeClass?.ToDisplayString() == "System.FlagsAttribute"
             );
 
-    private static BigInteger ToBigInteger(object constant) =>
+    /// <summary>The exact value of a 64-bit enum constant (a <c>long</c> or a <c>ulong</c>).</summary>
+    internal static BigInteger ToBigInteger(object constant) =>
         constant is ulong unsigned
             ? new BigInteger(unsigned)
             : new BigInteger(Convert.ToInt64(constant));
