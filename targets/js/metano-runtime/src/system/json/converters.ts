@@ -29,9 +29,9 @@ import {
   readContainer,
   writeContainer,
 } from "./container-depth.ts";
-import { cannotConvertTo } from "./contract-name.ts";
+import { cannotConvertTo, cannotConvertToTypeName } from "./contract-name.ts";
 import { dictionaryKeyConverterOf } from "./dictionary-keys.ts";
-import { readNull } from "./null-reads.ts";
+import { readNull, valueTypeNameOf } from "./null-reads.ts";
 import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
 import { numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
@@ -134,7 +134,7 @@ function getBuiltinConverter(
 ): ValueConverter {
   switch (descriptor.kind) {
     case "primitive":
-      return primitiveConverterOf(descriptor, readOptions);
+      return primitiveConverterOf(descriptor, readOptions, errorTypeName);
     case "temporal":
       return temporalConverterOf(descriptor, errorTypeName);
     case "decimal":
@@ -202,10 +202,16 @@ function mapConverter(
         throw unexpectedJsonKind("object", value);
       }
 
+      const nullValueName = valueTypeNameOf(descriptor.value);
+
       return readContainer("object", () => {
         const map = new Map<unknown, unknown>();
 
         for (const [k, v] of Object.entries(value)) {
+          if (v === null && nullValueName !== undefined) {
+            throw cannotConvertToTypeName(nullValueName);
+          }
+
           map.set(keyConv.deserialize(k), valueConv.deserialize(v));
         }
 
@@ -251,16 +257,31 @@ function serializeIterable(value: unknown, elemConv: ValueConverter): unknown[] 
 
 /**
  * Reads a JSON array element by element. Any other JSON value throws
- * `JsonException` (#425); `null` reads as `null`.
+ * `JsonException` (#425); `null` reads as `null` for a reference or nullable
+ * element and throws naming the element type for a value type (#471).
  */
-function deserializeArray(value: unknown, elemConv: ValueConverter): unknown[] | null {
+function deserializeArray(
+  value: unknown,
+  elemConv: ValueConverter,
+  element: TypeDescriptor,
+): unknown[] | null {
   if (value == null) return null;
 
   if (!Array.isArray(value)) {
     throw unexpectedJsonKind("array", value);
   }
 
-  return readContainer("array", () => value.map((item) => elemConv.deserialize(item)));
+  const nullElementName = valueTypeNameOf(element);
+
+  return readContainer("array", () =>
+    value.map((item) => {
+      if (item === null && nullElementName !== undefined) {
+        throw cannotConvertToTypeName(nullElementName);
+      }
+
+      return elemConv.deserialize(item);
+    }),
+  );
 }
 
 function arrayConverter(
@@ -272,7 +293,7 @@ function arrayConverter(
 
   return {
     serialize: (value: unknown) => serializeIterable(value, elemConv),
-    deserialize: (value: unknown) => deserializeArray(value, elemConv),
+    deserialize: (value: unknown) => deserializeArray(value, elemConv, descriptor.element),
   };
 }
 
@@ -288,7 +309,7 @@ function hashSetConverter(
   return {
     serialize: (value: unknown) => serializeIterable(value, elemConv),
     deserialize: (value: unknown) => {
-      const items = deserializeArray(value, elemConv);
+      const items = deserializeArray(value, elemConv, descriptor.element);
 
       return items === null ? null : new HashSet(items);
     },
@@ -300,7 +321,15 @@ function hashSetConverter(
 function brandedConverter(descriptor: BrandedDescriptor) {
   return {
     serialize: (value: unknown) => value, // brand erases at runtime
-    deserialize: (value: unknown) => descriptor.create(value),
+    // A branded value is a value type: JSON `null` throws, as System.Text.Json
+    // throws (#471).
+    deserialize: (value: unknown) => {
+      if (value == null) {
+        throw cannotConvertToTypeName(descriptor.typeName);
+      }
+
+      return descriptor.create(value);
+    },
   };
 }
 
@@ -312,6 +341,12 @@ function enumConverter(descriptor: EnumDescriptor) {
   return {
     serialize: (value: unknown) => value, // already a string
     deserialize: (value: unknown) => {
+      // An enum is a value type: JSON `null` throws its conversion error,
+      // as System.Text.Json throws (#471), before the enum-value error.
+      if (value === null) {
+        throw cannotConvertToTypeName(descriptor.typeName);
+      }
+
       if (typeof value !== "string" || !validValues.has(value)) {
         throw new JsonException(
           `Invalid enum value: ${JSON.stringify(value)}. ` +
@@ -333,6 +368,11 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
   return {
     serialize: (value: unknown) => value, // already a number
     deserialize: (value: unknown) => {
+      // A value type: JSON `null` throws its conversion error (#471).
+      if (value === null) {
+        throw cannotConvertToTypeName(descriptor.typeName);
+      }
+
       if (typeof value !== "number" || !validValues.has(value)) {
         throw new JsonException(
           `Invalid numeric enum value: ${JSON.stringify(value)}. ` +
@@ -768,7 +808,7 @@ function contractReaderOf(
 ): SpecPlan["readContract"] {
   const properties = propertyPlans.map(({ property }) => property);
   const lookupPlan = propertyLookupPlanOf(properties, spec.readOptions);
-  const readProperties = propertyReaderOf(propertyPlans);
+  const readProperties = propertyReaderOf(spec, propertyPlans);
   const assignPresentMembers = presentMemberAssignerOf(propertyPlans);
 
   return (raw, metadataKey) => {
@@ -817,9 +857,11 @@ function presentMemberAssignerOf(
  * Reads every property through `jsonValueOf` into the factory's input. An
  * absent (missing or `null`) optional property reads as `null`; a missing
  * required one throws; a missing one of the contract's `assignIfPresent`
- * list is left out.
+ * list is left out; a `null` on a non-nullable value-type property throws
+ * naming the declaring contract, as System.Text.Json does (#471).
  */
 function propertyReaderOf(
+  spec: TypeSpec,
   propertyPlans: readonly PropertyPlan[],
 ): (jsonValueOf: PropertyLookup) => Record<string, unknown> {
   return (jsonValueOf) => {
@@ -837,6 +879,14 @@ function propertyReaderOf(
       if (isAbsent && property.optional) {
         deserialized[property.ts] = null;
         continue;
+      }
+
+      if (
+        jsonValue === null &&
+        !property.optional &&
+        valueTypeNameOf(property.type) !== undefined
+      ) {
+        throw cannotConvertTo(spec);
       }
 
       if (jsonValue === undefined) {

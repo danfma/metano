@@ -156,7 +156,7 @@ export class WebJsonContext extends SerializerContext {
         {
           ts: "d",
           json: "d",
-          type: { kind: "decimal", type: Decimal },
+          type: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
         },
         {
           ts: "x",
@@ -183,7 +183,7 @@ export class WebJsonContext extends SerializerContext {
         {
           ts: "c",
           json: "c",
-          type: { kind: "numericEnum", values: Color },
+          type: { kind: "numericEnum", values: Color, typeName: "SampleJsonContracts.Color" },
         },
       ],
     }));
@@ -214,7 +214,7 @@ export class WebJsonContext extends SerializerContext {
           json: "d",
           type: {
             kind: "nullable",
-            inner: { kind: "decimal", type: Decimal },
+            inner: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
           },
           optional: true,
         },
@@ -232,7 +232,7 @@ export class WebJsonContext extends SerializerContext {
           json: "c",
           type: {
             kind: "nullable",
-            inner: { kind: "numericEnum", values: Color },
+            inner: { kind: "numericEnum", values: Color, typeName: "SampleJsonContracts.Color" },
           },
           optional: true,
         },

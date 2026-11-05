@@ -341,7 +341,7 @@ describe("Spec plans: read options", () => {
     for (let call = 0; call < 2; call++) {
       expectJsonException(
         () => JsonSerializer.deserialize({ Total: "7.5" }, lenientCountSpec),
-        "The JSON value could not be converted to System.Int32.",
+        "The JSON value could not be converted to Count.",
       );
     }
   });

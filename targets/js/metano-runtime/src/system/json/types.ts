@@ -71,7 +71,7 @@ export type TemporalDescriptor = WithClrTypeName & {
  * numbers from strings, the JSON text (decimal.js `Decimal` in generated
  * contexts); without it the JSON value is kept as is.
  */
-export type DecimalDescriptor = {
+export type DecimalDescriptor = WithClrTypeName & {
   readonly kind: "decimal";
   readonly type?: new (value: string | number) => unknown;
 };

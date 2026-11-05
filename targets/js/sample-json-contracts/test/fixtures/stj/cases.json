@@ -1669,5 +1669,238 @@
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.TimeOnly."
     }
+  },
+  {
+    "id": "NU1",
+    "context": "StudioJsonContext",
+    "getter": "holderInt",
+    "direction": "read",
+    "json": "{\"N\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderInt.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU2",
+    "context": "StudioJsonContext",
+    "getter": "holderLevel",
+    "direction": "read",
+    "json": "{\"Level\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderLevel.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU3",
+    "context": "StudioJsonContext",
+    "getter": "holderChar",
+    "direction": "read",
+    "json": "{\"C\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderChar.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU4",
+    "context": "StudioJsonContext",
+    "getter": "holderChar",
+    "direction": "read",
+    "json": "{\"C\":\"ab\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderChar.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU5",
+    "context": "StudioJsonContext",
+    "getter": "holderSPoint",
+    "direction": "read",
+    "json": "{\"S\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.SPoint."
+    }
+  },
+  {
+    "id": "NU6",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":null,\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU7",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":null,\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU8",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":null,\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU9",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":null,\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU10",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU11",
+    "context": "StudioJsonContext",
+    "getter": "listInt32",
+    "direction": "read",
+    "json": "[1,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "NU12",
+    "context": "StudioJsonContext",
+    "getter": "listLevel",
+    "direction": "read",
+    "json": "[0,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Level."
+    }
+  },
+  {
+    "id": "NU13",
+    "context": "StudioJsonContext",
+    "getter": "listGuid",
+    "direction": "read",
+    "json": "[\"0f8fad5b-d9cb-469f-a165-70867728950e\",null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Guid."
+    }
+  },
+  {
+    "id": "NU14",
+    "context": "StudioJsonContext",
+    "getter": "listDateTime",
+    "direction": "read",
+    "json": "[\"2024-01-31T10:20:30\",null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "NU15",
+    "context": "StudioJsonContext",
+    "getter": "hashSetInt32",
+    "direction": "read",
+    "json": "[1,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "NU16",
+    "context": "StudioJsonContext",
+    "getter": "dictionaryStringInt32",
+    "direction": "read",
+    "json": "{\"a\":1,\"b\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "NU17",
+    "context": "StudioJsonContext",
+    "getter": "int32Array",
+    "direction": "read",
+    "json": "[1,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "OK1",
+    "context": "StudioJsonContext",
+    "getter": "listNullableInt32",
+    "direction": "read",
+    "json": "[1,null]"
+  },
+  {
+    "id": "OK2",
+    "context": "StudioJsonContext",
+    "getter": "dictionaryStringNullableInt32",
+    "direction": "read",
+    "json": "{\"a\":null}"
+  },
+  {
+    "id": "OK3",
+    "context": "StudioJsonContext",
+    "getter": "listString",
+    "direction": "read",
+    "json": "[\"a\",null]"
+  },
+  {
+    "id": "OK4",
+    "context": "StudioJsonContext",
+    "getter": "holderChar",
+    "direction": "read",
+    "json": "{\"C\":\"a\"}"
   }
 ]

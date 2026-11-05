@@ -48,7 +48,7 @@ export class MembersJsonContext extends SerializerContext {
           json: "Numbers",
           type: {
             kind: "array",
-            element: { kind: "primitive" },
+            element: { kind: "primitive", numberType: "System.Byte" },
           },
         },
       ],
@@ -68,7 +68,7 @@ export class MembersJsonContext extends SerializerContext {
         {
           ts: "version",
           json: "Version",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "id",
@@ -79,7 +79,7 @@ export class MembersJsonContext extends SerializerContext {
         {
           ts: "hits",
           json: "Hits",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       assignIfPresent: ["name", "version", "id", "hits"],
@@ -95,18 +95,18 @@ export class MembersJsonContext extends SerializerContext {
         {
           ts: "second",
           json: "Second",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
           order: 5,
         },
         {
           ts: "first",
           json: "First",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "third",
           json: "Third",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
           order: 3,
         },
       ],
@@ -122,7 +122,7 @@ export class MembersJsonContext extends SerializerContext {
         {
           ts: "a",
           json: "A",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "note",
@@ -145,12 +145,12 @@ export class MembersJsonContext extends SerializerContext {
         {
           ts: "n",
           json: "N",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "count",
           json: "Count",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       assignIfPresent: ["count"],
