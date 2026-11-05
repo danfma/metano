@@ -84,11 +84,20 @@ public static class IrToTsVisibilityMapper
     ) =>
         signature.JSDoc
         ?? (
-            signature.Accessibility is TsAccessibility.Private
-            && groupAccessibility is not TsAccessibility.Private
+            IsUnreachableOutsideThePackage(signature.Accessibility, groupAccessibility)
                 ? InternalTag
                 : null
         );
+
+    /// <summary>
+    /// Whether a signature widened to <paramref name="groupAccessibility"/>
+    /// stays unreachable from another package: only a <c>private</c> one in a
+    /// wider group.
+    /// </summary>
+    private static bool IsUnreachableOutsideThePackage(
+        TsAccessibility signature,
+        TsAccessibility groupAccessibility
+    ) => signature is TsAccessibility.Private && groupAccessibility is not TsAccessibility.Private;
 
     /// <summary>How restrictive a modifier is: public 0, protected 1, private 2.</summary>
     private static int RestrictionOf(TsAccessibility modifier) =>
