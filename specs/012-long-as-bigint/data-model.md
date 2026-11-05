@@ -90,7 +90,7 @@ operand or body (FR-023), because `IsChecked` already carries the context into e
 | `l + m`, `l - m`, `l * m`, `-l`, `l << n`, `~u` | `IBinaryOperation` / `IUnaryOperation` (`IsChecked`, `Type`) | `IrIntegerOverflow(IrBinaryExpression(…, NumericKind), Kind, Wrap or Check)` |
 | `l++`, `l += i` | `IIncrementOrDecrementOperation` / `ICompoundAssignmentOperation` (`IsChecked`) | the existing read-modify-write nodes, with `IrIntegerOverflow` on the stored value |
 | `l / m`, `l % m` | `IBinaryOperation` | `IrBinaryExpression(…, IntegerDivide or Modulo, NumericKind)` |
-| `l >>> n` | `IBinaryOperation` (`UnsignedRightShift`) | `IrIntegerOverflow(IrBinaryExpression(…, UnsignedRightShift, Int64), Int64, Wrap)` for `long`; the unreduced `IrBinaryExpression(…, UnsignedRightShift, UInt64)` for `ulong`, which the TS bridge prints as `>>` (logical on a non-negative `bigint`) and Dart as its own `>>>` |
+| `l >>> n` | `IBinaryOperation` (`UnsignedRightShift`) | `IrBinaryExpression(…, UnsignedRightShift, Int64 / UInt64)`, never reduced: C#'s result stays in the domain. The TS bridge renders `long` as `BigInt.asIntN(64, BigInt.asUintN(64, l) >> c)` (the re-wrap is its own, because `asUintN` leaves a value above `long.MaxValue` for a count of `0`) and `ulong` as `>>`; Dart prints its own `>>>` |
 | `const long`, `long.MaxValue`, `1L << 40` | `GetConstantValue` | `IrLiteral(value, Int64 or UInt64)` |
 
 ## 3. TypeScript rendering (`src/Metano.Compiler.TypeScript/Bridge/`)

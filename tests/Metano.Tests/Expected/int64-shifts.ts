@@ -79,6 +79,10 @@ export class Shift {
     return n == null ? null : BigInt.asIntN(64, l << BigInt(n & 63));
   }
 
+  uLiftedUnsigned(nu: bigint | null, n: number): bigint | null {
+    return nu == null ? null : nu >> BigInt(n & 63);
+  }
+
   bitwise(l: bigint, m: bigint): bigint {
     return l & m | l ^ ~m;
   }

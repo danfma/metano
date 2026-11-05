@@ -1737,7 +1737,7 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The ordinary lowering of <c>left op right</c> over already extracted
-    /// operands, whose syntax gives their types; <paramref name="operation"/>
+    /// operands, whose syntax gives their types; <paramref name="operatorSyntax"/>
     /// (the binary expression or compound assignment) gives the operator a
     /// numeric node carries. A lifted operator reuses it
     /// for its non-null case: <paramref name="isLifted"/> peels
@@ -1746,7 +1746,7 @@ public sealed partial class IrExpressionExtractor
     /// which is not a Decimal method call.
     /// </summary>
     private IrExpression BuildBinary(
-        ExpressionSyntax operation,
+        ExpressionSyntax operatorSyntax,
         IrBinaryOp op,
         OperatorOperand left,
         OperatorOperand right,
@@ -1788,7 +1788,7 @@ public sealed partial class IrExpressionExtractor
             return BuildTemporalCompareCall(left.Value, right.Value, op, temporalTypeName);
         }
 
-        return NumericBinary(operation, left.Value, op, right.Value, right.Syntax);
+        return BuildNumericBinary(operatorSyntax, op, left.Value, right);
     }
 
     private bool AreDecimalOperands(OperatorOperand left, OperatorOperand right, bool isLifted) =>

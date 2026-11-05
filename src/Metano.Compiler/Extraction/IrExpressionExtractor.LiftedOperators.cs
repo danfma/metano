@@ -123,17 +123,20 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The lifted form of <paramref name="op"/>, whose non-null result is
-    /// reduced as <paramref name="operation"/> (the binary expression or
-    /// compound assignment) needs (spec 012 FR-025).
+    /// reduced as <paramref name="operatorSyntax"/> (the binary expression,
+    /// compound assignment or increment) needs (spec 012 FR-025).
     /// </summary>
-    private LiftedOperator LiftedOperatorFor(IrBinaryOp op, ExpressionSyntax operation)
+    private LiftedOperator LiftedOperatorFor(IrBinaryOp op, ExpressionSyntax operatorSyntax)
     {
-        var bound = _semantic.GetOperation(operation);
+        var operation = _semantic.GetOperation(operatorSyntax);
 
         return new(
             op.IsRelational(),
             (left, right) =>
-                ReduceOverflow(bound, BuildBinary(operation, op, left, right, isLifted: true))
+                ReduceOverflow(
+                    operation,
+                    BuildBinary(operatorSyntax, op, left, right, isLifted: true)
+                )
         );
     }
 

@@ -20,9 +20,9 @@ internal static class IntegerOverflowLowering
     /// The reduction <paramref name="operation"/> needs: <c>+</c>, <c>-</c>,
     /// <c>*</c>, unary <c>-</c>, <c>++</c>, <c>--</c> and the compound
     /// <c>+=</c>, <c>-=</c>, <c>*=</c> on a 64-bit integer (lifted forms
-    /// included); <c>~</c> on <c>ulong</c>, <c>&lt;&lt;</c> and
-    /// <c>&gt;&gt;&gt;</c> on <c>long</c> (and their compound forms), which
-    /// always wrap; <c>null</c> for any other operation, a user-defined
+    /// included); <c>~</c> on <c>ulong</c> and <c>&lt;&lt;</c> (and
+    /// <c>&lt;&lt;=</c>), which always wrap; <c>null</c> for any other
+    /// operation, a user-defined
     /// operator, or one narrower than 64 bits (OQ-4).
     /// </summary>
     public static IntegerOverflowReduction? ReductionOf(IOperation? operation) =>
@@ -58,8 +58,8 @@ internal static class IntegerOverflowLowering
 
     /// <summary>
     /// <c>&lt;&lt;</c> drops the bits shifted past bit 63 in either context
-    /// (shifts never check, FR-022); <c>&gt;&gt;&gt;</c> on a <c>long</c>
-    /// shifts its unsigned bits, which read back as signed (FR-029).
+    /// (shifts never check, FR-022). <c>&gt;&gt;</c> and <c>&gt;&gt;&gt;</c>
+    /// cannot leave the domain, so they are never reduced.
     /// </summary>
     private static IntegerOverflowReduction? BinaryReduction(
         BinaryOperatorKind kind,
@@ -71,7 +71,6 @@ internal static class IntegerOverflowLowering
             BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply =>
                 ReductionIn(type, isChecked),
             BinaryOperatorKind.LeftShift => ReductionIn(type, isChecked: false),
-            BinaryOperatorKind.UnsignedRightShift => SignedWrapIn(type),
             _ => null,
         };
 
@@ -102,11 +101,6 @@ internal static class IntegerOverflowLowering
     private static IntegerOverflowReduction? UnsignedComplementReduction(ITypeSymbol? type) =>
         SixtyFourBitKindOf(type) is IrNumericKind.UInt64
             ? new IntegerOverflowReduction(IrNumericKind.UInt64, IrOverflowMode.Wrap)
-            : null;
-
-    private static IntegerOverflowReduction? SignedWrapIn(ITypeSymbol? type) =>
-        SixtyFourBitKindOf(type) is IrNumericKind.Int64
-            ? new IntegerOverflowReduction(IrNumericKind.Int64, IrOverflowMode.Wrap)
             : null;
 
     private static IrNumericKind? SixtyFourBitKindOf(ITypeSymbol? type) =>

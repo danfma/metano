@@ -2,8 +2,8 @@
  * Runtime helpers for C#'s 64-bit integers, which the compiler maps to `bigint`:
  * range checks, checked narrowing, lifted conversions, the conversions from
  * `double`, `decimal` and `BigInteger` with .NET 9+ semantics, and division and
- * remainder with .NET's exceptions. Every export is a
- * function or a constant, so generated code imports only what it calls.
+ * remainder with .NET's exceptions. Every export is a function or a constant,
+ * so generated code imports only what it calls.
  */
 import { DivideByZeroException, OverflowException } from "./exceptions/index.ts";
 
@@ -253,7 +253,7 @@ export function divUInt64(
     return null;
   }
 
-  requireDivisor(divisor);
+  requireNonZeroDivisor(divisor);
 
   return dividend / divisor;
 }
@@ -276,21 +276,22 @@ export function remUInt64(
     return null;
   }
 
-  requireDivisor(divisor);
+  requireNonZeroDivisor(divisor);
 
   return dividend % divisor;
 }
 
 /** Throws what .NET throws for a signed 64-bit `/` or `%`: a zero divisor, or `long.MinValue` by `-1`. */
 function requireSignedDivision(dividend: bigint, divisor: bigint): void {
-  requireDivisor(divisor);
+  requireNonZeroDivisor(divisor);
 
   if (dividend === INT64_MIN && divisor === -1n) {
     throw new OverflowException();
   }
 }
 
-function requireDivisor(divisor: bigint): void {
+/** Throws DivideByZeroException, as every .NET integer `/` and `%` does, when `divisor` is zero. */
+function requireNonZeroDivisor(divisor: bigint): void {
   if (divisor === 0n) {
     throw new DivideByZeroException();
   }
