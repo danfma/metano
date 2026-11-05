@@ -24,7 +24,7 @@ export class Factory {
       receiver$temp$0.inner.items.push(5);
 
       return receiver$temp$0;
-    })(new Point(this.seed));
+    })(Point.fromSeed(this.seed));
     const tag = ((receiver$temp$1) => {
       Object.assign(receiver$temp$1, { name: "u" });
       Object.assign(receiver$temp$1, { weight: 1 });

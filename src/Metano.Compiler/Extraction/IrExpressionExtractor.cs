@@ -4232,31 +4232,57 @@ public sealed partial class IrExpressionExtractor
             )
         );
 
-    private IrExpression ExtractObjectCreation(ObjectCreationExpressionSyntax oc)
+    private IrExpression ExtractObjectCreation(ObjectCreationExpressionSyntax oc) =>
+        ExtractCreation(oc);
+
+    private IrExpression ExtractImplicitObjectCreation(
+        ImplicitObjectCreationExpressionSyntax ioc
+    ) => ExtractCreation(ioc);
+
+    /// <summary>
+    /// Lowers an explicit or implicit <c>new</c>. A construction a target may
+    /// route through the resolved overload's factory
+    /// (<see cref="DispatchedConstructorCalls.ConstructionTarget"/>) takes
+    /// Roslyn's bound arguments; every other one takes its source arguments.
+    /// </summary>
+    private IrExpression ExtractCreation(BaseObjectCreationExpressionSyntax creation)
     {
-        var args = oc.ArgumentList?.Arguments.Select(ExtractArgument).ToList() ?? [];
-        var ctorSymbol = _semantic.GetSymbolInfo(oc).Symbol as IMethodSymbol;
-        ReportTupleValueLookup(oc, ctorSymbol);
-        if (oc.ArgumentList is { } argList)
-            ApplyParamsSpread(args, ctorSymbol, argList.Arguments);
-        var typeSymbol = _semantic.GetTypeInfo(oc).Type;
+        var ctorSymbol = _semantic.GetSymbolInfo(creation).Symbol as IMethodSymbol;
+        var overload = DispatchedConstructorCalls.ConstructionTarget(ctorSymbol, _target);
+        var boundArgs = overload is null
+            ? null
+            : ExtractBoundArguments(_semantic.GetOperation(creation));
+        var args = boundArgs ?? ExtractSourceArguments(creation.ArgumentList, ctorSymbol);
+
+        ReportTupleValueLookup(creation, ctorSymbol);
+
+        var typeSymbol = _semantic.GetTypeInfo(creation).Type;
+
         var type = typeSymbol is not null
             ? IrTypeRefMapper.Map(typeSymbol, _originResolver, _target)
             : new IrUnknownTypeRef();
-        return BuildNewExpression(type, args, typeSymbol, oc);
+
+        return BuildNewExpression(
+            type,
+            args,
+            typeSymbol,
+            creation,
+            boundArgs is null ? null : overload
+        );
     }
 
-    private IrExpression ExtractImplicitObjectCreation(ImplicitObjectCreationExpressionSyntax ioc)
+    private List<IrArgument> ExtractSourceArguments(
+        ArgumentListSyntax? argumentList,
+        IMethodSymbol? ctorSymbol
+    )
     {
-        var args = ioc.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-        var ctorSymbol = _semantic.GetSymbolInfo(ioc).Symbol as IMethodSymbol;
-        ReportTupleValueLookup(ioc, ctorSymbol);
-        ApplyParamsSpread(args, ctorSymbol, ioc.ArgumentList.Arguments);
-        var typeSymbol = _semantic.GetTypeInfo(ioc).Type;
-        var type = typeSymbol is not null
-            ? IrTypeRefMapper.Map(typeSymbol, _originResolver, _target)
-            : new IrUnknownTypeRef();
-        return BuildNewExpression(type, args, typeSymbol, ioc);
+        if (argumentList is null)
+            return [];
+
+        var args = argumentList.Arguments.Select(ExtractArgument).ToList();
+        ApplyParamsSpread(args, ctorSymbol, argumentList.Arguments);
+
+        return args;
     }
 
     /// <summary>
@@ -4270,7 +4296,8 @@ public sealed partial class IrExpressionExtractor
         IrTypeRef type,
         IReadOnlyList<IrArgument> args,
         ITypeSymbol? typeSymbol,
-        ExpressionSyntax creationSyntax
+        ExpressionSyntax creationSyntax,
+        IrOverloadRef? overload = null
     )
     {
         var isPlainObject =
@@ -4288,7 +4315,7 @@ public sealed partial class IrExpressionExtractor
         // express named arguments (TypeScript) a positional list that still
         // behaves like the source, while backends that can (Dart) keep the
         // name on each IrArgument and render `name: value`.
-        if (ctor is not null && args.Any(a => a.Name is not null))
+        if (overload is null && ctor is not null && args.Any(a => a.Name is not null))
             args = NormalizeArguments(args, ctor);
 
         var initializer = InitializerOf(creationSyntax);
@@ -4319,7 +4346,8 @@ public sealed partial class IrExpressionExtractor
             ExternalImports: BuildImportedRenderableImports(typeSymbol),
             ExceptionConstruction: ExtractExceptionConstruction(ctor, args, creationSyntax),
             Origin: BuildOrigin(ctor),
-            TypeArguments: ConstructedTypeArguments(typeSymbol)
+            TypeArguments: ConstructedTypeArguments(typeSymbol),
+            Overload: overload
         );
 
         var constructed = BindExceptionArguments(creation);

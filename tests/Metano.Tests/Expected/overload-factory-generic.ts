@@ -71,28 +71,28 @@ export class RankedBox<T extends IRank<T>> extends Box<T> {
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === RankedBox.byRankedBoxValue) {
       const value = args[1] as T;
-      super(value);
+      super(Box.byBoxValue, value);
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === RankedBox.byRankedBoxN) {
       const n = args[1] as number;
-      super(n);
+      super(Box.byBoxN, n);
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
       const n = args[0] as number;
-      super(n);
+      super(Box.byBoxN, n);
 
       return;
     }
 
     if (args.length === 1 && typeof args[0] === "object") {
       const value = args[0] as T;
-      super(value);
+      super(Box.byBoxValue, value);
 
       return;
     }

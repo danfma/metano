@@ -310,12 +310,30 @@ internal sealed class JsonSpecBuilder
         if (targetType.IsAbstract)
             return BuildAbstractFactoryThrow(UnsupportedAbstractFactoryMessage(tsTypeName));
 
-        var construction = new TsNewExpression(
-            new TsIdentifier(tsTypeName),
-            BuildConstructorArguments(targetType)
+        return new TsReturnStatement(
+            WithAssignedMembers(BuildConstruction(targetType, tsTypeName), targetType)
         );
+    }
 
-        return new TsReturnStatement(WithAssignedMembers(construction, targetType));
+    /// <summary>
+    /// <c>new TodoItem(p.title as string, ...)</c>, or — for a type that
+    /// constructs through its overload factories — the factory of the
+    /// constructor System.Text.Json picks, with the same arguments:
+    /// <c>Money.fromAmount(p.amount as Decimal)</c> (spec 013 FR-035).
+    /// </summary>
+    private TsExpression BuildConstruction(INamedTypeSymbol targetType, string tsTypeName)
+    {
+        var constructor = JsonConstructorSelection.Of(targetType);
+        var arguments = BuildConstructorArguments(constructor);
+        var factory = constructor is null ? null : JsonConstructorSelection.FactoryOf(constructor);
+
+        if (factory is null)
+            return new TsNewExpression(new TsIdentifier(tsTypeName), arguments);
+
+        return new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier(tsTypeName), factory),
+            arguments
+        );
     }
 
     /// <summary>
@@ -334,10 +352,7 @@ internal sealed class JsonSpecBuilder
     /// with <c>Note = null</c>). Members set only when present are assigned by
     /// the runtime instead (<see cref="AssignIfPresentProperty"/>).
     /// </summary>
-    private TsExpression WithAssignedMembers(
-        TsNewExpression construction,
-        INamedTypeSymbol targetType
-    )
+    private TsExpression WithAssignedMembers(TsExpression construction, INamedTypeSymbol targetType)
     {
         var assignedMembers = UnboundMembersOf(targetType, JsonReadAssignment.Always)
             .Select(ToCastProperty)
@@ -409,7 +424,7 @@ internal sealed class JsonSpecBuilder
     /// matched ignoring case as System.Text.Json binds them.
     /// </summary>
     private static HashSet<string> ConstructorBoundMemberNames(INamedTypeSymbol targetType) =>
-        PrimaryConstructorParametersOf(targetType)
+        ParametersOf(JsonConstructorSelection.Of(targetType))
             .Select(parameter =>
                 SymbolHelper
                     .FindInstancePropertyInHierarchy(parameter.ContainingType, parameter.Name)
@@ -436,12 +451,11 @@ internal sealed class JsonSpecBuilder
     /// constructor is built with <c>new T()</c> and its members are assigned
     /// (<see cref="WithAssignedMembers"/>).
     /// </summary>
-    private List<TsExpression> BuildConstructorArguments(INamedTypeSymbol targetType) =>
-        PrimaryConstructorParametersOf(targetType).Select(BuildConstructorArgument).ToList();
+    private List<TsExpression> BuildConstructorArguments(IMethodSymbol? constructor) =>
+        ParametersOf(constructor).Select(BuildConstructorArgument).ToList();
 
-    private static IEnumerable<IParameterSymbol> PrimaryConstructorParametersOf(
-        INamedTypeSymbol targetType
-    ) => IrConstructorExtractor.FindPrimaryConstructor(targetType)?.Parameters ?? [];
+    private static IEnumerable<IParameterSymbol> ParametersOf(IMethodSymbol? constructor) =>
+        constructor?.Parameters ?? [];
 
     private TsExpression BuildConstructorArgument(IParameterSymbol parameter)
     {

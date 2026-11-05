@@ -438,7 +438,12 @@ public static class IrToTsConstructorDispatcherBridge
         DispatcherBaseCall baseCall,
         IrToTsBridgeContext context
     ) =>
-        IrToTsClassBridge.BuildBaseCall(ctor, baseCall.KeepsBaseMessage, context)
+        IrToTsClassBridge.BuildBaseCall(
+            ctor,
+            baseCall.BaseClass,
+            baseCall.KeepsBaseMessage,
+            context
+        )
         ?? (
             baseCall.ExtendsBase
                 ? new TsBaseConstructorCall(
@@ -452,11 +457,15 @@ public static class IrToTsConstructorDispatcherBridge
 
 /// <summary>
 /// What every branch of one constructor dispatcher needs for its base call:
-/// whether the class extends an emitted base (so a branch without base
-/// arguments still calls <c>super()</c>) and whether it keeps its base message
-/// (see <see cref="IrToTsClassBridge.BuildBaseCall"/>).
+/// the emitted base class the class extends, if any (so a branch without base
+/// arguments still calls <c>super()</c>, and a selected base overload is
+/// qualified by it), and whether it keeps its base message (see
+/// <see cref="IrToTsClassBridge.BuildBaseCall"/>).
 /// </summary>
-internal sealed record DispatcherBaseCall(bool ExtendsBase, bool KeepsBaseMessage);
+internal sealed record DispatcherBaseCall(TsType? BaseClass, bool KeepsBaseMessage)
+{
+    public bool ExtendsBase => BaseClass is not null;
+}
 
 /// <summary>
 /// The selectors of one class's constructor overloads (spec 013 FR-008,

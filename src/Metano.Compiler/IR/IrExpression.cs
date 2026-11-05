@@ -317,6 +317,17 @@ public sealed record IrArgument(IrExpression Value, string? Name = null, bool Is
 /// did not resolve; <paramref name="TypeArguments"/> is null for a non-generic
 /// type. Constructor mappings are applied by the TypeScript backend only today.
 /// </para>
+/// <para>
+/// <paramref name="Overload"/> is set when the constructor Roslyn resolved is
+/// an overload of a dispatched set whose type constructs through factories
+/// and whose IR is available (spec 013 FR-017, DECIDED-11, DECIDED-24): a
+/// backend may then build the value through that overload's factory
+/// (<c>Money.fromAmount(…)</c>) instead of its runtime dispatcher. The
+/// <paramref name="Arguments"/> are then Roslyn's bound arguments in
+/// parameter order: omitted defaults explicit, an expanded <c>params</c> call
+/// as its elements, a normal-form one as a spread. Null for every other
+/// construction.
+/// </para>
 /// </summary>
 public sealed record IrNewExpression(
     IrTypeRef Type,
@@ -329,7 +340,8 @@ public sealed record IrNewExpression(
     IReadOnlyList<IrExternalImport>? ExternalImports = null,
     IrExceptionConstruction? ExceptionConstruction = null,
     IrMemberOrigin? Origin = null,
-    IReadOnlyList<IrTypeRef>? TypeArguments = null
+    IReadOnlyList<IrTypeRef>? TypeArguments = null,
+    IrOverloadRef? Overload = null
 ) : IrExpression;
 
 /// <summary>

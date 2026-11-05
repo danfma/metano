@@ -428,7 +428,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             jsonConstructedTypes
         );
 
-        _overloadClaims = new TsOverloadClaimsRegistry(Context);
+        _overloadClaims = new TsOverloadClaimsRegistry(Context, _constructorAccessFacts);
 
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();
@@ -443,10 +443,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var previousRenames = IrToTsTypeMapper.NamedTypeRenames;
         var previousDelegatePredicate = IrTypeRefMapper.NamedDelegatePredicate;
         var previousInt64Representation = Int64RepresentationScope.Current;
+        var previousOverloadClaims = TsOverloadCallSites.Claims;
         try
         {
             // STAGING(012k): the scope goes with the switch.
             Int64RepresentationScope.Current = Int64Representation;
+            TsOverloadCallSites.Claims = OverloadClaims;
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrTypeRefMapper.NamedDelegatePredicate = sym =>
                 SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
@@ -529,6 +531,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             IrToTsTypeMapper.NamedTypeRenames = previousRenames;
             IrTypeRefMapper.NamedDelegatePredicate = previousDelegatePredicate;
             Int64RepresentationScope.Current = previousInt64Representation;
+            TsOverloadCallSites.Claims = previousOverloadClaims;
         }
 
         // Generate index.ts barrel files per namespace folder

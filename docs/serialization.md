@@ -445,7 +445,7 @@ your own `JsonConverter`.
 | `[JsonRequired]`, C# `required` | ✅ / ⚠️ | A non-nullable member is already required on read; on a nullable member a missing key reads `null` where STJ throws, `MS0037` |
 | `[JsonExtensionData]` | ⚠️ | Left out of the spec, `MS0037`; bound to a constructor parameter (STJ throws `InvalidOperationException`), the factory passes `null` |
 | `[JsonNumberHandling]`, `[JsonObjectCreationHandling(Populate)]`, `[JsonUnmappedMemberHandling(Disallow)]` | ⚠️ | Not mirrored, `MS0037` |
-| `[JsonConstructor]` | ✅ / ⚠️ | Mirrored on the constructor the factory calls (the primary one, else the one with the most parameters); on another constructor, `MS0037` |
+| `[JsonConstructor]` | ✅ / ⚠️ | A class with two or more constructors is built through the factory of the marked overload (`factory: (p) => Money.fromAmountCurrency(…)`, spec 013 FR-035). Any other type is built through the constructor the factory calls (the primary one, else the one with the most parameters); the attribute on another constructor (a `[PlainObject]` secondary one, a type read from a DLL or package) reports `MS0037` |
 | Any other `[JsonSourceGenerationOptions]` option | ⚠️ | `MS0037` when set to a value other than System.Text.Json's default; formatting options (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`) and `DefaultBufferSize` / `GenerationMode` are never reported ([details](#member-selection)) |
 | `[JsonDerivedType]` / `[JsonPolymorphic]` on a class or record | ✅ | Emits the base's `polymorphism` descriptor and a spec for every registered type ([details](#polymorphism)) |
 | `[JsonDerivedType]` on an interface or a `[PlainObject]` type | ✅ | Interface bases dispatch class variants by constructor; `[PlainObject]` variants are selected by synthesized guards ([details](#interface-and-plainobject-hierarchies)) |
@@ -1383,7 +1383,10 @@ position (STJ writes the base value at the redeclaration's position).
 Constructor access: a class with a `TypeSpec` in the context is passed as
 `type: T` and built by `factory: (p) => new T(...)`, both outside its class
 body, so its constructor stays public even when C# declares it `private` or
-`protected` (warning `MS0061`, baseline FR-049, #432). Other classes keep their constructor's
+`protected` (warning `MS0061`, baseline FR-049, #432). A class with two or more constructors is
+built through the factory of its `[JsonConstructor]` overload instead (`Money.fromAmount(…)`,
+spec 013 FR-035); that factory is emitted public, with `MS0061`, when its overload is not.
+Other classes keep their constructor's
 `private` / `protected` modifier. A context that claims a type from a referenced
 package with no public constructor does not type-check, because that package
 decided the modifier when it was transpiled; the transpiler reports `MS0062` at

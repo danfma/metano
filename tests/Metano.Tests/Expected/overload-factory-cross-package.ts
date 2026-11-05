@@ -14,28 +14,28 @@ export class Receipt extends Money {
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptAmount) {
       const amount = args[1] as Decimal;
-      super(amount);
+      super(Money.byMoneyAmount, amount);
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptCents) {
       const cents = args[1] as string;
-      super(cents.length);
+      super(Money.byMoneyCents, cents.length);
 
       return;
     }
 
     if (args.length === 1 && args[0] instanceof Decimal) {
       const amount = args[0] as Decimal;
-      super(amount);
+      super(Money.byMoneyAmount, amount);
 
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
       const cents = args[0] as string;
-      super(cents.length);
+      super(Money.byMoneyCents, cents.length);
 
       return;
     }

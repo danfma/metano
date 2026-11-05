@@ -53,11 +53,11 @@ export class Cash {
   }
 
   private static fromAmount$(amount: Decimal): Cash {
-    return new Cash(amount);
+    return Cash.fromAmount(amount);
   }
 
   private static fromCents$(cents: number): Cash {
-    return new Cash(cents);
+    return Cash.fromCents(cents);
   }
 
   static from(amount: Decimal): Cash;

@@ -1,4 +1,5 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Microsoft.CodeAnalysis;
@@ -61,6 +62,33 @@ public sealed class ConstructorAccessPolicy(
             : mostPermissive;
     }
 
+    /// <summary>
+    /// The declaration ordinals of the factories of <paramref name="type"/>
+    /// that code outside its class body calls (spec 013 FR-011): each is
+    /// emitted public instead of its overload's accessibility and reported
+    /// with <c>MS0061</c>. The class emitter calls it once per type.
+    /// </summary>
+    public IReadOnlySet<int> ResolveWidenedFactoriesAndReport(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir
+    )
+    {
+        var widened = new HashSet<int>();
+
+        foreach (var overload in ir.Constructor?.DeclarationsInOrder ?? [])
+        {
+            var ordinal = overload.DeclarationOrdinal;
+
+            if (_constructorAccessFacts.OutsideCallOfFactory(type, ordinal) is not { } call)
+                continue;
+
+            widened.Add(ordinal);
+            ReportWidenedFactory(type, overload, call);
+        }
+
+        return widened;
+    }
+
     private void ReportNarrowerConstructors(INamedTypeSymbol type, TsAccessibility emitted)
     {
         var narrower = _constructorAccessFacts
@@ -84,6 +112,25 @@ public sealed class ConstructorAccessPolicy(
             )
         );
     }
+
+    private void ReportWidenedFactory(
+        INamedTypeSymbol type,
+        IrConstructorDeclaration overload,
+        OutsideConstruction call
+    ) =>
+        _reportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.ConstructorAccessibilityWidened,
+                $"The factory of '{DispatchedOverload.SignatureOf(overload)}' is emitted public "
+                    + $"instead of {IrToTsVisibilityMapper.Map(overload.Visibility).Accessibility.ToKeyword()} because "
+                    + $"{call.Site} calls it outside the TypeScript class body (spec 013 FR-011).",
+                IrConstructorExtractor
+                    .AllExplicitConstructors(type)
+                    .ElementAtOrDefault(overload.DeclarationOrdinal)
+                    ?.Locations.FirstOrDefault()
+            )
+        );
 
     private void ReportWidened(
         INamedTypeSymbol type,

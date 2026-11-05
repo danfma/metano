@@ -248,7 +248,7 @@ public class ConstructorAccessModifierTests
         await Assert.That(output).Contains("  private constructor(length: number);\n");
         await Assert.That(output).Contains("  private constructor(text: string);\n");
         await Assert.That(output).Contains("  private constructor(...args: unknown[]) {");
-        await Assert.That(output).Contains("return new Code(text);");
+        await Assert.That(output).Contains("return Code.fromText$(text);");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
 

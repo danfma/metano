@@ -19,12 +19,16 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// syntax this compilation cannot bind, is read the same way.
 /// </para>
 /// </summary>
-public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
+public sealed class TsOverloadClaimsRegistry(
+    TypeScriptTransformContext context,
+    ConstructorAccessFacts constructorAccessFacts
+)
 {
     private static readonly IReadOnlyDictionary<string, TsClaimedMember> NothingInherited =
         new Dictionary<string, TsClaimedMember>(StringComparer.Ordinal);
 
     private readonly TypeScriptTransformContext _context = context;
+    private readonly ConstructorAccessFacts _constructorAccessFacts = constructorAccessFacts;
     private readonly IrToTsTypeOverrides? _typeOverrides = UnrecordedTypeOverridesOf(context);
     private readonly IrTypeOriginResolver? _shapeOriginResolver = UnrecordedOriginResolverOf(
         context
@@ -39,6 +43,16 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
     /// </summary>
     internal static bool AppliesTo(IrClassDeclaration ir) =>
         HasOverloadGroup(ir) || IrToTsClassBridge.BuildExtends(ir) is TsNamedType;
+
+    /// <summary>
+    /// The selector and factory names of the constructor overload a call site
+    /// identifies (spec 013 DECIDED-18); <c>null</c> when this compilation
+    /// cannot see the declaring type, which keeps the dispatcher call.
+    /// </summary>
+    internal TsConstructorOverloadNames? ConstructorNamesOf(IrOverloadRef overload) =>
+        IrTypeKeys.Find(overload.DeclaringType, _context.Compilation) is { } type
+            ? For(type).ConstructorNamesAt(overload.Ordinal)
+            : null;
 
     /// <summary>The claims of <paramref name="type"/>, computed on first use.</summary>
     internal TsOverloadClaims For(INamedTypeSymbol type) =>
@@ -59,10 +73,20 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
                 _context.ResolveTsName(type),
                 InheritedStaticsOf(type, ir),
                 constructor =>
-                    IrToTsConstructorFactoryBridge.SignatureOf(ir, constructor, _typeOverrides)
+                    IrToTsConstructorFactoryBridge.SignatureOf(
+                        ir,
+                        constructor,
+                        IsWidened(type, constructor),
+                        _typeOverrides
+                    )
             )
         );
     }
+
+    /// <summary>Whether code outside the class body calls the overload's factory (FR-011).</summary>
+    private bool IsWidened(INamedTypeSymbol type, IrConstructorDeclaration constructor) =>
+        _constructorAccessFacts.OutsideCallOfFactory(type, constructor.DeclarationOrdinal)
+            is not null;
 
     private IrClassDeclaration ShapeOf(INamedTypeSymbol type)
     {

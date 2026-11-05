@@ -1582,7 +1582,47 @@ public static partial class IrToTsExpressionBridge
         )
             return mapped;
 
+        if (FactoryOf(ne) is { } factory)
+            return MapFactoryConstruction(ne, factory, args, context);
+
         return new TsNewExpression(MapNewTarget(ne.Type), WithoutNullRestArray(ne.Arguments, args));
+    }
+
+    /// <summary>
+    /// The claimed factory of the overload a construction resolved to (spec
+    /// 013 FR-017); <c>null</c> when it keeps the dispatcher.
+    /// </summary>
+    private static string? FactoryOf(IrNewExpression ne) =>
+        ne.Overload is { } overload
+            ? TsOverloadCallSites.ConstructorNamesOf(overload)?.Factory
+            : null;
+
+    /// <summary>
+    /// <c>Money.fromAmount(amount)</c>: the construction through the resolved
+    /// overload's factory, which reaches its selector branch with no runtime
+    /// check. A generic class's factory re-declares the class's type
+    /// parameters (FR-028), so the constructed type's arguments go on the
+    /// call (<c>Box.fromValue&lt;string&gt;(s)</c>).
+    /// </summary>
+    private static TsCallExpression MapFactoryConstruction(
+        IrNewExpression ne,
+        string factory,
+        IReadOnlyList<TsExpression> args,
+        IrToTsBridgeContext context
+    )
+    {
+        IReadOnlyList<TsType>? typeArguments = ne.Type
+            is IrNamedTypeRef { TypeArguments: { Count: > 0 } constructedArguments }
+            ? constructedArguments
+                .Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
+                .ToList()
+            : null;
+
+        return new TsCallExpression(
+            new TsPropertyAccess(MapNewTarget(ne.Type), factory),
+            WithoutNullRestArray(ne.Arguments, args),
+            TypeArguments: typeArguments
+        );
     }
 
     /// <summary>

@@ -38,7 +38,7 @@ export class Day {
       this.tag = "a";
       this.label = "";
       this.mood = Mood.Loud;
-      this.nested = new Inner(n);
+      this.nested = Inner.fromV(n);
       this.id = UUID.empty;
 
       return;
@@ -53,7 +53,7 @@ export class Day {
         this.tag = "a";
         this.label = "";
         this.mood = Mood.Loud;
-        this.nested = new Inner(n);
+        this.nested = Inner.fromV(n);
         this.id = UUID.empty;
       }
 
@@ -67,7 +67,7 @@ export class Day {
       this.tag = "a";
       this.label = "";
       this.mood = Mood.Loud;
-      this.nested = new Inner(n);
+      this.nested = Inner.fromV(n);
       this.id = UUID.empty;
 
       return;
@@ -82,7 +82,7 @@ export class Day {
         this.tag = "a";
         this.label = "";
         this.mood = Mood.Loud;
-        this.nested = new Inner(n);
+        this.nested = Inner.fromV(n);
         this.id = UUID.empty;
       }
 

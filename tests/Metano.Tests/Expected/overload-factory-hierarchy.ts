@@ -123,56 +123,56 @@ export class Receipt extends Money {
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptAmount) {
       const amount = args[1] as Decimal;
-      super(amount);
+      super(Money.byMoneyAmount, amount);
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptCents) {
       const cents = args[1] as number;
-      super(cents);
+      super(Money.byMoneyCents, cents);
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptCode) {
       const code = args[1] as string;
-      super(code.length);
+      super(Money.byMoneyCents, code.length);
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Receipt.byReceiptId) {
       const id = args[1] as number;
-      super(id);
+      super(Money.byMoneyId, id);
 
       return;
     }
 
     if (args.length === 1 && args[0] instanceof Decimal) {
       const amount = args[0] as Decimal;
-      super(amount);
+      super(Money.byMoneyAmount, amount);
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
       const cents = args[0] as number;
-      super(cents);
+      super(Money.byMoneyCents, cents);
 
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
       const code = args[0] as string;
-      super(code.length);
+      super(Money.byMoneyCents, code.length);
 
       return;
     }
 
     if (args.length === 1 && isInt64(args[0])) {
       const id = args[0] as number;
-      super(id);
+      super(Money.byMoneyId, id);
 
       return;
     }
@@ -214,7 +214,7 @@ export class GiftReceipt extends Receipt {
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === GiftReceipt.byGiftReceiptAmount) {
       const amount = args[1] as string;
-      super(amount.length);
+      super(Receipt.byReceiptCents, amount.length);
       this.note = amount;
 
       return;
@@ -222,14 +222,14 @@ export class GiftReceipt extends Receipt {
 
     if (typeof args[0] === "symbol" && args[0] === GiftReceipt.byGiftReceiptCents) {
       const cents = args[1] as number;
-      super(cents);
+      super(Receipt.byReceiptCents, cents);
 
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
       const amount = args[0] as string;
-      super(amount.length);
+      super(Receipt.byReceiptCents, amount.length);
       this.note = amount;
 
       return;
@@ -237,7 +237,7 @@ export class GiftReceipt extends Receipt {
 
     if (args.length === 1 && isInt32(args[0])) {
       const cents = args[0] as number;
-      super(cents);
+      super(Receipt.byReceiptCents, cents);
 
       return;
     }

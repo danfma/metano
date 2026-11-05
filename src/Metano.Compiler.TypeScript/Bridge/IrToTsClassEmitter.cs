@@ -150,7 +150,13 @@ public sealed class IrToTsClassEmitter(
         if (emitsSelectorsAndFactories)
         {
             classMembers.AddRange(
-                IrToTsConstructorFactoryBridge.BuildFactories(ir, typeName, claims, lowering)
+                IrToTsConstructorFactoryBridge.BuildFactories(
+                    ir,
+                    typeName,
+                    claims,
+                    _constructorAccessPolicy.ResolveWidenedFactoriesAndReport(type, ir),
+                    lowering
+                )
             );
         }
 
@@ -230,7 +236,7 @@ public sealed class IrToTsClassEmitter(
             // valid type, and silently dropping the type would hide the gap.
             return TryBuildConstructorDispatcherFromIr(
                     ir,
-                    new DispatcherBaseCall(extendsType is not null, keepsBaseMessage),
+                    new DispatcherBaseCall(extendsType, keepsBaseMessage),
                     selectors,
                     implicitParameterlessBody,
                     groupAccessibility,
@@ -988,7 +994,7 @@ public sealed class IrToTsClassEmitter(
             return null;
 
         var baseCall = ir.Constructor is { } ctor
-            ? IrToTsClassBridge.BuildBaseCall(ctor, keepsBaseMessage, lowering)
+            ? IrToTsClassBridge.BuildBaseCall(ctor, extendsType, keepsBaseMessage, lowering)
             : null;
 
         return baseCall ?? new TsBaseConstructorCall([], [], keepsBaseMessage);

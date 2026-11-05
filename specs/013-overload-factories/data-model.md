@@ -48,9 +48,15 @@ public sealed record IrOverloadName(
 // camelCasing and the `__` operator prefix are target spellings (NFR-002).
 
 /// <summary>A stable overload identity: the declaring type (for an interface root, the
-/// constructed interface, DECIDED-30), the member's C# name, and the overload's
-/// declaration ordinal in its root group.</summary>
+/// constructed interface, DECIDED-30), the member's C# name (`.ctor` for a constructor),
+/// and the overload's declaration ordinal in its root group (013c:
+/// `IR/IrOverloadRef.cs`).</summary>
 public sealed record IrOverloadRef(IrTypeKey DeclaringType, string MemberName, int Ordinal);
+
+/// <summary>A type's identity across compilations: its assembly's name and its metadata
+/// name (`Shop.Box`1`, `Shop.Outer+Inner`). A target finds the type with
+/// `IAssemblySymbol.GetTypeByMetadataName` (`Extraction/IrTypeKeys.cs`, 013c).</summary>
+public sealed record IrTypeKey(string AssemblyName, string MetadataName);
 
 // IrParameter gains:
 public IrNamingSpelling? NamingSpelling { get; init; }   // null outside dispatched groups
@@ -64,9 +70,11 @@ public bool IsOverride { get; init; }                    // emits `override` on 
 public bool IsHiding { get; init; }                      // `new`: a non-root candidate, claimed against inherited members (claim step 7)
 // IrClassDeclaration gains:
 public bool HasMultiplyConstructedInterface { get; init; } // DECIDED-30: runtime-dispatched root names, MS0069
-// IrConstructorDeclaration gains, for a dispatched base call:
+// IrConstructorDeclaration gains, for a dispatched base call (013c):
 public IrOverloadRef? BaseOverload { get; init; }        // the statically resolved base overload (FR-017)
-public IReadOnlyList<IrExpression>? BaseArguments { get; init; } // Roslyn's bound arguments, defaults explicit
+// BaseArguments (already IReadOnlyList<IrArgument>) then holds Roslyn's bound arguments, defaults explicit
+// IrNewExpression gains (013c), for a construction lowered to a factory:
+IrOverloadRef? Overload = null                           // Arguments then hold Roslyn's bound arguments
 ```
 
 - `OverloadName` is `null` whenever the member is not in a dispatched group — the no-churn rule
@@ -106,7 +114,16 @@ public sealed record IrDirectOverloadGroupReference(
 The constructor-initializer case (`: base(args)` → `super(Base.byBaseX, ...)`) is not an
 expression: `IrConstructorDeclaration.BaseOverload` and `BaseArguments` record it, and the
 constructor bridge renders the selector form in every branch that chains to that base overload.
-`this(...)` chains keep today's inlining (DECIDED-7).
+`this(...)` chains keep today's inlining (DECIDED-7). A declared constructor without an
+initializer records its implicit `base()` the same way when the base set is dispatched.
+
+**Constructions (013c).** A `new` lowered to a factory is not an `IrDirectOverloadCall`: it stays
+an `IrNewExpression` that carries `Overload`, because a construction keeps everything else an
+`IrNewExpression` models — object initializers, constructed type arguments (passed to the
+factory, `Box.fromValue<string>(s)`), imports, and the shapes a target lowers first
+(`[PlainObject]`, branded, JSX, declarative BCL mappings). A Dart named constructor
+(`T.fromX(...)`) is a construction too. `IrDirectOverloadCall` (with its `Factory` kind) is left
+to the method call sites of 013e.
 
 ## 3. TypeScript rendering (`src/Metano.Compiler.TypeScript/Bridge/`)
 

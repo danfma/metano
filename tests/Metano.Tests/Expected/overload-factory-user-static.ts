@@ -2,7 +2,7 @@ import { Money } from "./money";
 
 export class Coupon extends Money {
   constructor(cents: number) {
-    super(cents);
+    super(Money.byMoneyCents, cents);
   }
 
   static fromAmount(text: string): Coupon {

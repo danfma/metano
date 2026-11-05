@@ -34,7 +34,7 @@ public class IrToTsConstructorDispatcherBridgeTests
         var printed = PrintConstructor(
             IrToTsConstructorDispatcherBridge.Build(
                 ctor,
-                baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
+                baseCall: new DispatcherBaseCall(BaseClass: null, KeepsBaseMessage: false),
                 typeParameters: [],
                 SelectorsOf(ctor),
                 implicitParameterlessBody: null,
@@ -75,7 +75,7 @@ public class IrToTsConstructorDispatcherBridgeTests
         var printed = PrintConstructor(
             IrToTsConstructorDispatcherBridge.Build(
                 ctor,
-                baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
+                baseCall: new DispatcherBaseCall(BaseClass: null, KeepsBaseMessage: false),
                 typeParameters: [],
                 SelectorsOf(ctor),
                 implicitParameterlessBody: null,
@@ -105,7 +105,7 @@ public class IrToTsConstructorDispatcherBridgeTests
             .That(
                 IrToTsConstructorDispatcherBridge.Build(
                     ctor,
-                    baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
+                    baseCall: new DispatcherBaseCall(BaseClass: null, KeepsBaseMessage: false),
                     typeParameters: [],
                     SelectorsOf(ctor),
                     implicitParameterlessBody: null,
@@ -156,6 +156,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                     IrToTsConstructorFactoryBridge.SignatureOf(
                         type,
                         constructor,
+                        isWidened: false,
                         typeOverrides: null
                     )
             )

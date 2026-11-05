@@ -48,6 +48,6 @@ import { Shape } from "./shape";
 
 export class Circle extends Shape {
   constructor(radius: number) {
-    super(radius);
+    super(Shape.byShapeScale, radius);
   }
 }

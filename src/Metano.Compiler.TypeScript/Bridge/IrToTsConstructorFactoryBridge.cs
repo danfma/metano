@@ -52,10 +52,13 @@ internal static class IrToTsConstructorFactoryBridge
     /// </summary>
     /// <param name="type">The class.</param>
     /// <param name="typeName">The class's emitted name.</param>
+    /// <param name="widenedFactories">The declaration ordinals of the
+    /// factories code outside the class body calls, emitted public (FR-011).</param>
     public static IReadOnlyList<TsMethodMember> BuildFactories(
         IrClassDeclaration type,
         string typeName,
         TsOverloadClaims claims,
+        IReadOnlySet<int> widenedFactories,
         IrToTsBridgeContext context
     )
     {
@@ -66,7 +69,13 @@ internal static class IrToTsConstructorFactoryBridge
 
         return constructor
             .DeclarationsInOrder.Select(overload =>
-                BuildFactory(type, selectors, overload, context)
+                BuildFactory(
+                    type,
+                    selectors,
+                    overload,
+                    widenedFactories.Contains(overload.DeclarationOrdinal),
+                    context
+                )
             )
             .ToList();
     }
@@ -74,31 +83,34 @@ internal static class IrToTsConstructorFactoryBridge
     /// <summary>
     /// The factory of <paramref name="constructor"/> as an inheriting class's
     /// claim pass compares it (FR-026): its parameter types, optional and rest
-    /// shape, accessibility and re-declared type parameters.
+    /// shape, accessibility — public when <paramref name="isWidened"/>
+    /// (FR-011) — and re-declared type parameters.
     /// </summary>
     public static TsFactorySignature SignatureOf(
         IrClassDeclaration type,
         IrConstructorDeclaration constructor,
+        bool isWidened,
         IrToTsTypeOverrides? typeOverrides
     ) =>
         new(
             DispatchedOverload.SignatureOf(constructor),
             IrToTsTypeParameterMapper.Convert(type.TypeParameters) ?? [],
             constructor.Parameters.Select(parameter => ShapeOf(parameter, typeOverrides)).ToList(),
-            VisibilityOf(constructor).Accessibility
+            VisibilityOf(constructor, isWidened).Accessibility
         );
 
     private static TsMethodMember BuildFactory(
         IrClassDeclaration type,
         ConstructorSelectors selectors,
         IrConstructorDeclaration overload,
+        bool isWidened,
         IrToTsBridgeContext context
     )
     {
         var names = selectors.Claims.NamesOf(overload);
         var typeParameters = IrToTsTypeParameterMapper.Convert(type.TypeParameters);
         var parameters = FactoryParameters(overload, context);
-        var (accessibility, jsDoc) = VisibilityOf(overload);
+        var (accessibility, jsDoc) = VisibilityOf(overload, isWidened);
 
         var construction = new TsNewExpression(
             new TsIdentifier(selectors.TypeName),
@@ -179,7 +191,12 @@ internal static class IrToTsConstructorFactoryBridge
             typeParameters?.Select(parameter => (TsType)new TsNamedType(parameter.Name)).ToList()
         );
 
-    /// <summary>The overload's own visibility under #445's member mapping (FR-011).</summary>
-    private static TsMemberVisibility VisibilityOf(IrConstructorDeclaration overload) =>
-        IrToTsVisibilityMapper.Map(overload.Visibility);
+    /// <summary>
+    /// The overload's own visibility under #445's member mapping, or public
+    /// when code outside the class body calls the factory (FR-011).
+    /// </summary>
+    private static TsMemberVisibility VisibilityOf(
+        IrConstructorDeclaration overload,
+        bool isWidened
+    ) => IrToTsVisibilityMapper.Map(isWidened ? IrVisibility.Public : overload.Visibility);
 }
