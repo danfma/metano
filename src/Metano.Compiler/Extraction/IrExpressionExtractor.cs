@@ -2195,16 +2195,18 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// Resolves a C# keyword type (<c>string</c>, <c>int</c>, etc.) used as an
     /// expression — typically the receiver of a static call like
-    /// <c>string.Concat(…)</c> — to the underlying BCL type name. The semantic
-    /// model knows what the keyword aliases to; we surface that as an
-    /// <see cref="IrTypeReference"/> so the bridge can apply BCL mappings or
-    /// fall back to the literal name.
+    /// <c>string.Concat(…)</c> or <c>decimal.Round(…)</c> — to the underlying
+    /// BCL type name. The semantic model knows what the keyword aliases to;
+    /// we surface that as an <see cref="IrTypeReference"/> so the bridge can
+    /// apply BCL mappings or fall back to the literal name, carrying the
+    /// reference's package origin so the collector imports the BCL export the
+    /// keyword resolves to, not a project type of the same name (issue #477).
     /// </summary>
     private IrExpression ExtractPredefinedType(PredefinedTypeSyntax pred)
     {
         var typeSymbol = _semantic.GetTypeInfo(pred).Type;
         if (typeSymbol is not null)
-            return new IrTypeReference(typeSymbol.Name);
+            return TypeReferenceFromIdentifier(typeSymbol, typeSymbol.Name);
         // The semantic model failed to resolve the keyword — fall back to the
         // raw token text so downstream code at least sees something useful.
         return new IrTypeReference(pred.Keyword.ValueText);

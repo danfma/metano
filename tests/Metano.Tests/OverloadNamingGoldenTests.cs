@@ -78,6 +78,9 @@ public class OverloadNamingGoldenTests
     [Test]
     public async Task CollidingTypeSpellings_ClimbTheirQualifiers()
     {
+        // The two project `Decimal` types emit one shared `Decimal` identifier,
+        // and this file binds a single intra-project import for it — the
+        // project-vs-project alias emission is tracked in #504.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
