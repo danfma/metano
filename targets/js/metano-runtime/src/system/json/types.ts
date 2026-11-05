@@ -32,7 +32,10 @@ export type RefDescriptor<T = unknown> = {
   readonly spec: () => TypeSpec<T>;
 };
 
-/** Temporal types — toString() to serialize, parse() to deserialize */
+/**
+ * Temporal types — `toString()` to serialize (`Temporal.PlainTime` in the
+ * STJ `TimeOnly` form, `temporal-text.ts`), `parse()` to deserialize.
+ */
 export type TemporalDescriptor = {
   readonly kind: "temporal";
   readonly parse: (iso: string) => unknown;

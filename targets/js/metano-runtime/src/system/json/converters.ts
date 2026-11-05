@@ -32,6 +32,7 @@ import {
 } from "./container-depth.ts";
 import { cannotConvertTo } from "./contract-name.ts";
 import { readNull } from "./null-reads.ts";
+import { temporalTextOf } from "./temporal-text.ts";
 import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
 import { numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
@@ -158,7 +159,7 @@ function temporalConverter(descriptor: TemporalDescriptor) {
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
-      return String(value);
+      return temporalTextOf(value);
     },
     deserialize: (value: unknown) => {
       if (value == null) return null;
