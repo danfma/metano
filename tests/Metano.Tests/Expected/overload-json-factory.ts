@@ -22,7 +22,7 @@ export class ShopJsonContext extends SerializerContext {
         {
           ts: "amount",
           json: "Amount",
-          type: { kind: "decimal", type: Decimal },
+          type: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
         },
         {
           ts: "currency",

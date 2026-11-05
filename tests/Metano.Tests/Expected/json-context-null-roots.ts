@@ -42,12 +42,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "y",
           json: "Y",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       valueType: true,
@@ -106,7 +106,7 @@ export class JsonContext extends SerializerContext {
 
   get boolean(): ValueSpec<boolean> {
     return this._boolean ??= this.createValueSpec({
-      descriptor: { kind: "primitive" },
+      descriptor: { kind: "primitive", typeName: "System.Boolean" },
       valueType: true,
       typeName: "System.Boolean",
     });
@@ -124,14 +124,14 @@ export class JsonContext extends SerializerContext {
     return this._nullableBoolean ??= this.createValueSpec({
       descriptor: {
         kind: "nullable",
-        inner: { kind: "primitive" },
+        inner: { kind: "primitive", typeName: "System.Boolean" },
       },
     });
   }
 
   get level(): ValueSpec<Level> {
     return this._level ??= this.createValueSpec({
-      descriptor: { kind: "numericEnum", values: Level },
+      descriptor: { kind: "numericEnum", values: Level, typeName: "TestApp.Level" },
       valueType: true,
       typeName: "TestApp.Level",
     });
@@ -145,7 +145,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "v",
           json: "V",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       valueType: true,
@@ -161,7 +161,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "a",
           json: "A",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       valueType: true,
@@ -177,7 +177,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       valueType: true,

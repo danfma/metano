@@ -54,7 +54,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "priority",
           json: "priority",
-          type: { kind: "enum", values: Priority },
+          type: { kind: "enum", values: Priority, typeName: "SampleTodo.Priority" },
         },
       ],
     }));
@@ -82,7 +82,7 @@ export class JsonContext extends SerializerContext {
           json: "priority",
           type: {
             kind: "nullable",
-            inner: { kind: "enum", values: Priority },
+            inner: { kind: "enum", values: Priority, typeName: "SampleTodo.Priority" },
           },
           optional: true,
         },
@@ -91,7 +91,7 @@ export class JsonContext extends SerializerContext {
           json: "completed",
           type: {
             kind: "nullable",
-            inner: { kind: "primitive" },
+            inner: { kind: "primitive", typeName: "System.Boolean" },
           },
           optional: true,
         },
@@ -113,12 +113,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "completed",
           json: "completed",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", typeName: "System.Boolean" },
         },
         {
           ts: "priority",
           json: "priority",
-          type: { kind: "enum", values: Priority },
+          type: { kind: "enum", values: Priority, typeName: "SampleTodo.Priority" },
         },
       ],
     }));

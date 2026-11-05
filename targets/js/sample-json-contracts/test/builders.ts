@@ -723,6 +723,18 @@ export const caseBuilders: Record<string, CaseBuilder> = {
       expect(String(schedule.moment)).toBe("2024-01-31T10:20:30+02:00[+02:00]");
     },
   },
+  OK1: {
+    assertRead: (value) => expect(value).toEqual([1, null]),
+  },
+  OK2: {
+    assertRead: (value) => expect((value as Map<string, number | null>).get("a")).toBeNull(),
+  },
+  OK3: {
+    assertRead: (value) => expect(value).toEqual(["a", null]),
+  },
+  OK4: {
+    assertRead: (value) => expect((value as { c: string }).c).toBe("a"),
+  },
 };
 
 /** Every builder key must have a manifest row (drift fails the test). */

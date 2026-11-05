@@ -46,7 +46,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "start",
           json: "start",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     });

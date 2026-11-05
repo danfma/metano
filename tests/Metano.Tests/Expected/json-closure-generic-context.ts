@@ -52,7 +52,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "total",
           json: "Total",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -71,7 +71,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "number",
           json: "Number",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });

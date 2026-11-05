@@ -113,10 +113,9 @@ export function temporalConverterOf(
       return temporalTextOf(value);
     },
     deserialize: (value: unknown) => {
-      if (value == null) return null;
-
-      // A JSON temporal is always a string; any other JSON kind is rejected
-      // as System.Text.Json rejects it.
+      // A JSON temporal is always a string: `null` on a non-nullable value
+      // type and any other JSON kind are rejected as System.Text.Json
+      // rejects them (#471).
       if (typeof value !== "string") {
         throw conversionError(descriptor, errorTypeName);
       }

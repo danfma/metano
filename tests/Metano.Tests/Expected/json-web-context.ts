@@ -126,7 +126,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "amount",
           json: "amount",
-          type: { kind: "decimal", type: Decimal },
+          type: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
         },
         {
           ts: "total",
@@ -162,12 +162,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "level",
           json: "level",
-          type: { kind: "numericEnum", values: Level },
+          type: { kind: "numericEnum", values: Level, typeName: "TestApp.Level" },
         },
         {
           ts: "valid",
           json: "valid",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", typeName: "System.Boolean" },
         },
       ],
     });

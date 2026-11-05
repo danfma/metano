@@ -18,6 +18,10 @@ import { GuidMapHolder } from "./guid-map-holder";
 import { HBase } from "./h-base";
 import { HLeaf } from "./h-leaf";
 import { HMid } from "./h-mid";
+import { HolderChar } from "./holder-char";
+import { HolderInt } from "./holder-int";
+import { HolderLevel } from "./holder-level";
+import { HolderSPoint } from "./holder-s-point";
 import { IBase } from "./i-base";
 import type { IShape } from "./i-shape";
 import type { IShapeB } from "./i-shape-b";
@@ -151,6 +155,34 @@ export class StudioJsonContext extends SerializerContext {
 
   private _schedule?: TypeSpec<Schedule>;
 
+  private _holderInt?: TypeSpec<HolderInt>;
+
+  private _holderLevel?: TypeSpec<HolderLevel>;
+
+  private _holderChar?: TypeSpec<HolderChar>;
+
+  private _holderSPoint?: TypeSpec<HolderSPoint>;
+
+  private _listInt32?: ValueSpec<number[] | null>;
+
+  private _listNullableInt32?: ValueSpec<(number | null)[] | null>;
+
+  private _listString?: ValueSpec<string[] | null>;
+
+  private _listLevel?: ValueSpec<Level[] | null>;
+
+  private _listGuid?: ValueSpec<UUID[] | null>;
+
+  private _listDateTime?: ValueSpec<Temporal.PlainDateTime[] | null>;
+
+  private _hashSetInt32?: ValueSpec<HashSet<number> | null>;
+
+  private _dictionaryStringInt32?: ValueSpec<Map<string, number> | null>;
+
+  private _dictionaryStringNullableInt32?: ValueSpec<Map<string, number | null> | null>;
+
+  private _int32Array?: ValueSpec<number[] | null>;
+
   private _color?: ValueSpec<Color>;
 
   private _level?: ValueSpec<Level>;
@@ -223,7 +255,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "seconds",
           json: "Seconds",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
       polymorphism: {
@@ -359,7 +391,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "a",
           json: "A",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -430,7 +462,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "v",
           json: "V",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -474,7 +506,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "a",
           json: "A",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -508,7 +540,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "a",
           json: "A",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -537,7 +569,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "a",
           json: "A",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -562,7 +594,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "b",
           json: "B",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -589,7 +621,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "base",
           json: "Base",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "name",
@@ -622,7 +654,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "value",
           json: "Value",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -688,7 +720,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "area",
           json: "Area",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
       polymorphism: {
@@ -864,8 +896,8 @@ export class StudioJsonContext extends SerializerContext {
             key: {
               kind: "numericEnum",
               values: Level,
-              numberType: "System.Int32",
               typeName: "SampleJsonContracts.Level",
+              numberType: "System.Int32",
             },
             value: { kind: "primitive" },
           },
@@ -898,7 +930,7 @@ export class StudioJsonContext extends SerializerContext {
         kind: "array",
         element: {
           kind: "array",
-          element: { kind: "primitive" },
+          element: { kind: "primitive", numberType: "System.Int32" },
         },
       },
     }));
@@ -912,7 +944,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get int32(): ValueSpec<number> {
     return (this._int32 ??= this.createValueSpec({
-      descriptor: { kind: "primitive" },
+      descriptor: { kind: "primitive", numberType: "System.Int32" },
       valueType: true,
       typeName: "System.Int32",
     }));
@@ -922,14 +954,14 @@ export class StudioJsonContext extends SerializerContext {
     return (this._nullableInt32 ??= this.createValueSpec({
       descriptor: {
         kind: "nullable",
-        inner: { kind: "primitive" },
+        inner: { kind: "primitive", numberType: "System.Int32" },
       },
     }));
   }
 
   get double(): ValueSpec<number> {
     return (this._double ??= this.createValueSpec({
-      descriptor: { kind: "primitive" },
+      descriptor: { kind: "primitive", numberType: "System.Double" },
       valueType: true,
       typeName: "System.Double",
     }));
@@ -937,7 +969,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get boolean(): ValueSpec<boolean> {
     return (this._boolean ??= this.createValueSpec({
-      descriptor: { kind: "primitive" },
+      descriptor: { kind: "primitive", typeName: "System.Boolean" },
       valueType: true,
       typeName: "System.Boolean",
     }));
@@ -945,7 +977,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get guid(): ValueSpec<UUID> {
     return (this._guid ??= this.createValueSpec({
-      descriptor: { kind: "branded", create: UUID.create },
+      descriptor: { kind: "branded", create: UUID.create, typeName: "System.Guid" },
       valueType: true,
       typeName: "System.Guid",
     }));
@@ -953,7 +985,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get decimal(): ValueSpec<Decimal> {
     return (this._decimal ??= this.createValueSpec({
-      descriptor: { kind: "decimal", type: Decimal },
+      descriptor: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
       valueType: true,
       typeName: "System.Decimal",
     }));
@@ -1075,9 +1107,170 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
+  get holderInt(): TypeSpec<HolderInt> {
+    return (this._holderInt ??= this.createSpec({
+      type: HolderInt,
+      factory: (p: Record<string, unknown>) => new HolderInt(p.n as number),
+      properties: [
+        {
+          ts: "n",
+          json: "N",
+          type: { kind: "primitive", numberType: "System.Int32" },
+        },
+      ],
+    }));
+  }
+
+  get holderLevel(): TypeSpec<HolderLevel> {
+    return (this._holderLevel ??= this.createSpec({
+      type: HolderLevel,
+      factory: (p: Record<string, unknown>) => new HolderLevel(p.level as Level),
+      properties: [
+        {
+          ts: "level",
+          json: "Level",
+          type: { kind: "numericEnum", values: Level, typeName: "SampleJsonContracts.Level" },
+        },
+      ],
+    }));
+  }
+
+  get holderChar(): TypeSpec<HolderChar> {
+    return (this._holderChar ??= this.createSpec({
+      type: HolderChar,
+      factory: (p: Record<string, unknown>) => new HolderChar(p.c as string),
+      properties: [
+        {
+          ts: "c",
+          json: "C",
+          type: { kind: "primitive", typeName: "System.Char" },
+        },
+      ],
+    }));
+  }
+
+  get holderSPoint(): TypeSpec<HolderSPoint> {
+    return (this._holderSPoint ??= this.createSpec({
+      type: HolderSPoint,
+      factory: (p: Record<string, unknown>) => new HolderSPoint(p.s as SPoint),
+      properties: [
+        {
+          ts: "s",
+          json: "S",
+          type: {
+            kind: "ref",
+            spec: () => this.sPoint,
+          },
+        },
+      ],
+    }));
+  }
+
+  get listInt32(): ValueSpec<number[] | null> {
+    return (this._listInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "primitive", numberType: "System.Int32" },
+      },
+    }));
+  }
+
+  get listNullableInt32(): ValueSpec<(number | null)[] | null> {
+    return (this._listNullableInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: {
+          kind: "nullable",
+          inner: { kind: "primitive", numberType: "System.Int32" },
+        },
+      },
+    }));
+  }
+
+  get listString(): ValueSpec<string[] | null> {
+    return (this._listString ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "primitive" },
+      },
+    }));
+  }
+
+  get listLevel(): ValueSpec<Level[] | null> {
+    return (this._listLevel ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "numericEnum", values: Level, typeName: "SampleJsonContracts.Level" },
+      },
+    }));
+  }
+
+  get listGuid(): ValueSpec<UUID[] | null> {
+    return (this._listGuid ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "branded", create: UUID.create, typeName: "System.Guid" },
+      },
+    }));
+  }
+
+  get listDateTime(): ValueSpec<Temporal.PlainDateTime[] | null> {
+    return (this._listDateTime ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: {
+          kind: "temporal",
+          parse: Temporal.PlainDateTime.from,
+          typeName: "System.DateTime",
+        },
+      },
+    }));
+  }
+
+  get hashSetInt32(): ValueSpec<HashSet<number> | null> {
+    return (this._hashSetInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "hashSet",
+        element: { kind: "primitive", numberType: "System.Int32" },
+      },
+    }));
+  }
+
+  get dictionaryStringInt32(): ValueSpec<Map<string, number> | null> {
+    return (this._dictionaryStringInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "map",
+        key: { kind: "primitive" },
+        value: { kind: "primitive", numberType: "System.Int32" },
+      },
+    }));
+  }
+
+  get dictionaryStringNullableInt32(): ValueSpec<Map<string, number | null> | null> {
+    return (this._dictionaryStringNullableInt32 ??= this.createValueSpec({
+      descriptor: {
+        kind: "map",
+        key: { kind: "primitive" },
+        value: {
+          kind: "nullable",
+          inner: { kind: "primitive", numberType: "System.Int32" },
+        },
+      },
+    }));
+  }
+
+  get int32Array(): ValueSpec<number[] | null> {
+    return (this._int32Array ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "primitive", numberType: "System.Int32" },
+      },
+    }));
+  }
+
   get color(): ValueSpec<Color> {
     return (this._color ??= this.createValueSpec({
-      descriptor: { kind: "numericEnum", values: Color },
+      descriptor: { kind: "numericEnum", values: Color, typeName: "SampleJsonContracts.Color" },
       valueType: true,
       typeName: "SampleJsonContracts.Color",
     }));
@@ -1085,7 +1278,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get level(): ValueSpec<Level> {
     return (this._level ??= this.createValueSpec({
-      descriptor: { kind: "numericEnum", values: Level },
+      descriptor: { kind: "numericEnum", values: Level, typeName: "SampleJsonContracts.Level" },
       valueType: true,
       typeName: "SampleJsonContracts.Level",
     }));
@@ -1093,7 +1286,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get flavor(): ValueSpec<Flavor> {
     return (this._flavor ??= this.createValueSpec({
-      descriptor: { kind: "enum", values: Flavor },
+      descriptor: { kind: "enum", values: Flavor, typeName: "SampleJsonContracts.Flavor" },
       valueType: true,
       typeName: "SampleJsonContracts.Flavor",
     }));
@@ -1107,12 +1300,12 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "y",
           json: "Y",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       valueType: true,
@@ -1122,7 +1315,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get title(): ValueSpec<Title> {
     return (this._title ??= this.createValueSpec({
-      descriptor: { kind: "branded", create: Title.from },
+      descriptor: { kind: "branded", create: Title.from, typeName: "SampleJsonContracts.Title" },
       valueType: true,
       typeName: "SampleJsonContracts.Title",
     }));
@@ -1141,7 +1334,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "note",
           json: "Note",
-          type: { kind: "branded", create: Title.from },
+          type: { kind: "branded", create: Title.from, typeName: "SampleJsonContracts.Title" },
         },
       ],
     }));
@@ -1180,7 +1373,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "b",
           json: "B",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1196,7 +1389,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "c",
           json: "C",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1211,7 +1404,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1226,7 +1419,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "y",
           json: "Y",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1241,7 +1434,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "w",
           json: "W",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1265,7 +1458,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "b",
           json: "B",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1301,7 +1494,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "c",
           json: "C",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1321,7 +1514,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "name",
@@ -1342,7 +1535,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "extra",
           json: "Extra",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1376,7 +1569,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "side",
           json: "Side",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     }));
@@ -1390,12 +1583,12 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "area",
           json: "Area",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "side",
           json: "Side",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     }));
@@ -1409,7 +1602,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     }));
@@ -1427,12 +1620,12 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "y",
           json: "Y",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "z",
           json: "Z",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     }));
@@ -1446,12 +1639,12 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "w",
           json: "W",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "h",
           json: "H",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     }));
@@ -1466,7 +1659,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "w",
           json: "W",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -1480,7 +1673,7 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
