@@ -123,7 +123,7 @@ public sealed class ConstructorAccessPolicy(
                 MetanoDiagnosticSeverity.Warning,
                 DiagnosticCodes.ConstructorAccessibilityWidened,
                 $"The factory of '{DispatchedOverload.SignatureOf(overload)}' is emitted public "
-                    + $"instead of {IrToTsVisibilityMapper.Map(overload.Visibility).Accessibility.ToKeyword()} because "
+                    + $"instead of {DeclaredFactoryKeywordOf(overload)} because "
                     + $"{call.Site} calls it outside the TypeScript class body (spec 013 FR-011).",
                 IrConstructorExtractor
                     .AllExplicitConstructors(type)
@@ -131,6 +131,9 @@ public sealed class ConstructorAccessPolicy(
                     ?.Locations.FirstOrDefault()
             )
         );
+
+    private static string DeclaredFactoryKeywordOf(IrConstructorDeclaration overload) =>
+        IrToTsVisibilityMapper.Map(overload.Visibility).Accessibility.ToKeyword();
 
     private void ReportWidened(
         INamedTypeSymbol type,

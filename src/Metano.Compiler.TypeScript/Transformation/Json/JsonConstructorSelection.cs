@@ -1,4 +1,3 @@
-using Metano.Annotations;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
@@ -28,11 +27,25 @@ internal static class JsonConstructorSelection
     /// <paramref name="constructor"/>; <c>null</c> when the TypeSpec keeps
     /// <c>new</c>.
     /// </summary>
-    public static string? FactoryOf(IMethodSymbol constructor) =>
-        DispatchedConstructorCalls.ConstructionTarget(constructor, TargetLanguage.TypeScript)
-            is { } overload
+    public static string? FactoryOf(IMethodSymbol? constructor, IrExtractionContext extraction) =>
+        DispatchedConstructorCalls.ConstructionTarget(constructor, extraction) is { } overload
             ? TsOverloadCallSites.ConstructorNamesOf(overload)?.Factory
             : null;
+
+    /// <summary>
+    /// The constructors the <c>TypeSpec</c>s of each <c>SerializerContext</c>
+    /// call, from the classes each one constructs.
+    /// </summary>
+    public static IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<IMethodSymbol>> CalledBy(
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>> constructedTypes
+    ) =>
+        constructedTypes.ToDictionary(
+            entry => entry.Key,
+            entry =>
+                (IReadOnlyList<IMethodSymbol>)
+                    entry.Value.Select(Of).OfType<IMethodSymbol>().ToList(),
+            (IEqualityComparer<INamedTypeSymbol>)SymbolEqualityComparer.Default
+        );
 
     /// <summary>The constructor <paramref name="type"/> marks <c>[JsonConstructor]</c>, if any.</summary>
     public static IMethodSymbol? MarkedConstructorOf(INamedTypeSymbol type) =>
@@ -41,5 +54,5 @@ internal static class JsonConstructorSelection
         );
 
     private static bool ConstructsThroughFactories(INamedTypeSymbol type) =>
-        DispatchedConstructorCalls.ConstructsThroughFactories(type, TargetLanguage.TypeScript);
+        TsConstructorSelectorShapes.ConstructsThroughFactories(type);
 }

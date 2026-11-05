@@ -153,19 +153,30 @@ lands with **013c**, the first slice that calls factories.
 
 Hand-offs from 013c: constructor claims are keyed by declaration ordinal
 (`TsOverloadClaims.ConstructorNamesAt`), and a call site resolves its `IrOverloadRef` through
-`TsOverloadClaimsRegistry.ConstructorNamesOf`, which finds the declaring type by its `IrTypeKey`;
+`TsOverloadClaimsRegistry.ConstructorNamesOf`, which finds the declaring type by its `IrTypeKey`
+(an unresolved identity keeps the dispatcher silently; once methods share the key, **013d / 013e**
+should report it instead);
 `TypeTransformer` publishes the registry for the transform (`TsOverloadCallSites`, the same
 `AsyncLocal` pattern as the other per-transform lowering state), so module functions, operators
 and entry points reach it too. Method fast paths are still keyed by table + group name + suffix:
 **013d / 013e** move them to `IrOverloadRef` once methods carry an ordinal. The core's call-site
-decision is `DispatchedConstructorCalls` (dispatched set, emitted as a class, source IR:
-DECIDED-24); bound arguments come from `IArgumentOperation` (`ExtractBoundArguments`), so 013e
+decision is `DispatchedConstructorCalls` (dispatched set, source IR: DECIDED-24), and the shapes a
+target emits with selectors come through the `IrExtractionContext.EmitsConstructorSelectors` port
+(TypeScript: `TsConstructorSelectorShapes`; Dart sets none, so it keeps its source arguments until
+**013g**); bound arguments keep C#'s evaluation order (`IrSelectedOverload.EvaluationOrder`); the
+per-group cache key folds in every dispatched set's shape (`DispatchedConstructionFingerprint`),
+since a body's `new` now depends on the callee's claimed names; bound arguments come from `IArgumentOperation` (`ExtractBoundArguments`), so 013e
 can reuse them for DECIDED-32. FR-011's widening reads per-overload facts
 (`ConstructorAccessFacts.OutsideCallOfFactory`); FR-049 rule 3 still widens the constructor
 of a restricted type too, because a `TypeSpec`'s `type: T` needs a public construct signature.
 Still on the dispatcher: a class that declares no constructor over a dispatched base (TypeScript's
-implicit `super(...args)`), a `new` whose argument list has a `params` collection that is not an
-array, and every call into a metadata-only reference (DECIDED-24).
+implicit `super(...args)`), a C# 12 primary-constructor class whose base list passes no arguments
+(`class P(int x) : Base`), a `new` whose argument list has a `params` collection that is not an
+array, and every call into a metadata-only reference (DECIDED-24). Known gaps: an omitted
+non-nullable struct `= default` passes `undefined`, which the factory's own default fills with
+013b's `undefined` (FR-027's zero value is not used there yet); a project-reference base whose
+factory its package widened (FR-011) is judged by its declared accessibility, so FR-026 may qualify
+a derived factory it could have kept.
 
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
 OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an

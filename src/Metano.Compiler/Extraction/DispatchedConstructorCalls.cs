@@ -4,15 +4,17 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Decides which constructor calls a target may lower to the exact overload
-/// Roslyn resolved instead of the runtime dispatcher (spec 013 FR-017,
-/// FR-019, DECIDED-11, DECIDED-24): a <c>new T(...)</c> to the overload's
-/// factory, a <c>: base(...)</c> to its selector. The overload must belong to
-/// a dispatched set (two or more declared constructors) of a type emitted as a
-/// class whose IR is available — declared in this compilation or in a project
-/// reference, which loads as source. A type read from metadata only (a DLL or
-/// a package) keeps the dispatcher call: its claimed names are unknown, and
-/// the dispatcher is correct, only slower.
+/// Decides which constructor calls are lowered to the exact overload Roslyn
+/// resolved instead of the runtime dispatcher (spec 013 FR-017, FR-019,
+/// DECIDED-11, DECIDED-24): a <c>new T(...)</c> to the overload's factory, a
+/// <c>: base(...)</c> to its selector. The core holds the target-neutral
+/// facts — the overload belongs to a dispatched set (two or more declared
+/// constructors) whose IR is available, declared in this compilation or in a
+/// project reference, which loads as source; a type read from metadata only
+/// (a DLL or a package) keeps the dispatcher call, since its claimed names are
+/// unknown and the dispatcher is correct, only slower. Which shapes a target
+/// emits with selectors and factories is the target's call, asked through
+/// <see cref="IrExtractionContext.EmitsConstructorSelectors"/>.
 /// </summary>
 public static class DispatchedConstructorCalls
 {
@@ -22,9 +24,10 @@ public static class DispatchedConstructorCalls
     /// </summary>
     public static IrOverloadRef? ConstructionTarget(
         IMethodSymbol? constructor,
-        Metano.Annotations.TargetLanguage? target
+        IrExtractionContext context
     ) =>
-        constructor is not null && ConstructsThroughFactories(constructor.ContainingType, target)
+        constructor is not null
+        && ConstructsThroughFactories(constructor.ContainingType, context.EmitsConstructorSelectors)
             ? OverloadOf(constructor)
             : null;
 
@@ -35,9 +38,10 @@ public static class DispatchedConstructorCalls
     /// </summary>
     public static IrOverloadRef? BaseCallTarget(
         IMethodSymbol? constructor,
-        Metano.Annotations.TargetLanguage? target
+        IrExtractionContext context
     ) =>
-        constructor is not null && HasSelectors(constructor.ContainingType, target)
+        constructor is not null
+        && HasSelectors(constructor.ContainingType, context.EmitsConstructorSelectors)
             ? OverloadOf(constructor)
             : null;
 
@@ -47,25 +51,25 @@ public static class DispatchedConstructorCalls
     /// </summary>
     public static bool ConstructsThroughFactories(
         INamedTypeSymbol type,
-        Metano.Annotations.TargetLanguage? target
-    ) => !type.IsAbstract && HasSelectors(type, target);
+        Func<INamedTypeSymbol, bool>? emitsSelectors
+    ) => !type.IsAbstract && HasSelectors(type, emitsSelectors);
 
     /// <summary>
-    /// Whether <paramref name="type"/> is emitted as a class with a selector
-    /// per constructor overload (FR-008, FR-013), from IR this compilation can
-    /// read.
+    /// Whether <paramref name="type"/> has a selector per constructor
+    /// overload: a dispatched set, from IR this compilation can read, of a
+    /// shape the target emits with selectors.
     /// </summary>
-    private static bool HasSelectors(
+    public static bool HasSelectors(
         INamedTypeSymbol type,
-        Metano.Annotations.TargetLanguage? target
+        Func<INamedTypeSymbol, bool>? emitsSelectors
     )
     {
         var definition = type.OriginalDefinition;
 
-        return definition.TypeKind is TypeKind.Class or TypeKind.Struct
+        return emitsSelectors is not null
             && IrConstructorExtractor.IsDispatchedSet(definition)
             && HasSourceIr(definition)
-            && IsEmittedAsClass(definition, target);
+            && emitsSelectors(definition);
     }
 
     /// <summary>
@@ -74,36 +78,6 @@ public static class DispatchedConstructorCalls
     /// </summary>
     private static bool HasSourceIr(INamedTypeSymbol type) =>
         !type.DeclaringSyntaxReferences.IsEmpty;
-
-    /// <summary>
-    /// A transpiled type that the target emits as a class: none of the shapes
-    /// that lower to something else (DECIDED-10) or emit nothing.
-    /// </summary>
-    private static bool IsEmittedAsClass(
-        INamedTypeSymbol type,
-        Metano.Annotations.TargetLanguage? target
-    ) =>
-        IsTranspiled(type)
-        && !SymbolHelper.HasIgnore(type, target)
-        && !SymbolHelper.HasPlainObject(type)
-        && !SymbolHelper.HasBranded(type)
-        && !SymbolHelper.HasJsTuple(type)
-        && !SymbolHelper.HasJsCallable(type)
-        && !SymbolHelper.HasExternal(type)
-        && !SymbolHelper.HasImport(type)
-        && !SymbolHelper.IsJsxRenderable(type);
-
-    /// <summary>
-    /// Whether the compilation declaring <paramref name="type"/> transpiles it,
-    /// by the rule that compilation applies to its own types
-    /// (<see cref="SymbolHelper.IsTranspilable"/>).
-    /// </summary>
-    private static bool IsTranspiled(INamedTypeSymbol type) =>
-        SymbolHelper.IsTranspilable(
-            type,
-            type.ContainingAssembly.HasTranspileAssembly(),
-            type.ContainingAssembly
-        );
 
     private static IrOverloadRef? OverloadOf(IMethodSymbol constructor) =>
         IrConstructorExtractor.DeclarationOrdinalOf(constructor) is { } ordinal

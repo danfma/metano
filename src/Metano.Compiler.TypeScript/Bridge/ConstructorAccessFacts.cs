@@ -1,7 +1,5 @@
-using Metano.Annotations;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.TypeScript.AST;
-using Metano.Compiler.TypeScript.Transformation.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -18,12 +16,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// is built from, so the facts and the IR agree. Value types are left out:
 /// their implicit parameterless constructor is always public.
 /// <para>
-/// A type that constructs through its overload factories (spec 013 FR-011)
-/// is also reached overload by overload: the facts record which non-public
+/// Unlike the class-level facts, which leave value types out, the
+/// per-overload facts cover every type that constructs through its overload
+/// factories (spec 013 FR-011), structs included: the facts record which non-public
 /// overloads code outside the class body constructs — a nested type's
 /// <c>new</c>, or the <c>[JsonConstructor]</c> overload a <c>TypeSpec</c>
-/// calls — so their factories are widened public. Value types are included
-/// here: their factories keep their overload's accessibility.
+/// calls — so their factories are widened public.
 /// </para>
 /// <para>
 /// The facts cross file boundaries — a <c>SerializerContext</c> or a derived
@@ -126,12 +124,14 @@ public sealed class ConstructorAccessFacts
     /// Collects the facts over <paramref name="emittedTypes"/> (top-level and
     /// emitted nested types). <paramref name="jsonConstructedTypes"/> maps each
     /// <c>SerializerContext</c> type to the classes it constructs through its
-    /// <c>TypeSpec</c>s.
+    /// <c>TypeSpec</c>s, and <paramref name="jsonCalledConstructors"/> to the
+    /// constructors those <c>TypeSpec</c>s call.
     /// </summary>
     public static ConstructorAccessFacts Collect(
         Compilation compilation,
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
-        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>> jsonConstructedTypes
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>> jsonConstructedTypes,
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<IMethodSymbol>> jsonCalledConstructors
     )
     {
         var constructors = emittedTypes
@@ -161,7 +161,7 @@ public sealed class ConstructorAccessFacts
             OutsideCalledFactoriesOf(
                 compilation,
                 emittedTypes,
-                jsonConstructedTypes,
+                jsonCalledConstructors,
                 withRestrictedFactories
             )
         );
@@ -172,7 +172,7 @@ public sealed class ConstructorAccessFacts
     /// factories and one of them is not public in TypeScript.
     /// </summary>
     private static bool HasRestrictedFactory(INamedTypeSymbol type) =>
-        DispatchedConstructorCalls.ConstructsThroughFactories(type, TargetLanguage.TypeScript)
+        TsConstructorSelectorShapes.ConstructsThroughFactories(type)
         && IrConstructorExtractor
             .AllExplicitConstructors(type)
             .Any(constructor => TsConstructorModifier.OfConstructor(constructor).IsNonPublic());
@@ -233,9 +233,9 @@ public sealed class ConstructorAccessFacts
 
     /// <summary>
     /// The first site outside the class body that calls each non-public
-    /// factory of <paramref name="restricted"/>, per overload ordinal: the
-    /// overload a <c>SerializerContext</c>'s <c>TypeSpec</c> calls, or one a
-    /// <c>new</c> in a nested type constructs.
+    /// factory of <paramref name="typesWithRestrictedFactories"/>, per overload
+    /// ordinal: the overload a <c>SerializerContext</c>'s <c>TypeSpec</c> calls,
+    /// or one a <c>new</c> in a nested type constructs.
     /// </summary>
     private static Dictionary<
         INamedTypeSymbol,
@@ -243,42 +243,72 @@ public sealed class ConstructorAccessFacts
     > OutsideCalledFactoriesOf(
         Compilation compilation,
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
-        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>> jsonConstructedTypes,
-        IReadOnlySet<INamedTypeSymbol> restricted
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<IMethodSymbol>> jsonCalledConstructors,
+        IReadOnlySet<INamedTypeSymbol> typesWithRestrictedFactories
     )
     {
         var calls = new Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>>(
             TypeComparer
         );
 
-        if (restricted.Count == 0)
+        if (typesWithRestrictedFactories.Count == 0)
             return calls;
 
         foreach (var type in emittedTypes)
         {
-            var jsonSite = new OutsideConstruction(
-                $"the TypeSpec of the JSON SerializerContext '{type.Name}'"
+            RecordJsonFactoryCalls(
+                calls,
+                type,
+                jsonCalledConstructors,
+                typesWithRestrictedFactories
             );
-
-            var constructedByJson = jsonConstructedTypes.GetValueOrDefault(type) ?? [];
-
-            var jsonConstructors = constructedByJson
-                .Where(restricted.Contains)
-                .Select(JsonConstructorSelection.Of)
-                .OfType<IMethodSymbol>();
-
-            foreach (var constructor in jsonConstructors)
-                RecordFactoryCall(calls, constructor, jsonSite);
-
-            var nestedSite = new OutsideConstruction($"the nested type '{type.ToDisplayString()}'");
-
-            foreach (
-                var constructor in ContainerConstructorsCalledBy(compilation, type, restricted)
-            )
-                RecordFactoryCall(calls, constructor, nestedSite);
+            RecordNestedFactoryCalls(calls, compilation, type, typesWithRestrictedFactories);
         }
 
         return calls;
+    }
+
+    private static void RecordJsonFactoryCalls(
+        Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>> calls,
+        INamedTypeSymbol context,
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<IMethodSymbol>> jsonCalledConstructors,
+        IReadOnlySet<INamedTypeSymbol> typesWithRestrictedFactories
+    )
+    {
+        var constructors = (jsonCalledConstructors.GetValueOrDefault(context) ?? [])
+            .Where(constructor =>
+                typesWithRestrictedFactories.Contains(constructor.ContainingType.OriginalDefinition)
+            )
+            .ToList();
+
+        if (constructors.Count == 0)
+            return;
+
+        var site = new OutsideConstruction(
+            $"the TypeSpec of the JSON SerializerContext '{context.Name}'"
+        );
+
+        foreach (var constructor in constructors)
+            RecordFactoryCall(calls, constructor, site);
+    }
+
+    private static void RecordNestedFactoryCalls(
+        Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>> calls,
+        Compilation compilation,
+        INamedTypeSymbol nested,
+        IReadOnlySet<INamedTypeSymbol> typesWithRestrictedFactories
+    )
+    {
+        var site = new OutsideConstruction($"the nested type '{nested.ToDisplayString()}'");
+
+        var constructors = ContainerConstructorsCalledBy(
+            compilation,
+            nested,
+            typesWithRestrictedFactories
+        );
+
+        foreach (var constructor in constructors)
+            RecordFactoryCall(calls, constructor, site);
     }
 
     /// <summary>
@@ -298,12 +328,7 @@ public sealed class ConstructorAccessFacts
             return;
 
         var type = constructor.ContainingType.OriginalDefinition;
-
-        if (!calls.TryGetValue(type, out var sites))
-        {
-            sites = [];
-            calls[type] = sites;
-        }
+        var sites = calls.GetValueOrDefault(type) ?? (calls[type] = []);
 
         sites.TryAdd(ordinal, site);
     }

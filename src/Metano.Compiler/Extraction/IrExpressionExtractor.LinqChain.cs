@@ -227,7 +227,7 @@ public sealed partial class IrExpressionExtractor
     /// </para>
     /// <para>
     /// Object-creation calls (<c>new T(...)</c>) are not covered —
-    /// they flow through <c>ExtractObjectCreation</c>, not
+    /// they flow through <c>ExtractCreation</c>, not
     /// <see cref="ExtractInvocation"/>. Constructor-arg
     /// <c>[Queryable]</c> opt-ins go unreported and are tracked as
     /// a #218 follow-up.

@@ -610,7 +610,7 @@ public static partial class IrToTsExpressionBridge
     /// the import collector sees the origin the file must import it from; every other
     /// type stays a plain <see cref="TsIdentifier"/>.
     /// </summary>
-    private static TsExpression TypeValueReference(string name, TsTypeOrigin? origin) =>
+    internal static TsExpression TypeValueReference(string name, TsTypeOrigin? origin) =>
         origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin);
 
     /// <summary>
@@ -1591,7 +1591,7 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static string? FactoryOf(IrNewExpression ne) =>
         ne.Overload is { } overload
-            ? TsOverloadCallSites.ConstructorNamesOf(overload)?.Factory
+            ? TsOverloadCallSites.ConstructorNamesOf(overload.Target)?.Factory
             : null;
 
     /// <summary>
@@ -1599,28 +1599,48 @@ public static partial class IrToTsExpressionBridge
     /// overload's factory, which reaches its selector branch with no runtime
     /// check. A generic class's factory re-declares the class's type
     /// parameters (FR-028), so the constructed type's arguments go on the
-    /// call (<c>Box.fromValue&lt;string&gt;(s)</c>).
+    /// call (<c>Box.fromValue&lt;string&gt;(s)</c>). Arguments that C#
+    /// evaluates out of parameter order (named arguments with a side effect)
+    /// are bound first, in that order.
     /// </summary>
-    private static TsCallExpression MapFactoryConstruction(
+    private static TsExpression MapFactoryConstruction(
         IrNewExpression ne,
         string factory,
         IReadOnlyList<TsExpression> args,
         IrToTsBridgeContext context
     )
     {
-        IReadOnlyList<TsType>? typeArguments = ne.Type
-            is IrNamedTypeRef { TypeArguments: { Count: > 0 } constructedArguments }
-            ? constructedArguments
+        var ordered = TsEvaluationOrder.Bind(
+            WithoutNullRestArray(ne.Arguments, args),
+            ne.Overload?.EvaluationOrder,
+            "$arg"
+        );
+
+        var call = new TsCallExpression(
+            new TsPropertyAccess(MapNewTarget(ne.Type), factory),
+            ordered.Arguments,
+            TypeArguments: ConstructedTypeArgumentsOf(ne.Type, context)
+        );
+
+        if (ordered.Bindings.Count == 0)
+            return call;
+
+        return TsImmediateInvocation.Of(
+            ordered.Bindings,
+            [new TsReturnStatement(call)],
+            isAsync: false
+        );
+    }
+
+    private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(
+        IrTypeRef type,
+        IrToTsBridgeContext context
+    ) =>
+        type is IrNamedTypeRef { TypeArguments: { Count: > 0 } typeArguments }
+            ? typeArguments
                 .Select(argument => IrToTsTypeMapper.Map(argument, context.TypeOverrides))
                 .ToList()
             : null;
-
-        return new TsCallExpression(
-            new TsPropertyAccess(MapNewTarget(ne.Type), factory),
-            WithoutNullRestArray(ne.Arguments, args),
-            TypeArguments: typeArguments
-        );
-    }
 
     /// <summary>
     /// Lowers <c>new T(args)</c> through a declarative constructor mapping

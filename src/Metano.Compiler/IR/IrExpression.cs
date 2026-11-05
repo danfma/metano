@@ -319,14 +319,18 @@ public sealed record IrArgument(IrExpression Value, string? Name = null, bool Is
 /// </para>
 /// <para>
 /// <paramref name="Overload"/> is set when the constructor Roslyn resolved is
-/// an overload of a dispatched set whose type constructs through factories
-/// and whose IR is available (spec 013 FR-017, DECIDED-11, DECIDED-24): a
-/// backend may then build the value through that overload's factory
-/// (<c>Money.fromAmount(…)</c>) instead of its runtime dispatcher. The
-/// <paramref name="Arguments"/> are then Roslyn's bound arguments in
-/// parameter order: omitted defaults explicit, an expanded <c>params</c> call
-/// as its elements, a normal-form one as a spread. Null for every other
-/// construction.
+/// an overload of a dispatched set whose type constructs through factories,
+/// whose IR is available, for a target that emits factories (spec 013
+/// FR-017, DECIDED-11, DECIDED-24): the backend then builds the value through
+/// that overload's factory (<c>Money.fromAmount(…)</c>) instead of its
+/// runtime dispatcher. <b>It changes what <paramref name="Arguments"/>
+/// holds</b>: Roslyn's bound arguments, unnamed and in parameter order —
+/// omitted defaults explicit, an expanded <c>params</c> call as its elements,
+/// a normal-form one as a spread — evaluated in
+/// <see cref="IrSelectedOverload.EvaluationOrder"/> when that is set. Without
+/// it, <paramref name="Arguments"/> are the source arguments. Null for every
+/// other construction, and when an argument has no bound form the extractor
+/// can lower.
 /// </para>
 /// </summary>
 public sealed record IrNewExpression(
@@ -341,7 +345,7 @@ public sealed record IrNewExpression(
     IrExceptionConstruction? ExceptionConstruction = null,
     IrMemberOrigin? Origin = null,
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
-    IrOverloadRef? Overload = null
+    IrSelectedOverload? Overload = null
 ) : IrExpression;
 
 /// <summary>

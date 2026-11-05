@@ -70,11 +70,16 @@ public bool IsOverride { get; init; }                    // emits `override` on 
 public bool IsHiding { get; init; }                      // `new`: a non-root candidate, claimed against inherited members (claim step 7)
 // IrClassDeclaration gains:
 public bool HasMultiplyConstructedInterface { get; init; } // DECIDED-30: runtime-dispatched root names, MS0069
+// 013c: the overload a call was lowered to, and the source's evaluation order of its bound
+// arguments when named arguments with a side effect put it apart from parameter order
+public sealed record IrSelectedOverload(IrOverloadRef Target, IReadOnlyList<int>? EvaluationOrder = null);
 // IrConstructorDeclaration gains, for a dispatched base call (013c):
-public IrOverloadRef? BaseOverload { get; init; }        // the statically resolved base overload (FR-017)
+public IrSelectedOverload? BaseOverload { get; init; }   // the statically resolved base overload (FR-017)
 // BaseArguments (already IReadOnlyList<IrArgument>) then holds Roslyn's bound arguments, defaults explicit
 // IrNewExpression gains (013c), for a construction lowered to a factory:
-IrOverloadRef? Overload = null                           // Arguments then hold Roslyn's bound arguments
+IrSelectedOverload? Overload = null                      // Arguments then hold Roslyn's bound arguments
+// IrExtractionContext gains (013c) the port a target answers:
+public Func<INamedTypeSymbol, bool>? EmitsConstructorSelectors { get; init; } // null: no direct constructor calls
 ```
 
 - `OverloadName` is `null` whenever the member is not in a dispatched group — the no-churn rule
@@ -124,6 +129,13 @@ factory, `Box.fromValue<string>(s)`), imports, and the shapes a target lowers fi
 (`[PlainObject]`, branded, JSX, declarative BCL mappings). A Dart named constructor
 (`T.fromX(...)`) is a construction too. `IrDirectOverloadCall` (with its `Factory` kind) is left
 to the method call sites of 013e.
+
+**Evaluation order (013c).** Bound arguments are in parameter order. When the source evaluates
+them in another order and one has a side effect (`new T(b: F(), a: G())`),
+`IrSelectedOverload.EvaluationOrder` records it and the target evaluates them first, in that
+order: TypeScript binds them through an immediately invoked arrow for a construction (the only
+IIFE of this feature, against NFR-004, which the expression position leaves no alternative to)
+and through `const __baseArgN` temporaries before `super(...)`.
 
 ## 3. TypeScript rendering (`src/Metano.Compiler.TypeScript/Bridge/`)
 

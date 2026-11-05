@@ -52,13 +52,13 @@ internal static class IrToTsConstructorFactoryBridge
     /// </summary>
     /// <param name="type">The class.</param>
     /// <param name="typeName">The class's emitted name.</param>
-    /// <param name="widenedFactories">The declaration ordinals of the
+    /// <param name="widenedFactoryOrdinals">The declaration ordinals of the
     /// factories code outside the class body calls, emitted public (FR-011).</param>
     public static IReadOnlyList<TsMethodMember> BuildFactories(
         IrClassDeclaration type,
         string typeName,
         TsOverloadClaims claims,
-        IReadOnlySet<int> widenedFactories,
+        IReadOnlySet<int> widenedFactoryOrdinals,
         IrToTsBridgeContext context
     )
     {
@@ -73,7 +73,7 @@ internal static class IrToTsConstructorFactoryBridge
                     type,
                     selectors,
                     overload,
-                    widenedFactories.Contains(overload.DeclarationOrdinal),
+                    widenedFactoryOrdinals.Contains(overload.DeclarationOrdinal),
                     context
                 )
             )

@@ -818,6 +818,9 @@ public class ConstructorAccessModifierTests
             [baseType, derived, plain],
             new Dictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>>(
                 SymbolEqualityComparer.Default
+            ),
+            new Dictionary<INamedTypeSymbol, IReadOnlyList<IMethodSymbol>>(
+                SymbolEqualityComparer.Default
             )
         );
 

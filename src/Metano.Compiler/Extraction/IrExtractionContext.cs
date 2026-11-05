@@ -32,6 +32,17 @@ public sealed record IrExtractionContext(
     public bool ExactInt64Lowering { get; init; }
 
     /// <summary>
+    /// The port through which a target says which types it emits with an
+    /// addressable form per constructor overload — a selector and, for a
+    /// concrete type, a factory (spec 013 FR-007, FR-008, DECIDED-10) — so
+    /// the extractor lowers calls into them to the overload Roslyn resolved
+    /// (<see cref="DispatchedConstructorCalls"/>). <c>null</c>, the default,
+    /// for a target that emits none: every construction and base call then
+    /// keeps its source arguments and the target's dispatcher.
+    /// </summary>
+    public Func<INamedTypeSymbol, bool>? EmitsConstructorSelectors { get; init; }
+
+    /// <summary>
     /// The context of a constant parameter default: the origin resolver and
     /// the 64-bit lowering. It names no local, so it needs no local naming,
     /// and it drops the target and the compilation as defaults always have:

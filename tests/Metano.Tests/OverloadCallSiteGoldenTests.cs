@@ -1,4 +1,6 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.TypeScript;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Tests;
 
@@ -12,6 +14,15 @@ namespace Metano.Tests;
 /// </summary>
 public class OverloadCallSiteGoldenTests
 {
+    /// <summary>
+    /// One golden per construction shape: a decimal and an implicit
+    /// <c>new(…)</c>, an omitted default and named arguments passed
+    /// positionally, a generic class's type arguments, <c>params</c> expanded,
+    /// empty and spread, a struct's implicit <c>new S()</c> kept, and a
+    /// single-constructor class kept as <c>new</c>. (A single-constructor base
+    /// keeping a plain <c>super(args)</c> is pinned by
+    /// <c>ConstructorOverloadTests.DerivedWithOverloads_NonOverloadedBase_EachBranchCallsSuper</c>.)
+    /// </summary>
     [Test]
     public async Task Construction_CallsTheResolvedOverloadsFactory()
     {
@@ -229,10 +240,7 @@ public class OverloadCallSiteGoldenTests
             """
         );
 
-        var widened = diagnostics
-            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.ConstructorAccessibilityWidened)
-            .Select(diagnostic => diagnostic.Message)
-            .ToList();
+        var widened = WidenedFactoryMessagesOf(diagnostics);
 
         var outputs = string.Join("\n", files["shop-json-context.ts"], files["tag.ts"]);
 
@@ -282,10 +290,7 @@ public class OverloadCallSiteGoldenTests
             """
         );
 
-        var widened = diagnostics
-            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.ConstructorAccessibilityWidened)
-            .Select(diagnostic => diagnostic.Message)
-            .ToList();
+        var widened = WidenedFactoryMessagesOf(diagnostics);
 
         await Assert
             .That(files["owner.ts"])
@@ -329,6 +334,206 @@ public class OverloadCallSiteGoldenTests
             .That(result["app/till.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("overload-cross-package-metadata.ts"));
     }
+
+    /// <summary>
+    /// C# evaluates named arguments in source order, so arguments passed out
+    /// of parameter order with a side effect are bound first, in that order:
+    /// an IIFE for a construction, temporaries before <c>super(...)</c>.
+    /// </summary>
+    [Test]
+    public async Task NamedArgumentsWithSideEffects_KeepTheSourceEvaluationOrder()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Calls
+            {
+                private static int _next;
+
+                public static int F() => ++_next;
+            }
+
+            [Transpile]
+            public class Base
+            {
+                public int A { get; }
+
+                public int B { get; }
+
+                public Base(int a, int b) { A = a; B = b; }
+
+                public Base(string s) { A = s.Length; }
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                public Derived() : base(b: Calls.F(), a: Calls.F()) { }
+            }
+
+            [Transpile]
+            public static class Shop
+            {
+                public static Base Make() => new Base(b: Calls.F(), a: Calls.F());
+
+                public static Base Plain(int x) => new Base(b: x, a: 1);
+            }
+            """
+        );
+
+        var outputs = string.Join("\n", result["derived.ts"], result["shop.ts"]);
+
+        await Assert
+            .That(outputs)
+            .IsEqualTo(TranspileHelper.ReadExpected("overload-calls-evaluation-order.ts"));
+    }
+
+    /// <summary>
+    /// The defaults an omitted parameter binds: a small integer as its
+    /// number, an <c>[Optional]</c> reference parameter without a default as
+    /// <c>null</c>.
+    /// </summary>
+    [Test]
+    public async Task OmittedDefaults_PassTheirBoundValues()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Runtime.InteropServices;
+
+            [Transpile]
+            public class Opt
+            {
+                public Opt(int a, [Optional] object? o, byte b = 5, short c = -2) { }
+
+                public Opt(string s) { }
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static Opt Make() => new Opt(1);
+            }
+            """
+        );
+
+        await Assert.That(result["use.ts"]).Contains("return Opt.fromAOBC(1, null, 5, -2);");
+    }
+
+    /// <summary>
+    /// A target that emits no selectors or factories (the Dart prototype)
+    /// keeps its source arguments and constructor call.
+    /// </summary>
+    [Test]
+    public async Task TargetWithoutFactories_KeepsTheSourceConstruction()
+    {
+        var (files, _) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+
+            [Transpile]
+            public class Base
+            {
+                public Base(int a, int b = 5) { }
+
+                public Base(string s) { }
+            }
+
+            [Transpile]
+            public static class Shop
+            {
+                public static Base Make() => new Base(1);
+            }
+            """
+        );
+
+        await Assert.That(files["shop.dart"]).Contains("Base(1)");
+        await Assert.That(files["shop.dart"]).DoesNotContain("/* default */");
+    }
+
+    /// <summary>
+    /// A caller's cached group is transformed again when the constructor set
+    /// it calls changes the factory's name: its closure tracks signatures, not
+    /// the body's <c>new</c>, so the key folds in every dispatched set.
+    /// </summary>
+    [Test]
+    public async Task GroupCache_RetransformsACallerWhenTheFactoryRenames()
+    {
+        var cacheDir = Path.Combine(Path.GetTempPath(), $"metano-013c-{Guid.NewGuid():N}");
+
+        Directory.CreateDirectory(cacheDir);
+
+        try
+        {
+            var first = TransformWithCache(cacheDir, CachedShop("cents"));
+            var second = TransformWithCache(cacheDir, CachedShop("units"));
+
+            await Assert.That(first).Contains("Money.fromCents(1)");
+            await Assert.That(second).Contains("Money.fromUnits(1)");
+        }
+        finally
+        {
+            Directory.Delete(cacheDir, recursive: true);
+        }
+    }
+
+    private static List<string> WidenedFactoryMessagesOf(
+        IEnumerable<MetanoDiagnostic> diagnostics
+    ) =>
+        diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.ConstructorAccessibilityWidened)
+            .Select(diagnostic => diagnostic.Message)
+            .ToList();
+
+    /// <summary>
+    /// Transforms <paramref name="source"/> with the per-group cache in
+    /// <paramref name="cacheDir"/>, writes the files there the way the host
+    /// would, and returns <c>app/shop.ts</c> as written.
+    /// </summary>
+    private static string TransformWithCache(string cacheDir, string source)
+    {
+        var compilation = TranspileHelper.CompileLibrary(source);
+        var (ir, _) = TranspileHelper.NewTransformerWithIr(compilation);
+        var printer = new Printer();
+
+        var transformer = new TypeTransformer(ir, compilation)
+        {
+            CacheOutputDir = cacheDir,
+            CacheConfigurationFingerprint = "fp",
+        };
+
+        foreach (var file in transformer.TransformAll())
+        {
+            var path = Path.Combine(cacheDir, file.FileName);
+
+            var content = transformer.CachedFileContents.TryGetValue(file.FileName, out var cached)
+                ? cached
+                : printer.Print(file);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, content);
+        }
+
+        return File.ReadAllText(Path.Combine(cacheDir, "app", "shop.ts"));
+    }
+
+    private static string CachedShop(string centsName) =>
+        $$"""
+            namespace App;
+
+            [Transpile]
+            public class Money
+            {
+                public Money(decimal amount) { }
+
+                public Money(int {{centsName}}) { }
+            }
+
+            [Transpile]
+            public static class Shop
+            {
+                public static Money Make() => new Money(1);
+            }
+            """;
 
     private const string CrossPackageLibrary = """
         using Metano.Annotations;

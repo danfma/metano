@@ -70,14 +70,16 @@ public sealed record IrConstructorDeclaration(
 
     /// <summary>
     /// The base constructor overload this constructor calls, when it belongs
-    /// to a dispatched set whose IR is available (spec 013 FR-017,
-    /// DECIDED-24): a backend may then select it exactly
-    /// (<c>super(Money.byMoneyAmount, …)</c>). <see cref="BaseArguments"/>
-    /// are then Roslyn's bound arguments, omitted defaults explicit. Null when
-    /// the base call is not into a dispatched set, or the constructor chains
-    /// through <c>: this(...)</c>.
+    /// to a dispatched set whose IR is available, for a target that emits
+    /// selectors (spec 013 FR-017, DECIDED-24): the backend then selects it
+    /// exactly (<c>super(Money.byMoneyAmount, …)</c>). It changes what
+    /// <see cref="BaseArguments"/> holds: Roslyn's bound arguments, unnamed
+    /// and in parameter order, omitted defaults explicit (see
+    /// <see cref="IrSelectedOverload"/>). Null when the base call is not into
+    /// a dispatched set, when an argument has no bound form the extractor can
+    /// lower, or when the constructor chains through <c>: this(...)</c>.
     /// </summary>
-    public IrOverloadRef? BaseOverload { get; init; }
+    public IrSelectedOverload? BaseOverload { get; init; }
 
     /// <summary>
     /// Every constructor of a dispatched set — this one and its
