@@ -105,6 +105,31 @@ public class JsonNullRootTests
     }
 
     [Test]
+    public async Task TypeName_PrintsAnEscapedNamespaceSegmentPlain()
+    {
+        var source = $$"""
+            using System.Text.Json.Serialization;
+
+            namespace TestApp.@event
+            {
+                [Transpile]
+                public readonly record struct Tick(int V);
+            }
+
+            namespace TestApp
+            {
+                [Transpile]
+                [JsonSerializable(typeof(@event.Tick))]
+                {{ContextBoilerplate}}
+            }
+            """;
+
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(source);
+
+        await Assert.That(files[ContextPath]).Contains("typeName: \"TestApp.event.Tick\"");
+    }
+
+    [Test]
     public async Task NullableRoots_AreNotMarked()
     {
         var ts = TranspileContext();

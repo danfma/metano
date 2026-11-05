@@ -120,7 +120,7 @@ expectType<Equal<typeof writtenMaybe, Record<string, unknown> | null>>();
 const writtenOptional = JsonSerializer.serialize(optionalOrder, orderSpec);
 expectType<Equal<typeof writtenOptional, Record<string, unknown> | null>>();
 
-function writeAny<U extends Order>(value: U, spec: TypeSpec<U>): Record<string, unknown> {
+function writeGenericOrder<U extends Order>(value: U, spec: TypeSpec<U>): Record<string, unknown> {
   return JsonSerializer.serialize(value, spec);
 }
 
@@ -145,13 +145,13 @@ const valueRootSpec: ValueSpec<number> = { descriptor: { kind: "primitive" }, va
 // above: each one exists only for its inferred type or its expected error.
 export {
   assertedOrder,
-  strictWritten,
-  writeAny,
   strictBoundOrder,
   strictBoundTextOrder,
   strictOrder,
   strictOrders,
   strictTextOrder,
+  strictWritten,
   structSpec,
   valueRootSpec,
+  writeGenericOrder,
 };
