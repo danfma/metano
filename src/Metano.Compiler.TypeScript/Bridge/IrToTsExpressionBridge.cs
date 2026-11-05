@@ -1580,10 +1580,34 @@ public static partial class IrToTsExpressionBridge
             return mapped;
 
         if (FactoryOf(ne) is { } factory)
-            return MapFactoryConstruction(ne, factory, args, context);
+        {
+            var factoryCallee = new TsPropertyAccess(MapNewTarget(ne.Type), factory);
+            var typeArguments = ConstructedTypeArgumentsOf(ne.Type, context);
 
-        return new TsNewExpression(MapNewTarget(ne.Type), WithoutNullRestArray(ne.Arguments, args));
+            return InEvaluationOrder(
+                ne,
+                args,
+                ordered => new TsCallExpression(
+                    factoryCallee,
+                    ordered,
+                    TypeArguments: typeArguments
+                )
+            );
+        }
+
+        return InEvaluationOrder(
+            ne,
+            args,
+            ordered => new TsNewExpression(MapNewTarget(ne.Type), ordered)
+        );
     }
+
+    /// <summary>
+    /// The parameters of the arrow that evaluates a construction's arguments
+    /// in C#'s order (<c>$arg0</c>): local to the arrow, and no C# identifier
+    /// contains a <c>$</c>, so they shadow no user name.
+    /// </summary>
+    private const string FactoryArgumentPrefix = "$arg";
 
     /// <summary>
     /// The claimed factory of the overload a construction resolved to (spec
@@ -1595,39 +1619,36 @@ public static partial class IrToTsExpressionBridge
             : null;
 
     /// <summary>
-    /// <c>Money.fromAmount(amount)</c>: the construction through the resolved
+    /// The construction <paramref name="build"/> makes from the arguments in
+    /// parameter order — <c>Money.fromAmount(amount)</c> through the resolved
     /// overload's factory, which reaches its selector branch with no runtime
-    /// check. A generic class's factory re-declares the class's type
-    /// parameters (FR-028), so the constructed type's arguments go on the
-    /// call (<c>Box.fromValue&lt;string&gt;(s)</c>). Arguments that C#
-    /// evaluates out of parameter order (named arguments with a side effect)
-    /// are bound first, in that order.
+    /// check, or <c>new T(…)</c>. A generic class's factory re-declares the
+    /// class's type parameters (FR-028), so the constructed type's arguments
+    /// go on its call (<c>Box.fromValue&lt;string&gt;(s)</c>). Bound arguments
+    /// that C# evaluates out of parameter order (named arguments with a side
+    /// effect) are bound first, in that order, through an arrow invoked on
+    /// the spot.
     /// </summary>
-    private static TsExpression MapFactoryConstruction(
+    private static TsExpression InEvaluationOrder(
         IrNewExpression ne,
-        string factory,
         IReadOnlyList<TsExpression> args,
-        IrToTsBridgeContext context
+        Func<IReadOnlyList<TsExpression>, TsExpression> build
     )
     {
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(ne.Arguments, args),
             ne.Overload?.EvaluationOrder,
-            "$arg"
+            FactoryArgumentPrefix
         );
 
-        var call = new TsCallExpression(
-            new TsPropertyAccess(MapNewTarget(ne.Type), factory),
-            ordered.Arguments,
-            TypeArguments: ConstructedTypeArgumentsOf(ne.Type, context)
-        );
+        var construction = build(ordered.Arguments);
 
         if (ordered.Bindings.Count == 0)
-            return call;
+            return construction;
 
         return TsImmediateInvocation.Of(
             ordered.Bindings,
-            [new TsReturnStatement(call)],
+            [new TsReturnStatement(construction)],
             isAsync: false
         );
     }

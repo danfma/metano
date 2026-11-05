@@ -28,6 +28,9 @@ internal static class TsEvaluationOrder
         if (order is null)
             return new TsOrderedArguments([], arguments);
 
+        // A trailing null `params` array was dropped from the lowered
+        // arguments (a rest parameter cannot take it), so its position binds
+        // nothing.
         var bindings = order
             .Where(position => position < arguments.Count)
             .Select(position => new TsImmediateBinding(

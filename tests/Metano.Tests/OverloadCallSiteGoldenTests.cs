@@ -446,8 +446,7 @@ public class OverloadCallSiteGoldenTests
             """
         );
 
-        await Assert.That(files["shop.dart"]).Contains("Base(1)");
-        await Assert.That(files["shop.dart"]).DoesNotContain("/* default */");
+        await Assert.That(files["shop.dart"]).Contains("static Base make() => Base(1);");
     }
 
     /// <summary>
