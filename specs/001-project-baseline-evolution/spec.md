@@ -212,8 +212,10 @@ Product requirements added after the migration (normative; each one is traced by
      type cannot be instantiated. An implicit constructor emits no modifier. A value type
      (`struct`, `record struct`) always emits a public constructor: C# gives it a public implicit
      parameterless constructor, so `new S()` is legal anywhere whatever it declares. An `internal`
-     or `protected internal` constructor additionally carries the `/** @internal */` JSDoc of the
-     assembly-wide visibility band (#445), judged by the group's most permissive declaration.
+     or `protected internal` constructor of a reference type additionally carries the
+     `/** @internal */` JSDoc (#445): a single constructor on its declaration, a dispatcher on
+     each overload signature declared `internal` / `protected internal` (the implementation
+     signature is untagged), so `stripInternal` drops only those signatures.
   2. *Mixed accessibility.* Every declared instance constructor, whatever its accessibility,
      takes part in the emitted constructor: two or more go through the overload dispatcher (#435).
      C# makes every other constructor of a type with a record positional or C# 12 primary
@@ -223,8 +225,8 @@ Product requirements added after the migration (normative; each one is traced by
      initializers that read a parameter, moved into it. A TypeScript class has one constructor
      accessibility: every overload
      signature and the implementation must share it (TS2385). When a type's constructors mix
-     accessibility, the backend MUST emit the most permissive mapped modifier (public, then
-     protected, then private) and report `MS0060` (`MixedConstructorAccessibility`, warning)
+     accessibility, the backend MUST emit the most permissive mapped modifier (public — which
+     `internal` and `protected internal` map to — then protected, then private) and report `MS0060` (`MixedConstructorAccessibility`, warning)
      naming the narrower constructors.
   3. *Construction outside the class body.* When generated or lowered code constructs the type
      from outside its TypeScript class body, a non-public constructor would fail to type-check

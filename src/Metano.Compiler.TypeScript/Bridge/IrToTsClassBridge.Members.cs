@@ -33,8 +33,9 @@ internal static partial class IrToTsClassBridge
     ///     to the getter when both are present).</item>
     /// </list>
     /// Returns an empty list for a <c>private protected</c> property: no
-    /// TypeScript accessibility can express it, and the TS surface must not
-    /// widen it (#445 keeps the skip).
+    /// TypeScript accessibility expresses it — <c>public</c> would widen it
+    /// and <c>private</c> would hide it from the derived classes C# lets
+    /// read it.
     /// </summary>
     public static IReadOnlyList<TsClassMember> BuildProperty(
         IrPropertyDeclaration prop,
@@ -46,6 +47,7 @@ internal static partial class IrToTsClassBridge
             return [];
 
         var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(prop.Visibility);
 
         if (prop.Semantics?.IsAbstract == true)
             return [BuildAbstractProperty(prop, name, tsType)];
@@ -75,9 +77,9 @@ internal static partial class IrToTsClassBridge
                     initializer,
                     IsReadOnly(prop),
                     Static: prop.IsStatic,
-                    Accessibility: IrToTsVisibilityMapper.Of(prop.Visibility),
+                    Accessibility: accessibility,
                     DefinitelyAssigned: prop.Semantics?.IsRequired == true,
-                    JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(prop.Visibility)
+                    JSDoc: jsdoc
                 ),
             ];
         }
@@ -89,14 +91,9 @@ internal static partial class IrToTsClassBridge
             var body = prop.GetterBody is null
                 ? new List<TsStatement>()
                 : IrToTsStatementBridge.MapBody(prop.GetterBody, context).ToList();
+
             members.Add(
-                new TsGetterMember(
-                    name,
-                    tsType,
-                    body,
-                    Static: prop.IsStatic,
-                    JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(prop.Visibility)
-                )
+                new TsGetterMember(name, tsType, body, Static: prop.IsStatic, JSDoc: jsdoc)
             );
         }
 
@@ -112,7 +109,7 @@ internal static partial class IrToTsClassBridge
                     new TsParameter("value", tsType),
                     body,
                     Static: prop.IsStatic,
-                    JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(prop.Visibility)
+                    JSDoc: jsdoc
                 )
             );
         }
@@ -135,7 +132,7 @@ internal static partial class IrToTsClassBridge
     )
     {
         var superMember = new TsPropertyAccess(new TsIdentifier("super"), name);
-        var accessibility = IrToTsVisibilityMapper.Of(prop.Visibility);
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(prop.Visibility);
 
         switch (prop.Semantics?.InheritedAccessor)
         {
@@ -150,7 +147,7 @@ internal static partial class IrToTsClassBridge
                             ),
                         ],
                         Accessibility: accessibility,
-                        JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(prop.Visibility)
+                        JSDoc: jsdoc
                     )
                 );
                 break;
@@ -162,7 +159,7 @@ internal static partial class IrToTsClassBridge
                         tsType,
                         [new TsReturnStatement(superMember)],
                         Accessibility: accessibility,
-                        JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(prop.Visibility)
+                        JSDoc: jsdoc
                     )
                 );
                 break;
@@ -188,8 +185,7 @@ internal static partial class IrToTsClassBridge
     {
         // DeclaresBackingField (checked by the caller) guarantees the field exists.
         var fieldName = context.ClassFields.FieldOf(prop)!;
-        var accessibility = IrToTsVisibilityMapper.Of(prop.Visibility);
-        var internalJSDoc = IrToTsVisibilityMapper.InternalJSDocOf(prop.Visibility);
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(prop.Visibility);
         var storage = PerClassBackingFields.StorageAccess(fieldName);
         var writable = prop.Accessors is not IrPropertyAccessors.GetOnly;
 
@@ -212,7 +208,7 @@ internal static partial class IrToTsClassBridge
                 tsType,
                 [new TsReturnStatement(storage)],
                 Accessibility: accessibility,
-                JSDoc: internalJSDoc
+                JSDoc: jsdoc
             ),
         };
 
@@ -227,7 +223,7 @@ internal static partial class IrToTsClassBridge
                         ),
                     ],
                     Accessibility: accessibility,
-                    JSDoc: internalJSDoc
+                    JSDoc: jsdoc
                 )
             );
 
@@ -244,15 +240,19 @@ internal static partial class IrToTsClassBridge
         IrPropertyDeclaration prop,
         string name,
         TsType tsType
-    ) =>
-        new(
+    )
+    {
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(prop.Visibility);
+
+        return new TsFieldMember(
             name,
             tsType,
             Readonly: IsReadOnly(prop),
-            Accessibility: IrToTsVisibilityMapper.Of(prop.Visibility),
+            Accessibility: accessibility,
             Abstract: true,
-            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(prop.Visibility)
+            JSDoc: jsdoc
         );
+    }
 
     /// <summary><c>get;</c> and <c>get; init;</c> map to a <c>readonly</c> member.</summary>
     private static bool IsReadOnly(IrPropertyDeclaration prop) =>
@@ -282,6 +282,8 @@ internal static partial class IrToTsClassBridge
         IReadOnlyList<TsStatement> body = method.Semantics.IsAbstract
             ? []
             : IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, context);
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(method.Visibility);
+
         return new TsMethodMember(
             name,
             parameters,
@@ -290,10 +292,10 @@ internal static partial class IrToTsClassBridge
             Static: method.IsStatic,
             Async: method.Semantics.IsAsync,
             Generator: method.Semantics.IsGenerator,
-            Accessibility: IrToTsVisibilityMapper.Of(method.Visibility),
+            Accessibility: accessibility,
             TypeParameters: typeParameters,
             Abstract: method.Semantics.IsAbstract,
-            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(method.Visibility)
+            JSDoc: jsdoc
         );
     }
 
@@ -304,16 +306,21 @@ internal static partial class IrToTsClassBridge
     /// <c>delegateAdd</c> and <c>delegateRemove</c>. The handler delegate
     /// type comes pre-resolved from the caller because the legacy
     /// <see cref="TypeMapper"/> still owns <c>[ExportFromBcl]</c> overrides.
+    /// Returns an empty list for a <c>private protected</c> event, as
+    /// <see cref="BuildProperty"/> and <see cref="BuildField"/> skip a
+    /// <c>private protected</c> member.
     /// </summary>
     public static IReadOnlyList<TsClassMember> BuildEvent(
         IrEventDeclaration evt,
         TsType delegateType
     )
     {
+        if (evt.Visibility is IrVisibility.PrivateProtected)
+            return [];
+
         var name = TypeScriptNaming.ToCamelCaseMember(evt.Name);
         var nullableDelegateType = new TsUnionType([delegateType, new TsNamedType("null")]);
-        var eventAccessibility = IrToTsVisibilityMapper.Of(evt.Visibility);
-        var eventJSDoc = IrToTsVisibilityMapper.InternalJSDocOf(evt.Visibility);
+        var eventVisibility = IrToTsVisibilityMapper.Map(evt.Visibility);
         var handlerParam = new TsParameter("handler", delegateType);
 
         return
@@ -327,20 +334,8 @@ internal static partial class IrToTsClassBridge
                 Initializer: new TsLiteral("null"),
                 Accessibility: TsAccessibility.Private
             ),
-            BuildDelegateAccessor(
-                name,
-                handlerParam,
-                "delegateAdd",
-                eventAccessibility,
-                eventJSDoc
-            ),
-            BuildDelegateAccessor(
-                name,
-                handlerParam,
-                "delegateRemove",
-                eventAccessibility,
-                eventJSDoc
-            ),
+            BuildDelegateAccessor(name, handlerParam, "delegateAdd", eventVisibility),
+            BuildDelegateAccessor(name, handlerParam, "delegateRemove", eventVisibility),
         ];
     }
 
@@ -348,8 +343,7 @@ internal static partial class IrToTsClassBridge
         string eventName,
         TsParameter handlerParam,
         string runtimeHelper,
-        TsAccessibility accessibility,
-        TsJSDoc? jsdoc
+        TsMemberVisibility visibility
     )
     {
         var suffix = runtimeHelper == "delegateAdd" ? "$add" : "$remove";
@@ -373,8 +367,8 @@ internal static partial class IrToTsClassBridge
                     )
                 ),
             ],
-            Accessibility: accessibility,
-            JSDoc: jsdoc
+            Accessibility: visibility.Accessibility,
+            JSDoc: visibility.JSDoc
         );
     }
 
@@ -390,8 +384,8 @@ internal static partial class IrToTsClassBridge
     /// definite-assignment assertion (<c>name!: T</c>). A <c>readonly</c>
     /// field written by a transpiled <c>init</c> accessor drops <c>readonly</c>,
     /// since the setter that accessor lowers to cannot write a read-only field.
-    /// Returns <c>null</c> for a <c>private protected</c> field: no TypeScript
-    /// accessibility can express it, and the TS surface must not widen it.
+    /// Returns <c>null</c> for a <c>private protected</c> field, for the
+    /// reason <see cref="BuildProperty"/> gives.
     /// </summary>
     public static TsFieldMember? BuildField(
         IrFieldDeclaration field,
@@ -414,15 +408,17 @@ internal static partial class IrToTsClassBridge
         if (!field.IsCapturedByCtor)
             initializer ??= ComputeDefaultInitializer(field.Type);
 
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(field.Visibility);
+
         return new TsFieldMember(
             name,
             tsType,
             initializer,
             field.IsReadonly && !field.IsAssignedByInitAccessor,
             Static: field.IsStatic,
-            Accessibility: IrToTsVisibilityMapper.Of(field.Visibility),
+            Accessibility: accessibility,
             DefinitelyAssigned: field.IsRequired,
-            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(field.Visibility)
+            JSDoc: jsdoc
         );
     }
 }

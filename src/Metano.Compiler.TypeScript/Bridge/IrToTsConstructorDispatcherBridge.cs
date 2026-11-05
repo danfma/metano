@@ -35,11 +35,15 @@ public static class IrToTsConstructorDispatcherBridge
     /// <param name="baseCall">What every branch's base call depends on.</param>
     /// <param name="typeParameters">The class's type parameters, which a
     /// parameter's type check resolves its type parameters against.</param>
+    /// <param name="signatureJSDoc">The JSDoc of each overload signature,
+    /// from the constructor it declares; none when omitted. The
+    /// implementation carries none.</param>
     internal static TsConstructor? Build(
         IrConstructorDeclaration primary,
         DispatcherBaseCall baseCall,
         IReadOnlyList<IrTypeParameter> typeParameters,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        Func<IrConstructorDeclaration, TsJSDoc?>? signatureJSDoc = null
     )
     {
         if (primary.Overloads is not { Count: > 0 })
@@ -65,7 +69,8 @@ public static class IrToTsConstructorDispatcherBridge
                         Rest: p.Parameter.IsParams,
                         Optional: p.Parameter.CanBeOmitted
                     ))
-                    .ToList()
+                    .ToList(),
+                signatureJSDoc?.Invoke(c)
             ))
             .ToList();
 

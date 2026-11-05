@@ -4,51 +4,55 @@ using Metano.Compiler.TypeScript.AST;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// The one visibility table every TypeScript emission site reads (issue #445).
-/// Before the fix, members, overload dispatchers and constructors each carried
-/// a private copy of the mapping, and the copies disagreed on the assembly-wide
-/// band: the dispatcher emitted an <c>internal</c> method as a private
-/// dispatcher (TS2341 from any other class in the package), while the class
-/// bridge emitted a <c>protected internal</c> property as <c>protected</c>
-/// (TS2445 from a non-derived class). Now every site reads this table:
+/// The one table that maps an IR visibility to the TypeScript declaration
+/// emitted for it — every member, overload signature, constructor, promoted
+/// member and module variable reads it:
 /// <list type="bullet">
-///   <item><c>private</c> → <c>private</c>;</item>
-///   <item><c>private protected</c> → <c>public</c> for class members (the
-///     bridge skips such members upstream, so the arm is unreachable there)
-///     and <c>private</c> for constructors (<see cref="TsConstructorModifier.Of"/>
-///     narrows it before the table applies);</item>
+///   <item><c>public</c> → <c>public</c>;</item>
+///   <item><c>internal</c> / <c>protected internal</c> → <c>public</c> tagged
+///     <c>/** @internal *&#47;</c>: any class of the emitting package may reach
+///     the member, and <c>stripInternal</c> drops it from the <c>.d.ts</c>;</item>
 ///   <item><c>protected</c> → <c>protected</c>;</item>
-///   <item><c>internal</c> / <c>protected internal</c> → <c>public</c> — the
-///     assembly-wide band is call-reachable from any class of the emitting
-///     package — and the member carries <c>/** @internal *&#47;</c> (see
-///     <see cref="InternalJSDocOf"/>).</item>
+///   <item><c>private</c> / <c>private protected</c> → <c>private</c>.</item>
 /// </list>
 /// </summary>
 public static class IrToTsVisibilityMapper
 {
+    private static readonly TsJSDoc InternalTag = new(["@internal"]);
+
+    /// <summary>The TypeScript accessibility and JSDoc of <paramref name="visibility"/>.</summary>
+    public static TsMemberVisibility Map(IrVisibility visibility) =>
+        new(AccessibilityOf(visibility), IsAssemblyScoped(visibility) ? InternalTag : null);
+
     /// <summary>
-    /// Maps IR visibility to the TS accessibility keyword the printer renders.
+    /// The most permissive of the visibilities that share one TypeScript
+    /// declaration (an overload group, a constructor group): public, then
+    /// <c>internal</c> / <c>protected internal</c>, then <c>protected</c>,
+    /// then <c>private</c> / <c>private protected</c>.
     /// </summary>
-    public static TsAccessibility Of(IrVisibility visibility) =>
+    public static IrVisibility MostPermissiveOf(IEnumerable<IrVisibility> visibilities) =>
+        visibilities.MinBy(RestrictionRankOf);
+
+    private static TsAccessibility AccessibilityOf(IrVisibility visibility) =>
         visibility switch
         {
-            IrVisibility.Private => TsAccessibility.Private,
+            IrVisibility.Public or IrVisibility.Internal or IrVisibility.ProtectedInternal =>
+                TsAccessibility.Public,
             IrVisibility.Protected => TsAccessibility.Protected,
-            _ => TsAccessibility.Public,
+            IrVisibility.Private or IrVisibility.PrivateProtected => TsAccessibility.Private,
+            _ => throw new ArgumentOutOfRangeException(nameof(visibility), visibility, null),
         };
 
-    /// <summary>
-    /// Whether the visibility lands in the assembly-wide band whose TS members
-    /// are public but tagged <c>@internal</c>: C# <c>internal</c> and
-    /// <c>protected internal</c>.
-    /// </summary>
-    public static bool IsInternalBand(IrVisibility visibility) =>
-        visibility is IrVisibility.Internal or IrVisibility.ProtectedInternal;
+    private static int RestrictionRankOf(IrVisibility visibility) =>
+        visibility switch
+        {
+            IrVisibility.Public => 0,
+            IrVisibility.Internal or IrVisibility.ProtectedInternal => 1,
+            IrVisibility.Protected => 2,
+            IrVisibility.Private or IrVisibility.PrivateProtected => 3,
+            _ => throw new ArgumentOutOfRangeException(nameof(visibility), visibility, null),
+        };
 
-    /// <summary>
-    /// The <c>/** @internal *&#47;</c> JSDoc for a member of the assembly-wide
-    /// band, <c>null</c> for every other visibility.
-    /// </summary>
-    public static TsJSDoc? InternalJSDocOf(IrVisibility visibility) =>
-        IsInternalBand(visibility) ? new TsJSDoc(["@internal"]) : null;
+    private static bool IsAssemblyScoped(IrVisibility visibility) =>
+        visibility is IrVisibility.Internal or IrVisibility.ProtectedInternal;
 }
