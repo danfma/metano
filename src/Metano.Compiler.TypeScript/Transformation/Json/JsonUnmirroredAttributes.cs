@@ -301,19 +301,16 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 
     /// <summary>
     /// The <c>[JsonConstructor]</c> constructor of <paramref name="type"/> when
-    /// it is not the one the factory calls
-    /// (<see cref="IrConstructorExtractor.FindPrimaryConstructor"/>).
+    /// it is not the one the factory calls (<see cref="JsonConstructorSelection"/>):
+    /// never for a type that constructs through its overload factories, which
+    /// calls the marked one (spec 013 DECIDED-25).
     /// </summary>
     private static IMethodSymbol? UncalledJsonConstructorOf(INamedTypeSymbol type)
     {
-        var marked = type.InstanceConstructors.FirstOrDefault(constructor =>
-            JsonSerializationAttributes.Has(constructor, JsonSerializationAttributes.Constructor)
-        );
-
-        if (marked is null)
+        if (JsonConstructorSelection.MarkedConstructorOf(type) is not { } marked)
             return null;
 
-        var called = IrConstructorExtractor.FindPrimaryConstructor(type);
+        var called = JsonConstructorSelection.Of(type);
 
         return SymbolEqualityComparer.Default.Equals(marked, called) ? null : marked;
     }

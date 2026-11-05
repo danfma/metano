@@ -1,5 +1,7 @@
+using Metano.Annotations;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -16,6 +18,14 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// is built from, so the facts and the IR agree. Value types are left out:
 /// their implicit parameterless constructor is always public.
 /// <para>
+/// A type that constructs through its overload factories (spec 013 FR-011)
+/// is also reached overload by overload: the facts record which non-public
+/// overloads code outside the class body constructs — a nested type's
+/// <c>new</c>, or the <c>[JsonConstructor]</c> overload a <c>TypeSpec</c>
+/// calls — so their factories are widened public. Value types are included
+/// here: their factories keep their overload's accessibility.
+/// </para>
+/// <para>
 /// The facts cross file boundaries — a <c>SerializerContext</c> or a derived
 /// class in another file changes a type's constructor — so
 /// <see cref="FingerprintOf"/> feeds them into the per-group cache key.
@@ -25,6 +35,7 @@ public sealed class ConstructorAccessFacts
 {
     private const string OutsideConstructionFact = "outside";
     private const string ExtendedFact = "extended";
+    private const string OutsideCalledFactoryFact = "factory";
 
     private static readonly IEqualityComparer<INamedTypeSymbol> TypeComparer =
         SymbolEqualityComparer.Default;
@@ -32,16 +43,22 @@ public sealed class ConstructorAccessFacts
     private readonly Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>> _constructors;
     private readonly Dictionary<INamedTypeSymbol, OutsideConstruction> _outsideConstructions;
     private readonly HashSet<INamedTypeSymbol> _extended;
+    private readonly Dictionary<
+        INamedTypeSymbol,
+        Dictionary<int, OutsideConstruction>
+    > _outsideCalledFactories;
 
     private ConstructorAccessFacts(
         Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>> constructors,
         Dictionary<INamedTypeSymbol, OutsideConstruction> outsideConstructions,
-        HashSet<INamedTypeSymbol> extended
+        HashSet<INamedTypeSymbol> extended,
+        Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>> outsideCalledFactories
     )
     {
         _constructors = constructors;
         _outsideConstructions = outsideConstructions;
         _extended = extended;
+        _outsideCalledFactories = outsideCalledFactories;
     }
 
     /// <summary>No type declares a non-public constructor.</summary>
@@ -49,7 +66,8 @@ public sealed class ConstructorAccessFacts
         new(
             new Dictionary<INamedTypeSymbol, IReadOnlyList<DeclaredConstructor>>(TypeComparer),
             new Dictionary<INamedTypeSymbol, OutsideConstruction>(TypeComparer),
-            new HashSet<INamedTypeSymbol>(TypeComparer)
+            new HashSet<INamedTypeSymbol>(TypeComparer),
+            new Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>>(TypeComparer)
         );
 
     /// <summary>
@@ -70,6 +88,16 @@ public sealed class ConstructorAccessFacts
     public bool IsExtended(INamedTypeSymbol type) => _extended.Contains(type.OriginalDefinition);
 
     /// <summary>
+    /// Where code outside the TypeScript class body of <paramref name="type"/>
+    /// calls the factory of its non-public constructor overload at
+    /// <paramref name="ordinal"/>, or <c>null</c> when nothing does.
+    /// </summary>
+    public OutsideConstruction? OutsideCallOfFactory(INamedTypeSymbol type, int ordinal) =>
+        _outsideCalledFactories
+            .GetValueOrDefault(type.OriginalDefinition)
+            ?.GetValueOrDefault(ordinal);
+
+    /// <summary>
     /// The facts recorded for <paramref name="groupTypes"/> and the types nested
     /// in them that another file can change, as a stable string; empty when
     /// none is recorded.
@@ -81,12 +109,18 @@ public sealed class ConstructorAccessFacts
         var entries = _outsideConstructions
             .Keys.Select(type => (Type: type, Fact: OutsideConstructionFact))
             .Concat(_extended.Select(type => (Type: type, Fact: ExtendedFact)))
+            .Concat(OutsideCalledFactoryEntries())
             .Where(entry => group.Contains(OutermostType(entry.Type)))
             .Select(entry => $"{entry.Type.ToDisplayString()}:{entry.Fact}")
             .Order(StringComparer.Ordinal);
 
         return string.Join(";", entries);
     }
+
+    private IEnumerable<(INamedTypeSymbol Type, string Fact)> OutsideCalledFactoryEntries() =>
+        _outsideCalledFactories.SelectMany(entry =>
+            entry.Value.Keys.Select(ordinal => (entry.Key, $"{OutsideCalledFactoryFact}#{ordinal}"))
+        );
 
     /// <summary>
     /// Collects the facts over <paramref name="emittedTypes"/> (top-level and
@@ -108,7 +142,12 @@ public sealed class ConstructorAccessFacts
             .Where(entry => entry.Constructors.Any(IsNonPublic))
             .ToDictionary(entry => entry.Type, entry => entry.Constructors, TypeComparer);
 
-        if (constructors.Count == 0)
+        var withRestrictedFactories = emittedTypes
+            .Select(type => type.OriginalDefinition)
+            .Where(HasRestrictedFactory)
+            .ToHashSet(TypeComparer);
+
+        if (constructors.Count == 0 && withRestrictedFactories.Count == 0)
             return Empty;
 
         var restricted = constructors
@@ -118,9 +157,25 @@ public sealed class ConstructorAccessFacts
         return new ConstructorAccessFacts(
             constructors,
             OutsideConstructions(compilation, emittedTypes, jsonConstructedTypes, restricted),
-            ExtendedTypes(emittedTypes, restricted)
+            ExtendedTypes(emittedTypes, restricted),
+            OutsideCalledFactoriesOf(
+                compilation,
+                emittedTypes,
+                jsonConstructedTypes,
+                withRestrictedFactories
+            )
         );
     }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> constructs through its overload
+    /// factories and one of them is not public in TypeScript.
+    /// </summary>
+    private static bool HasRestrictedFactory(INamedTypeSymbol type) =>
+        DispatchedConstructorCalls.ConstructsThroughFactories(type, TargetLanguage.TypeScript)
+        && IrConstructorExtractor
+            .AllExplicitConstructors(type)
+            .Any(constructor => TsConstructorModifier.OfConstructor(constructor).IsNonPublic());
 
     private static IReadOnlyList<DeclaredConstructor> DeclaredConstructors(INamedTypeSymbol type) =>
         IrConstructorExtractor.AllExplicitConstructors(type).Select(Describe).ToList();
@@ -176,6 +231,83 @@ public sealed class ConstructorAccessFacts
         return constructions;
     }
 
+    /// <summary>
+    /// The first site outside the class body that calls each non-public
+    /// factory of <paramref name="restricted"/>, per overload ordinal: the
+    /// overload a <c>SerializerContext</c>'s <c>TypeSpec</c> calls, or one a
+    /// <c>new</c> in a nested type constructs.
+    /// </summary>
+    private static Dictionary<
+        INamedTypeSymbol,
+        Dictionary<int, OutsideConstruction>
+    > OutsideCalledFactoriesOf(
+        Compilation compilation,
+        IReadOnlyList<INamedTypeSymbol> emittedTypes,
+        IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<INamedTypeSymbol>> jsonConstructedTypes,
+        IReadOnlySet<INamedTypeSymbol> restricted
+    )
+    {
+        var calls = new Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>>(
+            TypeComparer
+        );
+
+        if (restricted.Count == 0)
+            return calls;
+
+        foreach (var type in emittedTypes)
+        {
+            var jsonSite = new OutsideConstruction(
+                $"the TypeSpec of the JSON SerializerContext '{type.Name}'"
+            );
+
+            var constructedByJson = jsonConstructedTypes.GetValueOrDefault(type) ?? [];
+
+            var jsonConstructors = constructedByJson
+                .Where(restricted.Contains)
+                .Select(JsonConstructorSelection.Of)
+                .OfType<IMethodSymbol>();
+
+            foreach (var constructor in jsonConstructors)
+                RecordFactoryCall(calls, constructor, jsonSite);
+
+            var nestedSite = new OutsideConstruction($"the nested type '{type.ToDisplayString()}'");
+
+            foreach (
+                var constructor in ContainerConstructorsCalledBy(compilation, type, restricted)
+            )
+                RecordFactoryCall(calls, constructor, nestedSite);
+        }
+
+        return calls;
+    }
+
+    /// <summary>
+    /// Records that <paramref name="site"/> calls the factory of
+    /// <paramref name="constructor"/>, when that factory is not public.
+    /// </summary>
+    private static void RecordFactoryCall(
+        Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>> calls,
+        IMethodSymbol constructor,
+        OutsideConstruction site
+    )
+    {
+        if (!TsConstructorModifier.OfConstructor(constructor).IsNonPublic())
+            return;
+
+        if (IrConstructorExtractor.DeclarationOrdinalOf(constructor) is not { } ordinal)
+            return;
+
+        var type = constructor.ContainingType.OriginalDefinition;
+
+        if (!calls.TryGetValue(type, out var sites))
+        {
+            sites = [];
+            calls[type] = sites;
+        }
+
+        sites.TryAdd(ordinal, site);
+    }
+
     private static HashSet<INamedTypeSymbol> ExtendedTypes(
         IReadOnlyList<INamedTypeSymbol> emittedTypes,
         IReadOnlySet<INamedTypeSymbol> restricted
@@ -196,6 +328,18 @@ public sealed class ConstructorAccessFacts
         Compilation compilation,
         INamedTypeSymbol nested,
         IReadOnlySet<INamedTypeSymbol> restricted
+    ) =>
+        ContainerConstructorsCalledBy(compilation, nested, restricted)
+            .Select(constructor => constructor.ContainingType.OriginalDefinition);
+
+    /// <summary>
+    /// The constructors of <paramref name="restricted"/> containers that a
+    /// <c>new</c> in the declaration of <paramref name="nested"/> calls.
+    /// </summary>
+    private static IEnumerable<IMethodSymbol> ContainerConstructorsCalledBy(
+        Compilation compilation,
+        INamedTypeSymbol nested,
+        IReadOnlySet<INamedTypeSymbol> restricted
     )
     {
         var containers = ContainersOf(nested).Where(restricted.Contains).ToHashSet(TypeComparer);
@@ -205,16 +349,18 @@ public sealed class ConstructorAccessFacts
 
         return nested
             .DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
-            .SelectMany(declaration => ConstructedTypesIn(compilation, declaration))
-            .Where(containers.Contains);
+            .SelectMany(declaration => ConstructorsCalledIn(compilation, declaration))
+            .Where(constructor =>
+                containers.Contains(constructor.ContainingType.OriginalDefinition)
+            );
     }
 
     /// <summary>
-    /// The types a <c>new</c> in <paramref name="declaration"/> constructs,
+    /// The constructors a <c>new</c> in <paramref name="declaration"/> calls,
     /// outside the declarations of its own nested types (each emitted nested
     /// type is scanned on its own).
     /// </summary>
-    private static IEnumerable<INamedTypeSymbol> ConstructedTypesIn(
+    private static IEnumerable<IMethodSymbol> ConstructorsCalledIn(
         Compilation compilation,
         SyntaxNode declaration
     )
@@ -228,8 +374,7 @@ public sealed class ConstructorAccessFacts
             .DescendantNodes(StaysInThisTypeBody)
             .OfType<BaseObjectCreationExpressionSyntax>()
             .Select(creation => model.GetSymbolInfo(creation).Symbol)
-            .OfType<IMethodSymbol>()
-            .Select(constructor => constructor.ContainingType.OriginalDefinition);
+            .OfType<IMethodSymbol>();
     }
 
     /// <summary>The types containing <paramref name="type"/>, innermost first.</summary>

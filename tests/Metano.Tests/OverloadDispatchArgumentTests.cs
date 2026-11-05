@@ -189,7 +189,7 @@ public class OverloadDispatchArgumentTests
     }
 
     [Test]
-    public async Task CallSites_OmitDefaultsAndPassParamsExpanded()
+    public async Task CallSites_PassBoundDefaultsAndParamsToTheResolvedFactory()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -218,9 +218,9 @@ public class OverloadDispatchArgumentTests
 
         var output = result["use.ts"];
 
-        await Assert.That(output).Contains("new Opt()");
-        await Assert.That(output).Contains("new Opt(\"s\")");
-        await Assert.That(output).Contains("new Opt(\"s\", 1, 2)");
-        await Assert.That(output).Contains("new Opt(\"s\", ...[1, 2, 3])");
+        await Assert.That(output).Contains("Opt.fromA(5)");
+        await Assert.That(output).Contains("Opt.fromSRest(\"s\")");
+        await Assert.That(output).Contains("Opt.fromSRest(\"s\", 1, 2)");
+        await Assert.That(output).Contains("Opt.fromSRest(\"s\", ...[1, 2, 3])");
     }
 }

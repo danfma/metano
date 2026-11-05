@@ -212,13 +212,11 @@ public class ConstructorOverloadTests
     }
 
     [Test]
-    public async Task DerivedWithOverloads_OverloadedBase_SuperReachesBaseDispatcher()
+    public async Task DerivedWithOverloads_OverloadedBase_SuperSelectsTheBaseOverload()
     {
-        // #25.2: derived's super(...) lands at the base's public constructor —
-        // which is itself the dispatcher signature `(...args: unknown[])` when
-        // the base has overloads. The runtime branch resolves at the base's
-        // entry. This test pins the structural shape: both classes get their
-        // own dispatcher and the derived branches call super with raw args.
+        // #25.2: both classes get their own dispatcher. Spec 013 FR-017: the
+        // derived branches select the base overload Roslyn resolved through
+        // its selector, so the base's runtime checks never run for them.
         var result = TranspileHelper.Transpile(
             """
             namespace App;
@@ -249,11 +247,11 @@ public class ConstructorOverloadTests
         await Assert.That(baseTs).Contains("isInt32(args[0])");
         await Assert.That(baseTs).Contains("isString(args[0])");
 
-        // Derived carries its own dispatcher and forwards args to super.
+        // Derived carries its own dispatcher and selects the base overload.
         await Assert.That(derivedTs).Contains("extends Base");
         await Assert.That(derivedTs).Contains("constructor(...args: unknown[])");
-        await Assert.That(derivedTs).Contains("super(n)");
-        await Assert.That(derivedTs).Contains("super(s)");
+        await Assert.That(derivedTs).Contains("super(Base.byBaseN, n)");
+        await Assert.That(derivedTs).Contains("super(Base.byBaseS, s)");
     }
 
     [Test]

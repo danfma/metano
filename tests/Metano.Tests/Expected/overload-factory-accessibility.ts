@@ -150,6 +150,6 @@ export class Acct {
   }
 
   static parse(code: string): Acct {
-    return new Acct(code);
+    return Acct.fromCode(code);
   }
 }

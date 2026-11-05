@@ -27,9 +27,7 @@ internal sealed class TsOverloadClaimPass
     private readonly TsClassMemberTable _userMembers;
     private readonly Dictionary<string, TsClaimedMember> _statics;
     private readonly Dictionary<string, TsClaimedMember> _instances;
-    private readonly Dictionary<string, TsConstructorOverloadNames> _constructors = new(
-        StringComparer.Ordinal
-    );
+    private readonly Dictionary<int, TsConstructorOverloadNames> _constructors = [];
     private readonly Dictionary<TsFastPathKey, string> _fastPaths = [];
     private readonly List<TsClaimFinding> _findings = [];
 
@@ -116,7 +114,7 @@ internal sealed class TsOverloadClaimPass
 
         var names = ConstructorNamesOf(suffix, claimed, factory);
 
-        RecordConstructor(overload, suffix, names, factory);
+        RecordConstructor(overload, names, factory);
 
         if (firstCollision is not null)
             ReportRenamedConstructor(overload, firstCollision, names);
@@ -204,14 +202,13 @@ internal sealed class TsOverloadClaimPass
 
     private void RecordConstructor(
         IrConstructorDeclaration overload,
-        string suffix,
         TsConstructorOverloadNames names,
         TsFactorySignature? factory
     )
     {
         var signature = DispatchedOverload.SignatureOf(overload);
 
-        _constructors[suffix] = names;
+        _constructors[overload.DeclarationOrdinal] = names;
 
         _statics[names.Selector] = new TsClaimedMember(
             TsClaimedMemberKind.Selector,

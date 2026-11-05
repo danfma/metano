@@ -151,6 +151,22 @@ value-constrained type parameter still takes `null`, and so does a user struct i
 closes these. The factory widening of FR-011 (a factory code outside the class body calls)
 lands with **013c**, the first slice that calls factories.
 
+Hand-offs from 013c: constructor claims are keyed by declaration ordinal
+(`TsOverloadClaims.ConstructorNamesAt`), and a call site resolves its `IrOverloadRef` through
+`TsOverloadClaimsRegistry.ConstructorNamesOf`, which finds the declaring type by its `IrTypeKey`;
+`TypeTransformer` publishes the registry for the transform (`TsOverloadCallSites`, the same
+`AsyncLocal` pattern as the other per-transform lowering state), so module functions, operators
+and entry points reach it too. Method fast paths are still keyed by table + group name + suffix:
+**013d / 013e** move them to `IrOverloadRef` once methods carry an ordinal. The core's call-site
+decision is `DispatchedConstructorCalls` (dispatched set, emitted as a class, source IR:
+DECIDED-24); bound arguments come from `IArgumentOperation` (`ExtractBoundArguments`), so 013e
+can reuse them for DECIDED-32. FR-011's widening reads per-overload facts
+(`ConstructorAccessFacts.OutsideCallOfFactory`); FR-049 rule 3 still widens the constructor
+of a restricted type too, because a `TypeSpec`'s `type: T` needs a public construct signature.
+Still on the dispatcher: a class that declares no constructor over a dispatched base (TypeScript's
+implicit `super(...args)`), a `new` whose argument list has a `params` collection that is not an
+array, and every call into a metadata-only reference (DECIDED-24).
+
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
 OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an
 inherited single virtual, today's emission pinned) and DECIDED-30 (full support for

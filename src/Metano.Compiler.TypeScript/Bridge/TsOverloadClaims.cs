@@ -15,12 +15,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal sealed class TsOverloadClaims
 {
-    private readonly IReadOnlyDictionary<string, TsConstructorOverloadNames> _constructors;
+    private readonly IReadOnlyDictionary<int, TsConstructorOverloadNames> _constructors;
     private readonly IReadOnlyDictionary<TsFastPathKey, string> _fastPaths;
     private readonly IReadOnlyList<TsClaimFinding> _findings;
 
     public TsOverloadClaims(
-        IReadOnlyDictionary<string, TsConstructorOverloadNames> constructors,
+        IReadOnlyDictionary<int, TsConstructorOverloadNames> constructors,
         IReadOnlyDictionary<TsFastPathKey, string> fastPaths,
         IReadOnlyDictionary<string, TsClaimedMember> statics,
         IReadOnlyList<TsClaimFinding> findings
@@ -35,7 +35,7 @@ internal sealed class TsOverloadClaims
     /// <summary>A class with no overload group and nothing to inherit.</summary>
     public static TsOverloadClaims None { get; } =
         new(
-            new Dictionary<string, TsConstructorOverloadNames>(),
+            new Dictionary<int, TsConstructorOverloadNames>(),
             new Dictionary<TsFastPathKey, string>(),
             new Dictionary<string, TsClaimedMember>(StringComparer.Ordinal),
             []
@@ -49,10 +49,18 @@ internal sealed class TsOverloadClaims
 
     /// <summary>The selector and factory names of one constructor overload.</summary>
     public TsConstructorOverloadNames NamesOf(IrConstructorDeclaration constructor) =>
-        _constructors.GetValueOrDefault(DispatchedOverload.SuffixOf(constructor))
+        ConstructorNamesAt(constructor.DeclarationOrdinal)
         ?? throw new InvalidOperationException(
             $"The claim pass named no constructor overload '{constructor.SignatureText}'."
         );
+
+    /// <summary>
+    /// The selector and factory names of the constructor overload at
+    /// <paramref name="ordinal"/> (<see cref="IrOverloadRef.Ordinal"/>);
+    /// <c>null</c> when the class has no dispatched constructor there.
+    /// </summary>
+    public TsConstructorOverloadNames? ConstructorNamesAt(int ordinal) =>
+        _constructors.GetValueOrDefault(ordinal);
 
     /// <summary>
     /// The fast-path name of one overload of the group declared under

@@ -6,7 +6,7 @@ export class Money {
 
   protected static readonly byMoneyCents: unique symbol = Symbol("Money(int cents)");
 
-  static readonly zero: Money = new Money(0);
+  static readonly zero: Money = Money.fromCents(0);
 
   readonly how: string = "";
 

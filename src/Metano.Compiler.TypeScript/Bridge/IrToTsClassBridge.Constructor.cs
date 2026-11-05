@@ -183,16 +183,21 @@ internal static partial class IrToTsClassBridge
     /// <summary>
     /// The base-constructor call of <paramref name="ctor"/>: role-mapped
     /// <c>Error</c> arguments when the base is a BCL exception (see
-    /// <see cref="IrToTsExceptionConstructionBridge"/>), the plain base
-    /// arguments otherwise. Returns <c>null</c> when the constructor passes
-    /// nothing to its base and the class keeps no base message.
+    /// <see cref="IrToTsExceptionConstructionBridge"/>); the base overload's
+    /// selector before the bound arguments when the base call resolved into a
+    /// dispatched set (<c>super(Money.byMoneyAmount, amount)</c>, spec 013
+    /// FR-017); the plain base arguments otherwise. Returns <c>null</c> when
+    /// the constructor passes nothing to its base and the class keeps no base
+    /// message.
     /// </summary>
     /// <param name="ctor">The constructor making the base call.</param>
+    /// <param name="baseClass">The class's <c>extends</c> type, which
+    /// qualifies the base overload's selector.</param>
     /// <param name="keepsBaseMessage">Whether the class overrides
     /// <c>Message</c>, so the call is followed by the base-message capture.</param>
-    /// <param name="bclRegistry">The declarative BCL mappings.</param>
     public static TsBaseConstructorCall? BuildBaseCall(
         IrConstructorDeclaration ctor,
+        TsType? baseClass,
         bool keepsBaseMessage,
         IrToTsBridgeContext context
     )
@@ -210,19 +215,48 @@ internal static partial class IrToTsClassBridge
         }
 
         var baseArguments = ctor.BaseArguments ?? [];
+        var selector = BaseSelectorOf(ctor, baseClass);
 
-        if (baseArguments.Count == 0 && !keepsBaseMessage)
+        if (baseArguments.Count == 0 && selector is null && !keepsBaseMessage)
             return null;
 
         var loweredArguments = baseArguments
             .Select(argument => IrToTsExpressionBridge.MapArgument(argument, context))
             .ToList();
 
+        var arguments = IrToTsExpressionBridge.WithoutNullRestArray(
+            baseArguments,
+            loweredArguments
+        );
+
         return new TsBaseConstructorCall(
             [],
-            IrToTsExpressionBridge.WithoutNullRestArray(baseArguments, loweredArguments),
+            selector is null ? arguments : [selector, .. arguments],
             keepsBaseMessage
         );
+    }
+
+    /// <summary>
+    /// <c>Money.byMoneyAmount</c>: the claimed selector of the base overload
+    /// <paramref name="ctor"/> calls; <c>null</c> when the call keeps the
+    /// base dispatcher.
+    /// </summary>
+    private static TsPropertyAccess? BaseSelectorOf(
+        IrConstructorDeclaration ctor,
+        TsType? baseClass
+    )
+    {
+        if (ctor.BaseOverload is not { } overload || baseClass is not TsNamedType named)
+            return null;
+
+        if (TsOverloadCallSites.ConstructorNamesOf(overload) is not { } names)
+            return null;
+
+        TsExpression baseReference = named.Origin is { } origin
+            ? new TsTypeReference(named.Name, origin)
+            : new TsIdentifier(named.Name);
+
+        return new TsPropertyAccess(baseReference, names.Selector);
     }
 
     public static TsConstructor BuildSimpleConstructor(

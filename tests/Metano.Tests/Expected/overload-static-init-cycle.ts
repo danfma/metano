@@ -1,7 +1,7 @@
 import { B } from "./b";
 
 export class A {
-  static readonly seed: B = new B(1);
+  static readonly seed: B = B.fromV(1);
 
   constructor() { }
 

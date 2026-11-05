@@ -757,7 +757,7 @@ public class InternalVisibilityMappingTests
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
         var derived = result["app/derived.ts"];
 
-        await Assert.That(derived).Contains("super(\"x\");");
+        await Assert.That(derived).Contains("super(Base.byBaseName, \"x\");");
         await Assert.That(derived).Contains("this.v();");
         await Assert.That(derived).Contains("return this.p;");
 
@@ -819,7 +819,7 @@ public class InternalVisibilityMappingTests
 
         var derived = TranspileHelper.TranspileWithLibrary(library, consumer)["app/derived.ts"];
 
-        await Assert.That(derived).Contains("super();");
+        await Assert.That(derived).Contains("super(Base.byBaseDefault);");
         await Assert.That(derived).Contains("this.q(\"x\") + this.q(1)");
 
         var baseOutput = TranspileHelper.Transpile(library)["lib/base.ts"];

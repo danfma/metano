@@ -2,6 +2,7 @@ using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Metano.Compiler.Extraction;
 
@@ -180,6 +181,25 @@ public static class IrConstructorExtractor
             .ToList();
 
     /// <summary>
+    /// The position of <paramref name="constructor"/> among its type's
+    /// <see cref="AllExplicitConstructors"/> — its
+    /// <see cref="IrConstructorDeclaration.DeclarationOrdinal"/> — or
+    /// <c>null</c> for a constructor outside them (the implicit parameterless
+    /// one, a record's copy constructor). A constructed generic type's
+    /// constructor is located on its definition.
+    /// </summary>
+    public static int? DeclarationOrdinalOf(IMethodSymbol constructor)
+    {
+        var ordinal = AllExplicitConstructors(constructor.ContainingType.OriginalDefinition)
+            .ToList()
+            .FindIndex(declared =>
+                SymbolEqualityComparer.Default.Equals(declared, constructor.OriginalDefinition)
+            );
+
+        return ordinal < 0 ? null : ordinal;
+    }
+
+    /// <summary>
     /// What deciding a parameter's promotion needs: the type, the active
     /// compilation and target, the type's primary-constructor decision, and
     /// the target's local-naming policy for constructor-body bindings (#398).
@@ -300,27 +320,25 @@ public static class IrConstructorExtractor
         // half agrees on.
         var localNames = LocalBindingDisambiguator.ForMember(ctor, context.Extraction);
 
-        var baseArguments = TryExtractBaseArguments(
-            ctor,
-            compilation,
-            context.Extraction,
-            localNames
-        );
+        var baseCall = TryExtractBaseCall(ctor, compilation, context.Extraction, localNames);
 
         return new IrConstructorDeclaration(
             Parameters: parameters,
             Body: TryExtractBody(ctor, compilation, context.Extraction, localNames),
-            BaseArguments: baseArguments,
+            BaseArguments: baseCall?.Arguments,
             BaseExceptionConstruction: TryExtractBaseExceptionConstruction(
                 ctor,
-                baseArguments ?? [],
+                baseCall?.Arguments ?? [],
                 compilation,
                 target
             ),
             ThisChain: TryExtractThisChain(ctor, originResolver, compilation, context, localNames),
             Visibility: visibility,
             IsPrimary: isPrimary
-        );
+        )
+        {
+            BaseOverload = baseCall?.Overload,
+        };
     }
 
     /// <summary>
@@ -452,28 +470,119 @@ public static class IrConstructorExtractor
     }
 
     /// <summary>
-    /// Captures the arguments of the explicit base-constructor call, if any
-    /// (see <see cref="FindBaseCallSyntax"/>). The class and dispatcher
-    /// bridges use these to emit the matching <c>super(...)</c> call.
+    /// Captures the base-constructor call of <paramref name="ctor"/>, if the
+    /// class and dispatcher bridges must emit one: the explicit call (see
+    /// <see cref="FindBaseCallSyntax"/>) with its source arguments, or — when
+    /// its base overload is one a target selects exactly
+    /// (<see cref="DispatchedConstructorCalls.BaseCallTarget"/>) — with
+    /// Roslyn's bound arguments and that overload; an implicit call only in
+    /// the latter case, since a bare <c>super()</c> needs no IR.
     /// </summary>
-    private static IReadOnlyList<IrArgument>? TryExtractBaseArguments(
+    private static BaseConstructorCall? TryExtractBaseCall(
         IMethodSymbol ctor,
         Compilation compilation,
         IrExtractionContext context,
         LocalBindingNames localNames
     )
     {
-        if (FindBaseCallSyntax(ctor) is not { } baseCall)
-            return null;
+        if (FindBaseCallSyntax(ctor) is { } baseCall)
+            return ExtractExplicitBaseCall(baseCall, compilation, context, localNames);
 
+        return FindImplicitBaseCall(ctor, compilation) is { } implicitCall
+            ? ExtractSelectedBaseCall(implicitCall, compilation, context, localNames)
+            : null;
+    }
+
+    private static BaseConstructorCall ExtractExplicitBaseCall(
+        SyntaxNode baseCall,
+        Compilation compilation,
+        IrExtractionContext context,
+        LocalBindingNames localNames
+    )
+    {
         var model = compilation.GetSemanticModel(baseCall.SyntaxTree);
+
+        if (model.GetOperation(baseCall) is IInvocationOperation invocation)
+        {
+            var selected = ExtractSelectedBaseCall(invocation, compilation, context, localNames);
+
+            if (selected is not null)
+                return selected;
+        }
+
         var extractor = new IrExpressionExtractor(model, context, localNames);
 
-        return extractor.ExtractInitializerArguments(
+        var arguments = extractor.ExtractInitializerArguments(
             ArgumentListOf(baseCall),
             model.GetSymbolInfo(baseCall).Symbol as IMethodSymbol
         );
+
+        return new BaseConstructorCall(arguments, Overload: null);
     }
+
+    /// <summary>
+    /// The base call of <paramref name="invocation"/> lowered to its exact
+    /// overload (spec 013 FR-017); <c>null</c> when the base keeps its
+    /// dispatcher or an argument cannot be bound.
+    /// </summary>
+    private static BaseConstructorCall? ExtractSelectedBaseCall(
+        IInvocationOperation invocation,
+        Compilation compilation,
+        IrExtractionContext context,
+        LocalBindingNames localNames
+    )
+    {
+        var overload = DispatchedConstructorCalls.BaseCallTarget(
+            invocation.TargetMethod,
+            context.Target
+        );
+
+        if (overload is null)
+            return null;
+
+        var model = compilation.GetSemanticModel(invocation.Syntax.SyntaxTree);
+        var extractor = new IrExpressionExtractor(model, context, localNames);
+
+        return extractor.ExtractBoundArguments(invocation) is { } arguments
+            ? new BaseConstructorCall(arguments, overload)
+            : null;
+    }
+
+    /// <summary>
+    /// The implicit <c>base()</c> call of a declared constructor with no
+    /// initializer, as Roslyn binds it.
+    /// </summary>
+    private static IInvocationOperation? FindImplicitBaseCall(
+        IMethodSymbol ctor,
+        Compilation compilation
+    )
+    {
+        if (DeclaringSyntax(ctor) is not ConstructorDeclarationSyntax { Initializer: null } syntax)
+            return null;
+
+        var model = compilation.GetSemanticModel(syntax.SyntaxTree);
+
+        return
+            model.GetOperation(syntax)
+                is IConstructorBodyOperation
+                {
+                    Initializer: IExpressionStatementOperation
+                    {
+                        Operation: IInvocationOperation call
+                    },
+                }
+            ? call
+            : null;
+    }
+
+    /// <summary>
+    /// A constructor's base call: its arguments and, when a target selects
+    /// the base overload exactly, that overload.
+    /// </summary>
+    private sealed record BaseConstructorCall(
+        IReadOnlyList<IrArgument> Arguments,
+        IrOverloadRef? Overload
+    );
 
     private static PrimaryConstructorBaseTypeSyntax? FindPrimaryBase(BaseListSyntax? baseList) =>
         baseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>().FirstOrDefault();

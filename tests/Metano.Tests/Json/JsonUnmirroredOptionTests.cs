@@ -387,8 +387,14 @@ public class JsonUnmirroredOptionTests
         await Assert.That(SourceTextOf(diagnostics[0])).IsEqualTo("Name");
     }
 
+    /// <summary>
+    /// A type that constructs through its overload factories calls the
+    /// <c>[JsonConstructor]</c> overload's factory (spec 013 DECIDED-25), so
+    /// nothing is unmirrored; a <c>[PlainObject]</c> type has no factories and
+    /// builds its literal from the primary constructor's shape.
+    /// </summary>
     [Test]
-    public async Task JsonConstructorOnAnotherConstructor_IsReported()
+    public async Task JsonConstructorOnAnotherConstructor_IsReportedOnlyWithoutFactories()
     {
         var diagnostics = UnmirroredOf(
             """
@@ -406,6 +412,14 @@ public class JsonUnmirroredOptionTests
             }
 
             [Transpile]
+            [PlainObject]
+            public sealed record Plain(int A, int B)
+            {
+                [JsonConstructor]
+                public Plain(int a) : this(a, 0) { }
+            }
+
+            [Transpile]
             public sealed class Single
             {
                 [JsonConstructor]
@@ -416,6 +430,7 @@ public class JsonUnmirroredOptionTests
 
             [Transpile]
             [JsonSerializable(typeof(Pair))]
+            [JsonSerializable(typeof(Plain))]
             [JsonSerializable(typeof(Single))]
             """
         );
@@ -425,7 +440,7 @@ public class JsonUnmirroredOptionTests
         await Assert
             .That(diagnostics[0].Message)
             .IsEqualTo(
-                "'Pair' has [JsonConstructor] on a constructor the TypeScript context does not "
+                "'Plain' has [JsonConstructor] on a constructor the TypeScript context does not "
                     + "call: it constructs the type through its primary constructor."
             );
     }
