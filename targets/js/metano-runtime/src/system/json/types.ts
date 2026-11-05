@@ -20,12 +20,15 @@ export type NumberTypeName =
 export type IntegerTypeName = Exclude<NumberTypeName, "System.Single" | "System.Double">;
 
 /**
- * The CLR name a dictionary key descriptor carries (`typeName`) so a JSON
- * property name that does not parse into the key's type reports it as
- * System.Text.Json does (#479): `System.Boolean`, `System.Guid`,
- * `System.DateOnly`, `MyApp.Level`. Absent outside key positions.
+ * The CLR name a descriptor carries (`typeName`) so errors report it as
+ * System.Text.Json names the type: a dictionary key's rejected property name
+ * (#479: `System.Boolean`, `System.Guid`, `System.DateOnly`,
+ * `MyApp.Level`) and, on a temporal descriptor, the reader the runtime
+ * applies (#485: `System.TimeOnly` … `System.TimeSpan`). Absent where the
+ * runtime needs no type: a `string` primitive, containers, and hand-written
+ * specs.
  */
-type WithKeyTypeName = {
+type WithClrTypeName = {
   readonly typeName?: string;
 };
 
@@ -36,7 +39,7 @@ type WithKeyTypeName = {
  * name is parsed into the number (#479); it is absent otherwise. A
  * `System.Boolean` key names its `typeName`.
  */
-export type PrimitiveDescriptor = WithKeyTypeName & {
+export type PrimitiveDescriptor = WithClrTypeName & {
   readonly kind: "primitive";
   readonly numberType?: NumberTypeName;
 };
@@ -51,9 +54,14 @@ export type RefDescriptor<T = unknown> = {
  * Temporal types — `toString()` to serialize (`Temporal.PlainTime` in the
  * STJ `TimeOnly` form, `temporal-text.ts`), `parse()` to deserialize.
  */
-export type TemporalDescriptor = WithKeyTypeName & {
+export type TemporalDescriptor = WithClrTypeName & {
   readonly kind: "temporal";
-  readonly parse: (iso: string) => unknown;
+  /**
+   * The parse of a hand-written descriptor (`Temporal.PlainDate.from`, …).
+   * Generated descriptors name their `typeName` instead, so the runtime
+   * reads with System.Text.Json's own grammar (#485).
+   */
+  readonly parse?: (iso: string) => unknown;
 };
 
 /**
@@ -114,13 +122,13 @@ export type HashSetDescriptor = {
  * for no real benefit, since consumers always call `UserId.create("abc")`
  * with a typed string, never with raw parsed JSON.
  */
-export type BrandedDescriptor = WithKeyTypeName & {
+export type BrandedDescriptor = WithClrTypeName & {
   readonly kind: "branded";
   readonly create: (value: any) => unknown;
 };
 
 /** String enum — passthrough on serialize, validate on deserialize */
-export type EnumDescriptor = WithKeyTypeName & {
+export type EnumDescriptor = WithClrTypeName & {
   readonly kind: "enum";
   readonly values: Record<string, string>;
 };
@@ -130,7 +138,7 @@ export type EnumDescriptor = WithKeyTypeName & {
  * whose reverse mapping (`Level[0] === "Low"`) adds string values; only the
  * numbers are valid members.
  */
-export type NumericEnumDescriptor = WithKeyTypeName & {
+export type NumericEnumDescriptor = WithClrTypeName & {
   readonly kind: "numericEnum";
   /**
    * The enum's underlying integer type, set on a dictionary key: an integer

@@ -176,7 +176,7 @@ export class JsonContext extends SerializerContext {
 
   get dateTimeOffset(): ValueSpec<Temporal.ZonedDateTime> {
     return this._dateTimeOffset ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.ZonedDateTime.from },
+      descriptor: { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
       valueType: true,
       typeName: "System.DateTimeOffset",
     });

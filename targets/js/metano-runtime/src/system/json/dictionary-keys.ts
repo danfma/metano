@@ -13,6 +13,7 @@ import { cannotConvertToTypeName } from "./contract-name.ts";
 import { readNumberText, readEnumIntegerText } from "./number-from-string.ts";
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
+import { readTemporalText } from "./temporal-reads.ts";
 
 const BOOLEAN_TYPE_NAME = "System.Boolean";
 
@@ -217,7 +218,7 @@ function decimalKeyTextOf(value: unknown): string {
 function temporalKeyConverter(descriptor: TemporalDescriptor): ValueConverter {
   return keyConverter(
     temporalTextOf,
-    (name) => parsedOrUndefined(descriptor.parse, name),
+    (name) => parsedOrUndefined((text) => readTemporalText(descriptor, text), name),
     descriptor.typeName,
   );
 }
