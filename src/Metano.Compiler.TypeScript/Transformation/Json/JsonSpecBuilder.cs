@@ -192,12 +192,7 @@ internal sealed class JsonSpecBuilder
     {
         var polymorphism = _polymorphisms.GetValueOrDefault(targetType);
 
-        // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject,
-        // () => { throw ... } for a spec that cannot construct. The payload
-        // parameter exists only for a factory that reads it: a declared-but-unused
-        // `p` trips biome's noUnusedFunctionParameters in every consumer project
-        // (#480), and a parameterless constructor needs no payload either.
-        var factory = BuildFactoryStatement(targetType, tsTypeName, polymorphism);
+        var factory = BuildFactoryBody(targetType, tsTypeName, polymorphism);
 
         // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject,
         // () => { throw ... } for a spec that cannot construct. The payload
@@ -312,7 +307,7 @@ internal sealed class JsonSpecBuilder
     ///     member is assigned.</item>
     /// </list>
     /// </summary>
-    private FactoryBody BuildFactoryStatement(
+    private FactoryBody BuildFactoryBody(
         INamedTypeSymbol targetType,
         string tsTypeName,
         JsonPolymorphism? polymorphism
@@ -335,7 +330,7 @@ internal sealed class JsonSpecBuilder
             return FactoryBody.Throws(NonConstructibleFactoryMessage(targetType, tsTypeName));
 
         var construction = BuildConstruction(targetType, tsTypeName, out var argumentsReadPayload);
-        var assignedMembers = UnboundMembersOf(targetType, JsonReadAssignment.Always)
+        var assignedMembers = UnboundMembersOf(_properties, targetType, JsonReadAssignment.Always)
             .Select(ToCastProperty)
             .ToList();
 
@@ -428,7 +423,7 @@ internal sealed class JsonSpecBuilder
         if (!constructsInstance)
             return null;
 
-        var names = UnboundMembersOf(targetType, JsonReadAssignment.IfPresent)
+        var names = UnboundMembersOf(_properties, targetType, JsonReadAssignment.IfPresent)
             .Select(property => (TsExpression)new TsStringLiteral(property.TsName))
             .ToList();
 
@@ -441,17 +436,18 @@ internal sealed class JsonSpecBuilder
     /// The contract's members no constructor parameter binds that a read
     /// assigns as <paramref name="assignment"/>.
     /// </summary>
-    private IEnumerable<JsonSerializableProperty> UnboundMembersOf(
+    private static IEnumerable<JsonSerializableProperty> UnboundMembersOf(
+        JsonPropertyCollector properties,
         INamedTypeSymbol targetType,
         JsonReadAssignment assignment
     )
     {
         var boundNames = ConstructorBoundMemberNames(targetType);
 
-        return _properties
+        return properties
             .LiteralPropertiesOf(targetType)
             .Where(property => !boundNames.Contains(property.Member.Name))
-            .Where(property => _properties.Access.ReadAssignmentOf(property.Member) == assignment);
+            .Where(property => properties.Access.ReadAssignmentOf(property.Member) == assignment);
     }
 
     /// <summary>
@@ -474,11 +470,14 @@ internal sealed class JsonSpecBuilder
     /// constructor parameter binds (the parameter's own type when no property
     /// matches, skipping the extension-data overflow that casts nothing) and
     /// the members a read assigns after construction
-    /// (<see cref="JsonReadAssignment.Always"/>). The requirement scanner
-    /// reads them so the runtime helpers the cast types spell —
-    /// <c>HashSet</c> in <c>p.items as HashSet&lt;number&gt;</c>,
-    /// <c>Temporal</c> in <c>p.day as Temporal.PlainDate</c> — land in the
-    /// context's import table (FR-041).
+    /// (<see cref="JsonReadAssignment.Always"/>). A contract whose factory
+    /// only throws is skipped in the same order the factory body build
+    /// decides, so no import dangles for a cast that never happens (#496).
+    /// The requirement scanner reads the result so the runtime helpers the
+    /// cast types spell — <c>HashSet</c> in
+    /// <c>p.items as HashSet&lt;number&gt;</c>, <c>Temporal</c> in
+    /// <c>p.day as Temporal.PlainDate</c> — land in the context's import
+    /// table (FR-041).
     /// </summary>
     internal static IReadOnlyCollection<ITypeSymbol> FactoryCastTypesOf(JsonContextPlan plan)
     {
@@ -490,35 +489,45 @@ internal sealed class JsonSpecBuilder
                 continue;
 
             var contract = (INamedTypeSymbol)entry.Type;
+            var polymorphism = plan.Polymorphisms.GetValueOrDefault(contract);
 
-            if (SymbolHelper.HasPlainObject(contract))
-            {
-                foreach (var property in plan.Properties.LiteralPropertiesOf(contract))
-                    types.Add(property.Type);
-
+            // Mirror BuildFactoryBody's throw branches: an abstract
+            // polymorphic base throws, and any other non-<c>[PlainObject]</c>
+            // abstract type (interfaces included — IsAbstract is true for
+            // them) throws instead of constructing.
+            if (
+                polymorphism is { IsAbstractBase: true }
+                || contract.IsAbstract && !SymbolHelper.HasPlainObject(contract)
+            )
                 continue;
-            }
 
-            foreach (var parameter in ParametersOf(JsonConstructorSelection.Of(contract)))
-                if (CastTypeOf(parameter) is { } castType)
-                    types.Add(castType);
-
-            var boundNames = ConstructorBoundMemberNames(contract);
-
-            foreach (var property in plan.Properties.LiteralPropertiesOf(contract))
-            {
-                if (boundNames.Contains(property.Member.Name))
-                    continue;
-
-                if (
-                    plan.Properties.Access.ReadAssignmentOf(property.Member)
-                    == JsonReadAssignment.Always
-                )
-                    types.Add(property.Type);
-            }
+            types.UnionWith(CastTypesOf(plan, contract));
         }
 
         return types;
+    }
+
+    /// <summary>
+    /// The cast types of one constructible contract: its
+    /// <c>[PlainObject]</c> literal members, or its constructor-bound
+    /// parameter types plus the members assigned after construction.
+    /// </summary>
+    private static IEnumerable<ITypeSymbol> CastTypesOf(
+        JsonContextPlan plan,
+        INamedTypeSymbol contract
+    )
+    {
+        if (SymbolHelper.HasPlainObject(contract))
+            return plan.Properties.LiteralPropertiesOf(contract).Select(property => property.Type);
+
+        var parameterTypes = ParametersOf(JsonConstructorSelection.Of(contract))
+            .Select(CastTypeOf)
+            .OfType<ITypeSymbol>();
+
+        var assignedTypes = UnboundMembersOf(plan.Properties, contract, JsonReadAssignment.Always)
+            .Select(property => property.Type);
+
+        return parameterTypes.Concat(assignedTypes);
     }
 
     /// <summary>
@@ -552,16 +561,6 @@ internal sealed class JsonSpecBuilder
     private TsObjectProperty ToCastProperty(JsonSerializableProperty property) =>
         new(property.TsName, CastProperty(property.TsName, property.Type));
 
-    /// <summary>
-    /// Builds the <c>new T(...)</c> arguments: each parameter of the
-    /// constructor (in declaration order — the order the emitted TS
-    /// constructor uses) reads the property it initializes, searched across
-    /// the inheritance chain so a parameter forwarded to the base
-    /// (<c>ImageClip(string Path, double Seconds) : Clip(Seconds)</c>) reads
-    /// the inherited <c>seconds</c>. A type without a parameterized
-    /// constructor is built with <c>new T()</c> and its members are assigned
-    /// (<see cref="WithAssignedMembers"/>).
-    /// </summary>
     /// <summary>
     /// Builds the <c>new T(...)</c> arguments: each parameter of the
     /// constructor (in declaration order — the order the emitted TS
