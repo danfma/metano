@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace Metano.Annotations;
 
 /// <summary>
@@ -83,4 +85,14 @@ public sealed class MapPropertyAttribute(Type declaringType, string csharpProper
     /// of identifiers from <c>package:metano_runtime/metano_runtime.dart</c>.
     /// </summary>
     public string? DartRuntimeImports { get; init; }
+
+    /// <summary>
+    /// Staging filter of spec 012 (DECIDED-22), for Metano's own BCL mappings only:
+    /// when <c>true</c>, the TypeScript target applies this declaration only while it
+    /// maps C#'s 64-bit integers to <c>bigint</c>, so a <c>bigint</c> template never
+    /// reaches the 2.x <c>number</c> output. Removed with the staging switch, once
+    /// <c>bigint</c> is the only mapping.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool WhenInt64IsBigInt { get; init; }
 }
