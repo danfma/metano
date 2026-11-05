@@ -224,8 +224,12 @@ dispatcher for it; DECIDED-29's pinned output still fails `tsgo` (TS2416/TS2385)
 An interface root is always *implemented*: a `new` method, an explicit re-implementation
 (`X3 : X, IR`) or an override of an undispatched base virtual that also implements a root anchors
 on the interface member (`Implementation`), and the claim pass emits it `override` when an emitted
-base already declares that fast path (`TsMethodOverloadNames.OverridesInherited`) — naming.md's
-"a `new` method is its own root" holds for class groups only. `base.M(...)` is bound only into an
+base already declares that fast path for the same parameter types, forwarders included
+(`TsMethodOverloadNames.OverriddenNames`); a base fast path of that name for other parameter types
+is a different overload the anchored name cannot move from, reported `MS0068` reason 1 — naming.md's
+"a `new` method is its own root" holds for class groups only. The interface group is one definition,
+`Frontend/Roslyn/InterfaceOverloadGroup`, shared by the method groups, the multiply-constructed
+interfaces, the interface extractor and the explicit-implementation lowering. `base.M(...)` is bound only into an
 emitted class (not `[External]`, not the BCL), and inherited signatures of explicit implementations
 are declared under the interface member's name. Still failing `tsgo`, as before 013d (the
 DECIDED-29 family): a class overloading an inherited single virtual (`B : G` adding `M(int)` /
@@ -236,6 +240,14 @@ when it emits overloads (013g).
 A multiply-constructed root's name is the one its interface declares (computed on the interface
 definition, `convX`), not a constructed spelling: implementers must match the interface's member
 name, and a constructed spelling differs from it whenever the group needs type spellings.
+
+Deferred from the 013d reviews (design, no behavior): a target capability port instead of
+`IsDartTarget` for binding `base.M(...)`; reporting `MS0069` from the core so every target gets it;
+splitting `MethodOverloadGroups` into grouping, anchoring and inherited-dispatcher modules; a shared
+`TsDispatcherShape` for the two dispatcher bridges; passing the diagnostics sink and the claim
+registry through the contexts instead of ambient state; moving the pure lookups on IR records
+(`IrMethodGroup`, `IrClassDeclaration.ConstructedRootOf`) to `Analysis/` or recording the exception
+in ADR-0019.
 
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
 OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an

@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -128,13 +129,7 @@ public static class MultiplyConstructedInterfaces
 
         foreach (var name in GroupNamesOf(definition, context.Target))
         {
-            foreach (
-                var member in MethodOverloadGroups.InterfaceGroupOf(
-                    definition,
-                    name,
-                    context.Target
-                )
-            )
+            foreach (var member in InterfaceOverloadGroup.Of(definition, name, context.Target))
             {
                 yield return new IrConstructedRoot(
                     MethodOverloadGroups.RefOf(member, context.Target),
@@ -211,8 +206,6 @@ public static class MultiplyConstructedInterfaces
             .OfType<IMethodSymbol>()
             .Select(method => method.Name)
             .Distinct(StringComparer.Ordinal)
-            .Where(name =>
-                MethodOverloadGroups.InterfaceGroupOf(definition, name, target).Count >= 2
-            )
+            .Where(name => InterfaceOverloadGroup.Of(definition, name, target).Count >= 2)
             .ToList();
 }

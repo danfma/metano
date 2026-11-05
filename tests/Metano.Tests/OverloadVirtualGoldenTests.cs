@@ -321,7 +321,8 @@ public class OverloadVirtualGoldenTests
     /// A type adding an overload to a group of explicit implementations
     /// (<c>X4 : X</c>) gets the superset dispatcher; an explicit or a
     /// <c>new</c> re-implementation of an interface root a base already
-    /// implements overrides the base's fast path.
+    /// implements overrides the base's fast path, and its forwarders
+    /// (<c>Y3 : Y</c>, <c>rY</c>).
     /// </summary>
     [Test]
     public async Task Reimplementations_OverrideTheInheritedRootFastPaths()
@@ -371,11 +372,35 @@ public class OverloadVirtualGoldenTests
             {
                 public new int R(int x) => 10;
             }
+
+            [Transpile]
+            public interface IB
+            {
+                int R(int y);
+
+                int R(bool f);
+            }
+
+            [Transpile]
+            public class Y : IR, IB
+            {
+                public int R(int x) => 1;
+
+                public int R(string s) => 2;
+
+                public int R(bool f) => 3;
+            }
+
+            [Transpile]
+            public class Y3 : Y, IR, IB
+            {
+                public new int R(int x) => 9;
+            }
             """
         );
 
         await Assert
-            .That(Joined(result, "x", "x4", "x3", "bn", "dn"))
+            .That(Joined(result, "x", "x4", "x3", "bn", "dn", "y", "y3"))
             .IsEqualTo(TranspileHelper.ReadExpected("overload-interface-reimplementation.ts"));
     }
 
@@ -457,6 +482,7 @@ public class OverloadVirtualGoldenTests
 
         await Assert.That(result["my-widget.ts"]).Contains("super.add(x + 1);");
         await Assert.That(result["my-widget.ts"]).Contains("super.add(\"s\");");
+        await Assert.That(result["my-widget.ts"]).DoesNotContain("super.addX(");
     }
 
     /// <summary>

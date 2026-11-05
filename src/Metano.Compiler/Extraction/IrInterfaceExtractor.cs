@@ -1,3 +1,4 @@
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -94,7 +95,7 @@ public static class IrInterfaceExtractor
         Dictionary<string, IReadOnlyList<string>> groupSuffixes
     )
     {
-        var group = MethodOverloadGroups.InterfaceGroupOf(type, method.Name, target);
+        var group = InterfaceOverloadGroup.Of(type, method.Name, target);
         var ordinal = group.IndexOf(method);
 
         if (group.Count < 2 || ordinal < 0)

@@ -88,7 +88,14 @@ internal sealed class TsOverloadClaims
     /// is emitted <c>override</c> (TS4114).
     /// </summary>
     public bool OverridesInheritedFastPath(IrMethodDeclaration overload) =>
-        MethodNamesOf(overload).OverridesInherited;
+        OverridesInheritedMember(overload, FastPathNameOf(overload));
+
+    /// <summary>
+    /// Whether <paramref name="name"/> — the overload's fast path or one of its
+    /// forwarders — overrides a fast path an emitted base declares.
+    /// </summary>
+    public bool OverridesInheritedMember(IrMethodDeclaration overload, string name) =>
+        MethodNamesOf(overload).OverriddenNames.Contains(name);
 
     /// <summary>
     /// The fast-path name of the method overload the class declares under
@@ -180,13 +187,13 @@ internal sealed record TsMethodOverloadKey(string MemberName, int Ordinal);
 
 /// <summary>
 /// The claimed names of one method overload: its fast path, the forwarding
-/// members of the further roots it implements, and whether the fast path
-/// overrides one an emitted base declares.
+/// members of the further roots it implements, and the ones among them that
+/// override a fast path an emitted base declares.
 /// </summary>
 internal sealed record TsMethodOverloadNames(
     string FastPath,
     IReadOnlyList<string> Forwarders,
-    bool OverridesInherited = false
+    IReadOnlySet<string> OverriddenNames
 );
 
 /// <summary>A class's whole static and instance sides, inherited members included.</summary>

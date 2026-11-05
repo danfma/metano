@@ -1,5 +1,4 @@
 using Metano.Annotations;
-using Metano.Compiler.Extraction;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Frontend.Roslyn;
@@ -220,9 +219,7 @@ public static class ExplicitImplementationLowering
         && !SymbolHelper.HasSameParameters(method, interfaceMethod);
 
     private static bool IsInOverloadGroup(IMethodSymbol interfaceMethod, TargetLanguage? target) =>
-        MethodOverloadGroups
-            .InterfaceGroupOf(interfaceMethod.ContainingType, interfaceMethod.Name, target)
-            .Count >= 2;
+        InterfaceOverloadGroup.IsDispatched(interfaceMethod, target);
 
     private static bool ClaimsNameOutsideInterface(
         ISymbol other,

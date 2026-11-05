@@ -167,7 +167,7 @@ internal static class MethodOverloadGroups
             return new IrOverloadRef(
                 IrTypeKeys.Of(type),
                 definition.Name,
-                InterfaceGroupOf(type, definition.Name, target).IndexOf(definition)
+                InterfaceOverloadGroup.Of(type, definition.Name, target).IndexOf(definition)
             );
 
         var member =
@@ -178,22 +178,6 @@ internal static class MethodOverloadGroups
 
         return new IrOverloadRef(IrTypeKeys.Of(type), GroupNameOf(definition), member.Ordinal);
     }
-
-    /// <summary>
-    /// The public ordinary methods an interface declares under
-    /// <paramref name="name"/>, the members of its overload group in
-    /// declaration order.
-    /// </summary>
-    public static List<IMethodSymbol> InterfaceGroupOf(
-        INamedTypeSymbol type,
-        string name,
-        TargetLanguage? target
-    ) =>
-        type
-            .OriginalDefinition.GetMembers(name)
-            .OfType<IMethodSymbol>()
-            .Where(method => IsInterfaceGroupMethod(method, target))
-            .ToList();
 
     /// <summary>
     /// The name a method groups under: its C# name, or an explicit
@@ -336,10 +320,15 @@ internal static class MethodOverloadGroups
         // An interface root is implemented, never overridden, even by an
         // override of an undispatched base virtual: the base declares no fast
         // path under the root's name (the claim pass marks the ones it does).
+        // The overridden base already declares the further roots' forwarders.
+        var furtherRoots = method.IsOverride
+            ? new List<IMethodSymbol>()
+            : interfaceRoots.Skip(1).ToList();
+
         return new MethodAnchor(
             interfaceRoots[0],
             IrOverloadAnchorKind.Implementation,
-            method.IsOverride ? [] : interfaceRoots.Skip(1).ToList()
+            furtherRoots
         );
     }
 
@@ -391,10 +380,10 @@ internal static class MethodOverloadGroups
 
             foreach (var member in implemented.GetMembers().OfType<IMethodSymbol>())
             {
-                if (!IsInterfaceGroupMethod(member, target))
+                if (!InterfaceOverloadGroup.IsMember(member, target))
                     continue;
 
-                if (InterfaceGroupOf(implemented, member.Name, target).Count < 2)
+                if (InterfaceOverloadGroup.Of(implemented, member.Name, target).Count < 2)
                     continue;
 
                 if (Implements(type, method, member))
@@ -438,11 +427,6 @@ internal static class MethodOverloadGroups
         return false;
     }
 
-    private static bool IsInterfaceGroupMethod(IMethodSymbol method, TargetLanguage? target) =>
-        method is { MethodKind: MethodKind.Ordinary, IsStatic: false, IsImplicitlyDeclared: false }
-        && method.DeclaredAccessibility == Accessibility.Public
-        && !SymbolHelper.HasIgnore(method, target);
-
     /// <summary>
     /// A transpiled interface whose groups implementers anchor on: emitted
     /// (not <c>[External]</c>) and a real type (not <c>[JsCallable]</c>).
@@ -465,7 +449,7 @@ internal static class MethodOverloadGroups
 
         if (type.TypeKind == TypeKind.Interface)
         {
-            var members = InterfaceGroupOf(type, definition.Name, target);
+            var members = InterfaceOverloadGroup.Of(type, definition.Name, target);
 
             return OverloadGroupNaming.SuffixesOf(members)[members.IndexOf(definition)];
         }

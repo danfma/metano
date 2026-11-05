@@ -462,6 +462,56 @@ public class OverloadNameClaimTests
     }
 
     /// <summary>
+    /// <c>MS0068</c> reason 1 for an implementation: an interface root whose
+    /// name a base declares as the fast path of another overload
+    /// (<c>rX(x: string)</c> against <c>R(int x)</c>) cannot be renamed, and
+    /// overriding it would change the base overload's signature.
+    /// </summary>
+    [Test]
+    public async Task RootNameHeldByAnUnrelatedBaseFastPath_ReportsMs0068()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface IA
+            {
+                int R(int x);
+
+                int R(string s);
+            }
+
+            [Transpile]
+            public class A4
+            {
+                public int R(string x) => 1;
+
+                public int R(bool b) => 2;
+            }
+
+            [Transpile]
+            public class D4 : A4, IA
+            {
+                public int R(int x) => 3;
+
+                public new int R(string s) => 4;
+            }
+            """
+        );
+
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked);
+
+        await Assert.That(report).IsNotNull();
+        await Assert
+            .That(report!.Message)
+            .IsEqualTo(
+                "'D4.R' would override the generated fast path 'rX' of 'A4.R(string x)'; "
+                    + "rename the member, or rename the root overload's parameter or pin it "
+                    + "with [Name] (spec 013 FR-034)."
+            );
+        await Assert.That(files["d4.ts"]).DoesNotContain("override rX(");
+    }
+
+    /// <summary>
     /// <c>MS0069</c> (FR-036): a type implementing one generic interface
     /// twice keeps runtime dispatch, reported at the type that adds the
     /// second construction — not at a type that inherits both.
@@ -481,6 +531,11 @@ public class OverloadNameClaimTests
             .ToList();
 
         await Assert.That(reports.Select(LineOf)).IsEquivalentTo([12, 38]);
+        await Assert
+            .That(
+                diagnostics.Any(diagnostic => diagnostic.Severity == MetanoDiagnosticSeverity.Error)
+            )
+            .IsFalse();
         await Assert.That(reports[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert
             .That(reports[0].Message)

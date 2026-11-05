@@ -81,6 +81,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         var isStatic = primary.IsStatic;
         var members = new List<TsClassMember>();
+
         foreach (var overload in OverloadDispatchOrder.Sort(group.Members, m => m.Parameters))
         {
             if (owner?.ConstructedRootOf(overload) is not null)
@@ -102,7 +103,13 @@ public static class IrToTsOverloadDispatcherBridge
                 names
                     .ForwardingNamesOf(overload)
                     .Select(forwarderName =>
-                        BuildForwardingMember(overload, forwarderName, fastPathName, context)
+                        BuildForwardingMember(
+                            overload,
+                            forwarderName,
+                            fastPathName,
+                            names.OverridesInheritedMember(overload, forwarderName),
+                            context
+                        )
                     )
             );
         }
@@ -390,7 +397,7 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         string fastPathName,
         bool isStatic,
-        bool overridesInherited,
+        bool overridesInheritedFastPath,
         IrToTsBridgeContext context
     )
     {
@@ -412,7 +419,7 @@ public static class IrToTsOverloadDispatcherBridge
             // instead of referencing an undeclared T.
             TypeParameters: MapTypeParameters(method.TypeParameters),
             Abstract: isAbstract,
-            Override: IrMethodGroup.IsOverride(method) || overridesInherited,
+            Override: IrMethodGroup.IsOverride(method) || overridesInheritedFastPath,
             JSDoc: visibility.JSDoc
         );
     }
@@ -426,6 +433,7 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         string forwarderName,
         string fastPathName,
+        bool overridesInherited,
         IrToTsBridgeContext context
     )
     {
@@ -447,7 +455,8 @@ public static class IrToTsOverloadDispatcherBridge
             parameters,
             IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
             [new TsReturnStatement(call)],
-            TypeParameters: MapTypeParameters(method.TypeParameters)
+            TypeParameters: MapTypeParameters(method.TypeParameters),
+            Override: overridesInherited
         );
     }
 
