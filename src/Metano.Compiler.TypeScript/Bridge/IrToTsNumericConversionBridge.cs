@@ -211,23 +211,12 @@ internal static class IrToTsNumericConversionBridge
         TsExpression value
     )
     {
+        if (to.Kind is IrNumericKind.BigInteger && BigIntegerFromFraction(from.Kind) is { } helper)
+            return RuntimeCall(helper, value);
+
         // BigInteger counts as signed: only a ulong target picks the
         // unsigned helper.
         var isSigned = to.Kind is not IrNumericKind.UInt64;
-
-        if (to.Kind is IrNumericKind.BigInteger)
-        {
-            var fromFraction = from.Kind switch
-            {
-                IrNumericKind.Double or IrNumericKind.Single =>
-                    Int64RuntimeHelpers.BigIntegerFromDouble,
-                IrNumericKind.Decimal => Int64RuntimeHelpers.BigIntegerFromDecimal,
-                _ => null,
-            };
-
-            if (fromFraction is not null)
-                return RuntimeCall(fromFraction, value);
-        }
 
         return from.Kind switch
         {
@@ -245,6 +234,16 @@ internal static class IrToTsNumericConversionBridge
             _ => WidenedInteger(from, to, isChecked, value),
         };
     }
+
+    /// <summary>The helper that truncates a fraction into a <c>BigInteger</c> (FR-003), or <c>null</c>.</summary>
+    private static string? BigIntegerFromFraction(IrNumericKind from) =>
+        from switch
+        {
+            IrNumericKind.Double or IrNumericKind.Single =>
+                Int64RuntimeHelpers.BigIntegerFromDouble,
+            IrNumericKind.Decimal => Int64RuntimeHelpers.BigIntegerFromDecimal,
+            _ => null,
+        };
 
     /// <summary>
     /// An integer of 32 bits or fewer is exact as a <c>bigint</c>; a signed

@@ -628,6 +628,22 @@ describe("convert nodes (spec 012 FR-044)", () => {
     expect(evaluateExprTree(narrowed, emptyScope)).toBe(5);
   });
 
+  test("a lifted conversion keeps null, and a double saturates as an unchecked cast", () => {
+    const lifted: ExprTree = {
+      kind: "convert",
+      operand: { kind: "literal", value: null },
+      type: int64,
+    };
+    const saturated: ExprTree = {
+      kind: "convert",
+      operand: { kind: "literal", value: Number.POSITIVE_INFINITY },
+      type: int64,
+    };
+
+    expect(evaluateExprTree(lifted, emptyScope)).toBeNull();
+    expect(evaluateExprTree(saturated, emptyScope)).toBe(9223372036854775807n);
+  });
+
   test("compileLambdaBody and readParamName see through a convert node", () => {
     const predicate = compileLambdaBody({
       tree: {

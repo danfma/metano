@@ -38,7 +38,11 @@ export function minInt64(left: bigint, right: bigint): bigint {
   return left <= right ? left : right;
 }
 
-/** `Math.Max(ulong, ulong)` / `ulong.Max`. */
+/**
+ * `Math.Max(ulong, ulong)` / `ulong.Max`. The unsigned helpers share the
+ * signed bodies (a `bigint` orders the same either way) but stay distinct
+ * exports, one per .NET member the compiler maps.
+ */
 export function maxUInt64(left: bigint, right: bigint): bigint {
   return left >= right ? left : right;
 }
@@ -102,14 +106,14 @@ export function divRemUInt64(
  * `Math.BigMul(long, long, out long low)`: the high 64 bits of the exact
  * 128-bit product, then its low 64 bits reinterpreted as `long`.
  */
-export function bigMulInt64(left: bigint, right: bigint): readonly [high: bigint, low: bigint] {
+export function bigMulInt64(left: bigint, right: bigint): [high: bigint, low: bigint] {
   const product = left * right;
 
   return [product >> 64n, BigInt.asIntN(64, product)];
 }
 
 /** `Math.BigMul(ulong, ulong, out ulong low)`: the high and low 64 bits of the 128-bit product. */
-export function bigMulUInt64(left: bigint, right: bigint): readonly [high: bigint, low: bigint] {
+export function bigMulUInt64(left: bigint, right: bigint): [high: bigint, low: bigint] {
   const product = left * right;
 
   return [product >> 64n, product & LOW_64_BITS];

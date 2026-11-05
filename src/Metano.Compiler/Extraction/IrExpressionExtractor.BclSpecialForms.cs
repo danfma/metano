@@ -28,15 +28,17 @@ public sealed partial class IrExpressionExtractor
     private const string NumberStylesTypeName = "System.Globalization.NumberStyles";
 
     /// <summary>
-    /// A constant <c>System.Globalization.NumberStyles</c> (<c>HexNumber</c>,
-    /// <c>Integer | AllowThousands</c>) folded to its flags value under the
-    /// exact 64-bit lowering (spec 012 FR-038): the BCL enum has no
-    /// counterpart in the targets, and the 64-bit parsers take the flags as a
-    /// number. <c>null</c> for any other expression.
+    /// A constant <c>System.Globalization.NumberStyles</c> argument of
+    /// <c>long</c> / <c>ulong</c> <c>Parse</c> / <c>TryParse</c>
+    /// (<c>HexNumber</c>, <c>Integer | AllowThousands</c>) folded to its flags
+    /// value under the exact 64-bit lowering (spec 012 FR-038): the BCL enum
+    /// has no counterpart in the targets, and the 64-bit parsers take the
+    /// flags as a number. <c>null</c> for any other expression
+    /// (STAGING(012k): every mode).
     /// </summary>
     private IrLiteral? FoldedNumberStylesConstant(ExpressionSyntax expression)
     {
-        if (!_context.ExactInt64Lowering)
+        if (!_context.ExactInt64Lowering || !IsSixtyFourBitParserArgument(expression))
             return null;
 
         var isNumberStyles =
@@ -48,6 +50,15 @@ public sealed partial class IrExpressionExtractor
             ? new IrLiteral(flags, IrLiteralKind.Int32)
             : null;
     }
+
+    private bool IsSixtyFourBitParserArgument(ExpressionSyntax expression) =>
+        expression.Parent is ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax call }
+        && _semantic.GetSymbolInfo(call).Symbol
+            is IMethodSymbol
+            {
+                Name: "Parse" or "TryParse",
+                ContainingType.SpecialType: SpecialType.System_Int64 or SpecialType.System_UInt64,
+            };
 
     /// <summary>
     /// Returns the target Temporal subtype name

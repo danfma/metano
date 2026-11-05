@@ -13,15 +13,30 @@ namespace Metano.Compiler.Extraction;
 internal static class LinqSixtyFourBitValues
 {
     public static IrLinqSixtyFourBitValues? Of(IMethodSymbol method, IrLinqOperator op) =>
-        op switch
-        {
-            IrLinqOperator.Count
-            or IrLinqOperator.Sum
-            or IrLinqOperator.Min
-            or IrLinqOperator.Max => SixtyFourBit(method.ReturnType),
-            IrLinqOperator.Average => SixtyFourBit(SelectorResult(method) ?? SourceElement(method)),
-            _ => null,
-        };
+        TakesAComparer(method)
+            ? null
+            : op switch
+            {
+                IrLinqOperator.Count
+                or IrLinqOperator.Sum
+                or IrLinqOperator.Min
+                or IrLinqOperator.Max => SixtyFourBit(method.ReturnType),
+                IrLinqOperator.Average => SixtyFourBit(
+                    SelectorResult(method) ?? SourceElement(method)
+                ),
+                _ => null,
+            };
+
+    /// <summary>
+    /// <c>Min</c> / <c>Max</c> with an <c>IComparer</c> order by it, which
+    /// the <c>bigint</c> terminals do not take: such a stage keeps the generic
+    /// terminal.
+    /// </summary>
+    private static bool TakesAComparer(IMethodSymbol method) =>
+        method.Parameters.Any(parameter =>
+            parameter.Type.OriginalDefinition.ToDisplayString()
+                is "System.Collections.Generic.IComparer<T>"
+        );
 
     private static IrLinqSixtyFourBitValues? SixtyFourBit(ITypeSymbol? type) =>
         NumericEndpoints.Of(type) is { IsEnum: false } endpoint && endpoint.IsSixtyFourBitValue()

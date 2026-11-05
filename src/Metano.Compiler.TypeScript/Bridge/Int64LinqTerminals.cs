@@ -18,30 +18,24 @@ internal static class Int64LinqTerminals
         if (!Int64RepresentationScope.IsBigInt || stage.SixtyFourBitValues is not { } values)
             return IrLinqMapping.EmittedName(stage.Operator);
 
-        return stage.Operator switch
+        return (stage.Operator, values.IsNullable, values.Kind) switch
         {
-            IrLinqOperator.Sum => "sumInt64",
-            IrLinqOperator.Average => values.IsNullable ? "averageNullableInt64" : "averageInt64",
-            IrLinqOperator.Min => ExtremumName("min", values),
-            IrLinqOperator.Max => ExtremumName("max", values),
+            (IrLinqOperator.Sum, _, _) => Int64RuntimeHelpers.SumInt64,
+            (IrLinqOperator.Average, true, _) => Int64RuntimeHelpers.AverageNullableInt64,
+            (IrLinqOperator.Average, false, _) => Int64RuntimeHelpers.AverageInt64,
+            (IrLinqOperator.Min, true, _) => Int64RuntimeHelpers.MinNullableInt64Of,
+            (IrLinqOperator.Min, false, IrNumericKind.UInt64) => Int64RuntimeHelpers.MinUInt64Of,
+            (IrLinqOperator.Min, false, _) => Int64RuntimeHelpers.MinInt64Of,
+            (IrLinqOperator.Max, true, _) => Int64RuntimeHelpers.MaxNullableInt64Of,
+            (IrLinqOperator.Max, false, IrNumericKind.UInt64) => Int64RuntimeHelpers.MaxUInt64Of,
+            (IrLinqOperator.Max, false, _) => Int64RuntimeHelpers.MaxInt64Of,
             _ => IrLinqMapping.EmittedName(stage.Operator),
         };
     }
 
     /// <summary>Whether the chain ends in a <c>LongCount</c>, whose <c>number</c> count becomes a <c>bigint</c>.</summary>
-    public static bool CountsInInt64(IrLinqChain chain) =>
+    public static bool EndsInLongCount(IrLinqChain chain) =>
+        // STAGING(012k): every mode once the switch is gone.
         Int64RepresentationScope.IsBigInt
         && chain.Stages is [.., { Operator: IrLinqOperator.Count, SixtyFourBitValues: not null }];
-
-    private static string ExtremumName(string extremum, IrLinqSixtyFourBitValues values)
-    {
-        var type = (values.IsNullable, values.Kind) switch
-        {
-            (true, _) => "NullableInt64",
-            (false, IrNumericKind.UInt64) => "UInt64",
-            _ => "Int64",
-        };
-
-        return $"{extremum}{type}Of";
-    }
 }

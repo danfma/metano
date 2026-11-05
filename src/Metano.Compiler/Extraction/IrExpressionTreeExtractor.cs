@@ -179,7 +179,7 @@ internal sealed partial class IrExpressionTreeExtractor
             case LambdaExpressionSyntax nestedLambda:
                 return WalkNestedLambda(nestedLambda);
 
-            case CastExpressionSyntax cast when IsSixtyFourBitConversion(cast):
+            case CastExpressionSyntax cast when IsSixtyFourBitCast(cast):
                 return WalkSixtyFourBitCast(cast);
 
             default:
@@ -807,7 +807,9 @@ internal sealed partial class IrExpressionTreeExtractor
     private IrTypeRef? MapType(ExpressionSyntax expr)
     {
         var info = _semantic.GetTypeInfo(expr);
-        var t = ConvertsAcrossSixtyFourBits(info) ? info.Type : info.ConvertedType ?? info.Type;
+        var t = ConvertedTypeCrossesSixtyFourBits(expr, info)
+            ? info.Type
+            : info.ConvertedType ?? info.Type;
         return t is null ? null : IrTypeRefMapper.Map(t, _originResolver, _target);
     }
 

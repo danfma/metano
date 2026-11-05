@@ -55,4 +55,10 @@ export class Big {
   lifted(b: bigint | null): number | null {
     return b == null ? null : int32FromBigInteger(b);
   }
+
+  unwrapped(b: bigint | null): number {
+    return int32FromBigInteger(b ?? (() => {
+      throw new Error("Nullable object must have a value.");
+    })());
+  }
 }

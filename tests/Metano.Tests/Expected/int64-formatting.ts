@@ -8,7 +8,7 @@ export class Text {
   }
 
   plain(l: bigint): string {
-    return l.toString() + `${l}`;
+    return l.toString() + `${l}` + l.toString();
   }
 
   holes(l: bigint, u: bigint): string {
