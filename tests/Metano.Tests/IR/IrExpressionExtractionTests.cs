@@ -38,8 +38,97 @@ public class IrExpressionExtractionTests
         await Assert
             .That(ret.Value)
             .IsEqualTo(
-                new IrBinaryExpression(new IrIdentifier("a"), IrBinaryOp.Add, new IrIdentifier("b"))
+                new IrBinaryExpression(
+                    new IrIdentifier("a"),
+                    IrBinaryOp.Add,
+                    new IrIdentifier("b"),
+                    IrNumericKind.Int64
+                )
             );
+    }
+
+    /// <summary>
+    /// A built-in numeric operator carries its operand kind (spec 012
+    /// FR-027): the promoted left operand's, so a <c>byte</c> division is an
+    /// <c>int</c> one and a shift keeps its left operand's kind.
+    /// </summary>
+    [Test]
+    [Arguments("long Get(long a, long b) => a / b;", IrNumericKind.Int64)]
+    [Arguments("ulong Get(ulong a, ulong b) => a % b;", IrNumericKind.UInt64)]
+    [Arguments("int Get(byte a, byte b) => a / b;", IrNumericKind.Int32)]
+    [Arguments("long Get(long a, int n) => a >> n;", IrNumericKind.Int64)]
+    [Arguments("bool Get(ulong a, ulong b) => a < b;", IrNumericKind.UInt64)]
+    [Arguments("long? Get(long? a, long b) => a - b;", IrNumericKind.Int64)]
+    public async Task BuiltInNumericOperator_CarriesItsOperandKind(
+        string method,
+        IrNumericKind kind
+    )
+    {
+        var ret = GetAt<IrReturnStatement>(ExtractFromMethod(method), 0);
+
+        await Assert.That(FindBinary(ret.Value).NumericKind).IsEqualTo(kind);
+    }
+
+    [Test]
+    [Arguments("bool Get(bool a, bool b) => a == b;")]
+    [Arguments("string Get(string a, string b) => a + b;")]
+    [Arguments("System.DayOfWeek Get(System.DayOfWeek a) => a | System.DayOfWeek.Monday;")]
+    public async Task NonNumericOperator_HasNoNumericKind(string method)
+    {
+        var ret = GetAt<IrReturnStatement>(ExtractFromMethod(method), 0);
+
+        await Assert.That(FindBinary(ret.Value).NumericKind).IsNull();
+    }
+
+    /// <summary>
+    /// Under the exact 64-bit lowering a 64-bit shift count is masked with
+    /// 63 as C# reads it, folded when constant (DECIDED-9); a 32-bit shift
+    /// and the shipped <c>Number</c> mode keep the count.
+    /// </summary>
+    [Test]
+    public async Task SixtyFourBitShiftCount_IsMaskedUnderTheExactLowering()
+    {
+        var exact = IrExtractionContext.Empty with { ExactInt64Lowering = true };
+
+        var variable = FindBinary(
+            GetAt<IrReturnStatement>(
+                ExtractFromMethod("long Get(long a, int n) => a >> n;", context: exact),
+                0
+            ).Value
+        );
+
+        var constant = FindBinary(
+            GetAt<IrReturnStatement>(
+                ExtractFromMethod("long Get(long a) => a >> 70;", context: exact),
+                0
+            ).Value
+        );
+
+        var narrow = FindBinary(
+            GetAt<IrReturnStatement>(
+                ExtractFromMethod("int Get(int a, int n) => a >> n;", context: exact),
+                0
+            ).Value
+        );
+
+        var shipped = FindBinary(
+            GetAt<IrReturnStatement>(ExtractFromMethod("long Get(long a) => a >> 70;"), 0).Value
+        );
+
+        await Assert
+            .That(variable.Right)
+            .IsEqualTo(
+                new IrBinaryExpression(
+                    new IrIdentifier("n"),
+                    IrBinaryOp.BitwiseAnd,
+                    new IrLiteral(63, IrLiteralKind.Int32),
+                    IrNumericKind.Int32
+                )
+            );
+
+        await Assert.That(constant.Right).IsEqualTo(new IrLiteral(6, IrLiteralKind.Int32));
+        await Assert.That(narrow.Right).IsEqualTo(new IrIdentifier("n"));
+        await Assert.That(shipped.Right).IsEqualTo(new IrLiteral(70, IrLiteralKind.Int32));
     }
 
     [Test]
@@ -561,7 +650,8 @@ public class IrExpressionExtractionTests
 
     private static IReadOnlyList<IrStatement> ExtractFromMethod(
         string method,
-        string? extraMembers = null
+        string? extraMembers = null,
+        IrExtractionContext? context = null
     )
     {
         var csharp = $$"""
@@ -580,10 +670,21 @@ public class IrExpressionExtractionTests
         var target = methods.Last();
 
         var isVoid = target.ReturnType is PredefinedTypeSyntax { Keyword.ValueText: "void" };
-        var extractor = new IrStatementExtractor(model, IrExtractionContext.Empty);
+        var extractor = new IrStatementExtractor(model, context ?? IrExtractionContext.Empty);
 
         return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid).Statements;
     }
+
+    /// <summary>The outermost binary node of <paramref name="value"/>, through a lifted guard.</summary>
+    private static IrBinaryExpression FindBinary(IrExpression? value) =>
+        value switch
+        {
+            IrBinaryExpression binary => binary,
+            IrConditionalExpression conditional => FindBinary(conditional.WhenFalse),
+            _ => throw new InvalidOperationException(
+                $"Expected a binary expression but found {value?.GetType().Name ?? "null"}."
+            ),
+        };
 
     private static T GetAt<T>(IReadOnlyList<IrStatement> statements, int index)
         where T : IrStatement

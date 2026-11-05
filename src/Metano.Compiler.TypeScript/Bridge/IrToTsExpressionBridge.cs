@@ -165,6 +165,9 @@ public static partial class IrToTsExpressionBridge
             return new TsCallExpression(new TsPropertyAccess(target, "set"), [key, value]);
         }
 
+        if (IrToTsInt64OperatorBridge.TryMap(bin, operand => Map(operand, context)) is { } int64)
+            return int64;
+
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, context);
 
