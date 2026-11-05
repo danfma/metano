@@ -56,19 +56,20 @@ interface ConformanceCase {
 | W15 | `episodeSummaryArray` | `[EpisodeSummary("a","b")]` | `[{"Id":"a","Title":"b"}]` | roundtrip | both |
 | W16 | `title` property with `[JsonFactory]` | `"  ok "` | reads as `"ok"` | read | ts (FR-026) |
 | W17 | `nBase` (nested) | `NMid(1,2)` | `{"t":"mid","B":2,"A":1}` | roundtrip | both |
-| W18 | `nMid` | `NLeaf(1,2,3)` | `{"u":"leaf","C":3,"B":2,"A":1}` (expected; confirmed in S8) | roundtrip | both |
+| W18 | `nMid` | `NLeaf(1,2,3)` | `{"u":"leaf","C":3,"B":2,"A":1}` (confirmed in S8) | roundtrip | both |
 | W19 | `oBase` (overridden property) | `ODer(…)` | `{"$type":"o","X":2,"Name":"x","Base":1}` | roundtrip | both |
 | W20 | `gBaseInt32` (closed generic base, FR-015) | `GDer(1, 2)` | `{"$type":"g","Extra":2,"Value":1}` | roundtrip | both |
-| W21 | `feed` (closed generic via property, FR-033) | `Feed(Page([EpisodeSummary("a","b")]))` | measured in S8 | roundtrip | both |
+| W21 | `feed` (closed generic via property, FR-033) | `Feed(Page([EpisodeSummary("a","b")]))` | `{"Latest":{"Items":[{"Id":"a","Title":"b"}]}}` (S8) | roundtrip | both |
 | W22 | `listClip` | JSON `null` | `null` | roundtrip | both (FR-037) |
 | W22b | `clip` | JSON `null` | `null` | roundtrip | both (FR-037, breaking: was an error on the TS side) |
 | W23 | `iEnumerableClip` | a `Set` / generator of clips (TS) | `[{"kind":"silence","Seconds":2}]` | write | both (FR-038) |
 | W24 | `shape` (interface base, FR-018) | `Sq(2)` | `{"$type":"sq","Side":2}` | roundtrip | both |
 | W25 | `shapeB` (interface base, `FallBackToBaseType`) | `OtherB(3)` (unregistered) | `{"Area":3}` | write | both |
 | W26 | `plainShape` (`[PlainObject]` variants, FR-019) | `Point(1)` / `{ x: 1 }` | `{"$type":"point","X":1}` | roundtrip (TS reads a plain object) | both |
-| W27 | `plainShape` | `Point3(1,2,3)` / `{ x: 1, y: 2, z: 3 }` | `{"$type":"point3","Y":2,"Z":3,"X":1}` (expected; confirmed in S8) | roundtrip | both (selects `Point3` by `testOrder`) |
-| W28 | `mixedShape` (class and `[PlainObject]` variants on one base) | one value of each family | measured in S8 | roundtrip | both |
-| V1… | one row per value-root kind: `string`, `int32`, `double`, `nullableInt32`, `guid`, `decimal`, `dateTime`, `dateOnly`, `timeOnly`, `dateTimeOffset`, `timeSpan`, numeric enum, `hashSetString`, `dictionaryStringEpisodeSummary`, `dictionaryInt32String` | fixed values | measured in S8 | roundtrip | both, or `divergent` with `stjJson` (spec.md Documented divergences) |
+| W27 | `plainShape` | `Point3(1,2,3)` / `{ x: 1, y: 2, z: 3 }` | `{"$type":"point3","Y":2,"Z":3,"X":1}` (confirmed in S8) | roundtrip | both (selects `Point3` by `testOrder`) |
+| W28a | `mixedBase` (class and `[PlainObject]` variants on one base) | `MixedClass(2)` | `{"$type":"cls","W":2}` (S8) | roundtrip | both |
+| W28b | `mixedBase` | the plain object `{ x: 5 }` (TS) / `MixedPoint(5)` (STJ) | `{"$type":"pt","X":5}` (S8) | roundtrip | both |
+| V1… | one row per value-root kind: `string`, `int32`, `double`, `nullableInt32`, `guid`, `decimal`, `dateTime`, `dateOnly`, `timeOnly`, `dateTimeOffset`, `timeSpan`, numeric enum, `hashSetString`, `dictionaryStringEpisodeSummary`, `dictionaryInt32String` | fixed values | shipped as rows V1–V19 in S8 (the integer-key dictionary goes through an `IntMapHolder` property: a non-string-key root is `MS0035`) | roundtrip | both, or `divergent` with `stjJson` (spec.md Documented divergences) |
 
 Web-context cases (`[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]`, FR-048), both sides
 unless noted, all measured in research.md R8:
@@ -77,11 +78,11 @@ unless noted, all measured in research.md R8:
 |---|---|---|---|---|
 | WEB1 | `imageClip` | `{"PATH":"a","seconds":1}` | `ImageClip("a", 1)` | read |
 | WEB2 | `imageClip` | `{"path":"a","Path":"b","seconds":1}` | `ImageClip("b", 1)` (last key wins) | read |
-| WEB3 | `nums` | `{"n":"5","m":"7","d":"1.10","l":["1",2],"map":{"k":"3"}}` | `n = 5`, `m = 7`, `d = 1.10`, `l = [1, 2]`, `map.k = 3` | read |
-| WEB4 | `nums` | `{"n":"+5"}`, `{"n":"007"}`, `{"n":"-5"}` | `5`, `7`, `-5` | read |
-| WEB5 | `nums` | `{"x":"1e2"}`, `{"x":"+1.5"}`, `{"x":"NaN"}`, `{"x":"Infinity"}`, `{"x":"-Infinity"}` | `100`, `1.5`, `NaN`, `Infinity`, `-Infinity` | read |
+| WEB3 | `nums` (full payload; `x` and `c` added for FR-045) | `{"n":"5","m":"7","d":"1.10","l":["1",2],"map":{"k":"3"}}` | `n = 5`, `m = 7`, `d = 1.10`, `l = [1, 2]`, `map.k = 3` | read |
+| WEB4 | `softNums` | `{"n":"+5"}`, `{"n":"007"}`, `{"n":"-5"}` | `5`, `7`, `-5` | read |
+| WEB5 | `softNums` | `{"x":"1e2"}`, `{"x":"+1.5"}`, `{"x":"NaN"}`, `{"x":"Infinity"}`, `{"x":"-Infinity"}` | `100`, `1.5`, `NaN`, `Infinity`, `-Infinity` | read |
 | WEB6 | `int32` | `"5"` | `5` | read |
-| WEB7 | `nums` | `Nums(n: 5, m: 7, d: 1.10, x: 2.5)` | `{"n":5,"m":7,"d":1.10,"x":2.5,"l":null,"map":null,"c":0}` | write |
+| WEB7 | `nums` | `Nums(n: 5, m: 7, d: 1.10, x: 2.5)` | `{"n":5,"m":7,"d":1.10,"x":2.5,"l":null,"map":null,"c":0}`; `divergent` — Metano writes `"d":1.1` (the decimal scale, DECIDED-23 f) | write |
 
 Read-only cases (input → value), direction `read`, both sides:
 `{"Path":"a","kind":"image","Seconds":1}` through the `AllowOutOfOrderMetadataProperties` context →
@@ -113,10 +114,19 @@ selects the variant).
 | E14 | `shape` | `Other()` (unregistered implementation) | write | `NotSupportedException` | `Runtime type 'Other' is not supported by polymorphic type 'IShape'.` |
 | E15 | `plainShape` | a plain object matching no guard (TS only) | write | `NotSupportedException` | `Runtime type 'Object' is not supported by polymorphic type 'Shape'.` (ts only: STJ has no shape-less value) |
 | E16 | web `clip` | `{"Kind":"image","path":"a","seconds":1}` | read | `NotSupportedException` | `The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.` |
-| E17 | web `nums` | `{"n":"5.0"}`, `{"n":" 5"}`, `{"n":"5 "}`, `{"n":""}`, `{"n":"1e2"}`, `{"n":"0x10"}` | read | `JsonException` | `The JSON value could not be converted to System.Int32.` |
-| E18 | web `nums` | `{"x":"nan"}`, `{"x":" 1.5"}`, `{"x":"0x1"}` | read | `JsonException` | `The JSON value could not be converted to System.Double.` (measured: `JsonException`; text pinned in S8) |
-| E19 | web `nums` | `{"c":"1"}` (enum) / `{"m":"null"}` (`int?`) | read | `JsonException` | `The JSON value could not be converted to Color.` / `… System.Nullable`1[System.Int32].` |
+| E17 | web `softNums` | `{"n":"5.0"}`, `{"n":" 5"}`, `{"n":"5 "}`, `{"n":""}`, `{"n":"1e2"}`, `{"n":"0x10"}` | read | `JsonException` | `The JSON value could not be converted to System.Int32.` |
+| E18 | web `softNums` | `{"x":"nan"}`, `{"x":" 1.5"}`, `{"x":"0x1"}` | read | `JsonException` | `The JSON value could not be converted to ` — STJ names the declaring type `SoftNums`, the runtime `System.Nullable\`1[System.Double]` (measured, pinned in S8; DECIDED-23 c) |
+| E19 | web `softNums` | `{"c":"1"}` (enum) / `{"m":"null"}` (`int?`) | read | `JsonException` | `The JSON value could not be converted to Color.` / `… System.Nullable`1[System.Int32].` |
 | E20 | web `iBase` | `{"$type":"1","x":5}` | read | `JsonException` | `Read unrecognized type discriminator id '1'.` |
+
+Slice S8 shipped these rows plus: W11c/W22b/R7/R8, the tag-not-first error E22, the
+depth-limit error E23 (33 nested groups through `clip`: the contract itself visits the 65th
+container, pinning DECIDED-15's reader message), the empty-text error E24, the exact-decimal
+reads D2a/D2b and the past-MaxValue error D4, the abstract-entry read error E25 (FR-017,
+DECIDED-12), the null-root rows N1–N10 (FR-037), the naming-policy rows NAM1/NAM2 and the member
+options rows M1–M5. Message rows compare prefixes: STJ appends the `Path` suffix (DECIDED-5) and
+names namespaced types in several messages (measured in S8: the missing-tag, runtime-type,
+abstract-type and nested-group messages carry `SampleJsonContracts.`).
 
 Type names inside TS messages are the runtime class names (`constructor.name`), which equal the C#
 simple names unless a `[Name]` override renames the class; fixtures use no overrides. An

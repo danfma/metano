@@ -1,0 +1,1196 @@
+[
+  {
+    "id": "W1",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "roundtrip",
+    "expectedClass": "ImageClip",
+    "json": "{\"kind\":\"image\",\"Path\":\"a.png\",\"Seconds\":1.5}"
+  },
+  {
+    "id": "W2",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "roundtrip",
+    "expectedClass": "SilenceClip",
+    "json": "{\"kind\":\"silence\",\"Seconds\":2}"
+  },
+  {
+    "id": "W3",
+    "context": "StudioJsonContext",
+    "getter": "imageClip",
+    "direction": "roundtrip",
+    "expectedClass": "ImageClip",
+    "json": "{\"Path\":\"a.png\",\"Seconds\":1.5}"
+  },
+  {
+    "id": "W4",
+    "context": "StudioJsonContext",
+    "getter": "timeline",
+    "direction": "roundtrip",
+    "expectedClass": "Timeline",
+    "json": "{\"Name\":\"t\",\"Main\":{\"kind\":\"image\",\"Path\":\"a.png\",\"Seconds\":1.5},\"Clips\":[{\"kind\":\"silence\",\"Seconds\":2}]}"
+  },
+  {
+    "id": "W5",
+    "context": "StudioJsonContext",
+    "getter": "listClip",
+    "direction": "roundtrip",
+    "json": "[{\"kind\":\"image\",\"Path\":\"a\",\"Seconds\":1.5},{\"kind\":\"silence\",\"Seconds\":2}]"
+  },
+  {
+    "id": "W6",
+    "context": "StudioJsonContext",
+    "getter": "dictionaryStringClip",
+    "direction": "roundtrip",
+    "json": "{\"x\":{\"kind\":\"silence\",\"Seconds\":2}}"
+  },
+  {
+    "id": "W7",
+    "context": "StudioJsonContext",
+    "getter": "hBase",
+    "direction": "roundtrip",
+    "expectedClass": "HLeaf",
+    "json": "{\"t\":\"leaf\",\"C\":3,\"B\":2,\"A\":1}"
+  },
+  {
+    "id": "W8",
+    "context": "StudioJsonContext",
+    "getter": "hMid",
+    "direction": "write",
+    "json": "{\"B\":2,\"A\":1}"
+  },
+  {
+    "id": "W9",
+    "context": "StudioJsonContext",
+    "getter": "iBase",
+    "direction": "roundtrip",
+    "expectedClass": "IA",
+    "json": "{\"$type\":1,\"X\":5}"
+  },
+  {
+    "id": "W10",
+    "context": "StudioJsonContext",
+    "getter": "iBase",
+    "direction": "roundtrip",
+    "expectedClass": "IS",
+    "json": "{\"$type\":\"s\",\"Y\":2}"
+  },
+  {
+    "id": "W11",
+    "context": "StudioJsonContext",
+    "getter": "dBase",
+    "direction": "roundtrip",
+    "expectedClass": "DBase",
+    "json": "{}"
+  },
+  {
+    "id": "W11b",
+    "context": "StudioJsonContext",
+    "getter": "sBase",
+    "direction": "roundtrip",
+    "expectedClass": "SBase",
+    "json": "{\"$type\":\"b\",\"V\":1}"
+  },
+  {
+    "id": "W11c",
+    "context": "StudioJsonContext",
+    "getter": "dBase",
+    "direction": "roundtrip",
+    "expectedClass": "DBer",
+    "json": "{\"$type\":\"d\",\"W\":2}"
+  },
+  {
+    "id": "W12",
+    "context": "StudioJsonContext",
+    "getter": "uNear",
+    "direction": "write",
+    "json": "{\"$type\":\"a\",\"B\":2,\"A\":1}"
+  },
+  {
+    "id": "W13",
+    "context": "StudioJsonContext",
+    "getter": "uBaseH",
+    "direction": "write",
+    "json": "{\"A\":1}"
+  },
+  {
+    "id": "W15",
+    "context": "StudioJsonContext",
+    "getter": "episodeSummaryArray",
+    "direction": "roundtrip",
+    "json": "[{\"Id\":\"a\",\"Title\":\"b\"}]"
+  },
+  {
+    "id": "W17",
+    "context": "StudioJsonContext",
+    "getter": "nBase",
+    "direction": "roundtrip",
+    "expectedClass": "NMid",
+    "json": "{\"t\":\"mid\",\"B\":2,\"A\":1}"
+  },
+  {
+    "id": "W18",
+    "context": "StudioJsonContext",
+    "getter": "nMid",
+    "direction": "roundtrip",
+    "expectedClass": "NLeaf",
+    "json": "{\"u\":\"leaf\",\"C\":3,\"B\":2,\"A\":1}"
+  },
+  {
+    "id": "W19",
+    "context": "StudioJsonContext",
+    "getter": "oBase",
+    "direction": "roundtrip",
+    "expectedClass": "ODer",
+    "json": "{\"$type\":\"o\",\"X\":2,\"Name\":\"x\",\"Base\":1}"
+  },
+  {
+    "id": "W20",
+    "context": "StudioJsonContext",
+    "getter": "gBaseInt32",
+    "direction": "roundtrip",
+    "expectedClass": "GDer",
+    "json": "{\"$type\":\"g\",\"Extra\":2,\"Value\":1}"
+  },
+  {
+    "id": "W21",
+    "context": "StudioJsonContext",
+    "getter": "feed",
+    "direction": "roundtrip",
+    "expectedClass": "Feed",
+    "json": "{\"Latest\":{\"Items\":[{\"Id\":\"a\",\"Title\":\"b\"}]}}"
+  },
+  {
+    "id": "W22",
+    "context": "StudioJsonContext",
+    "getter": "listClip",
+    "direction": "roundtrip",
+    "json": "null"
+  },
+  {
+    "id": "W22b",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "roundtrip",
+    "json": "null"
+  },
+  {
+    "id": "W24",
+    "context": "StudioJsonContext",
+    "getter": "iShape",
+    "direction": "roundtrip",
+    "expectedClass": "Sq",
+    "json": "{\"$type\":\"sq\",\"Side\":2}"
+  },
+  {
+    "id": "W25",
+    "context": "StudioJsonContext",
+    "getter": "iShapeB",
+    "direction": "write",
+    "json": "{\"Area\":3}"
+  },
+  {
+    "id": "W26",
+    "context": "StudioJsonContext",
+    "getter": "shape",
+    "direction": "roundtrip",
+    "expectedClass": "Point",
+    "json": "{\"$type\":\"point\",\"X\":1}"
+  },
+  {
+    "id": "W27",
+    "context": "StudioJsonContext",
+    "getter": "shape",
+    "direction": "roundtrip",
+    "expectedClass": "Point3",
+    "json": "{\"$type\":\"point3\",\"Y\":2,\"Z\":3,\"X\":1}"
+  },
+  {
+    "id": "W28a",
+    "context": "StudioJsonContext",
+    "getter": "mixedBase",
+    "direction": "roundtrip",
+    "expectedClass": "MixedClass",
+    "json": "{\"$type\":\"cls\",\"W\":2}"
+  },
+  {
+    "id": "W28b",
+    "context": "StudioJsonContext",
+    "getter": "mixedBase",
+    "direction": "roundtrip",
+    "expectedClass": "MixedPoint",
+    "json": "{\"$type\":\"pt\",\"X\":5}"
+  },
+  {
+    "id": "R1",
+    "context": "OutOfOrderJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "expectedClass": "ImageClip",
+    "json": "{\"Path\":\"a\",\"kind\":\"image\",\"Seconds\":1}"
+  },
+  {
+    "id": "R2",
+    "context": "IgnoreJsonContext",
+    "getter": "ignBase",
+    "direction": "read",
+    "expectedClass": "IgnBase",
+    "json": "{\"k\":\"zzz\",\"V\":1}"
+  },
+  {
+    "id": "R3",
+    "context": "StudioJsonContext",
+    "getter": "imageClip",
+    "direction": "read",
+    "expectedClass": "ImageClip",
+    "json": "{\"kind\":\"image\",\"Path\":\"a\",\"Seconds\":1}"
+  },
+  {
+    "id": "R4",
+    "context": "StudioJsonContext",
+    "getter": "hMid",
+    "direction": "read",
+    "expectedClass": "HMid",
+    "json": "{\"t\":\"leaf\",\"B\":2,\"A\":1,\"C\":3}"
+  },
+  {
+    "id": "R5",
+    "context": "StudioJsonContext",
+    "getter": "nBase",
+    "direction": "read",
+    "expectedClass": "NMid",
+    "json": "{\"t\":\"mid\",\"u\":\"leaf\",\"B\":2,\"A\":1,\"C\":3}"
+  },
+  {
+    "id": "R6",
+    "context": "StudioJsonContext",
+    "getter": "shape",
+    "direction": "read",
+    "expectedClass": "Point",
+    "json": "{\"$type\":\"point\",\"X\":1}"
+  },
+  {
+    "id": "R7",
+    "context": "MembersJsonContext",
+    "getter": "setClass",
+    "direction": "read",
+    "expectedClass": "SetClass",
+    "json": "{\"N\":1}"
+  },
+  {
+    "id": "R8",
+    "context": "StudioJsonContext",
+    "getter": "uNear",
+    "direction": "read",
+    "expectedClass": "UNearA",
+    "json": "{\"$type\":\"a\",\"B\":2,\"A\":1}"
+  },
+  {
+    "id": "V1",
+    "context": "StudioJsonContext",
+    "getter": "string",
+    "direction": "roundtrip",
+    "json": "\"hello\""
+  },
+  {
+    "id": "V2",
+    "context": "StudioJsonContext",
+    "getter": "int32",
+    "direction": "roundtrip",
+    "json": "42"
+  },
+  {
+    "id": "V3",
+    "context": "StudioJsonContext",
+    "getter": "double",
+    "direction": "roundtrip",
+    "json": "2.5"
+  },
+  {
+    "id": "V4",
+    "context": "StudioJsonContext",
+    "getter": "nullableInt32",
+    "direction": "roundtrip",
+    "json": "7"
+  },
+  {
+    "id": "V5",
+    "context": "StudioJsonContext",
+    "getter": "boolean",
+    "direction": "roundtrip",
+    "json": "true"
+  },
+  {
+    "id": "V6",
+    "context": "StudioJsonContext",
+    "getter": "guid",
+    "direction": "roundtrip",
+    "json": "\"81473d0e-4b8d-4d63-b8c7-2f9e1a5d3c47\""
+  },
+  {
+    "id": "V7a",
+    "context": "StudioJsonContext",
+    "getter": "decimal",
+    "direction": "roundtrip",
+    "json": "79228162514264337593543950335"
+  },
+  {
+    "id": "V7b",
+    "context": "StudioJsonContext",
+    "getter": "decimal",
+    "direction": "roundtrip",
+    "json": "0.0000001"
+  },
+  {
+    "id": "V8",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "roundtrip",
+    "json": "\"2026-01-02T03:04:05.678\""
+  },
+  {
+    "id": "V9",
+    "context": "StudioJsonContext",
+    "getter": "dateOnly",
+    "direction": "roundtrip",
+    "json": "\"2026-01-02\""
+  },
+  {
+    "id": "V10",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "roundtrip",
+    "json": "\"03:04:05.678\"",
+    "stjJson": "\"03:04:05.6780000\"",
+    "divergence": "TimeOnly fraction digits: System.Text.Json keeps 7 digits, Temporal trims them (DECIDED-16 class)"
+  },
+  {
+    "id": "V11",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "roundtrip",
+    "json": "\"2026-01-02T03:04:05+00:00[UTC]\"",
+    "stjJson": "\"2026-01-02T03:04:05+00:00\"",
+    "divergence": "DateTimeOffset offset text (DECIDED-16)"
+  },
+  {
+    "id": "V12",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "roundtrip",
+    "json": "\"PT1H2M3S\"",
+    "stjJson": "\"01:02:03\"",
+    "divergence": "TimeSpan wire text (DECIDED-16)"
+  },
+  {
+    "id": "V13",
+    "context": "StudioJsonContext",
+    "getter": "color",
+    "direction": "roundtrip",
+    "json": "1"
+  },
+  {
+    "id": "V14",
+    "context": "StudioJsonContext",
+    "getter": "flavor",
+    "direction": "roundtrip",
+    "json": "\"Sweet\"",
+    "stjJson": "0",
+    "divergence": "StringEnum wire type (baseline mapping)"
+  },
+  {
+    "id": "V15",
+    "context": "StudioJsonContext",
+    "getter": "hashSetString",
+    "direction": "roundtrip",
+    "json": "[\"a\",\"b\"]"
+  },
+  {
+    "id": "V16",
+    "context": "StudioJsonContext",
+    "getter": "dictionaryStringEpisodeSummary",
+    "direction": "roundtrip",
+    "json": "{\"x\":{\"Id\":\"a\",\"Title\":\"b\"}}"
+  },
+  {
+    "id": "V17",
+    "context": "StudioJsonContext",
+    "getter": "intMapHolder",
+    "direction": "roundtrip",
+    "json": "{\"ByKey\":{\"1\":\"a\",\"5\":\"e\"}}",
+    "stjJson": "{\"ByKey\":{\"5\":\"e\",\"1\":\"a\"}}",
+    "divergence": "Dictionary<int,…> key order"
+  },
+  {
+    "id": "V18",
+    "context": "StudioJsonContext",
+    "getter": "sPoint",
+    "direction": "roundtrip",
+    "json": "{\"X\":1,\"Y\":2}"
+  },
+  {
+    "id": "V19",
+    "context": "StudioJsonContext",
+    "getter": "listListInt32",
+    "direction": "roundtrip",
+    "json": "[[0]]"
+  },
+  {
+    "id": "N1",
+    "context": "StudioJsonContext",
+    "getter": "string",
+    "direction": "roundtrip",
+    "json": "null"
+  },
+  {
+    "id": "N2",
+    "context": "StudioJsonContext",
+    "getter": "nullableInt32",
+    "direction": "roundtrip",
+    "json": "null"
+  },
+  {
+    "id": "N3",
+    "context": "StudioJsonContext",
+    "getter": "double",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Double."
+    }
+  },
+  {
+    "id": "N4",
+    "context": "StudioJsonContext",
+    "getter": "guid",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Guid."
+    }
+  },
+  {
+    "id": "N5",
+    "context": "StudioJsonContext",
+    "getter": "decimal",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Decimal."
+    }
+  },
+  {
+    "id": "N6",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "N7",
+    "context": "StudioJsonContext",
+    "getter": "dateOnly",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateOnly."
+    }
+  },
+  {
+    "id": "N8",
+    "context": "StudioJsonContext",
+    "getter": "level",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Level."
+    }
+  },
+  {
+    "id": "N9",
+    "context": "StudioJsonContext",
+    "getter": "boolean",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Boolean."
+    }
+  },
+  {
+    "id": "N10",
+    "context": "StudioJsonContext",
+    "getter": "title",
+    "direction": "read",
+    "sides": [
+      "ts"
+    ],
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Title."
+    }
+  },
+  {
+    "id": "E1",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":\"video\",\"Seconds\":2}",
+    "error": {
+      "class": "JsonException",
+      "message": "Read unrecognized type discriminator id 'video'."
+    }
+  },
+  {
+    "id": "E2",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":\"Image\",\"Seconds\":2}",
+    "error": {
+      "class": "JsonException",
+      "message": "Read unrecognized type discriminator id 'Image'."
+    }
+  },
+  {
+    "id": "E3",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"Seconds\":2}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "The JSON payload for polymorphic interface or abstract type '"
+    },
+    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+  },
+  {
+    "id": "E4",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"Path\":\"a\",\"kind\":\"image\",\"Seconds\":1}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "The JSON payload for polymorphic interface or abstract type '"
+    },
+    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+  },
+  {
+    "id": "E5",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":null,\"Seconds\":2}",
+    "error": {
+      "class": "JsonException",
+      "message": "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current token type is 'Null'."
+    }
+  },
+  {
+    "id": "E5bTrue",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":true,\"Seconds\":2}",
+    "error": {
+      "class": "JsonException",
+      "message": "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current token type is 'True'."
+    }
+  },
+  {
+    "id": "E5bFalse",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":false,\"Seconds\":2}",
+    "error": {
+      "class": "JsonException",
+      "message": "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current token type is 'False'."
+    }
+  },
+  {
+    "id": "E5bObject",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":{},\"Seconds\":2}",
+    "error": {
+      "class": "JsonException",
+      "message": "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current token type is 'StartObject'."
+    }
+  },
+  {
+    "id": "E5bArray",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":[],\"Seconds\":2}",
+    "error": {
+      "class": "JsonException",
+      "message": "The '$id', '$ref' or '$type' metadata properties must be JSON strings. Current token type is 'StartArray'."
+    }
+  },
+  {
+    "id": "E6",
+    "context": "StudioJsonContext",
+    "getter": "iBase",
+    "direction": "read",
+    "json": "{\"$type\":\"1\",\"X\":5}",
+    "error": {
+      "class": "JsonException",
+      "message": "Read unrecognized type discriminator id '1'."
+    }
+  },
+  {
+    "id": "E7",
+    "context": "IgnoreJsonContext",
+    "getter": "ignAbs",
+    "direction": "read",
+    "json": "{\"k\":\"zzz\",\"V\":1}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "The JSON payload for polymorphic interface or abstract type '"
+    },
+    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+  },
+  {
+    "id": "E8",
+    "context": "StudioJsonContext",
+    "getter": "uFail",
+    "direction": "write",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "Runtime type '"
+    },
+    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+  },
+  {
+    "id": "E9",
+    "context": "StudioJsonContext",
+    "getter": "nBase",
+    "direction": "write",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "Runtime type '"
+    },
+    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+  },
+  {
+    "id": "E10",
+    "context": "StudioJsonContext",
+    "getter": "int32",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "E11",
+    "context": "StudioJsonContext",
+    "getter": "sPoint",
+    "direction": "read",
+    "json": "null",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.SPoint."
+    }
+  },
+  {
+    "id": "E12",
+    "context": "StudioJsonContext",
+    "getter": "group",
+    "direction": "write",
+    "error": {
+      "class": "JsonException",
+      "message": "A possible object cycle was detected."
+    }
+  },
+  {
+    "id": "E13",
+    "context": "StudioJsonContext",
+    "getter": "iShape",
+    "direction": "read",
+    "json": "{\"Side\":2}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "The JSON payload for polymorphic interface or abstract type '"
+    },
+    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+  },
+  {
+    "id": "E14",
+    "context": "StudioJsonContext",
+    "getter": "iShape",
+    "direction": "write",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "Runtime type '"
+    },
+    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+  },
+  {
+    "id": "E15",
+    "context": "StudioJsonContext",
+    "getter": "shape",
+    "direction": "write",
+    "sides": [
+      "ts"
+    ],
+    "error": {
+      "class": "NotSupportedException",
+      "message": "Runtime type '"
+    },
+    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+  },
+  {
+    "id": "E16",
+    "context": "WebJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"Kind\":\"image\",\"path\":\"a\",\"seconds\":1}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "The JSON payload for polymorphic interface or abstract type '"
+    },
+    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+  },
+  {
+    "id": "E17a",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"5.0\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E17b",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\" 5\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E17c",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"5 \"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E17d",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E17e",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"1e2\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E17f",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"0x10\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E18a",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\"nan\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E18b",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\" 1.5\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E18c",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\"0x1\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E19a",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "sides": [
+      "stj"
+    ],
+    "json": "{\"c\":\"1\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.SoftNums."
+    },
+    "divergence": "Unknown numeric enum value error text (DECIDED-20 c)"
+  },
+  {
+    "id": "E19b",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "sides": [
+      "ts"
+    ],
+    "json": "{\"c\":\"1\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "Invalid numeric enum value: \"1\"."
+    },
+    "divergence": "Unknown numeric enum value error text (DECIDED-20 c)"
+  },
+  {
+    "id": "E19c",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"null\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to "
+    },
+    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+  },
+  {
+    "id": "E20",
+    "context": "WebJsonContext",
+    "getter": "iBase",
+    "direction": "read",
+    "json": "{\"$type\":\"1\",\"x\":5}",
+    "error": {
+      "class": "JsonException",
+      "message": "Read unrecognized type discriminator id '1'."
+    }
+  },
+  {
+    "id": "E22",
+    "context": "StudioJsonContext",
+    "getter": "dBase",
+    "direction": "read",
+    "json": "{\"W\":2,\"$type\":\"d\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The metadata property is either not supported by the type or is not the first property in the deserialized JSON object."
+    }
+  },
+  {
+    "id": "E23",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "json": "{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"image\",\"Path\":\"p\",\"Seconds\":1}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+    "error": {
+      "class": "JsonException",
+      "message": "The maximum configured depth of 64 has been exceeded. Cannot read next JSON object."
+    }
+  },
+  {
+    "id": "E24",
+    "context": "StudioJsonContext",
+    "getter": "int32",
+    "direction": "read",
+    "json": "",
+    "error": {
+      "class": "JsonException",
+      "message": "The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true."
+    }
+  },
+  {
+    "id": "D2a",
+    "context": "StudioJsonContext",
+    "getter": "decimal",
+    "direction": "read",
+    "json": "12345678901234567890.123456789"
+  },
+  {
+    "id": "D2b",
+    "context": "StudioJsonContext",
+    "getter": "decimal",
+    "direction": "read",
+    "json": "0.33333333333333333333333333333333"
+  },
+  {
+    "id": "D4",
+    "context": "StudioJsonContext",
+    "getter": "decimal",
+    "direction": "read",
+    "json": "79228162514264337593543950335.5",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Decimal."
+    }
+  },
+  {
+    "id": "W14",
+    "context": "WebJsonContext",
+    "getter": "clip",
+    "direction": "roundtrip",
+    "expectedClass": "ImageClip",
+    "json": "{\"kind\":\"image\",\"path\":\"a\",\"seconds\":1.5}"
+  },
+  {
+    "id": "WEB1",
+    "context": "WebJsonContext",
+    "getter": "imageClip",
+    "direction": "read",
+    "expectedClass": "ImageClip",
+    "json": "{\"PATH\":\"a\",\"seconds\":1}"
+  },
+  {
+    "id": "WEB2",
+    "context": "WebJsonContext",
+    "getter": "imageClip",
+    "direction": "read",
+    "expectedClass": "ImageClip",
+    "json": "{\"path\":\"a\",\"Path\":\"b\",\"seconds\":1}"
+  },
+  {
+    "id": "WEB3",
+    "context": "WebJsonContext",
+    "getter": "nums",
+    "direction": "read",
+    "json": "{\"n\":\"5\",\"m\":\"7\",\"d\":\"1.10\",\"l\":[\"1\",2],\"map\":{\"k\":\"3\"},\"x\":2.5,\"c\":0}"
+  },
+  {
+    "id": "WEB3b",
+    "context": "WebJsonContext",
+    "getter": "nums",
+    "direction": "read",
+    "json": "{\"n\":0,\"d\":\"12345678901234567890.123456789\",\"x\":0,\"l\":[],\"map\":{},\"c\":0}"
+  },
+  {
+    "id": "WEB4a",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"5\"}"
+  },
+  {
+    "id": "WEB4b",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"+5\"}"
+  },
+  {
+    "id": "WEB4c",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"007\"}"
+  },
+  {
+    "id": "WEB4d",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"n\":\"-5\"}"
+  },
+  {
+    "id": "WEB5a",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\"1e2\"}"
+  },
+  {
+    "id": "WEB5b",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\"+1.5\"}"
+  },
+  {
+    "id": "WEB5c",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\"NaN\"}"
+  },
+  {
+    "id": "WEB5d",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\"Infinity\"}"
+  },
+  {
+    "id": "WEB5e",
+    "context": "WebJsonContext",
+    "getter": "softNums",
+    "direction": "read",
+    "json": "{\"x\":\"-Infinity\"}"
+  },
+  {
+    "id": "WEB6",
+    "context": "WebJsonContext",
+    "getter": "int32",
+    "direction": "read",
+    "json": "\"5\""
+  },
+  {
+    "id": "WEB7",
+    "context": "WebJsonContext",
+    "getter": "nums",
+    "direction": "write",
+    "json": "{\"n\":5,\"m\":7,\"d\":1.1,\"x\":2.5,\"l\":null,\"map\":null,\"c\":0}",
+    "stjJson": "{\"n\":5,\"m\":7,\"d\":1.10,\"x\":2.5,\"l\":null,\"map\":null,\"c\":0}",
+    "divergence": "Decimal trailing zeros (DECIDED-23 f)"
+  },
+  {
+    "id": "NAM1",
+    "context": "SnakeCaseJsonContext",
+    "getter": "stats",
+    "direction": "roundtrip",
+    "expectedClass": "Stats",
+    "json": "{\"count\":1,\"ratio\":2.5,\"user_name\":\"u\"}"
+  },
+  {
+    "id": "NAM2",
+    "context": "KebabCaseJsonContext",
+    "getter": "stats",
+    "direction": "roundtrip",
+    "expectedClass": "Stats",
+    "json": "{\"count\":1,\"ratio\":2.5,\"user-name\":\"u\"}"
+  },
+  {
+    "id": "M1",
+    "context": "MembersJsonContext",
+    "getter": "blob",
+    "direction": "roundtrip",
+    "expectedClass": "Blob",
+    "json": "{\"Data\":\"AQID\",\"Maybe\":\"//4=\",\"Numbers\":[1,2]}"
+  },
+  {
+    "id": "M2",
+    "context": "MembersJsonContext",
+    "getter": "account",
+    "direction": "roundtrip",
+    "expectedClass": "Account",
+    "json": "{\"Id\":\"x\",\"Name\":\"n\",\"Version\":3,\"Hits\":4}"
+  },
+  {
+    "id": "M3",
+    "context": "MembersJsonContext",
+    "getter": "ordBase",
+    "direction": "roundtrip",
+    "expectedClass": "OrdBase",
+    "json": "{\"First\":1,\"Third\":3,\"Second\":5}"
+  },
+  {
+    "id": "M4",
+    "context": "MembersJsonContext",
+    "getter": "initRec",
+    "direction": "roundtrip",
+    "expectedClass": "InitRec",
+    "json": "{\"A\":1,\"Note\":\"n\"}"
+  },
+  {
+    "id": "M5",
+    "context": "MembersJsonContext",
+    "getter": "setClass",
+    "direction": "roundtrip",
+    "expectedClass": "SetClass",
+    "json": "{\"N\":1,\"Count\":5}"
+  },
+  {
+    "id": "W16",
+    "context": "StudioJsonContext",
+    "getter": "title",
+    "direction": "read",
+    "sides": [
+      "ts"
+    ],
+    "json": "\"  ok \""
+  },
+  {
+    "id": "W16b",
+    "context": "StudioJsonContext",
+    "getter": "episodeRec",
+    "direction": "roundtrip",
+    "sides": [
+      "ts"
+    ],
+    "expectedClass": "EpisodeRec",
+    "json": "{\"Id\":\"e\",\"Note\":\"ok\"}"
+  },
+  {
+    "id": "E25",
+    "context": "StudioJsonContext",
+    "getter": "uNear",
+    "direction": "read",
+    "json": "{\"$type\":\"abs\",\"A\":1}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "Deserialization of interface or abstract types is not supported. Type '"
+    },
+    "divergence": "STJ names the abstract type with its namespace (DECIDED-23 g class)"
+  }
+]
