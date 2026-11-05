@@ -214,6 +214,10 @@ Product requirements added after the migration (normative; each one is traced by
      parameterless constructor, so `new S()` is legal anywhere whatever it declares.
   2. *Mixed accessibility.* Every declared instance constructor, whatever its accessibility,
      takes part in the emitted constructor: two or more go through the overload dispatcher (#435).
+     Spec 013 extends that dispatcher's contract — constructor factories (`fromXxx`), selector
+     symbols (`protected static readonly byXxx: unique symbol`) and direct call sites — and the
+     factories inherit the emitted accessibility this requirement defines
+     ([specs/013-overload-factories/spec.md](../013-overload-factories/spec.md), DECIDED-8).
      C# makes every other constructor of a type with a record positional or C# 12 primary
      constructor chain to it, so each branch inlines it: its promoted members are declared as
      fields (a member that only reads the parameter is not emitted as a getter), and the branch
