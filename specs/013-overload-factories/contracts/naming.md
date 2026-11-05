@@ -24,13 +24,18 @@ or module function; for virtual and interface members, the **root** group of § 
    (DECIDED-5). Defaults, nullability and `params` do not change the suffix. An extension method's
    receiver parameter (`this Base b`) is a parameter like any other in every pass, except when all
    overloads of the group declare it with the same name and type: then it is left out of every
-   pass (`Twice(this Base b, int x)` / `Twice(this Base b, string s)` → `twiceX` / `twiceS`, R11;
+   pass (a nullable annotation is part of the type: `this string? s` and `this string s` are
+   different receivers) (`Twice(this Base b, int x)` / `Twice(this Base b, string s)` → `twiceX` /
+   `twiceS`, R11;
    `Twice(this Base b, int x)` / `Twice(this Other o, int x)` → `twiceBX` / `twiceOX`).
 2. **Distinctness, pass 1.** If every suffix in `G` is distinct (ordinal), done.
 3. **Suffix, pass 2 — type spellings.** On any collision, **every** overload of `G` switches to the
    § Spellings of its parameter types, concatenated in order (`F(int a)` / `F(string a)` →
    `Int32` / `String`). Operator groups start here: their suffix is always the type spellings
-   (FR-033, today's convention).
+   (FR-033, today's convention). A conversion operator group (`op_Implicit` / `op_Explicit`)
+   names like a method, but its type spelling ends with `To` + the target type's spelling,
+   because C# tells conversions apart by their target type (`explicit operator int(Money m)` /
+   `explicit operator long(Money m)` → `MoneyToInt32` / `MoneyToInt64`).
 4. **Distinctness, pass 2.** If every suffix in `G` is distinct, done.
 5. **The climb (DECIDED-4).** While two or more overloads share a suffix, each overload of every
    colliding set qualifies **every parameter's spelling one more level**, and the suffixes are
@@ -45,13 +50,25 @@ or module function; for virtual and interface members, the **root** group of § 
    - a generic type, array, nullable or tuple climbs its named components (the generic definition
      and each type argument, the element, the inner type) together, each from its own chain. A
      type argument climbs only because the whole parameter spelling collided — never on its own;
-   - a type parameter spells its name and never climbs (`T`).
+   - a type parameter spells its name and never climbs (`T`);
+   - a part that names **the same declaration** (same assembly, same full name, same
+     containing-type construction) at the same position in every overload of the colliding set cannot tell them apart, so it does not climb:
+     `M(List<A.Id>)` / `M(List<B.Id>)` climbs `Id` only (`ListOfAId` / `ListOfBId`), and
+     `K(Numerics.Decimal d, Shared.Foo f)` / `K(Other.Decimal d, Shared.Foo f)` gives
+     `NumericsDecimalFoo` / `OtherDecimalFoo`;
+   - a generic containing type's qualifier carries its type arguments (`Outer<int>.Inner` →
+     `OuterOfInt32Inner`), so two constructions of it climb apart.
 6. **Dead end (FR-024).** When a colliding set can climb no further (every component reached
    `Global`, which needs two types with the same full name from different assemblies, an extern
    alias, or two identical `[Name]` values), the core reports `MS0003` (`AmbiguousConstruct`,
    error) at the later overload and appends a deterministic positional marker to each overload of
-   the set, in declaration order: `$1`, `$2`, … (`kGlobalDecimal$1`, `kGlobalDecimal$2`). The output
-   stays valid TypeScript; the error fails the build.
+   the set, in declaration order: `$1`, `$2`, … (`K(Lib1::N.Decimal d)` / `K(Lib2::N.Decimal d)` →
+   `kGlobalNDecimal$1`, `kGlobalNDecimal$2`). The output stays valid TypeScript; the error fails
+   the build. Other known dead ends: overloads that differ only in their generic arity
+   (`M<T>(int x)` / `M(int x)` → `mInt32$1` / `mInt32$2`, TS2393 before), and the rare
+   spellings the grammar does not separate (`Outer<A<B>, C>` / `Outer<A<B, C>>` both spell
+   `OuterOfAOfBC`; a containing type's type arguments are spelled unqualified and do not climb,
+   so `Outer<A.Id>.Inner` / `Outer<B.Id>.Inner` dead-end).
 7. **`[Name]` (FR-005, OQ-1).** An overload carrying `[Name("…")]` replaces its suffix with the
    attribute's value, capitalized, before step 2; it takes part in the distinctness checks like a
    computed suffix. An invalid identifier reports `MS0003`.

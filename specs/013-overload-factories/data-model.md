@@ -9,19 +9,27 @@ field order is indicative.
 ```csharp
 /// <summary>
 /// How one parameter type is spelled in an overload name (013 FR-002), captured
-/// from the Roslyn symbol at extraction time, next to SignatureText, because the
-/// IR type refs erase collections, delegates, unsigned primitives and containing
-/// types (research R7). Leaf is the unqualified spelling ("Int32", "ListOfInt32",
-/// "Decimal"); Qualifiers(depth) is the spelling climbed depth levels (FR-003).
+/// from the Roslyn symbol at extraction time, because the IR type refs erase
+/// collections, delegates, unsigned primitives and containing types (research R7).
+/// The spelling is its parts concatenated; Leaf is the unqualified spelling
+/// ("Int32", "ListOfInt32", "Decimal"), derived from the parts.
 /// </summary>
-public sealed record IrNamingSpelling(
-    string Leaf,
-    IReadOnlyList<IrNamingComponent> Components // primitives: empty (they never climb)
-);
+public sealed record IrNamingSpelling(IReadOnlyList<IrNamingComponent> Components)
+{
+    public string Leaf { get; }
+}
 
-/// <summary>A named component of a spelling and its own qualifier chain,
-/// nearest first: containing types, namespace segments, then "Global".</summary>
-public sealed record IrNamingComponent(string Name, IReadOnlyList<string> Chain);
+/// <summary>One part of a spelling. A part with an empty chain never climbs: a
+/// primitive's CLR name, a type parameter, or a structural word ("Of", "Array",
+/// "OrNull", "TupleOf", "RefOf"). A named type carries its qualifier chain, nearest
+/// first (containing types, namespace segments, then "Global"), and its declaration's
+/// identity (assembly + full name), which tells same-named declarations apart and
+/// stops a part shared by every colliding overload from climbing.</summary>
+public sealed record IrNamingComponent(
+    string Name,
+    IReadOnlyList<string> Chain,
+    string? TypeIdentity = null
+);
 
 /// <summary>
 /// The candidate names OverloadNamePolicy computed for one overload of a
@@ -29,11 +37,14 @@ public sealed record IrNamingComponent(string Name, IReadOnlyList<string> Chain)
 /// (DECIDED-18), so the emitted spelling may carry a `$`.
 /// </summary>
 public sealed record IrOverloadName(
-    IrOverloadRef Root,         // the root overload this name belongs to (FR-025)
-    string Suffix,              // "Amount", "WidthHeight", "NumericsDecimal", "Default"
-    string? FastPathCandidate,  // methods / operators / module functions: "addXY", "__addMoneyInt32"; null on constructors
-    bool QualifiedFactory       // FR-026: the factory candidate is from + TypeName + Suffix
+    string Suffix               // "Amount", "WidthHeight", "NumericsDecimal", "Default" (013a)
+    // Deferred to the slices that consume them:
+    // IrOverloadRef Root       — the root overload this name belongs to (FR-025, 013d)
+    // bool QualifiedFactory    — FR-026: the factory candidate is from + TypeName + Suffix (013b)
 );
+// The member candidates (`addXY`, `__addMoneyInt32`, `fromAmount`) are not IR: each target
+// composes them from its own emitted base name and the suffix (naming.md step 8), since
+// camelCasing and the `__` operator prefix are target spellings (NFR-002).
 
 /// <summary>A stable overload identity: the declaring type (for an interface root, the
 /// constructed interface, DECIDED-30), the member's C# name, and the overload's
