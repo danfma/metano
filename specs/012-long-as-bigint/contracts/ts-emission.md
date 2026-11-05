@@ -62,6 +62,7 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `(ulong)dm` | `uint64FromDecimal(dm)` | same |
 | `BigInteger x = l;` | `l` | same |
 | `(long)b` | `int64FromBigInteger(b)` | same (always checked) |
+| `(ulong)b` | `uint64FromBigInteger(b)` (`… for a UInt64.` outside the range, but `Arithmetic operation resulted in an overflow.` for a value in (int.MinValue, −1], as .NET 10 throws) | same (always checked) |
 | `(long)e` (enum) | `BigInt(e)` | same |
 | `(IntEnum)l` | `Number(BigInt.asIntN(32, l))` | `Number(checkedNarrow(l, 32, true))` |
 | `(LongEnum)l` | `Number(l)` | same |
