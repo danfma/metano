@@ -64,7 +64,9 @@ public sealed class Printer(string indent = "  ")
     /// Renders a single <see cref="TsType"/> to text. Used by bridges
     /// that need to embed a type fragment inside a synthesized raw
     /// statement (e.g., the <c>[ObjectArgs]</c> destructuring header).
-    /// Types never carry helper references, so the output is plain text.
+    /// Helper-bound type names come out in their deferred form
+    /// (<see cref="DeferredHelperNames"/>) — the caller must embed the text
+    /// in a statement that reaches <see cref="Print"/>, which resolves them.
     /// </summary>
     public string PrintType(string indent, TsType type)
     {
