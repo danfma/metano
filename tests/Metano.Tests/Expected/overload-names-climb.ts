@@ -1,5 +1,5 @@
 import { isInt32 } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import { Decimal } from "#/other/decimal";
 import type { A } from "./a";
 import type { B } from "./b";
 
