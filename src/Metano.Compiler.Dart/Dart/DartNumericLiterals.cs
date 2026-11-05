@@ -12,12 +12,15 @@ namespace Metano.Compiler.Dart;
 /// </summary>
 internal static class DartNumericLiterals
 {
+    /// <summary>
+    /// The invariant-culture text of a numeric <paramref name="literal"/>; a
+    /// <c>ulong</c> prints as the Dart <c>int</c> with the same 64 bits.
+    /// </summary>
     public static string TextOf(IrLiteral literal) =>
         literal.Value switch
         {
-            ulong unsigned when literal.Kind is IrLiteralKind.UInt64 => unchecked(
-                (long)unsigned
-            ).ToString(CultureInfo.InvariantCulture),
+            ulong unsigned when literal.Kind is IrLiteralKind.UInt64 => SameBitsAsInt64(unsigned)
+                .ToString(CultureInfo.InvariantCulture),
             IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
             var other => other?.ToString() ?? "null",
         };
@@ -33,4 +36,7 @@ internal static class DartNumericLiterals
                     or IrLiteralKind.Float64
             } literal
         && TextOf(literal).StartsWith('-');
+
+    /// <summary>The two's-complement <c>long</c> with the bits of <paramref name="value"/>.</summary>
+    private static long SameBitsAsInt64(ulong value) => unchecked((long)value);
 }

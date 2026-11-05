@@ -58,15 +58,11 @@ public sealed partial class IrExpressionExtractor
         // TODO(012b): the literal kind follows the operand's type, not the
         // converted one, so `long x = unchecked((int)…)` folds to an Int32
         // literal; the 64-bit conversions of slice 012b settle it.
-        var digits = Convert.ToString(value, CultureInfo.InvariantCulture)!;
-
-        if (convertedType?.SpecialType == SpecialType.System_Decimal)
-            return new IrLiteral(digits, IrLiteralKind.Decimal);
-
-        if (convertedType?.ToDisplayString() == "System.Numerics.BigInteger")
-            return new IrLiteral(digits, IrLiteralKind.BigInteger);
-
-        return ClassifyNumeric(WidenedToInt32(value));
+        return ClassifyNumericForConvertedType(
+            Convert.ToString(value, CultureInfo.InvariantCulture)!,
+            WidenedToInt32(value),
+            convertedType
+        );
     }
 
     /// <summary>

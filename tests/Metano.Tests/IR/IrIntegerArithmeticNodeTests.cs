@@ -114,6 +114,7 @@ public class IrIntegerArithmeticNodeTests
             "Count",
             new IrMemberOrigin("Totals", "Count", IsStatic: true, IsDeclaringTypeNoContainer: true)
         );
+
         var rewriter = new DartIrRewriter(DeclarativeMappingRegistry.Empty);
 
         var rewritten = rewriter.Rewrite(Wrapped(containerlessRead));
@@ -176,10 +177,15 @@ public class IrIntegerArithmeticNodeTests
             new IrReturnStatement(Wrapped(outCall))
         );
 
-        var result = (IrReturnStatement)lowered[^1];
+        var binding = (IrTupleDeconstruction)lowered[0];
 
-        await Assert.That(lowered.Count).IsGreaterThan(1);
-        await Assert.That(OperandOf(result.Value)).IsNotTypeOf<IrOutArgumentCall>();
+        await Assert.That(lowered.Count).IsEqualTo(2);
+        await Assert
+            .That(string.Join(",", binding.Elements.Select(e => e.Name)))
+            .IsEqualTo("$result0,value");
+        await Assert
+            .That(lowered[1])
+            .IsEqualTo(new IrReturnStatement(Wrapped(new IrIdentifier("$result0"))));
     }
 
     [Test]
