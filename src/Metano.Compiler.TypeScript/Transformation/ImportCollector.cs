@@ -685,12 +685,9 @@ public sealed class ImportCollector(
     /// </summary>
     private HashSet<string> NamesClaimedByRuntime(ImportCollectionSink sink)
     {
-        var claimed = new HashSet<string>(StringComparer.Ordinal);
-
-        claimed.UnionWith(sink.RuntimeHelperReferences);
-        claimed.UnionWith(sink.RuntimeHelperTypeReferences);
-        claimed.UnionWith(sink.TemplateRuntimeHelpers);
-        claimed.UnionWith(sink.LinqPipeHelpers);
+        // The aliasable channels are the runtime's claims; the IR-scanner
+        // requirements add the names a mapped import declares.
+        var claimed = AliasableHelperNames(sink);
 
         if (_irRuntimeRequirements is { Count: > 0 } requirements)
         {
@@ -870,9 +867,9 @@ public sealed class ImportCollector(
 
         foreach (var import in imports)
         {
-            var isStamplable =
+            var isStampable =
                 IsRuntimeNamedImportLine(import) && !import.IsDefault && !import.IsNamespace;
-            var aliased = isStamplable
+            var aliased = isStampable
                 ? import
                     .Names.Where(aliases.ContainsKey)
                     .ToDictionary(name => name, name => aliases[name], Ordinal)
