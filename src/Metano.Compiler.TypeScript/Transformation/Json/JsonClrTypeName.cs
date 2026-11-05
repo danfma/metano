@@ -33,12 +33,22 @@ internal static class JsonClrTypeName
         if (type.ContainingType is { } container)
             return $"{QualifiedMetadataName(container)}+{type.MetadataName}";
 
-        var ns = type.ContainingNamespace;
+        var containingNamespace = type.ContainingNamespace;
 
-        return ns is null || ns.IsGlobalNamespace
+        return containingNamespace is null || containingNamespace.IsGlobalNamespace
             ? type.MetadataName
-            : $"{ns.ToDisplayString()}.{type.MetadataName}";
+            : $"{NamespaceMetadataName(containingNamespace)}.{type.MetadataName}";
     }
+
+    /// <summary>
+    /// The dotted metadata names of the namespace chain, so an
+    /// <c>@</c>-escaped keyword segment (<c>@event</c>) prints plain, as the
+    /// runtime type does.
+    /// </summary>
+    private static string NamespaceMetadataName(INamespaceSymbol containingNamespace) =>
+        containingNamespace.ContainingNamespace is { IsGlobalNamespace: false } parent
+            ? $"{NamespaceMetadataName(parent)}.{containingNamespace.MetadataName}"
+            : containingNamespace.MetadataName;
 
     /// <summary>The type arguments of the containers, outermost first, then the type's own.</summary>
     private static IEnumerable<ITypeSymbol> TypeArgumentChainOf(INamedTypeSymbol type)

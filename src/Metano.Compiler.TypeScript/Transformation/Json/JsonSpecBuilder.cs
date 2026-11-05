@@ -98,36 +98,26 @@ internal sealed class JsonSpecBuilder
     private static TsObjectLiteral BuildValueSpecObject(
         ITypeSymbol type,
         TsExpression descriptor
-    ) =>
-        new(
-            new[]
-            {
-                new TsObjectProperty("descriptor", descriptor),
-                ValueTypeProperty(type),
-                TypeNameProperty(type),
-            }
-                .OfType<TsObjectProperty>()
-                .ToList()
-        );
+    ) => new([new TsObjectProperty("descriptor", descriptor), .. ValueTypeProperties(type)]);
 
     /// <summary>
-    /// <c>valueType: true</c> for a C# value type, whose JSON <c>null</c>
-    /// throws <c>JsonException</c> as in System.Text.Json (FR-037); absent for
-    /// a reference type and for <c>Nullable&lt;T&gt;</c>, which read
+    /// <c>valueType: true, typeName: "MyApp.SPoint"</c> for a C# value type,
+    /// whose JSON <c>null</c> throws <c>JsonException</c> naming that type as
+    /// System.Text.Json does (FR-037, <see cref="JsonClrTypeName"/>); nothing
+    /// for a reference type and for <c>Nullable&lt;T&gt;</c>, which read
     /// <c>null</c> as <c>null</c>.
     /// </summary>
-    private static TsObjectProperty? ValueTypeProperty(ITypeSymbol type) =>
-        RejectsNull(type) ? new TsObjectProperty("valueType", new TsLiteral("true")) : null;
+    private static IEnumerable<TsObjectProperty> ValueTypeProperties(ITypeSymbol type)
+    {
+        if (!RejectsNull(type))
+            yield break;
 
-    /// <summary>
-    /// <c>typeName: "MyApp.SPoint"</c> next to <c>valueType</c>: the name
-    /// System.Text.Json prints when JSON <c>null</c> cannot be converted to
-    /// the type (<see cref="JsonClrTypeName"/>).
-    /// </summary>
-    private static TsObjectProperty? TypeNameProperty(ITypeSymbol type) =>
-        RejectsNull(type)
-            ? new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type)))
-            : null;
+        yield return new TsObjectProperty("valueType", new TsLiteral("true"));
+        yield return new TsObjectProperty(
+            "typeName",
+            new TsStringLiteral(JsonClrTypeName.Of(type))
+        );
+    }
 
     private static bool RejectsNull(ITypeSymbol type) =>
         type.IsValueType && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T;
@@ -221,20 +211,26 @@ internal sealed class JsonSpecBuilder
             )
         );
 
-        var specProperties = new[]
-        {
+        TsObjectProperty?[] leadingProperties =
+        [
             TypeProperty(targetType, tsTypeName),
             BaseLinkProperty(targetType),
             factoryProperty,
             propertiesProperty,
-            ValueTypeProperty(targetType),
-            TypeNameProperty(targetType),
+        ];
+
+        TsObjectProperty?[] trailingProperties =
+        [
             IgnoredPropertiesProperty(targetType),
             AssignIfPresentProperty(targetType),
             polymorphism is null ? null : _polymorphismSpecs.Build(polymorphism),
-        };
+        ];
 
-        return new TsObjectLiteral(specProperties.OfType<TsObjectProperty>().ToList());
+        return new TsObjectLiteral([
+            .. leadingProperties.OfType<TsObjectProperty>(),
+            .. ValueTypeProperties(targetType),
+            .. trailingProperties.OfType<TsObjectProperty>(),
+        ]);
     }
 
     /// <summary>
