@@ -279,8 +279,12 @@ public class InternalVisibilityMappingTests
                     + "  constructor(text: string);\n"
                     + "  constructor(...args: unknown[]) {"
             );
-        await Assert.That(output).DoesNotContain("@internal");
+        await Assert.That(output).DoesNotContain("@internal */\n  constructor(");
         await Assert.That(output).DoesNotContain("private constructor(");
+        // Each factory keeps its own overload's visibility (spec 013 DECIDED-17).
+        await Assert
+            .That(output)
+            .Contains("  /** @internal */\n  static fromValue(value: number): Gauge {");
     }
 
     [Test]

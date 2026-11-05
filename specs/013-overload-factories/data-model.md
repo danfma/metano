@@ -40,8 +40,9 @@ public sealed record IrOverloadName(
     string Suffix               // "Amount", "WidthHeight", "NumericsDecimal", "Default" (013a)
     // Deferred to the slices that consume them:
     // IrOverloadRef Root       — the root overload this name belongs to (FR-025, 013d)
-    // bool QualifiedFactory    — FR-026: the factory candidate is from + TypeName + Suffix (013b)
 );
+// FR-026 (from + TypeName + Suffix) is not IR: it compares the TypeScript static side a class
+// inherits, so the TypeScript claim pass decides it (013b, `TsOverloadClaimPass`, DECIDED-18).
 // The member candidates (`addXY`, `__addMoneyInt32`, `fromAmount`) are not IR: each target
 // composes them from its own emitted base name and the suffix (naming.md step 8), since
 // camelCasing and the `__` operator prefix are target spellings (NFR-002).
@@ -56,6 +57,8 @@ public IrNamingSpelling? NamingSpelling { get; init; }   // null outside dispatc
 // IrConstructorDeclaration and IrMethodDeclaration gain:
 public IrOverloadName? OverloadName { get; init; }       // null: not part of a dispatched group (NFR-001)
 public string? SignatureText { get; init; }              // constructors: "Money(decimal amount)" (D2)
+// IrConstructorDeclaration gains:
+public int DeclarationOrdinal { get; init; }             // declaration order of a dispatched set (013b): selectors and factories follow it
 // IrMethodDeclaration gains:
 public bool IsOverride { get; init; }                    // emits `override` on the root's fast path (FR-030), with the root's mapped visibility
 public bool IsHiding { get; init; }                      // `new`: a non-root candidate, claimed against inherited members (claim step 7)

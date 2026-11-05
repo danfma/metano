@@ -428,6 +428,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             jsonConstructedTypes
         );
 
+        _overloadClaims = new TsOverloadClaimsRegistry(Context);
+
         var files = new List<TsSourceFile>();
         var groups = new List<TypeFileGroup>();
         var perGroupClosure = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -634,6 +636,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private IAssemblySymbol? _currentAssembly;
     private PathNaming _pathNaming = new("");
     private ConstructorAccessFacts _constructorAccessFacts = ConstructorAccessFacts.Empty;
+    private TsOverloadClaimsRegistry? _overloadClaims;
 
     /// <summary>
     /// Built once after the setup phase of <see cref="TransformAll"/> completes.
@@ -642,6 +645,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// to fail fast if a per-type helper is invoked before <see cref="TransformAll"/>.
     /// </summary>
     private TypeScriptTransformContext? _context;
+
+    /// <summary>
+    /// The claim results of the classes this transform emits (spec 013 FR-004),
+    /// created by the setup phase of <see cref="TransformAll"/>.
+    /// </summary>
+    private TsOverloadClaimsRegistry OverloadClaims =>
+        _overloadClaims
+        ?? throw new InvalidOperationException(
+            "The overload claims are not yet initialized — TransformAll() must complete "
+                + "its setup phase before any per-type helper runs."
+        );
 
     /// <summary>Non-nullable view of <see cref="_context"/> — every per-type helper goes
     /// through this property so a misuse (helper called before <see cref="TransformAll"/>
@@ -907,7 +921,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
         if (TryEmitPlainObjectViaIr(type, sink, irCache))
             return true;
-        new IrToTsClassEmitter(Context, _constructorAccessFacts).Transform(type, sink);
+        new IrToTsClassEmitter(Context, _constructorAccessFacts, OverloadClaims).Transform(
+            type,
+            sink
+        );
         return true;
     }
 

@@ -432,4 +432,18 @@ public static class DiagnosticCodes
     /// 2^31 or more, which JS bit operators on <c>number</c> truncate. A warning at
     /// the member (spec 012 FR-058).</summary>
     public const string Int64EnumValuePrecision = "MS0064";
+
+    /// <summary>MS0067 — the spec 013 claim pass renamed a generated factory, selector
+    /// or fast path (per suffix, <c>$</c> appended until free) because its candidate was
+    /// already taken: by a user-written member (reason 1) or by an earlier synthesized
+    /// name (reason 2). The message names the candidate, the claimant and the emitted
+    /// name. A warning at the renamed overload (spec 013 FR-004).</summary>
+    public const string OverloadNameShadowed = "MS0067";
+
+    /// <summary>MS0068 — a user-written member would take over a generated name it does
+    /// not own: a derived user static has the name of an inherited generated factory,
+    /// which breaks the TypeScript static side (TS2417). User names are never renamed,
+    /// so the build fails and the message points at <c>[Name]</c>. An error at the user
+    /// member (spec 013 FR-034).</summary>
+    public const string OverloadFastPathHijacked = "MS0068";
 }

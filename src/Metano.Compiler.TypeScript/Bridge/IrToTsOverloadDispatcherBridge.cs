@@ -49,16 +49,21 @@ public static class IrToTsOverloadDispatcherBridge
     /// The containing class's type parameters, which a parameter's type check
     /// resolves its type parameters against after the method's own.
     /// </param>
+    /// <param name="fastPathNameOf">
+    /// The fast-path name of each overload, as the class's claim pass named it
+    /// (<see cref="TsOverloadClaims.FastPathNameOf"/>).
+    /// </param>
     internal static IReadOnlyList<TsClassMember> BuildMethod(
         IrMethodDeclaration primary,
         string containingTypeName,
         IReadOnlyList<IrTypeParameter> classTypeParameters,
+        Func<IrMethodDeclaration, string> fastPathNameOf,
         IrToTsBridgeContext context
     )
     {
         var primaryName = TypeScriptNaming.ToCamelCaseMember(primary.Name);
         var typeOverrides = context.TypeOverrides;
-        var plan = PlanOverloadGroup(CollectOverloads(primary), primaryName, typeOverrides);
+        var plan = PlanOverloadGroup(CollectOverloads(primary), fastPathNameOf, typeOverrides);
 
         if (plan is null)
             return [];
@@ -136,7 +141,11 @@ public static class IrToTsOverloadDispatcherBridge
     )
     {
         var plan =
-            PlanOverloadGroup(overloads, functionName, typeOverrides: null)
+            PlanOverloadGroup(
+                overloads,
+                overload => OverloadFastPathName.Of(functionName, overload),
+                typeOverrides: null
+            )
             ?? throw new ArgumentException(
                 "An overload group needs two or more methods.",
                 nameof(overloads)
@@ -193,7 +202,7 @@ public static class IrToTsOverloadDispatcherBridge
     /// </summary>
     private static OverloadGroupPlan? PlanOverloadGroup(
         IReadOnlyList<IrMethodDeclaration> overloads,
-        string dispatcherName,
+        Func<IrMethodDeclaration, string> fastPathNameOf,
         IrToTsTypeOverrides? typeOverrides
     )
     {
@@ -209,7 +218,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         return new OverloadGroupPlan(
             sorted,
-            ComputeFastPathNames(dispatcherName, sorted),
+            sorted.Select(fastPathNameOf).ToList(),
             isAsync,
             ResolveCommonReturnType(sorted, isAsync, typeOverrides),
             sorted
@@ -511,9 +520,4 @@ public static class IrToTsOverloadDispatcherBridge
         receiver is null
             ? new TsIdentifier(fastPathName)
             : new TsPropertyAccess(receiver, fastPathName);
-
-    private static List<string> ComputeFastPathNames(
-        string dispatcherName,
-        IReadOnlyList<IrMethodDeclaration> overloads
-    ) => overloads.Select(method => OverloadFastPathName.Of(dispatcherName, method)).ToList();
 }

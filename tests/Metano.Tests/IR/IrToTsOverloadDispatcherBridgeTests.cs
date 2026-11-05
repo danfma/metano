@@ -3,6 +3,7 @@ using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
+using Metano.Compiler.TypeScript.Transformation;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -35,6 +36,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             primary,
             containingTypeName,
             [],
+            CandidateFastPathNames(primary),
             IrToTsBridgeContext.For(null)
         );
 
@@ -78,6 +80,7 @@ public class IrToTsOverloadDispatcherBridgeTests
                 primary,
                 containingTypeName,
                 [],
+                CandidateFastPathNames(primary),
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -109,6 +112,7 @@ public class IrToTsOverloadDispatcherBridgeTests
                 primary,
                 containingTypeName,
                 [],
+                CandidateFastPathNames(primary),
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -139,6 +143,7 @@ public class IrToTsOverloadDispatcherBridgeTests
                 primary,
                 containingTypeName,
                 [],
+                CandidateFastPathNames(primary),
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -168,6 +173,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             primary,
             containingTypeName,
             [],
+            CandidateFastPathNames(primary),
             IrToTsBridgeContext.For(null)
         );
         var printed = PrintMembers(members, containingTypeName);
@@ -206,6 +212,7 @@ public class IrToTsOverloadDispatcherBridgeTests
                 primary,
                 containingTypeName,
                 [],
+                CandidateFastPathNames(primary),
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -239,6 +246,7 @@ public class IrToTsOverloadDispatcherBridgeTests
                 primary,
                 containingTypeName,
                 [],
+                CandidateFastPathNames(primary),
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -271,6 +279,7 @@ public class IrToTsOverloadDispatcherBridgeTests
                 primary,
                 containingTypeName,
                 [],
+                CandidateFastPathNames(primary),
                 IrToTsBridgeContext.For(null)
             ),
             containingTypeName
@@ -297,6 +306,7 @@ public class IrToTsOverloadDispatcherBridgeTests
             primary,
             containingTypeName,
             [],
+            CandidateFastPathNames(primary),
             IrToTsBridgeContext.For(null)
         );
         await Assert.That(members).IsEmpty();
@@ -341,4 +351,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         var end = printed.LastIndexOf('}');
         return printed[start..end].Trim();
     }
+
+    /// <summary>The fast paths' candidate names, as a class without collisions claims them.</summary>
+    private static Func<IrMethodDeclaration, string> CandidateFastPathNames(
+        IrMethodDeclaration primary
+    ) =>
+        overload =>
+            OverloadFastPathName.Of(TypeScriptNaming.ToCamelCaseMember(primary.Name), overload);
 }

@@ -17,17 +17,24 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </list>
 /// A single array passed to a <c>params</c> parameter (C#'s normal form) is
 /// deliberately not recognized: no call site emits it, and the rest-parameter
-/// signature does not advertise it.
+/// signature does not advertise it. A constructor's selector form (spec 013
+/// FR-009) passes the overload's arguments after its selector
+/// (<see cref="AfterSelector"/>).
 /// </summary>
 internal sealed class OverloadArgumentShape
 {
     private const string Arguments = "args";
 
     private readonly IReadOnlyList<IrParameter> _parameters;
+    private readonly int _firstArgument;
 
     public OverloadArgumentShape(IReadOnlyList<IrParameter> parameters)
+        : this(parameters, firstArgument: 0) { }
+
+    private OverloadArgumentShape(IReadOnlyList<IrParameter> parameters, int firstArgument)
     {
         _parameters = parameters;
+        _firstArgument = firstArgument;
         Rest = parameters is [.., { IsParams: true } rest] ? rest : null;
         FixedCount = Rest is null ? parameters.Count : parameters.Count - 1;
         RequiredCount = parameters.Take(FixedCount).TakeWhile(p => !p.CanBeOmitted).Count();
@@ -46,6 +53,13 @@ internal sealed class OverloadArgumentShape
     public bool HasOptionalArguments => RequiredCount < FixedCount;
 
     /// <summary>
+    /// The overload's arguments as its selector form passes them, after the
+    /// selector symbol at <c>args[0]</c>.
+    /// </summary>
+    public static OverloadArgumentShape AfterSelector(IReadOnlyList<IrParameter> parameters) =>
+        new(parameters, firstArgument: 1);
+
+    /// <summary>
     /// The runtime test that the dispatcher's <c>args</c> match this
     /// overload: the argument count, then each argument's type check.
     /// </summary>
@@ -54,7 +68,7 @@ internal sealed class OverloadArgumentShape
     {
         var fixedChecks = _parameters
             .Take(FixedCount)
-            .Select((parameter, index) => FixedArgumentCheck(parameter, index, scope));
+            .Select((parameter, index) => FixedArgumentCheck(parameter, PositionOf(index), scope));
 
         IReadOnlyList<TsExpression?> clauses =
         [
@@ -69,10 +83,10 @@ internal sealed class OverloadArgumentShape
     /// <summary>
     /// The argument bound to the parameter at <paramref name="index"/>:
     /// <c>args[index]</c>, or the trailing <c>args.slice(index)</c> for the
-    /// <c>params</c> parameter.
+    /// <c>params</c> parameter (each shifted past a selector).
     /// </summary>
     public TsExpression ValueOf(int index) =>
-        index == FixedCount && Rest is not null ? TrailingArguments() : ArgumentAt(index);
+        index == FixedCount && Rest is not null ? TrailingArguments() : PositionOf(index);
 
     /// <summary>
     /// The argument-count checks: <c>args.length === n</c> when every
@@ -124,8 +138,10 @@ internal sealed class OverloadArgumentShape
     private TsExpression TrailingArguments() =>
         new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier(Arguments), "slice"),
-            [new TsLiteral(FixedCount.ToString())]
+            [new TsLiteral((_firstArgument + FixedCount).ToString())]
         );
+
+    private TsExpression PositionOf(int index) => ArgumentAt(_firstArgument + index);
 
     /// <summary>The dispatcher's argument at <paramref name="index"/>: <c>args[index]</c>.</summary>
     internal static TsExpression ArgumentAt(int index) =>
@@ -138,25 +154,23 @@ internal sealed class OverloadArgumentShape
     internal static TsExpression IsOmitted(TsExpression argument) =>
         new TsBinaryExpression(argument, "===", new TsIdentifier("undefined"));
 
-    private static TsExpression CountCheck(string comparison, int count) =>
+    private TsExpression CountCheck(string comparison, int count) =>
         new TsBinaryExpression(
             new TsPropertyAccess(new TsIdentifier(Arguments), "length"),
             comparison,
-            new TsLiteral(count.ToString())
+            new TsLiteral((_firstArgument + count).ToString())
         );
 
     /// <summary>
-    /// The type check of the argument at <paramref name="index"/>; an omitted
+    /// The type check of <paramref name="argument"/>; an omitted
     /// optional argument (<c>undefined</c>) skips it.
     /// </summary>
     private static TsExpression? FixedArgumentCheck(
         IrParameter parameter,
-        int index,
+        TsExpression argument,
         TypeCheckScope scope
     )
     {
-        var argument = ArgumentAt(index);
-
         if (IrTypeCheckBuilder.Generate(parameter.Type, argument, scope) is not { } check)
             return null;
 

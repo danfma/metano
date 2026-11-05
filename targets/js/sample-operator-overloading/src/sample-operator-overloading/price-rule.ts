@@ -4,11 +4,34 @@ import { Decimal } from "decimal.js";
 import { Currency } from "./currency";
 
 export class PriceRule {
+  protected static readonly byPriceRulePercent: unique symbol = Symbol("PriceRule(int percent)");
+
+  protected static readonly byPriceRuleCodeTiers: unique symbol = Symbol(
+    "PriceRule(string code, params int[] tiers)",
+  );
+
   readonly description: string;
 
+  constructor(overload: typeof PriceRule.byPriceRulePercent, percent?: number);
+  constructor(overload: typeof PriceRule.byPriceRuleCodeTiers, code: string, ...tiers: number[]);
   constructor(percent?: number);
   constructor(code: string, ...tiers: number[]);
   constructor(...args: unknown[]) {
+    if (typeof args[0] === "symbol" && args[0] === PriceRule.byPriceRulePercent) {
+      const percent = (args[1] === undefined ? 10 : args[1]) as number;
+      this.description = `${percent}% off`;
+
+      return;
+    }
+
+    if (typeof args[0] === "symbol" && args[0] === PriceRule.byPriceRuleCodeTiers) {
+      const code = args[1] as string;
+      const tiers = args.slice(2) as number[];
+      this.description = `${code} with ${tiers.length} tiers`;
+
+      return;
+    }
+
     if (args.length <= 1 && (args[0] === undefined || isInt32(args[0]))) {
       const percent = (args[0] === undefined ? 10 : args[0]) as number;
       this.description = `${percent}% off`;
@@ -25,6 +48,14 @@ export class PriceRule {
     }
 
     throw new Error("No matching constructor");
+  }
+
+  static fromPercent(percent: number = 10): PriceRule {
+    return new PriceRule(PriceRule.byPriceRulePercent, percent);
+  }
+
+  static fromCodeTiers(code: string, ...tiers: number[]): PriceRule {
+    return new PriceRule(PriceRule.byPriceRuleCodeTiers, code, ...tiers);
   }
 
   private labelUpper(upper: boolean): string {
