@@ -1,6 +1,6 @@
 # Contract: The overload naming algorithm
 
-**Normative for**: 013 FR-001–FR-006, FR-024–FR-026, FR-032, FR-033. One algorithm names the
+**Normative for**: 013 FR-001–FR-006, FR-024–FR-026, FR-030, FR-032–FR-034, FR-036. One algorithm names the
 constructor factory, the selector symbol, the method fast path and the operator fast path of every
 overload of a dispatched group. It has two stages:
 
@@ -59,7 +59,7 @@ or module function; for virtual and interface members, the **root** group of § 
 
    | Member | Candidate |
    |---|---|
-   | selector | `by` + `T` + `S` — `T` is the declaring type's emitted simple name, so a derived class never redeclares an inherited selector (DECIDED-16, R2) |
+   | selector | `by` + `T` + `S` — `T` is the declaring type's emitted simple name, so a derived class with a different name never redeclares an inherited selector (DECIDED-16, R2); a base and a derived type with the same simple name (`N1.Money : N2.Money`) are resolved by claim step 8 |
    | factory | `from` + `S`, or `from` + `T` + `S` under FR-026 |
    | method fast path | camelCased method name + `S` (`addXY`, `fInt32`, `nowDefault`) |
    | operator fast path | `__` + operator name + `S` (`__addMoneyInt32`) |
@@ -95,15 +95,25 @@ the spelling.
 - The candidate names of a method overload come from its **root declaration**: follow
   `IMethodSymbol.OverriddenMethod` to the first declaration (for an `override`), or take the
   implemented interface member (for an implicit or explicit interface implementation), using the
-  member's `OriginalDefinition`. The root group is the overload group of the root's declaring type
-  (class or interface); its names are computed there, once, and every override and implementation
-  reuses them.
+  member's `OriginalDefinition` for the names. The root group is the overload group of the root's
+  declaring type (class or interface); its names are computed there, once, and every override and
+  implementation reuses them. For an interface implementation the root is the **constructed**
+  interface member (`IConv<int>.Conv(int x)`); a type that implements one generic interface more
+  than once has two constructed roots per name and follows DECIDED-30 (runtime dispatch, `MS0069`).
+- An override's fast path takes the root's mapped visibility (#445's root walk): a cross-assembly
+  `protected override` of a `protected internal` root is public, as the root is (TS2415 otherwise,
+  R14).
 - A `new` (hiding) method, or a method that is neither an override nor an implementation, is its
-  own root.
+  own root. Its candidate is a non-root candidate for the claim pass (step 7), so it can never
+  silently override a base fast path (R14: `addX` → `addX$`).
 - A derived type that declares **new** overloads next to inherited ones names them by running stage
   1 over the derived type's whole visible group (inherited + declared). The inherited overloads
-  keep their root names; the new ones take the names computed for them, claimed after the inherited
-  names (§ Claim pass).
+  keep their root names; the new ones take the names computed for them and claim them after the
+  inherited names, against inherited instance members of every visibility (§ Claim pass, step 7).
+  The derived type emits an `override` dispatcher whose signatures are a **superset** of the base
+  dispatcher's — including base overloads it cannot see (`private`, or `internal` to another
+  assembly), tagged as #445 tags them — whose branches for its own overloads call their fast
+  paths, and whose unmatched calls forward to `super.<dispatcher>(...args)` (TS2416 otherwise, R14).
 - One method that implements several roots whose names differ (two interfaces, or a base override
   plus an interface) emits its body under the first root's name in declaration order of the base
   list, and each further name as a forwarding member (`areaB(b: number) { return this.areaA(b); }`).
@@ -125,8 +135,14 @@ functions.
 5. method and module fast paths (the root group's names first, then a derived type's new
    overloads);
 6. operator fast paths;
-7. inherited statics: a selector or factory candidate equal to an inherited static's name is
-   checked here; a factory that hits FR-026 is qualified instead of claimed.
+7. inherited instance members: every **non-root** instance candidate (a `new` method's, a derived
+   type's new overload's) claims against the instance members of every emitted base class, of
+   every visibility (`private` included: TypeScript checks private members for assignability,
+   TS2416). Root names that an override reuses are not claimed here: they are meant to override;
+8. inherited statics: a selector or factory candidate equal to an inherited static's name is
+   checked here; a factory that meets FR-026's conditions is kept (`static override`), one that
+   does not is qualified, and anything still taken (a selector of a same-named base type) gets
+   `$`.
 
 **Per-suffix claims.** A claim resolves the overload's suffix, not one name: when any candidate
 derived from `S` (the selector and the factory of a constructor overload) is taken, `S` becomes
@@ -135,9 +151,16 @@ selector of one overload always share one spelling (`fromCents$` / `byCashCents$
 split). Fast paths have one candidate each, so the rule reduces to `name$`.
 
 **Reporting.** Every rename reports `MS0067` (FR-020): reason 1 when a user member claimed the
-name, reason 2 when an earlier synthesized name did. A user member that would **override** an
-inherited fast path reports `MS0068` instead (FR-034): it cannot be renamed, and silently
-overriding the fast path would hijack the inherited dispatcher.
+name, reason 2 when an earlier synthesized name did, reason 3 when an inherited instance member
+did (step 7). A user member that would **override** an inherited fast path, and a user **static**
+that would redeclare an inherited generated factory (`Receipt.FromAmount(string)` against
+`Money.fromAmount(amount: Decimal)`, TS2417), report `MS0068` instead (FR-034): user members are
+never renamed, so the build fails and points at `[Name]`.
+
+**Metadata-only roots (DECIDED-28).** A root in a DLL or package is named by running the
+producer's whole pipeline — stage 1 and this claim pass — over the metadata symbols. Implementation
+DLLs keep private members, so the claims match; reference assemblies strip them, and a rename the
+consumer then misses surfaces as TS4117 on the consumer's `override` (R14).
 
 **Identity, not strings.** A direct call site carries the overload's root identity
 (`IrOverloadRef`, data-model.md § 2). The bridge resolves it through the declaring type's claim
@@ -149,18 +172,24 @@ what the declaration emitted.
 A factory candidate `from<S>` of type `T` keeps its name unless an emitted base class (at any
 depth) has a static member of the same TypeScript name. Then:
 
-- if that inherited member is a generated factory whose overload has **the same parameter types
-  in the same order, with the same `params` / optional shape** (compared on the Roslyn symbols),
-  `T`'s factory keeps `from<S>`: same parameters and a covariant return type keep the static side
-  compatible (R2: `Receipt.fromAmount`, `GiftReceipt.fromCents`);
-- otherwise — a different parameter list, a generic base factory whose type parameter `T`'s
-  overload replaces with a concrete type, or an inherited user static — the factory becomes
-  `from` + `T` + `S` (R2: `GiftReceipt.fromGiftReceiptAmount`). The qualified name then goes
-  through the claim pass like any other.
+- if that inherited member is a generated factory that is **not `private`**, whose overload has
+  **the same parameter types in the same order, with the same `params` / optional shape** —
+  compared on the **constructed** base constructor (for `Box2<T> : Box<T>`, `Box<T>`'s `T` is
+  `Box2`'s `T`; for `IntBox : Box<int>`, it is `int`) — and whose accessibility `T`'s factory
+  matches or widens (public ≥ protected), then `T`'s factory keeps `from<S>` and is emitted
+  `static override` (TS4114 under `noImplicitOverride` otherwise, R14): same parameters, a
+  covariant return type and no narrowing keep the static side compatible (R2:
+  `Receipt.fromAmount`, `GiftReceipt.fromCents`);
+- otherwise — a different parameter list, a `private` base factory (TS2417: a private member
+  cannot be redeclared, R14 / reviewer p2), a narrower derived accessibility (a `protected`
+  factory against a public one, R14 / reviewer p3), or an inherited user static — the factory
+  becomes `from` + `T` + `S` (R2: `GiftReceipt.fromGiftReceiptAmount`; R14:
+  `Receipt.fromReceiptCode`, `Receipt.fromReceiptId`). The qualified name then goes through the
+  claim pass like any other.
 
 The rule reads declarations only, so it is deterministic and needs no TypeScript assignability
-check; it qualifies a compatible pair only in the generic-base case, which is the conservative
-direction.
+check. The reverse direction — a derived **user** static against an inherited generated factory —
+cannot be qualified (user names never move) and is `MS0068`.
 
 ## Worked examples
 
@@ -185,6 +214,9 @@ direction.
 | `GiftReceipt : Receipt` with `GiftReceipt(string amount)` / `GiftReceipt(int cents)` | — | `fromGiftReceiptAmount` (FR-026, different list) / `fromCents` |
 | `Cash(decimal amount)` / `Cash(int cents)` + `static From(decimal amount)` / `From(int cents)` | private `fromAmount`, `fromCents` fast paths beside no factory | factories `fromAmount` / `fromCents`; fast paths `fromAmount$` / `fromCents$` + `MS0067` reason 2 (R11) |
 | `virtual Add(int x)` / `Add(string s)`; `Derived` overrides `Add(int x)` | `Derived.add(x)` replaces the dispatcher (TS2416, R8) | `Base.addX` / `addS`; `Derived` emits `override addX` only |
+| `Derived : Base` with `new Add(int x)` (hiding) | — | `addX$` + `MS0067` reason 3 (R14) |
+| `Base.Add(int x)` + `private Add(string s)`; `Derived.Add(short s)` | — | `addS$` + `MS0067` reason 3; `Derived` emits the superset `override add` (R14) |
+| `Money` private `Money(string code)`; `Receipt(string code)` | — | `Receipt.fromReceiptCode` (FR-026: private base factory) |
 | `IShape.Area(int s)` / `Area(int w, int h)`; `Sq.Area(int side)` | `Sq.areaSide`, `areaWH` (private) | `areaS`, `areaWH` on `IShape` and `Sq` (root names) |
 | extension `Twice(this Base b, int x)` / `Twice(this Base b, string s)` | two `export function twice` (TS2393) | `twiceX`, `twiceS` + dispatcher `twice` |
 | operators `+(Acct a, long b)` / `+(Acct a, ulong b)` | `__addAcctLong`, `__addAcctULong` | `__addAcctInt64`, `__addAcctUInt64` |

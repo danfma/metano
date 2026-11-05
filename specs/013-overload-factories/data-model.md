@@ -35,8 +35,9 @@ public sealed record IrOverloadName(
     bool QualifiedFactory       // FR-026: the factory candidate is from + TypeName + Suffix
 );
 
-/// <summary>A stable overload identity: the declaring type, the member's C# name,
-/// and the overload's declaration ordinal in its root group.</summary>
+/// <summary>A stable overload identity: the declaring type (for an interface root, the
+/// constructed interface, DECIDED-30), the member's C# name, and the overload's
+/// declaration ordinal in its root group.</summary>
 public sealed record IrOverloadRef(IrTypeKey DeclaringType, string MemberName, int Ordinal);
 
 // IrParameter gains:
@@ -45,7 +46,10 @@ public IrNamingSpelling? NamingSpelling { get; init; }   // null outside dispatc
 public IrOverloadName? OverloadName { get; init; }       // null: not part of a dispatched group (NFR-001)
 public string? SignatureText { get; init; }              // constructors: "Money(decimal amount)" (D2)
 // IrMethodDeclaration gains:
-public bool IsOverride { get; init; }                    // emits `override` on the root's fast path (FR-030)
+public bool IsOverride { get; init; }                    // emits `override` on the root's fast path (FR-030), with the root's mapped visibility
+public bool IsHiding { get; init; }                      // `new`: a non-root candidate, claimed against inherited members (claim step 7)
+// IrClassDeclaration gains:
+public bool HasMultiplyConstructedInterface { get; init; } // DECIDED-30: runtime-dispatched root names, MS0069
 // IrConstructorDeclaration gains, for a dispatched base call:
 public IrOverloadRef? BaseOverload { get; init; }        // the statically resolved base overload (FR-017)
 public IReadOnlyList<IrExpression>? BaseArguments { get; init; } // Roslyn's bound arguments, defaults explicit
@@ -97,8 +101,9 @@ constructor bridge renders the selector form in every branch that chains to that
 | constructor overload `OverloadName` | `protected static readonly by<TypeName><Suffix>: unique symbol = Symbol("<SignatureText>");` — first among the static members (FR-029) |
 | every overload of a dispatched constructor | `constructor(overload: typeof T.by<TypeName><Suffix>, ...params);` before the retained plain signatures |
 | the constructor implementation | guarded selector branches, then today's fallback branches, then the throw |
-| constructor overload, concrete class | `static from<Suffix>(...)` (or `from<TypeName><Suffix>`, FR-026) with the overload's #445 accessibility, `return new T(T.by…, ...)` |
-| method overload `OverloadName` | `<accessibility> [static] [override] [abstract] <fastPath>(...)` |
+| constructor overload, concrete class | `static [override] from<Suffix>(...)` (or `from<TypeName><Suffix>`, FR-026) with the overload's #445 accessibility, `return new T(T.by…, ...)`; `override` when the name is inherited |
+| method overload `OverloadName` | `<accessibility> [static] [override] [abstract] <fastPath>(...)`; an override takes the root's accessibility |
+| a derived type's dispatcher over new overloads | `override` dispatcher with the base dispatcher's signatures plus its own; unmatched calls → `super.<dispatcher>(...args)` |
 | interface method overload | the fast-path signature beside the dispatcher signatures (FR-031) |
 | `IrDirectOverloadCall(Factory)` | `T.from<Suffix>(args)` |
 | `IrDirectOverloadCall(Method)` | `<receiver>.<fastPath>(args)`, receiver evaluated once |
@@ -126,7 +131,9 @@ call the way the declaring file emitted it.
 | Code | Raised by | Inputs |
 |---|---|---|
 | `MS0067` | each target's claim pass | the candidate, the claimant (user member or synthesized kind + name), the emitted name, the overload's location |
-| `MS0068` | each target's claim pass | the user member, the inherited fast path, its root overload |
+| `MS0067` reason 3 | each target's claim pass (step 7) | the non-root candidate, the inherited instance member |
+| `MS0068` | each target's claim pass | the user member (instance or static), the inherited fast path or factory, its overload |
+| `MS0069` | the core class extractor | the type, the interface, its constructions |
 | `MS0003` | `OverloadNamePolicy` (dead end, FR-024) | the colliding overloads, the positional names |
 
 ## 6. Naming decision flow

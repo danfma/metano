@@ -7,10 +7,13 @@ inferred from code or docs, not executed; **[M]** = maintainer decision.
 Probe environment [V]: macOS arm64, .NET SDK 10.0.401, `tsgo` 7.0.0-dev.20260707.2 (the pinned
 preview in `targets/js/metano-runtime`), Node v24.11.0, Bun 1.4.2. The probe programs live in the
 session scratchpad and are not committed (round 1: `glm25/`; review: `rev013/p1`–`p3`; round 2:
-`s013r2/a`–`h`, `s013r2/r7`, `s013r2/today`). Every output line below is quoted verbatim. Unless
-stated otherwise, the TypeScript probes compile with
-`tsgo --strict --declaration --target es2022 --module nodenext --moduleResolution nodenext` and run
-the emitted JavaScript under Node and Bun.
+`s013r2/a`–`h`, `s013r2/r7`, `s013r2/today`; round 3: `s013r2/r3`; second review: `rev013b/p1`–`p11`). Every output line below is quoted verbatim. Every
+TypeScript probe compiles with
+`tsgo --strict --noImplicitOverride --declaration --target es2022 --module nodenext --moduleResolution nodenext`
+(`--noImplicitOverride` because the samples set it; round 3 rebuilt every probe with it through
+`s013r2/rebuild.sh`, all `exit=0`, same Node output) and runs the emitted JavaScript under Node
+and Bun. Round 2's `s013r2/b` lacked `static override` on the kept factories and failed with the
+flag (TS4114, reviewer `rev013b`); the files now carry it.
 
 ## R1 — Selector signatures and plain signatures coexist; the `.d.ts` keeps both
 
@@ -69,7 +72,7 @@ gift-unqualified.ts(2,14): error TS2417: Class static side 'typeof GiftReceiptU'
 ```
 
 With the DECIDED-16 / FR-026 shape — `byMoneyAmount`, `byReceiptAmount`, `byGiftReceiptAmount`;
-`Receipt.fromAmount(amount: number)` kept (same parameter list as the inherited factory);
+`Receipt.fromAmount(amount: number)` kept as `static override` (same parameter list as the inherited factory);
 `GiftReceipt.fromGiftReceiptAmount(amount: string)` qualified (different list) and
 `GiftReceipt.fromCents(cents: number)` kept — the three modules compile (`exit=0`, also under the
 isolated / bundler flags) and run:
@@ -420,3 +423,29 @@ and Bun both print `2 3 100 3 2 6 3 5 4`:
 - **Explicit defaults in `super`** (FR-017): `Q(int c) : base(1)` against `P(int a, int b = 5)`
   emits `super(P.byPAB, 1, 5)` → `b` is `5`.
 - **JSON factory callee** (FR-035): `factory: (p: Record<string, unknown>) => P.fromAB(p.a as number, p.b as number)` → `4`.
+
+## R14 — Round-3 rules (second review, `rev013b`; fixes in `s013r2/r3`)
+
+The reviewer's probes `rev013b/p1`–`p11` (`run.sh`, all with `--noImplicitOverride`) fail as
+follows [V]; each row's fix is a file in `s013r2/r3`, which compiles (`exit=0`) and runs under
+Node: `dispatcher 2 1 1002 | access … true true | pi 6 | hiding direct 1 100 dispatcher 100 |
+privfast 5 1 | conv 1 2 3 4 | explicit 9 10 1`.
+
+| Reviewer probe | Failure | Rule | Fix probe |
+|---|---|---|---|
+| `p10` (three levels, kept factories without `override`) | `TS4114: This member must have an 'override' modifier …` ×3 | kept inherited factory names are `static override` (FR-026) | `s013r2/b` (rebuilt), `r3/bad-no-override.ts` reproduces TS4114 |
+| `p11` (derived dispatcher over `Add(int)` + new `Add(bool)`, base `private Add(string)`) | `TS2416: Property 'add' in type 'Derived' is not assignable …` + TS4114 | `override` dispatcher with a superset of the base signatures (the private one included, tagged), unmatched calls → `super.add(...args)` (FR-030) | `r3/dispatcher.ts`: `d.add(2)` → `2`, `add(true)` → `1`, `add("ab")` → `1002` (the base private overload, reached through `super`) |
+| `p2` (base `private static fromCode`, derived `fromCode`) | `TS2417: Class static side 'typeof Receipt' incorrectly extends …` | a `private` base factory forces qualification (FR-026) | `r3/access.ts`: `Receipt.fromReceiptCode` |
+| `p3` (base public `fromCents`, derived `protected static fromCents`) | TS2417 | a narrower derived accessibility forces qualification (FR-026) | `r3/access.ts`: `protected static fromReceiptId` |
+| `p4` (derived user `static fromAmount(s: string)` vs base factory) | TS2417 | `MS0068` reason 2 (maintainer: error) | `r3/bad-static.ts` reproduces TS2417 |
+| `p1` (cross-assembly `protected override` of a `protected internal` root) | `TS2415: Class 'Derived' incorrectly extends base class 'Base'.` | an override takes the root's mapped visibility (public) | `r3/pi.ts`: `override addX` public → `6` |
+| `p5` (derived new overload's candidate `addS` vs base `private addS`) | TS2416 | claim step 7: `addS$`, `MS0067` reason 3 | `r3/privfast.ts` |
+| `p8` (`new Add(int x)` hiding) | Node: `direct b.addX(1) = 100 (C#: 1) dispatcher b.add(1) = 100 (C#: 1)` | claim step 7: `addX$`, `MS0067` reason 3 | `r3/hiding.ts`: direct `b.addX(1)` → `1` (C#'s answer); `addX$(1)` → `100`; through the hiding type's dispatcher `b.add(1)` → `100`, the pre-existing divergence (spec § Divergences) |
+| `p6` (`C : IConv<int>, IConv<string>`) | `TS2393: Duplicate function implementation.` ×4, `TS2416 … 'convX' … IConv<string>` | runtime-dispatched root names + `MS0069` (maintainer: diagnostic) | `r3/conv.ts`: `ci.convX(1)` → `1`, `cs.convX("a")` → `2`, `conv(1, 2)` → `3`, `conv("a", 2)` → `4` |
+| `p7` (OQ-7 blind spot: producer emitted `addX$`, consumer overrides `addX`) | `TS4117: This member cannot have an 'override' modifier because it is not declared in the base class 'Base'. Did you mean 'addX$'?` | loud failure that names the right symbol (DECIDED-28) | — |
+| `p9` (three levels, every rule) | none; Node: `A 5 A.cents addX 3 … inherited B` | — | — |
+
+Explicit implementations (`r3/explicit.ts`): `Plot` with `IShape.Area(int s)` / `IShape.Area(int w,
+int h)` explicit and its own `Area(bool big)` emits `areaS`, `areaWH`, `areaBig` and a dispatcher
+`area` with all three signatures; `sh.areaS(3)` → `9`, `sh.area(2, 5)` → `10`, `area(true)` → `1`
+(FR-037).

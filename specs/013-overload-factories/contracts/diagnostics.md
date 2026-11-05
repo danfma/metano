@@ -1,7 +1,7 @@
-# Contract: Diagnostics `MS0067` and `MS0068`
+# Contract: Diagnostics `MS0067`, `MS0068` and `MS0069`
 
-**Normative for**: 013 FR-004, FR-005, FR-020, FR-024, FR-034. This spec PR reserves `MS0067` and
-`MS0068` in [diagnostic-catalog.md](../../001-project-baseline-evolution/baseline/diagnostic-catalog.md);
+**Normative for**: 013 FR-004, FR-005, FR-020, FR-024, FR-034, FR-036. This spec PR reserves `MS0067`,
+`MS0068` and `MS0069` in [diagnostic-catalog.md](../../001-project-baseline-evolution/baseline/diagnostic-catalog.md);
 `MS0066` is the last code allocated before it (spec 012). The climb's dead end reuses `MS0003`.
 Direct call sites that cannot be resolved (a metadata-only reference, `dynamic`, unresolved
 symbols) report nothing: they fall back to the dispatcher, which is correct, only slower (FR-019).
@@ -9,7 +9,8 @@ symbols) report nothing: they fall back to the dispatcher, which is correct, onl
 | Code | Name | Severity | Location |
 |---|---|---|---|
 | `MS0067` | `OverloadNameShadowed` | Warning | the overload whose candidate name was `$`-renamed |
-| `MS0068` | `OverloadFastPathHijacked` | Error | the user member that would override an inherited generated member |
+| `MS0068` | `OverloadFastPathHijacked` | Error | the user member that would override an inherited fast path, or redeclare an inherited factory |
+| `MS0069` | `MultiplyConstructedOverloadGroup` | Warning | the type implementing one generic interface more than once |
 | `MS0003` (existing) | `AmbiguousConstruct` | Error | the later overload of a set the climb cannot separate (FR-024) |
 
 ## `MS0067` reasons
@@ -21,7 +22,10 @@ candidate was already taken in the same scope:
    inherited from an emitted base);
 2. by an **earlier synthesized name** in the claim order — for example the `From(decimal amount)` /
    `From(int cents)` fast paths `fromAmount` / `fromCents`, claimed by the factories of
-   `Cash(decimal amount)` / `Cash(int cents)` (R11).
+   `Cash(decimal amount)` / `Cash(int cents)` (R11);
+3. by an **inherited instance member** of any visibility (claim step 7), for a non-root candidate —
+   a `new` (hiding) method's `addX` against the base fast path, or a derived overload's `addS`
+   against a base `private addS` (R14).
 
 Examples:
 
@@ -32,9 +36,9 @@ One report per renamed overload, naming the candidate, the claimant and the emit
 warning is what makes `$` acceptable on public API: nothing changed in the C# source, so the build
 must say so.
 
-## `MS0068` reason
+## `MS0068` reasons
 
-A user-written member of a derived type (or of a class implementing an interface) has the
+Reason 1: a user-written member of a derived type (or of a class implementing an interface) has the
 TypeScript name of a **fast path inherited from a root group** that the member does not override
 (for example a C# method `AddX()` in a class whose base declares `Add(int x)` / `Add(string s)`).
 In TypeScript the member would override the fast path, and the inherited dispatcher, which calls
@@ -42,6 +46,21 @@ In TypeScript the member would override the fast path, and the inherited dispatc
 and the root's name is fixed (it may live in another package), so the build fails:
 
 `'Derived.AddX' would override the generated fast path 'addX' of 'Base.Add(int x)'; rename the member, or rename the root overload's parameter or pin it with [Name] (spec 013 FR-034).`
+
+Reason 2 (maintainer decision, 2026-11-05): a **user static** of a derived type has the name of
+an inherited generated factory (`Receipt.FromAmount(string)` against `Money.fromAmount(amount:
+Decimal)`); TypeScript checks the static side (TS2417, R14), and neither name can move:
+
+`'Receipt.FromAmount' would redeclare the generated factory 'fromAmount' of 'Money(decimal amount)'; rename the member or give it [Name], or pin the constructor's suffix with [Name] (spec 013 FR-034).`
+
+## `MS0069` reason
+
+A type implements one generic interface with overload groups more than once (`C : IConv<int>,
+IConv<string>`). Each root fast-path name would need two implementations (TS2393 / TS2416, R14),
+so the type keeps runtime dispatch for those names and gets no per-implementation fast paths
+(DECIDED-30):
+
+`'C' implements 'IConv<T>' more than once; calls to 'Conv' keep runtime dispatch (spec 013 FR-036).`
 
 ## `MS0003` (dead end)
 
