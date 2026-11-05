@@ -63,6 +63,25 @@ public static class TranspileHelper
         return references;
     }
 
+    /// <summary>
+    /// Global invariant for every transpiled output: a deferred runtime helper
+    /// name (<see cref="DeferredHelperNames"/>) must never reach the printed
+    /// text — <see cref="Printer.Print"/> resolves each wrap to the file's
+    /// alias or the plain name, so a marker in the output means a print path
+    /// bypassed the resolution pass.
+    /// </summary>
+    private static void ThrowOnDeferredHelperNameLeak(string fileName, string content)
+    {
+        if (
+            content.IndexOf(DeferredHelperNames.Open) >= 0
+            || content.IndexOf(DeferredHelperNames.Close) >= 0
+        )
+            throw new InvalidOperationException(
+                $"{fileName} leaked an unresolved deferred runtime helper name; "
+                    + "every print must go through Printer.Print."
+            );
+    }
+
     private static SyntaxTree ParseSource(string csharpSource)
     {
         var source = $"""
@@ -182,7 +201,11 @@ public static class TranspileHelper
         var result = new Dictionary<string, string>();
 
         foreach (var file in files)
-            result[file.FileName] = printer.Print(file);
+        {
+            var printed = printer.Print(file);
+            ThrowOnDeferredHelperNameLeak(file.FileName, printed);
+            result[file.FileName] = printed;
+        }
 
         // Mirror the production host merge — frontend-raised diagnostics
         // (extraction-time validations like MS0010) need to surface to

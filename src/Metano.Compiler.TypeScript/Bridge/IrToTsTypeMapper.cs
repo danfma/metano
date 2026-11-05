@@ -23,7 +23,11 @@ public static class IrToTsTypeMapper
                 "Map",
                 [Map(m.KeyType, overrides), Map(m.ValueType, overrides)]
             ),
-            IrSetTypeRef s => new TsNamedType("HashSet", [Map(s.ElementType, overrides)]),
+            IrSetTypeRef s => new TsNamedType(
+                "HashSet",
+                [Map(s.ElementType, overrides)],
+                RuntimeHelperBinding: "HashSet"
+            ),
             IrTupleTypeRef t => new TsTupleType(t.Elements.Select(e => Map(e, overrides)).ToList()),
             IrFunctionTypeRef f => MapFunctionType(f, overrides),
             // Overloaded `[JsCallable]` Invoke → intersection of call signatures.
@@ -43,7 +47,8 @@ public static class IrToTsTypeMapper
             ]),
             IrGroupingTypeRef gr => new TsNamedType(
                 "Grouping",
-                [Map(gr.KeyType, overrides), Map(gr.ElementType, overrides)]
+                [Map(gr.KeyType, overrides), Map(gr.ElementType, overrides)],
+                RuntimeHelperBinding: "Grouping"
             ),
             IrTypeParameterRef tp => new TsNamedType(tp.Name),
             IrNamedTypeRef named => MapNamed(named, overrides),
@@ -213,7 +218,7 @@ public static class IrToTsTypeMapper
             IrPrimitive.Char => new TsStringType(),
             IrPrimitive.Void => new TsVoidType(),
             IrPrimitive.Object => new TsNamedType("unknown"),
-            IrPrimitive.Guid => new TsNamedType("UUID"),
+            IrPrimitive.Guid => new TsNamedType("UUID", RuntimeHelperBinding: "UUID"),
             IrPrimitive.DateTime => new TsNamedType("Temporal.PlainDateTime"),
             IrPrimitive.DateTimeOffset => new TsNamedType("Temporal.ZonedDateTime"),
             IrPrimitive.DateOnly => new TsNamedType("Temporal.PlainDate"),
