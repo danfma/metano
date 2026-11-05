@@ -29,6 +29,7 @@ internal static class Int64RuntimeHelpers
     public const string RemInt64 = "remInt64";
     public const string DivUInt64 = "divUInt64";
     public const string RemUInt64 = "remUInt64";
+    public const string FormatInt64 = "formatInt64";
 
     /// <summary>The range check of <c>long</c> (signed) or <c>ulong</c>.</summary>
     public static string CheckedRange(bool isSigned) => isSigned ? CheckedInt64 : CheckedUInt64;

@@ -1,5 +1,10 @@
+using System.Globalization;
 using Int64Reference;
 using SampleInt64Conformance;
+
+// The twin formats and parses in the invariant culture, as the runtime does.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
 var fixtures = Path.Combine(RepositoryRoot.Find(), "tests", "Int64Reference", "fixtures");
 
@@ -17,3 +22,11 @@ ReferenceFixture.Write(
 );
 
 ReferenceFixture.Write(Path.Combine(fixtures, "math.json"), typeof(MathStatics));
+
+ReferenceFixture.Write(
+    Path.Combine(fixtures, "formatting.json"),
+    typeof(Formatting),
+    typeof(Parsing),
+    typeof(ConvertCalls),
+    typeof(DecimalConvertCalls)
+);

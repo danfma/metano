@@ -16,6 +16,8 @@ namespace Metano.Compiler.Extraction;
 ///   <item><c>System.Math</c> static helpers (<c>Round</c>, <c>Floor</c>,
 ///   <c>Ceiling</c>, <c>Abs</c>) when the argument is <c>decimal</c>:
 ///   route through the same <c>Decimal</c> instance methods.</item>
+///   <item>A constant <c>NumberStyles</c> → its flags value under the exact
+///   64-bit lowering.</item>
 /// </list>
 /// Kept on the extractor partial so each rewriter shares the
 /// <c>_semantic</c> field and the recursive <c>Extract</c> entry point
@@ -23,6 +25,30 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 public sealed partial class IrExpressionExtractor
 {
+    private const string NumberStylesTypeName = "System.Globalization.NumberStyles";
+
+    /// <summary>
+    /// A constant <c>System.Globalization.NumberStyles</c> (<c>HexNumber</c>,
+    /// <c>Integer | AllowThousands</c>) folded to its flags value under the
+    /// exact 64-bit lowering (spec 012 FR-038): the BCL enum has no
+    /// counterpart in the targets, and the 64-bit parsers take the flags as a
+    /// number. <c>null</c> for any other expression.
+    /// </summary>
+    private IrLiteral? FoldedNumberStylesConstant(ExpressionSyntax expression)
+    {
+        if (!_context.ExactInt64Lowering)
+            return null;
+
+        var isNumberStyles =
+            _semantic.GetTypeInfo(expression).Type?.ToDisplayString() == NumberStylesTypeName;
+
+        return
+            isNumberStyles
+            && _semantic.GetConstantValue(expression) is { HasValue: true, Value: int flags }
+            ? new IrLiteral(flags, IrLiteralKind.Int32)
+            : null;
+    }
+
     /// <summary>
     /// Returns the target Temporal subtype name
     /// (<c>Temporal.PlainDate</c>, <c>Temporal.PlainDateTime</c>, …)

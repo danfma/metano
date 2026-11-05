@@ -433,6 +433,15 @@ public static class DiagnosticCodes
     /// the member (spec 012 FR-058).</summary>
     public const string Int64EnumValuePrecision = "MS0064";
 
+    /// <summary>MS0066 — a constant format passed to <c>ToString</c> on a 64-bit
+    /// integer or used in an interpolation hole over one (<c>C</c>, <c>P</c>,
+    /// <c>E</c>, <c>B</c>, a custom format), or a constant <c>NumberStyles</c> passed
+    /// to <c>long.Parse</c> / <c>TryParse</c> (or the <c>ulong</c> ones), is valid in
+    /// .NET but outside what the runtime implements; the call throws
+    /// <c>NotSupportedException</c> at run time. A warning (spec 012 FR-037,
+    /// FR-038).</summary>
+    public const string UnsupportedInt64Format = "MS0066";
+
     /// <summary>MS0067 — the spec 013 claim pass renamed a generated factory, selector
     /// or fast path (per suffix, <c>$</c> appended until free) because its candidate was
     /// already taken: by a user-written member (reason 1), by an earlier synthesized
