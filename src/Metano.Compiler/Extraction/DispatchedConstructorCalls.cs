@@ -27,7 +27,8 @@ public static class DispatchedConstructorCalls
         IrExtractionContext context
     ) =>
         constructor is not null
-        && ConstructsThroughFactories(constructor.ContainingType, context.EmitsConstructorSelectors)
+        && context.EmitsConstructorSelectors is { } emitsSelectors
+        && ConstructsThroughFactories(constructor.ContainingType, emitsSelectors)
             ? OverloadOf(constructor)
             : null;
 
@@ -41,7 +42,8 @@ public static class DispatchedConstructorCalls
         IrExtractionContext context
     ) =>
         constructor is not null
-        && HasSelectors(constructor.ContainingType, context.EmitsConstructorSelectors)
+        && context.EmitsConstructorSelectors is { } emitsSelectors
+        && HasSelectors(constructor.ContainingType, emitsSelectors)
             ? OverloadOf(constructor)
             : null;
 
@@ -51,7 +53,7 @@ public static class DispatchedConstructorCalls
     /// </summary>
     public static bool ConstructsThroughFactories(
         INamedTypeSymbol type,
-        Func<INamedTypeSymbol, bool>? emitsSelectors
+        Func<INamedTypeSymbol, bool> emitsSelectors
     ) => !type.IsAbstract && HasSelectors(type, emitsSelectors);
 
     /// <summary>
@@ -61,13 +63,12 @@ public static class DispatchedConstructorCalls
     /// </summary>
     public static bool HasSelectors(
         INamedTypeSymbol type,
-        Func<INamedTypeSymbol, bool>? emitsSelectors
+        Func<INamedTypeSymbol, bool> emitsSelectors
     )
     {
         var definition = type.OriginalDefinition;
 
-        return emitsSelectors is not null
-            && IrConstructorExtractor.IsDispatchedSet(definition)
+        return IrConstructorExtractor.IsDispatchedSet(definition)
             && HasSourceIr(definition)
             && emitsSelectors(definition);
     }

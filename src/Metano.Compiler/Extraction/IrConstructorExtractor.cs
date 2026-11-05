@@ -492,7 +492,7 @@ public static class IrConstructorExtractor
             return null;
 
         return ExtractSelectedBaseCall(implicitCall, compilation, context, localNames) is { } bound
-            ? new BaseConstructorCall(bound.Arguments, bound.Overload)
+            ? BaseConstructorCall.Of(bound)
             : null;
     }
 
@@ -510,7 +510,7 @@ public static class IrConstructorExtractor
             var bound = ExtractSelectedBaseCall(invocation, compilation, context, localNames);
 
             if (bound is not null)
-                return new BaseConstructorCall(bound.Arguments, bound.Overload);
+                return BaseConstructorCall.Of(bound);
         }
 
         var extractor = new IrExpressionExtractor(model, context, localNames);
@@ -613,5 +613,9 @@ public static class IrConstructorExtractor
     private sealed record BaseConstructorCall(
         IReadOnlyList<IrArgument> Arguments,
         IrSelectedOverload? Overload
-    );
+    )
+    {
+        public static BaseConstructorCall Of(BoundOverloadCall bound) =>
+            new(bound.Arguments, bound.Overload);
+    }
 }

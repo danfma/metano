@@ -262,6 +262,7 @@ public sealed class ConstructorAccessFacts
                 jsonCalledConstructors,
                 typesWithRestrictedFactories
             );
+
             RecordNestedFactoryCalls(calls, compilation, type, typesWithRestrictedFactories);
         }
 
@@ -270,12 +271,12 @@ public sealed class ConstructorAccessFacts
 
     private static void RecordJsonFactoryCalls(
         Dictionary<INamedTypeSymbol, Dictionary<int, OutsideConstruction>> calls,
-        INamedTypeSymbol context,
+        INamedTypeSymbol serializerContext,
         IReadOnlyDictionary<INamedTypeSymbol, IReadOnlyList<IMethodSymbol>> jsonCalledConstructors,
         IReadOnlySet<INamedTypeSymbol> typesWithRestrictedFactories
     )
     {
-        var constructors = (jsonCalledConstructors.GetValueOrDefault(context) ?? [])
+        var constructors = (jsonCalledConstructors.GetValueOrDefault(serializerContext) ?? [])
             .Where(constructor =>
                 typesWithRestrictedFactories.Contains(constructor.ContainingType.OriginalDefinition)
             )
@@ -285,7 +286,7 @@ public sealed class ConstructorAccessFacts
             return;
 
         var site = new OutsideConstruction(
-            $"the TypeSpec of the JSON SerializerContext '{context.Name}'"
+            $"the TypeSpec of the JSON SerializerContext '{serializerContext.Name}'"
         );
 
         foreach (var constructor in constructors)
@@ -328,7 +329,11 @@ public sealed class ConstructorAccessFacts
             return;
 
         var type = constructor.ContainingType.OriginalDefinition;
-        var sites = calls.GetValueOrDefault(type) ?? (calls[type] = []);
+        if (!calls.TryGetValue(type, out var sites))
+        {
+            sites = [];
+            calls.Add(type, sites);
+        }
 
         sites.TryAdd(ordinal, site);
     }

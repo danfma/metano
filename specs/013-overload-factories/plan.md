@@ -176,7 +176,9 @@ array, and every call into a metadata-only reference (DECIDED-24). Known gaps: a
 non-nullable struct `= default` passes `undefined`, which the factory's own default fills with
 013b's `undefined` (FR-027's zero value is not used there yet); a project-reference base whose
 factory its package widened (FR-011) is judged by its declared accessibility, so FR-026 may qualify
-a derived factory it could have kept.
+a derived factory it could have kept. The evaluation-order binding follows
+`IrEvaluationTraits.IsSideEffectFree`, which counts a property read as free, so named arguments
+reading a mutating getter are reordered unbound, as elsewhere in the pipeline.
 
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
 OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an

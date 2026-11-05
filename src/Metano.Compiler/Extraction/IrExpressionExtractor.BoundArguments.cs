@@ -42,18 +42,21 @@ public sealed partial class IrExpressionExtractor
         if (arguments is not { } bindable || bindable.Any(argument => !IsBindable(argument)))
             return null;
 
-        var inEvaluationOrder = bindable
+        var inParameterOrder = bindable
             .SelectMany(argument =>
                 BoundArgumentsOf(argument)
-                    .Select(value => new BoundArgument(value, argument.Parameter!.Ordinal))
+                    .Select(value => (Value: value, argument.Parameter!.Ordinal))
             )
+            .Select(
+                (argument, evaluationIndex) =>
+                    new BoundArgument(argument.Value, argument.Ordinal, evaluationIndex)
+            )
+            .OrderBy(argument => argument.ParameterOrdinal)
             .ToList();
-
-        var inParameterOrder = inEvaluationOrder.OrderBy(argument => argument.Parameter).ToList();
 
         return new BoundOverloadCall(
             inParameterOrder.Select(argument => argument.Value).ToList(),
-            new IrSelectedOverload(target, EvaluationOrderOf(inEvaluationOrder, inParameterOrder))
+            new IrSelectedOverload(target, EvaluationOrderOf(inParameterOrder))
         );
     }
 
@@ -73,33 +76,22 @@ public sealed partial class IrExpressionExtractor
     /// a side effect to keep in place.
     /// </summary>
     private static IReadOnlyList<int>? EvaluationOrderOf(
-        IReadOnlyList<BoundArgument> inEvaluationOrder,
         IReadOnlyList<BoundArgument> inParameterOrder
     )
     {
-        var order = inEvaluationOrder
-            .Select(argument => IndexOf(inParameterOrder, argument))
+        var order = inParameterOrder
+            .Select((argument, position) => (argument.EvaluationIndex, Position: position))
+            .OrderBy(entry => entry.EvaluationIndex)
+            .Select(entry => entry.Position)
             .ToList();
-        var isParameterOrder = order
-            .Select((index, position) => index == position)
-            .All(same => same);
 
-        var hasSideEffect = inEvaluationOrder.Any(argument =>
+        var isParameterOrder = order.SequenceEqual(Enumerable.Range(0, order.Count));
+
+        var hasSideEffect = inParameterOrder.Any(argument =>
             !IrEvaluationTraits.IsSideEffectFree(argument.Value.Value)
         );
 
         return isParameterOrder || !hasSideEffect ? null : order;
-    }
-
-    private static int IndexOf(IReadOnlyList<BoundArgument> arguments, BoundArgument argument)
-    {
-        for (var index = 0; index < arguments.Count; index++)
-        {
-            if (ReferenceEquals(arguments[index], argument))
-                return index;
-        }
-
-        throw new InvalidOperationException("A bound argument is missing from parameter order.");
     }
 
     private IEnumerable<IrArgument> BoundArgumentsOf(IArgumentOperation argument) =>
@@ -188,6 +180,13 @@ public sealed partial class IrExpressionExtractor
     private static bool IsNonNullableValueType(ITypeSymbol type) =>
         type.IsValueType && type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T;
 
-    /// <summary>One bound argument and the ordinal of the parameter it binds.</summary>
-    private sealed record BoundArgument(IrArgument Value, int Parameter);
+    /// <summary>
+    /// One bound argument, the ordinal of the parameter it binds and its
+    /// position in C#'s evaluation order.
+    /// </summary>
+    private sealed record BoundArgument(
+        IrArgument Value,
+        int ParameterOrdinal,
+        int EvaluationIndex
+    );
 }
