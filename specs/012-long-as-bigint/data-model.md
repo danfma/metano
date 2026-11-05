@@ -36,17 +36,17 @@ public enum IrNumericKind
 /// A C# numeric conversion whose source or target is a 64-bit integer (FR-010). Produced for implicit
 /// conversions (from SemanticModel.GetConversion / ConvertedType) and explicit casts (IConversionOperation).
 /// IsChecked is Roslyn's IConversionOperation.IsChecked (DECIDED-4). Enum endpoints use the enum's
-/// underlying kind and set the matching flag, so a target can tell `(long)e` from `(long)i`.
+/// underlying kind and set IsEnum, so a target can tell `(long)e` from `(long)i`.
 /// </summary>
 public sealed record IrNumericConversion(
     IrExpression Operand,
-    IrNumericKind From,
-    IrNumericKind To,
+    IrNumericEndpoint From,
+    IrNumericEndpoint To,
     bool IsChecked,
-    bool FromEnum = false,
-    bool ToEnum = false,
     bool IsLifted = false            // int? → long? (FR-019)
 ) : IrExpression;
+
+public sealed record IrNumericEndpoint(IrNumericKind Kind, bool IsEnum = false);
 
 public enum IrOverflowMode { Wrap, Check }
 

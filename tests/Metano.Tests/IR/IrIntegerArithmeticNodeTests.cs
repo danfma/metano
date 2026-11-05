@@ -32,8 +32,8 @@ public class IrIntegerArithmeticNodeTests
 
     private static readonly IrExpression ConvertedSum = new IrNumericConversion(
         Sum,
-        IrNumericKind.Int32,
-        IrNumericKind.Int64,
+        new IrNumericEndpoint(IrNumericKind.Int32),
+        new IrNumericEndpoint(IrNumericKind.Int64),
         IsChecked: false
     );
 

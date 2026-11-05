@@ -65,7 +65,7 @@ public class Int64StagingSwitchTests
         """;
 
     [Test]
-    public async Task NumberMode_ReproducesThePre012aOutput()
+    public async Task NumberMode_KeepsTheShippedOutput()
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(
             SixtyFourBitSource,

@@ -8,25 +8,28 @@ namespace Metano.Compiler.IR;
 /// without re-deriving operand types.
 /// </summary>
 /// <param name="Operand">The converted value.</param>
-/// <param name="From">The exact numeric kind of <paramref name="Operand"/>; an
-/// enum operand reports its underlying kind and sets <paramref name="FromEnum"/>.</param>
-/// <param name="To">The exact numeric kind of the result; an enum target reports
-/// its underlying kind and sets <paramref name="ToEnum"/>.</param>
+/// <param name="From">The source endpoint: the numeric kind of <paramref name="Operand"/>.</param>
+/// <param name="To">The target endpoint: the numeric kind of the result.</param>
 /// <param name="IsChecked">Roslyn's <c>IConversionOperation.IsChecked</c>: the
 /// conversion throws <c>OverflowException</c> when the value does not fit.</param>
-/// <param name="FromEnum">Whether the source is an enum value.</param>
-/// <param name="ToEnum">Whether the target is an enum type.</param>
 /// <param name="IsLifted">Whether the conversion is lifted over nullable values
 /// (<c>int?</c> to <c>long?</c>), so <c>null</c> passes through unchanged.</param>
 public sealed record IrNumericConversion(
     IrExpression Operand,
-    IrNumericKind From,
-    IrNumericKind To,
+    IrNumericEndpoint From,
+    IrNumericEndpoint To,
     bool IsChecked,
-    bool FromEnum = false,
-    bool ToEnum = false,
     bool IsLifted = false
 ) : IrExpression;
+
+/// <summary>
+/// One side of an <see cref="IrNumericConversion"/>. An enum endpoint reports
+/// its underlying kind and sets <see cref="IsEnum"/>, so a target can tell
+/// <c>(long)e</c> from <c>(long)i</c>.
+/// </summary>
+/// <param name="Kind">The exact numeric kind of the value.</param>
+/// <param name="IsEnum">Whether the value is of an enum type.</param>
+public sealed record IrNumericEndpoint(IrNumericKind Kind, bool IsEnum = false);
 
 /// <summary>
 /// Reduces the unbounded result of <see cref="Value"/> to the domain of
