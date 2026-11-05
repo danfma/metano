@@ -201,6 +201,7 @@ public sealed partial class IrExpressionExtractor
     public IrExpression Extract(ExpressionSyntax expression) =>
         _conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax
             ? new IrConditionalReceiver()
+            // A constant inside checked / unchecked takes Roslyn's wrapped value.
             : FoldedCheckedContextConstant(expression) ?? ExtractUnbound(expression);
 
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
@@ -1629,15 +1630,36 @@ public sealed partial class IrExpressionExtractor
     /// Mirrors the legacy <see cref="Metano.Compiler.TypeScript.Transformation.LiteralHandler"/>
     /// shape so the IR path produces matching output.
     /// </summary>
-    private IrLiteral ClassifyNumericInContext(LiteralExpressionSyntax lit, object? value)
+    private IrLiteral ClassifyNumericInContext(LiteralExpressionSyntax lit, object? value) =>
+        ClassifyNumericForConvertedType(
+            lit.Token.ValueText,
+            value,
+            _semantic.GetTypeInfo(lit).ConvertedType
+        );
+
+    /// <summary>
+    /// A numeric constant in the representation its converted type needs:
+    /// <c>decimal</c> and <c>BigInteger</c> carry <paramref name="digits"/>
+    /// (precision-preserving text), every other type the
+    /// <see cref="ClassifyNumeric">classified</see> <paramref name="value"/>.
+    /// </summary>
+    private static IrLiteral ClassifyNumericForConvertedType(
+        string digits,
+        object? value,
+        ITypeSymbol? convertedType
+    )
     {
-        var convertedType = _semantic.GetTypeInfo(lit).ConvertedType;
         if (convertedType?.SpecialType == SpecialType.System_Decimal)
-            return new IrLiteral(lit.Token.ValueText, IrLiteralKind.Decimal);
-        if (convertedType?.ToDisplayString() == "System.Numerics.BigInteger")
-            return new IrLiteral(lit.Token.ValueText, IrLiteralKind.BigInteger);
+            return new IrLiteral(digits, IrLiteralKind.Decimal);
+
+        if (IsBigInteger(convertedType))
+            return new IrLiteral(digits, IrLiteralKind.BigInteger);
+
         return ClassifyNumeric(value);
     }
+
+    private static bool IsBigInteger(ITypeSymbol? type) =>
+        type?.ToDisplayString() == "System.Numerics.BigInteger";
 
     /// <summary>
     /// C#'s target-typed <c>default</c> carries no surface type — the runtime
