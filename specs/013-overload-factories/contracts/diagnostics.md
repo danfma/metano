@@ -66,6 +66,8 @@ When two constructions are indistinguishable at run time (`IConv<List<int>>` and
 
 ## `MS0003` (dead end)
 
-`Overloads 'K(Lib1::N.Decimal d)' and 'K(Lib2::N.Decimal d)' have the same naming spelling at every qualification level; they are emitted as 'kGlobalNDecimal$1' and 'kGlobalNDecimal$2' (spec 013 FR-024).`
+`Overloads 'K(N.Decimal d)' and 'K(N.Decimal d)' have the same naming spelling at every qualification level; they are named with the suffixes 'GlobalNDecimal$1' and 'GlobalNDecimal$2' (spec 013 FR-024).`
+
+The core names suffixes, not emitted members: each target derives and claims the member names (DECIDED-18).
 
 The positional markers keep the output valid TypeScript; the error fails the build.
