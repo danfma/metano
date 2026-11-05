@@ -11,8 +11,7 @@ namespace Metano.Compiler.TypeScript.AST;
 /// it has no storage and no initializer, and a derived class implements it with a field,
 /// a parameter property or an accessor.</param>
 /// <param name="JSDoc">The JSDoc comment printed ahead of the member — the
-/// <c>/** @internal *&#47;</c> tag of the assembly-wide visibility band
-/// (issue #445).</param>
+/// <c>/** @internal *&#47;</c> tag of the assembly-wide visibility band.</param>
 public sealed record TsFieldMember(
     string Name,
     TsType Type,

@@ -51,7 +51,6 @@ export class Ledger {
     return memo.length;
   }
 
-  /** @internal */
   audit(amount: number): number;
   /** @internal */
   audit(memo: string): number;

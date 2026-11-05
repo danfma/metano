@@ -686,7 +686,6 @@ public sealed class Printer(string indent = "  ")
         else
         {
             // Single constructor (no overloads)
-            PrintJSDoc(ctor.JSDoc);
             PrintConstructorHead(ctor.Accessibility, ctor.Parameters);
 
             if (ctor.Body.Count == 0)

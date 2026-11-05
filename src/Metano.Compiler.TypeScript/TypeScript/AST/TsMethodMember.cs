@@ -9,7 +9,7 @@ namespace Metano.Compiler.TypeScript.AST;
 /// signatures.</param>
 /// <param name="JSDoc">The JSDoc comment printed ahead of a method with no
 /// overload signatures — the <c>/** @internal *&#47;</c> tag of an
-/// <c>internal</c> / <c>protected internal</c> member. With overloads, each
+/// <c>internal</c> member. With overloads, each
 /// <see cref="TsMethodOverload.JSDoc"/> prints ahead of its own signature and
 /// the implementation carries none.</param>
 public sealed record TsMethodMember(
@@ -33,7 +33,7 @@ public sealed record TsMethodMember(
 /// An overload signature for a method: methodName&lt;T&gt;(param: Type): ReturnType;
 /// <paramref name="TypeParameters"/> carries the overload's own method type
 /// parameters, printed per signature. <paramref name="JSDoc"/> prints ahead
-/// of the signature, taken from the C# method it declares.
+/// of the signature: the tag its group gives the C# method it declares.
 /// </summary>
 public sealed record TsMethodOverload(
     IReadOnlyList<TsParameter> Parameters,
