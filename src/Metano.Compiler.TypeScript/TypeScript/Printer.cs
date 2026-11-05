@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Parenthesization;
 using Metano.Compiler.TypeScript.Parenthesization.Templates;
@@ -12,9 +13,42 @@ public sealed class Printer(string indent = "  ")
 {
     private readonly IndentedStringBuilder _sb = new(indent);
 
+    /// <summary>
+    /// Wraps a helper name printed without a file-level alias map (fragment
+    /// rendering — loop headers and raw statement bodies baked before the
+    /// import collector has decided the aliases). The final file print
+    /// resolves each wrapped name through the map; private-use characters can
+    /// never collide with emitted source text.
+    /// </summary>
+    internal const char HelperNameStart = '\uE000';
+
+    internal const char HelperNameEnd = '\uE001';
+
+    /// <summary>
+    /// The alias map of the file being printed: runtime helper name → the
+    /// local alias the import line binds (<c>isInt32</c> → <c>isInt32$rt</c>).
+    /// <c>null</c> while rendering fragments, where helper names print
+    /// sentinel-wrapped and resolve at the file level.
+    /// </summary>
+    private IReadOnlyDictionary<string, string>? _runtimeHelperAliases;
+
     public string Print(TsSourceFile file)
     {
+        var rendered = RenderRaw(file);
+
+        return ResolveHelperNames(rendered, file.RuntimeHelperAliases);
+    }
+
+    /// <summary>
+    /// Renders the file without resolving the sentinel-wrapped helper names.
+    /// The fragment bakers (<c>WrapLoop</c> headers, raw statement bodies) use
+    /// it so the sentinels survive into the raw statement text and the final
+    /// file print — which knows the aliases — resolves them.
+    /// </summary>
+    internal string RenderRaw(TsSourceFile file)
+    {
         _sb.Clear();
+        _runtimeHelperAliases = file.RuntimeHelperAliases;
         for (var i = 0; i < file.Statements.Count; i++)
         {
             var stmt = file.Statements[i];
@@ -28,6 +62,66 @@ public sealed class Printer(string indent = "  ")
             _sb.WriteLn();
         }
         return _sb.ToString();
+    }
+
+    /// <summary>
+    /// Replaces every sentinel-wrapped helper name in the printed text with
+    /// the file's alias, or the plain name when the map has no entry (or is
+    /// absent entirely) — the strip that turns fragment output into plain
+    /// names.
+    /// </summary>
+    private static string ResolveHelperNames(
+        string text,
+        IReadOnlyDictionary<string, string>? aliases
+    )
+    {
+        if (!text.Contains(HelperNameStart))
+            return text;
+
+        var builder = new System.Text.StringBuilder(text.Length);
+        var rest = text.AsSpan();
+
+        while (true)
+        {
+            var start = rest.IndexOf(HelperNameStart);
+
+            if (start < 0)
+            {
+                builder.Append(rest);
+                break;
+            }
+
+            builder.Append(rest[..start]);
+            rest = rest[(start + 1)..];
+            var end = rest.IndexOf(HelperNameEnd);
+
+            if (end < 0)
+            {
+                // Unpaired start marker: nothing to resolve, keep the text.
+                builder.Append(HelperNameStart);
+                builder.Append(rest);
+                break;
+            }
+
+            var name = rest[..end].ToString();
+            builder.Append(aliases?.GetValueOrDefault(name) ?? name);
+            rest = rest[(end + 1)..];
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// How a runtime helper call prints: through the file's alias when the
+    /// name collided (issue #484), sentinel-wrapped in fragment rendering so
+    /// the file-level pass can resolve it, or plainly when nothing collided.
+    /// </summary>
+    private string HelperName(string name)
+    {
+        if (_runtimeHelperAliases is { } aliases)
+            return aliases.TryGetValue(name, out var alias) ? alias : name;
+
+        return $"{HelperNameStart}{name}{HelperNameEnd}";
     }
 
     /// <summary>
@@ -1281,7 +1375,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsRuntimeHelperReference helper:
-                _sb.Write(helper.Name);
+                _sb.Write(HelperName(helper.Name));
                 break;
 
             case TsLiteral lit:
@@ -1600,15 +1694,59 @@ public sealed class Printer(string indent = "  ")
 
             if (dollar < 0)
             {
-                _sb.Write(text[i..]);
+                WriteTemplateLiteral(text[i..], template.RuntimeImports);
                 break;
             }
 
             if (dollar > i)
-                _sb.Write(text[i..dollar]);
+                WriteTemplateLiteral(text[i..dollar], template.RuntimeImports);
 
             i = PrintPlaceholderAt(template, shape, dollar);
         }
+    }
+
+    /// <summary>
+    /// Writes a template's literal chunk with the helper names it declares in
+    /// <c>RuntimeImports</c> rerouted: to the file's alias when the import
+    /// collided (issue #484), sentinel-wrapped while rendering fragments so
+    /// the file-level pass resolves them, untouched otherwise. Only declared
+    /// names are touched — the rest of the chunk is compiler-authored text.
+    /// </summary>
+    private void WriteTemplateLiteral(string chunk, IReadOnlyList<string> runtimeImports)
+    {
+        if (runtimeImports.Count == 0)
+        {
+            _sb.Write(chunk);
+            return;
+        }
+
+        if (_runtimeHelperAliases is { } aliases)
+        {
+            var aliased = runtimeImports.Where(aliases.ContainsKey).ToList();
+
+            if (aliased.Count is 0)
+            {
+                _sb.Write(chunk);
+                return;
+            }
+
+            foreach (var helper in aliased)
+            {
+                var replacement = aliases[helper];
+                chunk = Regex.Replace(chunk, $@"\b{Regex.Escape(helper)}\b", _ => replacement);
+            }
+
+            _sb.Write(chunk);
+            return;
+        }
+
+        foreach (var helper in runtimeImports)
+        {
+            var wrapped = $"{HelperNameStart}{helper}{HelperNameEnd}";
+            chunk = Regex.Replace(chunk, $@"\b{Regex.Escape(helper)}\b", _ => wrapped);
+        }
+
+        _sb.Write(chunk);
     }
 
     /// <summary>

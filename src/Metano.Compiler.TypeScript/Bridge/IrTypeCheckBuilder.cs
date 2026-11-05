@@ -307,8 +307,15 @@ internal static class IrTypeCheckBuilder
         return new TsBinaryExpression(typeofCheck, "&&", arityCheck);
     }
 
+    /// <summary>
+    /// The call goes through <see cref="TsRuntimeHelperReference"/>, not a bare
+    /// identifier: when a user declaration in the module claims the helper's
+    /// name, the import collector aliases the runtime import and the printer
+    /// routes the call through the alias instead of silently calling the user's
+    /// function (issue #484).
+    /// </summary>
     private static TsExpression RuntimeIs(string helper, TsExpression value) =>
-        new TsCallExpression(new TsIdentifier(helper), [value]);
+        new TsCallExpression(new TsRuntimeHelperReference(helper), [value]);
 
     private static TsExpression TypeofObject(TsExpression value) => TypeofTest(value, "object");
 }

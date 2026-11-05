@@ -220,7 +220,7 @@ public static class IrToTsStatementBridge
             "frag.ts",
             [new TsFunction("frag", [], new TsVoidType(), body)]
         );
-        var printed = new Printer().Print(file);
+        var printed = new Printer().RenderRaw(file);
         var start = printed.IndexOf('{') + 1;
         var end = printed.LastIndexOf('}');
         var inner = printed[start..end].Trim('\n', '\r');
@@ -250,7 +250,7 @@ public static class IrToTsStatementBridge
             "frag.ts",
             [new TsFunction("frag", [], new TsVoidType(), [new TsExpressionStatement(expr)])]
         );
-        var printed = new Printer().Print(file);
+        var printed = new Printer().RenderRaw(file);
         // Extract the expression statement from inside the function body.
         var start = printed.IndexOf('{') + 1;
         var end = printed.LastIndexOf('}');
