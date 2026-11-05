@@ -105,6 +105,7 @@ public sealed class IrToTsClassEmitter(
         ) with
         {
             Accessibility = _constructorAccessPolicy.ResolveAndReport(type, ir),
+            JSDoc = ConstructorInternalJSDoc(ir),
         };
 
         var classMembers = new List<TsClassMember>();
@@ -447,6 +448,20 @@ public sealed class IrToTsClassEmitter(
     private static bool IsPromotedParamsParameter(IrConstructorParameter p) =>
         p.Parameter.IsParams && p.Promotion is not IrParameterPromotion.None;
 
+    /// <summary>
+    /// The <c>@internal</c> JSDoc of the assembly-wide visibility band
+    /// (issue #445): a constructor whose most permissive declaration is
+    /// <c>internal</c> or <c>protected internal</c> emits public and tagged.
+    /// A value type never carries the tag — its implicit parameterless
+    /// constructor is public regardless of what it declares (FR-049).
+    /// </summary>
+    private static TsJSDoc? ConstructorInternalJSDoc(IrClassDeclaration ir) =>
+        ir.Constructor is { } declaredConstructor && !ir.Semantics.IsValueType
+            ? IrToTsVisibilityMapper.InternalJSDocOf(
+                TsConstructorModifier.MostPermissiveVisibilityOf(declaredConstructor)
+            )
+            : null;
+
     private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p) =>
         new(
             IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),
@@ -456,7 +471,8 @@ public sealed class IrToTsClassEmitter(
             Initializer: null,
             Readonly: p.Promotion is IrParameterPromotion.ReadonlyProperty,
             Static: false,
-            Accessibility: IrToTsClassBridge.MapAccessibility(
+            Accessibility: IrToTsVisibilityMapper.Of(p.PromotedVisibility ?? IrVisibility.Public),
+            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(
                 p.PromotedVisibility ?? IrVisibility.Public
             )
         );

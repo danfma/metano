@@ -45,9 +45,10 @@ internal static partial class IrToTsClassBridge
             Static: method.IsStatic,
             Async: method.Semantics.IsAsync,
             Generator: method.Semantics.IsGenerator,
-            Accessibility: MapAccessibility(method.Visibility),
+            Accessibility: IrToTsVisibilityMapper.Of(method.Visibility),
             TypeParameters: typeParameters,
-            Abstract: false
+            Abstract: false,
+            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(method.Visibility)
         );
     }
 

@@ -104,7 +104,7 @@ internal static partial class IrToTsClassBridge
         }
 
         var isReadonly = p.Promotion is IrParameterPromotion.ReadonlyProperty;
-        var accessibility = MapAccessibility(p.PromotedVisibility ?? IrVisibility.Public);
+        var accessibility = IrToTsVisibilityMapper.Of(p.PromotedVisibility ?? IrVisibility.Public);
 
         return new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue);
     }

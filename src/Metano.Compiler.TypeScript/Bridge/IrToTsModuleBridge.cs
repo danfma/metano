@@ -112,7 +112,8 @@ public static class IrToTsModuleBridge
             // A `const` needs an initializer; a member with no literal default is a `let`.
             Const: isReadonly && value is not null,
             Exported: member.Visibility is not IrVisibility.Private,
-            Type: IrToTsTypeMapper.Map(type, typeOverrides)
+            Type: IrToTsTypeMapper.Map(type, typeOverrides),
+            JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(member.Visibility)
         );
     }
 

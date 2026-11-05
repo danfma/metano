@@ -6,5 +6,6 @@ public sealed record TsGetterMember(
     IReadOnlyList<TsStatement> Body,
     bool Static = false,
     bool Override = false,
-    TsAccessibility Accessibility = TsAccessibility.Public
+    TsAccessibility Accessibility = TsAccessibility.Public,
+    TsJSDoc? JSDoc = null
 ) : TsClassMember;

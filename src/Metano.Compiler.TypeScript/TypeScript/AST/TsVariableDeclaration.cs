@@ -20,5 +20,6 @@ public sealed record TsVariableDeclaration(
     bool Const = true,
     bool Exported = false,
     TsType? Type = null,
-    bool DefinitelyAssigned = false
+    bool DefinitelyAssigned = false,
+    TsJSDoc? JSDoc = null
 ) : TsStatement;
