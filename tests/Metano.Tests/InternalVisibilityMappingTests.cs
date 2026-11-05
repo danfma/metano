@@ -286,4 +286,57 @@ public class InternalVisibilityMappingTests
             .That(files["limits.ts"])
             .Contains("/** @internal */\nexport const max: number = 5;");
     }
+
+    [Test]
+    public async Task CrossPackageOverrideOfProtectedInternal_EmitsPublicTaggedLikeItsBase()
+    {
+        var library = """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            namespace Lib;
+
+            public class Shape
+            {
+                protected internal virtual int Sides() => 0;
+
+                protected internal virtual int Size { get; set; }
+            }
+
+            public abstract class Figure
+            {
+                protected internal abstract int Corners();
+            }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Square : Lib.Shape
+            {
+                protected override int Sides() => 4;
+
+                protected override int Size { get; set; }
+            }
+
+            public class Triangle : Lib.Figure
+            {
+                protected override int Corners() => 3;
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+        var square = result["app/square.ts"];
+        var triangle = result["app/triangle.ts"];
+
+        await Assert.That(square).Contains("  /** @internal */\n  sides(): number {");
+        await Assert.That(square).Contains("  /** @internal */\n  get size(): number {");
+        await Assert.That(square).Contains("  /** @internal */\n  set size(value: number) {");
+        await Assert.That(square).DoesNotContain("protected ");
+        await Assert.That(triangle).Contains("  /** @internal */\n  corners(): number {");
+        await Assert.That(triangle).DoesNotContain("protected ");
+    }
 }

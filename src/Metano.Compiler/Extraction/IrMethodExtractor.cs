@@ -77,7 +77,7 @@ public static class IrMethodExtractor
 
         return new IrMethodDeclaration(
             method.Name,
-            IrVisibilityMapper.Map(method.DeclaredAccessibility),
+            IrVisibilityMapper.MapMember(method),
             method.IsStatic,
             parameters,
             returnType,
