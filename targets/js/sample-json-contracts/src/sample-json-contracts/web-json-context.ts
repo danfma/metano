@@ -1,11 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { Decimal } from "decimal.js";
 import {
   SerializerContext,
   type JsonReadOptions,
   type TypeSpec,
   type ValueSpec,
 } from "metano-runtime/system/json";
-import { Decimal } from "decimal.js";
 import { Clip } from "./clip";
 import { Color } from "./color";
 import { Group } from "./group";

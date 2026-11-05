@@ -1,7 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { UUID } from "metano-runtime";
-import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Decimal } from "decimal.js";
+import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Keys } from "./keys";
 import { Level } from "./level";
 import { Mood } from "./mood";
