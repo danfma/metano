@@ -1,6 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { UUID } from "metano-runtime";
-import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
+import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Decimal } from "decimal.js";
 import { Keys } from "./keys";
 import { Level } from "./level";
@@ -12,8 +12,6 @@ export class JsonContext extends SerializerContext {
   private static readonly _default: JsonContext = new JsonContext();
 
   private _keys?: TypeSpec<Keys>;
-
-  private _dateOnly?: ValueSpec<Temporal.PlainDate>;
 
   static get default(): JsonContext {
     return this._default;
@@ -170,14 +168,6 @@ export class JsonContext extends SerializerContext {
           },
         },
       ],
-    });
-  }
-
-  get dateOnly(): ValueSpec<Temporal.PlainDate> {
-    return this._dateOnly ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.PlainDate.from },
-      valueType: true,
-      typeName: "System.DateOnly",
     });
   }
 }

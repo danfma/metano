@@ -54,11 +54,8 @@ public class JsonDictionaryKeyTests
             Dictionary<Tag, string> ByTag
         );
 
-        // The DateOnly root brings the Temporal import: the context imports
-        // the runtime helpers of its roots' own types, not of their members.
         [Transpile]
         [JsonSerializable(typeof(Keys))]
-        [JsonSerializable(typeof(DateOnly))]
         public partial class JsonContext : JsonSerializerContext
         {
             public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }

@@ -78,14 +78,25 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     }
 
     /// <summary>
-    /// The runtime helpers the emitted root getters need for the types they
-    /// name in <c>ValueSpec&lt;T&gt;</c> / <c>TypeSpec&lt;T&gt;</c> (<c>HashSet</c>,
-    /// <c>UUID</c>, <c>Temporal</c>, …; FR-041). Only roots that are emitted
-    /// count: rejected (<c>MS0035</c>) and dropped (<c>MS0036</c>) ones do not.
+    /// The runtime helpers the emitted context names as values for the types
+    /// its descriptors reference (FR-041). Two surfaces:
+    /// <list type="bullet">
+    ///   <item>every claimed entry's own type, spelled in
+    ///     <c>ValueSpec&lt;T&gt;</c> / <c>TypeSpec&lt;T&gt;</c> — a set value
+    ///     root names <c>HashSet</c> there, a temporal root <c>Temporal</c>;
+    ///     closure contracts and polymorphic variants are entries too, not
+    ///     only <c>[JsonSerializable]</c> roots. Only emitted entries count:
+    ///     rejected (<c>MS0035</c>) and dropped (<c>MS0036</c>) roots never
+    ///     reach the plan.</item>
+    ///   <item>the types the descriptors nest, members, elements, dictionary
+    ///     keys and values included (<see cref="JsonDescriptorTypes"/>,
+    ///     <see cref="DescriptorRequirements"/>).</item>
+    /// </list>
     /// The plan is computed silently; <see cref="Transform"/> reports its
     /// diagnostics. The System.Text.Json source generator declares a
-    /// <c>JsonTypeInfo&lt;T&gt;</c> member per root, whose scan yields the same
-    /// helpers, but the context must not depend on the generator having run.
+    /// <c>JsonTypeInfo&lt;T&gt;</c> member per root, whose scan yields the
+    /// same helpers, but the context must not depend on the generator having
+    /// run.
     /// </summary>
     public IReadOnlySet<IrRuntimeRequirement> RuntimeRequirementsOf(INamedTypeSymbol contextType)
     {
@@ -93,13 +104,41 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             return new HashSet<IrRuntimeRequirement>();
 
         return plan
-            .Entries.Where(entry => entry.Root is not null)
-            .SelectMany(entry =>
+            .Entries.SelectMany(entry =>
                 IrRuntimeRequirementScanner.Scan(
                     IrTypeRefMapper.Map(entry.Type, target: TargetLanguage.TypeScript)
                 )
             )
+            .Concat(DescriptorRequirements(plan))
             .ToHashSet();
+    }
+
+    /// <summary>
+    /// The requirements the plan's descriptors can satisfy only through the
+    /// import table: a temporal descriptor parses through
+    /// <c>Temporal.X.from</c>, and <c>Temporal</c> has no BCL export mapping,
+    /// so a temporal type anywhere in the descriptors — a root, a member, an
+    /// element, a dictionary key or value, a polymorphic variant's member —
+    /// requires the import. The other value identifiers the descriptors name
+    /// (<c>UUID.create</c>, <c>Decimal</c>, the contract and enum names)
+    /// resolve through the AST import walker and are not requirements: the
+    /// walker imports exactly the identifiers the file references, where a
+    /// helper requirement whose identifier the context never spells (a
+    /// <c>hashSet</c> descriptor carries only its <c>kind</c>) would dangle
+    /// unused.
+    /// </summary>
+    private static IReadOnlySet<IrRuntimeRequirement> DescriptorRequirements(JsonContextPlan plan)
+    {
+        var requirements = new HashSet<IrRuntimeRequirement>();
+
+        if (
+            JsonDescriptorTypes
+                .Of(plan)
+                .Any(type => JsonTypeClassifier.Classify(type) == JsonPropertyKind.Temporal)
+        )
+            requirements.Add(new IrRuntimeRequirement("Temporal", IrRuntimeCategory.Temporal));
+
+        return requirements;
     }
 
     /// <summary>
