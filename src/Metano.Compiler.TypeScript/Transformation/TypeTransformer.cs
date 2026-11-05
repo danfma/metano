@@ -810,7 +810,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (type.TypeKind != TypeKind.Interface)
             return false;
         var ifaceIr = (IrInterfaceDeclaration)GetOrExtractIr(type, irCache)!;
-        var fastPaths = TsInterfaceFastPaths.Of(ifaceIr);
+        var fastPaths = OverloadClaims.InterfaceFastPathsOf(type);
 
         TsOverloadClaims.Report(fastPaths.Findings, type, ReportDiagnostic);
 

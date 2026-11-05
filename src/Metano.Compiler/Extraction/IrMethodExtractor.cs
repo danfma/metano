@@ -90,6 +90,21 @@ public static class IrMethodExtractor
         };
     }
 
+    /// <summary>
+    /// The signature of a method another declaration owns — an inherited
+    /// dispatcher overload, an interface member's construction: no body, and
+    /// no diagnostics, which its declaring type reports where it is extracted.
+    /// </summary>
+    public static IrMethodDeclaration ExtractForeignSignature(
+        IMethodSymbol method,
+        IrExtractionContext context
+    )
+    {
+        using var _ = ExtractionDiagnostics.Suppress();
+
+        return Extract(method, context with { Compilation = null });
+    }
+
     private static IReadOnlyList<IrStatement>? TryExtractBody(
         IMethodSymbol method,
         IrExtractionContext context,

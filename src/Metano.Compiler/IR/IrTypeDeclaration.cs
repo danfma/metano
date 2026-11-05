@@ -41,6 +41,15 @@ public sealed record IrClassDeclaration(
     /// <c>null</c> when the type implements no interface more than once.
     /// </summary>
     public IReadOnlyList<IrConstructedRoot>? ConstructedRoots { get; init; }
+
+    /// <summary>
+    /// The constructed root <paramref name="method"/> is anchored on: a branch
+    /// of that root's runtime dispatcher, not a fast path; <c>null</c> otherwise.
+    /// </summary>
+    public IrConstructedRoot? ConstructedRootOf(IrMethodDeclaration method) =>
+        method.Anchor?.Root is { } root
+            ? ConstructedRoots?.FirstOrDefault(constructed => constructed.Root == root)
+            : null;
 }
 
 /// <summary>

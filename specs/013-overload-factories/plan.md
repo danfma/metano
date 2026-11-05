@@ -216,11 +216,23 @@ hiding type's dispatcher (spec § Divergences). Known gaps: Roslyn imports no pr
 assemblies, internal) member of a metadata reference (`MetadataImportOptions.Public` by default),
 so DECIDED-28's blind spot covers implementation DLLs as well as reference assemblies — a private
 claimant that renamed the producer's fast path is missed and the consumer's `override` fails with
-TS4117 (pinned by `MetadataBase_MissesAPrivateClaimant`); a group whose base's dispatcher signatures
+TS4117 (pinned by `MetadataBase_OverridesTheUnrenamedFastPath_WhenTheClaimantIsPrivate`); a group whose base's dispatcher signatures
 all take a `params` rest parameter forwards `...(args as never[])`; an abstract implementation of a
 multiply-constructed root is not branched (no body); a class that implements only part of an
 interface group, the rest inherited from a base that does not implement the interface, gets no
 dispatcher for it; DECIDED-29's pinned output still fails `tsgo` (TS2416/TS2385), as before.
+An interface root is always *implemented*: a `new` method, an explicit re-implementation
+(`X3 : X, IR`) or an override of an undispatched base virtual that also implements a root anchors
+on the interface member (`Implementation`), and the claim pass emits it `override` when an emitted
+base already declares that fast path (`TsMethodOverloadNames.OverridesInherited`) — naming.md's
+"a `new` method is its own root" holds for class groups only. `base.M(...)` is bound only into an
+emitted class (not `[External]`, not the BCL), and inherited signatures of explicit implementations
+are declared under the interface member's name. Still failing `tsgo`, as before 013d (the
+DECIDED-29 family): a class overloading an inherited single virtual (`B : G` adding `M(int)` /
+`M(string)` beside `G.M(bool)`, or `Bi : A, I` whose dispatcher shadows `A.n`) emits a dispatcher
+that redeclares the base's single method; `base.Equals(obj)` on a class with no emitted base still
+emits `super.equals`. `MS0069` is reported by the TypeScript class emitter only; Dart reports it
+when it emits overloads (013g).
 A multiply-constructed root's name is the one its interface declares (computed on the interface
 definition, `convX`), not a constructed spelling: implementers must match the interface's member
 name, and a constructed spelling differs from it whenever the group needs type spellings.

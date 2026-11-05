@@ -59,11 +59,11 @@ public static class IrToTsOverloadDispatcherBridge
     /// The fast-path and forwarding names of each overload, as the class's
     /// claim pass named them (<see cref="TsOverloadClaims"/>).
     /// </param>
-    /// <param name="constructedRoots">
-    /// The roots of the interfaces the class implements more than once
-    /// (<see cref="IrClassDeclaration.ConstructedRoots"/>): an overload
-    /// anchored on one is a branch of that root's runtime dispatcher
-    /// (<see cref="IrToTsConstructedRootDispatcherBridge"/>), not a fast path.
+    /// <param name="owner">
+    /// The class that declares the group, whose constructed roots
+    /// (<see cref="IrClassDeclaration.ConstructedRoots"/>) take the overloads
+    /// anchored on them as branches of a runtime dispatcher
+    /// (<see cref="IrToTsConstructedRootDispatcherBridge"/>), not fast paths.
     /// </param>
     internal static IReadOnlyList<TsClassMember> BuildMethod(
         IrMethodDeclaration primary,
@@ -71,7 +71,7 @@ public static class IrToTsOverloadDispatcherBridge
         IReadOnlyList<IrTypeParameter> classTypeParameters,
         TsOverloadClaims names,
         IrToTsBridgeContext context,
-        IReadOnlyList<IrConstructedRoot>? constructedRoots = null
+        IrClassDeclaration? owner = null
     )
     {
         var group = IrMethodGroup.Of(primary);
@@ -81,51 +81,74 @@ public static class IrToTsOverloadDispatcherBridge
 
         var isStatic = primary.IsStatic;
         var members = new List<TsClassMember>();
-        var rootsByRef = (constructedRoots ?? []).ToDictionary(root => root.Root);
-
         foreach (var overload in OverloadDispatchOrder.Sort(group.Members, m => m.Parameters))
         {
-            if (overload.Anchor?.Root is { } anchorRoot && rootsByRef.ContainsKey(anchorRoot))
+            if (owner?.ConstructedRootOf(overload) is not null)
                 continue;
 
             var fastPathName = names.FastPathNameOf(overload);
 
-            members.Add(BuildFastPathMember(overload, fastPathName, isStatic, context));
+            members.Add(
+                BuildFastPathMember(
+                    overload,
+                    fastPathName,
+                    isStatic,
+                    names.OverridesInheritedFastPath(overload),
+                    context
+                )
+            );
 
             members.AddRange(
                 names
                     .ForwardingNamesOf(overload)
-                    .Select(forwarder =>
-                        BuildForwardingMember(overload, forwarder, fastPathName, context)
+                    .Select(forwarderName =>
+                        BuildForwardingMember(overload, forwarderName, fastPathName, context)
                     )
             );
         }
 
-        members.AddRange(
-            group
-                .Members.Where(overload =>
-                    overload.Anchor?.Root is { } root && rootsByRef.ContainsKey(root)
-                )
-                .GroupBy(overload => overload.Anchor!.Root)
-                .Select(implementations =>
-                    IrToTsConstructedRootDispatcherBridge.Build(
-                        names.FastPathNameOf(implementations.First()),
-                        rootsByRef[implementations.Key],
-                        implementations.ToList(),
-                        classTypeParameters,
-                        context
-                    )
-                )
+        if (owner is not null)
+            members.AddRange(ConstructedRootDispatchers(group, owner, names, context));
+
+        var dispatcher = BuildDispatcher(
+            group,
+            containingTypeName,
+            classTypeParameters,
+            names,
+            context
         );
 
-        if (
-            BuildDispatcher(group, containingTypeName, classTypeParameters, names, context) is
-            { } dispatcher
-        )
+        if (dispatcher is not null)
             members.Add(dispatcher);
 
         return members;
     }
+
+    /// <summary>
+    /// One runtime dispatcher per constructed root the group's overloads are
+    /// anchored on (FR-036); every implementation of one root shares its name.
+    /// </summary>
+    private static IEnumerable<TsMethodMember> ConstructedRootDispatchers(
+        IrMethodGroup group,
+        IrClassDeclaration owner,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context
+    ) =>
+        group
+            .Members.Select(overload =>
+                (Overload: overload, Root: owner.ConstructedRootOf(overload))
+            )
+            .Where(entry => entry.Root is not null)
+            .GroupBy(entry => entry.Root!)
+            .Select(implementations =>
+                IrToTsConstructedRootDispatcherBridge.Build(
+                    names.FastPathNameOf(implementations.First().Overload),
+                    implementations.Key,
+                    implementations.Select(entry => entry.Overload).ToList(),
+                    owner.TypeParameters ?? [],
+                    context
+                )
+            );
 
     /// <summary>
     /// The group's dispatcher as <see cref="IrMethodGroup.DispatcherKind"/>
@@ -147,11 +170,13 @@ public static class IrToTsOverloadDispatcherBridge
         var typeOverrides = context.TypeOverrides;
         var inherited = group.Primary.InheritedOverloads ?? [];
         var branches = OverloadDispatchOrder.Sort(group.Branches, m => m.Parameters);
+
         var signatures = OverloadDispatchOrder
             .Sort(inherited, m => m.Parameters)
             .Concat(branches)
             .ToList();
-        var plan = PlanOverloadGroup(signatures, names.FastPathNameOf, typeOverrides, sort: false);
+
+        var plan = PlanOverloadGroup(signatures, typeOverrides, sort: false);
         var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
         var name = TypeScriptNaming.ToCamelCaseMember(group.Primary.Name);
 
@@ -215,14 +240,13 @@ public static class IrToTsOverloadDispatcherBridge
                 nameof(overloads)
             );
 
-        var plan = PlanOverloadGroup(
-            overloads,
-            overload => OverloadFastPathName.Of(functionName, overload),
-            typeOverrides: null,
-            sort: true
-        );
+        var plan = PlanOverloadGroup(overloads, typeOverrides: null, sort: true);
 
-        var fastPathNames = plan.FastPathNames.Select(name => ClaimName(name, takenNames)).ToList();
+        var fastPathNames = plan
+            .Sorted.Select(overload =>
+                ClaimName(OverloadFastPathName.Of(functionName, overload), takenNames)
+            )
+            .ToList();
 
         var functions = plan
             .Sorted.Select(
@@ -255,13 +279,12 @@ public static class IrToTsOverloadDispatcherBridge
 
     /// <summary>
     /// The target-shape-independent part of a dispatcher: the overloads in
-    /// dispatch order, their fast-path names, the async flag, the
+    /// dispatch order, the async flag, the
     /// implementation return type, the overload signatures and the
     /// accessibility they share: the most permissive of the group.
     /// </summary>
     private sealed record OverloadGroupPlan(
         IReadOnlyList<IrMethodDeclaration> Sorted,
-        IReadOnlyList<string> FastPathNames,
         bool IsAsync,
         TsType CommonReturn,
         IReadOnlyList<TsMethodOverload> Signatures,
@@ -275,7 +298,6 @@ public static class IrToTsOverloadDispatcherBridge
     /// </summary>
     private static OverloadGroupPlan PlanOverloadGroup(
         IReadOnlyList<IrMethodDeclaration> overloads,
-        Func<IrMethodDeclaration, string> fastPathNameOf,
         IrToTsTypeOverrides? typeOverrides,
         bool sort
     )
@@ -289,7 +311,6 @@ public static class IrToTsOverloadDispatcherBridge
 
         return new OverloadGroupPlan(
             sorted,
-            sorted.Select(fastPathNameOf).ToList(),
             isAsync,
             ResolveCommonReturnType(sorted, isAsync, typeOverrides),
             sorted
@@ -314,6 +335,7 @@ public static class IrToTsOverloadDispatcherBridge
         var returns = sorted
             .Select(m => IrToTsTypeMapper.Map(m.ReturnType, typeOverrides))
             .ToList();
+
         var isGeneric = sorted.Any(IsGeneric);
 
         if (!isGeneric && returns.All(t => t.Equals(returns[0])))
@@ -368,6 +390,7 @@ public static class IrToTsOverloadDispatcherBridge
         IrMethodDeclaration method,
         string fastPathName,
         bool isStatic,
+        bool overridesInherited,
         IrToTsBridgeContext context
     )
     {
@@ -389,7 +412,7 @@ public static class IrToTsOverloadDispatcherBridge
             // instead of referencing an undeclared T.
             TypeParameters: MapTypeParameters(method.TypeParameters),
             Abstract: isAbstract,
-            Override: IrMethodGroup.IsOverride(method),
+            Override: IrMethodGroup.IsOverride(method) || overridesInherited,
             JSDoc: visibility.JSDoc
         );
     }
@@ -532,6 +555,7 @@ public static class IrToTsOverloadDispatcherBridge
         {
             var method = sorted[i];
             var arguments = new OverloadArgumentShape(method.Parameters);
+
             var scope = TypeCheckScope.ForMethod(
                 method,
                 classScope.TypeParameters,

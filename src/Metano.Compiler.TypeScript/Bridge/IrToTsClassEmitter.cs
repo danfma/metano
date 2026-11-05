@@ -933,7 +933,7 @@ public sealed class IrToTsClassEmitter(
             owner.TypeParameters ?? [],
             claims,
             lowering,
-            owner.ConstructedRoots
+            owner
         );
     }
 
