@@ -38,18 +38,30 @@ internal static class NumericEndpoints
     /// <summary>
     /// Whether the exact 64-bit lowering makes the conversion from
     /// <paramref name="from"/> to <paramref name="to"/> explicit: one side
-    /// is a 64-bit integer, or an integer widens into <c>BigInteger</c>.
+    /// is a 64-bit integer, or an integer or <c>char</c> widens into
+    /// <c>BigInteger</c>.
     /// </summary>
     public static bool NeedsExactConversion(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from != to
         && (
             from.IsSixtyFourBitValue()
             || to.IsSixtyFourBitValue()
-            || (to is { Kind: IrNumericKind.BigInteger } && IsIntegerOrChar(from))
+            || (to is { Kind: IrNumericKind.BigInteger } && from.Kind.IsIntegerOrChar())
         );
 
-    private static bool IsIntegerOrChar(IrNumericEndpoint endpoint) =>
-        endpoint.Kind.IsInteger() || endpoint.Kind is IrNumericKind.Char;
+    /// <summary>
+    /// Whether a conversion from <paramref name="from"/> to
+    /// <paramref name="to"/> becomes an <see cref="IrNumericConversion"/>: a
+    /// floating-point truncation in every mode (FR-070), and the conversions
+    /// of <see cref="NeedsExactConversion"/> under the exact 64-bit lowering.
+    /// </summary>
+    public static bool IsLoweredExplicitly(
+        IrNumericEndpoint from,
+        IrNumericEndpoint to,
+        bool exactInt64Lowering
+    ) =>
+        IrNumericConversion.IsFloatingPointTruncation(from, to)
+        || (exactInt64Lowering && NeedsExactConversion(from, to));
 
     private static IrNumericKind? KindOf(ITypeSymbol? type) =>
         type?.SpecialType switch

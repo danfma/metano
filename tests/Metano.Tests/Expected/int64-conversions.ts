@@ -401,4 +401,27 @@ export class Conv {
 
     return x;
   }
+
+  checkedLoop(longs: bigint[]): number {
+    let last = 0;
+
+    {
+      for (const x$element of longs) {
+        const x = Number(checkedNarrow(x$element, 32, false));
+        last = x;
+      }
+    }
+
+    return last;
+  }
+
+  uncheckedLoop(longs: bigint[]): number {
+    let last = 0;
+    for (const x$element of longs) {
+      const x = Number(BigInt.asUintN(32, x$element));
+      last = x;
+    }
+
+    return last;
+  }
 }

@@ -380,52 +380,51 @@ public sealed class IrStatementExtractor(
         var collection = _expressions.Extract(fe.Expression);
         var body = ExtractEmbedded(fe.Statement);
 
-        if (ElementConversionEndpoints(fe) is not var (from, to, isLifted))
+        // `$` is not legal in a C# identifier, so the raw element's name
+        // cannot collide with a user binding.
+        var element = variable + "$element";
+
+        if (ElementConversion(fe, new IrIdentifier(element)) is not { } converted)
             return new IrForEachStatement(variable, variableType, collection, body);
 
-        // `foreach (long x in ints)`: iterate the raw element and declare the
-        // C# variable as its conversion (spec 012 FR-010).
-        var element = variable + "$element";
-        var converted = new IrNumericConversion(
-            new IrIdentifier(element),
-            from,
-            to,
-            IsChecked: false,
-            IsLifted: isLifted
-        );
-
-        IrStatement declaration = new IrVariableDeclaration(variable, variableType, converted);
+        // `foreach (long x in ints)`, `foreach (int x in doubles)`: iterate the
+        // raw element and declare the C# variable as its conversion (spec 012
+        // FR-010, FR-070).
+        var declaration = new IrVariableDeclaration(variable, variableType, converted);
 
         return new IrForEachStatement(element, null, collection, [declaration, .. body]);
     }
 
     /// <summary>
-    /// The endpoints of the numeric conversion from each element to the
-    /// declared loop variable, when the exact 64-bit lowering makes it
-    /// explicit; <c>null</c> otherwise.
+    /// The numeric conversion of <paramref name="element"/> to the declared
+    /// loop variable, when Roslyn's element conversion lowers explicitly: a
+    /// floating-point truncation in every mode, a 64-bit one under the exact
+    /// lowering. A <c>foreach</c> conversion is explicit, so it checks in a
+    /// checked context; no operation carries that flag, so it comes from the
+    /// enclosing context and the compilation options.
     /// </summary>
-    private (
-        IrNumericEndpoint From,
-        IrNumericEndpoint To,
-        bool IsLifted
-    )? ElementConversionEndpoints(ForEachStatementSyntax fe)
+    private IrNumericConversion? ElementConversion(ForEachStatementSyntax fe, IrExpression element)
     {
-        if (!_context.ExactInt64Lowering)
-            return null;
-
         var info = _semantic.GetForEachStatementInfo(fe);
         var variableType = (_semantic.GetDeclaredSymbol(fe) as ILocalSymbol)?.Type;
 
         if (
-            NumericEndpoints.Of(info.ElementType) is not { } from
+            !IsNumericElementConversion(info)
+            || NumericEndpoints.Of(info.ElementType) is not { } from
             || NumericEndpoints.Of(variableType) is not { } to
         )
             return null;
 
-        var needsNode =
-            IsNumericElementConversion(info) && NumericEndpoints.NeedsExactConversion(from, to);
+        if (!NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering))
+            return null;
 
-        return needsNode ? (from, to, info.ElementType.IsNullableValueType()) : null;
+        return new IrNumericConversion(
+            element,
+            from,
+            to,
+            IsChecked: CheckedContexts.IsChecked(fe, _semantic.Compilation),
+            IsLifted: info.ElementType.IsNullableValueType()
+        );
     }
 
     private static bool IsNumericElementConversion(ForEachStatementInfo info) =>

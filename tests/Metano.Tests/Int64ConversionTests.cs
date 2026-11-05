@@ -127,6 +127,8 @@ public class Int64ConversionTests
             public nint NWiden(int i) => i;
             public double MixedRel(long l, double d) => l < d ? 1 : 0;
             public long UncheckedInt() { long x = unchecked((int)0xFFFFFFFF); return x; }
+            public uint CheckedLoop(long[] longs) { uint last = 0; checked { foreach (uint x in longs) last = x; } return last; }
+            public uint UncheckedLoop(long[] longs) { uint last = 0; foreach (uint x in longs) last = x; return last; }
         }
         """;
 
@@ -287,10 +289,10 @@ public class Int64ConversionTests
 
     /// <summary>
     /// A user function named like a conversion helper is not mistaken for it:
-    /// only the calls the bridge emits import from <c>metano-runtime</c>.
+    /// only the helpers the bridge emits import from <c>metano-runtime</c>.
     /// </summary>
     [Test]
-    public async Task NumberMode_UserFunctionNamedLikeAHelper_IsNotImported()
+    public async Task BigIntMode_UserFunctionNamedLikeAHelper_IsNotImported()
     {
         const string source = """
             [Transpile, ExportedAsModule]
@@ -298,15 +300,19 @@ public class Int64ConversionTests
             {
                 public static int MapNullable(int x) => x;
                 public static int Int32FromDouble(int x) => MapNullable(x);
+                public static long Truncate(double d) => (long)d;
             }
             """;
 
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(
             source,
-            Int64Representation.Number
+            Int64Representation.BigInt
         );
 
-        await Assert.That(files["helpers.ts"]).DoesNotContain("metano-runtime");
+        var output = files["helpers.ts"];
+
+        await Assert.That(output).Contains("export function mapNullable(x: number): number");
+        await Assert.That(output).Contains("import { int64FromDouble } from \"metano-runtime\";");
     }
 
     private const string ForEachSource = """

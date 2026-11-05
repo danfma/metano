@@ -27,6 +27,10 @@ public static class IrNumericKindExtensions
                 or IrNumericKind.Int64
                 or IrNumericKind.UInt64;
 
+    /// <summary>An integral kind of 64 bits or fewer, or <c>char</c>.</summary>
+    public static bool IsIntegerOrChar(this IrNumericKind kind) =>
+        kind.IsInteger() || kind is IrNumericKind.Char;
+
     /// <summary><c>long</c> or <c>ulong</c> (<c>nint</c> / <c>nuint</c> included).</summary>
     public static bool IsSixtyFourBit(this IrNumericKind kind) =>
         kind is IrNumericKind.Int64 or IrNumericKind.UInt64;
@@ -53,7 +57,7 @@ public static class IrNumericKindExtensions
         !endpoint.IsEnum && endpoint.Kind.IsSixtyFourBit();
 
     /// <summary>
-    /// An integer value wider than any JS <c>number</c> holds exactly: a
+    /// An integer value wider than a double holds exactly: a
     /// 64-bit integer or a <c>BigInteger</c>, not an enum.
     /// </summary>
     public static bool IsWideIntegerValue(this IrNumericEndpoint endpoint) =>

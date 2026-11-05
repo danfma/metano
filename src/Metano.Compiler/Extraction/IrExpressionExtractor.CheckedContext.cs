@@ -62,10 +62,7 @@ public sealed partial class IrExpressionExtractor
     /// <c>checked</c> / <c>unchecked</c> expression or statement of its member.
     /// </summary>
     private static bool IsInCheckedContext(ExpressionSyntax expression) =>
-        expression
-            .AncestorsAndSelf()
-            .TakeWhile(node => node is not MemberDeclarationSyntax)
-            .Any(node => node is CheckedExpressionSyntax or CheckedStatementSyntax);
+        CheckedContexts.Innermost(expression) is not null;
 
     /// <summary>
     /// An integral type, an enum over one, or <c>char</c>: the types whose
