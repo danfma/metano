@@ -29,9 +29,12 @@ public class Int64OverloadNamingTests
         await Assert.That(output).Contains("import { isInt64, isUInt64 } from \"metano-runtime\";");
         await Assert.That(output).Contains("private pickLong(x: number)");
         await Assert.That(output).Contains("private pickULong(x: number)");
-        await Assert.That(output).Contains("isInt64(args[0])");
-        await Assert.That(output).Contains("isUInt64(args[0])");
-        await Assert.That(output).Contains("this.pickULong(args[0] as number)");
+        await Assert
+            .That(output)
+            .Contains("isInt64(args[0])) {\n      return this.pickLong(args[0] as number);");
+        await Assert
+            .That(output)
+            .Contains("isUInt64(args[0])) {\n      return this.pickULong(args[0] as number);");
     }
 
     [Test]
@@ -51,7 +54,9 @@ public class Int64OverloadNamingTests
 
         var output = result["acct.ts"];
 
+        await Assert.That(output).Contains("import { isInt64, isUInt64 } from \"metano-runtime\";");
         await Assert.That(output).Contains("__addAcctLong(");
         await Assert.That(output).Contains("__addAcctULong(");
+        await Assert.That(output).Contains("isUInt64(");
     }
 }

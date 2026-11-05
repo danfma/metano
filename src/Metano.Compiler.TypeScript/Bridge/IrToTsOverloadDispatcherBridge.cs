@@ -528,9 +528,8 @@ public static class IrToTsOverloadDispatcherBridge
         };
 
     /// <summary>
-    /// Legacy SimpleTypeName shortens certain primitive names (Int32 → Int,
-    /// System.Single → Float, etc.). Mirror that so the fallback naming matches
-    /// byte-for-byte when param-name naming isn't usable.
+    /// C#-alias spelling of a primitive used in fast-path helper names when
+    /// param-name naming isn't usable (Int, Long, ULong, Float, ...).
     /// </summary>
     private static string PrimitiveSuffix(IrPrimitive primitive) =>
         primitive switch
