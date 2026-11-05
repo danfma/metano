@@ -8,10 +8,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// emitted for it — every member, overload signature, constructor, promoted
 /// member and module variable reads it:
 /// <list type="bullet">
-///   <item><c>public</c> → <c>public</c>;</item>
-///   <item><c>internal</c> / <c>protected internal</c> → <c>public</c> tagged
-///     <c>/** @internal *&#47;</c>: any class of the emitting package may reach
-///     the member, and <c>stripInternal</c> drops it from the <c>.d.ts</c>;</item>
+///   <item><c>public</c> / <c>protected internal</c> → <c>public</c>: a
+///     derived class in another package may use a <c>protected internal</c>
+///     member, so it stays in the <c>.d.ts</c>;</item>
+///   <item><c>internal</c> → <c>public</c> tagged <c>/** @internal *&#47;</c>:
+///     any class of the emitting package may reach the member, and
+///     <c>stripInternal</c> drops it from the <c>.d.ts</c>;</item>
 ///   <item><c>protected</c> → <c>protected</c>;</item>
 ///   <item><c>private</c> / <c>private protected</c> → <c>private</c>.</item>
 /// </list>
@@ -22,37 +24,49 @@ public static class IrToTsVisibilityMapper
 
     /// <summary>The TypeScript accessibility and JSDoc of <paramref name="visibility"/>.</summary>
     public static TsMemberVisibility Map(IrVisibility visibility) =>
-        new(AccessibilityOf(visibility), IsAssemblyScoped(visibility) ? InternalTag : null);
+        visibility switch
+        {
+            IrVisibility.Public or IrVisibility.ProtectedInternal => new(
+                TsAccessibility.Public,
+                null
+            ),
+            IrVisibility.Internal => new(TsAccessibility.Public, InternalTag),
+            IrVisibility.Protected => new(TsAccessibility.Protected, null),
+            IrVisibility.Private or IrVisibility.PrivateProtected => new(
+                TsAccessibility.Private,
+                null
+            ),
+            _ => throw new ArgumentOutOfRangeException(nameof(visibility), visibility, null),
+        };
 
     /// <summary>
-    /// The most permissive of the visibilities that share one TypeScript
+    /// The most permissive of the accessibilities that share one TypeScript
     /// declaration (an overload group, a constructor group): public, then
-    /// <c>internal</c> / <c>protected internal</c>, then <c>protected</c>,
-    /// then <c>private</c> / <c>private protected</c>.
+    /// <c>protected</c>, then <c>private</c>.
     /// </summary>
-    public static IrVisibility MostPermissiveOf(IEnumerable<IrVisibility> visibilities) =>
-        visibilities.MinBy(RestrictionRankOf);
+    public static TsAccessibility MostPermissiveOf(IEnumerable<TsAccessibility> accessibilities) =>
+        accessibilities.MinBy(RestrictionOf);
 
-    private static TsAccessibility AccessibilityOf(IrVisibility visibility) =>
-        visibility switch
+    public static bool IsNarrowerThan(this TsAccessibility modifier, TsAccessibility other) =>
+        RestrictionOf(modifier) > RestrictionOf(other);
+
+    /// <summary>
+    /// The JSDoc of one overload signature of a group emitted
+    /// <paramref name="group"/>: its own tag, or <c>@internal</c> when the
+    /// signature is narrower than the group. TypeScript makes every signature
+    /// share the group's accessibility (TS2385), so <c>stripInternal</c>
+    /// hides the narrower one instead.
+    /// </summary>
+    public static TsJSDoc? SignatureJSDocOf(TsMemberVisibility signature, TsAccessibility group) =>
+        signature.JSDoc ?? (signature.Accessibility.IsNarrowerThan(group) ? InternalTag : null);
+
+    /// <summary>How restrictive a modifier is: public 0, protected 1, private 2.</summary>
+    private static int RestrictionOf(TsAccessibility modifier) =>
+        modifier switch
         {
-            IrVisibility.Public or IrVisibility.Internal or IrVisibility.ProtectedInternal =>
-                TsAccessibility.Public,
-            IrVisibility.Protected => TsAccessibility.Protected,
-            IrVisibility.Private or IrVisibility.PrivateProtected => TsAccessibility.Private,
-            _ => throw new ArgumentOutOfRangeException(nameof(visibility), visibility, null),
+            TsAccessibility.Public or TsAccessibility.None => 0,
+            TsAccessibility.Protected => 1,
+            TsAccessibility.Private => 2,
+            _ => throw new ArgumentOutOfRangeException(nameof(modifier), modifier, null),
         };
-
-    private static int RestrictionRankOf(IrVisibility visibility) =>
-        visibility switch
-        {
-            IrVisibility.Public => 0,
-            IrVisibility.Internal or IrVisibility.ProtectedInternal => 1,
-            IrVisibility.Protected => 2,
-            IrVisibility.Private or IrVisibility.PrivateProtected => 3,
-            _ => throw new ArgumentOutOfRangeException(nameof(visibility), visibility, null),
-        };
-
-    private static bool IsAssemblyScoped(IrVisibility visibility) =>
-        visibility is IrVisibility.Internal or IrVisibility.ProtectedInternal;
 }

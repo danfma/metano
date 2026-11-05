@@ -211,11 +211,14 @@ Product requirements added after the migration (normative; each one is traced by
      including an abstract type's, which Roslyn synthesizes `protected` only to restate that the
      type cannot be instantiated. An implicit constructor emits no modifier. A value type
      (`struct`, `record struct`) always emits a public constructor: C# gives it a public implicit
-     parameterless constructor, so `new S()` is legal anywhere whatever it declares. An `internal`
-     or `protected internal` constructor of a reference type additionally carries the
-     `/** @internal */` JSDoc (#445): a single constructor on its declaration, a dispatcher on
-     each overload signature declared `internal` / `protected internal` (the implementation
-     signature is untagged), so `stripInternal` drops only those signatures.
+     parameterless constructor, so `new S()` is legal anywhere whatever it declares. In a
+     dispatcher of a reference type, an overload signature declared `internal`, or narrower
+     than the emitted modifier, additionally carries the `/** @internal */` JSDoc (#445), so
+     `stripInternal` drops only those signatures; the implementation signature is untagged. A
+     `protected internal` constructor is untagged: a derived class in another package may call
+     it. When every signature would be tagged, none is, and a single `internal` constructor is
+     untagged too: `stripInternal` would otherwise leave the `.d.ts` class an implicit public
+     `new X()` that C# never declared, so such a constructor is widened to the `.d.ts`.
   2. *Mixed accessibility.* Every declared instance constructor, whatever its accessibility,
      takes part in the emitted constructor: two or more go through the overload dispatcher (#435).
      C# makes every other constructor of a type with a record positional or C# 12 primary

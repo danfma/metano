@@ -6,17 +6,11 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// The TypeScript modifier of a constructor (FR-049), mapped through
-/// <see cref="IrToTsVisibilityMapper"/>: <c>private</c> and
-/// <c>private protected</c> to <c>private</c>, <c>protected</c> to
-/// <c>protected</c>, every other accessibility to public. TypeScript orders
-/// them public, protected, private from the least to the most restrictive.
+/// The TypeScript modifier and overload-signature JSDoc of a constructor
+/// (FR-049), each declaration mapped through <see cref="IrToTsVisibilityMapper"/>.
 /// </summary>
 public static class TsConstructorModifier
 {
-    public static bool IsNarrowerThan(this TsAccessibility modifier, TsAccessibility other) =>
-        RestrictionOf(modifier) > RestrictionOf(other);
-
     /// <summary>
     /// Whether <paramref name="modifier"/> restricts construction:
     /// <c>protected</c> or <c>private</c>.
@@ -37,18 +31,16 @@ public static class TsConstructorModifier
     public static TsAccessibility DeclaredModifierOf(INamedTypeSymbol type) =>
         type.IsValueType
             ? TsAccessibility.Public
-            : MostPermissiveModifierOf(
+            : IrToTsVisibilityMapper.MostPermissiveOf(
                 IrConstructorExtractor
                     .AllExplicitConstructors(type)
-                    .Select(IrConstructorExtractor.DeclaredVisibility)
-                    .DefaultIfEmpty(IrVisibility.Public)
+                    .Select(OfConstructor)
+                    .DefaultIfEmpty(TsAccessibility.Public)
             );
 
     /// <summary>The modifier of one declared constructor.</summary>
     public static TsAccessibility OfConstructor(IMethodSymbol constructor) =>
-        IrToTsVisibilityMapper
-            .Map(IrConstructorExtractor.DeclaredVisibility(constructor))
-            .Accessibility;
+        Of(IrConstructorExtractor.DeclaredVisibility(constructor)).Accessibility;
 
     /// <summary>
     /// The modifier of a constructor group from what it declares: the most
@@ -56,23 +48,38 @@ public static class TsConstructorModifier
     /// <see cref="DeclaredModifierOf"/>.
     /// </summary>
     public static TsAccessibility MostPermissiveOf(IrConstructorDeclaration constructor) =>
-        MostPermissiveModifierOf(
-            new[] { constructor }
-                .Concat(constructor.Overloads ?? [])
-                .Select(declaration => declaration.Visibility)
+        IrToTsVisibilityMapper.MostPermissiveOf(
+            DeclarationsOf(constructor)
+                .Select(declaration => Of(declaration.Visibility).Accessibility)
         );
 
     /// <summary>
-    /// The JSDoc of one declared constructor signature of
-    /// <paramref name="type"/>: the <c>@internal</c> tag of an
-    /// <c>internal</c> / <c>protected internal</c> declaration. A value type
-    /// never carries it, as it never carries a modifier
-    /// (<see cref="KeepsPublicConstructor"/>).
+    /// The JSDoc of each overload signature of <paramref name="type"/>'s
+    /// constructor group, emitted <paramref name="emitted"/>
+    /// (<see cref="IrToTsVisibilityMapper.SignatureJSDocOf"/>). A value type
+    /// never carries one, as it never carries a modifier
+    /// (<see cref="KeepsPublicConstructor"/>). When every signature would be
+    /// tagged, none is: <c>stripInternal</c> would drop them all and leave the
+    /// <c>.d.ts</c> class an implicit public <c>new X()</c> that C# never
+    /// declared, so the group is widened to its emitted accessibility instead.
+    /// A single constructor is the one signature of its group, so it is never
+    /// tagged.
     /// </summary>
-    public static TsJSDoc? JSDocOf(IrClassDeclaration type, IrConstructorDeclaration constructor) =>
-        KeepsPublicConstructor(type)
-            ? null
-            : IrToTsVisibilityMapper.Map(constructor.Visibility).JSDoc;
+    public static Func<IrConstructorDeclaration, TsJSDoc?> SignatureJSDocOf(
+        IrClassDeclaration type,
+        TsAccessibility emitted
+    )
+    {
+        if (type.Constructor is not { } constructor || KeepsPublicConstructor(type))
+            return _ => null;
+
+        TsJSDoc? JSDocOf(IrConstructorDeclaration declaration) =>
+            IrToTsVisibilityMapper.SignatureJSDocOf(Of(declaration.Visibility), emitted);
+
+        return DeclarationsOf(constructor).All(declaration => JSDocOf(declaration) is not null)
+            ? _ => null
+            : JSDocOf;
+    }
 
     /// <summary>
     /// Whether <paramref name="type"/> emits a public, untagged constructor
@@ -82,19 +89,10 @@ public static class TsConstructorModifier
     public static bool KeepsPublicConstructor(IrClassDeclaration type) =>
         type.Semantics.IsValueType;
 
-    private static TsAccessibility MostPermissiveModifierOf(
-        IEnumerable<IrVisibility> declarations
-    ) =>
-        IrToTsVisibilityMapper
-            .Map(IrToTsVisibilityMapper.MostPermissiveOf(declarations))
-            .Accessibility;
+    private static TsMemberVisibility Of(IrVisibility visibility) =>
+        IrToTsVisibilityMapper.Map(visibility);
 
-    /// <summary>How restrictive a modifier is: public 0, protected 1, private 2.</summary>
-    private static int RestrictionOf(TsAccessibility modifier) =>
-        modifier switch
-        {
-            TsAccessibility.Private => 2,
-            TsAccessibility.Protected => 1,
-            _ => 0,
-        };
+    private static IEnumerable<IrConstructorDeclaration> DeclarationsOf(
+        IrConstructorDeclaration constructor
+    ) => new[] { constructor }.Concat(constructor.Overloads ?? []);
 }

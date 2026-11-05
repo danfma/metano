@@ -16,8 +16,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   branches on argument count + runtime type checks and delegates to the
 ///   matching fast path with cast arguments. It takes the accessibility of the
 ///   group's most permissive overload; each overload signature carries the
-///   JSDoc of its own declaration, so <c>stripInternal</c> drops only the
-///   <c>internal</c> ones.</item>
+///   JSDoc its declaration gets in the group
+///   (<see cref="IrToTsVisibilityMapper.SignatureJSDocOf"/>), so
+///   <c>stripInternal</c> drops only the <c>internal</c> and the narrower
+///   ones.</item>
 /// </list>
 /// The branches follow <see cref="OverloadDispatchOrder"/> and match the
 /// arguments as <see cref="OverloadArgumentShape"/> describes. An omitted
@@ -78,10 +80,6 @@ public static class IrToTsOverloadDispatcherBridge
 
         var receiver = DispatchReceiver(isStatic, containingTypeName);
 
-        var dispatcherVisibility = IrToTsVisibilityMapper.MostPermissiveOf(
-            plan.Sorted.Select(method => method.Visibility)
-        );
-
         members.Add(
             new TsMethodMember(
                 primaryName,
@@ -97,7 +95,7 @@ public static class IrToTsOverloadDispatcherBridge
                 Async: plan.IsAsync,
                 // The implementation is untagged: each overload signature
                 // carries its own declaration's JSDoc.
-                Accessibility: IrToTsVisibilityMapper.Map(dispatcherVisibility).Accessibility,
+                Accessibility: plan.Accessibility,
                 Overloads: plan.Signatures
             )
         );
@@ -176,14 +174,16 @@ public static class IrToTsOverloadDispatcherBridge
     /// <summary>
     /// The target-shape-independent part of a dispatcher: the overloads in
     /// dispatch order, their fast-path names, the async flag, the
-    /// implementation return type and the overload signatures.
+    /// implementation return type, the overload signatures and the
+    /// accessibility they share: the most permissive of the group.
     /// </summary>
     private sealed record OverloadGroupPlan(
         IReadOnlyList<IrMethodDeclaration> Sorted,
         IReadOnlyList<string> FastPathNames,
         bool IsAsync,
         TsType CommonReturn,
-        IReadOnlyList<TsMethodOverload> Signatures
+        IReadOnlyList<TsMethodOverload> Signatures,
+        TsAccessibility Accessibility
     );
 
     /// <summary>
@@ -201,13 +201,19 @@ public static class IrToTsOverloadDispatcherBridge
 
         var sorted = OverloadDispatchOrder.Sort(overloads, m => m.Parameters);
         var isAsync = sorted.Any(m => m.Semantics.IsAsync);
+        var accessibility = IrToTsVisibilityMapper.MostPermissiveOf(
+            sorted.Select(method => IrToTsVisibilityMapper.Map(method.Visibility).Accessibility)
+        );
 
         return new OverloadGroupPlan(
             sorted,
             ComputeFastPathNames(dispatcherName, sorted),
             isAsync,
             ResolveCommonReturnType(sorted, isAsync, typeOverrides),
-            sorted.Select(method => BuildOverloadSignature(method, typeOverrides)).ToList()
+            sorted
+                .Select(method => BuildOverloadSignature(method, accessibility, typeOverrides))
+                .ToList(),
+            accessibility
         );
     }
 
@@ -249,13 +255,17 @@ public static class IrToTsOverloadDispatcherBridge
 
     private static TsMethodOverload BuildOverloadSignature(
         IrMethodDeclaration method,
+        TsAccessibility groupAccessibility,
         IrToTsTypeOverrides? typeOverrides
     ) =>
         new(
             SignatureParameters(method, typeOverrides),
             IrToTsTypeMapper.Map(method.ReturnType, typeOverrides),
             MapTypeParameters(method.TypeParameters),
-            IrToTsVisibilityMapper.Map(method.Visibility).JSDoc
+            IrToTsVisibilityMapper.SignatureJSDocOf(
+                IrToTsVisibilityMapper.Map(method.Visibility),
+                groupAccessibility
+            )
         );
 
     private static List<TsParameter> DispatcherParameters() =>

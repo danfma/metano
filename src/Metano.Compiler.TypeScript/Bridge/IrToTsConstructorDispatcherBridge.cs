@@ -35,9 +35,9 @@ public static class IrToTsConstructorDispatcherBridge
     /// <param name="baseCall">What every branch's base call depends on.</param>
     /// <param name="typeParameters">The class's type parameters, which a
     /// parameter's type check resolves its type parameters against.</param>
-    /// <param name="signatureJSDoc">The JSDoc of each overload signature,
-    /// from the constructor it declares; none when omitted. The
-    /// implementation carries none.</param>
+    /// <param name="signatureJSDoc">The JSDoc of each overload signature: the
+    /// tag its group gives the constructor it declares; none when omitted.
+    /// The implementation carries none.</param>
     internal static TsConstructor? Build(
         IrConstructorDeclaration primary,
         DispatcherBaseCall baseCall,

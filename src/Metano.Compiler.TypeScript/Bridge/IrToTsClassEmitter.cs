@@ -94,18 +94,20 @@ public sealed class IrToTsClassEmitter(
             emitsDispatcher
         );
 
+        var constructorAccessibility = _constructorAccessPolicy.ResolveAndReport(type, ir);
+
         var constructor = BuildClassConstructor(
             type,
             ir,
             ctorParams,
             emitsDispatcher,
+            constructorAccessibility,
             extendsType,
             keepsBaseMessage,
             lowering
         ) with
         {
-            Accessibility = _constructorAccessPolicy.ResolveAndReport(type, ir),
-            JSDoc = ConstructorJSDoc(ir, emitsDispatcher),
+            Accessibility = constructorAccessibility,
         };
 
         var classMembers = new List<TsClassMember>();
@@ -153,6 +155,7 @@ public sealed class IrToTsClassEmitter(
         IrClassDeclaration ir,
         IReadOnlyList<TsConstructorParam> ctorParams,
         bool emitsDispatcher,
+        TsAccessibility accessibility,
         TsType? extendsType,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering
@@ -177,6 +180,7 @@ public sealed class IrToTsClassEmitter(
             return TryBuildConstructorDispatcherFromIr(
                     ir,
                     new DispatcherBaseCall(extendsType is not null, keepsBaseMessage),
+                    accessibility,
                     lowering
                 )
                 ?? EmitUnsupportedConstructor(
@@ -447,17 +451,6 @@ public sealed class IrToTsClassEmitter(
 
     private static bool IsPromotedParamsParameter(IrConstructorParameter p) =>
         p.Parameter.IsParams && p.Promotion is not IrParameterPromotion.None;
-
-    /// <summary>
-    /// The JSDoc of a constructor with no overload signatures, taken from
-    /// its one declaration (<see cref="TsConstructorModifier.JSDocOf"/>). A
-    /// dispatcher's implementation carries none: each overload signature
-    /// carries its own declaration's.
-    /// </summary>
-    private static TsJSDoc? ConstructorJSDoc(IrClassDeclaration ir, bool emitsDispatcher) =>
-        ir.Constructor is { } declaredConstructor && !emitsDispatcher
-            ? TsConstructorModifier.JSDocOf(ir, declaredConstructor)
-            : null;
 
     private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p)
     {
@@ -806,6 +799,7 @@ public sealed class IrToTsClassEmitter(
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
         IrClassDeclaration owner,
         DispatcherBaseCall baseCall,
+        TsAccessibility accessibility,
         IrToTsBridgeContext lowering
     )
     {
@@ -827,7 +821,7 @@ public sealed class IrToTsClassEmitter(
             baseCall,
             owner.TypeParameters ?? [],
             lowering,
-            signature => TsConstructorModifier.JSDocOf(owner, signature)
+            TsConstructorModifier.SignatureJSDocOf(owner, accessibility)
         );
     }
 
