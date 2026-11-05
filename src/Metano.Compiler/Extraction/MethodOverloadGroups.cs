@@ -28,7 +28,8 @@ internal sealed record MethodGroupMember(IMethodSymbol Symbol, int Ordinal, Meth
 internal sealed record MethodAnchor(
     IMethodSymbol Root,
     IrOverloadAnchorKind Kind,
-    IReadOnlyList<IMethodSymbol> FurtherRoots
+    IReadOnlyList<IMethodSymbol> FurtherRoots,
+    bool ReimplementsInherited = false
 );
 
 /// <summary>
@@ -328,9 +329,25 @@ internal static class MethodOverloadGroups
         return new MethodAnchor(
             interfaceRoots[0],
             IrOverloadAnchorKind.Implementation,
-            furtherRoots
+            furtherRoots,
+            BaseImplements(type, interfaceRoots[0], target)
         );
     }
+
+    /// <summary>
+    /// Whether an emitted base class already implements
+    /// <paramref name="root"/> (the interface mapping of the type's base), so
+    /// the type re-implements it — a <c>new</c> method or an explicit
+    /// re-implementation — and its root names override the base's.
+    /// </summary>
+    private static bool BaseImplements(
+        INamedTypeSymbol type,
+        IMethodSymbol root,
+        TargetLanguage? target
+    ) =>
+        type.BaseType is { } baseType
+        && baseType.FindImplementationForInterfaceMember(root) is IMethodSymbol implementation
+        && IsEmittedBase(implementation.ContainingType, target);
 
     private static IrOverloadAnchorKind KindOf(IMethodSymbol method) =>
         method.IsOverride ? IrOverloadAnchorKind.Override : IrOverloadAnchorKind.Implementation;

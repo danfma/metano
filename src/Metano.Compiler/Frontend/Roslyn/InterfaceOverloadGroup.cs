@@ -7,9 +7,8 @@ namespace Metano.Compiler.Frontend.Roslyn;
 /// The overload group an interface declares under one name (spec 013
 /// FR-031): its public, non-static ordinary methods of that name that the
 /// target does not ignore, in declaration order. A group of two or more is
-/// dispatched, so implementers anchor on its members. The one definition the
-/// method groups, the multiply-constructed interfaces, the interface
-/// extractor and the explicit-implementation lowering share.
+/// dispatched, so implementers anchor on its members. The single source of
+/// truth for interface overload-group membership.
 /// </summary>
 public static class InterfaceOverloadGroup
 {
