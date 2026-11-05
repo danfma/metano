@@ -27,5 +27,6 @@
     <Project Path="samples/SampleCounterV4/SampleCounterV4.csproj" />
     <Project Path="samples/SampleQueryableArrays/SampleQueryableArrays.csproj" />
     <Project Path="samples/SampleQueryableSqlite/SampleQueryableSqlite.csproj" />
+    <Project Path="samples/SampleJsonContracts/SampleJsonContracts.csproj" />
   </Folder>
 </Solution>

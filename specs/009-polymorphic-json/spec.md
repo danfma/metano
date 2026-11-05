@@ -564,8 +564,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   (DECIDED-15): `deserializeContract` counts container depth on the parsed value and throws
   `JsonException` "The maximum configured depth of 64 has been exceeded. Cannot read next JSON
   object." (`… JSON array.` for an array). Both boundaries were measured on .NET 10 in S4
-  (DECIDED-20 b): 64 nested containers are written and read, the 65th throws; S8 pins them with a
-  manifest row. Only containers count: the write side follows the source-generated fast path's
+  (DECIDED-20 b): 64 nested containers are written and read, the 65th throws; manifest row E23
+  pins the reader message and boundary (S8). Only containers count: the write side follows the source-generated fast path's
   boundary, while its exception and message are STJ's metadata / reflection mode's, which already
   throws for a non-null scalar written inside the 64th container (a hybrid, DECIDED-20 b). The
   read limit counts the containers the contract reads, whichever path built the tree:
@@ -583,7 +583,7 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   must specify a type discriminator."). Without the out-of-order option, `$id`, `$ref` or
   `$values` right after the tag throw the "metadata property … not the first property"
   `JsonException` first; with it, the key walk of DECIDED-21 j runs first. The generator marks the
-  entry `abstract: true` (`DerivedTypeSpec.abstract`). S8 adds the manifest row.
+  entry `abstract: true` (`DerivedTypeSpec.abstract`). Manifest row E25 pins the read (S8).
 - **FR-018**: An **interface base** MUST be supported. `[JsonDerivedType]` on a C# interface makes
   it polymorphic as for a class. Its spec has no `type` (the TS interface has no constructor), a
   throwing `factory` with the FR-011 message (`Cannot deserialize interface type 'IShape'
@@ -735,7 +735,7 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   - **Value-type roots** (C# `struct` / `record struct` object contracts, `int`, `Guid`, enums,
     branded types, `decimal`, temporal structs): JSON `null` throws `JsonException`
     `The JSON value could not be converted to <Type>.` (measured for `SPoint`; the `Int32` text is
-    pinned by manifest row E10 in S8). Their
+    pinned by manifest row E10, S8). Their
     spec carries `valueType: true` (both `TypeSpec` and `ValueSpec`); the generator emits it for
     every C# value type except `Nullable<T>`, which already accepts `null` through its `nullable`
     descriptor. A struct `TypeSpec` root is still typed `T | null` by the shared overload; the
@@ -1050,7 +1050,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
 | Unregistered C# subtype of a concrete `[PlainObject]` base whose shape passes the base's `baseTest` | `NotSupportedException` (measured: `Cat4` through `Animal4`) | written as the base (`{"Name":"c"}`) | FR-019 rule 5, DECIDED-24 b |
 | Runtime type name of a plain object in `Runtime type '…' is not supported` | the C# type name | `Object` | FR-019 |
-| Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Not measured; fixtures use ASCII names; probed in S8 |
+| Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Fixtures use ASCII names; probed in S8 (Bun 1.4.2's JSC agrees with .NET on U+A7CF, U+A7D3 and U+A7D5; Node 24 does not) | Engine-dependent (DECIDED-23 a) |
 | Read depth limit | the reader counts every container of the document | counts only the containers the contract visits (a deep value under an undeclared key is skipped) | DECIDED-20 (b) |
 | Write depth limit | fast path: 64 containers, `InvalidOperationException` "CurrentDepth (64) is equal to or larger than …" at the 65th; metadata / reflection: `JsonException` "A possible object cycle …", also for a non-null scalar inside the 64th container | 64 containers (scalars never count), `JsonException` "A possible object cycle …" at the 65th: the fast path's boundary with the metadata mode's error | DECIDED-20 (b) |
 | Depth inside a custom converter | `JsonSerializer.Serialize(…)` of a separate root inside a converter starts a fresh writer at depth 0 | the root inherits the outer depth (one process-global counter) | DECIDED-20 (b) |
@@ -1177,7 +1177,7 @@ the former `OPEN-N`.
 - **DECIDED-14 — Name-collision strategy.** FR-036 as written: STJ names kept; Error when the loser
   is referenced or the name is a reserved `SerializerContext` member, Warning otherwise.
 - **DECIDED-15 — Depth limit on read.** Enforced with the serialize-side counter; the reader message
-  and boundary are pinned by an S8 manifest row (FR-016). S4 measured both on .NET 10 and enforces
+  and boundary are pinned by manifest row E23 (FR-016, slice S8). S4 measured both on .NET 10 and enforces
   the limit already (DECIDED-20 b).
 - **DECIDED-16 — Value-root wire mismatches** (`byte[]`, `TimeSpan`, `DateTimeOffset`). Recorded as
   `divergent` manifest rows and documented divergences; `MS0037` for `byte[]`; each converter is
@@ -1848,7 +1848,11 @@ until the maintainer decides.
   and rejected number string of FR-048) agrees on both sides.
 - **SC-008**: Interface and `[PlainObject]` hierarchies round-trip on both sides for every variant
   in the sample, and a write of each `[PlainObject]` variant selects that variant (the FR-019
-  order), with 0 misrouted values in the manifest.
+  order), with 0 misrouted values in the manifest. **Met (S8):** manifest rows W24–W28b (class,
+  interface and `[PlainObject]` variants of `IShape`, `IShapeB`, `Shape` and `MixedBase`),
+  W26/W27/R6 (the FR-019 `testOrder` selects `Point3` before `Point` on write), E13–E15 (missing
+  tag, unregistered implementation, unmatched plain object), with every roundtrip and dispatch row
+  agreeing on both sides.
 
 ## Assumptions
 

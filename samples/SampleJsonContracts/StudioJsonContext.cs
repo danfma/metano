@@ -1,0 +1,56 @@
+using System.Text.Json.Serialization;
+
+namespace SampleJsonContracts;
+
+// The default-options context behind most of the conformance manifest
+// (contracts/wire-format.md). `Title` and `EpisodeRec` are TypeScript-only
+// rows (FR-026): System.Text.Json writes a branded record struct as an
+// object unless it gets a custom converter, so the STJ fixture context
+// declares no branded member.
+[JsonSerializable(typeof(Clip))]
+[JsonSerializable(typeof(Timeline))]
+[JsonSerializable(typeof(List<Clip>))]
+[JsonSerializable(typeof(Dictionary<string, Clip>))]
+[JsonSerializable(typeof(Group))]
+[JsonSerializable(typeof(HBase))]
+[JsonSerializable(typeof(IBase))]
+[JsonSerializable(typeof(DBase))]
+[JsonSerializable(typeof(SBase))]
+[JsonSerializable(typeof(UFail))]
+[JsonSerializable(typeof(UNear))]
+[JsonSerializable(typeof(UBaseH))]
+[JsonSerializable(typeof(NBase))]
+[JsonSerializable(typeof(NMid))]
+[JsonSerializable(typeof(OBase))]
+[JsonSerializable(typeof(GBase<int>))]
+[JsonSerializable(typeof(Feed))]
+[JsonSerializable(typeof(IShape))]
+[JsonSerializable(typeof(IShapeB))]
+[JsonSerializable(typeof(Shape))]
+[JsonSerializable(typeof(MixedBase))]
+[JsonSerializable(typeof(EpisodeSummary))]
+[JsonSerializable(typeof(IReadOnlyList<EpisodeSummary>))]
+[JsonSerializable(typeof(EpisodeSummary[]))]
+[JsonSerializable(typeof(Dictionary<string, EpisodeSummary>))]
+[JsonSerializable(typeof(HashSet<string>))]
+[JsonSerializable(typeof(IntMapHolder))]
+[JsonSerializable(typeof(List<List<int>>))]
+[JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(int?))]
+[JsonSerializable(typeof(double))]
+[JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(Guid))]
+[JsonSerializable(typeof(decimal))]
+[JsonSerializable(typeof(DateTime))]
+[JsonSerializable(typeof(DateOnly))]
+[JsonSerializable(typeof(TimeOnly))]
+[JsonSerializable(typeof(DateTimeOffset))]
+[JsonSerializable(typeof(TimeSpan))]
+[JsonSerializable(typeof(Color))]
+[JsonSerializable(typeof(Level))]
+[JsonSerializable(typeof(Flavor))]
+[JsonSerializable(typeof(SPoint))]
+[JsonSerializable(typeof(Title))]
+[JsonSerializable(typeof(EpisodeRec))]
+public partial class StudioJsonContext : JsonSerializerContext;
