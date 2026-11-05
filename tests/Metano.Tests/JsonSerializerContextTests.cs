@@ -473,6 +473,40 @@ public class JsonSerializerContextTests
         await Assert.That(ts).Contains("factory: () => new Counter()");
     }
 
+    [Test]
+    public async Task ParameterlessConstructorWithInitMembers_FactoryKeepsPayloadParameter()
+    {
+        var ts = TranspileHelper.Transpile(
+            """
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public sealed class Stamp
+            {
+                public int Mark { get; init; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Stamp))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        )["test-app/json-context.ts"];
+
+        // `init` members are always assigned after construction, so the
+        // factory reads the payload even though the constructor is
+        // parameterless (#480).
+        await Assert
+            .That(ts)
+            .Contains("factory: (p: Record<string, unknown>) => Object.assign(new Stamp(), {");
+    }
+
     private const string ContextBoilerplate = """
         public partial class JsonContext : JsonSerializerContext
         {
