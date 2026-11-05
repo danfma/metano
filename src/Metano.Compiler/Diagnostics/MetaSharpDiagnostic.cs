@@ -458,11 +458,12 @@ public static class DiagnosticCodes
     /// (spec 013 FR-036).</summary>
     public const string MultiplyConstructedOverloadGroup = "MS0069";
 
-    /// <summary>MS0070 — a file references both a BCL export (a
-    /// <c>[ExportFromBcl]</c> mapping, such as decimal.js's <c>Decimal</c>) and a
-    /// project type of the same emitted name. Both import lines bind the one
-    /// identifier, so every bare reference is ambiguous and one of the two
-    /// bindings is wrong at runtime. An error; rename one of the two with
-    /// <c>[Name]</c> (or change the export's <c>ExportedName</c>).</summary>
-    public const string BclExportNameClash = "MS0070";
+    /// <summary>MS0070 — one emitted name binds two different imports in one
+    /// file: two origin-carrying references staging different packages or
+    /// sub-paths (a BCL export and a cross-package type, or two cross-package
+    /// types), or an origin-carrying reference and a project type of the same
+    /// name. The bare references cannot tell the bindings apart and one of
+    /// them is wrong at runtime. An error; rename one of the two with
+    /// <c>[Name]</c> (or change the BCL export's <c>ExportedName</c>).</summary>
+    public const string ImportedNameClash = "MS0070";
 }

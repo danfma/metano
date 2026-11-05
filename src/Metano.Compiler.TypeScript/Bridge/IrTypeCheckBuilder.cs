@@ -38,7 +38,17 @@ internal static class IrTypeCheckBuilder
             IrNullableTypeRef nullable => NullableCheck(nullable, value, scope),
             IrTypeParameterRef typeParameter => TypeParameterCheck(typeParameter, value, scope),
             _ when scope.TypeOverrides?.TryResolve(type) is TsNamedType exported =>
-                new TsBinaryExpression(value, "instanceof", new TsIdentifier(exported.Name)),
+                new TsBinaryExpression(
+                    value,
+                    "instanceof",
+                    // The origin carries the export's package to the import
+                    // collector; a bare identifier would leave the check
+                    // without its import (issue #477).
+                    exported.Origin
+                        is { } origin
+                        ? new TsTypeReference(exported.Name, origin)
+                        : new TsIdentifier(exported.Name)
+                ),
             _ => ConcreteCheck(type, value),
         };
 

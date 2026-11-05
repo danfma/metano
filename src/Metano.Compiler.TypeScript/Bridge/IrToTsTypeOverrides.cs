@@ -39,38 +39,47 @@ public sealed class BclExportTypeOverrides(
 {
     public TsType? TryResolve(IrTypeRef type)
     {
-        if (type is not IrPrimitiveTypeRef p || BclKey(p.Primitive) is not { } key)
-            return null;
-        if (!map.TryGetValue(key, out var entry))
+        if (
+            type is not IrPrimitiveTypeRef p
+            || BclKey(p.Primitive) is not { } key
+            || !map.TryGetValue(key, out var entry)
+            || entry.FromPackage.Length == 0
+        )
             return null;
 
-        // Mirror TypeMapper.Map: every BCL hit records its package name and
-        // version so the package.json writer surfaces the dependency.
-        if (entry.FromPackage.Length > 0 && entry.Version is { Length: > 0 } version)
-            dependencyLedger.Record(entry.FromPackage, version);
-        return new TsNamedType(
-            entry.ExportedName,
-            Origin: new TsTypeOrigin(entry.FromPackage, SubPath: "")
-        );
+        return new TsNamedType(entry.ExportedName, Origin: OriginOf(entry));
     }
 
     /// <summary>
     /// The cross-package origin the import collector binds the BCL export of
     /// <paramref name="primitive"/> from, or <c>null</c> when the compilation
-    /// declares no <c>[ExportFromBcl]</c> for it. Every expression-position
-    /// node the bridge emits for the export carries it, so the collector
-    /// imports the package only for origin-carrying nodes — never by name
-    /// match (issue #477). Sub-path empty: a BCL export sits on the package
-    /// root barrel.
+    /// declares no <c>[ExportFromBcl]</c> for it — or when the entry names no
+    /// package, where the base emitter imported nothing. Every
+    /// expression-position node the bridge emits for the export carries the
+    /// origin, so the collector imports the package only for origin-carrying
+    /// nodes — never by name match (issue #477). Sub-path empty: a BCL export
+    /// sits on the package root barrel. Records the package dependency.
     /// </summary>
-    public TsTypeOrigin? TryOriginOf(IrPrimitive primitive)
+    public TsTypeOrigin? OriginOf(IrPrimitive primitive)
     {
-        if (BclKey(primitive) is not { } key || !map.TryGetValue(key, out var entry))
+        if (
+            BclKey(primitive) is not { } key
+            || !map.TryGetValue(key, out var entry)
+            || entry.FromPackage.Length == 0
+        )
             return null;
 
-        // A package used in expression position lands in package.json the
-        // same way a type-position hit does.
-        if (entry.FromPackage.Length > 0 && entry.Version is { Length: > 0 } version)
+        return OriginOf(entry);
+    }
+
+    /// <summary>
+    /// The origin of <paramref name="entry"/>, recording its package and
+    /// version in the dependency ledger: a package referenced from any
+    /// position lands in <c>package.json</c> the same way.
+    /// </summary>
+    private TsTypeOrigin OriginOf(IrBclExport entry)
+    {
+        if (entry.Version is { Length: > 0 } version)
             dependencyLedger.Record(entry.FromPackage, version);
 
         return new TsTypeOrigin(entry.FromPackage, SubPath: "");

@@ -1519,7 +1519,7 @@ public static partial class IrToTsExpressionBridge
     /// decimal.js only for this node.
     /// </summary>
     internal static TsExpression BclDecimalValueReference() =>
-        IrToTsTypeMapper.BclOverrides?.TryOriginOf(IrPrimitive.Decimal) is { } origin
+        IrToTsTypeMapper.BclOverrides?.OriginOf(IrPrimitive.Decimal) is { } origin
             ? new TsTypeReference("Decimal", origin)
             : new TsIdentifier("Decimal");
 

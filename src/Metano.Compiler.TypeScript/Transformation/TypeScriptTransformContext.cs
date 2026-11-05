@@ -555,21 +555,29 @@ public sealed class TypeScriptTransformContext(
     /// export's package, so the collector imports it from there and never by
     /// name match (issue #477).
     /// </summary>
-    public IrTypeOriginResolver OriginResolver =>
-        _originResolver ??= type =>
-            IrTypeOriginResolverFactory.Create(TypeMapping!)(type) ?? BclExportOriginOf(type);
+    public IrTypeOriginResolver OriginResolver => _originResolver ??= ComposeOriginResolver();
+
+    private IrTypeOriginResolver ComposeOriginResolver()
+    {
+        var crossPackage = IrTypeOriginResolverFactory.Create(TypeMapping!);
+
+        return type => crossPackage(type) ?? BclExportOriginOf(type);
+    }
 
     /// <summary>
     /// The origin of the <c>[ExportFromBcl]</c> entry for
     /// <paramref name="type"/>, keyed by the full display string of its
     /// original definition — only the exact BCL symbol matches, so a user
-    /// <c>Numerics.Decimal</c> keeps no package origin (issue #477).
+    /// <c>Numerics.Decimal</c> keeps no package origin (issue #477). No
+    /// origin when the entry names no package: the declaration binds the
+    /// name, not an import (the base emitter emitted none).
     /// </summary>
     private IrTypeOrigin? BclExportOriginOf(INamedTypeSymbol type) =>
         TypeMapping!.BclExportMap.TryGetValue(
             type.OriginalDefinition.ToDisplayString(),
             out var entry
         )
+        && entry.FromPackage.Length > 0
             ? new IrTypeOrigin(entry.FromPackage)
             : null;
 }

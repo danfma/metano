@@ -217,7 +217,7 @@ public class BclExportNameClashTests
                 [Transpile]
                 public sealed class Money
                 {
-                    public Lib.Decimal Convert(decimal value) => default;
+                    public Lib.Decimal Convert(Lib.Decimal value) => value;
                 }
 
                 [Transpile]
@@ -233,6 +233,7 @@ public class BclExportNameClashTests
         await Assert
             .That(result["app/money.ts"])
             .Contains("import type { Decimal } from \"@scope/numerics/lib\";");
+        await Assert.That(result["app/money.ts"]).DoesNotContain("decimal.js");
         await Assert
             .That(result["app/calc.ts"])
             .Contains("import type { Decimal } from \"decimal.js\";");
@@ -244,7 +245,7 @@ public class BclExportNameClashTests
     /// imports, so one is wrong; the diagnostic tells the author to rename.
     /// </summary>
     [Test]
-    public async Task SameFileUserDecimal_AndBclDecimal_ReportsTheClash()
+    public async Task FileReferencingUserAndBclDecimal_ReportsMS0070()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -264,11 +265,130 @@ public class BclExportNameClashTests
             """
         );
 
-        var clashes = diagnostics.Where(d => d.Code == DiagnosticCodes.BclExportNameClash).ToList();
+        var clashes = diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash).ToList();
 
         await Assert.That(clashes).HasSingleItem();
         await Assert
             .That(clashes[0].Message)
-            .Contains("'Decimal' names both the BCL export from 'decimal.js' and a project type");
+            .Contains("'Decimal' names both an import from 'decimal.js' and a project type in");
+    }
+
+    /// <summary>
+    /// A cross-package type and the BCL export of the same name in one file
+    /// clash the same way — two origins staged for one identifier — and the
+    /// diagnostic names both packages. The first origin keeps the binding.
+    /// </summary>
+    [Test]
+    public async Task CrossPackageUserDecimal_AndBclDecimal_InOneFile_ReportsMS0070()
+    {
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@scope/numerics")]
+
+            namespace Lib
+            {
+                public struct Decimal
+                {
+                    public int Raw { get; set; }
+                }
+            }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App
+            {
+                [Transpile]
+                public sealed class Money
+                {
+                    public Lib.Decimal Wrap(decimal value) => default;
+                }
+            }
+            """;
+
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            library,
+            consumer
+        );
+
+        var clashes = diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash).ToList();
+
+        await Assert.That(clashes).HasSingleItem();
+        await Assert
+            .That(clashes[0].Message)
+            .Contains("'Decimal' names both an import from 'decimal.js' and an import from");
+    }
+
+    /// <summary>
+    /// Bare BCL identifiers do not invent a project binding: a file whose
+    /// only `Decimal` tokens are the overload dispatch's `instanceof` checks
+    /// imports decimal.js and raises no MS0070, whatever other files declare.
+    /// </summary>
+    [Test]
+    public async Task DecimalOverloadDispatch_WithAProjectDecimalElsewhere_HasNoClash()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App.Other
+            {
+                [Transpile]
+                public struct Decimal
+                {
+                    public int Raw { get; set; }
+                }
+            }
+
+            namespace App
+            {
+                [Transpile]
+                public sealed class Money
+                {
+                    public decimal Sum(decimal left) => left;
+
+                    public decimal Sum(string raw) => decimal.Parse(raw);
+                }
+            }
+            """
+        );
+
+        var output = result["app/money.ts"];
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+        await Assert.That(output).Contains("import { Decimal } from \"decimal.js\";");
+        await Assert.That(output).Contains("instanceof Decimal");
+    }
+
+    /// <summary>
+    /// An `[ExportFromBcl]` that names no package imports nothing, like the
+    /// base emitter: the decimal use maps to its primitive instead of an
+    /// `import … from ""` line.
+    /// </summary>
+    [Test]
+    public async Task BclExportWithoutAPackage_ImportsNothing()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: Metano.Annotations.ExportFromBcl(
+                typeof(decimal),
+                ExportedName = "Big"
+            )]
+
+            namespace App;
+
+            [Transpile]
+            public sealed class Money
+            {
+                public decimal Sum(decimal left, decimal right) => left + right;
+            }
+            """
+        );
+
+        var output = result["app/money.ts"];
+
+        await Assert.That(output).DoesNotContain("from \"\"");
+        await Assert.That(output).DoesNotContain("decimal.js");
     }
 }
