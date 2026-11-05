@@ -1210,7 +1210,7 @@ public static partial class IrToTsExpressionBridge
         // receiver parameter (e.g. `self`) carries the runtime
         // `this`.
         if (lambda.UsesThis)
-            return new TsCallExpression(new TsIdentifier("bindReceiver"), [arrow]);
+            return new TsCallExpression(new TsRuntimeHelperReference("bindReceiver"), [arrow]);
         return arrow;
     }
 

@@ -159,7 +159,7 @@ public static class IrToTsRecordSynthesisBridge
         if (IrEqualityClassifier.UseStrictEquality(field.Type))
             return new TsBinaryExpression(self, "===", other);
 
-        return new TsCallExpression(new TsIdentifier("valueEquals"), [self, other]);
+        return new TsCallExpression(new TsRuntimeHelperReference("valueEquals"), [self, other]);
     }
 
     /// <summary>
@@ -173,7 +173,10 @@ public static class IrToTsRecordSynthesisBridge
     {
         var body = new List<TsStatement>
         {
-            new TsVariableDeclaration("hc", new TsNewExpression(new TsIdentifier("HashCode"), [])),
+            new TsVariableDeclaration(
+                "hc",
+                new TsNewExpression(new TsRuntimeHelperReference("HashCode"), [])
+            ),
         };
 
         if (overridesBase)
@@ -204,7 +207,7 @@ public static class IrToTsRecordSynthesisBridge
         var selfType = MakeSelfType(ir);
 
         var copy = new TsCallExpression(
-            new TsIdentifier("copyRecordWith"),
+            new TsRuntimeHelperReference("copyRecordWith"),
             [new TsIdentifier("this"), new TsIdentifier("overrides")],
             TypeArguments: [selfType]
         );

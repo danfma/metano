@@ -26,6 +26,13 @@ public sealed class ImportCollector(
     IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null
 )
 {
+    /// <summary>
+    /// The module specifier the runtime helpers are imported from. The alias
+    /// pass (issue #484) treats only its lines as the runtime's own claims; a
+    /// helper name arriving on any other line is a user binding.
+    /// </summary>
+    private const string RuntimeModuleName = "metano-runtime";
+
     private readonly TypeScriptTransformContext _context = context;
     private readonly TypeMappingContext _typeMappingContext =
         context.TypeMapping
@@ -49,11 +56,11 @@ public sealed class ImportCollector(
     /// <c>import</c> line: TypeScript built-ins (<c>Map</c>, <c>Set</c>,
     /// <c>unknown</c>, …), JavaScript globals (<c>console</c>,
     /// <c>Math</c>, <c>crypto</c>, <c>Object</c>), keywords used as
-    /// expressions (<c>typeof</c>), and runtime helpers that the
-    /// codegen wires in through a dedicated path
-    /// (<c>delegateAdd</c>/<c>delegateRemove</c>,
-    /// <c>getUnionGuard</c>/<c>registerUnionGuard</c>, <c>HashCode</c>,
-    /// <c>copyRecordWith</c>).
+    /// expressions (<c>typeof</c>), and the event accessors
+    /// (<c>delegateAdd</c>/<c>delegateRemove</c>) whose import the event
+    /// lowering wires separately. Runtime helper calls are not listed here:
+    /// they travel as <see cref="TsRuntimeHelperReference"/> nodes and the
+    /// walker collects them through the dedicated helper bucket.
     /// Hoisted out of the original 28-arm pattern match to drop the
     /// scrolling cost when adding a new bypass.
     /// </summary>
@@ -66,8 +73,6 @@ public sealed class ImportCollector(
         "null",
         "Partial",
         "Error",
-        IrRuntimeRequirementToTsImport.ImportedNameOf("HashCode"),
-        IrRuntimeRequirementToTsImport.ImportedNameOf("RecordCopy"),
         "Array",
         "v",
         "value",
@@ -82,18 +87,23 @@ public sealed class ImportCollector(
         "unknown[]",
         "delegateAdd",
         "delegateRemove",
-        "getUnionGuard",
-        "registerUnionGuard",
     };
 
-    public IReadOnlyList<TsImport> Collect(
-        INamedTypeSymbol currentType,
-        List<TsTopLevel> statements
-    )
+    /// <summary>
+    /// The module's import lines plus the <c>metano-runtime</c> helper aliases
+    /// the file must print its helper calls through (empty when no helper name
+    /// collides with a user declaration or user import — see
+    /// <see cref="ApplyRuntimeHelperAliases"/>).
+    /// </summary>
+    public (
+        IReadOnlyList<TsImport> Imports,
+        IReadOnlyDictionary<string, string> HelperAliases
+    ) Collect(INamedTypeSymbol currentType, List<TsTopLevel> statements)
     {
         var referencedTypes = new HashSet<string>();
         var valueTypes = new HashSet<string>(); // types used via `new` or `extends` (need runtime import)
-        var runtimeHelpers = new HashSet<string>(); // identifiers from TsTemplate.RuntimeImports
+        var runtimeHelperReferences = new HashSet<string>(StringComparer.Ordinal); // identifiers from TsRuntimeHelperReference
+        var templateRuntimeHelpers = new HashSet<string>(StringComparer.Ordinal); // identifiers from TsTemplate.RuntimeImports
         var crossPackageOrigins = new Dictionary<string, TsTypeOrigin>(); // name → cross-package origin
         var templateExternals = new List<IrExternalImport>();
         var linqPipeHelpers = new HashSet<string>(StringComparer.Ordinal);
@@ -103,7 +113,8 @@ public sealed class ImportCollector(
         var sink = new ImportCollectionSink(
             referencedTypes,
             valueTypes,
-            runtimeHelpers,
+            runtimeHelperReferences,
+            templateRuntimeHelpers,
             crossPackageOrigins,
             templateExternals,
             linqPipeHelpers,
@@ -169,29 +180,51 @@ public sealed class ImportCollector(
         //     finds them only on type signatures
         //   - UUID inside expression bodies emitted by the legacy
         //     JsonSerializerContextTransformer (doesn't flow through IR yet).
-        var alreadyImported = new HashSet<string>(StringComparer.Ordinal);
+        //
+        // `runtimeImported` tracks the names the runtime itself claims. It is
+        // kept apart from `importedNames` (the user-import dedupe): a user
+        // import of the same name must still be emitted — the runtime one is
+        // aliased instead of swallowing the user's binding (#484).
+        var runtimeImported = new HashSet<string>(StringComparer.Ordinal);
         foreach (var imp in imports)
         foreach (var name in imp.Names)
-            alreadyImported.Add(name);
+            runtimeImported.Add(name);
 
         // `Grouping<K,T>` is shipped from `metano-runtime/system/linq` (the pipe
         // runtime) and re-exported from the root `metano-runtime` barrel.
         // Pull it in as a type-only import when the consumer file references
         // it but didn't go through the LINQ-pipe import path.
-        if (referencedTypes.Contains("Grouping") && !alreadyImported.Contains("Grouping"))
+        if (referencedTypes.Contains("Grouping") && !runtimeImported.Contains("Grouping"))
         {
-            imports.Add(new TsImport(["Grouping"], "metano-runtime", TypeOnly: true));
-            alreadyImported.Add("Grouping");
+            imports.Add(new TsImport(["Grouping"], RuntimeModuleName, TypeOnly: true));
+            runtimeImported.Add("Grouping");
         }
 
         if (
-            (referencedTypes.Contains("UUID") || runtimeHelpers.Contains("UUID"))
-            && !alreadyImported.Contains("UUID")
+            (
+                referencedTypes.Contains("UUID")
+                || runtimeHelperReferences.Contains("UUID")
+                || templateRuntimeHelpers.Contains("UUID")
+            ) && !runtimeImported.Contains("UUID")
         )
         {
-            imports.Add(new TsImport(["UUID"], "metano-runtime"));
-            alreadyImported.Add("UUID");
-            runtimeHelpers.Remove("UUID");
+            imports.Add(new TsImport(["UUID"], RuntimeModuleName));
+            runtimeImported.Add("UUID");
+            runtimeHelperReferences.Remove("UUID");
+            templateRuntimeHelpers.Remove("UUID");
+        }
+
+        // Runtime helper calls collected from TsRuntimeHelperReference nodes —
+        // the value references the printer routes through the file's helper
+        // aliases. A name the IR scanner already imported is merged into the
+        // same "metano-runtime" line by MergeImportsByPath, so no ExceptWith
+        // here: the alias (issue #484) must survive the merge.
+        if (runtimeHelperReferences.Count > 0)
+        {
+            imports.Add(
+                new TsImport(runtimeHelperReferences.OrderBy(n => n).ToArray(), RuntimeModuleName)
+            );
+            runtimeImported.UnionWith(runtimeHelperReferences);
         }
 
         // Runtime helper imports collected from TsTemplate.RuntimeImports declarations
@@ -200,11 +233,14 @@ public sealed class ImportCollector(
         // IR scanner already value-imported (`HashSet` used both in a signature
         // and by a constructor-mapping template) must not be bound twice; a
         // type-only import does not provide the value, so it is kept.
-        runtimeHelpers.ExceptWith(ValueImportedNames(imports));
+        templateRuntimeHelpers.ExceptWith(ValueImportedNames(imports));
 
-        if (runtimeHelpers.Count > 0)
+        if (templateRuntimeHelpers.Count > 0)
         {
-            imports.Add(new TsImport(runtimeHelpers.OrderBy(n => n).ToArray(), "metano-runtime"));
+            imports.Add(
+                new TsImport(templateRuntimeHelpers.OrderBy(n => n).ToArray(), RuntimeModuleName)
+            );
+            runtimeImported.UnionWith(templateRuntimeHelpers);
         }
 
         // LINQ pipe helpers from TsLinqCall — `linq` itself + every
@@ -221,10 +257,9 @@ public sealed class ImportCollector(
             );
         }
 
-        // Track what we've already imported to avoid duplicates downstream.
-        var importedNames = new HashSet<string>(alreadyImported);
-        foreach (var helper in runtimeHelpers)
-            importedNames.Add(helper);
+        // Track the user-facing imports already emitted to avoid duplicates
+        // downstream; runtime bindings are not here (see `runtimeImported`).
+        var importedNames = new HashSet<string>(StringComparer.Ordinal);
 
         // Cross-package imports collected via TsTypeOrigin (resolved at type-mapping
         // time, no string lookup needed). Each origin carries the package name plus
@@ -330,11 +365,7 @@ public sealed class ImportCollector(
         foreach (var typeName in referencedTypes.OrderBy(n => n))
         {
             // Skip built-in types and runtime identifiers that don't need imports.
-            if (
-                typeName.StartsWith("Temporal.")
-                || IsRuntimeTypeCheck(typeName)
-                || NonImportableIdentifiers.Contains(typeName)
-            )
+            if (typeName.StartsWith("Temporal.") || NonImportableIdentifiers.Contains(typeName))
                 continue;
 
             // External import mapping ([Import] attribute, with optional AsDefault).
@@ -580,7 +611,197 @@ public sealed class ImportCollector(
             }
         }
 
-        return MergeImportsByPath(imports);
+        var helperAliases = ApplyRuntimeHelperAliases(imports, statements, sink);
+
+        return (MergeImportsByPath(imports), helperAliases);
+    }
+
+    /// <summary>
+    /// A <c>metano-runtime</c> helper whose plain import name is already taken
+    /// by a user declaration or a user import in the same module is re-imported
+    /// under a unique <c>$rt</c> alias, and the file's helper calls print
+    /// through that alias (issue #484). Without it the module either fails to
+    /// compile (duplicate identifier) or the generated calls silently bind to
+    /// the user's member.
+    ///
+    /// Only helpers whose references the printer can reroute are aliased:
+    /// first-class <see cref="TsRuntimeHelperReference"/> calls and the names
+    /// the BCL-mapping templates declare in <c>RuntimeImports</c> (the
+    /// printer substitutes the alias into the template's literal chunks).
+    /// Class-shaped helpers (<c>Enumerable</c>, <c>HashSet</c>, <c>UUID</c>,
+    /// <c>Temporal</c>, <c>Grouping</c>) stay on their plain names — they are
+    /// referenced as bare identifiers and types across the bridges, so an
+    /// alias would break every reference the alias map can't see.
+    /// </summary>
+    private IReadOnlyDictionary<string, string> ApplyRuntimeHelperAliases(
+        List<TsImport> imports,
+        List<TsTopLevel> statements,
+        ImportCollectionSink sink
+    )
+    {
+        // Every name the runtime itself claims in this module: the walker's
+        // helper references, the template-carried helpers, and the imports the
+        // IR runtime-requirement scanner asked for (semantic name → emitted
+        // name). Their imports are excluded from the occupied set — they are
+        // the candidates being aliased, not collisions.
+        var claimedByRuntime = new HashSet<string>(StringComparer.Ordinal);
+        claimedByRuntime.UnionWith(sink.RuntimeHelperReferences);
+        claimedByRuntime.UnionWith(sink.TemplateRuntimeHelpers);
+        if (_irRuntimeRequirements is { Count: > 0 } requirements)
+        {
+            foreach (var requirement in requirements)
+            {
+                if (IrRuntimeRequirementToTsImport.HasMappedImport(requirement))
+                    claimedByRuntime.Add(
+                        IrRuntimeRequirementToTsImport.ImportedNameOf(requirement.HelperName)
+                    );
+            }
+        }
+
+        // Occupied = everything declared in the module plus every imported
+        // binding that is not the runtime's own helper import. Type-only
+        // imports occupy module scope too (a local type of the same name is a
+        // duplicate identifier either way). A name the runtime claims counts
+        // as occupied when it arrives on a USER import line — the user's
+        // binding wins and the runtime one is what gets aliased (#484).
+        var occupied = new HashSet<string>(DeclaredNames(statements), StringComparer.Ordinal);
+
+        foreach (var import in imports)
+        {
+            if (import.IsNamespace)
+                continue;
+
+            var isRuntimeLine = import.From == RuntimeModuleName;
+
+            foreach (var name in import.Names)
+            {
+                if (isRuntimeLine && claimedByRuntime.Contains(name))
+                    continue;
+
+                occupied.Add(name);
+            }
+        }
+
+        var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
+        var taken = new HashSet<string>(occupied, StringComparer.Ordinal);
+
+        // Both reference channels alias: the walker's helper calls and the
+        // template-carried ones. The printer reroutes a template's declared
+        // names through the alias, so a `==` over records (the `valueEquals`
+        // template) colliding with a user import is aliased like the node
+        // references are.
+        var aliasable = new HashSet<string>(StringComparer.Ordinal);
+        aliasable.UnionWith(sink.RuntimeHelperReferences);
+        aliasable.UnionWith(sink.TemplateRuntimeHelpers);
+
+        foreach (var helper in aliasable.OrderBy(n => n, StringComparer.Ordinal))
+        {
+            if (!occupied.Contains(helper))
+                continue;
+
+            var attempt = 1;
+            string alias;
+
+            do
+            {
+                alias = attempt is 1 ? $"{helper}$rt" : $"{helper}$rt{attempt}";
+                attempt++;
+            } while (!taken.Add(alias));
+
+            aliases[helper] = alias;
+        }
+
+        if (aliases.Count == 0)
+            return aliases;
+
+        for (var i = 0; i < imports.Count; i++)
+        {
+            var import = imports[i];
+
+            // Only the runtime's own lines carry the alias — a user import of
+            // the same name keeps its binding untouched.
+            if (import.From != RuntimeModuleName || import.IsDefault || import.IsNamespace)
+                continue;
+
+            var aliased = import
+                .Names.Where(aliases.ContainsKey)
+                .ToDictionary(name => name, name => aliases[name], StringComparer.Ordinal);
+
+            if (aliased.Count == 0)
+                continue;
+
+            if (import.Aliases is not null)
+            {
+                foreach (var (original, local) in import.Aliases)
+                    if (!aliased.ContainsKey(original))
+                        aliased[original] = local;
+            }
+
+            imports[i] = import with { Aliases = aliased };
+        }
+
+        return aliases;
+    }
+
+    /// <summary>
+    /// Every binding a generated module declares at file scope: classes,
+    /// interfaces, functions, enums, const objects, type aliases, namespace
+    /// declarations, barrel <c>export import</c> aliases, and the top-level
+    /// (entry-point) variable and destructuring bindings. Namespaces' inner
+    /// members are scoped to the namespace and don't occupy module scope.
+    /// </summary>
+    private static IReadOnlySet<string> DeclaredNames(IReadOnlyList<TsTopLevel> statements)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var statement in statements)
+        {
+            switch (statement)
+            {
+                case TsFunction function:
+                    names.Add(function.Name);
+                    break;
+                case TsClass cls:
+                    names.Add(cls.Name);
+                    break;
+                case TsInterface iface:
+                    names.Add(iface.Name);
+                    break;
+                case TsEnum enumDeclaration:
+                    names.Add(enumDeclaration.Name);
+                    break;
+                case TsConstObject constObject:
+                    names.Add(constObject.Name);
+                    break;
+                case TsTypeAlias typeAlias:
+                    names.Add(typeAlias.Name);
+                    break;
+                case TsNamespaceDeclaration namespaceDeclaration:
+                    names.Add(namespaceDeclaration.Name);
+                    break;
+                case TsExportImportAlias exportImport:
+                    names.Add(exportImport.Alias);
+                    break;
+                case TsTopLevelStatement topLevel:
+                    switch (topLevel.Inner)
+                    {
+                        case TsVariableDeclaration variable:
+                            names.Add(variable.Name);
+                            break;
+                        case TsDestructuringDeclaration destructuring:
+                            foreach (var element in destructuring.Names)
+                            {
+                                if (element is not null)
+                                    names.Add(element);
+                            }
+                            break;
+                    }
+
+                    break;
+            }
+        }
+
+        return names;
     }
 
     /// <summary>
@@ -832,7 +1053,6 @@ public sealed class ImportCollector(
     {
         var names = sink.Names;
         var valueNames = sink.ValueNames;
-        var runtimeHelpers = sink.RuntimeHelpers;
         var crossPackageOrigins = sink.CrossPackageOrigins;
         switch (node)
         {
@@ -1062,7 +1282,6 @@ public sealed class ImportCollector(
     {
         var names = sink.Names;
         var valueNames = sink.ValueNames;
-        var runtimeHelpers = sink.RuntimeHelpers;
         var crossPackageOrigins = sink.CrossPackageOrigins;
         switch (stmt)
         {
@@ -1128,7 +1347,7 @@ public sealed class ImportCollector(
     {
         var names = sink.Names;
         var valueNames = sink.ValueNames;
-        var runtimeHelpers = sink.RuntimeHelpers;
+        var templateRuntimeHelpers = sink.TemplateRuntimeHelpers;
         var crossPackageOrigins = sink.CrossPackageOrigins;
         switch (expr)
         {
@@ -1146,7 +1365,7 @@ public sealed class ImportCollector(
                 RecordModuleExport(sink.OwnersByModuleExport, exportReference);
                 break;
             case TsRuntimeHelperReference helper:
-                runtimeHelpers.Add(helper.Name);
+                sink.RuntimeHelperReferences.Add(helper.Name);
                 break;
             case TsIdentifier bareId:
                 // Bare identifiers starting with uppercase may reference transpilable
@@ -1208,24 +1427,16 @@ public sealed class ImportCollector(
                 {
                     names.Add(callId.Name);
                     valueNames.Add(callId.Name);
-                    // `bindReceiver` is the metano-runtime helper the
-                    // TS bridge emits around lambdas bound to a
-                    // `[This]`-bearing delegate. Route it through the
-                    // runtime-helper bucket so the collector emits
-                    // the matching import without threading a new
-                    // IrRuntimeRequirement through the frontend.
+                    // `bindReceiver` reaches the output as a bare-identifier
+                    // call: the frontend wraps method-group → `[This]`
+                    // delegate conversions in an `IrCallExpression` over a
+                    // plain `IrIdentifier` (IrExpressionExtractor), and the
+                    // TS bridge maps lambdas bound to such delegates onto the
+                    // same shape. Route it through the runtime-helper bucket
+                    // so the collector emits the matching import — aliased on
+                    // a name collision (#484).
                     if (callId.Name == "bindReceiver")
-                        runtimeHelpers.Add("bindReceiver");
-                    // `getUnionGuard` / `registerUnionGuard` ship from
-                    // `metano-runtime` and back the [StrictUnionGuard]
-                    // dispatch. Route them through the runtime-helper
-                    // bucket so the collector emits the matching
-                    // import. The walker only sees calls (base guard
-                    // looks up via `getUnionGuard(...)`; each variant
-                    // module registers via `registerUnionGuard(...)`),
-                    // so this is the right hook.
-                    if (callId.Name is "getUnionGuard" or "registerUnionGuard")
-                        runtimeHelpers.Add(callId.Name);
+                        sink.RuntimeHelperReferences.Add("bindReceiver");
                 }
                 // Static method calls like Enumerable.from(...)
                 else if (
@@ -1358,10 +1569,10 @@ public sealed class ImportCollector(
                 // [MapMethod(..., RuntimeImports = "...")] declarations. The walker can't
                 // see these inside the opaque template text, so the BclMapper threads
                 // them through here as a separate field. They go into the dedicated
-                // `runtimeHelpers` set so the Collect entry point can emit a single
-                // bundled `import { ... } from "metano-runtime"` line.
+                // `templateRuntimeHelpers` set so the Collect entry point can emit a
+                // single bundled `import { ... } from "metano-runtime"` line.
                 foreach (var helper in template.RuntimeImports)
-                    runtimeHelpers.Add(helper);
+                    templateRuntimeHelpers.Add(helper);
                 // External `[Import]` metadata threaded from `[Emit]` methods —
                 // the template body references the identifier by name (e.g.,
                 // `createElement` in `createElement($T0, $0)`) but the walker
@@ -1458,23 +1669,6 @@ public sealed class ImportCollector(
             .SelectMany(import =>
                 import.Names.Where(name => import.TypeOnlyNames?.Contains(name) != true)
             );
-
-    private static bool IsRuntimeTypeCheck(string name) =>
-        name
-            is "isChar"
-                or "isString"
-                or "isByte"
-                or "isSByte"
-                or "isInt16"
-                or "isUInt16"
-                or "isInt32"
-                or "isUInt32"
-                or "isInt64"
-                or "isUInt64"
-                or "isFloat32"
-                or "isFloat64"
-                or "isBool"
-                or "isBigInt";
 }
 
 /// <summary>
@@ -1486,7 +1680,8 @@ public sealed class ImportCollector(
 internal sealed record ImportCollectionSink(
     HashSet<string> Names,
     HashSet<string> ValueNames,
-    HashSet<string> RuntimeHelpers,
+    HashSet<string> RuntimeHelperReferences,
+    HashSet<string> TemplateRuntimeHelpers,
     Dictionary<string, TsTypeOrigin> CrossPackageOrigins,
     List<IrExternalImport> TemplateExternals,
     HashSet<string> LinqPipeHelpers,
