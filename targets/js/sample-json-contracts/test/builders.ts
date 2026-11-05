@@ -37,6 +37,7 @@ import { OrdBase } from "#/sample-json-contracts/ord-base";
 import { Other } from "#/sample-json-contracts/other";
 import { OtherB } from "#/sample-json-contracts/other-b";
 import { Page } from "#/sample-json-contracts/page";
+import { Schedule } from "#/sample-json-contracts/schedule";
 import { SPoint } from "#/sample-json-contracts/s-point";
 import { SBase } from "#/sample-json-contracts/s-base";
 import { SetClass } from "#/sample-json-contracts/set-class";
@@ -417,13 +418,11 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     build: () => Temporal.PlainTime.from("03:04:05.678"),
     assertRead: (value) => expect(String(value)).toBe("03:04:05.678"),
   },
-  V11: {
+  V11b: {
     build: () => Temporal.ZonedDateTime.from("2026-01-02T03:04:05+00:00[UTC]"),
-    assertRead: (value) => expect(String(value)).toBe("2026-01-02T03:04:05+00:00[UTC]"),
   },
-  V12: {
+  V12b: {
     build: () => Temporal.Duration.from({ hours: 1, minutes: 2, seconds: 3 }),
-    assertRead: (value) => expect(String(value)).toBe("PT1H2M3S"),
   },
   V13: { build: () => 1, assertRead: (value) => expect(value).toBe(1) },
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
@@ -669,6 +668,59 @@ export const caseBuilders: Record<string, CaseBuilder> = {
 
       expect(rec.id).toBe("e");
       expect<string>(rec.note).toBe("ok");
+    },
+  },
+  T1: {
+    assertRead: (value) => expect(String(value)).toBe("03:04:05"),
+  },
+  T2: {
+    assertRead: (value) => expect(String(value)).toBe("03:04:05"),
+  },
+  T3: {
+    assertRead: (value) => expect(String(value)).toBe("00:00:00"),
+  },
+  T4: {
+    assertRead: (value) => expect(String(value)).toBe("03:04:05.1234567"),
+  },
+  T12: {
+    assertRead: (value) => expect(String(value)).toBe("2024-02-29"),
+  },
+  T15: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T00:00:00"),
+  },
+  T16: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:00"),
+  },
+  T17: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30"),
+  },
+  T18: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30.1234567"),
+  },
+  T22: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30+02:00[+02:00]"),
+  },
+  T25: {
+    assertRead: (value) => expect(String(value)).toBe("PT10H20M"),
+  },
+  T26: {
+    assertRead: (value) => expect(String(value)).toBe("P10D"),
+  },
+  T27: {
+    assertRead: (value) => expect(String(value)).toBe("P1DT10H20M"),
+  },
+  T28: {
+    assertRead: (value) => expect(String(value)).toBe("-P10675199DT2H48M5.4775808S"),
+  },
+  T33: {
+    assertRead: (value) => {
+      const schedule = expectClass(value, Schedule);
+
+      expect(String(schedule.at)).toBe("2024-01-31T10:20:00");
+      expect(String(schedule.starts)).toBe("03:04:05");
+      expect(String(schedule.day)).toBe("2024-02-29");
+      expect(String(schedule.duration)).toBe("P1DT10H20M30.5S");
+      expect(String(schedule.moment)).toBe("2024-01-31T10:20:30+02:00[+02:00]");
     },
   },
 };

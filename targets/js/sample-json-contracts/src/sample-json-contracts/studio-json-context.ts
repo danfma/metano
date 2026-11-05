@@ -41,6 +41,7 @@ import { isPoint3, type Point3 } from "./point3";
 import { isRect, type Rect } from "./rect";
 import { SBase } from "./s-base";
 import { SPoint } from "./s-point";
+import { Schedule } from "./schedule";
 import type { Shape } from "./shape";
 import { SilenceClip } from "./silence-clip";
 import { Sq } from "./sq";
@@ -143,6 +144,12 @@ export class StudioJsonContext extends SerializerContext {
   private _dateTimeOffset?: ValueSpec<Temporal.ZonedDateTime>;
 
   private _timeSpan?: ValueSpec<Temporal.Duration>;
+
+  private _listTimeOnly?: ValueSpec<Temporal.PlainTime[] | null>;
+
+  private _dictionaryStringTimeOnly?: ValueSpec<Map<string, Temporal.PlainTime> | null>;
+
+  private _schedule?: TypeSpec<Schedule>;
 
   private _color?: ValueSpec<Color>;
 
@@ -954,7 +961,11 @@ export class StudioJsonContext extends SerializerContext {
 
   get dateTime(): ValueSpec<Temporal.PlainDateTime> {
     return (this._dateTime ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.PlainDateTime.from },
+      descriptor: {
+        kind: "temporal",
+        parse: Temporal.PlainDateTime.from,
+        typeName: "System.DateTime",
+      },
       valueType: true,
       typeName: "System.DateTime",
     }));
@@ -962,7 +973,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get dateOnly(): ValueSpec<Temporal.PlainDate> {
     return (this._dateOnly ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.PlainDate.from },
+      descriptor: { kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" },
       valueType: true,
       typeName: "System.DateOnly",
     }));
@@ -970,7 +981,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get timeOnly(): ValueSpec<Temporal.PlainTime> {
     return (this._timeOnly ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.PlainTime.from },
+      descriptor: { kind: "temporal", parse: Temporal.PlainTime.from, typeName: "System.TimeOnly" },
       valueType: true,
       typeName: "System.TimeOnly",
     }));
@@ -978,7 +989,11 @@ export class StudioJsonContext extends SerializerContext {
 
   get dateTimeOffset(): ValueSpec<Temporal.ZonedDateTime> {
     return (this._dateTimeOffset ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.ZonedDateTime.from },
+      descriptor: {
+        kind: "temporal",
+        parse: Temporal.ZonedDateTime.from,
+        typeName: "System.DateTimeOffset",
+      },
       valueType: true,
       typeName: "System.DateTimeOffset",
     }));
@@ -986,9 +1001,77 @@ export class StudioJsonContext extends SerializerContext {
 
   get timeSpan(): ValueSpec<Temporal.Duration> {
     return (this._timeSpan ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.Duration.from },
+      descriptor: { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
       valueType: true,
       typeName: "System.TimeSpan",
+    }));
+  }
+
+  get listTimeOnly(): ValueSpec<Temporal.PlainTime[] | null> {
+    return (this._listTimeOnly ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: { kind: "temporal", parse: Temporal.PlainTime.from, typeName: "System.TimeOnly" },
+      },
+    }));
+  }
+
+  get dictionaryStringTimeOnly(): ValueSpec<Map<string, Temporal.PlainTime> | null> {
+    return (this._dictionaryStringTimeOnly ??= this.createValueSpec({
+      descriptor: {
+        kind: "map",
+        key: { kind: "primitive" },
+        value: { kind: "temporal", parse: Temporal.PlainTime.from, typeName: "System.TimeOnly" },
+      },
+    }));
+  }
+
+  get schedule(): TypeSpec<Schedule> {
+    return (this._schedule ??= this.createSpec({
+      type: Schedule,
+      factory: (p: Record<string, unknown>) =>
+        new Schedule(
+          p.at as Temporal.PlainDateTime,
+          p.starts as Temporal.PlainTime,
+          p.day as Temporal.PlainDate,
+          p.duration as Temporal.Duration,
+          p.moment as Temporal.ZonedDateTime,
+        ),
+      properties: [
+        {
+          ts: "at",
+          json: "At",
+          type: {
+            kind: "temporal",
+            parse: Temporal.PlainDateTime.from,
+            typeName: "System.DateTime",
+          },
+        },
+        {
+          ts: "starts",
+          json: "Starts",
+          type: { kind: "temporal", parse: Temporal.PlainTime.from, typeName: "System.TimeOnly" },
+        },
+        {
+          ts: "day",
+          json: "Day",
+          type: { kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" },
+        },
+        {
+          ts: "duration",
+          json: "Duration",
+          type: { kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" },
+        },
+        {
+          ts: "moment",
+          json: "Moment",
+          type: {
+            kind: "temporal",
+            parse: Temporal.ZonedDateTime.from,
+            typeName: "System.DateTimeOffset",
+          },
+        },
+      ],
     }));
   }
 
