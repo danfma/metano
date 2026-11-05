@@ -190,18 +190,22 @@ internal sealed class JsonSpecBuilder
     {
         var polymorphism = _polymorphisms.GetValueOrDefault(targetType);
 
-        var factoryParameter = new TsParameter(
-            "p",
-            new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
-        );
+        // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject,
+        // () => { throw ... } for a spec that cannot construct. The payload
+        // parameter exists only for a factory that reads it: a declared-but-unused
+        // `p` trips biome's noUnusedFunctionParameters in every consumer project
+        // (#480), and a parameterless constructor needs no payload either.
+        var factory = BuildFactoryStatement(targetType, tsTypeName, polymorphism);
+        var factoryParameter = ReferencesPayloadParameter(factory)
+            ? new TsParameter(
+                "p",
+                new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
+            )
+            : null;
 
-        // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject
         var factoryProperty = new TsObjectProperty(
             "factory",
-            new TsArrowFunction(
-                [factoryParameter],
-                [BuildFactoryStatement(targetType, tsTypeName, polymorphism)]
-            )
+            new TsArrowFunction(factoryParameter is null ? [] : [factoryParameter], [factory])
         );
 
         var propertiesProperty = new TsObjectProperty(
@@ -272,6 +276,39 @@ internal sealed class JsonSpecBuilder
             )
         );
     }
+
+    /// <summary>
+    /// Whether the spec's <c>factory</c> body reads the payload parameter:
+    /// the shapes <see cref="BuildFactoryStatement"/> builds it from — a throw
+    /// never does, a <c>[PlainObject]</c> or constructed literal only through
+    /// a <c>p.x</c> cast. A factory with a parameterless constructor (or an
+    /// empty literal) reads nothing and declares no parameter (#480).
+    /// </summary>
+    private static bool ReferencesPayloadParameter(TsStatement statement) =>
+        statement switch
+        {
+            TsReturnStatement ret => ret.Expression is not null
+                && ReferencesPayloadParameter(ret.Expression),
+            TsThrowStatement thr => ReferencesPayloadParameter(thr.Expression),
+            _ => false,
+        };
+
+    private static bool ReferencesPayloadParameter(TsExpression expression) =>
+        expression switch
+        {
+            TsIdentifier identifier => identifier.Name == "p",
+            TsPropertyAccess access => ReferencesPayloadParameter(access.Object),
+            TsCastExpression cast => ReferencesPayloadParameter(cast.Expression),
+            TsNewExpression newExpression => newExpression.Arguments.Any(
+                ReferencesPayloadParameter
+            ),
+            TsCallExpression call => ReferencesPayloadParameter(call.Callee)
+                || call.Arguments.Any(ReferencesPayloadParameter),
+            TsObjectLiteral literal => literal.Properties.Any(property =>
+                ReferencesPayloadParameter(property.Value)
+            ),
+            _ => false,
+        };
 
     /// <summary>
     /// The single statement of the spec's <c>factory</c> arrow:

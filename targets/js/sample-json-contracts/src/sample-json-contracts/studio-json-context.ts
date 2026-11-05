@@ -207,7 +207,7 @@ export class StudioJsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return (this._clip ??= this.createSpec({
       type: Clip,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.",
         );
@@ -343,7 +343,7 @@ export class StudioJsonContext extends SerializerContext {
   get hBase(): TypeSpec<HBase> {
     return (this._hBase ??= this.createSpec({
       type: HBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'HBase' directly; deserialize it through a polymorphic spec.",
         );
@@ -375,7 +375,7 @@ export class StudioJsonContext extends SerializerContext {
   get iBase(): TypeSpec<IBase> {
     return (this._iBase ??= this.createSpec({
       type: IBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'IBase' directly; deserialize it through a polymorphic spec.",
         );
@@ -401,7 +401,7 @@ export class StudioJsonContext extends SerializerContext {
   get dBase(): TypeSpec<DBase> {
     return (this._dBase ??= this.createSpec({
       type: DBase,
-      factory: (p: Record<string, unknown>) => new DBase(),
+      factory: () => new DBase(),
       properties: [],
       polymorphism: {
         discriminator: "$type",
@@ -441,7 +441,7 @@ export class StudioJsonContext extends SerializerContext {
   get uFail(): TypeSpec<UFail> {
     return (this._uFail ??= this.createSpec({
       type: UFail,
-      factory: (p: Record<string, unknown>) => new UFail(),
+      factory: () => new UFail(),
       properties: [],
       polymorphism: {
         discriminator: "$type",
@@ -458,7 +458,7 @@ export class StudioJsonContext extends SerializerContext {
   get uNear(): TypeSpec<UNear> {
     return (this._uNear ??= this.createSpec({
       type: UNear,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'UNear' directly; deserialize it through a polymorphic spec.",
         );
@@ -492,7 +492,7 @@ export class StudioJsonContext extends SerializerContext {
   get uBaseH(): TypeSpec<UBaseH> {
     return (this._uBaseH ??= this.createSpec({
       type: UBaseH,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'UBaseH' directly; deserialize it through a polymorphic spec.",
         );
@@ -521,7 +521,7 @@ export class StudioJsonContext extends SerializerContext {
   get nBase(): TypeSpec<NBase> {
     return (this._nBase ??= this.createSpec({
       type: NBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'NBase' directly; deserialize it through a polymorphic spec.",
         );
@@ -573,7 +573,7 @@ export class StudioJsonContext extends SerializerContext {
   get oBase(): TypeSpec<OBase> {
     return (this._oBase ??= this.createSpec({
       type: OBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'OBase' directly; deserialize it through a polymorphic spec.",
         );
@@ -606,7 +606,7 @@ export class StudioJsonContext extends SerializerContext {
   get gBaseInt32(): TypeSpec<GBase<number>> {
     return (this._gBaseInt32 ??= this.createSpec<GBase<number>>({
       type: GBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'GBase' directly; deserialize it through a polymorphic spec.",
         );
@@ -650,7 +650,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get iShape(): TypeSpec<IShape> {
     return (this._iShape ??= this.createSpec({
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize interface type 'IShape' directly; deserialize it through a polymorphic spec.",
         );
@@ -672,7 +672,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get iShapeB(): TypeSpec<IShapeB> {
     return (this._iShapeB ??= this.createSpec({
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize interface type 'IShapeB' directly; deserialize it through a polymorphic spec.",
         );
@@ -701,7 +701,7 @@ export class StudioJsonContext extends SerializerContext {
 
   get shape(): TypeSpec<Shape> {
     return (this._shape ??= this.createSpec({
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'Shape' directly; deserialize it through a polymorphic spec.",
         );
@@ -736,7 +736,7 @@ export class StudioJsonContext extends SerializerContext {
   get mixedBase(): TypeSpec<MixedBase> {
     return (this._mixedBase ??= this.createSpec({
       type: MixedBase,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'MixedBase' directly; deserialize it through a polymorphic spec.",
         );
@@ -1168,7 +1168,7 @@ export class StudioJsonContext extends SerializerContext {
     return (this._uFailY ??= this.createSpec({
       type: UFailY,
       base: this.uFail,
-      factory: (p: Record<string, unknown>) => new UFailY(),
+      factory: () => new UFailY(),
       properties: [],
     }));
   }
@@ -1192,7 +1192,7 @@ export class StudioJsonContext extends SerializerContext {
     return (this._uNearAbs ??= this.createSpec({
       type: UNearAbs,
       base: this.uNear,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'UNearAbs': polymorphic JSON deserialization is not supported yet.",
         );

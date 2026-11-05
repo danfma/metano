@@ -27,7 +27,7 @@ export class OutOfOrderJsonContext extends SerializerContext {
   get clip(): TypeSpec<Clip> {
     return (this._clip ??= this.createSpec({
       type: Clip,
-      factory: (p: Record<string, unknown>) => {
+      factory: () => {
         throw new Error(
           "Cannot deserialize abstract type 'Clip' directly; deserialize it through a polymorphic spec.",
         );
