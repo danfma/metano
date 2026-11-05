@@ -40,7 +40,7 @@ public static class TsConstructorModifier
 
     /// <summary>The modifier of one declared constructor.</summary>
     public static TsAccessibility OfConstructor(IMethodSymbol constructor) =>
-        Of(IrConstructorExtractor.DeclaredVisibility(constructor)).Accessibility;
+        MapDeclared(IrConstructorExtractor.DeclaredVisibility(constructor)).Accessibility;
 
     /// <summary>
     /// The modifier of a constructor group from what it declares: the most
@@ -50,12 +50,12 @@ public static class TsConstructorModifier
     public static TsAccessibility MostPermissiveOf(IrConstructorDeclaration constructor) =>
         IrToTsVisibilityMapper.MostPermissiveOf(
             DeclarationsOf(constructor)
-                .Select(declaration => Of(declaration.Visibility).Accessibility)
+                .Select(declaration => MapDeclared(declaration.Visibility).Accessibility)
         );
 
     /// <summary>
     /// The JSDoc of each overload signature of <paramref name="type"/>'s
-    /// constructor group, emitted <paramref name="emitted"/>
+    /// constructor group, emitted <paramref name="groupAccessibility"/>
     /// (<see cref="IrToTsVisibilityMapper.SignatureJSDocOf"/>). A value type
     /// never carries one, as it never carries a modifier
     /// (<see cref="KeepsPublicConstructor"/>). When every signature would be
@@ -65,20 +65,24 @@ public static class TsConstructorModifier
     /// A single constructor is the one signature of its group, so it is never
     /// tagged.
     /// </summary>
-    public static Func<IrConstructorDeclaration, TsJSDoc?> SignatureJSDocOf(
+    public static Func<IrConstructorDeclaration, TsJSDoc?> SignatureJSDocSelectorFor(
         IrClassDeclaration type,
-        TsAccessibility emitted
+        TsAccessibility groupAccessibility
     )
     {
         if (type.Constructor is not { } constructor || KeepsPublicConstructor(type))
             return _ => null;
 
         TsJSDoc? JSDocOf(IrConstructorDeclaration declaration) =>
-            IrToTsVisibilityMapper.SignatureJSDocOf(Of(declaration.Visibility), emitted);
+            IrToTsVisibilityMapper.SignatureJSDocOf(
+                MapDeclared(declaration.Visibility),
+                groupAccessibility
+            );
 
-        return DeclarationsOf(constructor).All(declaration => JSDocOf(declaration) is not null)
-            ? _ => null
-            : JSDocOf;
+        var wouldStripEverySignature = DeclarationsOf(constructor)
+            .All(declaration => JSDocOf(declaration) is not null);
+
+        return wouldStripEverySignature ? _ => null : JSDocOf;
     }
 
     /// <summary>
@@ -89,7 +93,7 @@ public static class TsConstructorModifier
     public static bool KeepsPublicConstructor(IrClassDeclaration type) =>
         type.Semantics.IsValueType;
 
-    private static TsMemberVisibility Of(IrVisibility visibility) =>
+    private static TsMemberVisibility MapDeclared(IrVisibility visibility) =>
         IrToTsVisibilityMapper.MapConstructor(visibility);
 
     private static IEnumerable<IrConstructorDeclaration> DeclarationsOf(
