@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, int32FromDouble, valueEquals } from "metano-runtime";
 import type { PageRequest } from "./page-request";
 
 export class PageResult<T> {
@@ -10,7 +10,9 @@ export class PageResult<T> {
   ) {}
 
   get totalPages(): number {
-    return this.totalCount === 0 ? 0 : Math.ceil(this.totalCount / this.page.safeSize);
+    return this.totalCount === 0
+      ? 0
+      : int32FromDouble(Math.ceil(this.totalCount / this.page.safeSize));
   }
 
   get hasNextPage(): boolean {

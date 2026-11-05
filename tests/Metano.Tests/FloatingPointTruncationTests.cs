@@ -1,0 +1,77 @@
+using Metano.Compiler.TypeScript;
+
+namespace Metano.Tests;
+
+/// <summary>
+/// A floating-point value cast to an <c>int</c>, <c>uint</c>, a narrower
+/// integer or <c>char</c> truncates and saturates as .NET 9+ does (spec 012
+/// FR-070), in both 64-bit modes, where the cast used to be erased.
+/// </summary>
+public class FloatingPointTruncationTests
+{
+    /// <summary>
+    /// FR-070 lands outside the staging switch: the shipped <c>Number</c>
+    /// mode truncates a floating-point cast to a narrow integer too, and
+    /// folds a constant one, while a cast to <c>long</c> keeps its 2.x form.
+    /// </summary>
+    [Test]
+    public async Task NumberMode_FloatingPointToNarrowInteger_Truncates()
+    {
+        const string source = """
+            [Transpile]
+            public class Casts
+            {
+                public int ToInt(double d) => (int)d;
+                public uint ToUInt(float f) => (uint)f;
+                public byte ToByte(double d) => (byte)d;
+                public short ToShortChecked(double d) => checked((short)d);
+                public int Constant() => (int)3.7;
+                public long ToLong(double d) => (long)d;
+                public int Narrow(long l) => (int)l;
+            }
+            """;
+
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            source,
+            Int64Representation.Number
+        );
+
+        var output = files["casts.ts"];
+
+        await Assert.That(output).Contains("return int32FromDouble(d);");
+        await Assert.That(output).Contains("return uint32FromDouble(f);");
+        await Assert.That(output).Contains("return int32FromDouble(d) & 0xFF;");
+        await Assert
+            .That(output)
+            .Contains("return Number(checkedNarrow(BigInt(int32FromDoubleChecked(d)), 16, true));");
+        await Assert.That(output).Contains("return 3;");
+        await Assert.That(output).Contains("toLong(d: number): number {\n    return d;");
+        await Assert.That(output).Contains("narrow(l: number): number {\n    return l;");
+        await Assert
+            .That(output)
+            .Contains(
+                "import { checkedNarrow, int32FromDouble, int32FromDoubleChecked, "
+                    + "uint32FromDouble } from \"metano-runtime\";"
+            );
+    }
+
+    /// <summary>
+    /// Dart keeps the explicit cast where it does not convert: a nullable
+    /// value cast to its underlying type reads through that type first.
+    /// </summary>
+    [Test]
+    public async Task Dart_NullableUnwrap_ReadsThroughTheUnderlyingType()
+    {
+        const string source = """
+            [Transpile]
+            public class Unwrap
+            {
+                public int ToInt(double? d) => (int)d;
+            }
+            """;
+
+        var (files, _) = DartTranspileHelper.Transpile(source);
+
+        await Assert.That(files["unwrap.dart"]).Contains("(d as double).toInt().toSigned(32)");
+    }
+}

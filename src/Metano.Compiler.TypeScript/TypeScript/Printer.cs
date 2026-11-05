@@ -1269,6 +1269,10 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(exportReference.Name);
                 break;
 
+            case TsRuntimeHelperReference helper:
+                _sb.Write(helper.Name);
+                break;
+
             case TsLiteral lit:
                 _sb.Write(lit.Raw);
                 break;

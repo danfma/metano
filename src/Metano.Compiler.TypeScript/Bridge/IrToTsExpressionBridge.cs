@@ -84,9 +84,10 @@ public static partial class IrToTsExpressionBridge
                 context
             ),
             IrCastExpression cast => MapCast(cast, context),
-            // Both representations render the operand until the BigInt
-            // lowering lands (spec 012); Number mode keeps this as its final form.
-            IrNumericConversion conversion => Map(conversion.Operand, context),
+            IrNumericConversion conversion => IrToTsNumericConversionBridge.Map(
+                conversion,
+                Map(conversion.Operand, context)
+            ),
             IrIntegerOverflow overflow => Map(overflow.Value, context),
             IrLambdaExpression lambda => MapLambda(lambda, context),
             IrStringInterpolation interp => MapStringInterpolation(interp, context),
