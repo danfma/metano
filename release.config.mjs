@@ -7,27 +7,35 @@
 // breaking-changes section. The transform below trims those trailing trailer
 // lines from each note before the preset renders them.
 //
-// Every other setting is identical to the JSON file it replaces.
+// One intended change from the JSON file it replaces: both the commit analyzer
+// and the release notes now use the same breaking-change keywords, including
+// `BREAKING-CHANGE`, the Conventional Commits synonym. Before, only the
+// analyzer had a keyword list and the notes used the preset default, so the two
+// could disagree. Every other setting is identical.
 import createConventionalcommitsPreset from "conventional-changelog-conventionalcommits";
 
-// Git-style trailer tokens we emit or recognize. A trailer is a trailing
-// `Token: value` line in the commit message's final paragraph.
-const trailerLinePattern =
-  /^(Co-Authored-By|Claude-Session|Claude-Model|Signed-off-by|Reviewed-by|Acked-by|Tested-by|Reported-by|Suggested-by|Helped-by|Requested-by|Originally-by|Based-on-patch|Cc|Link|See|Refs|Fixes):\s/i;
+// The trailers this repository's commits carry. Only these are stripped, so a
+// note that ends with prose such as `See: docs/migration.md` keeps it.
+const knownTrailerLinePattern = /^(Co-Authored-By|Claude-Session|Signed-off-by):\s/i;
 
-// Returns the commit with trailing trailer lines removed from each note's text.
+const isBlankOrKnownTrailer = (line) => line.trim() === "" || knownTrailerLinePattern.test(line);
+
+// Removes the trailing run of blank and known-trailer lines; trailers in the
+// middle of a note are kept.
+function stripTrailingTrailers(text) {
+  const lines = text.split("\n");
+  const lastContentIndex = lines.findLastIndex((line) => !isBlankOrKnownTrailer(line));
+
+  return lines.slice(0, lastContentIndex + 1).join("\n");
+}
+
 function stripNoteTrailers(commit) {
   if (!commit.notes?.length) {
     return commit;
   }
-  const notes = commit.notes.map((note) => {
-    const lines = note.text.split("\n");
-    let end = lines.length;
-    while (end > 0 && (lines[end - 1].trim() === "" || trailerLinePattern.test(lines[end - 1]))) {
-      end--;
-    }
-    return end === lines.length ? note : { ...note, text: lines.slice(0, end).join("\n") };
-  });
+
+  const notes = commit.notes.map((note) => ({ ...note, text: stripTrailingTrailers(note.text) }));
+
   return { ...commit, notes };
 }
 
@@ -46,15 +54,15 @@ const presetConfig = {
   ],
 };
 
+// Created here only to wrap the preset's own writer transform; both plugins
+// still load the preset themselves and merge the options below over it.
 const preset = await createConventionalcommitsPreset(presetConfig);
 
 const parserOpts = {
-  ...preset.parser,
-  noteKeywords: ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"],
+  noteKeywords: ["BREAKING CHANGE", "BREAKING-CHANGE", "BREAKING CHANGES", "BREAKING"],
 };
 
 const writerOpts = {
-  ...preset.writer,
   headerPartial: "## {{version}}\n\n{{#if date}}_{{date}}_\n\n{{/if}}",
   transform: (commit, context) => preset.writer.transform(stripNoteTrailers(commit), context),
 };
