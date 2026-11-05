@@ -413,8 +413,22 @@ describe("temporal reads System.Text.Json rejects", () => {
       "2024-01-31T10:20:30+15:00",
     ],
     [
+      { kind: "temporal", parse: Temporal.PlainDateTime.from, typeName: "System.DateTime" },
+      "2024-01-31T10:20:30-15:00",
+    ],
+    [
       { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
       "2024-01-31T10:20:30+02:60",
+    ],
+    [
+      { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
+      "2024-01-31T10:20:30+14:01",
+    ],
+    // A 17-digit fraction on the DateTimeOffset path exercises the
+    // zone-suffixed fallback too: no match, still the position's error.
+    [
+      { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
+      "2024-01-31T10:20:30.99999999999999999+02:00",
     ],
     [
       { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
