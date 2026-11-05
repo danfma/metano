@@ -115,7 +115,7 @@ public static class IrTypeRefMapper
                     named.TypeArguments.Length > 0
                         ? Map(named.TypeArguments[0], originResolver, target)
                         : new IrPrimitiveTypeRef(IrPrimitive.Void);
-                return new IrPromiseTypeRef(inner);
+                return new IrPromiseTypeRef(inner, named.IsValueType);
             }
 
             // BigInteger

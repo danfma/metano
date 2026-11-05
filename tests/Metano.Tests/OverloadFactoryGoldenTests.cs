@@ -668,6 +668,8 @@ public class OverloadFactoryGoldenTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
+            using System.Threading.Tasks;
+
             [Transpile]
             public record struct Rs(int X)
             {
@@ -681,6 +683,10 @@ public class OverloadFactoryGoldenTests
 
                 public Rs Pair;
 
+                public Task Pending;
+
+                public ValueTask Settled;
+
                 public Gen(T value) { Value = value; Pair = new Rs(1); }
 
                 public Gen(T value, int n) { Value = value; Pair = new Rs(n); }
@@ -690,11 +696,21 @@ public class OverloadFactoryGoldenTests
 
         await Assert.That(files["gen.ts"]).Contains("      this.pair = new Rs();\n");
         await Assert.That(files["gen.ts"]).Contains("      this.value = undefined as never;\n");
+        await Assert.That(files["gen.ts"]).Contains("      this.pending = null as never;\n");
+        await Assert.That(files["gen.ts"]).Contains("      this.settled = undefined as never;\n");
 
-        var unrepresentable = diagnostics.Where(d =>
-            d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("FR-027")
-        );
+        var unrepresentable = diagnostics
+            .Where(d =>
+                d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("FR-027")
+            )
+            .Select(d => d.Message)
+            .ToList();
 
-        await Assert.That(unrepresentable.Count()).IsEqualTo(1);
+        // The value-constrained T and the ValueTask; never the Task.
+        await Assert.That(unrepresentable.Count).IsEqualTo(2);
+        await Assert.That(unrepresentable.Count(m => m.Contains("ValueTask"))).IsEqualTo(1);
+        await Assert
+            .That(unrepresentable.Any(m => m.Contains("'System.Threading.Tasks.Task'")))
+            .IsFalse();
     }
 }

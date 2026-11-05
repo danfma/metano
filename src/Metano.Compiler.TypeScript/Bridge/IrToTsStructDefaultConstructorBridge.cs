@@ -100,9 +100,11 @@ internal static class IrToTsStructDefaultConstructorBridge
                 : AssertedNull(),
             IrNamedTypeRef named => NamedDefaultOf(named),
             // Value types the IR folds into structural shapes: a tuple, a
-            // KeyValuePair, a ValueTask (a promise shape, as Task is).
-            IrTupleTypeRef or IrKeyValuePairTypeRef or IrPromiseTypeRef => null,
-            // Every other IR shape (array, map, set, function, iterable…)
+            // KeyValuePair, a ValueTask; a Task shares the promise shape but is
+            // a reference type, whose default is null.
+            IrTupleTypeRef or IrKeyValuePairTypeRef or IrPromiseTypeRef { IsValueType: true } =>
+                null,
+            // Every other IR shape (array, map, set, function, iterable, Task…)
             // lowers a reference type; an ImmutableArray folds into an array,
             // whose default C# also reads as no array.
             _ => AssertedNull(),
