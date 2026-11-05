@@ -214,6 +214,14 @@ system prevents you from passing a plain string where a `UserId` is expected.
 `[InlineWrapper]` is still supported with the same behavior for existing code,
 but new code should prefer `[Branded]`.
 
+### `[JsonFactory]` — validating branded JSON reads
+
+On the one static method of a `[Branded]` / `[InlineWrapper]` type that
+validates its input (`From`): the generated `JsonSerializerContext` descriptor
+calls it (`create: Title.from`) instead of the non-validating `create`, so the
+C# validation also runs on JSON input. TypeScript-only; an invalid factory is
+error `MS0034`. See [Validating branded types](serialization.md#validating-branded-types).
+
 ### `[PlainObject]` — record → interface
 
 Emits a record or class as a TypeScript **interface** instead of a class. No
