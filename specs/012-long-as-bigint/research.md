@@ -725,7 +725,7 @@ BigInt(3.7) => The number 3.7 cannot be converted to a BigInt because it is not 
 ```
 
 Release flow on `90be699e` [V]: `.github/workflows/release.yml` triggers on `workflow_dispatch` only;
-`.releaserc.json` has `"branches": ["main"]`; there is no `release/3.0` branch; `main` holds the breaking
+`.releaserc.json` (now `release.config.mjs`) has `"branches": ["main"]`; there is no `release/3.0` branch; `main` holds the breaking
 commits `a4b03cd2` and `e79a114b` after `v2.10.1`, so the next release from `main` is 3.0.0.
 
 Other facts the review raised [S, I]: `long.MinValue / -1` with constant operands is CS0220 in a checked
