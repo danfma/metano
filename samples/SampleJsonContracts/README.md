@@ -26,10 +26,6 @@ divergence records `stjMessage` and `tsMessage`. Messages are compared after rem
 DECIDED-23 g) also drop the `SampleJsonContracts.` namespace. `stjPath` pins STJ's JSON path where
 its message names only the declaring type (DECIDED-23 c).
 
-The `biome.json` override that turns off `noUnusedFunctionParameters` for the generated `src/`
-covers the unused `p` parameter of the throwing factories of abstract and interface bases; it
-goes away with the emitter follow-up that drops that parameter.
-
 Regenerate the STJ texts after a .NET upgrade with `METANO_UPDATE_STJ_FIXTURES=1 dotnet run
 --project tests/Metano.Tests/ --no-build -- --treenode-filter "/*/*/StjConformanceFixtureTests/*"`
 and review the diff deliberately. Error messages are not regenerated.

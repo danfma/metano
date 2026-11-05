@@ -419,6 +419,13 @@ public class JsonSerializerContextTests
         var ts = TranspileHelper.Transpile(ClipContextSource)["test-app/json-context.ts"];
 
         await Assert.That(ts).DoesNotContain("new Clip(");
+
+        // A throwing factory never reads the payload, so its arrow declares
+        // no parameter: an unused `p` trips biome's noUnusedFunctionParameters
+        // in every consumer project (#480).
+        await Assert.That(ts).DoesNotContain("factory: (p: Record<string, unknown>) => {");
+        await Assert.That(ts).Contains("factory: () => {");
+
         await Assert
             .That(ts)
             .Contains(
@@ -433,6 +440,37 @@ public class JsonSerializerContextTests
 
         // `Seconds` is inherited but still a constructor slot, after `Path`.
         await Assert.That(ts).Contains("new ImageClip(p.path as string, p.seconds as number)");
+    }
+
+    [Test]
+    public async Task ParameterlessConstructor_FactoryDeclaresNoPayloadParameter()
+    {
+        var ts = TranspileHelper.Transpile(
+            """
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public record Counter
+            {
+                public int Count { get; set; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Counter))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        )["test-app/json-context.ts"];
+
+        // The factory binds no constructor slot and assigns nothing eagerly,
+        // so the payload parameter would go unused (#480).
+        await Assert.That(ts).Contains("factory: () => new Counter()");
     }
 
     private const string ContextBoilerplate = """

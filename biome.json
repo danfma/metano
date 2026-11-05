@@ -60,16 +60,6 @@
           }
         }
       }
-    },
-    {
-      "includes": ["targets/js/sample-json-contracts/src/**"],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "noUnusedFunctionParameters": "off"
-          }
-        }
-      }
     }
   ]
 }
