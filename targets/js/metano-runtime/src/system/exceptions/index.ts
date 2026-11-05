@@ -8,3 +8,5 @@ export * from "./argument-null-exception.ts";
 export * from "./format-exception.ts";
 export * from "./invalid-operation-exception.ts";
 export * from "./not-supported-exception.ts";
+export * from "./argument-out-of-range-exception.ts";
+export * from "./invalid-cast-exception.ts";

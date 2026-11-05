@@ -209,6 +209,7 @@ public sealed partial class IrExpressionExtractor
         var value =
             FoldedInt64Constant(expression)
             ?? FoldedCheckedContextConstant(expression)
+            ?? FoldedNumberStylesConstant(expression)
             ?? ExtractUnbound(expression);
 
         return WithImplicitNumericConversion(expression, value);
@@ -3291,15 +3292,38 @@ public sealed partial class IrExpressionExtractor
                 case InterpolatedStringTextSyntax text:
                     parts.Add(new IrInterpolationText(CookedInterpolationText(text)));
                     break;
-                case InterpolationSyntax expr:
-                    var formatSpec = expr.FormatClause?.FormatStringToken.ValueText;
-                    parts.Add(
-                        new IrInterpolationExpression(ExtractInterpolationHole(expr), formatSpec)
-                    );
+                case InterpolationSyntax hole:
+                    parts.Add(ExtractInterpolationPart(hole));
                     break;
             }
         }
         return new IrStringInterpolation(parts);
+    }
+
+    private IrInterpolationExpression ExtractInterpolationPart(InterpolationSyntax hole) =>
+        new(
+            ExtractInterpolationHole(hole),
+            hole.FormatClause?.FormatStringToken.ValueText,
+            InterpolationAlignment(hole),
+            SixtyFourBitKindOf(hole.Expression)
+        );
+
+    /// <summary>The constant alignment of a hole (<c>{x,8}</c>), or <c>null</c> without one.</summary>
+    private int? InterpolationAlignment(InterpolationSyntax hole) =>
+        hole.AlignmentClause is { } clause
+        && _semantic.GetConstantValue(clause.Value) is { HasValue: true, Value: int alignment }
+            ? alignment
+            : null;
+
+    /// <summary>The kind of a non-nullable <c>long</c> or <c>ulong</c> value, or <c>null</c>.</summary>
+    private IrNumericKind? SixtyFourBitKindOf(ExpressionSyntax expression)
+    {
+        var type = _semantic.GetTypeInfo(expression).Type;
+        var endpoint = type.IsNullableValueType() ? null : NumericEndpoints.Of(type);
+
+        return endpoint is { IsEnum: false } && endpoint.IsSixtyFourBitValue()
+            ? endpoint.Kind
+            : null;
     }
 
     /// <summary>
