@@ -200,6 +200,9 @@ public static class IrToTsJsxComponentBridge
         type switch
         {
             IrPrimitiveTypeRef { Primitive: IrPrimitive.Boolean } => new TsLiteral("false"),
+            // STAGING(012k): through SixtyFourBitZero, 0n once the switch is gone.
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 or IrPrimitive.UInt64 } =>
+                IrToTsClassBridge.SixtyFourBitZero(),
             IrPrimitiveTypeRef p when IsNumericPrimitive(p.Primitive) => new TsLiteral("0"),
             _ => new TsLiteral("null"),
         };

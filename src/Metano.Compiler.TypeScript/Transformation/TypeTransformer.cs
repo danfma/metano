@@ -440,8 +440,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // throws, keeping subsequent TransformAll runs clean.
         var previousRenames = IrToTsTypeMapper.NamedTypeRenames;
         var previousDelegatePredicate = IrTypeRefMapper.NamedDelegatePredicate;
+        var previousInt64Representation = Int64RepresentationScope.Current;
         try
         {
+            // STAGING(012k): the scope goes with the switch.
+            Int64RepresentationScope.Current = Int64Representation;
             IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
             IrTypeRefMapper.NamedDelegatePredicate = sym =>
                 SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
@@ -523,6 +526,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             IrToTsTypeMapper.NamedTypeRenames = previousRenames;
             IrTypeRefMapper.NamedDelegatePredicate = previousDelegatePredicate;
+            Int64RepresentationScope.Current = previousInt64Representation;
         }
 
         // Generate index.ts barrel files per namespace folder
@@ -771,6 +775,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             return false;
         var enumIr = (IrEnumDeclaration)GetOrExtractIr(type, irCache)!;
         IrToTsEnumBridge.Convert(enumIr, sink);
+
+        // STAGING(012k): every mode once the switch is gone.
+        if (Int64RepresentationScope.IsBigInt)
+            Int64EnumPrecision.Check(type, ReportDiagnostic);
+
         return true;
     }
 

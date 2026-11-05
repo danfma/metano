@@ -198,11 +198,21 @@ public sealed partial class IrExpressionExtractor
     private string LocalIrNameOf(ISymbol? symbol, string identifier) =>
         LocalNames.NameOf(symbol, identifier);
 
-    public IrExpression Extract(ExpressionSyntax expression) =>
-        _conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax
-            ? new IrConditionalReceiver()
-            // A constant inside checked / unchecked takes Roslyn's wrapped value.
-            : FoldedCheckedContextConstant(expression) ?? ExtractUnbound(expression);
+    public IrExpression Extract(ExpressionSyntax expression)
+    {
+        if (_conditionalReceiverSyntax is not null && expression == _conditionalReceiverSyntax)
+            return new IrConditionalReceiver();
+
+        // A 64-bit constant folds to one literal, and a constant inside
+        // checked / unchecked takes Roslyn's wrapped value; see
+        // IrExpressionExtractor.NumericConversions.cs and .CheckedContext.cs.
+        var value =
+            FoldedInt64Constant(expression)
+            ?? FoldedCheckedContextConstant(expression)
+            ?? ExtractUnbound(expression);
+
+        return WithImplicitNumericConversion(expression, value);
+    }
 
     private IrExpression ExtractUnbound(ExpressionSyntax expression) =>
         expression switch
@@ -4559,7 +4569,8 @@ public sealed partial class IrExpressionExtractor
     /// C# has no runtime cast — TS is structurally typed and every numeric is
     /// just <c>number</c> or <c>bigint</c>. A numeric cast the targets must
     /// render becomes an <see cref="IrNumericConversion"/> (a floating-point
-    /// value to a narrow integer); a constant one folds. The other
+    /// value to a narrow integer, and, under the exact 64-bit lowering, every
+    /// cast into or out of a 64-bit integer); a constant one folds. The other
     /// casts that need runtime code change the numeric representation:
     /// <list type="bullet">
     ///   <item><c>(decimal)bigIntExpr</c> → <c>new Decimal(expr.toString())</c></item>
@@ -4657,7 +4668,13 @@ public sealed partial class IrExpressionExtractor
                     or SpecialType.System_SByte
         )
         {
-            return new IrCallExpression(new IrMemberAccess(inner, "toNumber"), []);
+            // The exact lowering truncates first, so a 64-bit conversion of
+            // the result never meets a fraction (STAGING(012k): always).
+            var integral = _context.ExactInt64Lowering
+                ? new IrCallExpression(new IrMemberAccess(inner, "trunc"), [])
+                : inner;
+
+            return new IrCallExpression(new IrMemberAccess(integral, "toNumber"), []);
         }
 
         // int/long/decimal → BigInteger: BigInt(value)

@@ -1700,10 +1700,16 @@ public static partial class IrToTsExpressionBridge
                 new TsIdentifier("Decimal"),
                 [new TsStringLiteral(FormatNumericValue(lit.Value))]
             ),
-            // BigInteger literals use the native bigint suffix `n`.
-            IrLiteralKind.BigInteger => new TsLiteral(FormatNumericValue(lit.Value) + "n"),
+            // BigInteger literals use the native bigint suffix `n`, and so do
+            // 64-bit ones in the staging BigInt mode (spec 012 FR-007).
+            // STAGING(012k): 64-bit literals always take the suffix.
+            IrLiteralKind.BigInteger => BigIntLiteral(lit.Value),
+            IrLiteralKind.Int64 or IrLiteralKind.UInt64 when Int64RepresentationScope.IsBigInt =>
+                BigIntLiteral(lit.Value),
             _ => new TsLiteral(FormatNumericValue(lit.Value)),
         };
+
+    private static TsLiteral BigIntLiteral(object? value) => new(FormatNumericValue(value) + "n");
 
     private static string FormatNumericValue(object? value) =>
         value is IFormattable f

@@ -35,34 +35,11 @@ public sealed partial class IrExpressionExtractor
         if (!constant.HasValue || !IsFoldableTarget(typeInfo.Type))
             return null;
 
-        var folded = FoldedLiteral(constant.Value!, typeInfo.ConvertedType);
+        var folded = ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
 
         return typeInfo.Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
             ? new IrCastExpression(folded, IrTypeRefMapper.Map(enumType, _originResolver, _target))
             : folded;
-    }
-
-    /// <summary>
-    /// The literal of a folded <paramref name="value"/>, in the representation
-    /// its converted type needs: a <c>char</c> read as a <c>char</c> is a
-    /// character literal; <c>decimal</c> and <c>BigInteger</c> carry their
-    /// digits, as their literals do; an enum value is its underlying constant.
-    /// </summary>
-    private static IrLiteral FoldedLiteral(object value, ITypeSymbol? convertedType)
-    {
-        if (value is char character)
-            return convertedType?.SpecialType == SpecialType.System_Char
-                ? new IrLiteral(character, IrLiteralKind.Char)
-                : FoldedLiteral((int)character, convertedType);
-
-        // TODO(012b): the literal kind follows the operand's type, not the
-        // converted one, so `long x = unchecked((int)…)` folds to an Int32
-        // literal; the 64-bit conversions of slice 012b settle it.
-        return ClassifyNumericForConvertedType(
-            Convert.ToString(value, CultureInfo.InvariantCulture)!,
-            WidenedToInt32(value),
-            convertedType
-        );
     }
 
     /// <summary>

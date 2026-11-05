@@ -188,8 +188,7 @@ public static class IrToTsTypeMapper
             IrPrimitive.Byte => new TsNumberType(),
             IrPrimitive.Int16 => new TsNumberType(),
             IrPrimitive.Int32 => new TsNumberType(),
-            IrPrimitive.Int64 => new TsNumberType(),
-            IrPrimitive.UInt64 => new TsNumberType(),
+            IrPrimitive.Int64 or IrPrimitive.UInt64 => SixtyFourBitIntegerType(),
             IrPrimitive.Float32 => new TsNumberType(),
             IrPrimitive.Float64 => new TsNumberType(),
             IrPrimitive.Decimal => new TsNumberType(),
@@ -206,6 +205,14 @@ public static class IrToTsTypeMapper
             IrPrimitive.TimeSpan => new TsNamedType("Temporal.Duration"),
             _ => new TsAnyType(),
         };
+
+    /// <summary>
+    /// <c>long</c> / <c>ulong</c>: a native <c>bigint</c> in the staging
+    /// <c>BigInt</c> mode (spec 012 FR-002), a <c>number</c> otherwise.
+    /// STAGING(012k): always <c>bigint</c>.
+    /// </summary>
+    private static TsType SixtyFourBitIntegerType() =>
+        Int64RepresentationScope.IsBigInt ? new TsBigIntType() : new TsNumberType();
 
     /// <summary>
     /// <c>readonly [result: R, value: T]</c>, or for a discriminated result

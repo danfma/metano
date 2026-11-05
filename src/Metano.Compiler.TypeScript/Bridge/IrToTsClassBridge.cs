@@ -117,10 +117,9 @@ internal static partial class IrToTsClassBridge
         if (type is IrPrimitiveTypeRef p)
             return p.Primitive switch
             {
+                IrPrimitive.Int64 or IrPrimitive.UInt64 => SixtyFourBitZero(),
                 IrPrimitive.Int16
                 or IrPrimitive.Int32
-                or IrPrimitive.Int64
-                or IrPrimitive.UInt64
                 or IrPrimitive.Byte
                 or IrPrimitive.Float32
                 or IrPrimitive.Float64 => new TsLiteral("0"),
@@ -161,4 +160,12 @@ internal static partial class IrToTsClassBridge
 
         return null;
     }
+
+    /// <summary>
+    /// The zero of <c>long</c> / <c>ulong</c>: <c>0n</c> in the staging
+    /// <c>BigInt</c> mode (spec 012 FR-004), <c>0</c> otherwise.
+    /// STAGING(012k): always <c>0n</c>.
+    /// </summary>
+    internal static TsLiteral SixtyFourBitZero() =>
+        new(Int64RepresentationScope.IsBigInt ? "0n" : "0");
 }

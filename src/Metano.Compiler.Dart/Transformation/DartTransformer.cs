@@ -37,10 +37,12 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// The extraction context the core extractors receive: this compilation
     /// and the Dart target, no local-naming decision — local-name collision
-    /// renaming is TypeScript-only until #402 lands it for Dart.
+    /// renaming is TypeScript-only until #402 lands it for Dart. Dart always
+    /// takes the exact 64-bit lowering: its <c>int</c> is 64-bit, so the
+    /// conversions it prints are the narrowing ones (spec 012 DECIDED-19).
     /// </summary>
     private IrExtractionContext Extraction =>
-        new(Compilation: _compilation, Target: TargetLanguage.Dart);
+        new(Compilation: _compilation, Target: TargetLanguage.Dart) { ExactInt64Lowering = true };
 
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
 

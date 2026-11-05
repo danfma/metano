@@ -20,6 +20,24 @@ public sealed record IrExtractionContext(
     LocalNaming? LocalNaming = null
 )
 {
+    /// <summary>
+    /// Whether the target lowers 64-bit integers exactly (spec 012): the
+    /// extractor folds every 64-bit constant into one literal of its converted
+    /// type and makes every conversion into or out of a 64-bit integer an
+    /// <see cref="IR.IrNumericConversion"/>. Dart always sets it (DECIDED-19);
+    /// TypeScript only in its staging <c>BigInt</c> mode, so its shipped
+    /// <c>Number</c> mode keeps the 2.x IR (DECIDED-22). 012k makes it
+    /// unconditional and removes the property.
+    /// </summary>
+    public bool ExactInt64Lowering { get; init; }
+
+    /// <summary>
+    /// The context of a constant parameter default: only the origin resolver
+    /// and the 64-bit lowering reach it, since it names no local.
+    /// </summary>
+    public IrExtractionContext ForConstantDefault() =>
+        new(OriginResolver) { ExactInt64Lowering = ExactInt64Lowering };
+
     /// <summary>Shape-only extraction: no resolver, compilation or target.</summary>
     public static IrExtractionContext Empty { get; } = new();
 }

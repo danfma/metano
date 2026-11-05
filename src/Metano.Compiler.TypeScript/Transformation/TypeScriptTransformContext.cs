@@ -495,9 +495,9 @@ public sealed class TypeScriptTransformContext(
 
     /// <summary>
     /// How 64-bit integers are represented in the emitted TypeScript; the
-    /// compiler-internal staging switch of spec 012 (DECIDED-22). Nothing reads
-    /// it yet: slice 012b's type mapping and 64-bit lowering are its first
-    /// readers.
+    /// compiler-internal staging switch of spec 012 (DECIDED-22). In
+    /// <see cref="Int64Representation.BigInt"/> mode the extraction applies the
+    /// exact 64-bit lowering (<see cref="IrExtractionContext.ExactInt64Lowering"/>).
     /// </summary>
     internal Int64Representation Int64Representation { get; init; } = Int64Representation.Number;
 
@@ -519,7 +519,11 @@ public sealed class TypeScriptTransformContext(
     /// pass this object instead of re-threading the individual inputs.
     /// </summary>
     public IrExtractionContext Extraction =>
-        new(OriginResolver, Compilation, TargetLanguage.TypeScript, IrToTsNamingPolicy.LocalNaming);
+        new(OriginResolver, Compilation, TargetLanguage.TypeScript, IrToTsNamingPolicy.LocalNaming)
+        {
+            // STAGING(012k): always exact.
+            ExactInt64Lowering = Int64Representation is Int64Representation.BigInt,
+        };
 
     private BclExportTypeOverrides? _bclOverrides;
 

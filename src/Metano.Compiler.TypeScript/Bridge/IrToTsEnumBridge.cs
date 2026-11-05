@@ -1,5 +1,8 @@
+using System.Globalization;
+using System.Numerics;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -42,11 +45,24 @@ public static class IrToTsEnumBridge
             var members = ir
                 .Members.Select(m => new TsEnumMember(
                     IrToTsNamingPolicy.ToEnumMemberName(m.Name, m.Attributes),
-                    new TsLiteral(m.Value?.ToString() ?? "")
+                    new TsLiteral(NumericMemberValue(m.Value))
                 ))
                 .ToList();
 
             statements.Add(new TsEnum(tsName, members));
         }
     }
+
+    /// <summary>
+    /// The value a numeric member prints. In the staging <c>BigInt</c> mode a
+    /// 64-bit value prints as the double the member actually holds, the one
+    /// <c>MS0064</c> names (spec 012 FR-058); the <c>Number</c> mode keeps the
+    /// shipped digits. STAGING(012k).
+    /// </summary>
+    private static string NumericMemberValue(object? value) =>
+        value is long or ulong && Int64RepresentationScope.IsBigInt
+            ? Int64EnumPrecision
+                .NearestDouble(value is ulong unsigned ? unsigned : (long)value)
+                .ToString(CultureInfo.InvariantCulture)
+            : value?.ToString() ?? "";
 }

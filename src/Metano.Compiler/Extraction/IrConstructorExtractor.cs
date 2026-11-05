@@ -242,7 +242,7 @@ public static class IrConstructorExtractor
                         p.Name,
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         p.HasExplicitDefaultValue,
-                        ExtractDefaultValue(p, compilation, originResolver),
+                        ParameterDefaultValues.Extract(p, context.Extraction),
                         IsParams: p.IsParams,
                         IsOptional: p.HasOptional(),
                         IsConstant: p.HasConstant()
@@ -447,36 +447,6 @@ public static class IrConstructorExtractor
 
     private static PrimaryConstructorBaseTypeSyntax? FindPrimaryBase(BaseListSyntax? baseList) =>
         baseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>().FirstOrDefault();
-
-    /// <summary>
-    /// Extracts the C# default-value expression of a parameter into IR when we have the
-    /// syntax tree + semantic model available. Returns <c>null</c> for parameters
-    /// without an explicit default, for parameters declared in a referenced assembly
-    /// whose syntax isn't reachable, or when no compilation is supplied (the caller is
-    /// then operating in a shape-only mode).
-    /// </summary>
-    private static IrExpression? ExtractDefaultValue(
-        IParameterSymbol parameter,
-        Compilation? compilation,
-        IrTypeOriginResolver? originResolver
-    )
-    {
-        if (!parameter.HasExplicitDefaultValue || compilation is null)
-            return null;
-
-        var syntax =
-            parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax;
-        var defaultExpression = syntax?.Default?.Value;
-
-        if (defaultExpression is null)
-            return null;
-
-        var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-
-        return new IrExpressionExtractor(model, new IrExtractionContext(originResolver)).Extract(
-            defaultExpression
-        );
-    }
 
     /// <summary>
     /// Resolves the promotion mode for a primary-constructor parameter and,
