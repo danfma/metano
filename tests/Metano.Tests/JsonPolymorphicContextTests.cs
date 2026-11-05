@@ -396,11 +396,7 @@ public class JsonPolymorphicContextTests
         await Assert.That(ts).Contains("get clip(): TypeSpec<Clip>");
         await Assert.That(ts).DoesNotContain("polymorphism: {");
 
-        await Assert
-            .That(ts)
-            .Contains(
-                "Cannot deserialize abstract type 'Clip': polymorphic JSON deserialization is not supported yet."
-            );
+        await Assert.That(ts).Contains("Cannot construct abstract type 'Clip'.");
     }
 
     private static string WrapInNamespace(string declarations) =>

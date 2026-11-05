@@ -345,7 +345,7 @@ internal sealed class JsonSpecBuilder
             );
 
         if (targetType.IsAbstract)
-            return BuildAbstractFactoryThrow(UnsupportedAbstractFactoryMessage(tsTypeName));
+            return BuildAbstractFactoryThrow(NonConstructibleFactoryMessage(tsTypeName));
 
         return new TsReturnStatement(
             WithAssignedMembers(BuildConstruction(targetType, tsTypeName), targetType)
@@ -556,8 +556,7 @@ internal sealed class JsonSpecBuilder
 
     /// <summary>
     /// The text the factory of an abstract polymorphic base throws: FR-011's,
-    /// naming an interface base by its C# name (FR-018). A non-polymorphic
-    /// abstract type keeps the #238 text.
+    /// naming an interface base by its C# name (FR-018).
     /// </summary>
     private static string PolymorphicAbstractFactoryMessage(
         INamedTypeSymbol targetType,
@@ -573,7 +572,16 @@ internal sealed class JsonSpecBuilder
             + "polymorphic spec.";
     }
 
-    private static string UnsupportedAbstractFactoryMessage(string tsTypeName) =>
-        $"Cannot deserialize abstract type '{tsTypeName}': polymorphic JSON deserialization is "
-        + "not supported yet.";
+    /// <summary>
+    /// The text the factory of a non-polymorphic abstract type throws: the
+    /// real reason is the abstractness itself — TypeScript rejects
+    /// <c>new</c> on it — not the long-shipped polymorphism claim (#489).
+    /// The runtime throws System.Text.Json's abstract-type wording
+    /// (<c>Deserialization of interface or abstract types is not supported.
+    /// Type 'X'.</c>, measured on .NET 10) when a read dispatches here, so
+    /// this generated throw is unreachable and states only why the spec
+    /// cannot build.
+    /// </summary>
+    private static string NonConstructibleFactoryMessage(string tsTypeName) =>
+        $"Cannot construct abstract type '{tsTypeName}'.";
 }
