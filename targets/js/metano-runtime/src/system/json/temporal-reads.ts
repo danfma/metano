@@ -51,7 +51,7 @@ const TIME_ONLY_PATTERN = /^(\d+):(\d+)(?::(\d+)(?:\.(\d{1,7}))?)?$/;
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const DATE_TIME_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}(?::\d{2})?)?)?$/;
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,16}))?)?(Z|[+-]\d{2}(?::\d{2})?)?)?$/;
 
 const TIME_SPAN_COLON_PATTERN = /^(\d+)(?::(\d+)(?::(\d+)(?:\.(\d{1,7}))?)?)?$/;
 
@@ -252,7 +252,12 @@ function dateTimeOf(
   match: RegExpExecArray,
   errorTypeName: ErrorTypeName,
   typeName: string,
-  build: (match: RegExpExecArray, date: Temporal.PlainDate) => unknown,
+  build: (
+    match: RegExpExecArray,
+    date: Temporal.PlainDate,
+    typeName: string,
+    errorTypeName: ErrorTypeName,
+  ) => unknown,
 ): unknown {
   if (timeFieldsOf(match) === undefined) {
     return reject(typeName, errorTypeName);
@@ -260,7 +265,7 @@ function dateTimeOf(
 
   const date = plainDateOf(match, errorTypeName, typeName);
 
-  return build(match, date);
+  return build(match, date, typeName, errorTypeName);
 }
 
 /** The hour/minute/second fields of the match, `undefined` when out of range. */
@@ -288,7 +293,12 @@ function timeFieldsOf(
  * instant for an explicit offset, as System.Text.Json's `Kind=Local` read
  * does.
  */
-function plainDateTimeOf(match: RegExpExecArray, date: Temporal.PlainDate): unknown {
+function plainDateTimeOf(
+  match: RegExpExecArray,
+  date: Temporal.PlainDate,
+  typeName: string,
+  errorTypeName: ErrorTypeName,
+): unknown {
   const { hour, minute, second } = timeFieldsOf(match)!;
   const subSecond = subSecondOf(match[7]);
 
@@ -305,6 +315,11 @@ function plainDateTimeOf(match: RegExpExecArray, date: Temporal.PlainDate): unkn
   }
 
   const offsetMinutes = explicitOffsetMinutesOf(match[8]);
+
+  if (offsetMinutes === null) {
+    return reject(typeName, errorTypeName);
+  }
+
   const wallMs = wallMillisecondsOf(date, match);
   const local = new Date(wallMs - offsetMinutes * 60_000);
 
@@ -320,8 +335,18 @@ function plainDateTimeOf(match: RegExpExecArray, date: Temporal.PlainDate): unkn
 }
 
 /** The `ZonedDateTime` of a `DateTimeOffset` read, keeping the offset read. */
-function zonedDateTimeOf(match: RegExpExecArray, date: Temporal.PlainDate): unknown {
+function zonedDateTimeOf(
+  match: RegExpExecArray,
+  date: Temporal.PlainDate,
+  typeName: string,
+  errorTypeName: ErrorTypeName,
+): unknown {
   const declaredOffset = match[8] === undefined ? undefined : explicitOffsetMinutesOf(match[8]);
+
+  if (declaredOffset === null) {
+    return reject(typeName, errorTypeName);
+  }
+
   const wallMs = wallMillisecondsOf(date, match);
 
   // An offsetless read is the local one at that instant, as System.Text.Json
@@ -343,8 +368,11 @@ function wallMillisecondsOf(date: Temporal.PlainDate, match: RegExpExecArray): n
   return Date.UTC(date.year, date.month - 1, date.day, hour, minute, second);
 }
 
-/** The minutes of an explicit `±HH[:mm]` offset or `Z` (`0`). */
-function explicitOffsetMinutesOf(text: string): number {
+/** The minutes of an explicit `±HH[:mm]` offset or `Z` (`0`), `null` when
+ * out of range: System.Text.Json rejects minute `60` and every offset past
+ * `±14:00` (measured: `+02:60`, `+14:01`, `+15:00`, `+99:00` and `-15:00`
+ * throw the position's error). */
+function explicitOffsetMinutesOf(text: string): number | null {
   if (text === "Z") {
     return 0;
   }
@@ -353,7 +381,13 @@ function explicitOffsetMinutesOf(text: string): number {
   const minutes = text.length > 3 ? digitsOf(text.slice(4, 6)) : 0;
   const sign = text.startsWith("-") ? -1 : 1;
 
-  return sign * (hours * 60 + minutes);
+  if (minutes > 59) {
+    return null;
+  }
+
+  const total = sign * (hours * 60 + minutes);
+
+  return total >= -840 && total <= 840 ? total : null;
 }
 
 /** `±HH:MM`, the fixed-offset zone a read `DateTimeOffset` keeps. */
@@ -540,7 +574,11 @@ function subSecondNanosecondsOf(fraction: string | undefined): number {
     return 0;
   }
 
-  const nanoseconds = Number(fraction) * 10 ** (9 - fraction.length);
+  // The digits past the seventh are dropped before the numeric conversion:
+  // converting the whole run first rounds an all-nines tail up to one
+  // second (the text carries at most sixteen digits; STJ rejects more).
+  const truncated = fraction.slice(0, 7);
+  const nanoseconds = Number(truncated) * 10 ** (9 - truncated.length);
 
   return Math.floor(nanoseconds / 100) * 100;
 }
