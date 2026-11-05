@@ -1,7 +1,7 @@
 # Contract: TypeScript emission for overload factories, selectors and direct call sites
 
 **Normative for**: 013 FR-007–FR-019, FR-021, FR-025–FR-037. Every emission row below is a golden
-(FR-021); names follow [naming.md](./naming.md). Probes: research R1–R14.
+(FR-021); names follow [naming.md](./naming.md). Probes: research R1–R15.
 
 ## A dispatched constructor (`Dimension(int size)` / `Dimension(int width, int height)`)
 
@@ -225,6 +225,38 @@ export class C implements IConv<number>, IConv<string> {   // MS0069
 ```
 
 No per-implementation fast paths; direct calls into `C` use these dispatchers (R14).
+
+In a derived type, the root-name dispatcher is `override`, carries every constructed signature and
+forwards the constructions it does not implement to `super` (R15):
+
+```ts
+export class D extends C {                  // D : C, overriding Conv(int x)
+  override convX(x: number): number;
+  override convX(x: string): number;
+  override convX(...args: unknown[]): number {
+    if (isInt32(args[0])) {
+      return 10;
+    }
+
+    return super.convX(...(args as [never]));
+  }
+}
+
+export class D4 extends C1 implements IConv<string> {   // C1 : IConv<int>; D4 adds a construction, MS0069
+  override convX(x: number): number;
+  override convX(x: string): number;
+  override convX(...args: unknown[]): number {
+    if (isString(args[0])) {
+      return 2;                               // D4.Conv(string): an implementation, not an override
+    }
+
+    return super.convX(args[0] as number);
+  }
+  override conv(x: number): number;
+  override conv(x: string): number;
+  override conv(...args: unknown[]): number { … }
+}
+```
 
 ## Module groups (FR-032)
 

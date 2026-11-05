@@ -81,7 +81,7 @@ runtime-comparable, type-level-distinct, subclass-visible name for one construct
 ## References
 
 - Spec: [specs/013-overload-factories/spec.md](../../specs/013-overload-factories/spec.md)
-  (research R1–R14 holds the probe evidence).
+  (research R1–R15 holds the probe evidence).
 - Superseded in part: [ADR-0008](0008-overload-dispatch.md) — its dispatcher contract stands; its
   private fast paths and heuristic naming do not.
 - [ADR-0009](0009-type-guards.md), [ADR-0013](0013-shared-ir-as-canonical-semantic-representation.md),
