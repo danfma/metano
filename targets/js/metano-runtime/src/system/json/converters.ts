@@ -10,7 +10,6 @@ import type {
   NullableDescriptor,
   NumericEnumDescriptor,
   RefDescriptor,
-  TemporalDescriptor,
   JsonConverter,
   JsonReadOptions,
   PolymorphismSpec,
@@ -33,16 +32,19 @@ import {
 import { cannotConvertTo } from "./contract-name.ts";
 import { dictionaryKeyConverterOf } from "./dictionary-keys.ts";
 import { readNull } from "./null-reads.ts";
-import { temporalTextOf } from "./temporal-text.ts";
 import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
 import { JsonException } from "./errors.ts";
 import { numberOfTreeValue, treeWithDoubles } from "./exact-json-number.ts";
 import { forwardsNumberTexts } from "./exact-number-reads.ts";
 import {
   decimalConverterOf,
+  type ErrorTypeName,
   nullableTypeName,
+  declaredTypeName,
   primitiveConverterOf,
 } from "./numeric-converters.ts";
+import { temporalConverterOf } from "./temporal-reads.ts";
+import { contractNameOf } from "./contract-name.ts";
 import {
   hasTaggedRegistration,
   resolveDeserializeTarget,
@@ -56,17 +58,20 @@ import { type PropertyLookup, propertyLookupPlanOf } from "./property-lookup.ts"
  * Resolves the serialize/deserialize pair for a given type descriptor, checking
  * the custom converters of `plans` first (user overrides), then falling back to
  * built-in ones. `readOptions` are the read options of the spec being read
- * (FR-048); a `ref` reads with its target spec's own options. Under exact
- * tree numbers, only the built-in converters that read a number's exact
- * text see a `JsonNumberText` leaf (`withNumberTextsAsDoubles`).
+ * (FR-048); a `ref` reads with its target spec's own options. `errorTypeName`
+ * names the type a built-in conversion error reports: a property names the
+ * declaring contract, every other position names the value's own CLR type
+ * (#485). Under exact tree numbers, only the built-in converters that read a
+ * number's exact text see a `JsonNumberText` leaf (`withNumberTextsAsDoubles`).
  */
 function resolveConverter(
   descriptor: TypeDescriptor,
   plans: SpecPlans,
   readOptions?: JsonReadOptions,
+  errorTypeName: ErrorTypeName = declaredTypeName,
 ): ValueConverter {
   return customOrBuiltinConverter(descriptor, plans, () =>
-    getBuiltinConverter(descriptor, plans, readOptions),
+    getBuiltinConverter(descriptor, plans, readOptions, errorTypeName),
   );
 }
 
@@ -125,12 +130,13 @@ function getBuiltinConverter(
   descriptor: TypeDescriptor,
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
+  errorTypeName: ErrorTypeName = declaredTypeName,
 ): ValueConverter {
   switch (descriptor.kind) {
     case "primitive":
       return primitiveConverterOf(descriptor, readOptions);
     case "temporal":
-      return temporalConverter(descriptor);
+      return temporalConverterOf(descriptor, errorTypeName);
     case "decimal":
       return decimalConverterOf(descriptor, readOptions);
     case "bytes":
@@ -148,26 +154,14 @@ function getBuiltinConverter(
     case "numericEnum":
       return numericEnumConverter(descriptor);
     case "nullable":
-      return nullableConverter(descriptor, plans, readOptions);
+      return nullableConverter(descriptor, plans, readOptions, errorTypeName);
     case "ref":
       return refConverter(descriptor, plans);
   }
 }
 
 // ─── Temporal ────────────────────────────────────────────────────────────────
-
-function temporalConverter(descriptor: TemporalDescriptor) {
-  return {
-    serialize: (value: unknown) => {
-      if (value == null) return null;
-      return temporalTextOf(value);
-    },
-    deserialize: (value: unknown) => {
-      if (value == null) return null;
-      return descriptor.parse(value as string);
-    },
-  };
-}
+// Reads go through `temporal-reads.ts` (#485); writes keep `temporal-text.ts`.
 
 // ─── Map ─────────────────────────────────────────────────────────────────────
 
@@ -356,8 +350,9 @@ function nullableConverter(
   descriptor: NullableDescriptor,
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
+  errorTypeName: ErrorTypeName = declaredTypeName,
 ) {
-  const innerConv = nullableInnerConverter(descriptor.inner, plans, readOptions);
+  const innerConv = nullableInnerConverter(descriptor.inner, plans, readOptions, errorTypeName);
 
   return {
     serialize: (value: unknown) => (value == null ? null : innerConv.serialize(value)),
@@ -370,20 +365,23 @@ function nullableInnerConverter(
   inner: TypeDescriptor,
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
+  errorTypeName: ErrorTypeName,
 ): ValueConverter {
   return customOrBuiltinConverter(inner, plans, () =>
-    builtinNullableInnerConverter(inner, plans, readOptions),
+    builtinNullableInnerConverter(inner, plans, readOptions, errorTypeName),
   );
 }
 
 /**
  * The built-in converter of a nullable's inner type: a numeric one names
- * ``System.Nullable`1[<CLR name>]`` in its errors, as System.Text.Json does.
+ * ``System.Nullable`1[<CLR name>]`` in its errors, as System.Text.Json does;
+ * the rest name the type of their position (`errorTypeName`).
  */
 function builtinNullableInnerConverter(
   inner: TypeDescriptor,
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
+  errorTypeName: ErrorTypeName,
 ): ValueConverter {
   switch (inner.kind) {
     case "primitive":
@@ -391,7 +389,7 @@ function builtinNullableInnerConverter(
     case "decimal":
       return decimalConverterOf(inner, readOptions, nullableTypeName);
     default:
-      return getBuiltinConverter(inner, plans, readOptions);
+      return getBuiltinConverter(inner, plans, readOptions, errorTypeName);
   }
 }
 
@@ -585,6 +583,16 @@ function createSpecPlans(
 }
 
 /**
+ * How a property's conversion error names the declaring contract, as
+ * System.Text.Json does (#485): `{"At":"03:04:60"}` on a `HolderTimeOnly`
+ * names `HolderTimeOnly`, while a value root or an element names the
+ * temporal type itself.
+ */
+function contractErrorNameOf(spec: TypeSpec): ErrorTypeName {
+  return () => contractNameOf(spec);
+}
+
+/**
  * Compiles `spec` without calling into it: nested specs and derived
  * contracts are resolved when a value first reaches them, so the plan of a
  * recursive spec never compiles itself.
@@ -600,7 +608,7 @@ function compileSpecPlan(spec: TypeSpec, plans: SpecPlans): SpecPlan {
 
   const propertyPlans = properties.map<PropertyPlan>((property) => ({
     property,
-    converter: resolveConverter(property.type, plans, spec.readOptions),
+    converter: resolveConverter(property.type, plans, spec.readOptions, contractErrorNameOf(spec)),
     assignIfPresent: assignedIfPresent.has(property.ts),
   }));
 

@@ -143,6 +143,12 @@ internal sealed class JsonTypeDescriptorBuilder(
             : descriptor;
     }
 
+    /// <summary>
+    /// A temporal descriptor parses through its mapped <c>Temporal</c> type
+    /// (a hand-written spec's path) and names its CLR <c>typeName</c>, which
+    /// tells the runtime to read with System.Text.Json's own grammar and to
+    /// report its conversion errors (#485).
+    /// </summary>
     private TsObjectLiteral BuildTemporalDescriptor(ITypeSymbol type)
     {
         var typeName = JsonTsTypes.Map(_context, type) is TsNamedType namedTs
@@ -152,6 +158,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Temporal),
             new TsObjectProperty("parse", new TsPropertyAccess(new TsIdentifier(typeName), "from")),
+            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
         ]);
     }
 
@@ -283,16 +290,16 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// <summary>
     /// Whether a dictionary key of <paramref name="type"/> carries its CLR
     /// <c>typeName</c> (#479): the non-numeric keys whose JSON property name
-    /// the runtime parses (a <c>bool</c>, an enum, a <c>Guid</c> or a
-    /// temporal type), so a rejected name reports the type as
-    /// System.Text.Json does.
+    /// the runtime parses (a <c>bool</c>, an enum or a <c>Guid</c>), so a
+    /// rejected name reports the type as System.Text.Json does. A temporal
+    /// key's descriptor names its <c>typeName</c> itself (#485), which the
+    /// runtime reads the same way.
     /// </summary>
     private static bool KeyDescriptorCarriesTypeName(ITypeSymbol type, JsonPropertyKind kind) =>
         kind switch
         {
             JsonPropertyKind.Primitive => type.SpecialType == SpecialType.System_Boolean,
-            JsonPropertyKind.Enum or JsonPropertyKind.NumericEnum or JsonPropertyKind.Temporal =>
-                true,
+            JsonPropertyKind.Enum or JsonPropertyKind.NumericEnum => true,
             JsonPropertyKind.Branded => JsonTypeClassifier.IsGuid(type),
             _ => false,
         };

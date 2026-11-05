@@ -93,12 +93,20 @@ export class JsonContext extends SerializerContext {
         {
           ts: "createdAt",
           json: "createdAt",
-          type: { kind: "temporal", parse: Temporal.ZonedDateTime.from },
+          type: {
+            kind: "temporal",
+            parse: Temporal.ZonedDateTime.from,
+            typeName: "System.DateTimeOffset",
+          },
         },
         {
           ts: "updatedAt",
           json: "updatedAt",
-          type: { kind: "temporal", parse: Temporal.ZonedDateTime.from },
+          type: {
+            kind: "temporal",
+            parse: Temporal.ZonedDateTime.from,
+            typeName: "System.DateTimeOffset",
+          },
         },
         {
           ts: "estimatedHours",
@@ -144,7 +152,11 @@ export class JsonContext extends SerializerContext {
         {
           ts: "createdAt",
           json: "createdAt",
-          type: { kind: "temporal", parse: Temporal.ZonedDateTime.from },
+          type: {
+            kind: "temporal",
+            parse: Temporal.ZonedDateTime.from,
+            typeName: "System.DateTimeOffset",
+          },
         },
         {
           ts: "isSystem",

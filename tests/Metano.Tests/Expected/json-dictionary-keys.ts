@@ -175,7 +175,7 @@ export class JsonContext extends SerializerContext {
 
   get dateOnly(): ValueSpec<Temporal.PlainDate> {
     return this._dateOnly ??= this.createValueSpec({
-      descriptor: { kind: "temporal", parse: Temporal.PlainDate.from },
+      descriptor: { kind: "temporal", parse: Temporal.PlainDate.from, typeName: "System.DateOnly" },
       valueType: true,
       typeName: "System.DateOnly",
     });

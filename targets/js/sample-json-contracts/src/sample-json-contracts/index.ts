@@ -56,6 +56,7 @@ export { isRect } from "./rect";
 export type { Rect } from "./rect";
 export { SBase } from "./s-base";
 export { SPoint } from "./s-point";
+export { Schedule } from "./schedule";
 export { SetClass } from "./set-class";
 export type { Shape } from "./shape";
 export { SilenceClip } from "./silence-clip";
