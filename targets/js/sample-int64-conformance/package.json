@@ -1,0 +1,20 @@
+{
+  "name": "sample-int64-conformance",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "dependencies": {
+    "decimal.js": "^10.6.0",
+    "metano-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native-preview": "^7.0.0-dev.20260225.1"
+  },
+  "scripts": {
+    "generate": "cd ../../.. && METANO_UPDATE_INT64_CONFORMANCE=1 dotnet run --project tests/Metano.Tests/ -- --treenode-filter '/*/*/Int64ConformanceSampleTests/*'",
+    "build": "tsgo -b .",
+    "test": "bun test",
+    "test:node": "node dist/test/node-conformance.js"
+  }
+}

@@ -357,6 +357,64 @@ public static class TranspileHelper
     }
 
     /// <summary>
+    /// Transpiles the C# files of <paramref name="directory"/> (not its
+    /// subdirectories) as one assembly named after it, as they are: no
+    /// <c>using</c> is prepended, so a sample project compiles here as it does
+    /// under MSBuild with implicit usings disabled.
+    /// </summary>
+    internal static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileSourceDirectory(string directory, Int64Representation int64Representation)
+    {
+        var trees = Directory
+            .GetFiles(directory, "*.cs")
+            .Order(StringComparer.Ordinal)
+            .Select(path =>
+                CSharpSyntaxTree.ParseText(
+                    File.ReadAllText(path),
+                    new CSharpParseOptions(LanguageVersion.Preview),
+                    path
+                )
+            );
+
+        var compilation = CSharpCompilation.Create(
+            Path.GetFileName(directory),
+            trees,
+            BaseReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        ThrowOnErrors(compilation.GetDiagnostics(), $"C# compilation ({directory})");
+
+        return TranspileCore(compilation, int64Representation: int64Representation);
+    }
+
+    /// <summary>
+    /// Like <see cref="TranspileWithDiagnostics(string, Int64Representation)"/>
+    /// for a project compiled with <c>CheckForOverflowUnderflow</c>
+    /// (Roslyn's <c>CheckOverflow</c> option), so every operation outside an
+    /// <c>unchecked</c> context is checked (spec 012 DECIDED-4).
+    /// </summary>
+    internal static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithOverflowChecks(string csharpSource, Int64Representation int64Representation)
+    {
+        var compilation = CompileAssembly(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary
+        );
+
+        var checkedCompilation = compilation.WithOptions(
+            compilation.Options.WithOverflowChecks(true)
+        );
+
+        return TranspileCore(checkedCompilation, int64Representation: int64Representation);
+    }
+
+    /// <summary>
     /// Like <see cref="TranspileWithDiagnostics(string, string?)"/> but first runs the real
     /// System.Text.Json source generator over the compilation, mirroring what
     /// <c>MSBuildWorkspace</c> hands the frontend in production (the generated

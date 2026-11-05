@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The .NET side of the spec 012 reference conformance (FR-064): runs every
+    public method of samples/SampleInt64Conformance over boundary operands and
+    writes the results, or the exception type and message, to fixtures/*.json.
+    The transpiled twin (targets/js/sample-int64-conformance) must match them.
+    Regenerate by running this project from the repository (dotnet run, with
+    tests/Int64Reference as the project).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../samples/SampleInt64Conformance/SampleInt64Conformance.csproj" />
+  </ItemGroup>
+</Project>

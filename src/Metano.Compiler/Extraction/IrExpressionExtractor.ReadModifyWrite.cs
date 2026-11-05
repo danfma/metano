@@ -34,6 +34,9 @@ public sealed partial class IrExpressionExtractor
     {
         var right = Extract(assign.Right);
 
+        if (TryExtractReducedCompoundAssignment(target, assign, right) is { } reduced)
+            return reduced;
+
         if (MapCompoundAssignmentOperator(assign) is { } op && RequiresReadModifyWrite(op))
             return BuildReadModifyWrite(
                 target,

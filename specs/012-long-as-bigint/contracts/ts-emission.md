@@ -79,16 +79,16 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `-l` | `BigInt.asIntN(64, -l)` | `checkedInt64(-l)` |
 | `~l`, `~u` | `~l`, `BigInt.asUintN(64, ~u)` | same |
 | `l++;` (statement) | `l = BigInt.asIntN(64, l + 1n);` | `l = checkedInt64(l + 1n);` |
-| `x = l++;` | the existing read-modify-write lowering with the wrapped store (old value yielded) | same with `checkedInt64` |
+| `x = l++;` | `x = BigInt.asIntN(64, (l = BigInt.asIntN(64, l + 1n)) - 1n);` (the stored value stepped back, exact modulo 2^64, so no temporary and no IIFE) | `x = (l = checkedInt64(l + 1n)) - 1n;` (a step that did not throw was exact) |
 | `this.Total += i;` | `this.total = BigInt.asIntN(64, this.total + BigInt(i));` | `this.total = checkedInt64(this.total + BigInt(i));` |
 | `arr[k] *= 2;` (`long[] arr`, `k` with side effects) | the existing indexer read-modify-write lowering (`k` evaluated once) with `BigInt.asIntN(64, … * 2n)` | with `checkedInt64` |
 | `nl + 1` (`long? nl`) | the lifted lowering with `BigInt.asIntN(64, nl + 1n)` in its non-null branch | with `checkedInt64` |
 | `checked(e)`, `unchecked(e)` | the lowering of `e` | — |
 | `checked { s; }` | `{ s; }` with `s` lowered in a checked context | — |
 | `checked { Func<long> f = () => l + 1; }` | — | `const f = () => checkedInt64(l + 1n);` (the lambda inherits the context) |
-| `checked { long G() => l * 2; }` (local function) | — | `const g = (): bigint => checkedInt64(l * 2n);` |
+| `checked { long G() => l * 2; }` (local function) | — | `const g = (): bigint => checkedInt64(l * 2n);` once local functions are supported; today the statement reports `MS0001` in every mode (slice 012c, deferred) |
 | `checked { l <<= 1; }` | — | `l = BigInt.asIntN(64, l << 1n);` (shifts never check; no throw at `long.MaxValue`) |
-| `l /= m;`, `l %= m;`, `l &= m;`, `l >>= n;`, `l >>>= 2;` | `l = divInt64(l, m);`, `l = remInt64(l, m);`, `l = l & m;`, `l = l >> BigInt(n & 63);`, `l = BigInt.asIntN(64, BigInt.asUintN(64, l) >> 2n);` | same (the division helpers check their own cases) |
+| `l /= m;`, `l %= m;`, `l &= m;`, `l >>= n;`, `l >>>= 2;` | `l = divInt64(l, m);`, `l = remInt64(l, m);`, `l &= m;` (the native compound operator, which stores the same unwrapped value), `l = l >> BigInt(n & 63);`, `l = BigInt.asIntN(64, BigInt.asUintN(64, l) >> 2n);` | same (the division helpers check their own cases) |
 
 ## Operators (FR-027–FR-034)
 

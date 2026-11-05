@@ -48,6 +48,13 @@ jobs:
       - name: Smoke-test packed metano-runtime
         run: bash scripts/smoke-test-runtime-package.sh
 
+      # The 64-bit reference conformance (spec 012 FR-064): the transpiled twin
+      # must match the .NET fixtures under bun and Node before anything ships.
+      - name: sample-int64-conformance
+        run: |
+          (cd targets/js/metano-runtime && bun run build)
+          cd targets/js/sample-int64-conformance && bun run build && bun test && bun run test:node
+
       # Exchange the workflow's OIDC token for a short-lived NuGet API key
       # (NuGet Trusted Publishing) — replaces the long-lived NUGET_TOKEN secret.
       # Requires a trusted-publishing policy on nuget.org for user `danfma`

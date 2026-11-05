@@ -83,5 +83,11 @@ jobs:
       - name: sample-json-contracts
         run: cd targets/js/sample-json-contracts && bun run build && bun test
 
+      # The 64-bit reference conformance (spec 012 FR-064): the transpiled twin
+      # against the .NET fixtures, under bun and once under Node, which does
+      # not hide load-order issues the way bun does.
+      - name: sample-int64-conformance
+        run: cd targets/js/sample-int64-conformance && bun run build && bun test && bun run test:node
+
       - name: Biome check
         run: bunx biome check .

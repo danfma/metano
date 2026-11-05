@@ -55,10 +55,16 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression? TryExtractLiftedBinary(BinaryExpressionSyntax bin, IrBinaryOp op)
     {
-        if (!PropagatesNullThroughLift(_semantic.GetOperation(bin), op))
+        var operation = _semantic.GetOperation(bin);
+
+        if (!PropagatesNullThroughLift(operation, op))
             return null;
 
-        return LiftBinary(OperandOf(bin.Left), OperandOf(bin.Right), LiftedOperatorFor(op));
+        return LiftBinary(
+            OperandOf(bin.Left),
+            OperandOf(bin.Right),
+            LiftedOperatorFor(op, operation)
+        );
     }
 
     /// <summary>
@@ -72,12 +78,14 @@ public sealed partial class IrExpressionExtractor
         ExpressionSyntax operandSyntax
     )
     {
-        if (_semantic.GetOperation(node) is not IUnaryOperation { IsLifted: true })
+        var operation = _semantic.GetOperation(node);
+
+        if (operation is not IUnaryOperation { IsLifted: true })
             return null;
 
         return LiftUnary(
             OperandOf(operandSyntax),
-            operand => BuildUnary(op, operand, operandSyntax)
+            operand => ReduceOverflow(operation, BuildUnary(op, operand, operandSyntax))
         );
     }
 
@@ -96,8 +104,9 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var op = NarrowBuiltinOperator(mappedOp, assign);
+        var operation = _semantic.GetOperation(assign);
 
-        if (!PropagatesNullThroughLift(_semantic.GetOperation(assign), op))
+        if (!PropagatesNullThroughLift(operation, op))
             return null;
 
         return BuildReadModifyWrite(
@@ -111,13 +120,20 @@ public sealed partial class IrExpressionExtractor
                         assign.Left
                     ),
                     OperandOf(assign.Right),
-                    LiftedOperatorFor(op)
+                    LiftedOperatorFor(op, operation)
                 )
         );
     }
 
-    private LiftedOperator LiftedOperatorFor(IrBinaryOp op) =>
-        new(op.IsRelational(), (left, right) => BuildBinary(op, left, right, isLifted: true));
+    /// <summary>
+    /// The lifted form of <paramref name="op"/>, whose non-null result is
+    /// reduced as <paramref name="operation"/> needs (spec 012 FR-025).
+    /// </summary>
+    private LiftedOperator LiftedOperatorFor(IrBinaryOp op, IOperation? operation) =>
+        new(
+            op.IsRelational(),
+            (left, right) => ReduceOverflow(operation, BuildBinary(op, left, right, isLifted: true))
+        );
 
     /// <summary>
     /// Whether <paramref name="operation"/> is a lifted operator that yields

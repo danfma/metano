@@ -2,6 +2,7 @@ using System.Globalization;
 using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using static Metano.Compiler.TypeScript.Bridge.Int64TsExpressions;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -274,36 +275,5 @@ internal static class IrToTsNumericConversionBridge
                 new TsLiteral(signed ? "true" : "false")
             )
             : AsIntN(signed, bits, value);
-    }
-
-    private static TsExpression AsIntN(bool isSigned, int bits, TsExpression value) =>
-        Global(
-            isSigned ? "BigInt.asIntN" : "BigInt.asUintN",
-            new TsLiteral(bits.ToString(CultureInfo.InvariantCulture)),
-            value
-        );
-
-    private static TsExpression BigInt(TsExpression value) => Global("BigInt", value);
-
-    private static TsExpression Number(TsExpression value) => Global("Number", value);
-
-    /// <summary>A call of a <c>metano-runtime</c> helper, imported through its reference node.</summary>
-    private static TsCallExpression RuntimeCall(string name, params TsExpression[] arguments) =>
-        new(new TsRuntimeHelperReference(name), arguments);
-
-    /// <summary>
-    /// A call of a JavaScript global; a dotted name (<c>BigInt.asIntN</c>)
-    /// becomes a property access.
-    /// </summary>
-    private static TsCallExpression Global(string function, params TsExpression[] arguments)
-    {
-        var dot = function.IndexOf('.');
-
-        TsExpression callee =
-            dot < 0
-                ? new TsIdentifier(function)
-                : new TsPropertyAccess(new TsIdentifier(function[..dot]), function[(dot + 1)..]);
-
-        return new TsCallExpression(callee, arguments);
     }
 }

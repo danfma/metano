@@ -7,6 +7,7 @@
     <Project Path="src/Metano.Build/Metano.Build.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Int64Reference/Int64Reference.csproj" />
     <Project Path="tests/Metano.Tests/Metano.Tests.csproj" />
   </Folder>
   <Folder Name="/bindings/">
@@ -28,5 +29,6 @@
     <Project Path="samples/SampleQueryableArrays/SampleQueryableArrays.csproj" />
     <Project Path="samples/SampleQueryableSqlite/SampleQueryableSqlite.csproj" />
     <Project Path="samples/SampleJsonContracts/SampleJsonContracts.csproj" />
+    <Project Path="samples/SampleInt64Conformance/SampleInt64Conformance.csproj" />
   </Folder>
 </Solution>

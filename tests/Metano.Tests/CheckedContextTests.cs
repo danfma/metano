@@ -375,7 +375,7 @@ public class CheckedContextTests
         var ops = files["ops.dart"];
 
         await Assert.That(ops).Contains("int check(int a) => a * 2;");
-        await Assert.That(ops).Contains("{\n      l++;\n    }");
+        await Assert.That(ops).Contains("{\n      l = l + 1;\n    }");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
