@@ -201,6 +201,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         var sorted = OverloadDispatchOrder.Sort(overloads, m => m.Parameters);
         var isAsync = sorted.Any(m => m.Semantics.IsAsync);
+
         var accessibility = IrToTsVisibilityMapper.MostPermissiveOf(
             sorted.Select(method => IrToTsVisibilityMapper.Map(method.Visibility).Accessibility)
         );

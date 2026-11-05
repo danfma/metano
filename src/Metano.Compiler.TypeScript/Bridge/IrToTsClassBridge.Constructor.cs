@@ -104,9 +104,7 @@ internal static partial class IrToTsClassBridge
         }
 
         var isReadonly = p.Promotion is IrParameterPromotion.ReadonlyProperty;
-        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(
-            p.PromotedVisibility ?? IrVisibility.Public
-        );
+        var (accessibility, jsdoc) = PromotedMemberVisibility(p);
 
         return new TsConstructorParam(
             name,
@@ -117,6 +115,10 @@ internal static partial class IrToTsClassBridge
             JSDoc: jsdoc
         );
     }
+
+    /// <summary>The TypeScript visibility of a promoted member: its property's.</summary>
+    internal static TsMemberVisibility PromotedMemberVisibility(IrConstructorParameter p) =>
+        IrToTsVisibilityMapper.Map(p.PromotedVisibility ?? IrVisibility.Public);
 
     /// <summary>
     /// Lowers one non-promoted parameter to a plain TS parameter (no
