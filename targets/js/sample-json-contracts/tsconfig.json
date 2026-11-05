@@ -6,11 +6,10 @@
     "module": "Preserve",
     "moduleDetection": "force",
     "allowJs": true,
-    "rootDir": "./src",
+    "rootDir": ".",
     "outDir": "./dist",
-    "declaration": true,
-    "composite": true,
     "types": ["bun"],
+    "resolveJsonModule": true,
 
     // Bundler mode
     "moduleResolution": "bundler",
@@ -34,5 +33,6 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

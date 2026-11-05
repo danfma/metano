@@ -3,14 +3,15 @@ using System.Text.Json.Serialization;
 namespace SampleJsonContracts;
 
 // The default-options context behind most of the conformance manifest
-// (contracts/wire-format.md). `Title` and `EpisodeRec` are TypeScript-only
-// rows (FR-026): System.Text.Json writes a branded record struct as an
-// object unless it gets a custom converter, so the STJ fixture context
-// declares no branded member.
+// (contracts/wire-format.md). The TUnit side runs these very contexts through
+// their System.Text.Json source-generated `Default` instances. The `Title` and
+// `EpisodeRec` rows are TypeScript-only (FR-026): System.Text.Json writes a
+// branded record struct as an object unless it gets a custom converter.
 [JsonSerializable(typeof(Clip))]
 [JsonSerializable(typeof(Timeline))]
 [JsonSerializable(typeof(List<Clip>))]
 [JsonSerializable(typeof(Dictionary<string, Clip>))]
+[JsonSerializable(typeof(IEnumerable<Clip>))]
 [JsonSerializable(typeof(Group))]
 [JsonSerializable(typeof(HBase))]
 [JsonSerializable(typeof(IBase))]

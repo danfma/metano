@@ -7,7 +7,7 @@ import { UUID } from "metano-runtime";
 
 import { Account } from "#/sample-json-contracts/account";
 import { Blob } from "#/sample-json-contracts/blob";
-import { Clip } from "#/sample-json-contracts/clip";
+import type { Clip } from "#/sample-json-contracts/clip";
 import { Color } from "#/sample-json-contracts/color";
 import { DBer } from "#/sample-json-contracts/d-ber";
 import { DBase } from "#/sample-json-contracts/d-base";
@@ -40,6 +40,7 @@ import { SetClass } from "#/sample-json-contracts/set-class";
 import { SilenceClip } from "#/sample-json-contracts/silence-clip";
 import { SoftNums } from "#/sample-json-contracts/soft-nums";
 import { Sq } from "#/sample-json-contracts/sq";
+import { SqB } from "#/sample-json-contracts/sq-b";
 import { Stats } from "#/sample-json-contracts/stats";
 import { Timeline } from "#/sample-json-contracts/timeline";
 import { Title } from "#/sample-json-contracts/title";
@@ -52,9 +53,12 @@ import { UNearB } from "#/sample-json-contracts/u-near-b";
  * Per-id builders for the shared STJ conformance manifest
  * (`fixtures/stj/cases.json`, spec 009 contracts/wire-format.md).
  *
- * A manifest id that lists the `ts` side without an entry here fails the
- * conformance test, and an entry here without a manifest row fails too, so
- * the two sides cannot drift by omission.
+ * A `ts` row that needs a builder (every row but a read error) and has none
+ * fails the conformance test, and an entry here without a manifest row fails
+ * too, so the two sides cannot drift by omission.
+ *
+ * Entries follow the manifest order. A read error row needs no entry; one
+ * exists only where a flag carries information (`viaText`).
  *
  * `build` constructs the value for write and roundtrip rows; `assertRead`
  * verifies the deserialized value of read and roundtrip rows. `plainObject`
@@ -240,6 +244,11 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   },
   W22: { build: () => null },
   W22b: { build: () => null },
+  W23: {
+    build: function* () {
+      yield new SilenceClip(2);
+    },
+  },
   W24: {
     build: () => new Sq(2),
     assertRead: (value) => {
@@ -287,6 +296,27 @@ export const caseBuilders: Record<string, CaseBuilder> = {
       expect((value as { x: number }).x).toBe(5);
     },
     plainObject: true,
+  },
+  W29: {
+    build: () => ({ w: 1, h: 2 }),
+    assertRead: (value) => {
+      expectPlainObject(value);
+
+      const rect = value as { w: number; h: number };
+
+      expect(rect.w).toBe(1);
+      expect(rect.h).toBe(2);
+    },
+    plainObject: true,
+  },
+  W30: {
+    build: () => new SqB(4, 2),
+    assertRead: (value) => {
+      const square = expectClass(value, SqB);
+
+      expect(square.area).toBe(4);
+      expect(square.side).toBe(2);
+    },
   },
   R1: {
     assertRead: (value) => {
@@ -419,8 +449,13 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     assertRead: (value) => {
       const holder = expectClass(value, IntMapHolder);
 
-      expect(holder.byKey.get("5")).toBe("e");
-      expect(holder.byKey.get("1")).toBe("a");
+      // The runtime reads integer dictionary keys back as strings: the key
+      // descriptor carries no numeric type (reported as a follow-up), so
+      // this pins today's behavior instead of the C# `[5]` / `[1]` lookups.
+      const keys: unknown[] = [...holder.byKey.keys()];
+
+      expect(keys).toEqual(["1", "5"]);
+      expect([...holder.byKey.values()]).toEqual(["a", "e"]);
     },
   },
   V18: {
@@ -435,6 +470,32 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   V19: { build: () => [[0]], assertRead: (value) => expect(value).toEqual([[0]]) },
   N1: { build: () => null, assertRead: (value) => expect(value).toBeNull() },
   N2: { build: () => null, assertRead: (value) => expect(value).toBeNull() },
+  N5: { viaText: true },
+  E8: { build: () => new UFailX(1) },
+  E9: { build: () => new NLeaf(1, 2, 3) },
+  E12: {
+    build: () => {
+      const members: Clip[] = [];
+      const group = new Group("g", members);
+
+      members.push(group);
+
+      return group;
+    },
+  },
+  E14: { build: () => new Other(3) },
+  E15: { build: () => ({ nope: true }) },
+  R9: { assertRead: (value) => expect(groupDepth(value)).toBe(32) },
+  E24: { viaText: true },
+  D2a: {
+    assertRead: (value) => expectDecimal(value, "12345678901234567890.123456789"),
+    viaText: true,
+  },
+  D2b: {
+    assertRead: (value) => expectDecimal(value, "0.3333333333333333333333333333"),
+    viaText: true,
+  },
+  D4: { viaText: true },
   W14: {
     build: () => new ImageClip("a", 1.5),
     assertRead: (value) => {
@@ -476,8 +537,32 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     assertRead: (value) => expectDecimal((value as Nums).d, "12345678901234567890.123456789"),
     viaText: true,
   },
+  WEB4a: {
+    assertRead: (value) => {
+      const nums = expectClass(value, SoftNums);
+
+      expect(nums.n).toBe(5);
+      expect(nums.d).toBeNull();
+    },
+  },
+  WEB4b: { assertRead: (value) => expect(expectClass(value, SoftNums).n).toBe(5) },
+  WEB4c: { assertRead: (value) => expect(expectClass(value, SoftNums).n).toBe(7) },
+  WEB4d: { assertRead: (value) => expect(expectClass(value, SoftNums).n).toBe(-5) },
+  WEB5a: { assertRead: (value) => expect(expectClass(value, SoftNums).x).toBe(100) },
+  WEB5b: { assertRead: (value) => expect(expectClass(value, SoftNums).x).toBe(1.5) },
+  WEB5c: {
+    assertRead: (value) => expect(Number.isNaN(expectClass(value, SoftNums).x)).toBe(true),
+  },
+  WEB5d: {
+    assertRead: (value) => expect(expectClass(value, SoftNums).x).toBe(Number.POSITIVE_INFINITY),
+  },
+  WEB5e: {
+    assertRead: (value) => expect(expectClass(value, SoftNums).x).toBe(Number.NEGATIVE_INFINITY),
+  },
   WEB6: { assertRead: (value) => expect(value).toBe(5) },
-  WEB7: { build: () => new Nums(5, 7, new Decimal("1.10"), 2.5, null, null, Color.Red) },
+  // The list and map parameters are non-nullable in C#, but WEB7's partial
+  // value leaves them null, as the C# builder does.
+  WEB7: { build: () => new Nums(5, 7, new Decimal("1.10"), 2.5, null!, null!, Color.Red) },
   NAM1: {
     build: () => new Stats(1, 2.5, "u"),
     assertRead: (value) => {
@@ -543,112 +628,17 @@ export const caseBuilders: Record<string, CaseBuilder> = {
       expect(set.count).toBe(5);
     },
   },
-  E8: { build: () => new UFailX(1) },
-  E9: { build: () => new NLeaf(1, 2, 3) },
-  E12: {
-    build: () => {
-      const members: Clip[] = [];
-      const group = new Group("g", members);
-
-      members.push(group);
-
-      return group;
-    },
-  },
-  E14: { build: () => new Other(3) },
-  E15: { build: () => ({ nope: true }) },
-  D2a: {
-    assertRead: (value) => expectDecimal(value, "12345678901234567890.123456789"),
-    viaText: true,
-  },
-  D2b: {
-    assertRead: (value) => expectDecimal(value, "0.3333333333333333333333333333"),
-    viaText: true,
-  },
-  D4: { viaText: true },
-  N5: { viaText: true },
-  E24: { viaText: true },
   W16: { assertRead: (value) => expect(value).toBe("ok") },
-  WEB4a: {
-    assertRead: (value) => {
-      const nums = expectClass(value, SoftNums);
-
-      expect(nums.n).toBe(5);
-      expect(nums.d).toBeNull();
-    },
-  },
-  WEB4b: { assertRead: (value) => expect((expectClass(value, SoftNums) as SoftNums).n).toBe(5) },
-  WEB4c: { assertRead: (value) => expect((expectClass(value, SoftNums) as SoftNums).n).toBe(7) },
-  WEB4d: { assertRead: (value) => expect((expectClass(value, SoftNums) as SoftNums).n).toBe(-5) },
-  WEB5a: { assertRead: (value) => expect((expectClass(value, SoftNums) as SoftNums).x).toBe(100) },
-  WEB5b: { assertRead: (value) => expect((expectClass(value, SoftNums) as SoftNums).x).toBe(1.5) },
-  WEB5c: {
-    assertRead: (value) => expect(Number.isNaN((expectClass(value, SoftNums) as SoftNums).x)).toBe(true),
-  },
-  WEB5d: {
-    assertRead: (value) => expect((expectClass(value, SoftNums) as SoftNums).x).toBe(Number.POSITIVE_INFINITY),
-  },
-  WEB5e: {
-    assertRead: (value) => expect((expectClass(value, SoftNums) as SoftNums).x).toBe(Number.NEGATIVE_INFINITY),
-  },
-  E1: {},
-  E2: {},
-  E3: {},
-  E4: {},
-  E5: {},
-  E5bTrue: {},
-  E5bFalse: {},
-  E5bObject: {},
-  E5bArray: {},
-  E6: {},
-  E7: {},
-  E10: {},
-  E11: {},
-  E13: {},
-  E16: {},
-  E17a: {},
-  E17b: {},
-  E17c: {},
-  E17d: {},
-  E17e: {},
-  E17f: {},
-  E18a: {},
-  E18b: {},
-  E18c: {},
-  E19b: {},
-  E19c: {},
-  E20: {},
-  E22: {},
-  E23: {},
-  E25: {},
-  N3: {},
-  N4: {},
-  N6: {},
-  N7: {},
-  N8: {},
-  N9: {},
-  N10: {},
   W16b: {
     build: () => new EpisodeRec("e", Title.from("  ok ")),
     assertRead: (value) => {
       const rec = expectClass(value, EpisodeRec);
 
       expect(rec.id).toBe("e");
-      expect(rec.note).toBe("ok");
+      expect<string>(rec.note).toBe("ok");
     },
   },
 };
-
-/** The builder of a manifest id, failing the test when the side has none. */
-export function builderFor(id: string): CaseBuilder {
-  const builder = caseBuilders[id];
-
-  if (builder === undefined) {
-    throw new Error(`no ts builder for manifest case '${id}'`);
-  }
-
-  return builder;
-}
 
 /** Every builder key must have a manifest row (drift fails the test). */
 export function builderIds(): string[] {
@@ -669,4 +659,9 @@ function expectDecimal(value: unknown, text: string): void {
   expect(value).toBeInstanceOf(Decimal);
 
   expect((value as Decimal).toFixed()).toBe(text);
+}
+
+/** The number of nested groups of a read `Group` chain (manifest row R9). */
+function groupDepth(value: unknown): number {
+  return value instanceof Group ? 1 + groupDepth(value.members[0]) : 0;
 }
