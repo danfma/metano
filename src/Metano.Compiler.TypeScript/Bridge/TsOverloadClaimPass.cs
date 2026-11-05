@@ -331,7 +331,7 @@ internal sealed class TsOverloadClaimPass
 
             var fastPath = AnchoredNameOf(overload, anchor, baseName);
 
-            RecordFastPath(overload, fastPath, RootNamesOf(overload, fastPath));
+            RecordFastPath(overload, fastPath, RootNamesOf(anchor, fastPath));
         }
 
         foreach (var overload in group.Members.Where(member => member.Anchor is null))
@@ -387,21 +387,17 @@ internal sealed class TsOverloadClaimPass
     }
 
     /// <summary>
-    /// The names of the further interface roots an overload implements, each
-    /// a forwarding member to its fast path, when it differs from it.
-    /// </summary>
-    /// <summary>
     /// The name an anchored overload declares for each of its roots: the fast
     /// path for its root, the further roots' names (forwarders when they
     /// differ), every root kept, so a name two roots share is judged against
     /// both.
     /// </summary>
-    private IReadOnlyList<TsRootName> RootNamesOf(IrMethodDeclaration overload, string fastPath) =>
-        (overload.Anchor?.FurtherRoots ?? [])
+    private IReadOnlyList<TsRootName> RootNamesOf(IrOverloadAnchor anchor, string fastPath) =>
+        (anchor.FurtherRoots ?? [])
             .Select(root => (Root: root, Name: _input.RootFastPathOf(root)))
             .Where(entry => entry.Name is not null)
             .Select(entry => new TsRootName(entry.Root, entry.Name!))
-            .Prepend(new TsRootName(overload.Anchor!.Root, fastPath))
+            .Prepend(new TsRootName(anchor.Root, fastPath))
             .ToList();
 
     private void RecordFastPath(
@@ -413,6 +409,8 @@ internal sealed class TsOverloadClaimPass
         var signature = DispatchedOverload.SignatureOf(overload);
         var table = TableOf(overload.IsStatic);
 
+        // An own root's fast path has no root names; an anchored one's is
+        // also the first of them. Either way it comes first.
         var names = rootNames
             .Select(rootName => rootName.Name)
             .Prepend(fastPath)
