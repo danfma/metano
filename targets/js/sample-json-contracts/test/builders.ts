@@ -17,6 +17,7 @@ import { Feed } from "#/sample-json-contracts/feed";
 import { Flavor } from "#/sample-json-contracts/flavor";
 import { GDer } from "#/sample-json-contracts/g-der";
 import { Group } from "#/sample-json-contracts/group";
+import { GuidMapHolder } from "#/sample-json-contracts/guid-map-holder";
 import { HLeaf } from "#/sample-json-contracts/h-leaf";
 import { HMid } from "#/sample-json-contracts/h-mid";
 import { IA } from "#/sample-json-contracts/ia";
@@ -25,6 +26,8 @@ import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
 import { IntMapHolder } from "#/sample-json-contracts/int-map-holder";
 import { IS } from "#/sample-json-contracts/is";
+import { Level } from "#/sample-json-contracts/level";
+import { LevelMapHolder } from "#/sample-json-contracts/level-map-holder";
 import { MixedClass } from "#/sample-json-contracts/mixed-class";
 import { NLeaf } from "#/sample-json-contracts/n-leaf";
 import { NMid } from "#/sample-json-contracts/n-mid";
@@ -449,13 +452,8 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     assertRead: (value) => {
       const holder = expectClass(value, IntMapHolder);
 
-      // The runtime reads integer dictionary keys back as strings: the key
-      // descriptor carries no numeric type (reported as a follow-up), so
-      // this pins today's behavior instead of the C# `[5]` / `[1]` lookups.
-      const keys: unknown[] = [...holder.byKey.keys()];
-
-      expect(keys).toEqual(["1", "5"]);
-      expect([...holder.byKey.values()]).toEqual(["a", "e"]);
+      expect(holder.byKey.get(5)).toBe("e");
+      expect(holder.byKey.get(1)).toBe("a");
     },
   },
   V18: {
@@ -468,6 +466,30 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   V19: { build: () => [[0]], assertRead: (value) => expect(value).toEqual([[0]]) },
+  V20: {
+    build: () =>
+      new LevelMapHolder(
+        new Map([
+          [Level.High, "h"],
+          [Level.Low, "l"],
+        ]),
+      ),
+    assertRead: (value) => {
+      const holder = expectClass(value, LevelMapHolder);
+
+      expect(holder.byLevel.get(Level.High)).toBe("h");
+      expect(holder.byLevel.get(Level.Low)).toBe("l");
+    },
+  },
+  V21: {
+    build: () =>
+      new GuidMapHolder(new Map([[UUID.create("0f8fad5b-d9cb-469f-a165-70867728950e"), "a"]])),
+    assertRead: (value) => {
+      const holder = expectClass(value, GuidMapHolder);
+
+      expect(holder.byId.get(UUID.create("0f8fad5b-d9cb-469f-a165-70867728950e"))).toBe("a");
+    },
+  },
   N1: { build: () => null, assertRead: (value) => expect(value).toBeNull() },
   N2: { build: () => null, assertRead: (value) => expect(value).toBeNull() },
   N5: { viaText: true },

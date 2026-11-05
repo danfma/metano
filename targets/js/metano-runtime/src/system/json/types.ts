@@ -17,11 +17,23 @@ export type NumberTypeName =
   | "System.Double";
 
 /**
+ * The CLR name a dictionary key descriptor carries (`typeName`) so a JSON
+ * property name that does not parse into the key's type reports it as
+ * System.Text.Json does (#479): `System.Boolean`, `System.Guid`,
+ * `System.DateOnly`, `MyApp.Level`. Absent outside key positions.
+ */
+type KeyTypeName = {
+  readonly typeName?: string;
+};
+
+/**
  * Primitives that JSON.stringify handles natively (string, number, boolean).
  * `numberType` names the C# numeric type when the context reads numbers from
- * JSON strings (FR-048); it is absent otherwise.
+ * JSON strings (FR-048), and always on a dictionary key, whose JSON property
+ * name is parsed into the number (#479); it is absent otherwise. A
+ * `System.Boolean` key names its `typeName`.
  */
-export type PrimitiveDescriptor = {
+export type PrimitiveDescriptor = KeyTypeName & {
   readonly kind: "primitive";
   readonly numberType?: NumberTypeName;
 };
@@ -36,7 +48,7 @@ export type RefDescriptor<T = unknown> = {
  * Temporal types — `toString()` to serialize (`Temporal.PlainTime` in the
  * STJ `TimeOnly` form, `temporal-text.ts`), `parse()` to deserialize.
  */
-export type TemporalDescriptor = {
+export type TemporalDescriptor = KeyTypeName & {
   readonly kind: "temporal";
   readonly parse: (iso: string) => unknown;
 };
@@ -61,7 +73,11 @@ export type BytesDescriptor = {
   readonly kind: "bytes";
 };
 
-/** Map<K,V> — Object.fromEntries on serialize, new Map(Object.entries) on deserialize */
+/**
+ * Map<K,V> — Object.fromEntries on serialize, new Map(Object.entries) on
+ * deserialize. Each JSON property name is parsed into the `key` type as
+ * System.Text.Json parses it (`dictionary-keys.ts`, #479).
+ */
 export type MapDescriptor = {
   readonly kind: "map";
   readonly key: TypeDescriptor;
@@ -95,13 +111,13 @@ export type HashSetDescriptor = {
  * for no real benefit, since consumers always call `UserId.create("abc")`
  * with a typed string, never with raw parsed JSON.
  */
-export type BrandedDescriptor = {
+export type BrandedDescriptor = KeyTypeName & {
   readonly kind: "branded";
   readonly create: (value: any) => unknown;
 };
 
 /** String enum — passthrough on serialize, validate on deserialize */
-export type EnumDescriptor = {
+export type EnumDescriptor = KeyTypeName & {
   readonly kind: "enum";
   readonly values: Record<string, string>;
 };
@@ -111,7 +127,7 @@ export type EnumDescriptor = {
  * whose reverse mapping (`Level[0] === "Low"`) adds string values; only the
  * numbers are valid members.
  */
-export type NumericEnumDescriptor = {
+export type NumericEnumDescriptor = KeyTypeName & {
   readonly kind: "numericEnum";
   readonly values: Record<string, string | number>;
 };

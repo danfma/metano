@@ -760,6 +760,37 @@ public class StjConformanceFixtureTests
                 () => new List<List<int>> { new List<int> { 0 } },
                 async value => await Assert.That(((List<List<int>>)value!)[0][0]).IsEqualTo(0)
             ),
+            ["V20"] = Roundtrip(
+                () =>
+                    new LevelMapHolder(
+                        new Dictionary<Level, string> { [Level.High] = "h", [Level.Low] = "l" }
+                    ),
+                async value =>
+                {
+                    var holder = (LevelMapHolder)value!;
+
+                    await Assert.That(holder.ByLevel[Level.High]).IsEqualTo("h");
+
+                    await Assert.That(holder.ByLevel[Level.Low]).IsEqualTo("l");
+                }
+            ),
+            ["V21"] = Roundtrip(
+                () =>
+                    new GuidMapHolder(
+                        new Dictionary<Guid, string>
+                        {
+                            [new Guid("0f8fad5b-d9cb-469f-a165-70867728950e")] = "a",
+                        }
+                    ),
+                async value =>
+                    await Assert
+                        .That(
+                            ((GuidMapHolder)value!).ById[
+                                new Guid("0f8fad5b-d9cb-469f-a165-70867728950e")
+                            ]
+                        )
+                        .IsEqualTo("a")
+            ),
             ["N1"] = Roundtrip(() => null, async value => await Assert.That(value).IsNull()),
             ["N2"] = Roundtrip(() => null, async value => await Assert.That(value).IsNull()),
             ["E8"] = WriteOnly(() => new UFailX(1)),

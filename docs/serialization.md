@@ -319,13 +319,44 @@ handles these kinds:
 | `decimal` | `Decimal` | `JSON.rawJSON(value.toFixed())`: its exact digits as a JSON number ([details](#decimals)) | `new Decimal(…)` from the JSON number (its exact digits through `deserializeText`), or from the JSON string when the context reads numbers from strings, rounded as .NET rounds it; anything else, or a value outside the decimal range, throws `The JSON value could not be converted to System.Decimal.` |
 | `bytes` | `number[]` (C# `byte[]`) | padded standard base64, one line (`[1,2,3]` → `"AQID"`) | base64 as System.Text.Json reads it: space, tab, CR and LF ignored; anything else invalid throws `The JSON value could not be converted to System.Byte[].` |
 | `array` | `T[]` / `Iterable<T>` | `Array.from(iterable, serialize)` | `.map(deserialize)` |
-| `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
+| `map` | `Map<K,V>` | `Object.fromEntries(...)`, each key written as text ([below](#dictionary-keys)) | `new Map(Object.entries(...))`, each property name parsed into the key type ([below](#dictionary-keys)) |
 | `hashSet` | `HashSet<T>` | `Array.from(set, serialize)` | `new HashSet(arr)` |
 | `branded` | `[Branded]` / `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)`, or the type's `[JsonFactory]` ([below](#validating-branded-types)) |
 | `enum` | string enum | passthrough (already string) | validates against allowed values |
 | `numericEnum` | numeric enum | passthrough | validates against allowed values |
 | `nullable` | `T \| null` | `null` passes through, else recurse | same |
 | `ref` | another spec | recursive `serialize` with target spec | recursive `deserialize` |
+
+### Dictionary keys
+
+A JSON property name is always a string, so the key descriptor of a
+dictionary carries what the runtime needs to read it back into the key's C#
+type, the way System.Text.Json does (measured on .NET 10), whatever the
+context's read options (#479):
+
+| Key type | Key descriptor | Written | Read |
+|---|---|---|---|
+| `string` | `{ kind: "primitive" }` | as is | as is |
+| `int`, `long`, `short`, `byte`, `uint`, … | `{ kind: "primitive", numberType: "System.Int32" }` | `String(n)` | the [numbers-from-strings grammar](#web-defaults): `"+5"`, `"007"` and `"-0"` read for a signed type, digits only for an unsigned one; whitespace, `"1.0"`, `"1e2"`, `""` and out-of-range values throw |
+| `float`, `double` | `numberType: "System.Double"` | `String(n)` | the same grammar, `"NaN"` and `"Infinity"` included |
+| `bool` | `{ kind: "primitive", typeName: "System.Boolean" }` | `True` / `False` | `true` / `false` in any case, no whitespace |
+| numeric enum | `{ kind: "numericEnum", values: Level, typeName: "MyApp.Level" }` | the member name (`High`), or the number when no member has it | a member name in any case, a comma-separated list of names (OR-ed), or an integer (any value, as .NET reads it); surrounding whitespace ignored |
+| `[StringEnum]` | `{ kind: "enum", values: Mood, typeName: "MyApp.Mood" }` | the value | a member value in any case; surrounding whitespace ignored |
+| `Guid` | `{ kind: "branded", create: UUID.create, typeName: "System.Guid" }` | as is | the `D` format (`8-4-4-4-12`) in any case, read as lowercase; braces, the `N` format and whitespace throw |
+| `decimal` | `{ kind: "decimal", type: Decimal }` | `toFixed()` | the decimal grammar ([Decimals](#decimals)) |
+| `DateOnly` and the other temporal types | `{ kind: "temporal", parse: …, typeName: "System.DateOnly" }` | as its value is written | the descriptor's `parse` |
+| a `[Branded]` type | `{ kind: "branded", create: … }` | as is | `create(name)`, unchanged |
+
+A property name the key type rejects throws `JsonException` `The JSON value
+could not be converted to System.Int32.` (the key's CLR name: `System.Guid`,
+`MyApp.Level`), on the tree and the text paths alike. Two names that read as
+the same key (`"1"` and `"01"`) keep the last value, as in .NET. A custom
+converter of the key's kind still takes precedence.
+
+A `long` / `ulong` key reads as a `number` while 64-bit integers are numbers
+(spec 012 slice 012e turns them into `bigint`). A dictionary with a
+non-`string` key can be a property but not yet a `[JsonSerializable]` root
+(`MS0035`, [Roots](#roots)).
 
 ## Validating branded types
 
@@ -657,8 +688,9 @@ reading numbers from strings. `PropertyNameCaseInsensitive = true`,
   out-of-range values are rejected with `JsonException` `The JSON value could
   not be converted to System.Int32.` (the CLR name of the type, or
   ``System.Nullable`1[System.Int32]`` for `int?`). Enums, the text `"null"` for a
-  nullable number, dictionary keys and integer type discriminators never read
-  strings, as in .NET. Writing is unchanged: numbers are written as JSON
+  nullable number and integer type discriminators never read strings, as in
+  .NET; dictionary keys are always text and read by the same grammar whatever
+  the option ([Dictionary keys](#dictionary-keys)). Writing is unchanged: numbers are written as JSON
   numbers. A `decimal` read from a string is built from the exact text, so
   `"1.2345678901234567890123456789"` keeps its significant digits (trailing
   zeros are dropped: `"1.10"` reads as `1.1`), rounded to 28 decimal places as
@@ -1404,6 +1436,11 @@ the text are gone:
   `JsonStringEnumConverter`;
 - `Dictionary<int, …>` keys come out in JS order (integer-like keys first);
   `Stack<T>` is written in array order;
+- `double` dictionary keys print as `String()` prints them (`1e+21`, `0` for
+  `-0`; .NET: `1E+21`, `-0`), a `NaN` key is written (.NET throws), a
+  `decimal` key drops trailing zeros (`1.10` → `1.1`), a `Guid` key keeps the
+  case it holds, and a `[Flags]` combination of a numeric enum key is written
+  as its number (.NET: `A, B`);
 - a `null` `byte[]` is written `null` (the .NET source-generated fast path
   writes `""`);
 - a `[JsonIgnore] new` redeclaration writes the derived value at the base's
@@ -1420,6 +1457,11 @@ the text are gone:
 - An unknown numeric enum value throws (`7` reads as `(Color)7` in .NET);
   unknown string enum values and numeric enums read from strings throw with
   Metano's own messages.
+- Dictionary keys: an integer numeric enum key is range-checked as an `int`
+  whatever the enum's underlying type; a `[StringEnum]` key does not read its
+  member's number (.NET reads `"1"`); `[JsonStringEnumMemberName]` is not
+  applied to keys; a temporal key reads whatever its `parse` accepts
+  (`Temporal.PlainDate.from` takes `2024-01-02T00:00`, .NET throws).
 - `set` members are assigned after construction in wire order, not in the
   payload's order; a constructor parameter bound to an ignored property gets
   `undefined`.

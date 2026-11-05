@@ -201,11 +201,15 @@ public class JsonReadOptionsTests
     [Arguments("JsonSerializerDefaults.General")]
     [Arguments("JsonSerializerDefaults.Web, NumberHandling = JsonNumberHandling.Strict")]
     [Arguments("PropertyNameCaseInsensitive = true")]
-    public async Task StrictNumberHandling_EmitsNoNumberType(string options)
+    public async Task StrictNumberHandling_EmitsNoNumberType_ExceptOnDictionaryKeys(string options)
     {
         var ts = TranspileContext(options);
+        var dictionaryKey = """key: { kind: "primitive", numberType: "System.Int32" },""";
 
-        await Assert.That(ts).DoesNotContain("numberType");
+        await Assert.That(ts.Replace(dictionaryKey, "")).DoesNotContain("numberType");
+
+        await Assert.That(ts).Contains(dictionaryKey);
+
         await Assert.That(DescriptorOf(ts, "i")).IsEqualTo("{ kind: \"primitive\" }");
     }
 

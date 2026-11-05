@@ -62,7 +62,9 @@ interface TypeSpec<T> {
   readonly ignoredProperties?: readonly string[]; // new, optional (S4): TS names of base properties a [JsonIgnore] override hides
 }
 
-type PrimitiveDescriptor = { readonly kind: "primitive"; readonly numberType?: NumberTypeName }; // numberType new, optional
+type PrimitiveDescriptor = { readonly kind: "primitive"; readonly numberType?: NumberTypeName; readonly typeName?: string }; // numberType new, optional; typeName (#479) on a bool dictionary key
+// #479: TemporalDescriptor, BrandedDescriptor, EnumDescriptor and NumericEnumDescriptor also take an
+// optional `typeName` (the key's CLR name), set by the generator on dictionary keys only.
 type DecimalDescriptor = { readonly kind: "decimal"; readonly type?: new (value: string | number) => unknown }; // type new, optional (S2b)
 
 abstract class SerializerContext {
@@ -103,6 +105,17 @@ abstract class SerializerContext {
    got <kind>" for a non-array, non-null JSON value (#425), and the dictionary (`map`) converter
    throws `JsonException` "Expected object for deserialization, got <kind>" for a non-object or an
    array (DECIDED-20 c). `null` reads as `null` in all three.
+8b. The `map` converter parses each JSON property name into its key type as System.Text.Json does,
+   on the tree and the text paths, whatever the read options (#479): a `numberType` key by the
+   FR-048 grammar; a `typeName: "System.Boolean"` key from `true` / `false` in any case (written
+   `True` / `False`); a numeric enum key from a member name in any case, a comma-separated list
+   of names or an integer, written as the member name; a `[StringEnum]` key from a member value
+   in any case; a `typeName: "System.Guid"` key from the `D` format, lowercased; a `decimal` key
+   by the decimal grammar (written with `toFixed()`); a temporal key through `parse`. A rejected
+   name throws `JsonException` `The JSON value could not be converted to <numberType | typeName>.`
+   (`Object` without one). A key without a type, a `string` key and a `[Branded]` key keep the
+   value converter; a custom converter of the key's kind takes precedence. A `long` / `ulong` key
+   reads as a `number` until spec 012 slice 012e.
 9. JSON `null` at a root returns `null` unless the spec has `valueType: true`, which throws
    `JsonException` `The JSON value could not be converted to <Type>.`; a `null` value serializes to
    JSON `null` (FR-037).

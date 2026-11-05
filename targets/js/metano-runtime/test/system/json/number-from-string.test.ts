@@ -429,14 +429,14 @@ describe("numbers from strings — where the option applies", () => {
     );
   });
 
-  test("dictionary keys are left as they are", () => {
+  test("dictionary keys read as their key type, as without the option (#479)", () => {
     const map: TypeDescriptor = {
       kind: "map",
       key: { kind: "primitive", numberType: "System.Int32" },
       value: { kind: "primitive", numberType: "System.Int32" },
     };
 
-    expect(readRoot({ "007": "1" }, map)).toEqual(new Map([["007", 1]]));
+    expect(readRoot({ "007": "1" }, map)).toEqual(new Map([[7, 1]]));
   });
 
   test("a nullable number reads strings, but not the text null", () => {
