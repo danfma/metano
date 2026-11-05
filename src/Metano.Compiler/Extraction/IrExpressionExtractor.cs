@@ -552,16 +552,19 @@ public sealed partial class IrExpressionExtractor
         }
         else
         {
-            newValue = new IrBinaryExpression(
-                BuildExtensionHelperCall(
-                    setterLowering.Value.HelperContainer,
-                    getterName,
-                    emittedGetterName,
-                    [new IrArgument(receiver)],
-                    typeArguments: null
-                ),
-                compoundOp.Value,
-                rhs
+            newValue = ReduceOverflow(
+                _semantic.GetOperation(assign),
+                new IrBinaryExpression(
+                    BuildExtensionHelperCall(
+                        setterLowering.Value.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        [new IrArgument(receiver)],
+                        typeArguments: null
+                    ),
+                    compoundOp.Value,
+                    rhs
+                )
             );
         }
 
@@ -1729,7 +1732,10 @@ public sealed partial class IrExpressionExtractor
             ?? TryExtractNullableBooleanLogic(bin, op)
             ?? TryExtractLiftedBinary(bin, op)
             ?? TryExtractStringConcatenation(bin)
-            ?? BuildBinary(op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false);
+            ?? ReduceOverflow(
+                _semantic.GetOperation(bin),
+                BuildBinary(op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false)
+            );
     }
 
     /// <summary>
@@ -2008,7 +2014,10 @@ public sealed partial class IrExpressionExtractor
 
         if (!isIncrementOrDecrement)
             return TryExtractLiftedUnary(node, op, operand)
-                ?? BuildUnary(op, Extract(operand), operand);
+                ?? ReduceOverflow(
+                    _semantic.GetOperation(node),
+                    BuildUnary(op, Extract(operand), operand)
+                );
 
         // `receiver.Prop++` against an extension property rewrites to a
         // let-bound setter call so the receiver evaluates exactly once.
@@ -2021,7 +2030,7 @@ public sealed partial class IrExpressionExtractor
             && TryResolveExtensionPropertyLowering(incProp, incMember.Expression) is { } incLowering
         )
         {
-            return BuildExtensionPropertyIncrement(incMember, incProp, incLowering, op);
+            return BuildExtensionPropertyIncrement(node, incMember, incProp, incLowering, op);
         }
         // `receiver[i]++` against an extension indexer — same receiver-once
         // lowering as compound assignment, with the increment expressed as
@@ -2036,6 +2045,7 @@ public sealed partial class IrExpressionExtractor
         )
         {
             return BuildExtensionIndexerIncrement(
+                node,
                 incIndexer,
                 incIndexerProp,
                 incIndexerLowering,
@@ -2051,7 +2061,8 @@ public sealed partial class IrExpressionExtractor
         if (IsNullableValueOperand(operand))
             return LiftIncrement(node, operand, op, extractedOperand, isPrefix);
 
-        return new IrUnaryExpression(op, extractedOperand, isPrefix);
+        return TryExtractReducedIncrement(node, operand, op, extractedOperand, isPrefix)
+            ?? new IrUnaryExpression(op, extractedOperand, isPrefix);
     }
 
     /// <summary>
@@ -3423,7 +3434,14 @@ public sealed partial class IrExpressionExtractor
                 setterLowering.HelperContainer,
                 setterName,
                 emittedSetterName,
-                [new IrArgument(new IrBinaryExpression(currentValue, compoundOp.Value, rhs))],
+                [
+                    new IrArgument(
+                        ReduceOverflow(
+                            _semantic.GetOperation(assign),
+                            new IrBinaryExpression(currentValue, compoundOp.Value, rhs)
+                        )
+                    ),
+                ],
                 typeArguments: null
             );
         }
@@ -3448,17 +3466,21 @@ public sealed partial class IrExpressionExtractor
             emittedGetterName,
             setterName,
             emittedSetterName,
-            recv => new IrBinaryExpression(
-                BuildExtensionHelperCall(
-                    setterLowering.HelperContainer,
-                    getterName,
-                    emittedGetterName,
-                    [new IrArgument(recv)],
-                    typeArguments: null
-                ),
-                compoundOp.Value,
-                rhs
-            )
+            recv =>
+                ReduceOverflow(
+                    _semantic.GetOperation(assign),
+                    new IrBinaryExpression(
+                        BuildExtensionHelperCall(
+                            setterLowering.HelperContainer,
+                            getterName,
+                            emittedGetterName,
+                            [new IrArgument(recv)],
+                            typeArguments: null
+                        ),
+                        compoundOp.Value,
+                        rhs
+                    )
+                )
         );
     }
 
@@ -3470,6 +3492,7 @@ public sealed partial class IrExpressionExtractor
     /// numeric extension properties the MVP covers.
     /// </summary>
     private IrExpression BuildExtensionPropertyIncrement(
+        ExpressionSyntax node,
         MemberAccessExpressionSyntax targetSyntax,
         IPropertySymbol property,
         ExtensionPropertyLowering propLowering,
@@ -3483,7 +3506,9 @@ public sealed partial class IrExpressionExtractor
         var emittedSetterName = ResolvePropertySetterEmittedName(property);
         var getterName = propLowering.HelperName;
         var emittedGetterName = propLowering.EmittedName;
-        var binaryOp = op == IrUnaryOp.Increment ? IrBinaryOp.Add : IrBinaryOp.Subtract;
+        var binaryOp = StepOperatorOf(op);
+        var one = ExtensionIncrementStepOf(targetSyntax);
+        var operation = _semantic.GetOperation(node);
 
         // Static increment: no receiver to capture — emit
         // `prop$set(prop$get() ± 1)` directly.
@@ -3502,10 +3527,9 @@ public sealed partial class IrExpressionExtractor
                 emittedSetterName,
                 [
                     new IrArgument(
-                        new IrBinaryExpression(
-                            currentValue,
-                            binaryOp,
-                            new IrLiteral(1, IrLiteralKind.Int32)
+                        ReduceOverflow(
+                            operation,
+                            new IrBinaryExpression(currentValue, binaryOp, one)
                         )
                     ),
                 ],
@@ -3522,17 +3546,21 @@ public sealed partial class IrExpressionExtractor
             emittedGetterName,
             setterName,
             emittedSetterName,
-            recv => new IrBinaryExpression(
-                BuildExtensionHelperCall(
-                    propLowering.HelperContainer,
-                    getterName,
-                    emittedGetterName,
-                    [new IrArgument(recv)],
-                    typeArguments: null
-                ),
-                binaryOp,
-                new IrLiteral(1, IrLiteralKind.Int32)
-            )
+            recv =>
+                ReduceOverflow(
+                    operation,
+                    new IrBinaryExpression(
+                        BuildExtensionHelperCall(
+                            propLowering.HelperContainer,
+                            getterName,
+                            emittedGetterName,
+                            [new IrArgument(recv)],
+                            typeArguments: null
+                        ),
+                        binaryOp,
+                        one
+                    )
+                )
         );
     }
 
@@ -3623,16 +3651,19 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             (recv, idxRefs) =>
-                new IrBinaryExpression(
-                    BuildExtensionIndexerHelperCall(
-                        getterLowering.HelperContainer,
-                        getterName,
-                        emittedGetterName,
-                        recv,
-                        idxRefs
-                    ),
-                    compoundOp.Value,
-                    rhs
+                ReduceOverflow(
+                    _semantic.GetOperation(assign),
+                    new IrBinaryExpression(
+                        BuildExtensionIndexerHelperCall(
+                            getterLowering.HelperContainer,
+                            getterName,
+                            emittedGetterName,
+                            recv,
+                            idxRefs
+                        ),
+                        compoundOp.Value,
+                        rhs
+                    )
                 )
         );
     }
@@ -3645,6 +3676,7 @@ public sealed partial class IrExpressionExtractor
     /// value distinction is out of MVP scope.
     /// </summary>
     private IrExpression BuildExtensionIndexerIncrement(
+        ExpressionSyntax node,
         ElementAccessExpressionSyntax targetSyntax,
         IPropertySymbol indexer,
         ExtensionPropertyLowering lowering,
@@ -3658,7 +3690,9 @@ public sealed partial class IrExpressionExtractor
         var emittedSetterName = ResolvePropertySetterEmittedName(indexer);
         var getterName = lowering.HelperName;
         var emittedGetterName = lowering.EmittedName;
-        var binaryOp = op == IrUnaryOp.Increment ? IrBinaryOp.Add : IrBinaryOp.Subtract;
+        var binaryOp = StepOperatorOf(op);
+        var one = ExtensionIncrementStepOf(targetSyntax);
+        var operation = _semantic.GetOperation(node);
         var receiver = Extract(targetSyntax.Expression);
         var indexArgs = targetSyntax
             .ArgumentList.Arguments.Select(a => Extract(a.Expression))
@@ -3673,16 +3707,19 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             (recv, idxRefs) =>
-                new IrBinaryExpression(
-                    BuildExtensionIndexerHelperCall(
-                        lowering.HelperContainer,
-                        getterName,
-                        emittedGetterName,
-                        recv,
-                        idxRefs
-                    ),
-                    binaryOp,
-                    new IrLiteral(1, IrLiteralKind.Int32)
+                ReduceOverflow(
+                    operation,
+                    new IrBinaryExpression(
+                        BuildExtensionIndexerHelperCall(
+                            lowering.HelperContainer,
+                            getterName,
+                            emittedGetterName,
+                            recv,
+                            idxRefs
+                        ),
+                        binaryOp,
+                        one
+                    )
                 )
         );
     }

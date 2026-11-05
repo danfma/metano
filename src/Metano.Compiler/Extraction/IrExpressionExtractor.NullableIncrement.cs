@@ -26,9 +26,7 @@ public sealed partial class IrExpressionExtractor
         bool isPrefix
     )
     {
-        var lifted = LiftedOperatorFor(
-            op is IrUnaryOp.Increment ? IrBinaryOp.Add : IrBinaryOp.Subtract
-        );
+        var lifted = LiftedOperatorFor(StepOperatorOf(op), _semantic.GetOperation(node));
 
         IrExpression Increment(IrExpression current) =>
             LiftBinary(
@@ -37,26 +35,51 @@ public sealed partial class IrExpressionExtractor
                 lifted
             );
 
-        return BindTargetOnce(
+        return WriteIncrement(node, target, isPrefix, Increment);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="increment"/> of <paramref name="target"/> back
+    /// to it, evaluating the target's receiver and index once. A prefix form,
+    /// and a postfix form whose value is unused, are that assignment; a
+    /// postfix form whose value is used binds the previous value first and
+    /// yields it after the write.
+    /// </summary>
+    private IrExpression WriteIncrement(
+        ExpressionSyntax node,
+        IrExpression target,
+        bool isPrefix,
+        Func<IrExpression, IrExpression> increment
+    ) =>
+        BindTargetOnce(
             target,
             node,
             readTarget =>
                 isPrefix || IsValueUnused(node)
-                    ? WriteInPlace(readTarget, Increment)
-                    : WriteAndYieldPrevious(readTarget, Increment)
+                    ? WriteInPlace(readTarget, increment)
+                    : WriteAndYieldPrevious(readTarget, increment)
         );
-    }
 
     /// <summary>
     /// The step <c>1</c> in the operand's numeric representation: a
     /// <c>BigInteger</c> is a <c>bigint</c>, which JS does not mix with a
-    /// <c>number</c>.
+    /// <c>number</c>, and so is a 64-bit integer under the exact lowering
+    /// (a <c>1n</c> literal of its kind).
     /// </summary>
-    private IrExpression OneOf(ExpressionSyntax operand) =>
-        _semantic.GetTypeInfo(operand).Type.UnderlyingValueType()?.ToDisplayString()
-        == "System.Numerics.BigInteger"
-            ? new IrCallExpression(new IrTypeReference("BigInt"), [new IrArgument(OneLiteral)])
+    private IrExpression OneOf(ExpressionSyntax operand)
+    {
+        var type = _semantic.GetTypeInfo(operand).Type;
+
+        if (type.UnderlyingValueType()?.ToDisplayString() == "System.Numerics.BigInteger")
+            return new IrCallExpression(
+                new IrTypeReference("BigInt"),
+                [new IrArgument(OneLiteral)]
+            );
+
+        return NumericEndpoints.Of(type) is { } endpoint && endpoint.IsSixtyFourBitValue()
+            ? SixtyFourBitOne(endpoint.Kind)
             : OneLiteral;
+    }
 
     /// <summary>
     /// <c>(previous = target, target = compute(previous), previous)</c>: the
@@ -78,4 +101,12 @@ public sealed partial class IrExpressionExtractor
     private static bool IsValueUnused(ExpressionSyntax node) =>
         node.Parent is ExpressionStatementSyntax
         || (node.Parent is ForStatementSyntax loop && loop.Incrementors.Contains(node));
+
+    private static IrLiteral SixtyFourBitOne(IrNumericKind kind) =>
+        kind is IrNumericKind.UInt64
+            ? new IrLiteral(1UL, IrLiteralKind.UInt64)
+            : new IrLiteral(1L, IrLiteralKind.Int64);
+
+    private static IrBinaryOp StepOperatorOf(IrUnaryOp op) =>
+        op is IrUnaryOp.Increment ? IrBinaryOp.Add : IrBinaryOp.Subtract;
 }

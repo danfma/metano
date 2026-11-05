@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The C# twin of the spec 012 reference matrix (FR-064). It has no Metano
+    MSBuild transpile step on purpose: the matrix runs in the compiler-internal
+    BigInt mode of the staging switch (DECIDED-22), which has no MSBuild
+    surface, so tests/Metano.Tests/Int64ConformanceSampleTests.cs transpiles it
+    into targets/js/sample-int64-conformance/src and fails on drift.
+    tests/Int64Reference runs the same methods on .NET to write the fixtures.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <!-- Explicit usings: the TUnit drift test compiles these files as they are. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

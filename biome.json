@@ -37,7 +37,12 @@
     }
   },
   "files": {
-    "includes": ["targets/js/*/src/**", "targets/js/sample-json-contracts/test/**/*.ts"]
+    "includes": [
+      "targets/js/*/src/**",
+      "targets/js/sample-json-contracts/test/**/*.ts",
+      "targets/js/sample-int64-conformance/test/**/*.ts",
+      "!targets/js/sample-int64-conformance/src"
+    ]
   },
   "overrides": [
     {

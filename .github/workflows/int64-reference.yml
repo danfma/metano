@@ -1,0 +1,47 @@
+name: Int64 reference fixtures
+
+# Regenerates the spec 012 reference fixtures (FR-064) on .NET and fails when
+# they drift from the committed ones: a changed twin, generator or SDK must
+# ship regenerated fixtures. Runs when those inputs change, and weekly, because
+# the SDK rolls forward (global.json, setup-dotnet 10.0.x) and a new runtime can
+# change an exception message without touching any filtered path (plan K7).
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tests/Int64Reference/**"
+      - "samples/SampleInt64Conformance/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/int64-reference.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/Int64Reference/**"
+      - "samples/SampleInt64Conformance/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - ".github/workflows/int64-reference.yml"
+
+jobs:
+  fixtures:
+    name: Fixture drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Regenerate the fixtures
+        run: dotnet run --project tests/Int64Reference/
+
+      - name: Fail on drift
+        run: git diff --exit-code -- tests/Int64Reference/fixtures/

@@ -88,7 +88,10 @@ public static partial class IrToTsExpressionBridge
                 conversion,
                 Map(conversion.Operand, context)
             ),
-            IrIntegerOverflow overflow => Map(overflow.Value, context),
+            IrIntegerOverflow overflow => IrToTsIntegerOverflowBridge.Map(
+                overflow,
+                Map(overflow.Value, context)
+            ),
             IrLambdaExpression lambda => MapLambda(lambda, context),
             IrStringInterpolation interp => MapStringInterpolation(interp, context),
             IrIsPatternExpression isPattern => MapIsPattern(isPattern, context),

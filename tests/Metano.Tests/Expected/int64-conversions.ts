@@ -71,14 +71,14 @@ export class Conv {
   }
 
   compound(l: bigint, i: number): bigint {
-    l += BigInt(i);
-    this.field += BigInt(i);
+    l = BigInt.asIntN(64, l + BigInt(i));
+    this.field = BigInt.asIntN(64, this.field + BigInt(i));
 
     return l;
   }
 
   add(l: bigint, i: number): bigint {
-    return l + BigInt(i);
+    return BigInt.asIntN(64, l + BigInt(i));
   }
 
   toInt(l: bigint): number {
@@ -290,11 +290,11 @@ export class Conv {
   }
 
   promote(ui: number, i: number): bigint {
-    return BigInt(ui) + BigInt(i);
+    return BigInt.asIntN(64, BigInt(ui) + BigInt(i));
   }
 
   promoteNarrow(ui: number, i: number): number {
-    return Number(BigInt.asIntN(32, BigInt(ui) + BigInt(i)));
+    return Number(BigInt.asIntN(32, BigInt.asIntN(64, BigInt(ui) + BigInt(i))));
   }
 
   pat(l: bigint): boolean {
