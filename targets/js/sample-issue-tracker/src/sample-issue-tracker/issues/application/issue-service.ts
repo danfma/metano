@@ -18,7 +18,7 @@ export class IssueService {
     this._repository = repository;
   }
 
-  private async createAsyncTitleDescriptionTypePriority(
+  async createAsyncTitleDescriptionTypePriority(
     title: string,
     description: string,
     type: IssueType,
@@ -30,7 +30,7 @@ export class IssueService {
     return OperationResult.ok(issue);
   }
 
-  private createAsyncTitleDescriptionType(
+  createAsyncTitleDescriptionType(
     title: string,
     description: string,
     type: IssueType,
@@ -111,7 +111,7 @@ export class IssueService {
     return loadResult;
   }
 
-  private async addCommentAsyncIssueIdAuthorIdMessage(
+  async addCommentAsyncIssueIdAuthorIdMessage(
     issueId: IssueId,
     authorId: UserId,
     message: string,
@@ -125,7 +125,7 @@ export class IssueService {
     return await this.addCommentAsync(loadResult.value, authorId, message);
   }
 
-  private async addCommentAsyncIssueAuthorIdMessage(
+  async addCommentAsyncIssueAuthorIdMessage(
     issue: Issue,
     authorId: UserId,
     message: string,

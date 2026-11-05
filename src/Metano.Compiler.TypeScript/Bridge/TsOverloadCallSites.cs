@@ -35,11 +35,19 @@ internal static class TsOverloadCallSites
     /// which keeps the dispatcher call.
     /// </summary>
     internal static TsConstructorOverloadNames? ConstructorNamesOf(IrOverloadRef overload) =>
-        (
-            Claims
-            ?? throw new InvalidOperationException(
-                "An overload call site was lowered outside a TypeScript transform, which "
-                    + "publishes the claim results it resolves through."
-            )
-        ).ConstructorNamesOf(overload);
+        RequiredClaims.ConstructorNamesOf(overload);
+
+    /// <summary>
+    /// The claimed fast path of a method overload; <c>null</c> when the
+    /// declaring type is not visible to the transform.
+    /// </summary>
+    internal static string? MethodFastPathOf(IrOverloadRef overload) =>
+        RequiredClaims.RootFastPathOf(overload);
+
+    private static TsOverloadClaimsRegistry RequiredClaims =>
+        Claims
+        ?? throw new InvalidOperationException(
+            "An overload call site was lowered outside a TypeScript transform, which "
+                + "publishes the claim results it resolves through."
+        );
 }

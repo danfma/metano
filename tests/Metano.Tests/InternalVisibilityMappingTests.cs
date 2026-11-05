@@ -108,23 +108,23 @@ public class InternalVisibilityMappingTests
         "  /** @internal */\n  add(a: number, b: number): number;\n  /** @internal */\n  add(text: string): number;\n"
             + "  add(...args: unknown[]): number {",
         "  add(...args: unknown[]): number {",
-        "  private addAB(a: number, b: number): number {",
-        "  private addText(text: string): number {"
+        "  /** @internal */\n  addAB(a: number, b: number): number {",
+        "  /** @internal */\n  addText(text: string): number {"
     )]
     [Arguments(
         "protected internal",
         "}\n\n  add(a: number, b: number): number;\n  add(text: string): number;\n"
             + "  add(...args: unknown[]): number {",
         "  add(...args: unknown[]): number {",
-        "  private addAB(a: number, b: number): number {",
-        "  private addText(text: string): number {"
+        "}\n\n  addAB(a: number, b: number): number {",
+        "}\n\n  addText(text: string): number {"
     )]
     [Arguments(
         "protected",
         "  protected add(a: number, b: number): number;\n  protected add(text: string): number;",
         "  protected add(...args: unknown[]): number {",
-        "  private addAB(a: number, b: number): number {",
-        "  private addText(text: string): number {"
+        "  protected addAB(a: number, b: number): number {",
+        "  protected addText(text: string): number {"
     )]
     public async Task OverloadedMethod_TagsEachSignatureAndLeavesTheImplementationUntagged(
         string accessibility,

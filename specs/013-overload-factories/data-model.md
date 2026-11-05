@@ -65,11 +65,19 @@ public IrOverloadName? OverloadName { get; init; }       // null: not part of a 
 public string? SignatureText { get; init; }              // constructors: "Money(decimal amount)" (D2)
 // IrConstructorDeclaration gains:
 public int DeclarationOrdinal { get; init; }             // declaration order of a dispatched set (013b): selectors and factories follow it
-// IrMethodDeclaration gains:
-public bool IsOverride { get; init; }                    // emits `override` on the root's fast path (FR-030), with the root's mapped visibility
-public bool IsHiding { get; init; }                      // `new`: a non-root candidate, claimed against inherited members (claim step 7)
-// IrClassDeclaration gains:
-public bool HasMultiplyConstructedInterface { get; init; } // DECIDED-30: runtime-dispatched root names, MS0069
+// IrMethodDeclaration gains (as landed in 013d; the round-3 sketch had IsOverride / IsHiding):
+public int DeclarationOrdinal { get; init; }             // position among the type's methods of that C# name: IrOverloadRef.Ordinal
+public IrOverloadAnchor? Anchor { get; init; }           // the root it reuses the names of (FR-025); null: its own root, so a
+                                                         // non-root candidate claimed against inherited members (claim step 7)
+public IReadOnlyList<IrMethodDeclaration>? InheritedOverloads { get; init; } // on a primary: the inherited dispatcher's
+                                                         // overloads, constructed, invisible ones included (FR-030)
+public sealed record IrOverloadAnchor(IrOverloadRef Root, IrOverloadAnchorKind Kind /* Override | Implementation */,
+    IReadOnlyList<IrOverloadRef>? FurtherRoots = null);  // further interface roots: forwarding members
+// IrMethodGroup (IR/IrMethodGroup.cs) reads a folded group: DispatcherKind None | Declared | OverridesInherited, Branches
+// IrClassDeclaration gains (013d, instead of HasMultiplyConstructedInterface):
+public IReadOnlyList<IrConstructedRoot>? ConstructedRoots { get; init; } // DECIDED-30: runtime-dispatched root names
+public sealed record IrConstructedRoot(IrOverloadRef Root, IReadOnlyList<IrMethodDeclaration> Constructions, bool IsInherited);
+// IrCallExpression gains (013d): IrSelectedOverload? Overload — a base.M(...) call bound to its overload (super.<fastPath>)
 // 013c: the overload a call was lowered to, and the source's evaluation order of its bound
 // arguments when named arguments with a side effect put it apart from parameter order
 public sealed record IrSelectedOverload(IrOverloadRef Target, IReadOnlyList<int>? EvaluationOrder = null);
@@ -176,7 +184,7 @@ call the way the declaring file emitted it.
 | `MS0067` | each target's claim pass | the candidate, the claimant (user member or synthesized kind + name), the emitted name, the overload's location |
 | `MS0067` reason 3 | each target's claim pass (step 7) | the non-root candidate, the inherited instance member |
 | `MS0068` | each target's claim pass | the user member (instance or static), the inherited fast path or factory, its overload |
-| `MS0069` | the core class extractor | the type, the interface, its constructions |
+| `MS0069` | `MultiplyConstructedInterfaces` (core), reported once by each target's class emission | the type, the interface, its constructions |
 | `MS0003` | `OverloadNamePolicy` (dead end, FR-024) | the colliding overloads, the positional names |
 
 ## 6. Naming decision flow

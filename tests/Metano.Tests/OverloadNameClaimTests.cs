@@ -272,7 +272,7 @@ public class OverloadNameClaimTests
                     + "'Money(int cents)' inherited from 'Money'; it is emitted as 'fromCents$' "
                     + "(spec 013 FR-004)."
             );
-        await Assert.That(files["cash.ts"]).Contains("private static fromAmount$(amount: Decimal)");
+        await Assert.That(files["cash.ts"]).Contains("static fromAmount$(amount: Decimal)");
     }
 
     [Test]
@@ -338,6 +338,235 @@ public class OverloadNameClaimTests
             .That(files["b.ts"])
             .Contains("static override fromKV<K, V>(k: V, v: K): B<K, V> {");
         await Assert.That(files["b.ts"]).DoesNotContain("(k: K, v: V): B<K, V>");
+    }
+
+    /// <summary>
+    /// <c>MS0067</c> reason 3 (claim step 7): a <c>new</c> method's candidate
+    /// meets the base's fast path, which it must not override.
+    /// </summary>
+    [Test]
+    public async Task HidingMethodMeetingAnInheritedFastPath_ReportsMs0067Reason3()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Base
+            {
+                public virtual int Add(int x) => x;
+
+                public virtual int Add(string s) => s.Length;
+            }
+
+            [Transpile]
+            public class Hider : Base
+            {
+                public new int Add(int x) => 100;
+            }
+            """
+        );
+
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
+
+        await Assert.That(report).IsNotNull();
+
+        await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert
+            .That(report.Message)
+            .IsEqualTo(
+                "Fast path 'Hider.addX' of 'Add(int x)' collides with the fast path of "
+                    + "'Add(int x)' inherited from 'Base'; it is emitted as 'addX$' "
+                    + "(spec 013 FR-004)."
+            );
+        await Assert.That(LineOf(report)).IsEqualTo(14);
+        await Assert.That(files["hider.ts"]).Contains("  addX$(x: number): number {");
+    }
+
+    /// <summary>
+    /// <c>MS0067</c> reason 3 against a <c>private</c> base fast path: a
+    /// derived type's new overload would redeclare it (TS2416).
+    /// </summary>
+    [Test]
+    public async Task NewOverloadMeetingAPrivateBaseFastPath_ReportsMs0067Reason3()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Ledger
+            {
+                public int Add(int x) => x;
+
+                private int Add(string s) => s.Length;
+            }
+
+            [Transpile]
+            public class Shorty : Ledger
+            {
+                public int Add(short s) => 7;
+            }
+            """
+        );
+
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
+
+        await Assert.That(report).IsNotNull();
+        await Assert
+            .That(report!.Message)
+            .IsEqualTo(
+                "Fast path 'Shorty.addS' of 'Add(short s)' collides with the fast path of "
+                    + "'Add(string s)' inherited from 'Ledger'; it is emitted as 'addS$' "
+                    + "(spec 013 FR-004)."
+            );
+        await Assert.That(LineOf(report)).IsEqualTo(14);
+        await Assert.That(files["shorty.ts"]).Contains("return this.addS$(args[0] as number);");
+    }
+
+    /// <summary>
+    /// <c>MS0068</c> reason 1 (FR-034): a user member named like an inherited
+    /// fast path would override it, and the inherited dispatcher would call
+    /// the user member.
+    /// </summary>
+    [Test]
+    public async Task UserMemberNamedLikeAnInheritedFastPath_ReportsMs0068()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Base
+            {
+                public int Add(int x) => x;
+
+                public int Add(string s) => s.Length;
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                public int AddX() => 0;
+            }
+            """
+        );
+
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked);
+
+        await Assert.That(report).IsNotNull();
+
+        await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert
+            .That(report.Message)
+            .IsEqualTo(
+                "'Derived.AddX' would override the generated fast path 'addX' of "
+                    + "'Base.Add(int x)'; rename the member, or rename the root overload's "
+                    + "parameter or pin it with [Name] (spec 013 FR-034)."
+            );
+        await Assert.That(LineOf(report)).IsEqualTo(14);
+    }
+
+    /// <summary>
+    /// <c>MS0069</c> (FR-036): a type implementing one generic interface
+    /// twice keeps runtime dispatch, reported at the type that adds the
+    /// second construction — not at a type that inherits both.
+    /// </summary>
+    [Test]
+    public async Task MultiplyConstructedInterface_ReportsMs0069AtTheTypeThatAddsAConstruction()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            OverloadVirtualGoldenTests.ConvSource
+        );
+
+        var reports = diagnostics
+            .Where(diagnostic =>
+                diagnostic.Code == DiagnosticCodes.MultiplyConstructedOverloadGroup
+            )
+            .OrderBy(LineOf)
+            .ToList();
+
+        await Assert.That(reports.Select(LineOf)).IsEquivalentTo([12, 38]);
+        await Assert.That(reports[0].Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert
+            .That(reports[0].Message)
+            .IsEqualTo(
+                "'C' implements 'IConv<T>' more than once; calls to 'Conv' keep runtime "
+                    + "dispatch (spec 013 FR-036)."
+            );
+    }
+
+    /// <summary>
+    /// <c>MS0069</c>'s note: two constructions that lower to one runtime shape
+    /// (<c>List&lt;int&gt;</c> and <c>int[]</c>, both arrays) cannot be told
+    /// apart, so the first branch wins.
+    /// </summary>
+    [Test]
+    public async Task IndistinguishableConstructions_AddTheFirstBranchWinsNote()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface ISink<T>
+            {
+                int Put(T x);
+
+                int Put(T x, int n);
+            }
+
+            [Transpile]
+            public class Sink : ISink<System.Collections.Generic.List<int>>, ISink<int[]>
+            {
+                public int Put(System.Collections.Generic.List<int> x) => 1;
+
+                public int Put(System.Collections.Generic.List<int> x, int n) => 2;
+
+                public int Put(int[] x) => 3;
+
+                public int Put(int[] x, int n) => 4;
+            }
+            """
+        );
+
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.MultiplyConstructedOverloadGroup);
+
+        await Assert
+            .That(report!.Message)
+            .IsEqualTo(
+                "'Sink' implements 'ISink<T>' more than once; calls to 'Put' keep runtime "
+                    + "dispatch (spec 013 FR-036). The constructions 'ISink<List<int>>' and "
+                    + "'ISink<int[]>' cannot be told apart at run time; the first branch wins."
+            );
+    }
+
+    /// <summary>
+    /// DECIDED-31: an explicit overload with the signature of a class member
+    /// of the same name keeps today's <c>MS0031</c> and is dropped; one with
+    /// another signature joins the class's dispatcher.
+    /// </summary>
+    [Test]
+    public async Task ExplicitOverloadWithAClassMembersSignature_KeepsMs0031()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface IShape
+            {
+                int Area(int s);
+
+                int Area(int w, int h);
+            }
+
+            [Transpile]
+            public class Clash : IShape
+            {
+                int IShape.Area(int s) => s * s;
+
+                int IShape.Area(int w, int h) => w * h;
+
+                public int Area(int side) => side;
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Count(diagnostic => diagnostic.Code == "MS0031"))
+            .IsEqualTo(1);
+        await Assert.That(files["clash.ts"]).Contains("areaWH(w: number, h: number): number {");
     }
 
     /// <summary>

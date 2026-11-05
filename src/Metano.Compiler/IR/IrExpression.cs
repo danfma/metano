@@ -251,7 +251,17 @@ public sealed record IrCallExpression(
     IReadOnlyList<IrTypeRef>? TypeArguments = null,
     IrMemberOrigin? Origin = null,
     bool IsOptional = false
-) : IrExpression;
+) : IrExpression
+{
+    /// <summary>
+    /// The overload a <c>base.M(...)</c> call into a dispatched group resolved
+    /// to (spec 013 FR-018): <see cref="Arguments"/> are then Roslyn's bound
+    /// arguments, and a target calls the base overload's fast path, since the
+    /// base dispatcher would dispatch virtually again. <c>null</c> for every
+    /// other call.
+    /// </summary>
+    public IrSelectedOverload? Overload { get; init; }
+}
 
 /// <summary>
 /// A single argument in a call or object-creation expression.

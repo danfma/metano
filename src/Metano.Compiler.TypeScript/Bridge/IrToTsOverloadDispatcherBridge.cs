@@ -6,12 +6,16 @@ using Metano.Compiler.TypeScript.Transformation;
 namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
-/// Lowers an <see cref="IrMethodDeclaration"/> whose
-/// <see cref="IrMethodDeclaration.Overloads"/> carries the overload set into the
-/// canonical TypeScript dispatcher shape:
+/// Lowers a dispatched method group (<see cref="IrMethodGroup"/>) into the
+/// canonical TypeScript dispatcher shape (spec 013 FR-015, FR-030):
 /// <list type="number">
-///   <item>A private fast-path method per overload (real body via
-///   <see cref="IrToTsStatementBridge"/>), named uniquely within the group.</item>
+///   <item>An addressable fast-path method per overload, holding its body
+///   (<see cref="IrToTsStatementBridge"/>), named as the class's claim pass
+///   named it — an anchored overload under its root's name — with its own
+///   overload's visibility (#445's member mapping), <c>override</c> for an
+///   override and <c>abstract</c> for an abstract overload. A fast path that
+///   implements further interface roots gets one forwarding member per
+///   further name.</item>
 ///   <item>A dispatcher method taking <c>...args: unknown[]</c> that
 ///   branches on argument count + runtime type checks and delegates to the
 ///   matching fast path with cast arguments. It takes the accessibility of the
@@ -20,7 +24,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   (<see cref="IrToTsVisibilityMapper.SignatureJSDocOf"/>), so
 ///   <c>stripInternal</c> drops only the signatures no other package can
 ///   reach: the <c>internal</c> ones and the <c>private</c> ones of a wider
-///   group.</item>
+///   group. A group that only overrides an inherited dispatcher's overloads
+///   emits none; one that adds overloads to it emits an <c>override</c>
+///   dispatcher whose signatures are the inherited ones plus its own and
+///   whose unmatched calls go to <c>super</c>.</item>
 /// </list>
 /// The branches follow <see cref="OverloadDispatchOrder"/> and match the
 /// arguments as <see cref="OverloadArgumentShape"/> describes. An omitted
@@ -31,13 +38,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 public static class IrToTsOverloadDispatcherBridge
 {
     /// <summary>
-    /// Builds the dispatcher + fast-path members for a group of overloads.
+    /// Builds the fast-path members and the dispatcher of a dispatched group;
+    /// nothing for a method outside one, which the caller lowers as a single
+    /// method.
     /// </summary>
     /// <param name="primary">
-    /// The method that groups the overloads. Its
-    /// <see cref="IrMethodDeclaration.Overloads"/> carries the siblings. When
-    /// <c>Overloads</c> is null/empty this helper returns an empty list —
-    /// callers should pick the regular single-method path in that case.
+    /// The method that carries the group (<see cref="IrMethodGroup"/>).
     /// </param>
     /// <param name="containingTypeName">
     /// Name of the class that hosts the overloads — used as the static
@@ -49,64 +55,127 @@ public static class IrToTsOverloadDispatcherBridge
     /// The containing class's type parameters, which a parameter's type check
     /// resolves its type parameters against after the method's own.
     /// </param>
-    /// <param name="fastPathNameOf">
-    /// The fast-path name of each overload, as the class's claim pass named it
-    /// (<see cref="TsOverloadClaims.FastPathNameOf"/>).
+    /// <param name="names">
+    /// The fast-path and forwarding names of each overload, as the class's
+    /// claim pass named them (<see cref="TsOverloadClaims"/>).
+    /// </param>
+    /// <param name="constructedRoots">
+    /// The roots of the interfaces the class implements more than once
+    /// (<see cref="IrClassDeclaration.ConstructedRoots"/>): an overload
+    /// anchored on one is a branch of that root's runtime dispatcher
+    /// (<see cref="IrToTsConstructedRootDispatcherBridge"/>), not a fast path.
     /// </param>
     internal static IReadOnlyList<TsClassMember> BuildMethod(
         IrMethodDeclaration primary,
         string containingTypeName,
         IReadOnlyList<IrTypeParameter> classTypeParameters,
-        Func<IrMethodDeclaration, string> fastPathNameOf,
-        IrToTsBridgeContext context
+        TsOverloadClaims names,
+        IrToTsBridgeContext context,
+        IReadOnlyList<IrConstructedRoot>? constructedRoots = null
     )
     {
-        var primaryName = TypeScriptNaming.ToCamelCaseMember(primary.Name);
-        var typeOverrides = context.TypeOverrides;
-        var plan = PlanOverloadGroup(CollectOverloads(primary), fastPathNameOf, typeOverrides);
+        var group = IrMethodGroup.Of(primary);
 
-        if (plan is null)
+        if (!group.IsDispatched)
             return [];
 
         var isStatic = primary.IsStatic;
         var members = new List<TsClassMember>();
+        var rootsByRef = (constructedRoots ?? []).ToDictionary(root => root.Root);
 
-        for (var i = 0; i < plan.Sorted.Count; i++)
+        foreach (var overload in OverloadDispatchOrder.Sort(group.Members, m => m.Parameters))
         {
-            var fastPath = BuildFastPathMember(
-                plan.Sorted[i],
-                plan.FastPathNames[i],
-                isStatic,
-                context
-            );
+            if (overload.Anchor?.Root is { } anchorRoot && rootsByRef.ContainsKey(anchorRoot))
+                continue;
 
-            if (fastPath is not null)
-                members.Add(fastPath);
+            var fastPathName = names.FastPathNameOf(overload);
+
+            members.Add(BuildFastPathMember(overload, fastPathName, isStatic, context));
+
+            members.AddRange(
+                names
+                    .ForwardingNamesOf(overload)
+                    .Select(forwarder =>
+                        BuildForwardingMember(overload, forwarder, fastPathName, context)
+                    )
+            );
         }
 
-        var receiver = DispatchReceiver(isStatic, containingTypeName);
-
-        members.Add(
-            new TsMethodMember(
-                primaryName,
-                DispatcherParameters(),
-                plan.CommonReturn,
-                BuildDispatcherBody(
-                    plan.Sorted,
-                    plan.FastPathNames,
-                    receiver,
-                    new TypeCheckScope(classTypeParameters, typeOverrides)
-                ),
-                Static: isStatic,
-                Async: plan.IsAsync,
-                // The implementation is untagged: each overload signature
-                // carries the JSDoc its group gives it (SignatureJSDocOf).
-                Accessibility: plan.Accessibility,
-                Overloads: plan.Signatures
-            )
+        members.AddRange(
+            group
+                .Members.Where(overload =>
+                    overload.Anchor?.Root is { } root && rootsByRef.ContainsKey(root)
+                )
+                .GroupBy(overload => overload.Anchor!.Root)
+                .Select(implementations =>
+                    IrToTsConstructedRootDispatcherBridge.Build(
+                        names.FastPathNameOf(implementations.First()),
+                        rootsByRef[implementations.Key],
+                        implementations.ToList(),
+                        classTypeParameters,
+                        context
+                    )
+                )
         );
 
+        if (
+            BuildDispatcher(group, containingTypeName, classTypeParameters, names, context) is
+            { } dispatcher
+        )
+            members.Add(dispatcher);
+
         return members;
+    }
+
+    /// <summary>
+    /// The group's dispatcher as <see cref="IrMethodGroup.DispatcherKind"/>
+    /// decides it; <c>null</c> when it emits none.
+    /// </summary>
+    private static TsMethodMember? BuildDispatcher(
+        IrMethodGroup group,
+        string containingTypeName,
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context
+    )
+    {
+        var kind = group.DispatcherKind;
+
+        if (kind is IrDispatcherKind.None)
+            return null;
+
+        var typeOverrides = context.TypeOverrides;
+        var inherited = group.Primary.InheritedOverloads ?? [];
+        var branches = OverloadDispatchOrder.Sort(group.Branches, m => m.Parameters);
+        var signatures = OverloadDispatchOrder
+            .Sort(inherited, m => m.Parameters)
+            .Concat(branches)
+            .ToList();
+        var plan = PlanOverloadGroup(signatures, names.FastPathNameOf, typeOverrides, sort: false);
+        var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
+        var name = TypeScriptNaming.ToCamelCaseMember(group.Primary.Name);
+
+        var body = BuildDispatcherBody(
+            branches,
+            branches.Select(names.FastPathNameOf).ToList(),
+            DispatchReceiver(group.Primary.IsStatic, containingTypeName),
+            new TypeCheckScope(classTypeParameters, typeOverrides),
+            overridesInherited ? ForwardToBase(name, inherited) : NoMatchingOverload(name)
+        );
+
+        return new TsMethodMember(
+            name,
+            DispatcherParameters(),
+            plan.CommonReturn,
+            body,
+            Static: group.Primary.IsStatic,
+            Async: plan.IsAsync,
+            // The implementation is untagged: each overload signature
+            // carries the JSDoc its group gives it (SignatureJSDocOf).
+            Accessibility: plan.Accessibility,
+            Overloads: plan.Signatures,
+            Override: overridesInherited
+        );
     }
 
     /// <summary>
@@ -140,16 +209,18 @@ public static class IrToTsOverloadDispatcherBridge
         DeclarativeMappingRegistry? bclRegistry = null
     )
     {
-        var plan =
-            PlanOverloadGroup(
-                overloads,
-                overload => OverloadFastPathName.Of(functionName, overload),
-                typeOverrides: null
-            )
-            ?? throw new ArgumentException(
+        if (overloads.Count < 2)
+            throw new ArgumentException(
                 "An overload group needs two or more methods.",
                 nameof(overloads)
             );
+
+        var plan = PlanOverloadGroup(
+            overloads,
+            overload => OverloadFastPathName.Of(functionName, overload),
+            typeOverrides: null,
+            sort: true
+        );
 
         var fastPathNames = plan.FastPathNames.Select(name => ClaimName(name, takenNames)).ToList();
 
@@ -168,7 +239,8 @@ public static class IrToTsOverloadDispatcherBridge
                     plan.Sorted,
                     fastPathNames,
                     receiver: null,
-                    TypeCheckScope.Empty
+                    TypeCheckScope.Empty,
+                    NoMatchingOverload(TypeScriptNaming.ToCamelCaseMember(plan.Sorted[0].Name))
                 ),
                 Exported: true,
                 Async: plan.IsAsync,
@@ -197,19 +269,18 @@ public static class IrToTsOverloadDispatcherBridge
     );
 
     /// <summary>
-    /// Plans the dispatcher for <paramref name="overloads"/>, or returns
-    /// <c>null</c> when there are fewer than two (no dispatch needed).
+    /// Plans the dispatcher over <paramref name="overloads"/>, sorted into
+    /// dispatch order unless <paramref name="sort"/> is off (the caller
+    /// ordered them already).
     /// </summary>
-    private static OverloadGroupPlan? PlanOverloadGroup(
+    private static OverloadGroupPlan PlanOverloadGroup(
         IReadOnlyList<IrMethodDeclaration> overloads,
         Func<IrMethodDeclaration, string> fastPathNameOf,
-        IrToTsTypeOverrides? typeOverrides
+        IrToTsTypeOverrides? typeOverrides,
+        bool sort
     )
     {
-        if (overloads.Count < 2)
-            return null;
-
-        var sorted = OverloadDispatchOrder.Sort(overloads, m => m.Parameters);
+        var sorted = sort ? OverloadDispatchOrder.Sort(overloads, m => m.Parameters) : overloads;
         var isAsync = sorted.Any(m => m.Semantics.IsAsync);
 
         var accessibility = IrToTsVisibilityMapper.MostPermissiveOf(
@@ -228,21 +299,13 @@ public static class IrToTsOverloadDispatcherBridge
         );
     }
 
-    private static List<IrMethodDeclaration> CollectOverloads(IrMethodDeclaration primary)
-    {
-        var list = new List<IrMethodDeclaration> { primary };
-        if (primary.Overloads is { Count: > 0 } others)
-            list.AddRange(others);
-        return list;
-    }
-
     /// <summary>
     /// The implementation signature takes <c>...args: unknown[]</c> and can't
     /// name the overloads' method type parameters, so a group with any
     /// generic overload — or differing return types — falls back to an
     /// erased return type; the overload signatures keep the precise one.
     /// </summary>
-    private static TsType ResolveCommonReturnType(
+    internal static TsType ResolveCommonReturnType(
         IReadOnlyList<IrMethodDeclaration> sorted,
         bool isAsync,
         IrToTsTypeOverrides? typeOverrides
@@ -279,7 +342,7 @@ public static class IrToTsOverloadDispatcherBridge
             )
         );
 
-    private static List<TsParameter> DispatcherParameters() =>
+    internal static List<TsParameter> DispatcherParameters() =>
         [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)];
 
     private static TsExpression DispatchReceiver(bool isStatic, string containingTypeName) =>
@@ -295,28 +358,72 @@ public static class IrToTsOverloadDispatcherBridge
         return name;
     }
 
-    private static TsMethodMember? BuildFastPathMember(
+    /// <summary>
+    /// One overload's fast path, with its overload's own visibility (FR-015):
+    /// an override's is its root's, which the extractor already maps
+    /// (<c>IrVisibilityMapper.MapMember</c>). An abstract overload declares an
+    /// <c>abstract</c> signature, whose parameters can carry no initializer.
+    /// </summary>
+    private static TsMethodMember BuildFastPathMember(
         IrMethodDeclaration method,
         string fastPathName,
         bool isStatic,
         IrToTsBridgeContext context
     )
     {
-        if (method.Body is null)
-            return null;
+        var visibility = IrToTsVisibilityMapper.Map(method.Visibility);
+        var isAbstract = method.Semantics.IsAbstract;
 
         return new TsMethodMember(
             fastPathName,
-            FastPathParameters(method, context),
+            isAbstract
+                ? SignatureParameters(method, context.TypeOverrides)
+                : FastPathParameters(method, context),
             IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
-            IrToTsStatementBridge.MapBody(method.Body, context),
+            isAbstract ? [] : IrToTsStatementBridge.MapBody(method.Body ?? [], context),
             Static: isStatic,
-            Async: method.Semantics.IsAsync,
-            // Fast paths are private — the dispatcher is the public entry point.
-            Accessibility: TsAccessibility.Private,
+            Async: method.Semantics.IsAsync && !isAbstract,
+            Accessibility: visibility.Accessibility,
             // Propagate method type parameters so a generic overload like
             // `Identity<T>(T value)` emits as `identityT<T>(value: T): T`
             // instead of referencing an undeclared T.
+            TypeParameters: MapTypeParameters(method.TypeParameters),
+            Abstract: isAbstract,
+            Override: IrMethodGroup.IsOverride(method),
+            JSDoc: visibility.JSDoc
+        );
+    }
+
+    /// <summary>
+    /// A further root's name of an overload that implements several
+    /// (naming.md § Root anchoring): it forwards to the fast path, which
+    /// holds the body (NFR-003).
+    /// </summary>
+    private static TsMethodMember BuildForwardingMember(
+        IrMethodDeclaration method,
+        string forwarderName,
+        string fastPathName,
+        IrToTsBridgeContext context
+    )
+    {
+        var parameters = SignatureParameters(method, context.TypeOverrides);
+
+        var call = new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("this"), fastPathName),
+            parameters
+                .Select(parameter =>
+                    parameter.Rest
+                        ? new TsSpreadExpression(new TsIdentifier(parameter.Name))
+                        : (TsExpression)new TsIdentifier(parameter.Name)
+                )
+                .ToList()
+        );
+
+        return new TsMethodMember(
+            forwarderName,
+            parameters,
+            IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
+            [new TsReturnStatement(call)],
             TypeParameters: MapTypeParameters(method.TypeParameters)
         );
     }
@@ -363,7 +470,7 @@ public static class IrToTsOverloadDispatcherBridge
     /// The parameters of an overload signature, where TypeScript forbids an
     /// initializer: a parameter a call may omit is optional instead.
     /// </summary>
-    private static List<TsParameter> SignatureParameters(
+    internal static List<TsParameter> SignatureParameters(
         IrMethodDeclaration method,
         IrToTsTypeOverrides? typeOverrides
     ) =>
@@ -407,7 +514,7 @@ public static class IrToTsOverloadDispatcherBridge
             ? IrToTsExpressionBridge.Map(defaultValue, context)
             : null;
 
-    private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
+    internal static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters
     ) => IrToTsTypeParameterMapper.Convert(typeParameters);
 
@@ -415,7 +522,8 @@ public static class IrToTsOverloadDispatcherBridge
         IReadOnlyList<IrMethodDeclaration> sorted,
         IReadOnlyList<string> fastPathNames,
         TsExpression? receiver,
-        TypeCheckScope classScope
+        TypeCheckScope classScope,
+        TsStatement unmatched
     )
     {
         var body = new List<TsStatement>();
@@ -443,21 +551,61 @@ public static class IrToTsOverloadDispatcherBridge
             );
         }
 
-        body.Add(
-            new TsThrowStatement(
-                new TsNewExpression(
-                    new TsIdentifier("Error"),
-                    [
-                        new TsStringLiteral(
-                            // Legacy dispatcher emits the camelCased public name so the
-                            // runtime message matches how callers spell the method.
-                            $"No matching overload for {TypeScriptNaming.ToCamelCaseMember(sorted[0].Name)}"
-                        ),
-                    ]
-                )
+        body.Add(unmatched);
+
+        return body;
+    }
+
+    /// <summary>
+    /// The end of a dispatcher no branch matched: the legacy error, which
+    /// names the camelCased public method the way callers spell it.
+    /// </summary>
+    internal static TsStatement NoMatchingOverload(string methodName) =>
+        new TsThrowStatement(
+            new TsNewExpression(
+                new TsIdentifier("Error"),
+                [new TsStringLiteral($"No matching overload for {methodName}")]
             )
         );
-        return body;
+
+    /// <summary>
+    /// The end of an overriding dispatcher: every call it does not handle
+    /// goes to the inherited one (FR-030),
+    /// <c>return super.add(...(args as [never]));</c>. The arguments are cast
+    /// to a tuple of one inherited overload's arity, which TypeScript accepts
+    /// as a spread into it; an overload with only a rest parameter takes
+    /// <c>never[]</c>.
+    /// </summary>
+    internal static TsStatement ForwardToBase(
+        string dispatcherName,
+        IReadOnlyList<IrMethodDeclaration> inherited
+    ) =>
+        new TsReturnStatement(
+            new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("super"), dispatcherName),
+                [
+                    new TsSpreadExpression(
+                        new TsCastExpression(
+                            new TsIdentifier("args"),
+                            ForwardedArgumentsType(inherited)
+                        )
+                    ),
+                ]
+            )
+        );
+
+    private static TsType ForwardedArgumentsType(IReadOnlyList<IrMethodDeclaration> inherited)
+    {
+        var fixedArity = inherited.FirstOrDefault(overload =>
+            !overload.Parameters.Any(parameter => parameter.IsParams)
+        );
+
+        if (fixedArity is null)
+            return new TsArrayType(new TsNamedType("never"));
+
+        return new TsTupleType(
+            fixedArity.Parameters.Select(_ => (TsType)new TsNamedType("never")).ToList()
+        );
     }
 
     /// <summary>

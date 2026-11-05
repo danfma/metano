@@ -3,11 +3,11 @@ import { isInt32 } from "metano-runtime";
 export class Clock {
   constructor() { }
 
-  private nowTick(tick: number): number {
+  nowTick(tick: number): number {
     return tick;
   }
 
-  private nowDefault(): number {
+  nowDefault(): number {
     return 0;
   }
 

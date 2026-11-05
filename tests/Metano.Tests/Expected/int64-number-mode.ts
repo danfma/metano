@@ -43,15 +43,15 @@ export class Ops {
     return typeof o === "number";
   }
 
-  private overInt64(x: number): string {
+  overInt64(x: number): string {
     return "long";
   }
 
-  private overUInt64(x: number): string {
+  overUInt64(x: number): string {
     return "ulong";
   }
 
-  private overInt32(x: number): string {
+  overInt32(x: number): string {
     return "int";
   }
 
