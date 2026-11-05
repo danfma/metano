@@ -23,7 +23,14 @@ public sealed record IrMethodDeclaration(
     IrMethodSemantics Semantics,
     IReadOnlyList<IrTypeParameter>? TypeParameters = null,
     IReadOnlyList<IrMethodDeclaration>? Overloads = null
-) : IrMemberDeclaration(Name, Visibility, IsStatic);
+) : IrMemberDeclaration(Name, Visibility, IsStatic)
+{
+    /// <summary>
+    /// The overload's name in its dispatched group (spec 013 FR-001);
+    /// <c>null</c> when the method is not part of one.
+    /// </summary>
+    public IrOverloadName? OverloadName { get; init; }
+}
 
 /// <summary>
 /// A property declaration. Carries per-accessor visibility so shapes like

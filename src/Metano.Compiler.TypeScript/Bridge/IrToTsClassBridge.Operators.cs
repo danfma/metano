@@ -74,8 +74,8 @@ internal static partial class IrToTsClassBridge
     /// <summary>
     /// Lowers an overloaded operator group (two or more <c>operator +</c>
     /// methods sharing a derived name) into a static dispatcher
-    /// (<c>__add(...args: unknown[])</c>) plus one private fast-path method
-    /// per overload, plus a single instance helper (<c>$add(...args)</c>)
+    /// (<c>__add(...args: unknown[])</c>) plus one public fast-path method
+    /// per overload (<c>__addMoneyInt32</c>), plus a single instance helper (<c>$add(...args)</c>)
     /// that delegates to the static side with <c>this</c> as the first
     /// argument. Per-overload parameter lists, return types, and type-checks
     /// come pre-resolved from the caller because the legacy
@@ -112,17 +112,15 @@ internal static partial class IrToTsClassBridge
             .Select(i => new TsMethodOverload(overloadParameters[i], overloadReturnTypes[i]))
             .ToList();
 
-        // Fast-path naming follows the same convention as
-        // IrToTsOverloadDispatcherBridge: <staticName><CapitalizedParamType>...
+        // The core's naming policy spells operator overloads by their parameter
+        // types: <staticName><Suffix> (__addMoneyInt32, spec 013 FR-033).
         var fastPathNames = indices
-            .Select(i =>
-                staticName
-                + string.Concat(overloadParamIrTypes[i].Select(t => Capitalize(SimpleTypeName(t))))
-            )
+            .Select(i => OverloadFastPathName.Of(staticName, overloads[i]))
             .ToList();
 
-        // Fast-path private static methods — one per overload, real body via
-        // IrToTsStatementBridge.
+        // Fast-path static methods — one per overload, real body via
+        // IrToTsStatementBridge. Public, unlike method fast paths, so resolved
+        // operator call sites can target them directly (spec 013 FR-033).
         for (var k = 0; k < indices.Count; k++)
         {
             var i = indices[k];
@@ -137,8 +135,7 @@ internal static partial class IrToTsClassBridge
                     overloadParameters[i],
                     overloadReturnTypes[i],
                     body,
-                    Static: true,
-                    Accessibility: TsAccessibility.Private
+                    Static: true
                 )
             );
         }
@@ -275,33 +272,6 @@ internal static partial class IrToTsClassBridge
         );
         return body;
     }
-
-    private static string Capitalize(string s) =>
-        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
-
-    /// <summary>
-    /// Short per-type tag the operator dispatcher uses in its fast-path
-    /// helper names (<c>__add$Int$Int</c>, <c>__divide$Money$Decimal</c>, …),
-    /// so each overload gets a distinct dispatch target.
-    /// </summary>
-    private static string SimpleTypeName(IrTypeRef type) =>
-        type switch
-        {
-            IrPrimitiveTypeRef p => p.Primitive switch
-            {
-                IrPrimitive.Int32 => "Int",
-                IrPrimitive.Int64 => "Long",
-                IrPrimitive.UInt64 => "ULong",
-                IrPrimitive.String => "String",
-                IrPrimitive.Boolean => "Bool",
-                IrPrimitive.Float64 => "Double",
-                IrPrimitive.Float32 => "Float",
-                IrPrimitive.Decimal => "Decimal",
-                _ => p.Primitive.ToString(),
-            },
-            IrNamedTypeRef n => n.Name,
-            _ => "Unknown",
-        };
 
     /// <summary>
     /// Maps the IR's canonical operator name (<c>"Addition"</c>,
