@@ -5,8 +5,9 @@ already taken by [`008-exports-subpath-root`](../008-exports-subpath-root/spec.m
 
 **Created**: 2026-10-31
 
-**Status**: Draft. The maintainer settled the design decisions (see [Decisions](#decisions)). Two
-new questions stay open: OPEN-18 and OPEN-19.
+**Status**: Implemented. Every slice of [plan.md](./plan.md) (S1–S9) is merged; it ships in the
+3.0 major. The maintainer settled the design decisions (see [Decisions](#decisions)). Two
+questions stay open, OPEN-18 and OPEN-19; the implementation follows their recommended defaults.
 
 **Release impact**: **breaking** (`feat!`, next major version of the Metano release, which
 versions the NuGet tools and `metano-runtime` together). `deserialize` through a `TypeSpec` now returns `T | null`, as STJ does
@@ -995,7 +996,7 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
 ### Diagnostics (reserved codes, DECIDED-2)
 
 This spec owns `MS0032`–`MS0037`. The C# unions specification (PR #310) owns `MS0038`–`MS0043`.
-This spec lists its range under "Reserved codes" in the baseline
+All six codes are implemented and listed in the stable table of the baseline
 [diagnostic catalog](../001-project-baseline-evolution/baseline/diagnostic-catalog.md).
 
 | Code | Name | Severity | Raised for |

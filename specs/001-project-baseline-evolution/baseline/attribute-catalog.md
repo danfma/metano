@@ -82,6 +82,36 @@ Nothing in `Metano.Annotations` defines these yet; they are specified by [spec 0
 
 `EmitTarget` (`Annotations/EmitTarget.cs`) and `TargetLanguage` (`Annotations/TargetLanguage.cs`).
 
+## System.Text.Json attributes (TypeScript `SerializerContext`)
+
+Not Metano attributes: the TypeScript target reads these `System.Text.Json.Serialization`
+attributes on a `JsonSerializerContext` subclass and on the types it reaches, and mirrors
+System.Text.Json's behavior in the generated `SerializerContext` (spec 009, #268 / #269 / #270).
+They are matched by metadata name (`Json/JsonSerializationAttributes.cs`,
+`Json/JsonPolymorphismReader.cs`). Every attribute or option that changes the wire and is not
+mirrored is reported with `MS0037`. User guide:
+[`docs/serialization.md`](../../../docs/serialization.md#attribute-support). Paths are under
+`src/Metano.Compiler.TypeScript/Transformation/`.
+
+| Attribute | Effect in the generated context | Code |
+| --- | --- | --- |
+| `[JsonSerializable(typeof(T))]` (+ `TypeInfoPropertyName`) | A root: a `TypeSpec<T>` getter for an object type, a `ValueSpec<T>` for a collection, dictionary, set, primitive, enum, branded or nullable type, plus every object type reachable from it; the getter takes System.Text.Json's `JsonTypeInfo` name (→ MS0035, MS0036). | `Json/JsonContractRoots.cs`, `Json/JsonContractClosure.cs`, `Json/JsonTypeInfoNames.cs` |
+| `[JsonSourceGenerationOptions]` | `PropertyNamingPolicy`, `JsonSerializerDefaults.Web`, `PropertyNameCaseInsensitive`, `NumberHandling = AllowReadingFromString` and `AllowOutOfOrderMetadataProperties` are mirrored (names at transpile time, the rest as the context's `readOptions`); any other option set to a non-default value → MS0037. | `Json/JsonOptionsReader.cs`, `Json/JsonReadOptionsGetterBuilder.cs`, `Json/JsonUnmirroredContextOptions.cs` |
+| `[JsonPolymorphic]` / `[JsonDerivedType]` | On a class, record, interface or `[PlainObject]` base: a data-only `polymorphism` descriptor on the base spec (discriminator, string / int / untagged tags, the three unknown-type modes, ignore-unrecognized), every registered type added to the closure, synthesized `isT` guards for `[PlainObject]` variants (→ MS0032, MS0033). | `Json/JsonPolymorphismReader.cs`, `Json/JsonPolymorphismValidator.cs`, `Json/JsonPolymorphismSpecBuilder.cs`, `Json/JsonStructuralVariants.cs` |
+| `[JsonPropertyName("x")]` | The member's wire name; wins over the naming policy. | `Json/JsonPropertyCollector.cs` |
+| `[JsonPropertyOrder(n)]` | `PropertySpec.order`; the runtime sorts the whole hierarchy by it, stably. | `Json/JsonPropertyCollector.cs`, `Json/JsonSpecBuilder.cs` |
+| `[JsonInclude]` | Serializes a field or an `internal` / `protected internal` property the source generator reaches; on a member it cannot reach, or on a read-only field → MS0037. | `Json/JsonMemberAccess.cs`, `Json/JsonUnmirroredAttributes.cs` |
+| `[JsonIgnore]` | `Always` (the default) leaves the member out and, on an override, hides the base declarations (`ignoredProperties`); `Never` keeps it; the conditional values keep it and warn MS0037. | `Json/JsonPropertyCollector.cs`, `Json/JsonSpecBuilder.cs`, `Json/JsonUnmirroredAttributes.cs` |
+| `[JsonConstructor]` | Mirrored on the constructor the factory calls; on another constructor → MS0037. | `Json/JsonUnmirroredAttributes.cs` |
+| `[JsonRequired]` | Mirrored on a non-nullable member (already required on read); on a nullable member → MS0037. | `Json/JsonUnmirroredAttributes.cs` |
+| `[JsonConverter]`, `[JsonExtensionData]`, `[JsonNumberHandling]`, `[JsonObjectCreationHandling(Populate)]`, `[JsonUnmappedMemberHandling(Disallow)]` | Not mirrored → MS0037 (`[JsonConverter]` on a `[Branded]` / `[InlineWrapper]` type is not reported); a `[JsonExtensionData]` member is left out of the spec. | `Json/JsonUnmirroredAttributes.cs` |
+
+The Metano companion attribute is `[JsonFactory]` (above, under "Naming & emission shape").
+Tests: `tests/Metano.Tests/JsonSerializerContextTests.cs`, `JsonPolymorphicContextTests.cs`,
+`JsonStructuralPolymorphismTests.cs`, `JsonValueRootTests.cs`, `JsonFactoryTests.cs`, and
+`tests/Metano.Tests/Json/` (`JsonMemberOptionsTests.cs`, `JsonUnmirroredOptionTests.cs`,
+`JsonReadOptionsTests.cs`, `JsonWebNamingTests.cs`, `StjConformanceFixtureTests.cs`).
+
 ## Backend-specific attributes (TypeScript)
 
 These are defined inside the TypeScript backend, not in `Metano.Annotations`:
