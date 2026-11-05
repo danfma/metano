@@ -379,8 +379,57 @@ public sealed class IrStatementExtractor(
                 : null;
         var collection = _expressions.Extract(fe.Expression);
         var body = ExtractEmbedded(fe.Statement);
-        return new IrForEachStatement(variable, variableType, collection, body);
+
+        if (ElementConversionEndpoints(fe) is not var (from, to, isLifted))
+            return new IrForEachStatement(variable, variableType, collection, body);
+
+        // `foreach (long x in ints)`: iterate the raw element and declare the
+        // C# variable as its conversion (spec 012 FR-010).
+        var element = variable + "$element";
+        var converted = new IrNumericConversion(
+            new IrIdentifier(element),
+            from,
+            to,
+            IsChecked: false,
+            IsLifted: isLifted
+        );
+
+        IrStatement declaration = new IrVariableDeclaration(variable, variableType, converted);
+
+        return new IrForEachStatement(element, null, collection, [declaration, .. body]);
     }
+
+    /// <summary>
+    /// The endpoints of the numeric conversion from each element to the
+    /// declared loop variable, when the exact 64-bit lowering makes it
+    /// explicit; <c>null</c> otherwise.
+    /// </summary>
+    private (
+        IrNumericEndpoint From,
+        IrNumericEndpoint To,
+        bool IsLifted
+    )? ElementConversionEndpoints(ForEachStatementSyntax fe)
+    {
+        if (!_context.ExactInt64Lowering)
+            return null;
+
+        var info = _semantic.GetForEachStatementInfo(fe);
+        var variableType = (_semantic.GetDeclaredSymbol(fe) as ILocalSymbol)?.Type;
+
+        if (
+            NumericEndpoints.Of(info.ElementType) is not { } from
+            || NumericEndpoints.Of(variableType) is not { } to
+        )
+            return null;
+
+        var needsNode =
+            IsNumericElementConversion(info) && NumericEndpoints.NeedsExactConversion(from, to);
+
+        return needsNode ? (from, to, info.ElementType.IsNullableValueType()) : null;
+    }
+
+    private static bool IsNumericElementConversion(ForEachStatementInfo info) =>
+        info.ElementConversion.IsNumeric || info.ElementConversion.IsNullable;
 
     private IrStatement ExtractTry(TryStatementSyntax ts)
     {

@@ -3,15 +3,41 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <summary>
 /// The names of the <c>metano-runtime/system/int64</c> helpers the TypeScript
 /// bridge emits (spec 012 contracts/runtime-int64.md), the single place they
-/// are spelled, with the selectors that pick a variant by context.
+/// are spelled, with the selectors that pick a variant by signedness and
+/// context.
 /// </summary>
 internal static class Int64RuntimeHelpers
 {
+    public const string CheckedInt64 = "checkedInt64";
+    public const string CheckedUInt64 = "checkedUInt64";
     public const string CheckedNarrow = "checkedNarrow";
+    public const string MapNullable = "mapNullable";
+    public const string Int64FromDouble = "int64FromDouble";
+    public const string Int64FromDoubleChecked = "int64FromDoubleChecked";
+    public const string UInt64FromDouble = "uint64FromDouble";
+    public const string UInt64FromDoubleChecked = "uint64FromDoubleChecked";
     public const string Int32FromDoubleUnchecked = "int32FromDouble";
     public const string Int32FromDoubleChecked = "int32FromDoubleChecked";
     public const string UInt32FromDoubleUnchecked = "uint32FromDouble";
     public const string UInt32FromDoubleChecked = "uint32FromDoubleChecked";
+    public const string Int64ToSingle = "int64ToSingle";
+    public const string Int64FromDecimal = "int64FromDecimal";
+    public const string UInt64FromDecimal = "uint64FromDecimal";
+    public const string Int64FromBigInteger = "int64FromBigInteger";
+    public const string UInt64FromBigInteger = "uint64FromBigInteger";
+
+    /// <summary>The range check of <c>long</c> (signed) or <c>ulong</c>.</summary>
+    public static string CheckedRange(bool isSigned) => isSigned ? CheckedInt64 : CheckedUInt64;
+
+    /// <summary><c>(long)d</c> / <c>(ulong)d</c>, saturating unchecked or throwing checked.</summary>
+    public static string FromDouble(bool isSigned, bool isChecked) =>
+        (isSigned, isChecked) switch
+        {
+            (true, false) => Int64FromDouble,
+            (true, true) => Int64FromDoubleChecked,
+            (false, false) => UInt64FromDouble,
+            (false, true) => UInt64FromDoubleChecked,
+        };
 
     /// <summary><c>(int)d</c> (FR-070).</summary>
     public static string Int32FromDouble(bool isChecked) =>
@@ -20,4 +46,12 @@ internal static class Int64RuntimeHelpers
     /// <summary><c>(uint)d</c> (FR-070).</summary>
     public static string UInt32FromDouble(bool isChecked) =>
         isChecked ? UInt32FromDoubleChecked : UInt32FromDoubleUnchecked;
+
+    /// <summary><c>(long)m</c> / <c>(ulong)m</c>, checked in every context.</summary>
+    public static string FromDecimal(bool isSigned) =>
+        isSigned ? Int64FromDecimal : UInt64FromDecimal;
+
+    /// <summary><c>(long)b</c> / <c>(ulong)b</c>, checked in every context.</summary>
+    public static string FromBigInteger(bool isSigned) =>
+        isSigned ? Int64FromBigInteger : UInt64FromBigInteger;
 }

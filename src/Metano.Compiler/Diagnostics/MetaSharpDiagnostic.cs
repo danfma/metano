@@ -425,4 +425,11 @@ public static class DiagnosticCodes
     /// compile time, sometimes cyclically, so no dispatch order matches it; static
     /// call-site dispatch (#25) will. A warning at the catch-all overload (#440).</summary>
     public const string AmbiguousRuntimeDispatch = "MS0063";
+
+    /// <summary>MS0064 — a member of an enum whose underlying type is <c>long</c>,
+    /// <c>ulong</c>, <c>nint</c> or <c>nuint</c> has a value a TypeScript enum member
+    /// (a <c>number</c>) cannot hold exactly, or is a <c>[Flags]</c> member of
+    /// 2^31 or more, which JS bit operators on <c>number</c> truncate. A warning at
+    /// the member (spec 012 FR-058).</summary>
+    public const string Int64EnumValuePrecision = "MS0064";
 }

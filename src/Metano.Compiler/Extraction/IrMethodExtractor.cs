@@ -42,7 +42,7 @@ public static class IrMethodExtractor
                         localNames.NameOf(p, IrParameterNaming.IrNameOf(p, compilation)),
                         IrTypeRefMapper.Map(p.Type, originResolver, target),
                         HasDefaultValue: p.HasExplicitDefaultValue,
-                        DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                        DefaultValue: ParameterDefaultValues.Extract(p, context),
                         IsParams: p.IsParams,
                         IsOptional: p.HasOptional(),
                         IsConstant: p.HasConstant()
@@ -115,35 +115,6 @@ public static class IrMethodExtractor
         var extractor = new IrStatementExtractor(model, context, inheritedLocalNames: localNames);
 
         return extractor.ExtractBody(body, expressionBody, method.ReturnsVoid).Statements;
-    }
-
-    /// <summary>
-    /// Parses a parameter's default-value syntax into IR so backends that render
-    /// defaults (like the Dart target) can reproduce them. Returns null when the
-    /// parameter has no default, when no compilation is supplied (shape-only mode),
-    /// or when the declaring syntax isn't reachable (referenced-assembly methods).
-    /// </summary>
-    private static IrExpression? ExtractDefaultValue(
-        IParameterSymbol parameter,
-        Compilation? compilation,
-        IrTypeOriginResolver? originResolver
-    )
-    {
-        if (!parameter.HasExplicitDefaultValue || compilation is null)
-            return null;
-
-        var syntax =
-            parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax;
-        var defaultExpression = syntax?.Default?.Value;
-
-        if (defaultExpression is null)
-            return null;
-
-        var model = compilation.GetSemanticModel(syntax!.SyntaxTree);
-
-        return new IrExpressionExtractor(model, new IrExtractionContext(originResolver)).Extract(
-            defaultExpression
-        );
     }
 
     private static bool DetectYield(IMethodSymbol method)

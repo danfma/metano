@@ -21,3 +21,24 @@ internal enum Int64Representation
     /// </summary>
     BigInt,
 }
+
+/// <summary>
+/// The <see cref="Int64Representation"/> of the transform running on this
+/// execution context, read by the static type mapper and expression bridge.
+/// <see cref="Transformation.TypeTransformer"/> publishes it for the duration
+/// of a transform; an <see cref="AsyncLocal{T}"/> keeps parallel transforms
+/// (and parallel tests) apart. Removed with the staging switch (012k).
+/// </summary>
+internal static class Int64RepresentationScope
+{
+    private static readonly AsyncLocal<Int64Representation> _current = new();
+
+    public static Int64Representation Current
+    {
+        get => _current.Value;
+        set => _current.Value = value;
+    }
+
+    /// <summary>Whether 64-bit integers are native <c>bigint</c> values.</summary>
+    public static bool IsBigInt => Current is Int64Representation.BigInt;
+}

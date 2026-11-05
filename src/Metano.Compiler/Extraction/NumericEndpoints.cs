@@ -5,7 +5,8 @@ namespace Metano.Compiler.Extraction;
 
 /// <summary>
 /// Classifies Roslyn types as the <see cref="IrNumericEndpoint"/>s of a
-/// numeric conversion (spec 012).
+/// numeric conversion (spec 012 FR-010), and decides which conversions the
+/// core makes explicit as an <see cref="IrNumericConversion"/>.
 /// </summary>
 internal static class NumericEndpoints
 {
@@ -26,6 +27,29 @@ internal static class NumericEndpoints
 
         return KindOf(underlying) is { } kind ? new IrNumericEndpoint(kind) : null;
     }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> (or its nullable underlying type) is a
+    /// 64-bit integer: <c>long</c>, <c>ulong</c>, <c>nint</c> or <c>nuint</c>.
+    /// </summary>
+    public static bool IsSixtyFourBit(ITypeSymbol? type) =>
+        Of(type) is { } endpoint && endpoint.IsSixtyFourBitValue();
+
+    /// <summary>
+    /// Whether the exact 64-bit lowering makes the conversion from
+    /// <paramref name="from"/> to <paramref name="to"/> explicit: one side
+    /// is a 64-bit integer, or an integer widens into <c>BigInteger</c>.
+    /// </summary>
+    public static bool NeedsExactConversion(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from != to
+        && (
+            from.IsSixtyFourBitValue()
+            || to.IsSixtyFourBitValue()
+            || (to is { Kind: IrNumericKind.BigInteger } && IsIntegerOrChar(from))
+        );
+
+    private static bool IsIntegerOrChar(IrNumericEndpoint endpoint) =>
+        endpoint.Kind.IsInteger() || endpoint.Kind is IrNumericKind.Char;
 
     private static IrNumericKind? KindOf(ITypeSymbol? type) =>
         type?.SpecialType switch
