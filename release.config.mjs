@@ -11,7 +11,10 @@
 // and the release notes now use the same breaking-change keywords, including
 // `BREAKING-CHANGE`, the Conventional Commits synonym. Before, only the
 // analyzer had a keyword list and the notes used the preset default, so the two
-// could disagree. Every other setting is identical.
+// could disagree. `BREAKING-CHANGE:` footers now also trigger a major
+// release. The bare `BREAKING` keyword is dropped: it is not a Conventional
+// Commits keyword and the case-insensitive parser matched prose such as
+// "Breaking out of the loop". Every other setting is identical.
 import createConventionalcommitsPreset from "conventional-changelog-conventionalcommits";
 
 // The trailers this repository's commits carry. Only these are stripped, so a
@@ -59,7 +62,7 @@ const presetConfig = {
 const preset = await createConventionalcommitsPreset(presetConfig);
 
 const parserOpts = {
-  noteKeywords: ["BREAKING CHANGE", "BREAKING-CHANGE", "BREAKING CHANGES", "BREAKING"],
+  noteKeywords: ["BREAKING CHANGE", "BREAKING-CHANGE", "BREAKING CHANGES"],
 };
 
 const writerOpts = {
