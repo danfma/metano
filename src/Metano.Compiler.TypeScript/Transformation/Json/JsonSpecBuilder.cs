@@ -18,6 +18,8 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// </summary>
 internal sealed class JsonSpecBuilder
 {
+    private const string PayloadParameterName = "p";
+
     private readonly TypeScriptTransformContext _context;
     private readonly JsonTypeInfoNames _names;
     private readonly JsonPropertyCollector _properties;
@@ -196,16 +198,17 @@ internal sealed class JsonSpecBuilder
         // `p` trips biome's noUnusedFunctionParameters in every consumer project
         // (#480), and a parameterless constructor needs no payload either.
         var factory = BuildFactoryStatement(targetType, tsTypeName, polymorphism);
-        var factoryParameter = ReferencesPayloadParameter(factory)
-            ? new TsParameter(
-                "p",
-                new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
-            )
-            : null;
+
+        // factory: (p) => new T(...) for classes, (p) => ({ ... }) for PlainObject,
+        // () => { throw ... } for a spec that cannot construct. The payload
+        // parameter exists only when the built body reads it (#480): a
+        // declared-but-unused `p` trips biome's noUnusedFunctionParameters in
+        // every consumer project.
+        TsParameter[] factoryParameters = factory.ReadsPayload ? [PayloadParameter()] : [];
 
         var factoryProperty = new TsObjectProperty(
             "factory",
-            new TsArrowFunction(factoryParameter is null ? [] : [factoryParameter], [factory])
+            new TsArrowFunction(factoryParameters, [factory.Statement])
         );
 
         var propertiesProperty = new TsObjectProperty(
@@ -278,77 +281,67 @@ internal sealed class JsonSpecBuilder
     }
 
     /// <summary>
-    /// Whether the spec's <c>factory</c> body reads the payload parameter:
-    /// the shapes <see cref="BuildFactoryStatement"/> builds it from — a throw
-    /// never does, a <c>[PlainObject]</c> or constructed literal only through
-    /// a <c>p.x</c> cast. A factory with a parameterless constructor (or an
-    /// empty literal) reads nothing and declares no parameter (#480).
+    /// The spec's <c>factory</c> arrow body and whether it reads the payload:
+    /// the parameter exists only when it does (#480), so the decision comes
+    /// from the build itself — a new body shape can never read a payload the
+    /// arrow fails to declare.
     /// </summary>
-    private static bool ReferencesPayloadParameter(TsStatement statement) =>
-        statement switch
-        {
-            TsReturnStatement ret => ret.Expression is not null
-                && ReferencesPayloadParameter(ret.Expression),
-            TsThrowStatement thr => ReferencesPayloadParameter(thr.Expression),
-            _ => false,
-        };
-
-    private static bool ReferencesPayloadParameter(TsExpression expression) =>
-        expression switch
-        {
-            TsIdentifier identifier => identifier.Name == "p",
-            TsPropertyAccess access => ReferencesPayloadParameter(access.Object),
-            TsCastExpression cast => ReferencesPayloadParameter(cast.Expression),
-            TsNewExpression newExpression => newExpression.Arguments.Any(
-                ReferencesPayloadParameter
-            ),
-            TsCallExpression call => ReferencesPayloadParameter(call.Callee)
-                || call.Arguments.Any(ReferencesPayloadParameter),
-            TsObjectLiteral literal => literal.Properties.Any(property =>
-                ReferencesPayloadParameter(property.Value)
-            ),
-            _ => false,
-        };
+    private sealed record FactoryBody(TsStatement Statement, bool ReadsPayload)
+    {
+        public static FactoryBody Throws(string message) =>
+            new(BuildAbstractFactoryThrow(message), ReadsPayload: false);
+    }
 
     /// <summary>
-    /// The single statement of the spec's <c>factory</c> arrow:
+    /// The spec's <c>factory</c> arrow body, with whether it reads the
+    /// payload (the parameter exists only then, #480):
     /// <list type="bullet">
     ///   <item>abstract polymorphic base (a class, a <c>[PlainObject]</c> type
     ///     or an interface) → <c>throw new Error(...)</c>: its reads dispatch
     ///     to a derived contract and never reach it (FR-011, FR-018);</item>
     ///   <item><c>[PlainObject]</c> → <c>return { title: p.title as string, ... }</c>,
     ///     inherited members included: a TS interface has no base constructor
-    ///     to fill them;</item>
+    ///     to fill them; reads the payload when the literal is non-empty;</item>
     ///   <item>any other abstract class → <c>throw new Error(...)</c>:
     ///     TypeScript rejects <c>new</c> on an abstract class, so it cannot be
     ///     deserialized directly;</item>
     ///   <item>class → <c>return new TodoItem(p.title as string, ...)</c>, with
     ///     the arguments in the emitted constructor's positional order, inside
     ///     <c>Object.assign(…, { … })</c> when members are assigned after
-    ///     construction.</item>
+    ///     construction; reads the payload when any argument casts it or any
+    ///     member is assigned.</item>
     /// </list>
     /// </summary>
-    private TsStatement BuildFactoryStatement(
+    private FactoryBody BuildFactoryStatement(
         INamedTypeSymbol targetType,
         string tsTypeName,
         JsonPolymorphism? polymorphism
     )
     {
         if (polymorphism is { IsAbstractBase: true })
-            return BuildAbstractFactoryThrow(
-                PolymorphicAbstractFactoryMessage(targetType, tsTypeName)
-            );
+            return FactoryBody.Throws(PolymorphicAbstractFactoryMessage(targetType, tsTypeName));
 
         if (SymbolHelper.HasPlainObject(targetType))
-            return new TsReturnStatement(
-                BuildPlainObjectLiteral(_properties.LiteralPropertiesOf(targetType))
+        {
+            var literalProperties = _properties.LiteralPropertiesOf(targetType);
+
+            return new(
+                new TsReturnStatement(BuildPlainObjectLiteral(literalProperties)),
+                ReadsPayload: literalProperties.Count > 0
             );
+        }
 
         if (targetType.IsAbstract)
-            return BuildAbstractFactoryThrow(NonConstructibleFactoryMessage(tsTypeName));
+            return FactoryBody.Throws(NonConstructibleFactoryMessage(tsTypeName));
 
-        return new TsReturnStatement(
-            WithAssignedMembers(BuildConstruction(targetType, tsTypeName), targetType)
+        var construction = BuildConstruction(targetType, tsTypeName, out var argumentsReadPayload);
+        var assignedMembers = UnboundMembersOf(targetType, JsonReadAssignment.Always)
+            .Select(ToCastProperty)
+            .ToList();
+
+        return new(
+            new TsReturnStatement(WithAssignedMembers(construction, assignedMembers)),
+            ReadsPayload: argumentsReadPayload || assignedMembers.Count > 0
         );
     }
 
@@ -357,11 +350,16 @@ internal sealed class JsonSpecBuilder
     /// constructs through its overload factories — the factory of the
     /// constructor System.Text.Json picks, with the same arguments:
     /// <c>Money.fromAmount(p.amount as Decimal)</c> (spec 013 FR-035).
+    /// Reports whether any argument casts the payload.
     /// </summary>
-    private TsExpression BuildConstruction(INamedTypeSymbol targetType, string tsTypeName)
+    private TsExpression BuildConstruction(
+        INamedTypeSymbol targetType,
+        string tsTypeName,
+        out bool readsPayload
+    )
     {
         var constructor = JsonConstructorSelection.Of(targetType);
-        var arguments = BuildConstructorArguments(constructor);
+        var arguments = BuildConstructorArguments(constructor, out readsPayload);
         var factory = JsonConstructorSelection.FactoryOf(constructor, _context.Extraction);
 
         if (factory is null)
@@ -375,9 +373,10 @@ internal sealed class JsonSpecBuilder
 
     /// <summary>
     /// <paramref name="construction"/>, or
-    /// <c>Object.assign(new T(...), { c: p.c as number })</c> when the
-    /// contract has unbound members System.Text.Json always sets through the
-    /// object initializer (<c>init</c> or <c>required</c>,
+    /// <c>Object.assign(new T(...), { c: p.c as number })</c> wrapping it
+    /// when <paramref name="assignedMembers"/> is non-empty: the contract's
+    /// unbound members System.Text.Json always sets through the object
+    /// initializer (<c>init</c> or <c>required</c>,
     /// <see cref="JsonReadAssignment.Always"/>), each with its most-derived
     /// declaration. Inherited members count, since a linked spec's factory
     /// builds the whole object, except the base declarations a
@@ -389,12 +388,11 @@ internal sealed class JsonSpecBuilder
     /// with <c>Note = null</c>). Members set only when present are assigned by
     /// the runtime instead (<see cref="AssignIfPresentProperty"/>).
     /// </summary>
-    private TsExpression WithAssignedMembers(TsExpression construction, INamedTypeSymbol targetType)
+    private static TsExpression WithAssignedMembers(
+        TsExpression construction,
+        List<TsObjectProperty> assignedMembers
+    )
     {
-        var assignedMembers = UnboundMembersOf(targetType, JsonReadAssignment.Always)
-            .Select(ToCastProperty)
-            .ToList();
-
         if (assignedMembers.Count == 0)
             return construction;
 
@@ -564,11 +562,43 @@ internal sealed class JsonSpecBuilder
     /// constructor is built with <c>new T()</c> and its members are assigned
     /// (<see cref="WithAssignedMembers"/>).
     /// </summary>
-    private List<TsExpression> BuildConstructorArguments(IMethodSymbol? constructor) =>
-        ParametersOf(constructor).Select(BuildConstructorArgument).ToList();
+    /// <summary>
+    /// Builds the <c>new T(...)</c> arguments: each parameter of the
+    /// constructor (in declaration order — the order the emitted TS
+    /// constructor uses) reads the property it initializes, searched across
+    /// the inheritance chain so a parameter forwarded to the base
+    /// (<c>ImageClip(string Path, double Seconds) : Clip(Seconds)</c>) reads
+    /// the inherited <c>seconds</c>. A type without a parameterized
+    /// constructor is built with <c>new T()</c> and its members are assigned
+    /// (<see cref="WithAssignedMembers"/>). Reports whether any argument
+    /// casts the payload: an extension-data overflow emits a bare
+    /// <c>null</c>, reading nothing.
+    /// </summary>
+    private List<TsExpression> BuildConstructorArguments(
+        IMethodSymbol? constructor,
+        out bool readsPayload
+    )
+    {
+        var parameters = ParametersOf(constructor).ToList();
+
+        readsPayload = parameters.Any(parameter => CastTypeOf(parameter) is not null);
+
+        return parameters.Select(BuildConstructorArgument).ToList();
+    }
 
     private static IEnumerable<IParameterSymbol> ParametersOf(IMethodSymbol? constructor) =>
         constructor?.Parameters ?? [];
+
+    /// <summary>
+    /// The payload parameter of a spec's factory arrow:
+    /// <c>p: Record&lt;string, unknown&gt;</c>, declared only when the built
+    /// body reads it (#480).
+    /// </summary>
+    private static TsParameter PayloadParameter() =>
+        new(
+            PayloadParameterName,
+            new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
+        );
 
     private TsExpression BuildConstructorArgument(IParameterSymbol parameter)
     {
@@ -594,7 +624,7 @@ internal sealed class JsonSpecBuilder
 
     private TsExpression CastProperty(string tsName, ITypeSymbol type) =>
         new TsCastExpression(
-            new TsPropertyAccess(new TsIdentifier("p"), tsName),
+            new TsPropertyAccess(new TsIdentifier(PayloadParameterName), tsName),
             JsonTsTypes.Map(_context, type)
         );
 
