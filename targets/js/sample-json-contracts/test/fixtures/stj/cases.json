@@ -397,7 +397,7 @@
     "json": "\"2026-01-02T03:04:05+00:00[UTC]\"",
     "stjJson": "\"2026-01-02T03:04:05+00:00\"",
     "crossReadable": false,
-    "divergence": "DateTimeOffset text, not mutually readable: STJ writes the offset only and rejects '[UTC]', Temporal.ZonedDateTime writes and requires the zone (DECIDED-16); since #485 the TypeScript read is System.Text.Json's, so it rejects the zone text too"
+    "divergence": "DateTimeOffset text, not mutually readable: STJ writes the offset only and rejects '[UTC]', Temporal.ZonedDateTime writes and requires the zone (DECIDED-16); the TypeScript read keeps both texts readable, STJ's plain-offset one included, so only the reverse direction breaks"
   },
   {
     "id": "V12",
@@ -410,7 +410,7 @@
     "json": "\"PT1H2M3S\"",
     "stjJson": "\"01:02:03\"",
     "crossReadable": false,
-    "divergence": "TimeSpan text, not mutually readable: STJ writes and reads '01:02:03', Temporal.Duration 'PT1H2M3S' (DECIDED-16); since #485 the TypeScript read is System.Text.Json's, so it rejects the duration text too"
+    "divergence": "TimeSpan text, not mutually readable: STJ writes and reads '01:02:03', Temporal.Duration 'PT1H2M3S' (DECIDED-16); the TypeScript read keeps both texts readable, STJ's '01:02:03' included, so only the reverse direction breaks"
   },
   {
     "id": "V11b",

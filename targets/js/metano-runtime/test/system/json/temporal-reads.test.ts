@@ -118,6 +118,12 @@ describe("temporal reads System.Text.Json accepts — DateTime", () => {
     ["2024-01-31T10:20:30+02:00", localWallText("2024-01-31T10:20:30+02:00")],
     ["2024-01-31T10:20:30-02:30", localWallText("2024-01-31T10:20:30-02:30")],
     ["2024-01-31T10:20:30-02", localWallText("2024-01-31T10:20:30-02:00")],
+    // The \u00b114:00 offset bound and the minute range (measured on .NET 10).
+    ["2024-01-31T10:20:30+14:00", localWallText("2024-01-31T10:20:30+14:00")],
+    ["2024-01-31T10:20:30-14:00", localWallText("2024-01-31T10:20:30-14:00")],
+    ["2024-01-31T10:20:30+02:59", localWallText("2024-01-31T10:20:30+02:59")],
+    // Sixteen fraction digits, the longest run System.Text.Json takes.
+    ["2024-01-31T10:20:30.9999999999999999", "2024-01-31T10:20:30.9999999"],
   ];
 
   for (const [input, expected] of accepted) {
@@ -158,6 +164,23 @@ describe("temporal reads System.Text.Json accepts — DateTimeOffset", () => {
     const moment = readWith("2024-01-31T10:20:30.12345678+02:00");
 
     expect(String(moment)).toBe("2024-01-31T10:20:30.1234567+02:00[+02:00]");
+  });
+
+  test("reads sixteen fraction digits, the longest run System.Text.Json takes", () => {
+    // An all-nines run past the seventh must truncate, never round up.
+    const moment = readWith("2024-01-31T10:20:30.9999999999999999+02:00");
+
+    expect(String(moment)).toBe("2024-01-31T10:20:30.9999999+02:00[+02:00]");
+  });
+
+  test("keeps the \u00b114:00 offset bound", () => {
+    expect(String(readWith("2024-01-31T10:20:30+14:00"))).toBe(
+      "2024-01-31T10:20:30+14:00[+14:00]",
+    );
+
+    expect(String(readWith("2024-01-31T10:20:30-14:00"))).toBe(
+      "2024-01-31T10:20:30-14:00[-14:00]",
+    );
   });
 
   test("assumes the local offset without one", () => {
@@ -371,6 +394,36 @@ describe("temporal reads System.Text.Json rejects", () => {
     ],
     [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, ""],
     [{ kind: "temporal", parse: Temporal.Duration.from, typeName: "System.TimeSpan" }, "PXY"],
+    // A fraction run past sixteen digits (measured on .NET 10: STJ rejects it).
+    [
+      { kind: "temporal", parse: Temporal.PlainDateTime.from, typeName: "System.DateTime" },
+      "2024-01-31T10:20:30.99999999999999999",
+    ],
+    // Offsets out of range: minute 60, and anything past \u00b114:00.
+    [
+      { kind: "temporal", parse: Temporal.PlainDateTime.from, typeName: "System.DateTime" },
+      "2024-01-31T10:20:30+02:60",
+    ],
+    [
+      { kind: "temporal", parse: Temporal.PlainDateTime.from, typeName: "System.DateTime" },
+      "2024-01-31T10:20:30+14:01",
+    ],
+    [
+      { kind: "temporal", parse: Temporal.PlainDateTime.from, typeName: "System.DateTime" },
+      "2024-01-31T10:20:30+15:00",
+    ],
+    [
+      { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
+      "2024-01-31T10:20:30+02:60",
+    ],
+    [
+      { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
+      "2024-01-31T10:20:30+15:00",
+    ],
+    [
+      { kind: "temporal", parse: Temporal.ZonedDateTime.from, typeName: "System.DateTimeOffset" },
+      "2024-01-31T10:20:30-15:00",
+    ],
   ];
 
   for (const [descriptor, input] of rejected) {
