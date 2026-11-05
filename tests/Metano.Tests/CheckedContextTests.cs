@@ -301,6 +301,54 @@ public class CheckedContextTests
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
+    /// <summary>
+    /// Enum and <c>char</c> targets wrap like the integral types: an enum
+    /// keeps the cast a constant enum cast lowers to, around its wrapped
+    /// underlying value, and a <c>char</c> becomes a character literal.
+    /// </summary>
+    private const string WrappedEnumAndCharSource = """
+        [Transpile]
+        public enum Level : byte { Low = 1 }
+
+        [Transpile]
+        public class Codes
+        {
+            public Level Wrapped() => unchecked((Level)300);
+            public string Text() => unchecked((char)70000).ToString();
+            public char Letter() => unchecked((char)70000);
+            public int Code() => unchecked((char)70000);
+        }
+        """;
+
+    [Test]
+    [Arguments("return 44;")]
+    [Arguments("return \"\u1170\".toString();")]
+    [Arguments("letter(): string {\n    return \"\u1170\";")]
+    [Arguments("code(): number {\n    return 4464;")]
+    public async Task UncheckedEnumAndCharConstants_LowerToTheirWrappedValue(string expected)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            WrappedEnumAndCharSource,
+            Int64Representation.Number
+        );
+
+        await Assert.That(files["codes.ts"]).Contains(expected);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    [Arguments("Level wrapped() => 44 as Level;")]
+    [Arguments("String text() => '\u1170'.toString();")]
+    [Arguments("String letter() => '\u1170';")]
+    [Arguments("int code() => 4464;")]
+    public async Task Dart_UncheckedEnumAndCharConstants_LowerToTheirWrappedValue(string expected)
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(WrappedEnumAndCharSource);
+
+        await Assert.That(files["codes.dart"]).Contains(expected);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
     [Test]
     public async Task Dart_LowersCheckedContextsToTheirOperandAndBlock()
     {
