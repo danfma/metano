@@ -331,7 +331,7 @@ internal sealed class TsOverloadClaimPass
 
             var fastPath = AnchoredNameOf(overload, anchor, baseName);
 
-            RecordFastPath(overload, fastPath, ForwardersOf(overload, fastPath));
+            RecordFastPath(overload, fastPath, RootNamesOf(overload, fastPath));
         }
 
         foreach (var overload in group.Members.Where(member => member.Anchor is null))
@@ -390,38 +390,46 @@ internal sealed class TsOverloadClaimPass
     /// The names of the further interface roots an overload implements, each
     /// a forwarding member to its fast path, when it differs from it.
     /// </summary>
-    private IReadOnlyList<TsRootName> ForwardersOf(IrMethodDeclaration overload, string fastPath) =>
+    /// <summary>
+    /// The name an anchored overload declares for each of its roots: the fast
+    /// path for its root, the further roots' names (forwarders when they
+    /// differ), every root kept, so a name two roots share is judged against
+    /// both.
+    /// </summary>
+    private IReadOnlyList<TsRootName> RootNamesOf(IrMethodDeclaration overload, string fastPath) =>
         (overload.Anchor?.FurtherRoots ?? [])
             .Select(root => (Root: root, Name: _input.RootFastPathOf(root)))
-            .Where(entry => entry.Name is not null && entry.Name != fastPath)
+            .Where(entry => entry.Name is not null)
             .Select(entry => new TsRootName(entry.Root, entry.Name!))
-            .DistinctBy(entry => entry.Name, StringComparer.Ordinal)
+            .Prepend(new TsRootName(overload.Anchor!.Root, fastPath))
             .ToList();
 
     private void RecordFastPath(
         IrMethodDeclaration overload,
         string fastPath,
-        IReadOnlyList<TsRootName> forwarders
+        IReadOnlyList<TsRootName> rootNames
     )
     {
         var signature = DispatchedOverload.SignatureOf(overload);
         var table = TableOf(overload.IsStatic);
-        var rootNames = forwarders
-            .Prepend(new TsRootName(overload.Anchor?.Root, fastPath))
+
+        var names = rootNames
+            .Select(rootName => rootName.Name)
+            .Prepend(fastPath)
+            .Distinct(StringComparer.Ordinal)
             .ToList();
-        var names = rootNames.Select(rootName => rootName.Name).ToList();
 
         var overriddenNames = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var rootName in rootNames)
+        foreach (var name in names)
         {
-            if (InheritedFastPathMetBy(overload, rootName.Name) is not { } inherited)
+            if (InheritedFastPathMetBy(overload, name) is not { } inherited)
                 continue;
 
-            if (ReimplementsRoot(overload, rootName.Root))
-                overriddenNames.Add(rootName.Name);
+            if (ReimplementsAnyRootNamed(overload, rootNames, name))
+                overriddenNames.Add(name);
             else
-                ReportHijack(overload.Name, rootName.Name, inherited);
+                ReportHijack(overload.Name, name, inherited);
         }
 
         foreach (var name in names)
@@ -435,11 +443,7 @@ internal sealed class TsOverloadClaimPass
         }
 
         _methods[new TsMethodOverloadKey(overload.Name, overload.DeclarationOrdinal)] =
-            new TsMethodOverloadNames(
-                fastPath,
-                forwarders.Select(forwarder => forwarder.Name).ToList(),
-                overriddenNames
-            );
+            new TsMethodOverloadNames(fastPath, names.Skip(1).ToList(), overriddenNames);
     }
 
     /// <summary>
@@ -462,8 +466,20 @@ internal sealed class TsOverloadClaimPass
         return InheritedFastPathAt(name);
     }
 
-    private static bool ReimplementsRoot(IrMethodDeclaration overload, IrOverloadRef? root) =>
-        root is not null && (overload.Anchor?.ReimplementedRoots ?? []).Contains(root);
+    /// <summary>
+    /// Whether the base already implements one of the roots that produce
+    /// <paramref name="name"/>: its member under that name is then the base's
+    /// fast path for that root, which the overload overrides.
+    /// </summary>
+    private static bool ReimplementsAnyRootNamed(
+        IrMethodDeclaration overload,
+        IReadOnlyList<TsRootName> rootNames,
+        string name
+    ) =>
+        rootNames.Any(rootName =>
+            rootName.Name == name
+            && (overload.Anchor?.ReimplementedRoots ?? []).Contains(rootName.Root)
+        );
 
     private TsCollision? FastPathCollisionOf(string name, bool isStatic) =>
         HolderOfFastPath(name, isStatic) is { } holder
@@ -579,4 +595,4 @@ internal sealed record TsClaimPassInput(
 );
 
 /// <summary>The name an overload declares for one of its roots.</summary>
-internal sealed record TsRootName(IrOverloadRef? Root, string Name);
+internal sealed record TsRootName(IrOverloadRef Root, string Name);
