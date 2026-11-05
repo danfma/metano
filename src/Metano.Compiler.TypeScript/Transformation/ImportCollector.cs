@@ -654,7 +654,7 @@ public sealed class ImportCollector(
     /// chunks), and the LINQ pipe operators. <c>Temporal</c> is the one
     /// exception: its only value-side emission is a mapping template that
     /// doesn't declare the binding, so an alias would break that call while
-    /// the type references alias — a collision reports MS0070 instead.
+    /// the type references alias — a collision reports MS0071 instead.
     /// </summary>
     private (
         List<TsImport> Imports,
@@ -791,7 +791,7 @@ public sealed class ImportCollector(
     };
 
     /// <summary>
-    /// Reports MS0070 when a user name takes an unaliasable runtime helper:
+    /// Reports MS0071 when a user name takes an unaliasable runtime helper:
     /// the module would emit a duplicate identifier, and there is no alias
     /// path to repair it — the user renames via <c>[Name]</c>.
     /// </summary>

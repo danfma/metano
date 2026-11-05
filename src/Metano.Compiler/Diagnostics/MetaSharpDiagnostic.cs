@@ -467,12 +467,11 @@ public static class DiagnosticCodes
     /// <c>[Name]</c> (or change the BCL export's <c>ExportedName</c>).</summary>
     public const string ImportedNameClash = "MS0070";
 
-    /// <summary>MS0070 — a user declaration or import takes the name of a runtime
+    /// <summary>MS0071 — a user declaration or import takes the name of a runtime
     /// type the module imports and the collision cannot be aliased (<c>Temporal</c>:
     /// its only value-side emission is a mapping template that doesn't declare the
     /// binding, so an alias would break that call while the type references alias).
     /// An error at the module; the user renames the member with <c>[Name]</c> (#484).
     /// </summary>
-    public const string RuntimeHelperNameHijacked = "MS0070";
-
+    public const string RuntimeHelperNameHijacked = "MS0071";
 }
