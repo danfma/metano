@@ -415,7 +415,7 @@ public class RuntimeHelperAliasTests
     /// compiler reports MS0071 pointing at [Name].
     /// </summary>
     [Test]
-    public async Task UnaliasableHelperCollision_ReportsMs0070()
+    public async Task UnaliasableHelperCollision_ReportsMs0071()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -435,7 +435,16 @@ public class RuntimeHelperAliasTests
         );
 
         await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.RuntimeHelperNameHijacked))
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.RuntimeHelperNameHijacked
+                    && d.Message
+                        == "'Temporal' is a runtime type the generated module imports, and a user "
+                            + "declaration or import in the same module takes that name. The "
+                            + "collision cannot be aliased; rename the user member with "
+                            + "[Name(\"...\")] (or the import via [Import(name: \"...\")])."
+                )
+            )
             .IsTrue();
     }
 
