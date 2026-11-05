@@ -366,4 +366,39 @@ public class ForEachTranspileTests
         // member chain: a missing element holds the variable as `null`.
         await Assert.That(dart).Contains("int? x = x$element?.toInt().toSigned(32);");
     }
+
+    /// <summary>
+    /// With the kinds already matching there is no conversion to run after
+    /// the unwrap, so the unwrap itself is the variable's cast — an enum
+    /// loop variable reads `as Color`, not the underlying `as int`.
+    /// </summary>
+    [Test]
+    public async Task Dart_ForEach_NullableEnumElement_CastsToTheVariableType()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            public enum Color { Red, Green }
+
+            [Transpile]
+            public sealed class Picker
+            {
+                public Color First(Color?[] values)
+                {
+                    #pragma warning disable CS8629
+                    foreach (Color c in values)
+                        return c;
+                    #pragma warning restore CS8629
+
+                    return Color.Red;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["picker.dart"])
+            .Contains(
+                "Color c = (c$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as Color;"
+            );
+    }
 }

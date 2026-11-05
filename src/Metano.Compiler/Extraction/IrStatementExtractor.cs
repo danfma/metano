@@ -443,11 +443,14 @@ public sealed class IrStatementExtractor(
     /// The unwrap-or-throw first stage of a nullable element read into a
     /// non-nullable loop variable, then the numeric conversion Roslyn's
     /// explicit element conversion performs — mirroring the explicit cast
-    /// (<c>(int)d</c>): the cast shape carries the variable's type so Dart
-    /// reads the result through it (<c>as Color</c>, not <c>as int</c> for an
-    /// enum loop variable), and no conversion is emitted when the lowering
-    /// keeps none. The checked context is the loop's, like any element
-    /// conversion.
+    /// (<c>(int)d</c>). With a conversion to run, the unwrap reads the raw
+    /// element through its underlying type (Dart's
+    /// <c>(… as double).toInt()</c>) and the conversion carries the
+    /// variable's type as its <see cref="IrNumericConversion.CastType"/>
+    /// (<c>as Color</c> for an enum loop variable); with none — the kinds
+    /// already match, or the lowering keeps no node — the unwrap itself is
+    /// the variable's cast (<c>as Color</c>). The checked context is the
+    /// loop's, like any element conversion.
     /// </summary>
     private IrExpression UnwrappedElementValue(
         ForEachStatementSyntax fe,
@@ -458,32 +461,31 @@ public sealed class IrStatementExtractor(
         IrNumericEndpoint to
     )
     {
-        var unwrapped = new IrCastExpression(
-            _expressions.GuardedValueOrThrow(element),
-            IrTypeRefMapper.Map(
-                elementType.UnwrapNullableValueType(),
-                _originResolver,
-                _context.Target
-            )
-        );
-
-        var isChecked = CheckedContexts.IsChecked(fe, _semantic.Compilation);
+        var guarded = _expressions.GuardedValueOrThrow(element);
 
         if (
             from == to
             || !NumericEndpoints.IsLoweredExplicitly(from, to, _context.ExactInt64Lowering)
         )
-            return unwrapped;
+            return new IrCastExpression(guarded, MapType(variableType));
+
+        var unwrapped = new IrCastExpression(
+            guarded,
+            MapType(elementType.UnwrapNullableValueType())
+        );
 
         return new IrNumericConversion(
             unwrapped,
             from,
             to,
-            isChecked,
+            CheckedContexts.IsChecked(fe, _semantic.Compilation),
             IsLifted: false,
-            CastType: IrTypeRefMapper.Map(variableType, _originResolver, _context.Target)
+            CastType: MapType(variableType)
         );
     }
+
+    private IrTypeRef MapType(ITypeSymbol type) =>
+        IrTypeRefMapper.Map(type, _originResolver, _context.Target);
 
     private static bool IsNumericElementConversion(ForEachStatementInfo info) =>
         info.ElementConversion.IsNumeric || info.ElementConversion.IsNullable;
