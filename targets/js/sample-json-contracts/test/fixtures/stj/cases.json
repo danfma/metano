@@ -361,9 +361,7 @@
     "context": "StudioJsonContext",
     "getter": "timeOnly",
     "direction": "roundtrip",
-    "json": "\"03:04:05.678\"",
-    "stjJson": "\"03:04:05.6780000\"",
-    "divergence": "TimeOnly fraction digits: System.Text.Json keeps 7 digits, Temporal trims them (DECIDED-16 class)"
+    "json": "\"03:04:05.6780000\""
   },
   {
     "id": "V11",
