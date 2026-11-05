@@ -13,8 +13,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// as it publishes its other per-transform lowering state. Every bridge that
 /// lowers an expression reaches it — class members, module functions,
 /// operators, plain objects, entry points — without threading it through
-/// each. <see cref="AsyncLocal{T}"/> keeps parallel transforms apart; outside
-/// a transform nothing resolves, so a call keeps its dispatcher form.
+/// each. <see cref="AsyncLocal{T}"/> keeps parallel transforms apart. Asking
+/// outside a transform is a bug, so it throws instead of silently keeping the
+/// dispatcher form.
 /// </para>
 /// </summary>
 internal static class TsOverloadCallSites
@@ -30,9 +31,15 @@ internal static class TsOverloadCallSites
 
     /// <summary>
     /// The claimed selector and factory of a constructor overload;
-    /// <c>null</c> outside a transform or when the declaring type is not
-    /// visible to it.
+    /// <c>null</c> when the declaring type is not visible to the transform,
+    /// which keeps the dispatcher call.
     /// </summary>
-    public static TsConstructorOverloadNames? ConstructorNamesOf(IrOverloadRef overload) =>
-        Claims?.ConstructorNamesOf(overload);
+    internal static TsConstructorOverloadNames? ConstructorNamesOf(IrOverloadRef overload) =>
+        (
+            Claims
+            ?? throw new InvalidOperationException(
+                "An overload call site was lowered outside a TypeScript transform, which "
+                    + "publishes the claim results it resolves through."
+            )
+        ).ConstructorNamesOf(overload);
 }

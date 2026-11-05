@@ -325,7 +325,7 @@ internal sealed class JsonSpecBuilder
     {
         var constructor = JsonConstructorSelection.Of(targetType);
         var arguments = BuildConstructorArguments(constructor);
-        var factory = constructor is null ? null : JsonConstructorSelection.FactoryOf(constructor);
+        var factory = JsonConstructorSelection.FactoryOf(constructor, _context.Extraction);
 
         if (factory is null)
             return new TsNewExpression(new TsIdentifier(tsTypeName), arguments);

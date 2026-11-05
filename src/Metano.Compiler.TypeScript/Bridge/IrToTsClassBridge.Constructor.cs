@@ -16,6 +16,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 internal static partial class IrToTsClassBridge
 {
     /// <summary>
+    /// The temporaries a base call evaluates its arguments into when C#
+    /// evaluates them out of parameter order (<c>__baseArg0</c>).
+    /// </summary>
+    private const string BaseArgumentPrefix = "__baseArg";
+
+    /// <summary>
     /// Builds the TS constructor-parameter list for the primary constructor,
     /// one entry per C# parameter in declaration order so positional call
     /// sites (<c>new T(a, b)</c>, the JSON factory) line up with the emitted
@@ -217,24 +223,33 @@ internal static partial class IrToTsClassBridge
         var baseArguments = ctor.BaseArguments ?? [];
         var selector = BaseSelectorOf(ctor, baseClass);
 
-        if (baseArguments.Count == 0 && selector is null && !keepsBaseMessage)
+        if (PassesNothingToBase(baseArguments, selector, keepsBaseMessage))
             return null;
 
         var loweredArguments = baseArguments
             .Select(argument => IrToTsExpressionBridge.MapArgument(argument, context))
             .ToList();
 
-        var arguments = IrToTsExpressionBridge.WithoutNullRestArray(
-            baseArguments,
-            loweredArguments
+        var ordered = TsEvaluationOrder.Bind(
+            IrToTsExpressionBridge.WithoutNullRestArray(baseArguments, loweredArguments),
+            ctor.BaseOverload?.EvaluationOrder,
+            BaseArgumentPrefix
         );
 
         return new TsBaseConstructorCall(
-            [],
-            selector is null ? arguments : [selector, .. arguments],
+            ordered
+                .Bindings.Select(binding => new TsVariableDeclaration(binding.Name, binding.Value))
+                .ToList(),
+            selector is null ? ordered.Arguments : [selector, .. ordered.Arguments],
             keepsBaseMessage
         );
     }
+
+    private static bool PassesNothingToBase(
+        IReadOnlyList<IrArgument> baseArguments,
+        TsPropertyAccess? selector,
+        bool keepsBaseMessage
+    ) => baseArguments.Count == 0 && selector is null && !keepsBaseMessage;
 
     /// <summary>
     /// <c>Money.byMoneyAmount</c>: the claimed selector of the base overload
@@ -249,14 +264,13 @@ internal static partial class IrToTsClassBridge
         if (ctor.BaseOverload is not { } overload || baseClass is not TsNamedType named)
             return null;
 
-        if (TsOverloadCallSites.ConstructorNamesOf(overload) is not { } names)
+        if (TsOverloadCallSites.ConstructorNamesOf(overload.Target) is not { } names)
             return null;
 
-        TsExpression baseReference = named.Origin is { } origin
-            ? new TsTypeReference(named.Name, origin)
-            : new TsIdentifier(named.Name);
-
-        return new TsPropertyAccess(baseReference, names.Selector);
+        return new TsPropertyAccess(
+            IrToTsExpressionBridge.TypeValueReference(named.Name, named.Origin),
+            names.Selector
+        );
     }
 
     public static TsConstructor BuildSimpleConstructor(

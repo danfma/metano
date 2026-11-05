@@ -425,7 +425,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         _constructorAccessFacts = ConstructorAccessFacts.Collect(
             compilation,
             emittedTypes,
-            jsonConstructedTypes
+            jsonConstructedTypes,
+            JsonConstructorSelection.CalledBy(jsonConstructedTypes)
         );
 
         _overloadClaims = new TsOverloadClaimsRegistry(Context, _constructorAccessFacts);
@@ -1369,6 +1370,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .Cast<INamedTypeSymbol>();
         var sigIndex = GroupClosureHasher.BuildSignatureHashIndex(allTypes);
         var graph = IrTypeDependencyGraph.Build(ir);
+        var dispatchedConstructions = DispatchedConstructionFingerprint.Of(allTypes);
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var group in groups)
@@ -1377,8 +1379,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var closure = GroupClosureHasher.HashGroupClosure(fqns, graph, sigIndex);
             var constructorFacts = constructorAccessFacts.FingerprintOf(group.Types);
 
-            result[GroupKey(group)] =
-                constructorFacts.Length == 0 ? closure : $"{closure}|{constructorFacts}";
+            var parts = new[] { closure, constructorFacts, dispatchedConstructions }.Where(part =>
+                part.Length > 0
+            );
+
+            result[GroupKey(group)] = string.Join("|", parts);
         }
         return result;
     }

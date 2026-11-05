@@ -488,8 +488,11 @@ public static class IrConstructorExtractor
         if (FindBaseCallSyntax(ctor) is { } baseCall)
             return ExtractExplicitBaseCall(baseCall, compilation, context, localNames);
 
-        return FindImplicitBaseCall(ctor, compilation) is { } implicitCall
-            ? ExtractSelectedBaseCall(implicitCall, compilation, context, localNames)
+        if (FindImplicitBaseCall(ctor, compilation) is not { } implicitCall)
+            return null;
+
+        return ExtractSelectedBaseCall(implicitCall, compilation, context, localNames) is { } bound
+            ? new BaseConstructorCall(bound.Arguments, bound.Overload)
             : null;
     }
 
@@ -504,10 +507,10 @@ public static class IrConstructorExtractor
 
         if (model.GetOperation(baseCall) is IInvocationOperation invocation)
         {
-            var selected = ExtractSelectedBaseCall(invocation, compilation, context, localNames);
+            var bound = ExtractSelectedBaseCall(invocation, compilation, context, localNames);
 
-            if (selected is not null)
-                return selected;
+            if (bound is not null)
+                return new BaseConstructorCall(bound.Arguments, bound.Overload);
         }
 
         var extractor = new IrExpressionExtractor(model, context, localNames);
@@ -525,27 +528,22 @@ public static class IrConstructorExtractor
     /// overload (spec 013 FR-017); <c>null</c> when the base keeps its
     /// dispatcher or an argument cannot be bound.
     /// </summary>
-    private static BaseConstructorCall? ExtractSelectedBaseCall(
+    private static BoundOverloadCall? ExtractSelectedBaseCall(
         IInvocationOperation invocation,
         Compilation compilation,
         IrExtractionContext context,
         LocalBindingNames localNames
     )
     {
-        var overload = DispatchedConstructorCalls.BaseCallTarget(
-            invocation.TargetMethod,
-            context.Target
-        );
+        var target = DispatchedConstructorCalls.BaseCallTarget(invocation.TargetMethod, context);
 
-        if (overload is null)
+        if (target is null)
             return null;
 
         var model = compilation.GetSemanticModel(invocation.Syntax.SyntaxTree);
         var extractor = new IrExpressionExtractor(model, context, localNames);
 
-        return extractor.ExtractBoundArguments(invocation) is { } arguments
-            ? new BaseConstructorCall(arguments, overload)
-            : null;
+        return extractor.ExtractBoundCall(invocation, target);
     }
 
     /// <summary>
@@ -574,15 +572,6 @@ public static class IrConstructorExtractor
             ? call
             : null;
     }
-
-    /// <summary>
-    /// A constructor's base call: its arguments and, when a target selects
-    /// the base overload exactly, that overload.
-    /// </summary>
-    private sealed record BaseConstructorCall(
-        IReadOnlyList<IrArgument> Arguments,
-        IrOverloadRef? Overload
-    );
 
     private static PrimaryConstructorBaseTypeSyntax? FindPrimaryBase(BaseListSyntax? baseList) =>
         baseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>().FirstOrDefault();
@@ -615,4 +604,14 @@ public static class IrConstructorExtractor
             SymbolHelper.GetNameOverride(prop, context.Target)
         );
     }
+
+    /// <summary>
+    /// A constructor's base call: its arguments and, when a target selects
+    /// the base overload exactly, that overload — with which the arguments
+    /// are Roslyn's bound ones.
+    /// </summary>
+    private sealed record BaseConstructorCall(
+        IReadOnlyList<IrArgument> Arguments,
+        IrSelectedOverload? Overload
+    );
 }

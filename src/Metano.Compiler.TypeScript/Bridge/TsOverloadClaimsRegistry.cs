@@ -13,10 +13,21 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// own emission and every class that inherits from it read the same names
 /// (spec 013 DECIDED-18). Shared by the parallel per-file transforms.
 /// <para>
-/// A class's claims are a function of its shape alone: its IR is extracted
+/// A class's claims are a function of its shape — its IR is extracted
 /// without bodies (names, visibility, parameters), so the result is the same
 /// whichever file asks first, and a base declared in another project, whose
-/// syntax this compilation cannot bind, is read the same way.
+/// syntax this compilation cannot bind, is read the same way — and of one
+/// compilation-wide fact: which non-public factories code outside the class
+/// body calls (FR-011, <see cref="ConstructorAccessFacts"/>). That fact is
+/// known only for this compilation's types; a base from another project is
+/// judged by its declared accessibility, so a factory its own package widened
+/// reads narrower here, and FR-026 then qualifies a derived factory it could
+/// have kept — a different name, never a clash.
+/// </para>
+/// <para>
+/// Call sites reach the constructor claims by overload identity
+/// (<see cref="ConstructorNamesOf(IrOverloadRef)"/>), which finds the
+/// declaring type by its <see cref="IrTypeKey"/>.
 /// </para>
 /// </summary>
 public sealed class TsOverloadClaimsRegistry(
@@ -51,7 +62,7 @@ public sealed class TsOverloadClaimsRegistry(
     /// </summary>
     internal TsConstructorOverloadNames? ConstructorNamesOf(IrOverloadRef overload) =>
         IrTypeKeys.Find(overload.DeclaringType, _context.Compilation) is { } type
-            ? For(type).ConstructorNamesAt(overload.Ordinal)
+            ? For(type).ConstructorNamesOf(overload.Ordinal)
             : null;
 
     /// <summary>The claims of <paramref name="type"/>, computed on first use.</summary>

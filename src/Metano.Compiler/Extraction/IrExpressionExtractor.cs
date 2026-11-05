@@ -232,8 +232,7 @@ public sealed partial class IrExpressionExtractor
                 QualifiedMemberSyntax.Of(member)
             ),
             InvocationExpressionSyntax inv => ExtractInvocation(inv),
-            ObjectCreationExpressionSyntax oc => ExtractObjectCreation(oc),
-            ImplicitObjectCreationExpressionSyntax ioc => ExtractImplicitObjectCreation(ioc),
+            BaseObjectCreationExpressionSyntax creation => ExtractCreation(creation),
             ConditionalExpressionSyntax cond => new IrConditionalExpression(
                 Extract(cond.Condition),
                 Extract(cond.WhenTrue),
@@ -4232,13 +4231,6 @@ public sealed partial class IrExpressionExtractor
             )
         );
 
-    private IrExpression ExtractObjectCreation(ObjectCreationExpressionSyntax oc) =>
-        ExtractCreation(oc);
-
-    private IrExpression ExtractImplicitObjectCreation(
-        ImplicitObjectCreationExpressionSyntax ioc
-    ) => ExtractCreation(ioc);
-
     /// <summary>
     /// Lowers an explicit or implicit <c>new</c>. A construction a target may
     /// route through the resolved overload's factory
@@ -4248,11 +4240,8 @@ public sealed partial class IrExpressionExtractor
     private IrExpression ExtractCreation(BaseObjectCreationExpressionSyntax creation)
     {
         var ctorSymbol = _semantic.GetSymbolInfo(creation).Symbol as IMethodSymbol;
-        var overload = DispatchedConstructorCalls.ConstructionTarget(ctorSymbol, _target);
-        var boundArgs = overload is null
-            ? null
-            : ExtractBoundArguments(_semantic.GetOperation(creation));
-        var args = boundArgs ?? ExtractSourceArguments(creation.ArgumentList, ctorSymbol);
+        var bound = TryBindToResolvedOverload(creation, ctorSymbol);
+        var args = bound?.Arguments ?? ExtractSourceArguments(creation.ArgumentList, ctorSymbol);
 
         ReportTupleValueLookup(creation, ctorSymbol);
 
@@ -4262,14 +4251,24 @@ public sealed partial class IrExpressionExtractor
             ? IrTypeRefMapper.Map(typeSymbol, _originResolver, _target)
             : new IrUnknownTypeRef();
 
-        return BuildNewExpression(
-            type,
-            args,
-            typeSymbol,
-            creation,
-            boundArgs is null ? null : overload
-        );
+        return BuildNewExpression(type, args, typeSymbol, creation, bound?.Overload);
     }
+
+    private static bool HasNamedArgument(IReadOnlyList<IrArgument> args) =>
+        args.Any(argument => argument.Name is not null);
+
+    /// <summary>
+    /// The construction bound to the factory of the overload Roslyn resolved
+    /// (<see cref="DispatchedConstructorCalls.ConstructionTarget"/>), or
+    /// <c>null</c> when it keeps its source arguments and the dispatcher.
+    /// </summary>
+    private BoundOverloadCall? TryBindToResolvedOverload(
+        BaseObjectCreationExpressionSyntax creation,
+        IMethodSymbol? ctorSymbol
+    ) =>
+        DispatchedConstructorCalls.ConstructionTarget(ctorSymbol, _context) is { } target
+            ? ExtractBoundCall(_semantic.GetOperation(creation), target)
+            : null;
 
     private List<IrArgument> ExtractSourceArguments(
         ArgumentListSyntax? argumentList,
@@ -4297,7 +4296,7 @@ public sealed partial class IrExpressionExtractor
         IReadOnlyList<IrArgument> args,
         ITypeSymbol? typeSymbol,
         ExpressionSyntax creationSyntax,
-        IrOverloadRef? overload = null
+        IrSelectedOverload? overload = null
     )
     {
         var isPlainObject =
@@ -4314,8 +4313,9 @@ public sealed partial class IrExpressionExtractor
         // with the parameter's default value. This gives backends that can't
         // express named arguments (TypeScript) a positional list that still
         // behaves like the source, while backends that can (Dart) keep the
-        // name on each IrArgument and render `name: value`.
-        if (overload is null && ctor is not null && args.Any(a => a.Name is not null))
+        // name on each IrArgument and render `name: value`. A construction
+        // bound to its resolved overload is already positional, without names.
+        if (overload is null && ctor is not null && HasNamedArgument(args))
             args = NormalizeArguments(args, ctor);
 
         var initializer = InitializerOf(creationSyntax);

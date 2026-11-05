@@ -49,7 +49,7 @@ internal sealed class TsOverloadClaims
 
     /// <summary>The selector and factory names of one constructor overload.</summary>
     public TsConstructorOverloadNames NamesOf(IrConstructorDeclaration constructor) =>
-        ConstructorNamesAt(constructor.DeclarationOrdinal)
+        ConstructorNamesOf(constructor.DeclarationOrdinal)
         ?? throw new InvalidOperationException(
             $"The claim pass named no constructor overload '{constructor.SignatureText}'."
         );
@@ -59,7 +59,7 @@ internal sealed class TsOverloadClaims
     /// <paramref name="ordinal"/> (<see cref="IrOverloadRef.Ordinal"/>);
     /// <c>null</c> when the class has no dispatched constructor there.
     /// </summary>
-    public TsConstructorOverloadNames? ConstructorNamesAt(int ordinal) =>
+    public TsConstructorOverloadNames? ConstructorNamesOf(int ordinal) =>
         _constructors.GetValueOrDefault(ordinal);
 
     /// <summary>
