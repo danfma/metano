@@ -290,7 +290,8 @@ internal static partial class IrToTsClassBridge
             IrPrimitiveTypeRef p => p.Primitive switch
             {
                 IrPrimitive.Int32 => "Int",
-                IrPrimitive.Int64 or IrPrimitive.UInt64 => "Long",
+                IrPrimitive.Int64 => "Long",
+                IrPrimitive.UInt64 => "ULong",
                 IrPrimitive.String => "String",
                 IrPrimitive.Boolean => "Bool",
                 IrPrimitive.Float64 => "Double",

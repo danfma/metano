@@ -89,6 +89,7 @@ public static class IrRuntimeRequirementToTsImport
             or "isInt16"
             or "isInt32"
             or "isInt64"
+            or "isUInt64"
             or "isFloat32"
             or "isFloat64"
             or "isBool"
