@@ -93,9 +93,13 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
         if (EmittedBaseOf(type, ir) is not { } baseType)
             return NothingInherited;
 
+        var baseTypeParameterNames = baseType
+            .OriginalDefinition.TypeParameters.Select(parameter => parameter.Name)
+            .ToList();
+
         return TsFactoryInheritance.Inherit(
             For(baseType).Statics,
-            baseType.OriginalDefinition.TypeParameters.Select(parameter => parameter.Name).ToList(),
+            baseTypeParameterNames,
             extendsType,
             (ir.TypeParameters ?? []).Select(parameter => parameter.Name).ToList()
         );
@@ -127,18 +131,11 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
             )
             : null;
 
-    /// <summary>
-    /// The cross-package origins of the types a shape names, without recording
-    /// the misses the class's own emission reports (<c>MS0007</c>).
-    /// </summary>
     private static IrTypeOriginResolver? UnrecordedOriginResolverOf(
         TypeScriptTransformContext context
     ) =>
         context.TypeMapping is { } typeMapping
-            ? named =>
-                typeMapping.CrossAssemblyOrigins.GetValueOrDefault(
-                    named.OriginalDefinition.GetCrossAssemblyOriginKey()
-                )
+            ? IrTypeOriginResolverFactory.CreateUnrecorded(typeMapping)
             : null;
 
     private static bool HasOverloadGroup(IrClassDeclaration ir) =>

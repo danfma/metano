@@ -126,11 +126,6 @@ internal sealed class TsOverloadClaimPass
     /// The candidate names of a suffix: its selector and, for a concrete class,
     /// its factory as FR-026 names it.
     /// </summary>
-    /// <remarks>
-    /// A factory FR-026 qualifies stays qualified once its suffix takes
-    /// <c>$</c>: the qualified name goes through the claim pass like any other
-    /// (<c>fromIntBoxValue$</c>).
-    /// </remarks>
     private TsConstructorOverloadNames ConstructorNamesOf(
         string suffix,
         string claimed,
@@ -140,12 +135,13 @@ internal sealed class TsOverloadClaimPass
         var selector = SelectorName(claimed);
 
         if (factory is null)
-            return new TsConstructorOverloadNames(selector, null, false);
+            return new TsConstructorOverloadNames(
+                selector,
+                Factory: null,
+                OverridesInheritedFactory: false
+            );
 
-        var form =
-            FactoryFormOf(suffix, factory) is FactoryForm.Qualified
-                ? FactoryForm.Qualified
-                : FactoryFormOf(claimed, factory);
+        var form = FactoryFormFor(suffix, claimed, factory);
 
         var factoryName =
             form is FactoryForm.Qualified
@@ -155,9 +151,20 @@ internal sealed class TsOverloadClaimPass
         return new TsConstructorOverloadNames(
             selector,
             factoryName,
-            form is FactoryForm.KeepsInherited
+            OverridesInheritedFactory: form is FactoryForm.KeepsInherited
         );
     }
+
+    /// <summary>
+    /// The FR-026 form of the factory claimed under <paramref name="claimed"/>.
+    /// A factory qualified under its own suffix stays qualified once the suffix
+    /// takes <c>$</c>: the qualified name goes through the claim pass like any
+    /// other (<c>fromIntBoxValue$</c>).
+    /// </summary>
+    private FactoryForm FactoryFormFor(string suffix, string claimed, TsFactorySignature factory) =>
+        FactoryFormOf(suffix, factory) is FactoryForm.Qualified
+            ? FactoryForm.Qualified
+            : FactoryFormOf(claimed, factory);
 
     /// <summary>
     /// What holds the selector or the factory candidate, if anything: the

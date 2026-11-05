@@ -185,12 +185,8 @@ internal static class OverloadGroupNaming
             $"{parameter.Type.ToDisplayString()} {parameter.Name}"
         );
 
-        return $"{DeclaredNameOf(method)}({string.Join(", ", parameters)})";
+        return $"{OverloadSignatureText.DeclaredNameOf(method)}({string.Join(", ", parameters)})";
     }
-
-    /// <summary>The method's name, or a constructor's type name.</summary>
-    private static string DeclaredNameOf(IMethodSymbol method) =>
-        method.MethodKind == MethodKind.Constructor ? method.ContainingType.Name : method.Name;
 
     /// <summary>Requires two or more items: a dead end holds at least two overloads.</summary>
     private static string JoinQuoted(IEnumerable<string> items)

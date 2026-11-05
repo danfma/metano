@@ -22,7 +22,10 @@ internal static class TsFactoryInheritance
     /// (<c>Box2&lt;U&gt; : Box&lt;U&gt;</c>, <c>C&lt;P, Q&gt; : B&lt;P, Q&gt;</c>
     /// with <c>B&lt;V, K&gt;</c>: <c>V</c> → <c>P</c>, <c>K</c> → <c>Q</c>); a
     /// factory whose type parameter the clause fixes (<c>IntBox :
-    /// Box&lt;int&gt;</c>) or binds twice can never be redeclared.
+    /// Box&lt;int&gt;</c>) or binds twice can never be redeclared. The binding
+    /// is one for the whole clause: a constructor factory re-declares every
+    /// class type parameter (FR-028), so a clause that fixes one fixes a type
+    /// parameter of every generic inherited factory.
     /// </summary>
     /// <param name="baseStatics">The base's whole static side, in the base's
     /// type parameters.</param>

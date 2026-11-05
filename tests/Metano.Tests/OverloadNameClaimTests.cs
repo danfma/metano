@@ -29,6 +29,8 @@ public class OverloadNameClaimTests
 
         var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
 
+        await Assert.That(report).IsNotNull();
+
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert
             .That(report.Message)
@@ -96,6 +98,8 @@ public class OverloadNameClaimTests
 
         var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
 
+        await Assert.That(report).IsNotNull();
+
         await Assert
             .That(report!.Message)
             .IsEqualTo(
@@ -123,6 +127,8 @@ public class OverloadNameClaimTests
         );
 
         var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
+
+        await Assert.That(report).IsNotNull();
 
         await Assert
             .That(report!.Message)
@@ -158,6 +164,8 @@ public class OverloadNameClaimTests
         );
 
         var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked);
+
+        await Assert.That(report).IsNotNull();
 
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
         await Assert
@@ -213,6 +221,8 @@ public class OverloadNameClaimTests
 
         var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
 
+        await Assert.That(report).IsNotNull();
+
         await Assert.That(report!.Message).Contains("'F(string a)'");
         await Assert.That(LineOf(report)).IsEqualTo(10);
     }
@@ -255,6 +265,13 @@ public class OverloadNameClaimTests
                     + "of 'Money(decimal amount)' inherited from 'Money'; it is emitted as "
                     + "'fromAmount$' (spec 013 FR-004)."
             );
+        await Assert
+            .That(reports[1].Message)
+            .IsEqualTo(
+                "Fast path 'Cash.fromCents' of 'From(int cents)' collides with the factory of "
+                    + "'Money(int cents)' inherited from 'Money'; it is emitted as 'fromCents$' "
+                    + "(spec 013 FR-004)."
+            );
         await Assert.That(files["cash.ts"]).Contains("private static fromAmount$(amount: Decimal)");
     }
 
@@ -294,7 +311,38 @@ public class OverloadNameClaimTests
             .IsNotNull();
     }
 
-    /// <summary>The only diagnostic with <paramref name="code"/>, or <c>null</c> when none has it.</summary>
+    [Test]
+    public async Task SwappedTypeParameters_RenameEveryNameAtOnce()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class A<K, V>
+            {
+                public A(K k, V v) { }
+
+                public A(int n) { }
+            }
+
+            [Transpile]
+            public class B<K, V> : A<V, K>
+            {
+                public B(V k, K v) : base(k, v) { }
+
+                public B(int n) : base(n) { }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["b.ts"])
+            .Contains("static override fromKV<K, V>(k: V, v: K): B<K, V> {");
+    }
+
+    /// <summary>
+    /// The only diagnostic with <paramref name="code"/>, or <c>null</c> when
+    /// none has it; throws when several have it.
+    /// </summary>
     private static MetanoDiagnostic? FindDiagnostic(
         IEnumerable<MetanoDiagnostic> diagnostics,
         string code

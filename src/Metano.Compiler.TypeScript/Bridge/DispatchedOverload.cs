@@ -13,7 +13,11 @@ internal static class DispatchedOverload
         Required(overload.OverloadName?.Suffix, overload.Name, "an overload name");
 
     public static string SuffixOf(IrConstructorDeclaration overload) =>
-        Required(overload.OverloadName?.Suffix, overload.SignatureText, "an overload name");
+        Required(
+            overload.OverloadName?.Suffix,
+            overload.SignatureText ?? "constructor",
+            "an overload name"
+        );
 
     /// <summary>The method as C# declares it: <c>From(decimal amount)</c>.</summary>
     public static string SignatureOf(IrMethodDeclaration overload) =>

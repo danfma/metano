@@ -92,7 +92,7 @@ public sealed class IrToTsClassEmitter(
         );
 
         var explicitCtors = IrConstructorExtractor.AllExplicitConstructors(type);
-        var emitsDispatcher = explicitCtors.Count > 1;
+        var emitsDispatcher = IrConstructorExtractor.IsDispatchedSet(type);
         var promotedMemberDeclaration = PromotedMemberDeclarationOf(
             ir.Constructor,
             emitsDispatcher
@@ -133,7 +133,9 @@ public sealed class IrToTsClassEmitter(
         }
 
         if (keepsBaseMessage)
+        {
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
+        }
 
         EmitPromotedMemberFields(ir.Constructor, promotedMemberDeclaration, classMembers);
 

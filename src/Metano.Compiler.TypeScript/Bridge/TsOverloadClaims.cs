@@ -87,11 +87,17 @@ internal sealed class TsOverloadClaims
     private static Location? LocationOf(INamedTypeSymbol type, TsClaimSite site)
     {
         var declaration = site.ConstructorOrdinal is { } ordinal
-            ? IrConstructorExtractor.AllExplicitConstructors(type).ElementAtOrDefault(ordinal)
+            ? ConstructorAt(type, ordinal)
             : MemberAt(type, site);
 
         return (declaration ?? type).Locations.FirstOrDefault();
     }
+
+    private static IMethodSymbol ConstructorAt(INamedTypeSymbol type, int ordinal) =>
+        IrConstructorExtractor.AllExplicitConstructors(type).ElementAtOrDefault(ordinal)
+        ?? throw new InvalidOperationException(
+            $"'{type.Name}' has no declared constructor at ordinal {ordinal}."
+        );
 
     private static ISymbol? MemberAt(INamedTypeSymbol type, TsClaimSite site)
     {
