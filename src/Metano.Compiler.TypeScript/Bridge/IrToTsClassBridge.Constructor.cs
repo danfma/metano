@@ -104,7 +104,9 @@ internal static partial class IrToTsClassBridge
         }
 
         var isReadonly = p.Promotion is IrParameterPromotion.ReadonlyProperty;
-        var (accessibility, jsdoc) = PromotedMemberVisibility(p);
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(
+            p.PromotedVisibility ?? IrVisibility.Public
+        );
 
         return new TsConstructorParam(
             name,
@@ -115,23 +117,6 @@ internal static partial class IrToTsClassBridge
             JSDoc: jsdoc
         );
     }
-
-    /// <summary>
-    /// The TypeScript visibility of a promoted member. A
-    /// <c>private protected</c> one emits <c>protected</c>: unlike a declared
-    /// <c>private protected</c> member it cannot be skipped — the constructor
-    /// assigns it — and the <c>private</c> the shared table gives would hide
-    /// it from the derived classes C# lets read it.
-    /// </summary>
-    internal static TsMemberVisibility PromotedMemberVisibility(IrConstructorParameter p) =>
-        IrToTsVisibilityMapper.Map(
-            p.PromotedVisibility switch
-            {
-                IrVisibility.PrivateProtected => IrVisibility.Protected,
-                { } declared => declared,
-                null => IrVisibility.Public,
-            }
-        );
 
     /// <summary>
     /// Lowers one non-promoted parameter to a plain TS parameter (no

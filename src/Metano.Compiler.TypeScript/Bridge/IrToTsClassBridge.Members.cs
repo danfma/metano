@@ -32,10 +32,6 @@ internal static partial class IrToTsClassBridge
     ///   <item>Custom setter body → <see cref="TsSetterMember"/> (in addition
     ///     to the getter when both are present).</item>
     /// </list>
-    /// Returns an empty list for a <c>private protected</c> property: no
-    /// TypeScript accessibility expresses it — <c>public</c> would widen it
-    /// and <c>private</c> would hide it from the derived classes C# lets
-    /// read it.
     /// </summary>
     public static IReadOnlyList<TsClassMember> BuildProperty(
         IrPropertyDeclaration prop,
@@ -43,9 +39,6 @@ internal static partial class IrToTsClassBridge
         IrToTsBridgeContext context
     )
     {
-        if (prop.Visibility is IrVisibility.PrivateProtected)
-            return [];
-
         var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
         var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(prop.Visibility);
 
@@ -306,18 +299,12 @@ internal static partial class IrToTsClassBridge
     /// <c>delegateAdd</c> and <c>delegateRemove</c>. The handler delegate
     /// type comes pre-resolved from the caller because the legacy
     /// <see cref="TypeMapper"/> still owns <c>[ExportFromBcl]</c> overrides.
-    /// Returns an empty list for a <c>private protected</c> event, as
-    /// <see cref="BuildProperty"/> and <see cref="BuildField"/> skip a
-    /// <c>private protected</c> member.
     /// </summary>
     public static IReadOnlyList<TsClassMember> BuildEvent(
         IrEventDeclaration evt,
         TsType delegateType
     )
     {
-        if (evt.Visibility is IrVisibility.PrivateProtected)
-            return [];
-
         var name = TypeScriptNaming.ToCamelCaseMember(evt.Name);
         var nullableDelegateType = new TsUnionType([delegateType, new TsNamedType("null")]);
         var eventVisibility = IrToTsVisibilityMapper.Map(evt.Visibility);
@@ -384,18 +371,13 @@ internal static partial class IrToTsClassBridge
     /// definite-assignment assertion (<c>name!: T</c>). A <c>readonly</c>
     /// field written by a transpiled <c>init</c> accessor drops <c>readonly</c>,
     /// since the setter that accessor lowers to cannot write a read-only field.
-    /// Returns <c>null</c> for a <c>private protected</c> field, for the
-    /// reason <see cref="BuildProperty"/> gives.
     /// </summary>
-    public static TsFieldMember? BuildField(
+    public static TsFieldMember BuildField(
         IrFieldDeclaration field,
         TsType tsType,
         IrToTsBridgeContext context
     )
     {
-        if (field.Visibility is IrVisibility.PrivateProtected)
-            return null;
-
         var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(field.Name, field.Attributes);
 
         // When the field captures a constructor parameter (DI shape) the

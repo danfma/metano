@@ -221,13 +221,13 @@ public sealed class IrToTsClassEmitter(
             switch (irMember)
             {
                 case IrFieldDeclaration irField:
-                    var fieldMember = IrToTsClassBridge.BuildField(
-                        irField,
-                        IrToTsTypeMapper.Map(irField.Type, BclOverrides),
-                        lowering
+                    classMembers.Add(
+                        IrToTsClassBridge.BuildField(
+                            irField,
+                            IrToTsTypeMapper.Map(irField.Type, BclOverrides),
+                            lowering
+                        )
                     );
-                    if (fieldMember is not null)
-                        classMembers.Add(fieldMember);
                     break;
 
                 case IrPropertyDeclaration irProp
@@ -286,8 +286,7 @@ public sealed class IrToTsClassEmitter(
                 case IrMethodDeclaration irMethod when irMethod.Semantics.IsOperator:
                     deferredOperators.Add(irMethod);
                     break;
-                case IrMethodDeclaration irMethod
-                    when irMethod.Visibility is not IrVisibility.PrivateProtected:
+                case IrMethodDeclaration irMethod:
                     deferredMethods.Add(irMethod);
                     break;
             }
@@ -454,7 +453,9 @@ public sealed class IrToTsClassEmitter(
 
     private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p)
     {
-        var (accessibility, jsdoc) = IrToTsClassBridge.PromotedMemberVisibility(p);
+        var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(
+            p.PromotedVisibility ?? IrVisibility.Public
+        );
 
         return new TsFieldMember(
             IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),

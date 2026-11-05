@@ -6,8 +6,9 @@ namespace Metano.Tests;
 /// <c>/** @internal *&#47;</c> — same-assembly callers reach it from any
 /// class, so the emitted surface must not restrict it; <c>protected
 /// internal</c> widens to an untagged public member, since a derived class in
-/// another package may use it; <c>private</c> stays <c>private</c> and
-/// <c>protected</c> stays <c>protected</c>.
+/// another package may use it; <c>private protected</c> becomes a
+/// <c>protected</c> member tagged <c>/** @internal *&#47;</c>; <c>private</c>
+/// stays <c>private</c> and <c>protected</c> stays <c>protected</c>.
 /// </summary>
 public class InternalVisibilityMappingTests
 {
@@ -44,6 +45,12 @@ public class InternalVisibilityMappingTests
         "{\n  count: number = 0;",
         "\n\n  steps: number = 0;",
         "\n\n  reset(): void"
+    )]
+    [Arguments(
+        "private protected",
+        "  /** @internal */\n  protected count: number = 0;",
+        "  /** @internal */\n  protected steps: number = 0;",
+        "  /** @internal */\n  protected reset(): void"
     )]
     [Arguments(
         "private",
@@ -304,6 +311,7 @@ public class InternalVisibilityMappingTests
     [Arguments("private")]
     [Arguments("protected")]
     [Arguments("internal")]
+    [Arguments("private protected")]
     public async Task MixedMethodGroup_TagsTheNarrowerSignatureOfAPublicDispatcher(
         string narrowerOverload
     )
@@ -535,7 +543,7 @@ public class InternalVisibilityMappingTests
     }
 
     [Test]
-    public async Task PrivateProtectedPromotedParameter_EmitsAProtectedParameterProperty()
+    public async Task PrivateProtectedPromotedParameter_EmitsAProtectedTaggedParameterProperty()
     {
         var files = TranspileHelper.Transpile(
             """
@@ -557,12 +565,12 @@ public class InternalVisibilityMappingTests
 
         await Assert
             .That(files["app/probe.ts"])
-            .Contains("  constructor(protected readonly x: number) { }");
+            .Contains("  constructor(/** @internal */ protected readonly x: number) { }");
         await Assert.That(files["app/derived-probe.ts"]).Contains("return this.x * 2;");
     }
 
     [Test]
-    public async Task PrivateProtectedMembers_AreStillSkipped()
+    public async Task PrivateProtectedMembers_EmitProtectedTaggedForTheirOwnAndDerivedBodies()
     {
         var files = TranspileHelper.Transpile(
             """
@@ -581,17 +589,43 @@ public class InternalVisibilityMappingTests
 
                 private protected void Reset() { }
 
-                public int Read() => 1;
+                public int Read()
+                {
+                    Changed?.Invoke();
+                    Reset();
+
+                    return Count + Steps;
+                }
+            }
+
+            [Transpile]
+            public class Gadget : Widget
+            {
+                public int Bump()
+                {
+                    Reset();
+
+                    return Count + Steps;
+                }
             }
             """
         );
-        var output = files["app/widget.ts"];
+        var widget = files["app/widget.ts"];
+        var gadget = files["app/gadget.ts"];
 
-        await Assert.That(output).DoesNotContain("count");
-        await Assert.That(output).DoesNotContain("steps");
-        await Assert.That(output).DoesNotContain("changed");
-        await Assert.That(output).DoesNotContain("reset");
-        await Assert.That(output).Contains("  read(): number {");
+        await Assert.That(widget).Contains("  /** @internal */\n  protected count: number = 0;");
+        await Assert.That(widget).Contains("  /** @internal */\n  protected steps: number = 0;");
+        await Assert.That(widget).Contains("  private changed: ");
+        await Assert.That(widget).Contains("  /** @internal */\n  protected changed$add(handler:");
+        await Assert
+            .That(widget)
+            .Contains("  /** @internal */\n  protected changed$remove(handler:");
+        await Assert.That(widget).Contains("  /** @internal */\n  protected reset(): void {");
+        await Assert.That(widget).Contains("this.changed?.();");
+        await Assert.That(widget).Contains("this.reset();");
+        await Assert.That(widget).Contains("return this.count + this.steps;");
+        await Assert.That(gadget).Contains("this.reset();");
+        await Assert.That(gadget).Contains("return this.count + this.steps;");
     }
 
     [Test]
