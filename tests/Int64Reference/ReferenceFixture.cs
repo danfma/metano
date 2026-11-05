@@ -100,7 +100,7 @@ internal static class ReferenceFixture
     private static IEnumerable<object?[]> ArgumentsOf(MethodInfo method) =>
         method
             .GetParameters()
-            .Select(parameter => BoundaryOperands.For(parameter.ParameterType))
+            .Select(BoundaryOperands.For)
             .Aggregate(
                 (IEnumerable<object?[]>)
                     [

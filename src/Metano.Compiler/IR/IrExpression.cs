@@ -651,11 +651,18 @@ public abstract record IrInterpolationPart;
 public sealed record IrInterpolationText(string Text) : IrInterpolationPart;
 
 /// <summary>
-/// An expression segment within an interpolated string.
+/// An expression segment within an interpolated string:
+/// <c>{Expression,Alignment:FormatSpecifier}</c>.
+/// <see cref="SixtyFourBitKind"/> is the hole's numeric kind when its value
+/// is a (non-nullable) <c>long</c> or <c>ulong</c>, so a target that formats
+/// those values itself can honor the format and the alignment (spec 012
+/// FR-037); <c>null</c> otherwise.
 /// </summary>
 public sealed record IrInterpolationExpression(
     IrExpression Expression,
-    string? FormatSpecifier = null
+    string? FormatSpecifier = null,
+    int? Alignment = null,
+    IrNumericKind? SixtyFourBitKind = null
 ) : IrInterpolationPart;
 
 // -- Pattern matching --

@@ -135,7 +135,10 @@ function invoke(
   }
 }
 
-/** A fixture argument as the twin receives it: a `bigint`, a `number`, a one-character string or a `Decimal`. */
+/**
+ * A fixture argument as the twin receives it: a `bigint`, a `number`, a
+ * one-character string, a `Decimal`, a `string` or a `boolean`.
+ */
 function argumentOf(text: string | null, type: string): unknown {
   if (text === null) {
     return null;
@@ -153,6 +156,14 @@ function argumentOf(text: string | null, type: string): unknown {
 
   if (baseType === "Decimal") {
     return new Decimal(text);
+  }
+
+  if (baseType === "String") {
+    return text;
+  }
+
+  if (baseType === "Boolean") {
+    return text === "true";
   }
 
   return Number(text);

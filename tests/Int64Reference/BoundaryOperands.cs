@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Reflection;
 
 namespace Int64Reference;
 
@@ -130,6 +131,127 @@ internal static class BoundaryOperands
         new BigInteger(ulong.MaxValue) + 1,
     ];
 
+    private static readonly object?[] BooleanValues = [false, true];
+
+    /// <summary>
+    /// Format strings: the implemented standard formats with and without a
+    /// precision, and invalid ones. The valid .NET formats the runtime rejects
+    /// with NotSupportedException (MS0066) diverge by design, so the runtime
+    /// tests cover them instead.
+    /// </summary>
+    private static readonly object?[] FormatValues =
+    [
+        null,
+        "",
+        "G",
+        "g",
+        "G1",
+        "G2",
+        "G5",
+        "g5",
+        "G19",
+        "G20",
+        "R",
+        "D",
+        "D8",
+        "d3",
+        "D25",
+        "N",
+        "N0",
+        "n3",
+        "F",
+        "F0",
+        "f3",
+        "X",
+        "x",
+        "X0",
+        "x4",
+        "X20",
+        "Q",
+        "Z",
+        "D1000000000",
+    ];
+
+    /// <summary>
+    /// Text to parse: the grammar of every supported <c>NumberStyles</c> and
+    /// of <c>Convert</c>'s bases, white space (U+00A0 is not .NET white
+    /// space), trailing NULs, the 64-bit limits and one past them.
+    /// </summary>
+    private static readonly object?[] TextValues =
+    [
+        null,
+        "",
+        " ",
+        "12",
+        " 12 ",
+        "\t12\n",
+        "\u00A012",
+        "+5",
+        "-5",
+        "--5",
+        "- 5",
+        "-5-",
+        "5-",
+        "5 -",
+        "1,234",
+        ",1",
+        "1,,2",
+        "1,",
+        "-1,234.000",
+        "1.5",
+        "1.",
+        ".0",
+        ".",
+        "-0",
+        "-0.0",
+        "0,-",
+        "0x10",
+        "0X10",
+        "1e3",
+        "12\0\0",
+        "12 \0",
+        "\012",
+        "1 2",
+        "00000000000000000000000000012",
+        "9223372036854775807",
+        "9223372036854775808",
+        "-9223372036854775808",
+        "-9223372036854775809",
+        "18446744073709551615",
+        "18446744073709551616",
+        "FF",
+        "ff",
+        "FFFFFFFFFFFFFFFF",
+        "7FFFFFFFFFFFFFFF",
+        "8000000000000000",
+        "10000000000000000",
+        "0000000000000000000FF",
+        " FF ",
+        "-FF",
+        "101",
+        "777",
+        "1777777777777777777777",
+        "2000000000000000000000",
+        "z",
+    ];
+
+    /// <summary>The bases of <c>Convert.ToInt64(string, int)</c>, and one it rejects.</summary>
+    private static readonly object?[] BaseValues = [2, 8, 10, 16, 3];
+
+    /// <summary>
+    /// The operands of <paramref name="parameter"/>: its name picks the
+    /// <c>string</c> and base operands (<c>format</c>, <c>text</c>,
+    /// <c>fromBase</c>), its type the others.
+    /// </summary>
+    public static IReadOnlyList<object?> For(ParameterInfo parameter) =>
+        parameter.Name switch
+        {
+            "format" => FormatValues,
+            "text" => TextValues,
+            "fromBase" => BaseValues,
+            _ => For(parameter.ParameterType),
+        };
+
     /// <summary>The operands of a parameter of type <paramref name="type"/>.</summary>
     public static IReadOnlyList<object?> For(Type type) =>
         Nullable.GetUnderlyingType(type) is { } underlying
@@ -147,6 +269,7 @@ internal static class BoundaryOperands
             TypeCode.Double => DoubleValues,
             TypeCode.Single => SingleValues,
             TypeCode.Decimal => DecimalValues,
+            TypeCode.Boolean => BooleanValues,
             _ when type == typeof(BigInteger) => BigIntegerValues,
             _ => throw new NotSupportedException($"No boundary operands for '{type}'."),
         };

@@ -691,6 +691,8 @@ public static partial class IrToTsExpressionBridge
 
         if (context.Bcl is not null && call.Origin is not null)
         {
+            Int64Formatting.InspectCall(call);
+
             // Lower the receiver separately so the BCL mapper sees it as the raw
             // value (no .methodName suffix applied yet). For unqualified calls the
             // target is an IrIdentifier — pass no receiver.
@@ -1482,7 +1484,9 @@ public static partial class IrToTsExpressionBridge
                     pendingText.Clear();
                     // A template-literal hole accepts any expression, so the
                     // hole needs no grouping of its own.
-                    expressions.Add(Map(expr.Expression, context));
+                    var value = Map(expr.Expression, context);
+
+                    expressions.Add(Int64Formatting.TryFormatHole(expr, value) ?? value);
                     break;
             }
         }
