@@ -124,7 +124,7 @@ internal static partial class IrToTsClassBridge
                 or IrPrimitive.Float32
                 or IrPrimitive.Float64 => new TsLiteral("0"),
                 IrPrimitive.Decimal => new TsNewExpression(
-                    new TsIdentifier("Decimal"),
+                    IrToTsExpressionBridge.BclDecimalValueReference(),
                     [new TsStringLiteral("0")]
                 ),
                 IrPrimitive.Boolean => new TsLiteral("false"),

@@ -1495,8 +1495,10 @@ public static partial class IrToTsExpressionBridge
         {
             // The runtime class for Decimal is the decimal.js `Decimal`
             // constructor — the type mapper flattens it to `number` for
-            // signature purposes, but `new` must reach the real class.
-            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } => new TsIdentifier("Decimal"),
+            // signature purposes, but `new` must reach the real class. The
+            // origin carries the decimal.js import to the collector (issue
+            // #477); without an [ExportFromBcl] the bare name stays.
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Decimal } => BclDecimalValueReference(),
             // Dictionary / IDictionary / HashSet / ISet / List / IList lower
             // to their JS runtime equivalents; the type mapper collapses them
             // into IrMap/IrSet/IrArray refs, so we reconstruct the JS class
@@ -1509,6 +1511,17 @@ public static partial class IrToTsExpressionBridge
                 _ => new TsIdentifier("Object"),
             },
         };
+
+    /// <summary>
+    /// The value-position reference to the decimal.js <c>Decimal</c> class,
+    /// carrying the export's origin when the compilation declares the
+    /// <c>[ExportFromBcl]</c> mapping (issue #477): the collector imports
+    /// decimal.js only for this node.
+    /// </summary>
+    internal static TsExpression BclDecimalValueReference() =>
+        IrToTsTypeMapper.BclOverrides?.TryOriginOf(IrPrimitive.Decimal) is { } origin
+            ? new TsTypeReference("Decimal", origin)
+            : new TsIdentifier("Decimal");
 
     /// <summary>
     /// Lowers <c>new T(a, b, …)</c>. For <c>[PlainObject]</c> targets the
@@ -1837,9 +1850,10 @@ public static partial class IrToTsExpressionBridge
             // wrap as decimal.js Decimal instances so downstream arithmetic
             // (already method-call shaped by the extractor) has the correct
             // receiver type. The extractor passes through the raw source
-            // token text so precision is preserved.
+            // token text so precision is preserved. The origin carries the
+            // decimal.js import to the collector (issue #477).
             IrLiteralKind.Decimal => new TsNewExpression(
-                new TsIdentifier("Decimal"),
+                BclDecimalValueReference(),
                 [new TsStringLiteral(FormatNumericValue(lit.Value))]
             ),
             // BigInteger literals use the native bigint suffix `n`, and so do

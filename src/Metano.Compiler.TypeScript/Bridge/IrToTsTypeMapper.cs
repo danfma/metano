@@ -89,6 +89,22 @@ public static class IrToTsTypeMapper
     }
 
     /// <summary>
+    /// The <c>[ExportFromBcl]</c> overrides of the running transform, consulted by
+    /// every bridge site that lowers a BCL-exported type in expression position
+    /// (<c>new Decimal(…)</c>, the <c>1.5m</c> literal, the field zero) to attach
+    /// the export's cross-package origin (issue #477). <see cref="AsyncLocal{T}"/>
+    /// keeps the slot per execution context so parallel test runs don't race;
+    /// <c>null</c> outside a transform keeps the pre-origin bare identifiers.
+    /// </summary>
+    private static readonly AsyncLocal<BclExportTypeOverrides?> _bclOverrides = new();
+
+    internal static BclExportTypeOverrides? BclOverrides
+    {
+        get => _bclOverrides.Value;
+        set => _bclOverrides.Value = value;
+    }
+
+    /// <summary>
     /// Returns the alias for <paramref name="canonicalName"/> if one is
     /// active for the current emitted file, otherwise the canonical name
     /// itself. Used at every emit site that produces a type-name token —

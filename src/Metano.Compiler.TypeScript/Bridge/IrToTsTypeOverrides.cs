@@ -48,7 +48,32 @@ public sealed class BclExportTypeOverrides(
         // version so the package.json writer surfaces the dependency.
         if (entry.FromPackage.Length > 0 && entry.Version is { Length: > 0 } version)
             dependencyLedger.Record(entry.FromPackage, version);
-        return new TsNamedType(entry.ExportedName);
+        return new TsNamedType(
+            entry.ExportedName,
+            Origin: new TsTypeOrigin(entry.FromPackage, SubPath: "")
+        );
+    }
+
+    /// <summary>
+    /// The cross-package origin the import collector binds the BCL export of
+    /// <paramref name="primitive"/> from, or <c>null</c> when the compilation
+    /// declares no <c>[ExportFromBcl]</c> for it. Every expression-position
+    /// node the bridge emits for the export carries it, so the collector
+    /// imports the package only for origin-carrying nodes — never by name
+    /// match (issue #477). Sub-path empty: a BCL export sits on the package
+    /// root barrel.
+    /// </summary>
+    public TsTypeOrigin? TryOriginOf(IrPrimitive primitive)
+    {
+        if (BclKey(primitive) is not { } key || !map.TryGetValue(key, out var entry))
+            return null;
+
+        // A package used in expression position lands in package.json the
+        // same way a type-position hit does.
+        if (entry.FromPackage.Length > 0 && entry.Version is { Length: > 0 } version)
+            dependencyLedger.Record(entry.FromPackage, version);
+
+        return new TsTypeOrigin(entry.FromPackage, SubPath: "");
     }
 
     private static string? BclKey(IrPrimitive primitive) =>

@@ -110,7 +110,7 @@ public class EndToEndOutputTests
         // elision shows up as a clear diff.
         var expected =
             "import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\";\n"
-            + "import { Decimal } from \"decimal.js\";\n"
+            + "import type { Decimal } from \"decimal.js\";\n"
             + "\n"
             + "export class Issue {\n"
             + "  constructor(readonly title: string, readonly status: IssueStatus, readonly estimatedCost: Decimal) { }\n"

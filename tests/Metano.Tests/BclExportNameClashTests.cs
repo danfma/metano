@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -5,9 +7,11 @@ namespace Metano.Tests;
 /// user <c>Numerics.Decimal</c> against <c>System.Decimal</c>'s
 /// <c>Decimal</c> from <c>decimal.js</c>, or a user <c>MidpointRounding</c>
 /// against the runtime's enum mirror — resolves to its own generated module
-/// like any other transpiled type (issue #477): the import collector claimed
-/// every name equal to a BCL export's <c>ExportedName</c> for the package,
-/// whatever type it belonged to.
+/// like any other transpiled type (issue #477): only the full BCL symbol
+/// maps to the package, through an origin each emitted reference carries,
+/// so the collector imports decimal.js / metano-runtime only for those
+/// nodes; a same-file collision reports MS0070 instead of binding both to
+/// one module.
 /// </summary>
 public class BclExportNameClashTests
 {
@@ -110,6 +114,161 @@ public class BclExportNameClashTests
         await Assert
             .That(output)
             .Contains("import { MidpointRounding } from \"./midpoint-rounding\";");
-        await Assert.That(output).DoesNotContain("metano-runtime");
+        await Assert
+            .That(output)
+            .DoesNotContain("import { MidpointRounding } from \"metano-runtime\";");
+    }
+
+    /// <summary>
+    /// A project type named <c>Decimal</c> does not detach the real BCL
+    /// mapping: a file that uses only the C# <c>decimal</c> keeps importing
+    /// decimal.js through the export's origin node.
+    /// </summary>
+    [Test]
+    public async Task BclDecimal_StillImportsDecimalJs_WhenAProjectTypeSharesTheName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App.Other
+            {
+                [Transpile]
+                public struct Decimal
+                {
+                    public int Raw { get; set; }
+                }
+            }
+
+            namespace App
+            {
+                [Transpile]
+                public sealed class Money
+                {
+                    public decimal Sum(decimal left, decimal right) => left + right;
+                }
+            }
+            """
+        );
+
+        var output = result["app/money.ts"];
+
+        await Assert.That(output).Contains("import type { Decimal } from \"decimal.js\";");
+        await Assert.That(output).Contains("left.plus(right)");
+    }
+
+    /// <summary>
+    /// A project enum named <c>MidpointRounding</c> does not detach the BCL
+    /// mapping either: `Math.Round` with `System.MidpointRounding.AwayFromZero`
+    /// keeps importing the runtime's mirror enum.
+    /// </summary>
+    [Test]
+    public async Task BclMidpointRounding_StillImportsTheRuntimeMirror_WhenAProjectTypeSharesTheName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App.Other
+            {
+                [Transpile]
+                public enum MidpointRounding { X, Y, Z }
+            }
+
+            namespace App
+            {
+                [Transpile]
+                public sealed class Rounder
+                {
+                    public double Away(double a) => Math.Round(a, System.MidpointRounding.AwayFromZero);
+                }
+            }
+            """
+        );
+
+        var output = result["app/rounder.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("import { MidpointRounding, roundNumber } from \"metano-runtime\";");
+    }
+
+    /// <summary>
+    /// Cross-package and BCL share the name without stealing each other's
+    /// module: each file's import follows its own reference's origin.
+    /// </summary>
+    [Test]
+    public async Task CrossPackageUserDecimal_AndBclDecimal_BindTheirOwnModules()
+    {
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@scope/numerics")]
+
+            namespace Lib
+            {
+                public struct Decimal
+                {
+                    public int Raw { get; set; }
+                }
+            }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App
+            {
+                [Transpile]
+                public sealed class Money
+                {
+                    public Lib.Decimal Convert(decimal value) => default;
+                }
+
+                [Transpile]
+                public sealed class Calc
+                {
+                    public decimal Sum(decimal left, decimal right) => left + right;
+                }
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+
+        await Assert
+            .That(result["app/money.ts"])
+            .Contains("import type { Decimal } from \"@scope/numerics/lib\";");
+        await Assert
+            .That(result["app/calc.ts"])
+            .Contains("import type { Decimal } from \"decimal.js\";");
+    }
+
+    /// <summary>
+    /// A file that references both the decimal.js export and a project type
+    /// of the same name reports MS0070 — the bare identifier would bind both
+    /// imports, so one is wrong; the diagnostic tells the author to rename.
+    /// </summary>
+    [Test]
+    public async Task SameFileUserDecimal_AndBclDecimal_ReportsTheClash()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public struct Decimal
+            {
+                public int Raw { get; set; }
+            }
+
+            [Transpile]
+            public sealed class Money
+            {
+                public App.Decimal Wrap(decimal value) => default;
+            }
+            """
+        );
+
+        var clashes = diagnostics.Where(d => d.Code == DiagnosticCodes.BclExportNameClash).ToList();
+
+        await Assert.That(clashes).HasSingleItem();
+        await Assert
+            .That(clashes[0].Message)
+            .Contains("'Decimal' names both the BCL export from 'decimal.js' and a project type");
     }
 }

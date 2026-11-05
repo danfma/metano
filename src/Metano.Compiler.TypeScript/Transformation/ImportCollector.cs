@@ -327,26 +327,6 @@ public sealed class ImportCollector(
             )
                 continue;
 
-            // BCL export mapping (e.g., decimal → Decimal from "decimal.js").
-            // A transpilable type whose emitted name matches the export's
-            // name — a user `Numerics.Decimal` against `System.Decimal`'s
-            // `Decimal` — resolves to its own module below: only the full
-            // BCL symbol maps to the package (issue #477). Not bucketed: each
-            // BCL mapping can land on a distinct external package, and the
-            // cross-package merge strategy doesn't apply here.
-            var bclEntry = _context.BclExportMap.Values.FirstOrDefault(e =>
-                e.ExportedName == typeName && !_context.TranspilableTypes.ContainsKey(typeName)
-            );
-            if (
-                bclEntry is not null
-                && bclEntry.FromPackage.Length > 0
-                && importedNames.Add(typeName)
-            )
-            {
-                imports.Add(new TsImport([bclEntry.ExportedName], bclEntry.FromPackage));
-                continue;
-            }
-
             // External import mapping ([Import] attribute, with optional AsDefault).
             // Not bucketed: default imports never merge (`import Foo from "..."` is
             // one-name-only) and named externals come from arbitrary modules.
@@ -492,6 +472,16 @@ public sealed class ImportCollector(
             if (!_context.TranspilableTypes.TryGetValue(typeName, out var referencedRef))
                 continue;
 
+            // A BCL export (or cross-package type) whose import came through
+            // the origin channel and a project type of the same emitted name
+            // collide on the one identifier: both import lines bind it, and
+            // every bare reference is ambiguous. Loud diagnostic instead of
+            // the silent single-module binding the name match produced
+            // (issue #477). Even a co-located [EmitInFile] type collides —
+            // the bare name binds the local declaration too.
+            if (crossPackageOrigins.TryGetValue(typeName, out var collidingOrigin))
+                ReportBclExportNameClash(typeName, collidingOrigin);
+
             // Skip types co-located in the same file via [EmitInFile] — they're
             // declared locally in the merged source, no import needed.
             if (referencedRef.Namespace == currentNs && referencedRef.FileName == currentFileName)
@@ -624,6 +614,26 @@ public sealed class ImportCollector(
                 $"'{exportName}' is read from {string.Join(" and ", owners)} in one file, "
                     + "but each exports its own member of that name. Add a [Name(\"...\")] "
                     + "override on one of the members so both can be imported."
+            )
+        );
+
+    /// <summary>
+    /// MS0070: a file references both a BCL export (decimal.js's
+    /// <c>Decimal</c>, the runtime's <c>MidpointRounding</c>) and a project
+    /// type of the same emitted name. Both import lines bind the one
+    /// identifier; every bare reference is ambiguous and one binding is wrong
+    /// at runtime. Rename one of the two with <c>[Name]</c> (or the export's
+    /// <c>ExportedName</c>) (issue #477).
+    /// </summary>
+    private void ReportBclExportNameClash(string typeName, TsTypeOrigin origin) =>
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.BclExportNameClash,
+                $"'{typeName}' names both the BCL export from '{origin.PackageName}' and a "
+                    + "project type in this file; the bare name is ambiguous. Rename the "
+                    + "project type or member with [Name(\"...\")], or the export with "
+                    + "ExportedName."
             )
         );
 

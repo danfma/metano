@@ -129,7 +129,7 @@ internal static class IrToTsNumericConversionBridge
             IrNumericKind.Double => Number(value),
             IrNumericKind.Single => RuntimeCall(Int64RuntimeHelpers.Int64ToSingle, value),
             IrNumericKind.Decimal => new TsNewExpression(
-                new TsIdentifier("Decimal"),
+                IrToTsExpressionBridge.BclDecimalValueReference(),
                 [new TsCallExpression(new TsPropertyAccess(value, "toString"), [])]
             ),
             _ => Number(Narrowed(value, to.Kind.BitWidth(), to.Kind.IsSigned(), isChecked)),
