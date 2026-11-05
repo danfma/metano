@@ -75,6 +75,9 @@ internal static class IrToTsNumericConversionBridge
         if (to.IsEnum)
             return ToEnum(from, to, isChecked, value);
 
+        if (from is { Kind: IrNumericKind.BigInteger, IsEnum: false })
+            return FromBigInteger(to, value);
+
         if (from.IsWideIntegerValue())
             return FromBigInt(from, to, isChecked, value);
 
@@ -106,7 +109,47 @@ internal static class IrToTsNumericConversionBridge
             : Number(RenderConversion(from, underlying, isChecked, value));
     }
 
-    /// <summary>Out of a <c>bigint</c> (<c>long</c>, <c>ulong</c>, <c>BigInteger</c>).</summary>
+    /// <summary>
+    /// Out of a <c>BigInteger</c> (FR-003): every explicit conversion checks
+    /// its range in any context, through the <c>metano-runtime</c> helpers
+    /// that reproduce .NET's results and messages; a <c>double</c> keeps
+    /// .NET's truncated significand.
+    /// </summary>
+    private static TsExpression FromBigInteger(IrNumericEndpoint to, TsExpression value) =>
+        to.Kind switch
+        {
+            IrNumericKind.BigInteger => value,
+            IrNumericKind.Int64 or IrNumericKind.UInt64 => RuntimeCall(
+                Int64RuntimeHelpers.FromBigInteger(to.Kind.IsSigned()),
+                value
+            ),
+            IrNumericKind.Int32 => RuntimeCall(Int64RuntimeHelpers.Int32FromBigInteger, value),
+            IrNumericKind.UInt32 => RuntimeCall(Int64RuntimeHelpers.UInt32FromBigInteger, value),
+            IrNumericKind.Char => Global(
+                "String.fromCharCode",
+                NarrowedBigInteger(value, bits: 16, signed: false)
+            ),
+            IrNumericKind.Double => RuntimeCall(Int64RuntimeHelpers.DoubleFromBigInteger, value),
+            IrNumericKind.Single => Global(
+                "Math.fround",
+                RuntimeCall(Int64RuntimeHelpers.DoubleFromBigInteger, value)
+            ),
+            IrNumericKind.Decimal => new TsNewExpression(
+                new TsIdentifier("Decimal"),
+                [RuntimeCall(Int64RuntimeHelpers.DecimalTextFromBigInteger, value)]
+            ),
+            _ => NarrowedBigInteger(value, to.Kind.BitWidth(), to.Kind.IsSigned()),
+        };
+
+    private static TsExpression NarrowedBigInteger(TsExpression value, int bits, bool signed) =>
+        RuntimeCall(
+            Int64RuntimeHelpers.NarrowFromBigInteger,
+            value,
+            new TsLiteral(bits.ToString(CultureInfo.InvariantCulture)),
+            new TsLiteral(signed ? "true" : "false")
+        );
+
+    /// <summary>Out of a 64-bit <c>bigint</c> (<c>long</c>, <c>ulong</c>).</summary>
     private static TsExpression FromBigInt(
         IrNumericEndpoint from,
         IrNumericEndpoint to,
@@ -171,6 +214,20 @@ internal static class IrToTsNumericConversionBridge
         // BigInteger counts as signed: only a ulong target picks the
         // unsigned helper.
         var isSigned = to.Kind is not IrNumericKind.UInt64;
+
+        if (to.Kind is IrNumericKind.BigInteger)
+        {
+            var fromFraction = from.Kind switch
+            {
+                IrNumericKind.Double or IrNumericKind.Single =>
+                    Int64RuntimeHelpers.BigIntegerFromDouble,
+                IrNumericKind.Decimal => Int64RuntimeHelpers.BigIntegerFromDecimal,
+                _ => null,
+            };
+
+            if (fromFraction is not null)
+                return RuntimeCall(fromFraction, value);
+        }
 
         return from.Kind switch
         {

@@ -4735,6 +4735,9 @@ public sealed partial class IrExpressionExtractor
     ///   <item><c>(int|long|short|byte)decimalExpr</c> → <c>expr.toNumber()</c></item>
     ///   <item><c>(BigInteger)intExpr</c> → <c>BigInt(expr)</c></item>
     /// </list>
+    /// Under the exact 64-bit lowering every <c>BigInteger</c> cast is an
+    /// <see cref="IrNumericConversion"/> instead (spec 012 FR-003), so the
+    /// <c>BigInteger</c> branches serve the 2.x output only (STAGING(012k)).
     /// All other casts collapse to the inner expression.
     /// </summary>
     private IrExpression ExtractCast(CastExpressionSyntax cast)

@@ -18,7 +18,9 @@ ReferenceFixture.Write(
 ReferenceFixture.Write(
     Path.Combine(fixtures, "conversions.json"),
     typeof(Conversions),
-    typeof(DecimalConversions)
+    typeof(DecimalConversions),
+    typeof(BigIntegerConversions),
+    typeof(DecimalBigIntegerConversions)
 );
 
 ReferenceFixture.Write(Path.Combine(fixtures, "math.json"), typeof(MathStatics));

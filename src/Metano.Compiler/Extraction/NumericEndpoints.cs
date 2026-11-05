@@ -41,16 +41,11 @@ internal static class NumericEndpoints
     /// <summary>
     /// Whether the exact 64-bit lowering makes the conversion from
     /// <paramref name="from"/> to <paramref name="to"/> explicit: one side
-    /// is a 64-bit integer, or an integer or <c>char</c> widens into
-    /// <c>BigInteger</c>.
+    /// is a 64-bit integer or a <c>BigInteger</c> (spec 012 FR-003), so one
+    /// table decides every <c>bigint</c> conversion.
     /// </summary>
     public static bool NeedsExactConversion(IrNumericEndpoint from, IrNumericEndpoint to) =>
-        from != to
-        && (
-            from.IsSixtyFourBitValue()
-            || to.IsSixtyFourBitValue()
-            || (to is { Kind: IrNumericKind.BigInteger } && from.Kind.IsIntegerOrChar())
-        );
+        from != to && (from.IsWideIntegerValue() || to.IsWideIntegerValue());
 
     /// <summary>
     /// Whether a conversion from <paramref name="from"/> to
