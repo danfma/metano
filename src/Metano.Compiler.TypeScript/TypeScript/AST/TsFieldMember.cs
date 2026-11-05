@@ -9,7 +9,11 @@ namespace Metano.Compiler.TypeScript.AST;
 /// <see cref="Initializer"/>.</param>
 /// <param name="Abstract">An abstract property declaration (<c>abstract readonly name: Type;</c>):
 /// it has no storage and no initializer, and a derived class implements it with a field,
-/// a parameter property or an accessor.</param>
+/// a parameter property promoted through the constructor (<c>public x: number</c> in
+/// <see cref="TsConstructorParam"/>) or an accessor.</param>
+/// <param name="JSDoc">The JSDoc comment printed ahead of the member — the
+/// <c>/** @internal *&#47;</c> tag of the assembly-wide visibility band
+/// (issue #445).</param>
 public sealed record TsFieldMember(
     string Name,
     TsType Type,
@@ -19,5 +23,6 @@ public sealed record TsFieldMember(
     bool Optional = false,
     TsAccessibility Accessibility = TsAccessibility.Public,
     bool DefinitelyAssigned = false,
-    bool Abstract = false
+    bool Abstract = false,
+    TsJSDoc? JSDoc = null
 ) : TsClassMember;

@@ -70,6 +70,7 @@ export class ShotSchedule {
     return box.value.frames + (kind === ShotSchedule.Kind.B ? 1 : 0) + ShotSchedule$ShotEntry.empty().frames + isEntry + ShotSchedule.Slot.create().index + ShotSchedule$Deep.make().n + new ShotSchedule$Deep.Leaf(1).n + entry.twice().frames;
   }
 
+  /** @internal */
   static kindValue(kind: ShotSchedule.Kind = ShotSchedule.Kind.B): number {
     return kind;
   }

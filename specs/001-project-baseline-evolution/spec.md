@@ -211,7 +211,9 @@ Product requirements added after the migration (normative; each one is traced by
      including an abstract type's, which Roslyn synthesizes `protected` only to restate that the
      type cannot be instantiated. An implicit constructor emits no modifier. A value type
      (`struct`, `record struct`) always emits a public constructor: C# gives it a public implicit
-     parameterless constructor, so `new S()` is legal anywhere whatever it declares.
+     parameterless constructor, so `new S()` is legal anywhere whatever it declares. An `internal`
+     or `protected internal` constructor additionally carries the `/** @internal */` JSDoc of the
+     assembly-wide visibility band (#445), judged by the group's most permissive declaration.
   2. *Mixed accessibility.* Every declared instance constructor, whatever its accessibility,
      takes part in the emitted constructor: two or more go through the overload dispatcher (#435).
      C# makes every other constructor of a type with a record positional or C# 12 primary

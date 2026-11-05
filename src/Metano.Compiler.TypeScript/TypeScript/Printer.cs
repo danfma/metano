@@ -419,10 +419,32 @@ public sealed class Printer(string indent = "  ")
         });
     }
 
+    /// <summary>
+    /// Prints a member's JSDoc: one <c>/** text *&#47;</c> line per entry,
+    /// ahead of the member it annotates.
+    /// </summary>
+    private void PrintJSDoc(TsJSDoc? jsdoc)
+    {
+        if (jsdoc is null)
+            return;
+
+        foreach (var line in jsdoc.Lines)
+        {
+            _sb.Write("/** ");
+            _sb.Write(line);
+            _sb.Write(" */");
+            _sb.WriteLn();
+        }
+    }
+
     private void PrintFunction(TsFunction func)
     {
+        // With overloads the tag prints ahead of each signature; a single
+        // declaration prints it ahead of the implementation itself.
         if (func.Overloads is { Count: > 0 } overloads)
             PrintFunctionOverloadSignatures(func, overloads);
+        else
+            PrintJSDoc(func.JSDoc);
 
         if (func.Exported)
             _sb.Write("export ");
@@ -457,6 +479,7 @@ public sealed class Printer(string indent = "  ")
     {
         foreach (var overload in overloads)
         {
+            PrintJSDoc(func.JSDoc);
             if (func.Exported)
                 _sb.Write("export ");
             _sb.Write("function ");
@@ -636,18 +659,21 @@ public sealed class Printer(string indent = "  ")
             // Print overload signatures first
             foreach (var overload in ctor.Overloads)
             {
+                PrintJSDoc(ctor.JSDoc);
                 PrintConstructorHead(ctor.Accessibility, overload.Parameters);
                 _sb.Write(";");
                 _sb.WriteLn();
             }
 
             // Print dispatcher implementation
+            PrintJSDoc(ctor.JSDoc);
             PrintConstructorHead(ctor.Accessibility, ctor.Parameters);
             PrintBody(ctor.Body);
         }
         else
         {
             // Single constructor (no overloads)
+            PrintJSDoc(ctor.JSDoc);
             PrintConstructorHead(ctor.Accessibility, ctor.Parameters);
 
             if (ctor.Body.Count == 0)
@@ -711,6 +737,7 @@ public sealed class Printer(string indent = "  ")
         switch (member)
         {
             case TsGetterMember getter:
+                PrintJSDoc(getter.JSDoc);
                 PrintAccessibility(getter.Accessibility);
 
                 if (getter.Static)
@@ -726,6 +753,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsSetterMember setter:
+                PrintJSDoc(setter.JSDoc);
                 PrintAccessibility(setter.Accessibility);
 
                 if (setter.Static)
@@ -742,6 +770,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsFieldMember field:
+                PrintJSDoc(field.JSDoc);
                 PrintAccessibility(field.Accessibility);
 
                 if (field.Abstract)
@@ -770,14 +799,20 @@ public sealed class Printer(string indent = "  ")
             case TsMethodMember method:
                 if (method.Overloads is { Count: > 0 })
                 {
-                    // Print overload signatures first
+                    // Print overload signatures first, each carrying the tag —
+                    // every declaration lands in the .d.ts a consumer reads.
                     foreach (var overload in method.Overloads)
                     {
+                        PrintJSDoc(method.JSDoc);
                         PrintAccessibility(method.Accessibility);
                         if (method.Static)
                             _sb.Write("static ");
                         PrintOverloadSignature(method.Name, overload);
                     }
+                }
+                else
+                {
+                    PrintJSDoc(method.JSDoc);
                 }
 
                 // Print the implementation (or single method).
@@ -1070,6 +1105,8 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsVariableDeclaration varDecl:
+                PrintJSDoc(varDecl.JSDoc);
+
                 if (varDecl.Exported)
                     _sb.Write("export ");
                 _sb.Write(varDecl.Const ? "const " : "let ");

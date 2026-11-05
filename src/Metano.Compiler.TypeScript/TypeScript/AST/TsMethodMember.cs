@@ -4,9 +4,12 @@ namespace Metano.Compiler.TypeScript.AST;
 /// A class method: <c>name(params): ReturnType { body }</c>.
 /// </summary>
 /// <param name="ComputedKey">When set, the method is declared under the computed
-/// property key <c>[expression]</c> (<c>[Symbol.iterator]()</c>) and
+/// property key <c>[expression]</c> (<c>[Symbol.iterator]</c>) and
 /// <see cref="Name"/> only labels the member; a computed-key method has no overload
 /// signatures.</param>
+/// <param name="JSDoc">The JSDoc comment printed ahead of the member — the
+/// <c>/** @internal *&#47;</c> tag of the assembly-wide visibility band
+/// (issue #445).</param>
 public sealed record TsMethodMember(
     string Name,
     IReadOnlyList<TsParameter> Parameters,
@@ -20,7 +23,8 @@ public sealed record TsMethodMember(
     IReadOnlyList<TsMethodOverload>? Overloads = null,
     bool Abstract = false,
     bool Override = false,
-    TsExpression? ComputedKey = null
+    TsExpression? ComputedKey = null,
+    TsJSDoc? JSDoc = null
 ) : TsClassMember;
 
 /// <summary>

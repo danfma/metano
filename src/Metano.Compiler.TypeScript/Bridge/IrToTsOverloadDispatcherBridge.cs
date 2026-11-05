@@ -88,8 +88,9 @@ public static class IrToTsOverloadDispatcherBridge
                 ),
                 Static: isStatic,
                 Async: plan.IsAsync,
-                Accessibility: VisibilityToAccessibility(primary.Visibility),
-                Overloads: plan.Signatures
+                Accessibility: IrToTsVisibilityMapper.Of(primary.Visibility),
+                Overloads: plan.Signatures,
+                JSDoc: IrToTsVisibilityMapper.InternalJSDocOf(primary.Visibility)
             )
         );
 
@@ -546,13 +547,4 @@ public static class IrToTsOverloadDispatcherBridge
 
     private static string Capitalize(string s) =>
         string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
-
-    private static TsAccessibility VisibilityToAccessibility(IrVisibility visibility) =>
-        visibility switch
-        {
-            IrVisibility.Private => TsAccessibility.Private,
-            IrVisibility.Protected => TsAccessibility.Protected,
-            IrVisibility.Internal => TsAccessibility.Private,
-            _ => TsAccessibility.Public,
-        };
 }

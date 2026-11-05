@@ -8,7 +8,8 @@ namespace Metano.Compiler.TypeScript.AST;
 /// JSX return type is inferred), matching the lowering contract.
 /// <paramref name="Overloads"/> carries the overload signatures printed ahead
 /// of the implementation (<c>function f(a: string): T;</c>) when the function
-/// is the dispatcher of a C# overload group.
+/// is the dispatcher of a C# overload group. <see cref="JSDoc"/> prints ahead
+/// of the first overload signature — or the implementation when there are none.
 /// </summary>
 public sealed record TsFunction(
     string Name,
@@ -19,5 +20,6 @@ public sealed record TsFunction(
     bool Async = false,
     bool Generator = false,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null,
-    IReadOnlyList<TsMethodOverload>? Overloads = null
+    IReadOnlyList<TsMethodOverload>? Overloads = null,
+    TsJSDoc? JSDoc = null
 ) : TsTopLevel;

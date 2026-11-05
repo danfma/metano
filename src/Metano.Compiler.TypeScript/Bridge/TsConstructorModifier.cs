@@ -8,19 +8,17 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <summary>
 /// The TypeScript modifier of a constructor declared with a given IR
 /// visibility (FR-049): <c>private</c> and <c>private protected</c> map to
-/// <c>private</c>, <c>protected</c> to <c>protected</c>, every other
-/// accessibility to public. TypeScript orders them public, protected,
-/// private from the least to the most restrictive.
+/// <c>private</c>, <c>protected</c> to <c>protected</c>, <c>internal</c> and
+/// <c>protected internal</c> to public (issue #445 — the assembly-wide band
+/// shares <see cref="IrToTsVisibilityMapper"/>'s table). TypeScript orders
+/// them public, protected, private from the least to the most restrictive.
 /// </summary>
 public static class TsConstructorModifier
 {
     public static TsAccessibility Of(IrVisibility visibility) =>
-        visibility switch
-        {
-            IrVisibility.Private or IrVisibility.PrivateProtected => TsAccessibility.Private,
-            IrVisibility.Protected => TsAccessibility.Protected,
-            _ => TsAccessibility.Public,
-        };
+        visibility is IrVisibility.PrivateProtected
+            ? TsAccessibility.Private
+            : IrToTsVisibilityMapper.Of(visibility);
 
     /// <summary>How restrictive a modifier is: public 0, protected 1, private 2.</summary>
     public static int RestrictionOf(TsAccessibility modifier) =>
@@ -63,4 +61,16 @@ public static class TsConstructorModifier
     /// <summary>The modifier of one declared constructor.</summary>
     public static TsAccessibility OfConstructor(IMethodSymbol constructor) =>
         Of(IrConstructorExtractor.DeclaredVisibility(constructor));
+
+    /// <summary>
+    /// The IR visibility the constructor group's most permissive declaration
+    /// carries — the declaration whose accessibility the group emits, and what
+    /// the <c>@internal</c> tagging of issue #445 reads.
+    /// </summary>
+    public static IrVisibility MostPermissiveVisibilityOf(IrConstructorDeclaration constructor) =>
+        new[] { constructor }
+            .Concat(constructor.Overloads ?? [])
+            .OrderBy(declaration => RestrictionOf(Of(declaration.Visibility)))
+            .First()
+            .Visibility;
 }

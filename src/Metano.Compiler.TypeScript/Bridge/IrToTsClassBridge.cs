@@ -161,18 +161,4 @@ internal static partial class IrToTsClassBridge
 
         return null;
     }
-
-    /// <summary>
-    /// Maps an IR member visibility to the TS accessibility keyword the
-    /// printer renders. <c>Internal</c> / <c>ProtectedInternal</c> /
-    /// <c>PrivateProtected</c> all collapse to <c>public</c> in TS — the
-    /// language has no narrower-than-public sibling-of-private band.
-    /// </summary>
-    public static TsAccessibility MapAccessibility(IrVisibility visibility) =>
-        visibility switch
-        {
-            IrVisibility.Private => TsAccessibility.Private,
-            IrVisibility.Protected or IrVisibility.ProtectedInternal => TsAccessibility.Protected,
-            _ => TsAccessibility.Public,
-        };
 }
