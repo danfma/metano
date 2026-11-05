@@ -536,11 +536,10 @@ public class JsonSerializerContextTests
             """
         )["test-app/json-context.ts"];
 
-        // IsAbstract is true for interfaces too. Today no non-polymorphic
-        // interface entry exists for the non-constructible branch to build a
-        // factory from (an interface root is rejected with MS0035, and a ref
-        // to an interface member claims no entry), but the branch must never
-        // label an interface abstract (#489).
+        // Regression guard while #502 is open: the Hub context is emitted,
+        // but no non-polymorphic interface entry exists yet for the
+        // non-constructible branch to label abstract (#489).
+        await Assert.That(ts).Contains("new Hub(p.title as string, p.sensor as ISensor)");
         await Assert.That(ts).DoesNotContain("Cannot construct abstract type 'ISensor'");
     }
 

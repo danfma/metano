@@ -58,34 +58,20 @@ public class JsonContextImportTests
     public async Task PolymorphicVariantTemporalMember_ContextImportsTemporal()
     {
         var ts = TranspileHelper.Transpile(
-            $$"""
-            using System;
-            using System.Collections.Generic;
-            using System.Text.Json.Serialization;
-            using Metano.Annotations;
+            Context(
+                """
+                [Transpile]
+                [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+                [JsonDerivedType(typeof(Leaf), "leaf")]
+                public abstract record Node;
 
-            namespace TestApp;
+                [Transpile]
+                public sealed record Leaf(DateOnly Day) : Node;
 
-            [Transpile]
-            [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
-            [JsonDerivedType(typeof(Leaf), "leaf")]
-            public abstract record Node;
-
-            [Transpile]
-            public sealed record Leaf(DateOnly Day) : Node;
-
-            [Transpile]
-            public sealed record Hub(Node Root);
-
-            [Transpile]
-            [JsonSerializable(typeof(Hub))]
-            public partial class JsonContext : JsonSerializerContext
-            {
-                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
-                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
-                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
-            }
-            """
+                [Transpile]
+                public sealed record Hub(Node Root);
+                """
+            )
         )[ContextPath];
 
         await Assert.That(ts).Contains("""import { Temporal } from "@js-temporal/polyfill";""");
@@ -103,7 +89,8 @@ public class JsonContextImportTests
             )
         )[ContextPath];
 
-        await Assert.That(ts).DoesNotContain("Temporal");
+        await Assert.That(ts).DoesNotContain("from \"@js-temporal/polyfill\"");
+        await Assert.That(ts).Contains("p.count as number");
     }
 
     [Test]
@@ -121,5 +108,51 @@ public class JsonContextImportTests
         // The factory cast spells the runtime type: `p.tags as HashSet<number>`.
         await Assert.That(ts).Contains("p.tags as HashSet<number>");
         await Assert.That(ts).Contains("""import { HashSet } from "metano-runtime";""");
+    }
+
+    [Test]
+    public async Task AbstractClassEntry_FactoryThrowsWithoutCastingImports()
+    {
+        var ts = TranspileHelper.Transpile(
+            Context(
+                """
+                [Transpile]
+                public abstract class Base
+                {
+                    public HashSet<int> Tags { get; init; } = new();
+                }
+
+                [Transpile]
+                public sealed record Hub(string Title, Base Ranking);
+                """
+            )
+        )[ContextPath];
+
+        // Base's factory only throws; nothing casts the set, so the import
+        // would dangle unused (#496).
+        await Assert.That(ts).DoesNotContain("import { HashSet");
+        await Assert.That(ts).Contains("factory: () => {");
+        await Assert
+            .That(ts)
+            .Contains("""throw new Error("Cannot construct abstract type 'Base'.");""");
+    }
+
+    [Test]
+    public async Task AbstractRecordWithSetMember_FactoryThrowsWithoutCastingImports()
+    {
+        var ts = TranspileHelper.Transpile(
+            Context(
+                """
+                [Transpile]
+                public abstract record Base(HashSet<int> Tags);
+
+                [Transpile]
+                public sealed record Hub(string Title, Base Ranking);
+                """
+            )
+        )[ContextPath];
+
+        await Assert.That(ts).DoesNotContain("import { HashSet");
+        await Assert.That(ts).Contains("factory: () => {");
     }
 }
