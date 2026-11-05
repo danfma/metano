@@ -145,4 +145,31 @@ public class Int64StagingSwitchTests
         await Assert.That(numberTarget.ConfigurationFingerprint).EndsWith(";int64=Number");
         await Assert.That(bigIntTarget.ConfigurationFingerprint).EndsWith(";int64=BigInt");
     }
+
+    /// <summary>
+    /// <c>nint</c> / <c>nuint</c> are 64-bit (DECIDED-2), so the Number mode
+    /// maps them to <c>number</c> like <c>long</c>, where it used to emit the
+    /// undeclared <c>IntPtr</c> / <c>UIntPtr</c> type names (a DECIDED-22
+    /// exception).
+    /// </summary>
+    [Test]
+    public async Task NumberMode_NativeIntegers_MapToNumber()
+    {
+        const string source = """
+            [Transpile]
+            public class Native
+            {
+                public nint Widen(nint n) => n;
+                public nuint WidenU(nuint n) => n;
+            }
+            """;
+
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            source,
+            Int64Representation.Number
+        );
+
+        await Assert.That(files["native.ts"]).Contains("widen(n: number): number {");
+        await Assert.That(files["native.ts"]).Contains("widenU(n: number): number {");
+    }
 }

@@ -81,9 +81,13 @@ public static class IrTypeRefMapper
             case SpecialType.System_Int32:
             case SpecialType.System_UInt32:
                 return new IrPrimitiveTypeRef(IrPrimitive.Int32);
+            // nint / nuint are 64-bit on every host Metano targets (spec 012
+            // DECIDED-2).
             case SpecialType.System_Int64:
+            case SpecialType.System_IntPtr:
                 return new IrPrimitiveTypeRef(IrPrimitive.Int64);
             case SpecialType.System_UInt64:
+            case SpecialType.System_UIntPtr:
                 return new IrPrimitiveTypeRef(IrPrimitive.UInt64);
             case SpecialType.System_Single:
                 return new IrPrimitiveTypeRef(IrPrimitive.Float32);
