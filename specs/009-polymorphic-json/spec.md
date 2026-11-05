@@ -753,14 +753,19 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   byte-identical generated TypeScript, except where FR-010 adds a previously missing `base:` link,
   FR-033 / FR-047 add the getters (and their imports and `package.json` dependency) of closed
   generic and referenced-package types that were previously dangling `ref` / inlined bases,
-  FR-009 removes a duplicated overridden property, FR-037 adds `valueType: true` to struct
-  contracts, FR-048 changes contexts declared with `JsonSerializerDefaults.Web` (camelCase
-  names, read options, number hints), and every `decimal` descriptor names its type
-  (`{ kind: "decimal", type: Decimal }`, DECIDED-23 f). Since slice S6b (FR-046, DECIDED-25) a
-  `byte[]` descriptor is `{ kind: "bytes" }` instead of a number array, and a factory wraps
-  `new T(…)` in `Object.assign(…, { … })` when the contract has members no constructor parameter
-  binds that System.Text.Json assigns on read (before S6b they were silently not read). The types
-  of call sites change with FR-034 (breaking, FR-049).
+  FR-009 removes a duplicated overridden property, FR-037 adds `valueType: true` and the CLR
+  `typeName` to struct contracts and to value-type value roots (goldens
+  `Expected/json-context-factory.ts`, `Expected/json-context-value-roots.ts`), FR-048 changes
+  contexts declared with `JsonSerializerDefaults.Web` (camelCase names, read options, number
+  hints), and every `decimal` descriptor names its type (`{ kind: "decimal", type: Decimal }`,
+  DECIDED-23 f), so the context imports `Decimal` as a value (`import { Decimal } from
+  "decimal.js"` instead of `import type`, e.g. `sample-issue-tracker/…/json-context.ts`). Since
+  slice S6b (FR-046, DECIDED-25) a `byte[]` descriptor is `{ kind: "bytes" }` instead of a
+  number array, a factory wraps `new T(…)` in `Object.assign(…, { … })` when the contract has
+  `init` / `required` members no constructor parameter binds, and a spec lists the `set`
+  members and writable fields the runtime assigns only when the payload carries them in
+  `assignIfPresent` (before S6b they were silently not read; DECIDED-23 f, DECIDED-25). The
+  types of call sites change with FR-034 (breaking, FR-049).
 - **FR-041**: The runtime additions MUST be additive and exported from
   `metano-runtime/system/json` (`ValueSpec`, `JsonTypeInfo`, `PolymorphismSpec`, `DerivedTypeSpec`,
   `TypeDiscriminator`, `UnknownDerivedTypeHandling`, `JsonReadOptions`, `NumberTypeName`,
@@ -768,7 +773,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   signature changes, they are additive. The generated context adds **no new runtime value
   import**. Its only new value imports are the synthesized guards of `[PlainObject]` variants
   (`isCircle` from the variant's module, FR-019), resolved like the variant's own import (local or
-  through `OriginResolver` for a library variant). Types that appear
+  through `OriginResolver` for a library variant), and `Decimal` from `decimal.js` wherever a
+  `decimal` descriptor names it (`type: Decimal`, DECIDED-23 f). Types that appear
   only inside `ValueSpec<…>` / `TypeSpec<…>` type arguments (`HashSet`, `Temporal`, `Decimal`,
   `UUID`, cross-package element types) are imported **type-only** (`import type` or a per-name
   `type` qualifier), and those imports MUST be produced by the context transformer itself, since
@@ -1841,8 +1847,10 @@ until the maintainer decides.
   `tsgo --strict` with 0 errors (today: the file does not compile), and each value-root kind has a
   manifest row.
 - **SC-004**: Every existing golden file and JSON test passes unchanged, except the documented
-  FR-010 `base:` additions, FR-009 dedupes, FR-037 `valueType` flags on struct contracts, FR-048
-  Web-context changes and DECIDED-7 renames. Hand-written TS tests that use the result of
+  FR-010 `base:` additions, FR-009 dedupes, FR-037 `valueType` / `typeName` on struct
+  contracts and value-type value roots, the `Decimal` value import and `type: Decimal` of
+  `decimal` descriptors, the S6b `bytes`, `Object.assign` and `assignIfPresent` changes listed in
+  FR-040, FR-048 Web-context changes and DECIDED-7 renames. Hand-written TS tests that use the result of
   `deserialize` through a `TypeSpec` as `T` are updated for the `T | null` return type (FR-034),
   which is the migration of FR-049 applied to this repository.
 - **SC-005**: With `[JsonFactory]`, 0 invalid branded values are accepted by `deserialize` in the
