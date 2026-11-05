@@ -470,6 +470,82 @@ internal sealed class JsonSpecBuilder
             )
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Every C# type the context's factories cast (<c>p.x as T</c>): for a
+    /// <c>[PlainObject]</c> its literal members, otherwise the property each
+    /// constructor parameter binds (the parameter's own type when no property
+    /// matches, skipping the extension-data overflow that casts nothing) and
+    /// the members a read assigns after construction
+    /// (<see cref="JsonReadAssignment.Always"/>). The requirement scanner
+    /// reads them so the runtime helpers the cast types spell —
+    /// <c>HashSet</c> in <c>p.items as HashSet&lt;number&gt;</c>,
+    /// <c>Temporal</c> in <c>p.day as Temporal.PlainDate</c> — land in the
+    /// context's import table (FR-041).
+    /// </summary>
+    internal static IReadOnlyCollection<ITypeSymbol> FactoryCastTypesOf(JsonContextPlan plan)
+    {
+        var types = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var entry in plan.Entries)
+        {
+            if (entry.Kind != JsonPropertyKind.Ref)
+                continue;
+
+            var contract = (INamedTypeSymbol)entry.Type;
+
+            if (SymbolHelper.HasPlainObject(contract))
+            {
+                foreach (var property in plan.Properties.LiteralPropertiesOf(contract))
+                    types.Add(property.Type);
+
+                continue;
+            }
+
+            foreach (var parameter in ParametersOf(JsonConstructorSelection.Of(contract)))
+                if (CastTypeOf(parameter) is { } castType)
+                    types.Add(castType);
+
+            var boundNames = ConstructorBoundMemberNames(contract);
+
+            foreach (var property in plan.Properties.LiteralPropertiesOf(contract))
+            {
+                if (boundNames.Contains(property.Member.Name))
+                    continue;
+
+                if (
+                    plan.Properties.Access.ReadAssignmentOf(property.Member)
+                    == JsonReadAssignment.Always
+                )
+                    types.Add(property.Type);
+            }
+        }
+
+        return types;
+    }
+
+    /// <summary>
+    /// The type a constructor parameter's factory argument casts
+    /// (<c>p.x as T</c>): the property it binds across the inheritance chain,
+    /// or the parameter's own type when no property matches; <c>null</c> for
+    /// the extension-data overflow member, which is left out of the spec, so
+    /// the factory emits a bare <c>null</c> and casts nothing.
+    /// </summary>
+    private static ITypeSymbol? CastTypeOf(IParameterSymbol parameter)
+    {
+        var property = SymbolHelper.FindInstancePropertyInHierarchy(
+            parameter.ContainingType,
+            parameter.Name
+        );
+
+        if (
+            property is not null
+            && JsonSerializationAttributes.Has(property, JsonSerializationAttributes.ExtensionData)
+        )
+            return null;
+
+        return property?.Type ?? parameter.Type;
+    }
+
     private TsObjectLiteral BuildPlainObjectLiteral(
         IReadOnlyList<JsonSerializableProperty> properties
     ) => new(properties.Select(ToCastProperty).ToList());
