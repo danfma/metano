@@ -34,6 +34,13 @@ public static partial class IrToTsExpressionBridge
         IrRuntimeRequirementToTsImport.ImportedNameOf("TupleEquals");
 
     /// <summary>
+    /// The parameters of the arrow that evaluates a construction's arguments
+    /// in C#'s order (<c>$arg0</c>): local to the arrow, and no C# identifier
+    /// contains a <c>$</c>, so they shadow no user name.
+    /// </summary>
+    private const string ConstructionArgumentPrefix = "$arg";
+
+    /// <summary>
     /// Maps an IR expression to TS. When <paramref name="bclRegistry"/> is provided,
     /// member accesses and calls consult <see cref="IrToTsBclMapper"/> first and
     /// fall back to the raw lowering when no entry matches. Without a registry the
@@ -1581,6 +1588,9 @@ public static partial class IrToTsExpressionBridge
 
         if (FactoryOf(ne) is { } factory)
         {
+            // A generic class's factory re-declares the class's type
+            // parameters (FR-028), so the constructed type's arguments go on
+            // its call (`Box.fromValue<string>(s)`).
             var factoryCallee = new TsPropertyAccess(MapNewTarget(ne.Type), factory);
             var typeArguments = ConstructedTypeArgumentsOf(ne.Type, context);
 
@@ -1603,13 +1613,6 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// The parameters of the arrow that evaluates a construction's arguments
-    /// in C#'s order (<c>$arg0</c>): local to the arrow, and no C# identifier
-    /// contains a <c>$</c>, so they shadow no user name.
-    /// </summary>
-    private const string FactoryArgumentPrefix = "$arg";
-
-    /// <summary>
     /// The claimed factory of the overload a construction resolved to (spec
     /// 013 FR-017); <c>null</c> when it keeps the dispatcher.
     /// </summary>
@@ -1622,9 +1625,8 @@ public static partial class IrToTsExpressionBridge
     /// The construction <paramref name="build"/> makes from the arguments in
     /// parameter order — <c>Money.fromAmount(amount)</c> through the resolved
     /// overload's factory, which reaches its selector branch with no runtime
-    /// check, or <c>new T(…)</c>. A generic class's factory re-declares the
-    /// class's type parameters (FR-028), so the constructed type's arguments
-    /// go on its call (<c>Box.fromValue&lt;string&gt;(s)</c>). Bound arguments
+    /// check, or <c>new T(…)</c> when the overload has no claimed factory
+    /// (a defensive fallback). Bound arguments
     /// that C# evaluates out of parameter order (named arguments with a side
     /// effect) are bound first, in that order, through an arrow invoked on
     /// the spot.
@@ -1638,7 +1640,7 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(ne.Arguments, args),
             ne.Overload?.EvaluationOrder,
-            FactoryArgumentPrefix
+            ConstructionArgumentPrefix
         );
 
         var construction = build(ordered.Arguments);
