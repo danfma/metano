@@ -439,6 +439,38 @@ public class RuntimeHelperAliasTests
             .IsTrue();
     }
 
+    /// <summary>
+    /// A <c>Guid</c> local declared ahead of its assignment prints as a typed
+    /// <c>let g: UUID;</c> — a type-only helper reference. The runtime import
+    /// must appear even though no value-side helper was collected: the
+    /// type-reference bucket alone drives it.
+    /// </summary>
+    [Test]
+    public async Task GuidLocalDeclaredAheadOfAssignment_ImportsTheUuidType()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            [EmitInFile("store")]
+            public static class Store
+            {
+                public static string Label()
+                {
+                    Guid g;
+                    g = default;
+                    return g.ToString();
+                }
+            }
+            """
+        );
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+
+        var output = files["store.ts"];
+        await Assert.That(output).Contains("let g: UUID;");
+        await Assert.That(output).Contains(@"import { UUID } from ""metano-runtime"";");
+    }
+
     private static List<MetanoDiagnostic> UnsupportedFeatures(
         IEnumerable<MetanoDiagnostic> diagnostics
     ) => diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
