@@ -179,12 +179,15 @@ public sealed record IrMemberAccess(
 ) : IrExpression;
 
 /// <summary>
-/// Element/index access: <c>target[index]</c>.
+/// Element/index access: <c>target[index]</c>. <see cref="IndexKind"/> is the
+/// index's kind when an array is indexed with a 64-bit integer, which a
+/// target that indexes with another type converts (spec 012 FR-036).
 /// </summary>
 public sealed record IrElementAccess(
     IrExpression Target,
     IrExpression Index,
-    IrTypeRef? TargetType = null
+    IrTypeRef? TargetType = null,
+    IrNumericKind? IndexKind = null
 ) : IrExpression;
 
 /// <summary>
@@ -589,6 +592,21 @@ public sealed record IrLambdaExpression(
 /// Array/list literal: <c>[a, b, c]</c>.
 /// </summary>
 public sealed record IrArrayLiteral(IReadOnlyList<IrExpression> Elements) : IrExpression;
+
+/// <summary>
+/// <c>new T[length]</c> without an initializer: <see cref="Length"/>
+/// elements, each <see cref="ElementDefault"/>, C#'s <c>default(T)</c> (a
+/// literal or an immutable value, so every slot may share it).
+/// <see cref="LengthKind"/> is the length's kind when it is a 64-bit
+/// integer, which a target that indexes with another type converts (spec
+/// 012 FR-004, FR-036).
+/// </summary>
+public sealed record IrArrayCreation(
+    IrTypeRef ElementType,
+    IrExpression Length,
+    IrExpression ElementDefault,
+    IrNumericKind? LengthKind = null
+) : IrExpression;
 
 /// <summary>
 /// A C# tuple literal, <c>(a, b)</c> or <c>(x: a, y: b)</c>: its elements in

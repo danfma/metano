@@ -270,6 +270,8 @@ public sealed partial class IrExpressionExtractor
             ),
             ArrayCreationExpressionSyntax arr when arr.Initializer is not null =>
                 new IrArrayLiteral(arr.Initializer.Expressions.Select(Extract).ToList()),
+            ArrayCreationExpressionSyntax sized when TryExtractSizedArray(sized) is { } creation =>
+                creation,
             ImplicitArrayCreationExpressionSyntax iarr => new IrArrayLiteral(
                 iarr.Initializer.Expressions.Select(Extract).ToList()
             ),
@@ -3136,8 +3138,26 @@ public sealed partial class IrExpressionExtractor
                 ? Extract(arguments.Arguments[0].Expression)
                 : new IrLiteral(0, IrLiteralKind.Int32);
 
-        return new IrElementAccess(target, index, MapExpressionType(receiverSyntax));
+        return new IrElementAccess(
+            target,
+            index,
+            MapExpressionType(receiverSyntax),
+            ArrayIndexKind(receiverSyntax, arguments)
+        );
     }
+
+    /// <summary>
+    /// The kind of a 64-bit index into an array (<c>arr[l]</c>, spec 012
+    /// FR-036); <c>null</c> for any other index or receiver.
+    /// </summary>
+    private IrNumericKind? ArrayIndexKind(
+        ExpressionSyntax receiverSyntax,
+        BracketedArgumentListSyntax arguments
+    ) =>
+        _semantic.GetTypeInfo(receiverSyntax).Type is IArrayTypeSymbol
+        && arguments.Arguments is [var index]
+            ? SixtyFourBitKindOf(index.Expression)
+            : null;
 
     /// <summary>
     /// The IR type of a receiver expression. A <c>?[index]</c> receiver is

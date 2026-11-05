@@ -175,7 +175,19 @@ export interface ExprRef {
 }
 
 /** Discriminated union of every supported node. */
+/**
+ * A numeric conversion into or out of a 64-bit integer (spec 012 FR-044):
+ * `(long)x.count`, or the implicit widening of an `int` operand. `type` is
+ * the target, `System.Int64` / `System.UInt64` for a 64-bit one.
+ */
+export interface ExprConvert {
+  readonly kind: "convert";
+  readonly operand: ExprTree;
+  readonly type: ExprTypeRef;
+}
+
 export type ExprTree =
+  | ExprConvert
   | ExprParam
   | ExprCapture
   | ExprLiteral

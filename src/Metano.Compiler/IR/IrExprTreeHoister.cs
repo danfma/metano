@@ -214,6 +214,7 @@ public static class IrExprTreeHoister
                 Rewrite(b.Right, nameByNode, false)
             ),
             IrExprUnary u => new IrExprUnary(u.Op, Rewrite(u.Operand, nameByNode, false)),
+            IrExprConvert cv => new IrExprConvert(Rewrite(cv.Operand, nameByNode, false), cv.Type),
             IrExprConditional cond => new IrExprConditional(
                 Rewrite(cond.Condition, nameByNode, false),
                 Rewrite(cond.WhenTrue, nameByNode, false),
@@ -273,6 +274,9 @@ public static class IrExprTreeHoister
                 break;
             case IrExprUnary u:
                 yield return u.Operand;
+                break;
+            case IrExprConvert cv:
+                yield return cv.Operand;
                 break;
             case IrExprConditional cond:
                 yield return cond.Condition;
@@ -338,6 +342,8 @@ public static class IrExprTreeHoister
                     && Equals(a.Left, b.Left)
                     && Equals(a.Right, b.Right),
                 (IrExprUnary a, IrExprUnary b) => a.Op == b.Op && Equals(a.Operand, b.Operand),
+                (IrExprConvert a, IrExprConvert b) => Equals(a.Type, b.Type)
+                    && Equals(a.Operand, b.Operand),
                 (IrExprConditional a, IrExprConditional b) => Equals(a.Condition, b.Condition)
                     && Equals(a.WhenTrue, b.WhenTrue)
                     && Equals(a.WhenFalse, b.WhenFalse),
@@ -386,6 +392,10 @@ public static class IrExprTreeHoister
                 case IrExprUnary u:
                     hash.Add(u.Op);
                     hash.Add(GetHashCode(u.Operand));
+                    break;
+                case IrExprConvert cv:
+                    hash.Add(cv.Type);
+                    hash.Add(GetHashCode(cv.Operand));
                     break;
                 case IrExprConditional cond:
                     hash.Add(GetHashCode(cond.Condition));

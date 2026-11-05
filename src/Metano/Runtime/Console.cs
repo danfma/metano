@@ -9,7 +9,27 @@
 // object argument. Those overloads stay un-mapped on the Dart side until a
 // proper formatting strategy lands.
 
+//
+// A `long` / `ulong` argument (spec 012 FR-072) is a `bigint` while 64-bit integers
+// map to `bigint` (`WhenInt64IsBigInt`, a staging filter): `console.log(5n)` prints
+// `5n`, so the value goes through `String` first and prints `5`, as C# does.
+
 using Metano.Annotations;
+
+[assembly: MapMethod(
+    typeof(Console),
+    nameof(Console.WriteLine),
+    JsTemplate = "console.log(String($0))",
+    WhenParameterTypes = [typeof(long)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Console),
+    nameof(Console.WriteLine),
+    JsTemplate = "console.log(String($0))",
+    WhenParameterTypes = [typeof(ulong)],
+    WhenInt64IsBigInt = true
+)]
 
 [assembly: MapMethod(
     typeof(Console),

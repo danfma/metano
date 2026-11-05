@@ -339,6 +339,37 @@ export interface AverageTerm<T> extends TerminalBase<T, number> {
   readonly queryable?: QueryableMeta;
 }
 
+/**
+ * `Sum` over 64-bit values (`long`, `long?`, a `long` selector), which are
+ * `bigint`s: a checked sum, nulls skipped, `0n` when empty.
+ */
+export interface SumInt64Term<T> extends TerminalBase<T, bigint> {
+  readonly kind: "sum";
+  readonly selector?: (item: T) => bigint | null;
+  readonly queryable?: QueryableMeta;
+}
+
+/** `Average` over 64-bit values: `R` is `number`, or `number | null` for `long?` values. */
+export interface AverageInt64Term<T, R extends number | null> extends TerminalBase<T, R> {
+  readonly kind: "average";
+  readonly selector?: (item: T) => bigint | null;
+  readonly queryable?: QueryableMeta;
+}
+
+/** `Min` over 64-bit values: `R` is `bigint`, or `bigint | null` for `long?` values. */
+export interface MinInt64Term<T, R extends bigint | null> extends TerminalBase<T, R> {
+  readonly kind: "min";
+  readonly selector?: (item: T) => bigint | null;
+  readonly queryable?: QueryableMeta;
+}
+
+/** `Max` over 64-bit values: `R` is `bigint`, or `bigint | null` for `long?` values. */
+export interface MaxInt64Term<T, R extends bigint | null> extends TerminalBase<T, R> {
+  readonly kind: "max";
+  readonly selector?: (item: T) => bigint | null;
+  readonly queryable?: QueryableMeta;
+}
+
 export interface ContainsTerm<T> extends TerminalBase<T, boolean> {
   readonly kind: "contains";
   readonly value: T;
@@ -370,5 +401,9 @@ export type AnyTerminal =
   | MinByTerm<unknown, unknown>
   | MaxByTerm<unknown, unknown>
   | AverageTerm<unknown>
+  | SumInt64Term<unknown>
+  | AverageInt64Term<unknown, number | null>
+  | MinInt64Term<unknown, bigint | null>
+  | MaxInt64Term<unknown, bigint | null>
   | ContainsTerm<unknown>
   | AggregateTerm<unknown, unknown>;

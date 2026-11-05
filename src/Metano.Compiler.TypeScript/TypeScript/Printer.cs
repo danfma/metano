@@ -1445,6 +1445,12 @@ public sealed class Printer(string indent = "  ")
             case TsNewExpression newExpr:
                 _sb.Write("new ");
                 PrintOperand(newExpr.Callee, TsOperandSlot.NewCallee);
+                if (newExpr.TypeArguments is { Count: > 0 } newTypeArgs)
+                {
+                    _sb.Write("<");
+                    _sb.WriteList(newTypeArgs, PrintType);
+                    _sb.Write(">");
+                }
                 _sb.Write("(");
                 _sb.WriteList(newExpr.Arguments, PrintListElement);
                 _sb.Write(")");
