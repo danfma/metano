@@ -6,6 +6,11 @@ namespace Metano.Tests.IR;
 
 public class IrExpressionExtractionTests
 {
+    private static readonly IrExtractionContext ExactLowering = IrExtractionContext.Empty with
+    {
+        ExactInt64Lowering = true,
+    };
+
     [Test]
     public async Task IntLiteral_ExtractsAsInt32()
     {
@@ -64,9 +69,7 @@ public class IrExpressionExtractionTests
         IrNumericKind kind
     )
     {
-        var ret = GetAt<IrReturnStatement>(ExtractFromMethod(method), 0);
-
-        await Assert.That(FindBinary(ret.Value).NumericKind).IsEqualTo(kind);
+        await Assert.That(ReturnedBinary(method).NumericKind).IsEqualTo(kind);
     }
 
     [Test]
@@ -75,9 +78,7 @@ public class IrExpressionExtractionTests
     [Arguments("System.DayOfWeek Get(System.DayOfWeek a) => a | System.DayOfWeek.Monday;")]
     public async Task NonNumericOperator_HasNoNumericKind(string method)
     {
-        var ret = GetAt<IrReturnStatement>(ExtractFromMethod(method), 0);
-
-        await Assert.That(FindBinary(ret.Value).NumericKind).IsNull();
+        await Assert.That(ReturnedBinary(method).NumericKind).IsNull();
     }
 
     /// <summary>
@@ -86,37 +87,23 @@ public class IrExpressionExtractionTests
     /// and the shipped <c>Number</c> mode keep the count.
     /// </summary>
     [Test]
-    public async Task SixtyFourBitShiftCount_IsMaskedUnderTheExactLowering()
+    [Arguments("long Get(long a) => a >> 70;", 6)]
+    [Arguments("long Get(long a) => a << -1;", 63)]
+    [Arguments("ulong Get(ulong a) => a >>> 64;", 0)]
+    public async Task SixtyFourBitConstantShiftCount_IsFoldedMasked(string method, int count)
     {
-        var exact = IrExtractionContext.Empty with { ExactInt64Lowering = true };
+        var shift = ReturnedBinary(method, ExactLowering);
 
-        var variable = FindBinary(
-            GetAt<IrReturnStatement>(
-                ExtractFromMethod("long Get(long a, int n) => a >> n;", context: exact),
-                0
-            ).Value
-        );
+        await Assert.That(shift.Right).IsEqualTo(new IrLiteral(count, IrLiteralKind.Int32));
+    }
 
-        var constant = FindBinary(
-            GetAt<IrReturnStatement>(
-                ExtractFromMethod("long Get(long a) => a >> 70;", context: exact),
-                0
-            ).Value
-        );
-
-        var narrow = FindBinary(
-            GetAt<IrReturnStatement>(
-                ExtractFromMethod("int Get(int a, int n) => a >> n;", context: exact),
-                0
-            ).Value
-        );
-
-        var shipped = FindBinary(
-            GetAt<IrReturnStatement>(ExtractFromMethod("long Get(long a) => a >> 70;"), 0).Value
-        );
+    [Test]
+    public async Task SixtyFourBitVariableShiftCount_IsMasked()
+    {
+        var shift = ReturnedBinary("long Get(long a, int n) => a >> n;", ExactLowering);
 
         await Assert
-            .That(variable.Right)
+            .That(shift.Right)
             .IsEqualTo(
                 new IrBinaryExpression(
                     new IrIdentifier("n"),
@@ -125,10 +112,19 @@ public class IrExpressionExtractionTests
                     IrNumericKind.Int32
                 )
             );
+    }
 
-        await Assert.That(constant.Right).IsEqualTo(new IrLiteral(6, IrLiteralKind.Int32));
-        await Assert.That(narrow.Right).IsEqualTo(new IrIdentifier("n"));
-        await Assert.That(shipped.Right).IsEqualTo(new IrLiteral(70, IrLiteralKind.Int32));
+    [Test]
+    [Arguments("int Get(int a, int n) => a >> n;", true)]
+    [Arguments("long Get(long a, int n) => a >> n;", false)]
+    public async Task ShiftCount_IsKeptOutsideTheExactSixtyFourBitLowering(
+        string method,
+        bool exact
+    )
+    {
+        var shift = ReturnedBinary(method, exact ? ExactLowering : null);
+
+        await Assert.That(shift.Right).IsEqualTo(new IrIdentifier("n"));
     }
 
     [Test]
@@ -675,12 +671,19 @@ public class IrExpressionExtractionTests
         return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid).Statements;
     }
 
-    /// <summary>The outermost binary node of <paramref name="value"/>, through a lifted guard.</summary>
+    /// <summary>The binary node the single-statement <paramref name="method"/> returns.</summary>
+    private static IrBinaryExpression ReturnedBinary(
+        string method,
+        IrExtractionContext? context = null
+    ) => FindBinary(GetAt<IrReturnStatement>(ExtractFromMethod(method, context: context), 0).Value);
+
+    /// <summary>The outermost binary node of <paramref name="value"/>, through a lifted guard or a 64-bit reduction.</summary>
     private static IrBinaryExpression FindBinary(IrExpression? value) =>
         value switch
         {
             IrBinaryExpression binary => binary,
             IrConditionalExpression conditional => FindBinary(conditional.WhenFalse),
+            IrIntegerOverflow overflow => FindBinary(overflow.Value),
             _ => throw new InvalidOperationException(
                 $"Expected a binary expression but found {value?.GetType().Name ?? "null"}."
             ),

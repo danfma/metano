@@ -11,11 +11,11 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// the core stamps on the binary node. Division and remainder call the
 /// <c>metano-runtime</c> helpers, which throw <c>DivideByZeroException</c> and
 /// the <c>long.MinValue / -1</c> <c>OverflowException</c> as .NET does,
-/// unless the divisor is a constant that cannot throw: native <c>bigint</c>
-/// division already truncates toward zero and its remainder takes the
-/// dividend's sign (DECIDED-8). A shift count, already masked by the core,
-/// becomes a <c>bigint</c> (DECIDED-9). The staging <c>Number</c> mode keeps
-/// its <c>intDiv</c> and native operators (DECIDED-22).
+/// unless the core says the constant divisor cannot throw: native
+/// <c>bigint</c> division already truncates toward zero and its remainder
+/// takes the dividend's sign (DECIDED-8). A shift count, already masked by
+/// the core, becomes a <c>bigint</c> (DECIDED-9). The staging <c>Number</c>
+/// mode keeps its <c>intDiv</c> and native operators (DECIDED-22).
 /// </summary>
 internal static class IrToTsInt64OperatorBridge
 {
@@ -30,62 +30,72 @@ internal static class IrToTsInt64OperatorBridge
     )
     {
         // STAGING(012k): every 64-bit operator renders once the switch is gone.
-        if (!Int64RepresentationScope.IsBigInt || binary.NumericKind is not { } kind)
+        if (!Int64RepresentationScope.IsBigInt || binary.NumericKind?.IsSixtyFourBit() != true)
             return null;
 
-        if (!kind.IsSixtyFourBit())
-            return null;
-
-        var isSigned = kind.IsSigned();
+        var isSigned = binary.NumericKind.Value.IsSigned();
 
         return binary.Operator switch
         {
-            IrBinaryOp.IntegerDivide => Division(binary, isSigned, isRemainder: false, map),
-            IrBinaryOp.Modulo => Division(binary, isSigned, isRemainder: true, map),
-            IrBinaryOp.LeftShift => Shift(map(binary.Left), "<<", binary.Right, map),
-            IrBinaryOp.RightShift => Shift(map(binary.Left), ">>", binary.Right, map),
-            IrBinaryOp.UnsignedRightShift => Shift(
-                UnsignedBits(isSigned, map(binary.Left)),
-                ">>",
-                binary.Right,
+            IrBinaryOp.IntegerDivide => Division(
+                binary,
+                "/",
+                Int64RuntimeHelpers.Quotient(isSigned),
                 map
             ),
+            IrBinaryOp.Modulo => Division(
+                binary,
+                "%",
+                Int64RuntimeHelpers.Remainder(isSigned),
+                map
+            ),
+            IrBinaryOp.LeftShift => Shift(map(binary.Left), "<<", binary.Right, map),
+            IrBinaryOp.RightShift => Shift(map(binary.Left), ">>", binary.Right, map),
+            IrBinaryOp.UnsignedRightShift => UnsignedRightShift(binary, isSigned, map),
             _ => null,
         };
     }
 
     private static TsExpression Division(
         IrBinaryExpression binary,
-        bool isSigned,
-        bool isRemainder,
+        string token,
+        string helper,
         Func<IrExpression, TsExpression> map
     )
     {
         var dividend = map(binary.Left);
         var divisor = map(binary.Right);
 
-        if (IsNonThrowingDivisor(binary.Right, isSigned))
-            return new TsBinaryExpression(dividend, isRemainder ? "%" : "/", divisor);
-
-        return RuntimeCall(Int64RuntimeHelpers.Division(isSigned, isRemainder), dividend, divisor);
+        return binary.HasNonThrowingConstantDivisor()
+            ? new TsBinaryExpression(dividend, token, divisor)
+            : RuntimeCall(helper, dividend, divisor);
     }
 
     /// <summary>
-    /// A constant divisor other than <c>0</c>, and other than <c>-1</c> for a
-    /// signed dividend, whose quotient and remainder cannot throw.
+    /// <c>&gt;&gt;&gt;</c>: on a <c>ulong</c>, <c>&gt;&gt;</c>, already
+    /// logical for a non-negative <c>bigint</c>; on a <c>long</c>, the
+    /// unsigned bits shifted and read back as signed,
+    /// <c>BigInt.asIntN(64, BigInt.asUintN(64, l) &gt;&gt; c)</c> (FR-029),
+    /// since a count of <c>0</c> keeps a value above <c>long.MaxValue</c>.
     /// </summary>
-    private static bool IsNonThrowingDivisor(IrExpression divisor, bool isSigned) =>
-        divisor is IrLiteral { Value: long or ulong or int } literal
-        && Convert.ToDecimal(literal.Value, CultureInfo.InvariantCulture) switch
-        {
-            0m => false,
-            -1m => !isSigned,
-            _ => true,
-        };
+    private static TsExpression UnsignedRightShift(
+        IrBinaryExpression binary,
+        bool isSigned,
+        Func<IrExpression, TsExpression> map
+    )
+    {
+        if (!isSigned)
+            return Shift(map(binary.Left), ">>", binary.Right, map);
+
+        var unsignedBits = AsIntN(isSigned: false, 64, map(binary.Left));
+
+        return AsIntN(isSigned: true, 64, Shift(unsignedBits, ">>", binary.Right, map));
+    }
 
     /// <summary>
-    /// <c>value op count</c> with the count as a <c>bigint</c>: a folded
-    /// constant prints as a <c>bigint</c> literal, any other count is
+    /// <c>value op count</c> over the already mapped <paramref name="value"/>
+    /// and the IR <paramref name="count"/>, which stays unmapped so a folded
+    /// constant prints as a <c>bigint</c> literal; any other count is
     /// converted with <c>BigInt(…)</c>.
     /// </summary>
     private static TsBinaryExpression Shift(
@@ -102,12 +112,4 @@ internal static class IrToTsInt64OperatorBridge
         count is IrLiteral { Value: int constant }
             ? new TsLiteral(constant.ToString(CultureInfo.InvariantCulture) + "n")
             : BigInt(map(count));
-
-    /// <summary>
-    /// The bits <c>&gt;&gt;&gt;</c> shifts: a <c>long</c> as its unsigned
-    /// 64-bit value (the core wraps the result back, FR-029); a
-    /// <c>ulong</c> is already non-negative, so <c>&gt;&gt;</c> is logical.
-    /// </summary>
-    private static TsExpression UnsignedBits(bool isSigned, TsExpression value) =>
-        isSigned ? AsIntN(isSigned: false, 64, value) : value;
 }

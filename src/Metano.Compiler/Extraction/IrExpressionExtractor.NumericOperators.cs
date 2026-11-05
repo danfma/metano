@@ -23,47 +23,30 @@ public sealed partial class IrExpressionExtractor
     );
 
     /// <summary>
-    /// <c>left op right</c> as <paramref name="operation"/> (a binary
+    /// <c>left op right</c> as <paramref name="operatorSyntax"/> (a binary
     /// expression or a compound assignment) binds it, with the operand kind
-    /// of a built-in numeric operator and a 64-bit shift count masked;
-    /// <paramref name="rightSyntax"/> folds a constant count.
+    /// of a built-in numeric operator and a 64-bit shift count masked.
     /// </summary>
-    private IrBinaryExpression NumericBinary(
-        ExpressionSyntax operation,
-        IrExpression left,
+    private IrBinaryExpression BuildNumericBinary(
+        ExpressionSyntax operatorSyntax,
         IrBinaryOp op,
-        IrExpression right,
-        ExpressionSyntax rightSyntax
+        IrExpression left,
+        OperatorOperand right
     )
     {
-        var kind = BuiltInNumericKindOf(operation);
+        var kind = BuiltInNumericKindOf(operatorSyntax);
 
-        return new IrBinaryExpression(left, op, ShiftCountOf(op, kind, right, rightSyntax), kind);
+        return new IrBinaryExpression(left, op, ShiftCountOf(op, kind, right), kind);
     }
 
     /// <summary>
-    /// The value <c>target op= right</c> stores: the binary form over the
-    /// current value, reduced as the compound operation needs (FR-024).
-    /// </summary>
-    private IrExpression CompoundValue(
-        AssignmentExpressionSyntax assign,
-        IrExpression current,
-        IrBinaryOp op,
-        IrExpression right
-    ) =>
-        ReduceOverflow(
-            _semantic.GetOperation(assign),
-            NumericBinary(assign, current, op, right, assign.Right)
-        );
-
-    /// <summary>
-    /// The operand kind of the built-in operator <paramref name="operation"/>
+    /// The operand kind of the built-in operator <paramref name="operatorSyntax"/>
     /// binds to: its left parameter's kind, through <c>Nullable&lt;T&gt;</c>
     /// for a lifted operator; <c>null</c> for an enum, a user-defined, a
     /// string or a boolean operator.
     /// </summary>
-    private IrNumericKind? BuiltInNumericKindOf(ExpressionSyntax operation) =>
-        _semantic.GetSymbolInfo(operation).Symbol
+    private IrNumericKind? BuiltInNumericKindOf(ExpressionSyntax operatorSyntax) =>
+        _semantic.GetSymbolInfo(operatorSyntax).Symbol
             is IMethodSymbol { MethodKind: MethodKind.BuiltinOperator, Parameters: [var left, ..] }
         && NumericEndpoints.Of(left.Type) is { IsEnum: false } endpoint
             ? endpoint.Kind
@@ -76,31 +59,16 @@ public sealed partial class IrExpressionExtractor
     /// <c>63</c>). Any other right operand is unchanged; the shipped
     /// <c>Number</c> mode keeps its shifts (DECIDED-22).
     /// </summary>
-    private IrExpression ShiftCountOf(
-        IrBinaryOp op,
-        IrNumericKind? kind,
-        IrExpression count,
-        ExpressionSyntax countSyntax
-    )
+    private IrExpression ShiftCountOf(IrBinaryOp op, IrNumericKind? kind, OperatorOperand count)
     {
-        var masksCount =
-            _context.ExactInt64Lowering
-            && op.IsShift()
-            && kind is { } shifted
-            && shifted.IsSixtyFourBit();
+        if (!op.IsShift() || !IsExactSixtyFourBit(kind))
+            return count.Value;
 
-        if (!masksCount)
-            return count;
-
-        if (_semantic.GetConstantValue(countSyntax) is { HasValue: true, Value: { } constant })
-            return new IrLiteral(
-                Convert.ToInt32(constant, CultureInfo.InvariantCulture)
-                    & SixtyFourBitShiftCountMask,
-                IrLiteralKind.Int32
-            );
+        if (_semantic.GetConstantValue(count.Syntax) is { HasValue: true, Value: { } constant })
+            return MaskedConstantCount(constant);
 
         return new IrBinaryExpression(
-            count,
+            count.Value,
             IrBinaryOp.BitwiseAnd,
             SixtyFourBitShiftCountMaskLiteral,
             IrNumericKind.Int32
@@ -111,13 +79,23 @@ public sealed partial class IrExpressionExtractor
     /// Whether <paramref name="op"/> on 64-bit operands has no compound
     /// operator in the targets that keeps C# semantics under the exact 64-bit
     /// lowering: division and remainder throw where the native operators do
-    /// not, and a shift masks (and in TypeScript converts) its count, so their
-    /// compound forms read, compute and write the target (FR-024).
-    /// <c>&amp;=</c>, <c>|=</c> and <c>^=</c> keep the native operator.
+    /// not, and a shift reads its count masked, so their compound forms
+    /// store the binary form's value through the read-modify-write lowering
+    /// (FR-024), as the wrapping operators do. <c>&amp;=</c>, <c>|=</c> and
+    /// <c>^=</c> keep the native operator.
     /// </summary>
-    private bool NeedsSixtyFourBitReadModifyWrite(IrBinaryOp op, ExpressionSyntax operation) =>
-        _context.ExactInt64Lowering
-        && (op is IrBinaryOp.IntegerDivide or IrBinaryOp.Modulo || op.IsShift())
-        && BuiltInNumericKindOf(operation) is { } kind
-        && kind.IsSixtyFourBit();
+    private bool NeedsSixtyFourBitReadModifyWrite(IrBinaryOp op, ExpressionSyntax operatorSyntax) =>
+        (op.IsDivisionOrRemainder() || op.IsShift())
+        && IsExactSixtyFourBit(BuiltInNumericKindOf(operatorSyntax));
+
+    /// <summary>A 64-bit operand kind under the exact 64-bit lowering.</summary>
+    private bool IsExactSixtyFourBit(IrNumericKind? kind) =>
+        _context.ExactInt64Lowering && kind?.IsSixtyFourBit() == true;
+
+    /// <summary>A constant shift count as C# reads it for a 64-bit shift.</summary>
+    private static IrLiteral MaskedConstantCount(object constant) =>
+        new(
+            Convert.ToInt32(constant, CultureInfo.InvariantCulture) & SixtyFourBitShiftCountMask,
+            IrLiteralKind.Int32
+        );
 }

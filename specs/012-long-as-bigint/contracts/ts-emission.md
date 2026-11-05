@@ -104,6 +104,7 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `l << n` | `BigInt.asIntN(64, l << BigInt(n & 63))` |
 | `u << n` | `BigInt.asUintN(64, u << BigInt(n & 63))` |
 | `l >> n`, `u >> n` | `l >> BigInt(n & 63)`, `u >> BigInt(n & 63)` |
+| `l << c` (`char c`) | known gap: the implicit `char` → `int` conversion has no IR node, so the count stays a string (`BigInt(c & 63)`, rejected by `tsgo`); it needs a core `char` → `int` conversion, not a per-operator fix (slice 012d, deferred) |
 | `l >>> 2` | `BigInt.asIntN(64, BigInt.asUintN(64, l) >> 2n)` |
 | `u >>> 2` | `u >> 2n` |
 | `l & m`, `l \| m`, `l ^ m` | `l & m`, `l \| m`, `l ^ m` |

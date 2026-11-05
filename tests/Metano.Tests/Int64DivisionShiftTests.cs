@@ -103,6 +103,7 @@ public class Int64DivisionShiftTests
             public long Expression(long l, int n) => l << n + 1;
             public long? Lifted(long? nl, int n) => nl << n;
             public long? LiftedCount(long l, int? n) => l << n;
+            public ulong? ULiftedUnsigned(ulong? nu, int n) => nu >>> n;
             public long Bitwise(long l, long m) => (l & m) | (l ^ ~m);
             public int Narrow(int i, int n) => i << n | i >> 2 | i >>> n;
 
@@ -214,6 +215,8 @@ public class Int64DivisionShiftTests
         await Assert.That(shift).Contains("int leftMasked(int l) => l << 6;");
         await Assert.That(shift).Contains("int unsigned(int l) => l >>> 2;");
         await Assert.That(shift).Contains("int narrow(int i, int n) => i << n | i >> 2 | i >>> n;");
+        await Assert.That(shift).Contains("l = l << (n & 63);");
+        await Assert.That(shift).Contains("l = l >>> (n & 63);");
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 

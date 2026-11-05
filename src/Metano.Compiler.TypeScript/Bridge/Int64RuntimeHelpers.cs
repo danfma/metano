@@ -59,13 +59,9 @@ internal static class Int64RuntimeHelpers
     public static string FromBigInteger(bool isSigned) =>
         isSigned ? Int64FromBigInteger : UInt64FromBigInteger;
 
-    /// <summary><c>l / m</c> or <c>l % m</c> (signed), <c>u / v</c> or <c>u % v</c>.</summary>
-    public static string Division(bool isSigned, bool isRemainder) =>
-        (isSigned, isRemainder) switch
-        {
-            (true, false) => DivInt64,
-            (true, true) => RemInt64,
-            (false, false) => DivUInt64,
-            (false, true) => RemUInt64,
-        };
+    /// <summary><c>l / m</c> (signed) or <c>u / v</c>, throwing as .NET does.</summary>
+    public static string Quotient(bool isSigned) => isSigned ? DivInt64 : DivUInt64;
+
+    /// <summary><c>l % m</c> (signed) or <c>u % v</c>, throwing as .NET does.</summary>
+    public static string Remainder(bool isSigned) => isSigned ? RemInt64 : RemUInt64;
 }
