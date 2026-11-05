@@ -448,7 +448,9 @@ public static class IrTypeRefMapper
                 JsxNativeElementTag: jsxNativeTag,
                 IsJsxComponent: isJsxComponent,
                 RendersAsJsxElement: rendersAsJsx,
-                IsDefaultConstructible: IsDefaultConstructible(named, target)
+                IsDefaultConstructible: IsDefaultConstructible(named, target),
+                IsValueType: named.IsValueType,
+                HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target)
             );
 
         if (named.TypeKind == TypeKind.Struct)
@@ -461,7 +463,9 @@ public static class IrTypeRefMapper
                 IsPlainObject: SymbolHelper.HasPlainObject(named),
                 IsJsTuple: isJsTuple,
                 JsTupleArity: jsTupleArity,
-                IsDefaultConstructible: IsDefaultConstructible(named, target)
+                IsDefaultConstructible: IsDefaultConstructible(named, target),
+                IsValueType: true,
+                HasImplicitParameterlessOverload: HasImplicitParameterlessOverload(named, target)
             );
 
         if (named.TypeKind == TypeKind.Class)
@@ -495,13 +499,39 @@ public static class IrTypeRefMapper
         INamedTypeSymbol named,
         Metano.Annotations.TargetLanguage? target
     ) =>
+        IsStructWithRuntimeClass(named, target)
+        && named.InstanceConstructors.All(ctor => ctor.IsImplicitlyDeclared);
+
+    /// <summary>
+    /// Whether <paramref name="named"/> is a struct with a runtime class whose
+    /// dispatched constructor set leaves C#'s implicit parameterless
+    /// constructor in place, which the targets add as one more overload
+    /// (spec 013 FR-027).
+    /// </summary>
+    private static bool HasImplicitParameterlessOverload(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        IsStructWithRuntimeClass(named, target)
+        && IrConstructorExtractor.IsDispatchedSet(named)
+        && !IrConstructorExtractor
+            .AllExplicitConstructors(named)
+            .Any(ctor => ctor.Parameters.IsEmpty);
+
+    /// <summary>
+    /// A transpiled struct with a runtime class: not <c>[PlainObject]</c>,
+    /// <c>[JsTuple]</c>, <c>[External]</c> or <c>[Import]</c>.
+    /// </summary>
+    private static bool IsStructWithRuntimeClass(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
         named.TypeKind == TypeKind.Struct
         && IsTranspilableType(named, target)
         && !SymbolHelper.HasPlainObject(named)
         && !named.HasJsTuple()
         && !SymbolHelper.HasExternal(named)
-        && !SymbolHelper.HasImport(named)
-        && named.InstanceConstructors.All(ctor => ctor.IsImplicitlyDeclared);
+        && !SymbolHelper.HasImport(named);
 
     /// <summary>
     /// Picks the member that <c>default(E)</c> resolves to. For numeric enums

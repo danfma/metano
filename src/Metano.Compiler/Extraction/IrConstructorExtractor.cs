@@ -50,7 +50,7 @@ public static class IrConstructorExtractor
 
         var promotionContext = new PromotionContext(type, context, promotion);
 
-        if (explicitCtors.Count < 2)
+        if (!IsDispatchedSet(type))
             return BuildFromMethod(primary, context.OriginResolver, promotionContext);
 
         var named = OverloadGroupNaming.ApplyToConstructors(
@@ -64,6 +64,11 @@ public static class IrConstructorExtractor
         var primaryIndex = explicitCtors
             .ToList()
             .FindIndex(ctor => SymbolEqualityComparer.Default.Equals(ctor, primary));
+
+        if (primaryIndex < 0)
+            throw new InvalidOperationException(
+                $"The primary constructor of '{type.Name}' is not one of its declared constructors."
+            );
 
         // Other constructors become overloads (without nested Overloads of their own).
         var overloads = named.Where((_, index) => index != primaryIndex).ToList();
@@ -148,6 +153,15 @@ public static class IrConstructorExtractor
         IsPrimaryConstructor(ctor) || IsImplicitAbstractConstructorInMetadata(ctor)
             ? IrVisibility.Public
             : IrVisibilityMapper.Map(ctor.DeclaredAccessibility);
+
+    /// <summary>
+    /// Whether <paramref name="type"/>'s declared constructors form a
+    /// dispatched set: two or more (spec 013 D1). Each overload of the set is
+    /// named (<see cref="IrConstructorDeclaration.OverloadName"/>) and a target
+    /// emits it behind one dispatcher.
+    /// </summary>
+    public static bool IsDispatchedSet(INamedTypeSymbol type) =>
+        AllExplicitConstructors(type).Count > 1;
 
     /// <summary>
     /// The constructors <see cref="Extract"/> models for

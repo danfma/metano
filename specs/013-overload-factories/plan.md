@@ -139,7 +139,13 @@ need the ordinal the core so far records only on constructors) and keeps the sym
 thin adapter. **013d** adds the inherited instance side (claim step 7) to the cached result, which
 today holds only the static side. **013e** replaces the module-function path, which still names
 fast paths without a claim (`IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions`), with the
-barrel claim table. The factory widening of FR-011 (a factory code outside the class body calls)
+barrel claim table. `IrToTsTypeOverrides` both maps a type and records its package; the claim pass
+reads shapes through a copy with a throwaway ledger, and splitting the mapping from the recording is
+left to a later cleanup. FR-027's struct branch zeroes references, numbers, `bool`, `decimal`,
+enums, nullables, `char`, `BigInteger`, branded values and structs whose `new S()` zeroes them; it
+leaves `undefined` with `MS0001` for `Guid` (`UUID.empty` is expressible, not built yet), the date
+and time types, structs with a single declared constructor or a user parameterless one, tuples and
+type parameters constrained to a value type — a follow-up closes these. The factory widening of FR-011 (a factory code outside the class body calls)
 lands with **013c**, the first slice that calls factories.
 
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),

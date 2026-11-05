@@ -62,9 +62,11 @@ internal static class IrToTsConstructorFactoryBridge
         if (type.Semantics.IsAbstract || type.Constructor is not { } constructor)
             return [];
 
+        var selectors = new ConstructorSelectors(typeName, claims);
+
         return constructor
             .DeclarationsInOrder.Select(overload =>
-                BuildFactory(type, new ConstructorSelectors(typeName, claims), overload, context)
+                BuildFactory(type, selectors, overload, context)
             )
             .ToList();
     }
