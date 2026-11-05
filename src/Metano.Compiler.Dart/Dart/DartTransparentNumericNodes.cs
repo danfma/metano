@@ -1,16 +1,20 @@
+using System.Globalization;
 using Metano.Compiler.IR;
 
 namespace Metano.Compiler.Dart;
 
 /// <summary>
-/// The numeric IR nodes Dart prints as their operand, because a Dart
-/// <c>int</c> is already a 64-bit two's-complement value:
-/// <see cref="IrIntegerOverflow"/> (the VM <c>int</c> wraps by itself, and a
-/// checked context is a documented gap) and <see cref="IrNumericConversion"/>
-/// (the narrowing <c>.toSigned</c> / <c>.toUnsigned</c> forms land with the
-/// slice that produces the node). The printer and the operand-grouping rules
-/// look through them, so a wrapped operand keeps the parentheses its own
-/// shape needs.
+/// How Dart prints the numeric IR nodes of spec 012, given that a Dart
+/// <c>int</c> is already a 64-bit two's-complement value (DECIDED-19).
+/// <see cref="IrIntegerOverflow"/> prints as its operand (the VM <c>int</c>
+/// wraps by itself, and a checked context is a documented gap). An
+/// <see cref="IrNumericConversion"/> that changes the value prints as a
+/// method selector on its operand (<see cref="ConversionSelector"/>); one
+/// Dart does not convert keeps the explicit cast it lowers
+/// (<c>x as T</c>, as before the conversion node existed), or prints its
+/// operand when it is implicit. The printer and the operand-grouping rules
+/// read every node through <see cref="Unwrap"/>, so a wrapped operand keeps
+/// the parentheses its own shape needs.
 /// </summary>
 internal static class DartTransparentNumericNodes
 {
@@ -19,7 +23,51 @@ internal static class DartTransparentNumericNodes
         expression switch
         {
             IrIntegerOverflow overflow => Unwrap(overflow.Value),
-            IrNumericConversion conversion => Unwrap(conversion.Operand),
+            IrNumericConversion conversion when ConversionSelector(conversion) is null =>
+                conversion.CastType is { } castType
+                    ? new IrCastExpression(conversion.Operand, castType)
+                    : Unwrap(conversion.Operand),
             _ => expression,
         };
+
+    /// <summary>
+    /// The selector Dart appends to the operand of <paramref name="conversion"/>:
+    /// <c>.toInt()</c> out of a floating-point value, <c>.toDouble()</c> into
+    /// one, and <c>.toSigned(n)</c> / <c>.toUnsigned(n)</c> to keep the low
+    /// <c>n</c> bits of an integer narrower than 64 bits
+    /// (<c>(int)0x100000001L</c> is <c>1</c>). <c>null</c> when Dart does not
+    /// convert: a 64-bit-preserving conversion, and the <c>char</c>,
+    /// <c>decimal</c>, <c>BigInteger</c> and enum endpoints this shape-only
+    /// target leaves to the cast (documented gaps). A lifted conversion opens
+    /// the chain with <c>?.</c>, so <c>null</c> passes through.
+    /// </summary>
+    public static string? ConversionSelector(IrNumericConversion conversion)
+    {
+        var chain = SelectorChain(conversion.From, conversion.To);
+
+        // A lifted conversion (`int?` → `long?`) short-circuits on `null`.
+        return chain is not null && conversion.IsLifted ? "?" + chain : chain;
+    }
+
+    private static string? SelectorChain(IrNumericEndpoint from, IrNumericEndpoint to)
+    {
+        if (!IsConvertible(from) || !IsConvertible(to))
+            return null;
+
+        if (to.Kind.IsFloatingPoint())
+            return from.Kind.IsFloatingPoint() ? null : ".toDouble()";
+
+        var narrowing = to.Kind.BitWidth() < 64 ? Narrowing(to.Kind) : null;
+
+        return from.Kind.IsFloatingPoint() ? ".toInt()" + narrowing : narrowing;
+    }
+
+    private static string Narrowing(IrNumericKind kind) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $".{(kind.IsSigned() ? "toSigned" : "toUnsigned")}({kind.BitWidth()})"
+        );
+
+    private static bool IsConvertible(IrNumericEndpoint endpoint) =>
+        !endpoint.IsEnum && (endpoint.Kind.IsInteger() || endpoint.Kind.IsFloatingPoint());
 }

@@ -4557,8 +4557,10 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// C# has no runtime cast — TS is structurally typed and every numeric is
-    /// just <c>number</c> or <c>bigint</c>. The only casts that need actual
-    /// runtime code are the ones that change numeric representation:
+    /// just <c>number</c> or <c>bigint</c>. A numeric cast the targets must
+    /// render becomes an <see cref="IrNumericConversion"/> (a floating-point
+    /// value to a narrow integer); a constant one folds. The other
+    /// casts that need runtime code change the numeric representation:
     /// <list type="bullet">
     ///   <item><c>(decimal)bigIntExpr</c> → <c>new Decimal(expr.toString())</c></item>
     ///   <item><c>(BigInteger)decimalExpr</c> → <c>BigInt(expr.toFixed(0))</c></item>
@@ -4575,6 +4577,8 @@ public sealed partial class IrExpressionExtractor
         if (sourceType is null || targetType is null)
             return new IrCastExpression(inner, ExtractTargetType(cast));
 
+        var unwrapsNullable = false;
+
         if (
             UnwrapsNullableValue(sourceType, targetType)
             && _semantic.GetOperation(cast)
@@ -4583,6 +4587,28 @@ public sealed partial class IrExpressionExtractor
         {
             inner = ValueOrThrowWhenMissing(cast.Expression, inner);
             sourceType = UnwrapNullable(sourceType);
+            unwrapsNullable = true;
+        }
+
+        // The unwrapped value converts as its underlying type; a target that
+        // keeps the cast (Dart) reads it through that type.
+        var convertedOperand = unwrapsNullable
+            ? new IrCastExpression(inner, IrTypeRefMapper.Map(sourceType, _originResolver, _target))
+            : inner;
+
+        var conversion = ExplicitNumericConversion(
+            cast,
+            convertedOperand,
+            sourceType,
+            targetType,
+            ExtractTargetType(cast)
+        );
+
+        if (conversion is not null)
+        {
+            IrExpression? folded = FoldedConstantCast(cast);
+
+            return folded ?? conversion;
         }
 
         var sourceSpecial = sourceType.SpecialType;

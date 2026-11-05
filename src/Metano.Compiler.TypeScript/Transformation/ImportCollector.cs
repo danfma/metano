@@ -1086,6 +1086,9 @@ public sealed class ImportCollector(
             case TsModuleExportReference exportReference:
                 RecordModuleExport(sink.OwnersByModuleExport, exportReference);
                 break;
+            case TsRuntimeHelperReference helper:
+                runtimeHelpers.Add(helper.Name);
+                break;
             case TsIdentifier bareId:
                 // Bare identifiers starting with uppercase may reference transpilable
                 // types used as values (e.g., enum objects passed to descriptor specs).

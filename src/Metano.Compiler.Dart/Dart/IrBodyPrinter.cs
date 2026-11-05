@@ -342,6 +342,11 @@ public static class IrBodyPrinter
                 sb.Append("throw ");
                 PrintExpression(sb, th.Expression);
                 break;
+            case IrNumericConversion conversion
+                when DartTransparentNumericNodes.ConversionSelector(conversion) is { } selector:
+                PrintOperand(sb, conversion.Operand, ReceiverRequiresParens(conversion.Operand));
+                sb.Append(selector);
+                break;
             case IrIntegerOverflow or IrNumericConversion:
                 PrintExpression(sb, DartTransparentNumericNodes.Unwrap(expr));
                 break;
