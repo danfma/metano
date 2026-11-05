@@ -1616,4 +1616,19 @@ public static class SymbolHelper
 
         return null;
     }
+
+    /// <summary>
+    /// Whether two methods declare the same parameter types with the same
+    /// <c>ref</c> kinds, in the same order: one signature for overloading.
+    /// </summary>
+    public static bool HasSameParameters(IMethodSymbol method, IMethodSymbol other) =>
+        method.Parameters.Length == other.Parameters.Length
+        && method
+            .Parameters.Zip(
+                other.Parameters,
+                (parameter, otherParameter) =>
+                    parameter.RefKind == otherParameter.RefKind
+                    && SymbolEqualityComparer.Default.Equals(parameter.Type, otherParameter.Type)
+            )
+            .All(same => same);
 }

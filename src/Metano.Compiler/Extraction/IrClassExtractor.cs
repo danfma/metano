@@ -455,7 +455,12 @@ public static class IrClassExtractor
         {
             Overloads = widestFirst.Count > 1 ? widestFirst.Skip(1).ToList() : null,
             InheritedOverloads = group
-                .InheritedOverloads?.Select(overload => ExtractSignature(overload, context))
+                .InheritedOverloads?.Select(overload =>
+                    DeclareUnderInterfaceName(
+                        IrMethodExtractor.ExtractForeignSignature(overload, context),
+                        overload
+                    )
+                )
                 .ToList(),
         };
     }
@@ -505,21 +510,6 @@ public static class IrClassExtractor
             anchor.Kind,
             furtherRoots.Count > 0 ? furtherRoots : null
         );
-    }
-
-    /// <summary>
-    /// The signature of an inherited dispatcher overload, as the deriving
-    /// type sees it: no body, and no diagnostics, which its own declaring
-    /// type reports.
-    /// </summary>
-    private static IrMethodDeclaration ExtractSignature(
-        IMethodSymbol overload,
-        IrExtractionContext context
-    )
-    {
-        using var _ = ExtractionDiagnostics.Suppress();
-
-        return IrMethodExtractor.Extract(overload, context with { Compilation = null });
     }
 
     /// <summary>

@@ -652,7 +652,7 @@ public static partial class IrToTsExpressionBridge
         if (IsBaseIdentityHash(call))
             return new TsLiteral("0");
 
-        if (BaseFastPathCallOf(call, loweredArgs) is { } baseFastPathCall)
+        if (BaseFastPathCallOf(call, loweredArgs, context) is { } baseFastPathCall)
             return baseFastPathCall;
 
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
@@ -1630,15 +1630,17 @@ public static partial class IrToTsExpressionBridge
     /// bound arguments in C#'s evaluation order. <c>null</c> when the call
     /// has no resolved overload or its declaring type is not visible.
     /// </summary>
+    /// <summary>The overload a <c>base.M(...)</c> call was bound to; <c>null</c> for any other call.</summary>
+    private static IrSelectedOverload? BaseOverloadOf(IrCallExpression call) =>
+        call.Target is IrMemberAccess { Target: IrBaseExpression } ? call.Overload : null;
+
     private static TsExpression? BaseFastPathCallOf(
         IrCallExpression call,
-        IReadOnlyList<TsExpression> loweredArgs
+        IReadOnlyList<TsExpression> loweredArgs,
+        IrToTsBridgeContext context
     )
     {
-        if (
-            call
-            is not { Overload: { } overload, Target: IrMemberAccess { Target: IrBaseExpression } }
-        )
+        if (BaseOverloadOf(call) is not { } overload)
             return null;
 
         if (TsOverloadCallSites.MethodFastPathOf(overload.Target) is not { } fastPath)
@@ -1652,7 +1654,11 @@ public static partial class IrToTsExpressionBridge
 
         var superCall = new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("super"), fastPath),
-            ordered.Arguments
+            ordered.Arguments,
+            TypeArguments: call.TypeArguments?.Select(argument =>
+                    IrToTsTypeMapper.Map(argument, context.TypeOverrides)
+                )
+                .ToList()
         );
 
         if (ordered.Bindings.Count == 0)

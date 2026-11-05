@@ -31,7 +31,7 @@ public static class MultiplyConstructedInterfaces
         IrExtractionContext context
     )
     {
-        var roots = DispatchedInterfacesOf(type, context.Target)
+        var roots = MultiplyConstructedInterfacesOf(type, context.Target)
             .SelectMany(definition => RootsOf(type, definition, context))
             .ToList();
 
@@ -47,7 +47,7 @@ public static class MultiplyConstructedInterfaces
         INamedTypeSymbol type,
         TargetLanguage? target
     ) =>
-        DispatchedInterfacesOf(type, target)
+        MultiplyConstructedInterfacesOf(type, target)
             .Where(definition =>
                 type.BaseType is not { } baseType || ConstructionsOf(baseType, definition).Count < 2
             )
@@ -122,6 +122,7 @@ public static class MultiplyConstructedInterfaces
     )
     {
         var constructions = ConstructionsOf(type, definition);
+
         var isInherited =
             type.BaseType is { } baseType && ConstructionsOf(baseType, definition).Count > 0;
 
@@ -152,8 +153,6 @@ public static class MultiplyConstructedInterfaces
         IrExtractionContext context
     )
     {
-        using var _ = ExtractionDiagnostics.Suppress();
-
         var constructed = construction
             .GetMembers(member.Name)
             .OfType<IMethodSymbol>()
@@ -161,7 +160,7 @@ public static class MultiplyConstructedInterfaces
                 SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, member)
             );
 
-        return IrMethodExtractor.Extract(constructed, context with { Compilation = null });
+        return IrMethodExtractor.ExtractForeignSignature(constructed, context);
     }
 
     /// <summary>
@@ -169,19 +168,28 @@ public static class MultiplyConstructedInterfaces
     /// <paramref name="type"/> implements more than once, in the order of its
     /// interfaces.
     /// </summary>
-    private static IEnumerable<INamedTypeSymbol> DispatchedInterfacesOf(
+    private static IEnumerable<INamedTypeSymbol> MultiplyConstructedInterfacesOf(
         INamedTypeSymbol type,
         TargetLanguage? target
-    ) =>
-        type
+    )
+    {
+        if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+            return [];
+
+        return type
             .AllInterfaces.Select(implemented => implemented.OriginalDefinition)
             .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
-            .Where(definition =>
-                type.TypeKind is TypeKind.Class or TypeKind.Struct
-                && IrTypeRefMapper.IsTranspilableType(definition, target)
-                && GroupNamesOf(definition, target).Count > 0
-                && ConstructionsOf(type, definition).Count >= 2
-            );
+            .Where(definition => IsMultiplyConstructedGroupInterface(type, definition, target));
+    }
+
+    private static bool IsMultiplyConstructedGroupInterface(
+        INamedTypeSymbol type,
+        INamedTypeSymbol definition,
+        TargetLanguage? target
+    ) =>
+        MethodOverloadGroups.IsTranspiledInterface(definition, target)
+        && GroupNamesOf(definition, target).Count > 0
+        && ConstructionsOf(type, definition).Count >= 2;
 
     private static IReadOnlyList<INamedTypeSymbol> ConstructionsOf(
         INamedTypeSymbol type,

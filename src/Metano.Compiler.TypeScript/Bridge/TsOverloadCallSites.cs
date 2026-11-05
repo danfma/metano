@@ -29,6 +29,13 @@ internal static class TsOverloadCallSites
         set => _claims.Value = value;
     }
 
+    private static TsOverloadClaimsRegistry RequiredClaims =>
+        Claims
+        ?? throw new InvalidOperationException(
+            "An overload call site was lowered outside a TypeScript transform, which "
+                + "publishes the claim results it resolves through."
+        );
+
     /// <summary>
     /// The claimed selector and factory of a constructor overload;
     /// <c>null</c> when the declaring type is not visible to the transform,
@@ -43,11 +50,4 @@ internal static class TsOverloadCallSites
     /// </summary>
     internal static string? MethodFastPathOf(IrOverloadRef overload) =>
         RequiredClaims.RootFastPathOf(overload);
-
-    private static TsOverloadClaimsRegistry RequiredClaims =>
-        Claims
-        ?? throw new InvalidOperationException(
-            "An overload call site was lowered outside a TypeScript transform, which "
-                + "publishes the claim results it resolves through."
-        );
 }

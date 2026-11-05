@@ -174,6 +174,7 @@ public class OverloadVirtualGoldenTests
         await Assert
             .That(fromImage["app/derived.ts"])
             .IsEqualTo(TranspileHelper.ReadExpected("overload-virtual-metadata.ts"));
+
         await Assert.That(fromProject["app/derived.ts"]).IsEqualTo(fromImage["app/derived.ts"]);
     }
 
@@ -188,7 +189,9 @@ public class OverloadVirtualGoldenTests
     [Test]
     [Arguments(false)]
     [Arguments(true)]
-    public async Task MetadataBase_MissesAPrivateClaimant(bool referenceAssembly)
+    public async Task MetadataBase_OverridesTheUnrenamedFastPath_WhenTheClaimantIsPrivate(
+        bool referenceAssembly
+    )
     {
         var library = VirtualLibrary("private");
 
@@ -203,6 +206,7 @@ public class OverloadVirtualGoldenTests
         await Assert
             .That(fromImage["app/derived.ts"])
             .Contains("override addS(s: string): number {");
+
         await Assert
             .That(fromProject["app/derived.ts"])
             .Contains("override addS$(s: string): number {");
@@ -311,6 +315,148 @@ public class OverloadVirtualGoldenTests
         await Assert
             .That(Joined(result, "i-shape", "sq", "plot", "ia", "ib", "both"))
             .IsEqualTo(TranspileHelper.ReadExpected("overload-interface.ts"));
+    }
+
+    /// <summary>
+    /// A type adding an overload to a group of explicit implementations
+    /// (<c>X4 : X</c>) gets the superset dispatcher; an explicit or a
+    /// <c>new</c> re-implementation of an interface root a base already
+    /// implements overrides the base's fast path.
+    /// </summary>
+    [Test]
+    public async Task Reimplementations_OverrideTheInheritedRootFastPaths()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface IR
+            {
+                int R(int x);
+
+                int R(string s);
+            }
+
+            [Transpile]
+            public class X : IR
+            {
+                int IR.R(int x) => 1;
+
+                int IR.R(string s) => 2;
+
+                public int R(bool b) => 3;
+            }
+
+            [Transpile]
+            public class X4 : X
+            {
+                public int R(double d) => 4;
+            }
+
+            [Transpile]
+            public class X3 : X, IR
+            {
+                int IR.R(int x) => 9;
+            }
+
+            [Transpile]
+            public class Bn : IR
+            {
+                public int R(int x) => 1;
+
+                public int R(string s) => 2;
+            }
+
+            [Transpile]
+            public class Dn : Bn, IR
+            {
+                public new int R(int x) => 10;
+            }
+            """
+        );
+
+        await Assert
+            .That(Joined(result, "x", "x4", "x3", "bn", "dn"))
+            .IsEqualTo(TranspileHelper.ReadExpected("overload-interface-reimplementation.ts"));
+    }
+
+    /// <summary>
+    /// An override of an undispatched base virtual that also implements an
+    /// interface root is an implementation, not an override of a fast path
+    /// the base lacks, so a further derived type's dispatcher still carries
+    /// its signature.
+    /// </summary>
+    [Test]
+    public async Task OverrideImplementingAnInterfaceRoot_StaysInTheInheritedDispatcher()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface I
+            {
+                int N(int x);
+
+                int N(string s);
+            }
+
+            [Transpile]
+            public class A
+            {
+                public virtual int N(int x) => 1;
+            }
+
+            [Transpile]
+            public class Bi : A, I
+            {
+                public override int N(int x) => 2;
+
+                public int N(string s) => 3;
+            }
+
+            [Transpile]
+            public class Ci : Bi
+            {
+                public int N(bool b) => 9;
+            }
+            """
+        );
+
+        await Assert.That(result["bi.ts"]).Contains("  nX(x: number): number {");
+        await Assert.That(result["bi.ts"]).DoesNotContain("override nX(");
+        await Assert.That(result["ci.ts"]).Contains("  override n(x: number): number;");
+    }
+
+    /// <summary>
+    /// <c>base.M(...)</c> into an <c>[External]</c> base's group keeps the
+    /// call the base really declares: the dispatcher name, not a fast path
+    /// the ambient class has no member for.
+    /// </summary>
+    [Test]
+    public async Task BaseCallIntoAnExternalGroup_KeepsTheDispatcherCall()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [External]
+            public abstract class Widget
+            {
+                public virtual void Add(int x) { }
+
+                public virtual void Add(string s) { }
+            }
+
+            [Transpile]
+            public class MyWidget : Widget
+            {
+                public override void Add(int x) => base.Add(x + 1);
+
+                public void Go() => base.Add("s");
+            }
+            """
+        );
+
+        await Assert.That(result["my-widget.ts"]).Contains("super.add(x + 1);");
+        await Assert.That(result["my-widget.ts"]).Contains("super.add(\"s\");");
     }
 
     /// <summary>

@@ -272,13 +272,14 @@ internal static class MethodOverloadGroups
     ) =>
         type.GetMembers()
             .OfType<IMethodSymbol>()
-            .Where(method =>
-                !method.IsImplicitlyDeclared
-                && !SymbolHelper.HasIgnore(method, target)
-                && IsUserMethod(method)
-                && !IsDroppedExplicitImplementation(method, target)
-                && !SymbolHelper.IsInlinedAtCallSite(method)
-            );
+            .Where(method => IsDeclaredGroupMethod(method, target));
+
+    private static bool IsDeclaredGroupMethod(IMethodSymbol method, TargetLanguage? target) =>
+        !method.IsImplicitlyDeclared
+        && !SymbolHelper.HasIgnore(method, target)
+        && IsUserMethod(method)
+        && !IsDroppedExplicitImplementation(method, target)
+        && !SymbolHelper.IsInlinedAtCallSite(method);
 
     private static bool IsOperator(IMethodSymbol method) =>
         method.MethodKind is MethodKind.UserDefinedOperator or MethodKind.Conversion;
@@ -332,13 +333,14 @@ internal static class MethodOverloadGroups
         if (interfaceRoots.Count == 0)
             return null;
 
-        return method.IsOverride
-            ? new MethodAnchor(interfaceRoots[0], IrOverloadAnchorKind.Override, [])
-            : new MethodAnchor(
-                interfaceRoots[0],
-                IrOverloadAnchorKind.Implementation,
-                interfaceRoots.Skip(1).ToList()
-            );
+        // An interface root is implemented, never overridden, even by an
+        // override of an undispatched base virtual: the base declares no fast
+        // path under the root's name (the claim pass marks the ones it does).
+        return new MethodAnchor(
+            interfaceRoots[0],
+            IrOverloadAnchorKind.Implementation,
+            method.IsOverride ? [] : interfaceRoots.Skip(1).ToList()
+        );
     }
 
     private static IrOverloadAnchorKind KindOf(IMethodSymbol method) =>
@@ -441,7 +443,11 @@ internal static class MethodOverloadGroups
         && method.DeclaredAccessibility == Accessibility.Public
         && !SymbolHelper.HasIgnore(method, target);
 
-    private static bool IsTranspiledInterface(INamedTypeSymbol type, TargetLanguage? target) =>
+    /// <summary>
+    /// A transpiled interface whose groups implementers anchor on: emitted
+    /// (not <c>[External]</c>) and a real type (not <c>[JsCallable]</c>).
+    /// </summary>
+    internal static bool IsTranspiledInterface(INamedTypeSymbol type, TargetLanguage? target) =>
         IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
         && !SymbolHelper.HasExternal(type.OriginalDefinition)
         && !SymbolHelper.HasJsCallable(type.OriginalDefinition);
@@ -497,7 +503,8 @@ internal static class MethodOverloadGroups
         return inherited
             .Where(overload =>
                 !declared.Any(member =>
-                    !member.Symbol.IsOverride && HasSameParameters(member.Symbol, overload)
+                    !member.Symbol.IsOverride
+                    && SymbolHelper.HasSameParameters(member.Symbol, overload)
                 )
             )
             .ToList();
@@ -539,7 +546,7 @@ internal static class MethodOverloadGroups
                 return group.Members.Count >= 2 ? added : null;
 
             var above = (DispatcherOverloadsAbove(ancestor!, name, target) ?? []).Where(overload =>
-                !added.Any(own => HasSameParameters(own, overload))
+                !added.Any(own => SymbolHelper.HasSameParameters(own, overload))
             );
 
             return [.. above, .. added];
@@ -548,7 +555,12 @@ internal static class MethodOverloadGroups
         return null;
     }
 
-    private static bool IsEmittedBase(INamedTypeSymbol? type, TargetLanguage? target) =>
+    /// <summary>
+    /// A class the target emits, whose dispatched groups a derived class and
+    /// a <c>base.M(...)</c> call can reach by fast path: transpiled, not
+    /// <c>[External]</c>, not a BCL or special type.
+    /// </summary>
+    internal static bool IsEmittedBase(INamedTypeSymbol? type, TargetLanguage? target) =>
         type is { TypeKind: TypeKind.Class, SpecialType: SpecialType.None }
         && IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
         && !SymbolHelper.HasExternal(type.OriginalDefinition);
@@ -563,17 +575,6 @@ internal static class MethodOverloadGroups
                     definition.OriginalDefinition
                 )
             );
-
-    private static bool HasSameParameters(IMethodSymbol method, IMethodSymbol other) =>
-        method.Parameters.Length == other.Parameters.Length
-        && method
-            .Parameters.Zip(
-                other.Parameters,
-                (parameter, otherParameter) =>
-                    parameter.RefKind == otherParameter.RefKind
-                    && SymbolEqualityComparer.Default.Equals(parameter.Type, otherParameter.Type)
-            )
-            .All(same => same);
 
     /// <summary>
     /// The inherited overloads the type can see, which name its own overloads

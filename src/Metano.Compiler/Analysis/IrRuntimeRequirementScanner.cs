@@ -90,7 +90,9 @@ public static class IrRuntimeRequirementScanner
         if (c.Members is not null)
             foreach (var m in c.Members)
                 ScanMember(m, acc);
+
         ScanConstructedRootDispatchers(c, acc);
+
         if (c.Constructor is not null)
             ScanConstructor(c.Constructor, acc);
         if (c.NestedTypes is not null)
@@ -198,15 +200,10 @@ public static class IrRuntimeRequirementScanner
         HashSet<IrRuntimeRequirement> acc
     )
     {
-        if (c.ConstructedRoots is not { } roots)
-            return;
-
-        var rootRefs = roots.Select(root => root.Root).ToHashSet();
-
         var implementations = (c.Members ?? [])
             .OfType<IrMethodDeclaration>()
             .SelectMany(method => IrMethodGroup.Of(method).Members)
-            .Where(method => method.Anchor?.Root is { } root && rootRefs.Contains(root));
+            .Where(method => c.ConstructedRootOf(method) is not null);
 
         foreach (var implementation in implementations)
             CollectDispatcherTypeChecks(implementation.Parameters, acc);

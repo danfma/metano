@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler.Extraction;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Frontend.Roslyn;
@@ -197,7 +198,7 @@ public static class ExplicitImplementationLowering
             .Where(other => IsDeclaredMember(other, target))
             .FirstOrDefault(other =>
                 ClaimsNameOutsideInterface(other, name, interfaceMember.ContainingType, target)
-                && !IsDistinctOverloadOfGroup(other, interfaceMember)
+                && !IsDistinctOverloadOfGroup(other, interfaceMember, target)
             );
     }
 
@@ -208,32 +209,20 @@ public static class ExplicitImplementationLowering
     /// that covers them all (spec 013 DECIDED-31), so it claims nothing. A
     /// method with the explicit member's signature still does.
     /// </summary>
-    private static bool IsDistinctOverloadOfGroup(ISymbol other, ISymbol interfaceMember) =>
+    private static bool IsDistinctOverloadOfGroup(
+        ISymbol other,
+        ISymbol interfaceMember,
+        TargetLanguage? target
+    ) =>
         other is IMethodSymbol { MethodKind: MethodKind.Ordinary } method
         && interfaceMember is IMethodSymbol interfaceMethod
-        && IsInOverloadGroup(interfaceMethod)
-        && !HasSameParameters(method, interfaceMethod);
+        && IsInOverloadGroup(interfaceMethod, target)
+        && !SymbolHelper.HasSameParameters(method, interfaceMethod);
 
-    private static bool IsInOverloadGroup(IMethodSymbol interfaceMethod) =>
-        interfaceMethod
-            .ContainingType.GetMembers(interfaceMethod.Name)
-            .OfType<IMethodSymbol>()
-            .Count(member =>
-                member.MethodKind == MethodKind.Ordinary
-                && !member.IsStatic
-                && member.DeclaredAccessibility == Accessibility.Public
-            ) >= 2;
-
-    private static bool HasSameParameters(IMethodSymbol method, IMethodSymbol other) =>
-        method.Parameters.Length == other.Parameters.Length
-        && method
-            .Parameters.Zip(
-                other.Parameters,
-                (parameter, otherParameter) =>
-                    parameter.RefKind == otherParameter.RefKind
-                    && SymbolEqualityComparer.Default.Equals(parameter.Type, otherParameter.Type)
-            )
-            .All(same => same);
+    private static bool IsInOverloadGroup(IMethodSymbol interfaceMethod, TargetLanguage? target) =>
+        MethodOverloadGroups
+            .InterfaceGroupOf(interfaceMethod.ContainingType, interfaceMethod.Name, target)
+            .Count >= 2;
 
     private static bool ClaimsNameOutsideInterface(
         ISymbol other,

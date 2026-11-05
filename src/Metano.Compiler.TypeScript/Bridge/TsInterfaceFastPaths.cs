@@ -22,18 +22,6 @@ internal sealed class TsInterfaceFastPaths
     /// <summary>What the claim found: one <c>MS0067</c> per renamed fast path.</summary>
     public IReadOnlyList<TsClaimFinding> Findings => _findings;
 
-    public static TsInterfaceFastPaths Of(IrInterfaceDeclaration ir)
-    {
-        var claims = new TsInterfaceFastPaths();
-        var methods = (ir.Members ?? []).OfType<IrMethodDeclaration>().ToList();
-        var taken = MemberNamesOf(ir);
-
-        foreach (var method in methods.Where(method => method.OverloadName is not null))
-            claims.Claim(ir.Name, method, taken);
-
-        return claims;
-    }
-
     /// <summary>
     /// The fast-path name of the overload the interface declares under
     /// <paramref name="memberName"/> at <paramref name="ordinal"/>;
@@ -78,6 +66,18 @@ internal sealed class TsInterfaceFastPaths
                 new TsClaimSite(method.Name, Signature: DispatchedOverload.SignatureOf(method))
             )
         );
+
+    public static TsInterfaceFastPaths Of(IrInterfaceDeclaration ir)
+    {
+        var claims = new TsInterfaceFastPaths();
+        var methods = (ir.Members ?? []).OfType<IrMethodDeclaration>().ToList();
+        var taken = MemberNamesOf(ir);
+
+        foreach (var method in methods.Where(method => method.OverloadName is not null))
+            claims.Claim(ir.Name, method, taken);
+
+        return claims;
+    }
 
     /// <summary>The names the interface's own members declare: properties and dispatchers.</summary>
     private static HashSet<string> MemberNamesOf(IrInterfaceDeclaration ir)

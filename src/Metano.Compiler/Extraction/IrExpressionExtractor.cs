@@ -2735,13 +2735,7 @@ public sealed partial class IrExpressionExtractor
         if (IsDartTarget || symbol is null)
             return null;
 
-        if (inv.Expression is not MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax })
-            return null;
-
-        if (
-            MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _target)
-            is not { IsDispatched: true }
-        )
+        if (!IsBaseMemberCall(inv) || !IsDispatchedGroupMethod(symbol))
             return null;
 
         var bound = ExtractBoundCall(
@@ -2752,23 +2746,31 @@ public sealed partial class IrExpressionExtractor
         if (bound is null)
             return null;
 
-        var typeArguments =
-            symbol.TypeArguments.Length > 0
-                ? symbol
-                    .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
-                    .ToList()
-                : null;
-
         return new IrCallExpression(
             Extract(inv.Expression),
             bound.Arguments,
-            typeArguments,
+            MethodTypeArgumentsOf(symbol),
             BuildOrigin(symbol)
         )
         {
             Overload = bound.Overload,
         };
     }
+
+    private static bool IsBaseMemberCall(InvocationExpressionSyntax inv) =>
+        inv.Expression is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax };
+
+    private bool IsDispatchedGroupMethod(IMethodSymbol symbol) =>
+        MethodOverloadGroups.IsEmittedBase(symbol.ContainingType, _target)
+        && MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _target)
+            is { IsDispatched: true };
+
+    private IReadOnlyList<IrTypeRef>? MethodTypeArgumentsOf(IMethodSymbol symbol) =>
+        symbol.TypeArguments.Length > 0
+            ? symbol
+                .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
+                .ToList()
+            : null;
 
     /// <summary>
     /// Builds the <c>[ObjectArgs]</c> object-literal payload from the

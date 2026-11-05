@@ -100,11 +100,7 @@ public static class IrInterfaceExtractor
         if (group.Count < 2 || ordinal < 0)
             return declaration;
 
-        if (!groupSuffixes.TryGetValue(method.Name, out var suffixes))
-        {
-            suffixes = OverloadGroupNaming.SuffixesOf(group);
-            groupSuffixes[method.Name] = suffixes;
-        }
+        var suffixes = GroupSuffixesOf(method.Name, group, groupSuffixes);
 
         var named = OverloadGroupNaming.Apply([(method, declaration)], _ => suffixes[ordinal])[
             method
@@ -114,6 +110,26 @@ public static class IrInterfaceExtractor
         {
             DeclarationOrdinal = ordinal,
         };
+    }
+
+    /// <summary>
+    /// A group's suffixes, computed once per interface, so a dead end is
+    /// reported once.
+    /// </summary>
+    private static IReadOnlyList<string> GroupSuffixesOf(
+        string name,
+        IReadOnlyList<IMethodSymbol> group,
+        Dictionary<string, IReadOnlyList<string>> groupSuffixes
+    )
+    {
+        if (groupSuffixes.TryGetValue(name, out var cached))
+            return cached;
+
+        var suffixes = OverloadGroupNaming.SuffixesOf(group);
+
+        groupSuffixes[name] = suffixes;
+
+        return suffixes;
     }
 
     private static IrPropertyDeclaration ExtractProperty(

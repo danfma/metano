@@ -76,13 +76,16 @@ internal sealed class TsOverloadClaimPass
     {
         foreach (var (name, declaredBy) in _userMembers.Instances)
         {
-            if (
-                InheritedInstances.GetValueOrDefault(name) is
-                { Kind: TsClaimedMemberKind.FastPath } fastPath
-            )
+            if (InheritedFastPathAt(name) is { } fastPath)
                 ReportHijack(declaredBy, name, fastPath);
         }
     }
+
+    private TsClaimedMember? InheritedFastPathAt(string name) =>
+        InheritedInstances.GetValueOrDefault(name)
+            is { Kind: TsClaimedMemberKind.FastPath } fastPath
+            ? fastPath
+            : null;
 
     private void ReportHijack(string declaredBy, string name, TsClaimedMember fastPath) =>
         _findings.Add(
@@ -415,8 +418,22 @@ internal sealed class TsOverloadClaimPass
         }
 
         _methods[new TsMethodOverloadKey(overload.Name, overload.DeclarationOrdinal)] =
-            new TsMethodOverloadNames(fastPath, forwarders);
+            new TsMethodOverloadNames(
+                fastPath,
+                forwarders,
+                ReimplementsInheritedFastPath(overload, fastPath)
+            );
     }
+
+    /// <summary>
+    /// An interface implementation whose root name an emitted base already
+    /// declares as a fast path — a <c>new</c> method or an explicit
+    /// re-implementation — overrides it in TypeScript.
+    /// </summary>
+    private bool ReimplementsInheritedFastPath(IrMethodDeclaration overload, string fastPath) =>
+        overload.Anchor is { Kind: IrOverloadAnchorKind.Implementation }
+        && !overload.IsStatic
+        && InheritedFastPathAt(fastPath) is not null;
 
     private TsCollision? FastPathCollisionOf(string name, bool isStatic) =>
         HolderOfFastPath(name, isStatic) is { } holder

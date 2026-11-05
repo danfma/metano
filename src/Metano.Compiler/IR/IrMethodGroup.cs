@@ -48,16 +48,18 @@ public sealed class IrMethodGroup
 
     /// <summary>How the group declares its dispatcher.</summary>
     public IrDispatcherKind DispatcherKind =>
-        Primary.InheritedOverloads is null
-            ? (Members.Count >= 2 ? IrDispatcherKind.Declared : IrDispatcherKind.None)
-            : (
-                Members.Any(member => !IsOverride(member))
-                    ? IrDispatcherKind.OverridesInherited
-                    : IrDispatcherKind.None
-            );
+        (InheritsDispatcher: Primary.InheritedOverloads is not null, AddsOverloads) switch
+        {
+            (InheritsDispatcher: true, AddsOverloads: true) => IrDispatcherKind.OverridesInherited,
+            (InheritsDispatcher: false, _) when Members.Count >= 2 => IrDispatcherKind.Declared,
+            _ => IrDispatcherKind.None,
+        };
+
+    /// <summary>Whether a member is more than an override of an inherited overload.</summary>
+    private bool AddsOverloads => Members.Any(member => !IsOverride(member));
 
     /// <summary>
-    /// The overloads the dispatcher branches to, in declaration order: every
+    /// The overloads the dispatcher branches to, in the group's order: every
     /// member of a declared dispatcher; the overloads a type adds to an
     /// inherited one, whose own branches reach the overrides through their
     /// fast paths; none without a dispatcher.
