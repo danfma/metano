@@ -22,7 +22,6 @@ internal sealed class TsOverloadClaimPass
 {
     private const string SelectorPrefix = "by";
     private const string FactoryPrefix = "from";
-    private const string ClaimMark = "$";
 
     private readonly TsClaimPassInput _input;
     private readonly TsClassMemberTable _userMembers;
@@ -38,8 +37,8 @@ internal sealed class TsOverloadClaimPass
     {
         _input = input;
         _userMembers = TsClassMemberTable.Of(input.Ir);
-        _statics = UserClaims(_userMembers.Statics);
-        _instances = UserClaims(_userMembers.Instances);
+        _statics = UserClaims(_userMembers.Statics, input.TypeName);
+        _instances = UserClaims(_userMembers.Instances, input.TypeName);
     }
 
     private IReadOnlyDictionary<string, TsClaimedMember> Inherited => _input.InheritedStatics;
@@ -106,70 +105,94 @@ internal sealed class TsOverloadClaimPass
 
     private void ClaimConstructor(IrConstructorDeclaration overload, TsFactorySignature? factory)
     {
-        var suffix = SuffixOf(overload.OverloadName, overload.SignatureText);
-        var claim = ClaimFirstFree(suffix, claimed => ConstructorCollisionOf(claimed, factory));
-        var names = ConstructorNamesOf(claim.Name, factory);
+        var suffix = DispatchedOverload.SuffixOf(overload);
+        var firstCollision = ConstructorCollisionOf(ConstructorNamesOf(suffix, suffix, factory));
+
+        var claimed = TsFreeName.FirstFree(
+            suffix,
+            candidate =>
+                ConstructorCollisionOf(ConstructorNamesOf(suffix, candidate, factory)) is not null
+        );
+
+        var names = ConstructorNamesOf(suffix, claimed, factory);
 
         RecordConstructor(overload, suffix, names, factory);
 
-        if (claim.FirstCollision is { } collision)
-            ReportRenamedConstructor(overload, collision, names);
+        if (firstCollision is not null)
+            ReportRenamedConstructor(overload, firstCollision, names);
     }
 
     /// <summary>
-    /// What holds the selector or the factory candidate of the suffix, if
-    /// anything: the class's own statics, or the inherited static side — the
-    /// inherited factory a kept factory overrides excepted.
+    /// The candidate names of a suffix: its selector and, for a concrete class,
+    /// its factory as FR-026 names it.
     /// </summary>
-    private TsCollision? ConstructorCollisionOf(string claimed, TsFactorySignature? factory)
-    {
-        var selector = SelectorName(claimed);
-
-        if (HolderOfStatic(selector, includeInherited: true) is { } selectorHolder)
-            return new TsCollision("Selector", selector, selectorHolder);
-
-        if (factory is null)
-            return null;
-
-        var (factoryName, overrides) = FactoryNameOf(claimed, factory);
-
-        return HolderOfStatic(factoryName, includeInherited: !overrides) is { } factoryHolder
-            ? new TsCollision("Factory", factoryName, factoryHolder)
-            : null;
-    }
-
+    /// <remarks>
+    /// A factory FR-026 qualifies stays qualified once its suffix takes
+    /// <c>$</c>: the qualified name goes through the claim pass like any other
+    /// (<c>fromIntBoxValue$</c>).
+    /// </remarks>
     private TsConstructorOverloadNames ConstructorNamesOf(
+        string suffix,
         string claimed,
         TsFactorySignature? factory
     )
     {
+        var selector = SelectorName(claimed);
+
         if (factory is null)
-            return new TsConstructorOverloadNames(SelectorName(claimed), null, false);
+            return new TsConstructorOverloadNames(selector, null, false);
 
-        var (factoryName, overrides) = FactoryNameOf(claimed, factory);
+        var form =
+            FactoryFormOf(suffix, factory) is FactoryForm.Qualified
+                ? FactoryForm.Qualified
+                : FactoryFormOf(claimed, factory);
 
-        return new TsConstructorOverloadNames(SelectorName(claimed), factoryName, overrides);
+        var factoryName =
+            form is FactoryForm.Qualified
+                ? FactoryPrefix + TypeName + claimed
+                : FactoryPrefix + claimed;
+
+        return new TsConstructorOverloadNames(
+            selector,
+            factoryName,
+            form is FactoryForm.KeepsInherited
+        );
+    }
+
+    /// <summary>
+    /// What holds the selector or the factory candidate, if anything: the
+    /// class's own statics, or the inherited static side — the inherited
+    /// factory a kept factory overrides excepted.
+    /// </summary>
+    private TsCollision? ConstructorCollisionOf(TsConstructorOverloadNames names)
+    {
+        if (HolderOfStatic(names.Selector, includeInherited: true) is { } selectorHolder)
+            return new TsCollision("Selector", names.Selector, selectorHolder);
+
+        if (names.Factory is not { } factory)
+            return null;
+
+        var holder = HolderOfStatic(factory, includeInherited: !names.OverridesInheritedFactory);
+
+        return holder is null ? null : new TsCollision("Factory", factory, holder);
     }
 
     /// <summary>
     /// FR-026: <c>from</c> + suffix, kept as an override when the inherited
     /// static of that name is a factory the derived one can redeclare;
-    /// <c>from</c> + type name + suffix when another inherited static holds it.
+    /// qualified, <c>from</c> + type name + suffix, when another inherited
+    /// static holds it.
     /// </summary>
-    private (string Name, bool Overrides) FactoryNameOf(string claimed, TsFactorySignature factory)
+    private FactoryForm FactoryFormOf(string claimed, TsFactorySignature factory)
     {
-        var plain = FactoryPrefix + claimed;
+        if (!Inherited.TryGetValue(FactoryPrefix + claimed, out var inherited))
+            return FactoryForm.Plain;
 
-        if (!Inherited.TryGetValue(plain, out var inherited))
-            return (plain, false);
-
-        if (
+        return
             inherited.Factory is { } inheritedFactory
             && TsFactoryInheritance.CanRedeclare(inheritedFactory, factory)
-        )
-            return (plain, true);
-
-        return (FactoryPrefix + TypeName + claimed, false);
+            ? FactoryForm.KeepsInherited
+            : FactoryForm.Qualified;
     }
 
     private void RecordConstructor(
@@ -179,17 +202,22 @@ internal sealed class TsOverloadClaimPass
         TsFactorySignature? factory
     )
     {
+        var signature = DispatchedOverload.SignatureOf(overload);
+
         _constructors[suffix] = names;
+
         _statics[names.Selector] = new TsClaimedMember(
             TsClaimedMemberKind.Selector,
-            $"the selector of '{overload.SignatureText}'"
+            $"the selector of '{signature}'",
+            TypeName
         );
 
         if (names.Factory is { } factoryName)
         {
             _statics[factoryName] = new TsClaimedMember(
                 TsClaimedMemberKind.Factory,
-                $"the factory of '{overload.SignatureText}'",
+                $"the factory of '{signature}'",
+                TypeName,
                 factory
             );
         }
@@ -207,8 +235,8 @@ internal sealed class TsOverloadClaimPass
 
         ReportRename(
             $"{collision.Kind} '{TypeName}.{collision.Candidate}' collides with "
-                + $"{collision.Holder.Description}; {emitted} (spec 013 FR-004).",
-            new TsClaimSite(overload.SignatureText ?? "", overload.DeclarationOrdinal)
+                + $"{DescriptionOf(collision.Holder)}; {emitted} (spec 013 FR-004).",
+            new TsClaimSite(DispatchedOverload.SignatureOf(overload), overload.DeclarationOrdinal)
         );
     }
 
@@ -247,20 +275,25 @@ internal sealed class TsOverloadClaimPass
 
         foreach (var overload in new[] { group }.Concat(group.Overloads ?? []))
         {
-            var suffix = SuffixOf(overload.OverloadName, overload.SignatureText);
-            var claim = ClaimFirstFree(
-                baseName + suffix,
-                name => FastPathCollisionOf(name, isStatic)
+            var suffix = DispatchedOverload.SuffixOf(overload);
+            var candidate = baseName + suffix;
+            var firstCollision = FastPathCollisionOf(candidate, isStatic);
+
+            var claimed = TsFreeName.FirstFree(
+                candidate,
+                name => HolderOfFastPath(name, isStatic) is not null
             );
 
-            TableOf(isStatic)[claim.Name] = new TsClaimedMember(
+            TableOf(isStatic)[claimed] = new TsClaimedMember(
                 TsClaimedMemberKind.FastPath,
-                $"the fast path of '{overload.SignatureText}'"
+                $"the fast path of '{DispatchedOverload.SignatureOf(overload)}'",
+                TypeName
             );
-            _fastPaths[new TsFastPathKey(isStatic, baseName, suffix)] = claim.Name;
 
-            if (claim.FirstCollision is { } collision)
-                ReportRenamedFastPath(overload, collision, claim.Name);
+            _fastPaths[new TsFastPathKey(isStatic, baseName, suffix)] = claimed;
+
+            if (firstCollision is not null)
+                ReportRenamedFastPath(overload, firstCollision, claimed);
         }
     }
 
@@ -275,18 +308,17 @@ internal sealed class TsOverloadClaimPass
         string claimed
     ) =>
         ReportRename(
-            $"Fast path '{TypeName}.{collision.Candidate}' of '{overload.SignatureText}' "
-                + $"collides with {collision.Holder.Description}; it is emitted as '{claimed}' "
+            $"Fast path '{TypeName}.{collision.Candidate}' of "
+                + $"'{DispatchedOverload.SignatureOf(overload)}' "
+                + $"collides with {DescriptionOf(collision.Holder)}; it is emitted as '{claimed}' "
                 + "(spec 013 FR-004).",
-            new TsClaimSite(
-                overload.Name,
-                ParameterNames: overload.Parameters.Select(parameter => parameter.Name).ToList()
-            )
+            new TsClaimSite(overload.Name, Signature: DispatchedOverload.SignatureOf(overload))
         );
 
     /// <summary>
-    /// <c>MS0067</c>: reason 1 when the holder is a user member, reason 2 when
-    /// it is an earlier synthesized name; the message names the holder.
+    /// <c>MS0067</c>. Its reason — 1 for a user member, 2 for an earlier
+    /// synthesized name — is the holder the message names, not a separate
+    /// field.
     /// </summary>
     private void ReportRename(string message, TsClaimSite site) =>
         _findings.Add(
@@ -312,6 +344,15 @@ internal sealed class TsOverloadClaimPass
 
     private string SelectorName(string claimed) => SelectorPrefix + TypeName + claimed;
 
+    /// <summary>
+    /// How a message names a holder: as it is, or, for an inherited one, with
+    /// the base type that declares it.
+    /// </summary>
+    private string DescriptionOf(TsClaimedMember holder) =>
+        holder.DeclaredBy == TypeName
+            ? holder.Description
+            : $"{holder.Description} inherited from '{holder.DeclaredBy}'";
+
     /// <summary>The inherited static side under the class's own statics.</summary>
     private Dictionary<string, TsClaimedMember> StaticSide()
     {
@@ -323,49 +364,30 @@ internal sealed class TsOverloadClaimPass
         return side;
     }
 
-    /// <summary>
-    /// The first spelling of <paramref name="candidate"/> nothing holds,
-    /// appending <c>$</c> until free, and the collision that made it move
-    /// (<c>null</c> when the candidate itself was free).
-    /// </summary>
-    private static TsClaim ClaimFirstFree(string candidate, Func<string, TsCollision?> collisionOf)
-    {
-        var firstCollision = collisionOf(candidate);
-        var claimed = candidate;
-
-        for (
-            var collision = firstCollision;
-            collision is not null;
-            collision = collisionOf(claimed)
-        )
-            claimed += ClaimMark;
-
-        return new TsClaim(claimed, firstCollision);
-    }
-
     private static Dictionary<string, TsClaimedMember> UserClaims(
-        IReadOnlyDictionary<string, string> userMembers
+        IReadOnlyDictionary<string, string> userMembers,
+        string typeName
     ) =>
         userMembers.ToDictionary(
             entry => entry.Key,
             entry => new TsClaimedMember(
                 TsClaimedMemberKind.User,
-                $"the user member '{entry.Key}'"
+                $"the user member '{entry.Key}'",
+                typeName
             ),
             StringComparer.Ordinal
         );
 
-    private static string SuffixOf(IrOverloadName? name, string? signature) =>
-        name?.Suffix
-        ?? throw new InvalidOperationException(
-            $"Overload '{signature}' of a dispatched group carries no overload name."
-        );
+    /// <summary>How a factory is named against the static side it inherits (FR-026).</summary>
+    private enum FactoryForm
+    {
+        Plain,
+        KeepsInherited,
+        Qualified,
+    }
 
     /// <summary>A candidate name and what already holds it.</summary>
     private sealed record TsCollision(string Kind, string Candidate, TsClaimedMember Holder);
-
-    /// <summary>A claimed name and the collision that moved it, if any.</summary>
-    private sealed record TsClaim(string Name, TsCollision? FirstCollision);
 }
 
 /// <summary>

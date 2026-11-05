@@ -48,8 +48,10 @@ public static class IrToTsConstructorDispatcherBridge
     /// <param name="typeParameters">The class's type parameters, which a
     /// parameter's type check resolves its type parameters against.</param>
     /// <param name="selectors">The claimed selectors the addressable
-    /// signatures and branches test, and a struct's parameterless
-    /// initialization.</param>
+    /// signatures and branches test.</param>
+    /// <param name="implicitParameterlessBody">A struct's implicit
+    /// parameterless constructor (<see cref="IrToTsStructDefaultConstructorBridge"/>);
+    /// <c>null</c> for any other type.</param>
     /// <param name="signatureJSDoc">The JSDoc of each overload signature: the
     /// tag its group gives the constructor it declares; none when omitted.
     /// The implementation carries none.</param>
@@ -58,6 +60,7 @@ public static class IrToTsConstructorDispatcherBridge
         DispatcherBaseCall baseCall,
         IReadOnlyList<IrTypeParameter> typeParameters,
         ConstructorSelectors selectors,
+        IReadOnlyList<TsStatement>? implicitParameterlessBody,
         IrToTsBridgeContext context,
         Func<IrConstructorDeclaration, TsJSDoc?>? signatureJSDoc = null
     )
@@ -72,8 +75,10 @@ public static class IrToTsConstructorDispatcherBridge
 
         var declared = primary.DeclarationsInOrder;
 
-        IReadOnlyList<TsConstructorOverload> implicitParameterless =
-            selectors.ImplicitParameterlessBody is null ? [] : [new TsConstructorOverload([])];
+        IReadOnlyList<TsConstructorOverload> implicitParameterless = implicitParameterlessBody
+            is null
+            ? []
+            : [new TsConstructorOverload([])];
 
         List<TsConstructorOverload> overloads =
         [
@@ -89,8 +94,8 @@ public static class IrToTsConstructorDispatcherBridge
 
         var body = new List<TsStatement>();
 
-        if (selectors.ImplicitParameterlessBody is { } parameterlessBody)
-            body.Add(BuildImplicitParameterlessBranch(parameterlessBody));
+        if (implicitParameterlessBody is not null)
+            body.Add(BuildImplicitParameterlessBranch(implicitParameterlessBody));
 
         foreach (var ctor in declared)
             body.Add(BuildSelectorBranch(ctor, baseCall, selectors, context));
@@ -160,22 +165,18 @@ public static class IrToTsConstructorDispatcherBridge
 
         var selector = new TsConstructorParam(
             SelectorParameterName(parameters),
-            new TsTypeQuery($"{selectors.TypeName}.{selectors.SelectorOf(ctor)}"),
+            selectors.TypeQueryOf(ctor),
             Accessibility: TsAccessibility.None
         );
 
         return new TsConstructorOverload([selector, .. parameters], signatureJSDoc?.Invoke(ctor));
     }
 
-    private static string SelectorParameterName(IReadOnlyList<TsConstructorParam> parameters)
-    {
-        var name = SelectorParameter;
-
-        while (parameters.Any(parameter => parameter.Name == name))
-            name += "$";
-
-        return name;
-    }
+    private static string SelectorParameterName(IReadOnlyList<TsConstructorParam> parameters) =>
+        TsFreeName.FirstFree(
+            SelectorParameter,
+            name => parameters.Any(parameter => parameter.Name == name)
+        );
 
     /// <summary>
     /// The branch the overload's selector reaches:
@@ -200,14 +201,7 @@ public static class IrToTsConstructorDispatcherBridge
                 new TsStringLiteral("symbol")
             ),
             "&&",
-            new TsBinaryExpression(
-                selectorArgument,
-                "===",
-                new TsPropertyAccess(
-                    new TsIdentifier(selectors.TypeName),
-                    selectors.SelectorOf(ctor)
-                )
-            )
+            new TsBinaryExpression(selectorArgument, "===", selectors.ReferenceTo(ctor))
         );
 
         var arguments = OverloadArgumentShape.AfterSelector(ctor.PlainParameters);
@@ -223,11 +217,7 @@ public static class IrToTsConstructorDispatcherBridge
         IReadOnlyList<TsStatement> parameterlessBody
     ) =>
         new(
-            new TsBinaryExpression(
-                new TsPropertyAccess(new TsIdentifier("args"), "length"),
-                "===",
-                new TsLiteral("0")
-            ),
+            new OverloadArgumentShape([]).Guard(TypeCheckScope.Empty),
             [.. parameterlessBody, new TsReturnStatement()]
         );
 
@@ -469,20 +459,19 @@ public static class IrToTsConstructorDispatcherBridge
 internal sealed record DispatcherBaseCall(bool ExtendsBase, bool KeepsBaseMessage);
 
 /// <summary>
-/// What the addressable part of one constructor dispatcher needs (spec 013
-/// FR-009, FR-027): the class's emitted name, which qualifies its selectors,
-/// the claim results that name them, and — for a struct without a declared
-/// parameterless constructor — the statements of its implicit one.
+/// The selectors of one class's constructor overloads (spec 013 FR-008,
+/// FR-009): the class's emitted name, which qualifies them, and the claim
+/// results that name them.
 /// </summary>
-/// <param name="ImplicitParameterlessBody">The default-value assignments of a
-/// struct's implicit parameterless constructor; <c>null</c> for any other
-/// type.</param>
-internal sealed record ConstructorSelectors(
-    string TypeName,
-    TsOverloadClaims Claims,
-    IReadOnlyList<TsStatement>? ImplicitParameterlessBody
-)
+internal sealed record ConstructorSelectors(string TypeName, TsOverloadClaims Claims)
 {
-    /// <summary>The claimed selector of <paramref name="ctor"/>.</summary>
-    public string SelectorOf(IrConstructorDeclaration ctor) => Claims.NamesOf(ctor).Selector;
+    /// <summary>The selector of <paramref name="ctor"/> as a value: <c>T.byTX</c>.</summary>
+    public TsPropertyAccess ReferenceTo(IrConstructorDeclaration ctor) =>
+        new(new TsIdentifier(TypeName), SelectorOf(ctor));
+
+    /// <summary>The selector's type: <c>typeof T.byTX</c>.</summary>
+    public TsTypeQuery TypeQueryOf(IrConstructorDeclaration ctor) =>
+        new($"{TypeName}.{SelectorOf(ctor)}");
+
+    private string SelectorOf(IrConstructorDeclaration ctor) => Claims.NamesOf(ctor).Selector;
 }

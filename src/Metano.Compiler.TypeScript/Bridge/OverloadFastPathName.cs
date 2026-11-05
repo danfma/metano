@@ -11,11 +11,5 @@ namespace Metano.Compiler.TypeScript.Bridge;
 internal static class OverloadFastPathName
 {
     public static string Of(string baseName, IrMethodDeclaration overload) =>
-        baseName + SuffixOf(overload);
-
-    private static string SuffixOf(IrMethodDeclaration overload) =>
-        overload.OverloadName?.Suffix
-        ?? throw new InvalidOperationException(
-            $"Overload '{overload.Name}' of a dispatched group carries no overload name."
-        );
+        baseName + DispatchedOverload.SuffixOf(overload);
 }

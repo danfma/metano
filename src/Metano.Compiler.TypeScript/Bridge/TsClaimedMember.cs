@@ -28,11 +28,14 @@ internal enum TsClaimedMemberKind
 /// <param name="Kind">What the member is.</param>
 /// <param name="Description">How a diagnostic names it: <c>the user member
 /// 'fromCents'</c>, <c>the factory of 'Money(int cents)'</c>.</param>
+/// <param name="DeclaredBy">The emitted name of the class that declares it,
+/// which a diagnostic names when a derived class meets it.</param>
 /// <param name="Factory">A factory's signature; <c>null</c> for any other
 /// kind.</param>
 internal sealed record TsClaimedMember(
     TsClaimedMemberKind Kind,
     string Description,
+    string DeclaredBy,
     TsFactorySignature? Factory = null
 );
 

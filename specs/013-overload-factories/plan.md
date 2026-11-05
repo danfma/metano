@@ -131,6 +131,17 @@ emits the selectors and branches but leaves derived classes on today's `super(ar
 root-anchoring rule belongs to **013d**; the claim pass belongs to **013b**, and 013d / 013e extend
 its tables (instance fast paths, barrels).
 
+Hand-offs from 013b (its review): the TypeScript claim results (`TsOverloadClaims`, cached by
+`TsOverloadClaimsRegistry` per `INamedTypeSymbol`) are keyed by suffix (constructors) and by
+table + emitted group name + suffix (fast paths). **013c** re-keys them by the overload identity a
+call site carries (`IrOverloadRef`: declaring type, C# member name, declaration ordinal; methods
+need the ordinal the core so far records only on constructors) and keeps the symbol lookup as a
+thin adapter. **013d** adds the inherited instance side (claim step 7) to the cached result, which
+today holds only the static side. **013e** replaces the module-function path, which still names
+fast paths without a claim (`IrToTsOverloadDispatcherBridge.BuildNamespaceFunctions`), with the
+barrel claim table. The factory widening of FR-011 (a factory code outside the class body calls)
+lands with **013c**, the first slice that calls factories.
+
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
 OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an
 inherited single virtual, today's emission pinned) and DECIDED-30 (full support for

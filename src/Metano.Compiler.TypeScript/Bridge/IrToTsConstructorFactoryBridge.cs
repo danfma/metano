@@ -38,7 +38,7 @@ internal static class IrToTsConstructorFactoryBridge
                 new TsUniqueSymbolType(),
                 new TsCallExpression(
                     new TsIdentifier(SymbolConstructor),
-                    [new TsStringLiteral(overload.SignatureText ?? "")]
+                    [new TsStringLiteral(DispatchedOverload.SignatureOf(overload))]
                 ),
                 Readonly: true,
                 Static: true,
@@ -64,7 +64,7 @@ internal static class IrToTsConstructorFactoryBridge
 
         return constructor
             .DeclarationsInOrder.Select(overload =>
-                BuildFactory(type, typeName, overload, claims.NamesOf(overload), context)
+                BuildFactory(type, new ConstructorSelectors(typeName, claims), overload, context)
             )
             .ToList();
     }
@@ -80,42 +80,39 @@ internal static class IrToTsConstructorFactoryBridge
         IrToTsTypeOverrides? typeOverrides
     ) =>
         new(
-            constructor.SignatureText ?? "",
+            DispatchedOverload.SignatureOf(constructor),
             IrToTsTypeParameterMapper.Convert(type.TypeParameters) ?? [],
-            constructor
-                .Parameters.Select(parameter => new TsFactoryParameter(
-                    IrToTsTypeMapper.MapParameterType(parameter.Parameter, typeOverrides),
-                    parameter.Parameter.CanBeOmitted,
-                    parameter.Parameter.IsParams
-                ))
-                .ToList(),
-            AccessibilityOf(constructor).Accessibility
+            constructor.Parameters.Select(parameter => ShapeOf(parameter, typeOverrides)).ToList(),
+            VisibilityOf(constructor).Accessibility
         );
 
     private static TsMethodMember BuildFactory(
         IrClassDeclaration type,
-        string typeName,
+        ConstructorSelectors selectors,
         IrConstructorDeclaration overload,
-        TsConstructorOverloadNames names,
         IrToTsBridgeContext context
     )
     {
+        var names = selectors.Claims.NamesOf(overload);
         var typeParameters = IrToTsTypeParameterMapper.Convert(type.TypeParameters);
         var parameters = FactoryParameters(overload, context);
-        var (accessibility, jsDoc) = AccessibilityOf(overload);
+        var (accessibility, jsDoc) = VisibilityOf(overload);
 
         var construction = new TsNewExpression(
-            new TsIdentifier(typeName),
-            [
-                new TsPropertyAccess(new TsIdentifier(typeName), names.Selector),
-                .. parameters.Select(ForwardedArgument),
-            ]
+            new TsIdentifier(selectors.TypeName),
+            [selectors.ReferenceTo(overload), .. parameters.Select(ForwardedArgument)]
         );
 
+        var factoryName =
+            names.Factory
+            ?? throw new InvalidOperationException(
+                $"The claim pass named no factory for '{DispatchedOverload.SignatureOf(overload)}'."
+            );
+
         return new TsMethodMember(
-            names.Factory!,
+            factoryName,
             parameters,
-            SelfType(typeName, typeParameters),
+            SelfType(selectors.TypeName, typeParameters),
             [new TsReturnStatement(construction)],
             Static: true,
             Accessibility: accessibility,
@@ -127,21 +124,41 @@ internal static class IrToTsConstructorFactoryBridge
 
     /// <summary>
     /// The overload's parameters as the factory declares them: local-binding
-    /// names, the C# defaults, <c>params</c> as a rest parameter.
+    /// names, the C# defaults, and the shape <see cref="SignatureOf"/>
+    /// compares (<c>params</c> as a rest parameter).
     /// </summary>
     private static List<TsParameter> FactoryParameters(
         IrConstructorDeclaration overload,
         IrToTsBridgeContext context
     ) =>
         overload
-            .Parameters.Select(parameter => new TsParameter(
-                IrToTsNamingPolicy.ToParameterName(parameter.Parameter.Name),
-                IrToTsTypeMapper.MapParameterType(parameter.Parameter, context.TypeOverrides),
-                Optional: parameter.Parameter.CanBeOmitted,
-                DefaultValue: IrToTsClassBridge.ResolveCtorParamDefault(parameter, context),
-                Rest: parameter.Parameter.IsParams
-            ))
+            .Parameters.Select(parameter =>
+            {
+                var shape = ShapeOf(parameter, context.TypeOverrides);
+
+                return new TsParameter(
+                    IrToTsNamingPolicy.ToParameterName(parameter.Parameter.Name),
+                    shape.Type,
+                    Optional: shape.CanBeOmitted,
+                    DefaultValue: IrToTsClassBridge.ResolveCtorParamDefault(parameter, context),
+                    Rest: shape.Rest
+                );
+            })
             .ToList();
+
+    /// <summary>
+    /// One parameter's type and its optional and rest shape: the single
+    /// mapping both the emitted factory and its FR-026 comparison read.
+    /// </summary>
+    private static TsFactoryParameter ShapeOf(
+        IrConstructorParameter parameter,
+        IrToTsTypeOverrides? typeOverrides
+    ) =>
+        new(
+            IrToTsTypeMapper.MapParameterType(parameter.Parameter, typeOverrides),
+            parameter.Parameter.CanBeOmitted,
+            parameter.Parameter.IsParams
+        );
 
     private static TsExpression ForwardedArgument(TsParameter parameter)
     {
@@ -161,6 +178,6 @@ internal static class IrToTsConstructorFactoryBridge
         );
 
     /// <summary>The overload's own visibility under #445's member mapping (FR-011).</summary>
-    private static TsMemberVisibility AccessibilityOf(IrConstructorDeclaration overload) =>
+    private static TsMemberVisibility VisibilityOf(IrConstructorDeclaration overload) =>
         IrToTsVisibilityMapper.Map(overload.Visibility);
 }

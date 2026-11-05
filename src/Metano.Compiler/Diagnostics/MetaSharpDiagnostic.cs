@@ -440,10 +440,10 @@ public static class DiagnosticCodes
     /// name. A warning at the renamed overload (spec 013 FR-004).</summary>
     public const string OverloadNameShadowed = "MS0067";
 
-    /// <summary>MS0068 — a user-written member would take over a generated name it does
-    /// not own: a derived user static has the name of an inherited generated factory,
-    /// which breaks the TypeScript static side (TS2417). User names are never renamed,
-    /// so the build fails and the message points at <c>[Name]</c>. An error at the user
-    /// member (spec 013 FR-034).</summary>
+    /// <summary>MS0068 — a user-written member takes a generated name it does not own,
+    /// such as a derived user static named like an inherited generated factory. User
+    /// names are never renamed, so the build fails and the message points at
+    /// <c>[Name]</c>; the target's message says what the clash breaks. An error at the
+    /// user member (spec 013 FR-034).</summary>
     public const string OverloadFastPathHijacked = "MS0068";
 }

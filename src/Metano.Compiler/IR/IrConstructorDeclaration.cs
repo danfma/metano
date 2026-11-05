@@ -61,8 +61,10 @@ public sealed record IrConstructorDeclaration(
 
     /// <summary>
     /// The constructor's position among the type's declared constructors, in
-    /// declaration order; <c>0</c> outside a dispatched set. A target emits
-    /// selectors and factories in this order (spec 013 FR-006).
+    /// declaration order — its index in
+    /// <c>IrConstructorExtractor.AllExplicitConstructors</c>, which a target
+    /// relies on to locate it; <c>0</c> outside a dispatched set. A target
+    /// emits selectors and factories in this order (spec 013 FR-006).
     /// </summary>
     public int DeclarationOrdinal { get; init; }
 

@@ -160,10 +160,14 @@ functions.
    type's new overload's) claims against the instance members of every emitted base class, of
    every visibility (`private` included: TypeScript checks private members for assignability,
    TS2416). Root names that an override reuses are not claimed here: they are meant to override;
-8. inherited statics: a selector or factory candidate equal to an inherited static's name is
-   checked here; a factory that meets FR-026's conditions is kept (`static override`), one that
-   does not is qualified, and anything still taken (a selector of a same-named base type) gets
-   `$`.
+8. inherited statics: a selector, factory or static fast-path candidate equal to an inherited
+   static's name is checked here; a factory that meets FR-026's conditions is kept
+   (`static override`), one that does not is qualified, and anything still taken (a selector of a
+   same-named base type, a static fast path, since TypeScript checks every static for
+   assignability, TS2417) gets `$`. A qualified factory stays qualified when its suffix takes `$`
+   (`fromIntBoxValue$`). Inherited factories are compared in the deriving class's type
+   parameters, rebound through each `extends` clause's arguments against the base's declared
+   type parameters, level by level.
 
 **Per-suffix claims.** A claim resolves the overload's suffix, not one name: when any candidate
 derived from `S` (the selector and the factory of a constructor overload) is taken, `S` becomes
@@ -196,7 +200,9 @@ depth) has a static member of the same TypeScript name. Then:
 - if that inherited member is a generated factory that is **not `private`**, whose overload has
   **the same parameter types in the same order, with the same `params` / optional shape** —
   compared on the **constructed** base constructor (for `Box2<T> : Box<T>`, `Box<T>`'s `T` is
-  `Box2`'s `T`; for `IntBox : Box<int>`, it is `int`) — and whose accessibility `T`'s factory
+  `Box2`'s `T`; for `IntBox : Box<int>` the `extends` clause fixes `T`, and an inherited factory
+  that stays generic (`fromValue<T>(value: T): Box<T>`) can never be redeclared by a non-generic
+  one, so `IntBox`'s is qualified, `fromIntBoxValue`) — and whose accessibility `T`'s factory
   matches or widens (public ≥ protected), and — for a generic class — whose type parameters, on
   the same constructed mapping, carry **the same constraints** as the base's (`SortedBox<T> :
   Box<T> where T : IComparable<T>` adds a constraint, so TypeScript's static side rejects the
