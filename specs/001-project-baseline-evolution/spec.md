@@ -214,10 +214,12 @@ Product requirements added after the migration (normative; each one is traced by
      parameterless constructor, so `new S()` is legal anywhere whatever it declares.
   2. *Mixed accessibility.* Every declared instance constructor, whatever its accessibility,
      takes part in the emitted constructor: two or more go through the overload dispatcher (#435).
-     Spec 013 extends that dispatcher's contract — constructor factories (`fromXxx`), selector
-     symbols (`protected static readonly byXxx: unique symbol`) and direct call sites — and the
-     factories inherit the emitted accessibility this requirement defines
-     ([specs/013-overload-factories/spec.md](../013-overload-factories/spec.md), DECIDED-8).
+     Spec 013 extends that dispatcher's contract (FR-050) — constructor factories (`fromXxx`),
+     selector symbols (`protected static readonly by<TypeName>Xxx: unique symbol`) and direct
+     call sites. The constructor keeps the accessibility this requirement defines; each factory
+     carries its own overload's accessibility, and rule 3's widening applies to a factory that
+     code outside the class body calls
+     ([specs/013-overload-factories/spec.md](../013-overload-factories/spec.md), DECIDED-17).
      C# makes every other constructor of a type with a record positional or C# 12 primary
      constructor chain to it, so each branch inlines it: its promoted members are declared as
      fields (a member that only reads the parameter is not emitted as a getter), and the branch
@@ -259,6 +261,33 @@ Product requirements added after the migration (normative; each one is traced by
   parameterless constructor, the one C# synthesizes. There, metadata adds a known false
   positive, an abstract class's C# 12 primary constructor (`protected` in metadata), and a known
   false negative, an abstract type's declared `protected` parameterless constructor.
+
+- **FR-050** (overload dispatch, ADR-0008): The TypeScript backend MUST lower a C# method,
+  constructor or user-defined operator overload group (two or more members of one name) to one
+  public runtime dispatcher plus one fast path per overload that holds the body.
+  1. *Dispatcher.* The dispatcher carries one overload signature per C# overload and a
+     `(...args: unknown[])` implementation whose branches test the argument count and each
+     parameter's runtime check (ADR-0009), in `OverloadDispatchOrder` (required-only overloads
+     first, most parameters first; then optional ones, fewest first; then `params` ones; a
+     concrete overload before a same-arity generic one), and throws when no branch matches. A
+     constructor dispatcher holds each overload's body in its branch (chains inlined); a method
+     dispatcher delegates to the fast paths.
+  2. *Defaults and `params`.* A parameter with a default is optional in the signatures and
+     binds the C# default when omitted (#438, #440); a `params` parameter takes the expanded
+     trailing arguments.
+  3. *Catch-all overloads.* A catch-all overload (no parameter checked) tried before an
+     overlapping concrete one reports `MS0063` (#440).
+  4. *Extension.* Spec 013 ([specs/013-overload-factories/spec.md](../013-overload-factories/spec.md))
+     extends this contract with core-computed, root-anchored fast-path names, constructor
+     factories, selector symbols and direct call sites; the dispatcher stays the public fallback
+     for hand-written TypeScript.
+
+  This restates the legacy overload-dispatch requirement, numbered `FR-042` in the retired
+  `old-spec/04-functional-requirements.md`. That identifier keeps resolving through the
+  reconciliation ledger (SC-005), but new references cite FR-050: feature specs reuse `FR-042`
+  locally (for example 010 FR-042, the union companion namespace), so the bare number is
+  ambiguous. Traced by the "Method overload dispatch" and "Constructor overload dispatch" rows of
+  the feature-support matrix.
 
 ### Key Entities
 
