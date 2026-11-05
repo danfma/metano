@@ -8,23 +8,31 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// inherits, emitted <c>static override</c>, or must be qualified with the
 /// type name. TypeScript checks the static side of <c>extends</c> (TS2417), so
 /// the kept factory must be assignable to the inherited one; the rule is a
-/// conservative, declaration-only stand-in for that check.
+/// conservative, declaration-only stand-in for that check. Types are compared
+/// by their printed form (<see cref="Printer.RenderType"/>): two types print
+/// alike exactly when TypeScript reads them as the same type.
 /// </summary>
 internal static class TsFactoryInheritance
 {
     /// <summary>
     /// The static side a class inherits from its base, each factory rewritten
-    /// into the class's own type parameters through its <c>extends</c> clause:
-    /// a base type parameter bound to one of the class's type parameters is
-    /// renamed to it (<c>Box2&lt;U&gt; : Box&lt;U&gt;</c>); a factory whose
-    /// type parameter the clause fixes (<c>IntBox : Box&lt;int&gt;</c>) or
-    /// binds twice can never be redeclared.
+    /// into the class's own type parameters through its <c>extends</c> clause,
+    /// which binds the base's declared type parameters in order: a base type
+    /// parameter bound to one of the class's type parameters is renamed to it
+    /// (<c>Box2&lt;U&gt; : Box&lt;U&gt;</c>, <c>C&lt;P, Q&gt; : B&lt;P, Q&gt;</c>
+    /// with <c>B&lt;V, K&gt;</c>: <c>V</c> → <c>P</c>, <c>K</c> → <c>Q</c>); a
+    /// factory whose type parameter the clause fixes (<c>IntBox :
+    /// Box&lt;int&gt;</c>) or binds twice can never be redeclared.
     /// </summary>
-    /// <param name="baseStatics">The base's whole static side.</param>
+    /// <param name="baseStatics">The base's whole static side, in the base's
+    /// type parameters.</param>
+    /// <param name="baseTypeParameterNames">The base's declared type
+    /// parameters, in order.</param>
     /// <param name="extendsType">The class's <c>extends</c> clause.</param>
     /// <param name="typeParameterNames">The class's own type parameters.</param>
     public static IReadOnlyDictionary<string, TsClaimedMember> Inherit(
         IReadOnlyDictionary<string, TsClaimedMember> baseStatics,
+        IReadOnlyList<string> baseTypeParameterNames,
         TsType extendsType,
         IReadOnlyList<string> typeParameterNames
     )
@@ -33,13 +41,15 @@ internal static class TsFactoryInheritance
             ? arguments
             : [];
 
+        var binding = BindingOf(baseTypeParameterNames, baseArguments, typeParameterNames);
+
         return baseStatics.ToDictionary(
             entry => entry.Key,
             entry =>
                 entry.Value.Factory is { } factory
                     ? entry.Value with
                     {
-                        Factory = Rebind(factory, baseArguments, typeParameterNames),
+                        Factory = Rebind(factory, binding),
                     }
                     : entry.Value,
             StringComparer.Ordinal
@@ -61,16 +71,19 @@ internal static class TsFactoryInheritance
         && HaveSameParameters(inherited.Parameters, derived.Parameters)
         && KeepsTypeParameters(inherited.TypeParameters, derived.TypeParameters);
 
+    /// <summary>
+    /// The factory in the class's type parameters; unredeclarable when the
+    /// binding leaves one of its type parameters out (or there is none).
+    /// </summary>
     private static TsFactorySignature Rebind(
         TsFactorySignature factory,
-        IReadOnlyList<TsType> baseArguments,
-        IReadOnlyList<string> typeParameterNames
+        IReadOnlyDictionary<string, string>? binding
     )
     {
         if (factory.TypeParameters.Count == 0)
             return factory;
 
-        if (BindingOf(factory.TypeParameters, baseArguments, typeParameterNames) is not { } binding)
+        if (binding is null || !BindsEvery(factory.TypeParameters, binding))
             return factory with { BindsTypeParameters = true };
 
         return factory with
@@ -94,23 +107,28 @@ internal static class TsFactoryInheritance
         };
     }
 
+    private static bool BindsEvery(
+        IReadOnlyList<TsTypeParameter> typeParameters,
+        IReadOnlyDictionary<string, string> binding
+    ) => typeParameters.All(parameter => binding.ContainsKey(parameter.Name));
+
     /// <summary>
     /// Each base type parameter → the class type parameter its
     /// <c>extends</c> argument names; <c>null</c> when an argument is anything
     /// else or two arguments name the same type parameter.
     /// </summary>
     private static Dictionary<string, string>? BindingOf(
-        IReadOnlyList<TsTypeParameter> baseTypeParameters,
+        IReadOnlyList<string> baseTypeParameterNames,
         IReadOnlyList<TsType> baseArguments,
         IReadOnlyList<string> typeParameterNames
     )
     {
-        if (baseArguments.Count != baseTypeParameters.Count)
+        if (baseArguments.Count != baseTypeParameterNames.Count)
             return null;
 
         var binding = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        for (var index = 0; index < baseTypeParameters.Count; index++)
+        for (var index = 0; index < baseTypeParameterNames.Count; index++)
         {
             if (TypeParameterNamedBy(baseArguments[index], typeParameterNames) is not { } bound)
                 return null;
@@ -118,7 +136,7 @@ internal static class TsFactoryInheritance
             if (binding.ContainsValue(bound))
                 return null;
 
-            binding[baseTypeParameters[index].Name] = bound;
+            binding[baseTypeParameterNames[index]] = bound;
         }
 
         return binding;
@@ -138,13 +156,12 @@ internal static class TsFactoryInheritance
         IReadOnlyList<TsFactoryParameter> derived
     ) =>
         inherited.Count == derived.Count
-        && inherited
-            .Zip(derived)
-            .All(pair =>
-                pair.First.CanBeOmitted == pair.Second.CanBeOmitted
-                && pair.First.Rest == pair.Second.Rest
-                && Printer.RenderType(pair.First.Type) == Printer.RenderType(pair.Second.Type)
-            );
+        && inherited.Zip(derived, IsSameParameter).All(isSame => isSame);
+
+    private static bool IsSameParameter(TsFactoryParameter inherited, TsFactoryParameter derived) =>
+        inherited.CanBeOmitted == derived.CanBeOmitted
+        && inherited.Rest == derived.Rest
+        && Printer.RenderType(inherited.Type) == Printer.RenderType(derived.Type);
 
     private static bool KeepsTypeParameters(
         IReadOnlyList<TsTypeParameter> inherited,

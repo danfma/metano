@@ -24,6 +24,16 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsRecordSynthesisBridge
 {
+    private const string EqualsMethodName = "equals";
+    private const string WithMethodName = "with";
+
+    /// <summary>
+    /// The instance members <see cref="Generate"/> declares, which a class's
+    /// claim pass treats as user members (spec 013 FR-004).
+    /// </summary>
+    internal static IReadOnlyList<string> SynthesizedMemberNames { get; } =
+    [EqualsMethodName, IrToTsNamingPolicy.HashCodeMethodName, WithMethodName];
+
     /// <summary>
     /// Whether the class should receive synthesized <c>equals</c>/<c>hashCode</c>/<c>with</c>.
     /// Records yes; <c>[PlainObject]</c> records no (those emit as bare
@@ -90,7 +100,7 @@ public static class IrToTsRecordSynthesisBridge
     )
     {
         var baseCondition = overridesBase
-            ? SuperCall("equals", new TsIdentifier("other"))
+            ? SuperCall(EqualsMethodName, new TsIdentifier("other"))
             : SameRecordTypeTest();
 
         var condition = fields.Aggregate(
@@ -99,7 +109,7 @@ public static class IrToTsRecordSynthesisBridge
         );
 
         return new TsMethodMember(
-            "equals",
+            EqualsMethodName,
             [new TsParameter("other", new TsAnyType())],
             new TsBooleanType(),
             [new TsReturnStatement(condition)]
@@ -200,7 +210,7 @@ public static class IrToTsRecordSynthesisBridge
         );
 
         return new TsMethodMember(
-            "with",
+            WithMethodName,
             [new TsParameter("overrides?", new TsNamedType("Partial", [selfType]))],
             selfType,
             [new TsReturnStatement(copy)]

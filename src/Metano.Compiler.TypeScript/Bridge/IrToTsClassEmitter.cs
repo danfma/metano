@@ -82,7 +82,7 @@ public sealed class IrToTsClassEmitter(
         );
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
-        var claims = ClaimsOf(type, ir);
+        var claims = ClaimAndReport(type, ir);
         var typeName = _context.ResolveTsName(type);
 
         var ctorParams = IrToTsClassBridge.BuildPrimaryCtorParams(
@@ -105,11 +105,14 @@ public sealed class IrToTsClassEmitter(
             ir,
             ctorParams,
             emitsDispatcher,
-            new ConstructorSelectors(
-                typeName,
-                claims,
-                ImplicitParameterlessBodyOf(ir, explicitCtors)
-            ),
+            new ConstructorSelectors(typeName, claims),
+            emitsDispatcher
+                ? IrToTsStructDefaultConstructorBridge.BuildBody(
+                    ir,
+                    type,
+                    _context.ReportDiagnostic
+                )
+                : null,
             constructorAccessibility,
             extendsType,
             keepsBaseMessage,
@@ -119,13 +122,15 @@ public sealed class IrToTsClassEmitter(
             Accessibility = constructorAccessibility,
         };
 
-        var addressesConstructors = emitsDispatcher && constructor.Overloads is { Count: > 0 };
+        var emitsSelectorsAndFactories = emitsDispatcher && constructor.Overloads is { Count: > 0 };
         var classMembers = new List<TsClassMember>();
 
-        if (addressesConstructors)
+        if (emitsSelectorsAndFactories)
+        {
             classMembers.AddRange(
                 IrToTsConstructorFactoryBridge.BuildSelectors(ir.Constructor!, claims)
             );
+        }
 
         if (keepsBaseMessage)
             classMembers.Add(IrToTsExceptionConstructionBridge.BaseMessageFieldDeclaration());
@@ -140,10 +145,12 @@ public sealed class IrToTsClassEmitter(
             lowering
         );
 
-        if (addressesConstructors)
+        if (emitsSelectorsAndFactories)
+        {
             classMembers.AddRange(
                 IrToTsConstructorFactoryBridge.BuildFactories(ir, typeName, claims, lowering)
             );
+        }
 
         EmitDeferredOperatorsAndMethods(type, ir, claims, classMembers, lowering);
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, lowering);
@@ -162,11 +169,11 @@ public sealed class IrToTsClassEmitter(
     }
 
     /// <summary>
-    /// The class's claim results (spec 013 FR-004), whose diagnostics its own
-    /// emission reports; none for a class with no overload group and no
-    /// emitted base.
+    /// The class's claim results (spec 013 FR-004), reporting their
+    /// diagnostics: the class's own emission is the one place that does. None
+    /// for a class with no overload group and no emitted base.
     /// </summary>
-    private TsOverloadClaims ClaimsOf(INamedTypeSymbol type, IrClassDeclaration ir)
+    private TsOverloadClaims ClaimAndReport(INamedTypeSymbol type, IrClassDeclaration ir)
     {
         if (!TsOverloadClaimsRegistry.AppliesTo(ir))
             return TsOverloadClaims.None;
@@ -177,101 +184,6 @@ public sealed class IrToTsClassEmitter(
 
         return claims;
     }
-
-    /// <summary>
-    /// The body of a struct's implicit parameterless constructor (spec 013
-    /// FR-027): every instance field takes its type's default value, as
-    /// <c>default(S)</c> gives it, whatever its initializer says. <c>null</c>
-    /// for a reference type, or a struct that declares its own parameterless
-    /// constructor (an ordinary overload).
-    /// </summary>
-    private IReadOnlyList<TsStatement>? ImplicitParameterlessBodyOf(
-        IrClassDeclaration ir,
-        IReadOnlyList<IMethodSymbol> explicitCtors
-    )
-    {
-        if (!ir.Semantics.IsValueType || explicitCtors.Any(ctor => ctor.Parameters.IsEmpty))
-            return null;
-
-        return StructStorageOf(ir)
-            .Select(storage =>
-                (TsStatement)
-                    new TsExpressionStatement(
-                        new TsBinaryExpression(
-                            new TsPropertyAccess(new TsIdentifier("this"), storage.Name),
-                            "=",
-                            DefaultValueOf(storage.Type)
-                        )
-                    )
-            )
-            .ToList();
-    }
-
-    /// <summary>
-    /// A struct's instance storage, in declaration order: its promoted
-    /// members, then its instance fields and auto-properties.
-    /// </summary>
-    private static IEnumerable<(string Name, IrTypeRef Type)> StructStorageOf(IrClassDeclaration ir)
-    {
-        var promoted = ir.Constructor is { IsPrimary: true } primary
-            ? primary
-                .Parameters.Where(parameter => parameter.Promotion is not IrParameterPromotion.None)
-                .Select(parameter =>
-                    (
-                        IrToTsNamingPolicy.ToDataMemberName(
-                            parameter.Parameter.Name,
-                            parameter.EmittedName
-                        ),
-                        parameter.Parameter.Type
-                    )
-                )
-            : [];
-
-        var declared = (ir.Members ?? []).SelectMany<IrMemberDeclaration, (string, IrTypeRef)>(
-            member =>
-                member switch
-                {
-                    IrFieldDeclaration { IsStatic: false } field =>
-                    [
-                        (
-                            IrToTsNamingPolicy.ToDeclaredDataMemberName(
-                                field.Name,
-                                field.Attributes
-                            ),
-                            field.Type
-                        ),
-                    ],
-                    IrPropertyDeclaration { IsStatic: false } property
-                        when IsAutoProperty(property) =>
-                    [
-                        (
-                            IrToTsNamingPolicy.ToDeclaredDataMemberName(
-                                property.Name,
-                                property.Attributes
-                            ),
-                            property.Type
-                        ),
-                    ],
-                    _ => [],
-                }
-        );
-
-        return promoted.Concat(declared).DistinctBy(storage => storage.Item1);
-    }
-
-    private static bool IsAutoProperty(IrPropertyDeclaration property) =>
-        property.Semantics is not { IsAbstract: true }
-        && property.Semantics?.HasGetterBody != true
-        && property.Semantics?.HasSetterBody != true;
-
-    /// <summary>
-    /// The value <c>default(T)</c> stores: the type's implicit initializer, or
-    /// <c>null</c> for a reference type, asserted (<c>null as never</c>) since
-    /// the field's TypeScript type does not admit it.
-    /// </summary>
-    private static TsExpression DefaultValueOf(IrTypeRef type) =>
-        IrToTsClassBridge.ComputeDefaultInitializer(type)
-        ?? new TsCastExpression(new TsLiteral("null"), new TsNamedType("never"));
 
     /// <summary>
     /// Two-branch dispatcher for the constructor body:
@@ -291,6 +203,7 @@ public sealed class IrToTsClassEmitter(
         IReadOnlyList<TsConstructorParam> ctorParams,
         bool emitsDispatcher,
         ConstructorSelectors selectors,
+        IReadOnlyList<TsStatement>? implicitParameterlessBody,
         TsAccessibility groupAccessibility,
         TsType? extendsType,
         bool keepsBaseMessage,
@@ -317,6 +230,7 @@ public sealed class IrToTsClassEmitter(
                     ir,
                     new DispatcherBaseCall(extendsType is not null, keepsBaseMessage),
                     selectors,
+                    implicitParameterlessBody,
                     groupAccessibility,
                     lowering
                 )
@@ -942,6 +856,7 @@ public sealed class IrToTsClassEmitter(
         IrClassDeclaration owner,
         DispatcherBaseCall baseCall,
         ConstructorSelectors selectors,
+        IReadOnlyList<TsStatement>? implicitParameterlessBody,
         TsAccessibility groupAccessibility,
         IrToTsBridgeContext lowering
     )
@@ -964,6 +879,7 @@ public sealed class IrToTsClassEmitter(
             baseCall,
             owner.TypeParameters ?? [],
             selectors,
+            implicitParameterlessBody,
             lowering,
             TsConstructorModifier.SignatureJSDocSelectorFor(owner, groupAccessibility)
         );

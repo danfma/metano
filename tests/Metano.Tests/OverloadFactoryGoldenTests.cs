@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -522,5 +524,142 @@ public class OverloadFactoryGoldenTests
         await Assert
             .That(outputs)
             .IsEqualTo(TranspileHelper.ReadExpected("overload-names-claims.ts"));
+    }
+
+    [Test]
+    public async Task GenericHierarchy_RebindsInheritedFactoriesThroughEachExtendsClause()
+    {
+        // B reorders A's type parameters and declares one constructor, so C
+        // inherits A's factory through B: C's `(P k, Q v)` is A's `(V v, K k)`
+        // read through B, a different list, and C qualifies its factory.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class A<K, V>
+            {
+                public K? Key { get; }
+
+                public A(K k, V v) { Key = k; }
+
+                public A(int n) { }
+            }
+
+            [Transpile]
+            public class B<V2, K2> : A<K2, V2>
+            {
+                public B(K2 k, V2 v) : base(k, v) { }
+            }
+
+            [Transpile]
+            public class C<P, Q> : B<P, Q>
+            {
+                public C(P k, Q v) : base(v, k) { }
+
+                public C(Q v, P k, bool flip) : base(v, k) { }
+            }
+            """
+        );
+
+        await Assert
+            .That(result["c.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-hierarchy-generic.ts"));
+    }
+
+    [Test]
+    public async Task StructDefaultBranch_GivesEachFieldItsTypesDefault()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile]
+            public enum Mood { Calm, Loud }
+
+            [Transpile]
+            public struct Inner
+            {
+                public int V;
+
+                public Inner(int v) { V = v; }
+
+                public Inner(string text) { V = text.Length; }
+            }
+
+            [Transpile]
+            public struct Day
+            {
+                public char Tag;
+
+                public string Label;
+
+                public Mood Mood;
+
+                public Inner Nested;
+
+                public Guid Id;
+
+                public Day(int n) { Tag = 'a'; Label = ""; Mood = Mood.Loud; Nested = new Inner(n); Id = Guid.Empty; }
+
+                public Day(string label) : this(label.Length) { Label = label; }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["day.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-struct-defaults.ts"));
+
+        var unrepresentable = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .Select(d => d.Message)
+            .Where(message => message.Contains("FR-027"))
+            .ToList();
+
+        await Assert.That(unrepresentable.Count).IsEqualTo(1);
+        await Assert
+            .That(unrepresentable[0])
+            .IsEqualTo(
+                "'default(System.Guid)' has no literal in the target: 'new Day()' leaves 'id' "
+                    + "undefined instead of the zeroed value (spec 013 FR-027)."
+            );
+    }
+
+    [Test]
+    public async Task CrossPackageBase_KeepsTheFactoriesItCanRedeclare()
+    {
+        var library = """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            namespace Lib;
+
+            public class Money
+            {
+                public Money(decimal amount) { }
+
+                public Money(int cents) { }
+            }
+            """;
+
+        var consumer = """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Receipt : Lib.Money
+            {
+                public Receipt(decimal amount) : base(amount) { }
+
+                public Receipt(string cents) : base(cents.Length) { }
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+
+        await Assert
+            .That(result["app/receipt.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("overload-factory-cross-package.ts"));
     }
 }

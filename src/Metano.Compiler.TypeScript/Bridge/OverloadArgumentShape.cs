@@ -26,15 +26,15 @@ internal sealed class OverloadArgumentShape
     private const string Arguments = "args";
 
     private readonly IReadOnlyList<IrParameter> _parameters;
-    private readonly int _firstArgument;
+    private readonly int _firstArgumentIndex;
 
     public OverloadArgumentShape(IReadOnlyList<IrParameter> parameters)
-        : this(parameters, firstArgument: 0) { }
+        : this(parameters, firstArgumentIndex: 0) { }
 
-    private OverloadArgumentShape(IReadOnlyList<IrParameter> parameters, int firstArgument)
+    private OverloadArgumentShape(IReadOnlyList<IrParameter> parameters, int firstArgumentIndex)
     {
         _parameters = parameters;
-        _firstArgument = firstArgument;
+        _firstArgumentIndex = firstArgumentIndex;
         Rest = parameters is [.., { IsParams: true } rest] ? rest : null;
         FixedCount = Rest is null ? parameters.Count : parameters.Count - 1;
         RequiredCount = parameters.Take(FixedCount).TakeWhile(p => !p.CanBeOmitted).Count();
@@ -57,7 +57,7 @@ internal sealed class OverloadArgumentShape
     /// selector symbol at <c>args[0]</c>.
     /// </summary>
     public static OverloadArgumentShape AfterSelector(IReadOnlyList<IrParameter> parameters) =>
-        new(parameters, firstArgument: 1);
+        new(parameters, firstArgumentIndex: 1);
 
     /// <summary>
     /// The runtime test that the dispatcher's <c>args</c> match this
@@ -68,7 +68,7 @@ internal sealed class OverloadArgumentShape
     {
         var fixedChecks = _parameters
             .Take(FixedCount)
-            .Select((parameter, index) => FixedArgumentCheck(parameter, PositionOf(index), scope));
+            .Select((parameter, index) => FixedArgumentCheck(parameter, ArgumentFor(index), scope));
 
         IReadOnlyList<TsExpression?> clauses =
         [
@@ -86,7 +86,7 @@ internal sealed class OverloadArgumentShape
     /// <c>params</c> parameter (each shifted past a selector).
     /// </summary>
     public TsExpression ValueOf(int index) =>
-        index == FixedCount && Rest is not null ? TrailingArguments() : PositionOf(index);
+        index == FixedCount && Rest is not null ? TrailingArguments() : ArgumentFor(index);
 
     /// <summary>
     /// The argument-count checks: <c>args.length === n</c> when every
@@ -138,10 +138,10 @@ internal sealed class OverloadArgumentShape
     private TsExpression TrailingArguments() =>
         new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier(Arguments), "slice"),
-            [new TsLiteral((_firstArgument + FixedCount).ToString())]
+            [new TsLiteral((_firstArgumentIndex + FixedCount).ToString())]
         );
 
-    private TsExpression PositionOf(int index) => ArgumentAt(_firstArgument + index);
+    private TsExpression ArgumentFor(int index) => ArgumentAt(_firstArgumentIndex + index);
 
     /// <summary>The dispatcher's argument at <paramref name="index"/>: <c>args[index]</c>.</summary>
     internal static TsExpression ArgumentAt(int index) =>
@@ -158,7 +158,7 @@ internal sealed class OverloadArgumentShape
         new TsBinaryExpression(
             new TsPropertyAccess(new TsIdentifier(Arguments), "length"),
             comparison,
-            new TsLiteral((_firstArgument + count).ToString())
+            new TsLiteral((_firstArgumentIndex + count).ToString())
         );
 
     /// <summary>

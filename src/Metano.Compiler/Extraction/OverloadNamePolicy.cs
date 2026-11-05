@@ -8,7 +8,7 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal enum OverloadGroupKind
 {
-    /// <summary>Methods and module functions: parameter names first.</summary>
+    /// <summary>Methods, module functions and constructors: parameter names first.</summary>
     Method,
 
     /// <summary>

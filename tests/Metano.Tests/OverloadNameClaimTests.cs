@@ -27,7 +27,7 @@ public class OverloadNameClaimTests
             """
         );
 
-        var report = Single(diagnostics, DiagnosticCodes.OverloadNameShadowed);
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
 
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert
@@ -94,7 +94,7 @@ public class OverloadNameClaimTests
             """
         );
 
-        var report = Single(diagnostics, DiagnosticCodes.OverloadNameShadowed);
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
 
         await Assert
             .That(report!.Message)
@@ -122,7 +122,7 @@ public class OverloadNameClaimTests
             """
         );
 
-        var report = Single(diagnostics, DiagnosticCodes.OverloadNameShadowed);
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
 
         await Assert
             .That(report!.Message)
@@ -157,7 +157,7 @@ public class OverloadNameClaimTests
             """
         );
 
-        var report = Single(diagnostics, DiagnosticCodes.OverloadFastPathHijacked);
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked);
 
         await Assert.That(report!.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
         await Assert
@@ -185,12 +185,117 @@ public class OverloadNameClaimTests
             """
         );
 
+        await Assert.That(files["solo.ts"]).Contains("static fromV: number = 1;");
+        await Assert.That(files["solo.ts"]).Contains("constructor(v: number)");
         await Assert.That(files["solo.ts"]).DoesNotContain("unique symbol");
         await Assert.That(files["solo.ts"]).DoesNotContain("static fromV(");
-        await Assert.That(Single(diagnostics, DiagnosticCodes.OverloadNameShadowed)).IsNull();
+        await Assert
+            .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed))
+            .IsNull();
     }
 
-    private static MetanoDiagnostic? Single(
+    [Test]
+    public async Task TypeSpelledGroup_ReportsMs0067AtTheRenamedOverload()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Names
+            {
+                public string FString() => "user";
+
+                public string F(int a) => "int";
+
+                public string F(string a) => "string";
+            }
+            """
+        );
+
+        var report = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed);
+
+        await Assert.That(report!.Message).Contains("'F(string a)'");
+        await Assert.That(LineOf(report)).IsEqualTo(10);
+    }
+
+    [Test]
+    public async Task StaticFastPathMeetingAnInheritedFactory_NamesTheBaseType()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Money
+            {
+                public Money(decimal amount) { }
+
+                public Money(int cents) { }
+            }
+
+            [Transpile]
+            public class Cash : Money
+            {
+                public Cash(int cents) : base(cents) { }
+
+                public static Cash From(decimal amount) => new Cash(1);
+
+                public static Cash From(int cents) => new Cash(cents);
+            }
+            """
+        );
+
+        var reports = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.OverloadNameShadowed)
+            .OrderBy(LineOf)
+            .ToList();
+
+        await Assert.That(reports.Count).IsEqualTo(2);
+        await Assert
+            .That(reports[0].Message)
+            .IsEqualTo(
+                "Fast path 'Cash.fromAmount' of 'From(decimal amount)' collides with the factory "
+                    + "of 'Money(decimal amount)' inherited from 'Money'; it is emitted as "
+                    + "'fromAmount$' (spec 013 FR-004)."
+            );
+        await Assert.That(files["cash.ts"]).Contains("private static fromAmount$(amount: Decimal)");
+    }
+
+    [Test]
+    public async Task QualifiedFactoryClaimedByAUserMember_StaysQualified()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Box<T>
+            {
+                public Box(T value) { }
+
+                public Box(int n) { }
+            }
+
+            [Transpile]
+            public class IntBox : Box<int>
+            {
+                public static int FromIntBoxValue = 1;
+
+                public IntBox(int value) : base(value) { }
+
+                public IntBox(int value, int extra) : base(value + extra) { }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["int-box.ts"])
+            .Contains("static fromIntBoxValue$(value: number): IntBox {");
+        await Assert
+            .That(files["int-box.ts"])
+            .Contains("protected static readonly byIntBoxValue$: unique symbol");
+        await Assert
+            .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadNameShadowed))
+            .IsNotNull();
+    }
+
+    /// <summary>The only diagnostic with <paramref name="code"/>, or <c>null</c> when none has it.</summary>
+    private static MetanoDiagnostic? FindDiagnostic(
         IEnumerable<MetanoDiagnostic> diagnostics,
         string code
     ) => diagnostics.SingleOrDefault(diagnostic => diagnostic.Code == code);

@@ -15,13 +15,6 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// </summary>
 internal sealed class TsClassMemberTable
 {
-    private static readonly string[] SynthesizedRecordMembers =
-    [
-        "equals",
-        IrToTsNamingPolicy.HashCodeMethodName,
-        "with",
-    ];
-
     private readonly Dictionary<string, string> _statics = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _instances = new(StringComparer.Ordinal);
 
@@ -45,7 +38,7 @@ internal sealed class TsClassMemberTable
 
         if (IrToTsRecordSynthesisBridge.ShouldSynthesize(ir))
         {
-            foreach (var name in SynthesizedRecordMembers)
+            foreach (var name in IrToTsRecordSynthesisBridge.SynthesizedMemberNames)
                 table.Declare(isStatic: false, name, ir.Name);
         }
 

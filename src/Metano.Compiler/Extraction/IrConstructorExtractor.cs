@@ -62,9 +62,8 @@ public static class IrConstructorExtractor
         );
 
         var primaryIndex = explicitCtors
-            .Select((ctor, index) => (ctor, index))
-            .First(entry => SymbolEqualityComparer.Default.Equals(entry.ctor, primary))
-            .index;
+            .ToList()
+            .FindIndex(ctor => SymbolEqualityComparer.Default.Equals(ctor, primary));
 
         // Other constructors become overloads (without nested Overloads of their own).
         var overloads = named.Where((_, index) => index != primaryIndex).ToList();

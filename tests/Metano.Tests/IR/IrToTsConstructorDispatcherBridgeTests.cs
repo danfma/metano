@@ -37,6 +37,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                 baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                 typeParameters: [],
                 SelectorsOf(ctor),
+                implicitParameterlessBody: null,
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -77,6 +78,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                 baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                 typeParameters: [],
                 SelectorsOf(ctor),
+                implicitParameterlessBody: null,
                 IrToTsBridgeContext.For(null)
             )!
         );
@@ -106,6 +108,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                     baseCall: new DispatcherBaseCall(ExtendsBase: false, KeepsBaseMessage: false),
                     typeParameters: [],
                     SelectorsOf(ctor),
+                    implicitParameterlessBody: null,
                     IrToTsBridgeContext.For(null)
                 )
             )
@@ -158,7 +161,7 @@ public class IrToTsConstructorDispatcherBridgeTests
             )
         );
 
-        return new ConstructorSelectors("T", claims, ImplicitParameterlessBody: null);
+        return new ConstructorSelectors("T", claims);
     }
 
     private static string PrintConstructor(TsConstructor ctor)

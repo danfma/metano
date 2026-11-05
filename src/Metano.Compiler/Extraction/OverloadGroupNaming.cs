@@ -14,11 +14,6 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal static class OverloadGroupNaming
 {
-    private static readonly SymbolDisplayFormat SignatureTextTypeFormat =
-        SymbolDisplayFormat.MinimallyQualifiedFormat.AddMiscellaneousOptions(
-            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
-        );
-
     /// <param name="overloads">The group's methods and their extracted
     /// declarations, in declaration order.</param>
     /// <returns>Each method's declaration carrying its parameters' spellings and
@@ -44,7 +39,7 @@ internal static class OverloadGroupNaming
                         {
                             Parameters = named.Parameters[index],
                             OverloadName = new IrOverloadName(named.Suffixes[index]),
-                            SignatureText = SignatureTextOf(symbol),
+                            SignatureText = OverloadSignatureText.Of(symbol),
                         }
                     )
             )
@@ -88,7 +83,7 @@ internal static class OverloadGroupNaming
                             )
                             .ToList(),
                         OverloadName = new IrOverloadName(named.Suffixes[index]),
-                        SignatureText = SignatureTextOf(constructor.Symbol),
+                        SignatureText = OverloadSignatureText.Of(constructor.Symbol),
                         DeclarationOrdinal = index,
                     }
             )
@@ -188,21 +183,6 @@ internal static class OverloadGroupNaming
     {
         var parameters = method.Parameters.Select(parameter =>
             $"{parameter.Type.ToDisplayString()} {parameter.Name}"
-        );
-
-        return $"{DeclaredNameOf(method)}({string.Join(", ", parameters)})";
-    }
-
-    /// <summary>
-    /// The overload as C# declares it, for a selector's description and a
-    /// target's diagnostics: <c>Money(decimal amount)</c>,
-    /// <c>Opt(string s, params int[] rest)</c>.
-    /// </summary>
-    private static string SignatureTextOf(IMethodSymbol method)
-    {
-        var parameters = method.Parameters.Select(parameter =>
-            (parameter.IsParams ? "params " : "")
-            + $"{parameter.Type.ToDisplayString(SignatureTextTypeFormat)} {parameter.Name}"
         );
 
         return $"{DeclaredNameOf(method)}({string.Join(", ", parameters)})";

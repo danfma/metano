@@ -49,7 +49,7 @@ internal sealed class TsOverloadClaims
 
     /// <summary>The selector and factory names of one constructor overload.</summary>
     public TsConstructorOverloadNames NamesOf(IrConstructorDeclaration constructor) =>
-        _constructors.GetValueOrDefault(SuffixOf(constructor.OverloadName, "constructor"))
+        _constructors.GetValueOrDefault(DispatchedOverload.SuffixOf(constructor))
         ?? throw new InvalidOperationException(
             $"The claim pass named no constructor overload '{constructor.SignatureText}'."
         );
@@ -60,7 +60,7 @@ internal sealed class TsOverloadClaims
     /// </summary>
     public string FastPathNameOf(bool isStatic, string baseName, IrMethodDeclaration overload) =>
         _fastPaths.GetValueOrDefault(
-            new TsFastPathKey(isStatic, baseName, SuffixOf(overload.OverloadName, overload.Name))
+            new TsFastPathKey(isStatic, baseName, DispatchedOverload.SuffixOf(overload))
         )
         ?? throw new InvalidOperationException(
             $"The claim pass named no fast path for '{overload.SignatureText}'."
@@ -81,13 +81,13 @@ internal sealed class TsOverloadClaims
 
     /// <summary>
     /// The declaration a finding is about: the constructor at its declaration
-    /// ordinal, the method overload with its parameter names, or the first
+    /// ordinal, the method overload with its signature text, or the first
     /// member with its C# name; the type when none matches.
     /// </summary>
     private static Location? LocationOf(INamedTypeSymbol type, TsClaimSite site)
     {
         var declaration = site.ConstructorOrdinal is { } ordinal
-            ? IrConstructorExtractor.AllExplicitConstructors(type)[ordinal]
+            ? IrConstructorExtractor.AllExplicitConstructors(type).ElementAtOrDefault(ordinal)
             : MemberAt(type, site);
 
         return (declaration ?? type).Locations.FirstOrDefault();
@@ -97,21 +97,13 @@ internal sealed class TsOverloadClaims
     {
         var members = type.GetMembers(site.MemberName);
 
-        if (site.ParameterNames is not { } parameterNames)
+        if (site.Signature is not { } signature)
             return members.FirstOrDefault();
 
         return members
             .OfType<IMethodSymbol>()
-            .FirstOrDefault(method =>
-                method.Parameters.Select(parameter => parameter.Name).SequenceEqual(parameterNames)
-            );
+            .FirstOrDefault(method => OverloadSignatureText.Of(method) == signature);
     }
-
-    private static string SuffixOf(IrOverloadName? name, string member) =>
-        name?.Suffix
-        ?? throw new InvalidOperationException(
-            $"Overload '{member}' of a dispatched group carries no overload name."
-        );
 }
 
 /// <summary>
@@ -142,10 +134,11 @@ internal sealed record TsClaimFinding(
 /// <summary>
 /// The C# declaration a claim finding is about: a constructor by its
 /// declaration ordinal, otherwise a member by its C# name — a method overload
-/// also by its parameter names.
+/// also by its signature text (<see cref="OverloadSignatureText"/>), since the
+/// overloads of a group may share every parameter name.
 /// </summary>
 internal sealed record TsClaimSite(
     string MemberName,
     int? ConstructorOrdinal = null,
-    IReadOnlyList<string>? ParameterNames = null
+    string? Signature = null
 );

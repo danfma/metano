@@ -26,6 +26,9 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
 
     private readonly TypeScriptTransformContext _context = context;
     private readonly IrToTsTypeOverrides? _typeOverrides = UnrecordedTypeOverridesOf(context);
+    private readonly IrTypeOriginResolver? _shapeOriginResolver = UnrecordedOriginResolverOf(
+        context
+    );
     private readonly ConcurrentDictionary<INamedTypeSymbol, Lazy<TsOverloadClaims>> _claims = new(
         SymbolEqualityComparer.Default
     );
@@ -65,7 +68,11 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
     {
         using var _ = ExtractionDiagnostics.Suppress();
 
-        var extraction = _context.Extraction with { Compilation = null };
+        var extraction = _context.Extraction with
+        {
+            Compilation = null,
+            OriginResolver = _shapeOriginResolver,
+        };
 
         return IrEmissionNormalizer.Normalize(IrClassExtractor.Extract(type, extraction), type);
     }
@@ -80,26 +87,26 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
         IrClassDeclaration ir
     )
     {
-        if (
-            EmittedBaseOf(type, ir) is not { } baseType
-            || IrToTsClassBridge.BuildExtends(ir) is not { } extendsType
-        )
+        if (IrToTsClassBridge.BuildExtends(ir) is not TsNamedType extendsType)
+            return NothingInherited;
+
+        if (EmittedBaseOf(type, ir) is not { } baseType)
             return NothingInherited;
 
         return TsFactoryInheritance.Inherit(
             For(baseType).Statics,
+            baseType.OriginalDefinition.TypeParameters.Select(parameter => parameter.Name).ToList(),
             extendsType,
             (ir.TypeParameters ?? []).Select(parameter => parameter.Name).ToList()
         );
     }
 
     /// <summary>
-    /// The base class the TypeScript class extends, when the target emits it:
+    /// The base class of a class that extends one, when the target emits it:
     /// not an erased or BCL base, and not an ambient (<c>[External]</c>) one.
     /// </summary>
     private static INamedTypeSymbol? EmittedBaseOf(INamedTypeSymbol type, IrClassDeclaration ir) =>
-        IrToTsClassBridge.BuildExtends(ir) is TsNamedType
-        && ir.BaseType is IrNamedTypeRef { Semantics.IsTranspilable: true }
+        ir.BaseType is IrNamedTypeRef { Semantics.IsTranspilable: true }
         && type.BaseType is { } baseType
         && !SymbolHelper.HasExternal(baseType)
             ? baseType
@@ -118,6 +125,20 @@ public sealed class TsOverloadClaimsRegistry(TypeScriptTransformContext context)
                 typeMapping.BclExportMap,
                 new CrossPackageDependencyLedger()
             )
+            : null;
+
+    /// <summary>
+    /// The cross-package origins of the types a shape names, without recording
+    /// the misses the class's own emission reports (<c>MS0007</c>).
+    /// </summary>
+    private static IrTypeOriginResolver? UnrecordedOriginResolverOf(
+        TypeScriptTransformContext context
+    ) =>
+        context.TypeMapping is { } typeMapping
+            ? named =>
+                typeMapping.CrossAssemblyOrigins.GetValueOrDefault(
+                    named.OriginalDefinition.GetCrossAssemblyOriginKey()
+                )
             : null;
 
     private static bool HasOverloadGroup(IrClassDeclaration ir) =>
