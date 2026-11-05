@@ -19,7 +19,9 @@ interface PlainTimeLike {
  * `"03:04:05"` when the fraction is zero, otherwise exactly seven fraction
  * digits (`"03:04:05.6780000"`), truncated to ticks (100 ns), the precision
  * of `TimeOnly`. Every other temporal value keeps its ISO `toString()`, which
- * already matches STJ for tick-precision `DateTime` / `DateOnly` values.
+ * already matches STJ for tick-precision `DateTime` / `DateOnly` values; a
+ * sub-tick `PlainDateTime` (nanoseconds a C# `DateTime` cannot hold) still
+ * writes its nine fraction digits, a text STJ never produces.
  *
  * The kind is read from `Symbol.toStringTag` so a native `Temporal` and the
  * `@js-temporal/polyfill` classes are both recognized.
@@ -33,12 +35,12 @@ export function temporalTextOf(value: unknown): string {
 }
 
 function plainTimeText(time: PlainTimeLike): string {
-  const fractionDigits = hasTicks(time) ? TICK_FRACTION_DIGITS : 0;
+  const fractionDigits = hasSubSecondTicks(time) ? TICK_FRACTION_DIGITS : 0;
 
   return time.toString({ fractionalSecondDigits: fractionDigits, roundingMode: "trunc" });
 }
 
-function hasTicks(time: PlainTimeLike): boolean {
+function hasSubSecondTicks(time: PlainTimeLike): boolean {
   const fractionNanoseconds =
     time.millisecond * 1_000_000 + time.microsecond * 1_000 + time.nanosecond;
 

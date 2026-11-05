@@ -1063,6 +1063,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Constructor parameter bound to an ignored property | `default(T)` | `undefined` (the factory reads a key the payload never carries) | DECIDED-20 (a) |
 | `[JsonIgnore] new` (non-override) redeclaration | writes the base declaration from the base's own storage, at the redeclaration's position (measured: `{"Name":"base","X":2}` when the derived type declares the ignored `Name` before `X`) | writes the base declaration from the single TS member, which holds the derived value, at the base's position (`{"X":2,"Name":"derived"}`) | DECIDED-20 (a) |
 | Error messages | with a `Path`, `LineNumber`, `BytePositionInLine` suffix | without | DECIDED-5 |
+| Type name in the polymorphic messages (missing tag, unsupported runtime type, abstract entry) | namespace-qualified (`'SampleJsonContracts.Clip'`) | the simple name (`'Clip'`) | Documented (DECIDED-23 g, SC-001); manifest rows E3, E4, E7, E8, E9, E13, E14, E16 and E25 are `namespaceInsensitive` |
 
 ### Key Entities
 
@@ -1832,8 +1833,9 @@ until the maintainer decides.
   sides. Rows restricted to one side or carrying a `divergence` note are each traced to an entry
   under Documented divergences.
 - **SC-002**: 100% of the error rows throw the same exception class name on every side they list,
-  and the same whole message once STJ's `Path` suffix and the sample namespace are removed, or
-  the per-side `stjMessage` / `tsMessage` of a documented divergence.
+  and the same whole message once STJ's `Path` suffix is removed (and, on the polymorphic rows of
+  the namespace divergence, the type's namespace), or the per-side `stjMessage` / `tsMessage` of a
+  documented divergence.
 - **SC-003**: A context with one root of each supported shape (≥ 15 roots) compiles under
   `tsgo --strict` with 0 errors (today: the file does not compile), and each value-root kind has a
   manifest row.
@@ -1850,7 +1852,7 @@ until the maintainer decides.
   and rejected number string of FR-048) agrees on both sides.
 - **SC-008**: Interface and `[PlainObject]` hierarchies round-trip on both sides for every variant
   in the sample, and a write of each `[PlainObject]` variant selects that variant (the FR-019
-  order), with 0 misrouted values in the manifest. **Met (S8):** every registered variant of the
+  order), with 0 misrouted values in the manifest. **Met (S8, final):** every registered variant of the
   sample's interface and `[PlainObject]` hierarchies has a roundtrip row on both sides — `IShape`:
   `Sq` (W24); `IShapeB`: `SqB` (W30), plus the unregistered `OtherB` written as the base (W25);
   `Shape`: `Point` (W26), `Point3` (W27), `Rect` (W29); `MixedBase`: `MixedClass` (W28a),

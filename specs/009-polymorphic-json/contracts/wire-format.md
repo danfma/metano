@@ -24,6 +24,7 @@ interface ConformanceCase {
     stjMessage?: string;              // instead of `message` when the sides' texts differ
     tsMessage?: string;
     stjPath?: string;                 // STJ's JSON path, where its message names only the declaring type
+    namespaceInsensitive?: boolean;   // compare without `SampleJsonContracts.` (DECIDED-23 g rows)
   };
   divergence?: string;                // the entry in spec.md "Documented divergences"
 }
@@ -37,10 +38,12 @@ interface ConformanceCase {
   expected value); `instanceof` is asserted only for read and roundtrip rows.
 - **roundtrip**: write, then read the written text.
 - **error**: the operation of `direction` throws `error.class`, and its whole message equals
-  `stjMessage ?? message` (STJ) or `tsMessage ?? message` (TS) after normalization: STJ's
-  `Path: … | LineNumber: … | BytePositionInLine: …` suffix (DECIDED-5) and the sample namespace
-  `SampleJsonContracts.` are removed on both sides. `stjPath`, when present, must equal the path
-  STJ reported.
+  `stjMessage ?? message` (STJ) or `tsMessage ?? message` (TS) once STJ's
+  `Path: … | LineNumber: … | BytePositionInLine: …` suffix (DECIDED-5) is removed. Only the rows
+  marked `namespaceInsensitive` (the polymorphic messages E3, E4, E7, E8, E9, E13, E14, E16, E25,
+  where STJ qualifies the type and the runtime does not, DECIDED-23 g) also drop the sample
+  namespace `SampleJsonContracts.` on both sides; every other row compares it as written (N8, N10
+  and E11 carry it on both sides). `stjPath`, when present, must equal the path STJ reported.
 - **crossReadable**: the TS side also reads `stjJson`, checks the value and writes `json` back; the
   STJ side reads `json`. `false` marks a divergence that breaks interop (V11, V12, V14).
 - The .NET side checks every row whose `sides` include `stj`; the Bun side every row whose `sides`
@@ -135,14 +138,15 @@ selects the variant).
 | E20 | web `iBase` | `{"$type":"1","x":5}` | read | `JsonException` | `Read unrecognized type discriminator id '1'.` |
 
 Slice S8 shipped these rows plus: W11c/W22b/R7/R8, the tag-not-first error E22, the
-depth-limit error E23 (33 nested groups through `clip`: the contract itself visits the 65th
-container, pinning DECIDED-15's reader message) and its passing neighbor R9 (32 nested groups,
-the innermost with no members: exactly 64 containers read on both sides), the empty-text error E24, the exact-decimal
+depth-limit error E23 (32 nested groups around an image clip: exactly 65 containers, the 65th
+one the contract itself visits, pinning DECIDED-15's reader message) and its passing neighbor R9
+(32 nested groups, the innermost with no members: exactly 64 containers, read on both sides),
+the empty-text error E24, the exact-decimal
 reads D2a/D2b and the past-MaxValue error D4, the abstract-entry read error E25 (FR-017,
 DECIDED-12), the null-root rows N1–N10 (FR-037), the naming-policy rows NAM1/NAM2 and the member
-options rows M1–M5. Message rows compare the whole normalized message: STJ appends the `Path`
-suffix (DECIDED-5) and names namespaced types in several messages (measured in S8: the
-missing-tag, runtime-type and abstract-type messages carry `SampleJsonContracts.`).
+options rows M1–M5. Message rows compare the whole message without STJ's `Path` suffix
+(DECIDED-5); the missing-tag, runtime-type and abstract-type messages, where STJ names the
+namespaced type (measured in S8), are `namespaceInsensitive`.
 
 Type names inside TS messages are the runtime class names (`constructor.name`), which equal the C#
 simple names unless a `[Name]` override renames the class; fixtures use no overrides. An

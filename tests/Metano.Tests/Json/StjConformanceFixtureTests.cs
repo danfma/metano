@@ -16,7 +16,7 @@ namespace Metano.Tests.Json;
 /// byte for byte (<c>stjJson</c> for the rows with a <c>divergence</c> note),
 /// read and roundtrip rows assert the runtime type and the builder's field
 /// values, and error rows assert the thrown exception class and the whole
-/// message, normalized (<see cref="NormalizedStjError"/>). A row marked
+/// message (<see cref="NormalizedStjError"/>). A row marked
 /// <c>crossReadable</c> also reads the TypeScript text. A row that needs a
 /// builder and has none fails, and a builder without a manifest row fails
 /// too, so the two sides cannot drift by omission.
@@ -69,6 +69,11 @@ public class StjConformanceFixtureTests
         await Assert.That(missing).IsEmpty();
     }
 
+    /// <summary>
+    /// Checked against the rows that need a builder: unlike the TypeScript
+    /// side, which keeps a read error's builder for its <c>viaText</c> flag,
+    /// this side has no per-row flag, so a read error never has a builder.
+    /// </summary>
     [Test]
     public async Task EveryStjBuilderHasAManifestRow()
     {
@@ -83,13 +88,13 @@ public class StjConformanceFixtureTests
     public async Task ConformanceRowsMatchSystemTextJson()
     {
         var failures = new List<string>();
-        var textUpdates = 0;
+        var anyTextUpdated = false;
 
         foreach (var row in StjRows())
         {
             try
             {
-                textUpdates += await RunCase(row);
+                anyTextUpdated |= await RunCase(row);
             }
             catch (Exception error)
             {
@@ -99,7 +104,7 @@ public class StjConformanceFixtureTests
             }
         }
 
-        if (textUpdates > 0)
+        if (anyTextUpdated)
         {
             WriteManifest();
         }
@@ -117,11 +122,13 @@ public class StjConformanceFixtureTests
     /// Every row needs a builder except a read error: its input is the
     /// manifest text and its expectation the manifest error.
     /// </summary>
-    private static bool RequiresBuilder(ConformanceCase row) =>
-        !(row.Error is not null && row.Direction == "read");
+    private static bool RequiresBuilder(ConformanceCase row) => !IsReadError(row);
 
-    /// <summary>Runs one row; returns 1 when it recorded a text update.</summary>
-    private static async Task<int> RunCase(ConformanceCase row)
+    private static bool IsReadError(ConformanceCase row) =>
+        row.Error is not null && row.Direction == "read";
+
+    /// <summary>Runs one row; true when it recorded a text update.</summary>
+    private static async Task<bool> RunCase(ConformanceCase row)
     {
         var typeInfo = TypeInfoOf(row);
 
@@ -129,10 +136,11 @@ public class StjConformanceFixtureTests
         {
             await AssertErrorRow(row, error, typeInfo);
 
-            return 0;
+            return false;
         }
 
         var builder = Builders[row.Id];
+
         var (text, updated) =
             row.Direction == "read"
                 ? (row.Json!, false)
@@ -148,7 +156,7 @@ public class StjConformanceFixtureTests
             await AssertReadValue(row, builder, typeInfo, row.Json!);
         }
 
-        return updated ? 1 : 0;
+        return updated;
     }
 
     private static async Task AssertErrorRow(
@@ -157,16 +165,15 @@ public class StjConformanceFixtureTests
         JsonTypeInfo typeInfo
     )
     {
-        var thrown =
-            row.Direction == "read"
-                ? Catch(() => JsonSerializer.Deserialize(row.Json!, typeInfo))
-                : Catch(() => JsonSerializer.Serialize(Builders[row.Id].Build!(), typeInfo));
+        var thrown = IsReadError(row)
+            ? Catch(() => JsonSerializer.Deserialize(row.Json!, typeInfo))
+            : Catch(() => JsonSerializer.Serialize(Builders[row.Id].Build!(), typeInfo));
 
         await Assert.That(thrown).IsNotNull();
 
         await Assert.That(thrown!.GetType().Name).IsEqualTo(error.Class);
 
-        var (message, path) = NormalizedStjError(thrown);
+        var (message, path) = NormalizedStjError(thrown, error.NamespaceInsensitive == true);
 
         await Assert.That(message).IsEqualTo(error.StjMessage ?? error.Message);
 
@@ -225,25 +232,35 @@ public class StjConformanceFixtureTests
     /// <summary>
     /// The message STJ threw, without the <c>Path: … | LineNumber: … |
     /// BytePositionInLine: …</c> suffix the TypeScript side never writes
-    /// (DECIDED-5) and without the sample's namespace, which STJ prints in
-    /// some messages (DECIDED-23 g); the TypeScript side drops the namespace
-    /// too. The JSON path comes back separately, for the rows that pin it.
+    /// (DECIDED-5). A <c>namespaceInsensitive</c> row also drops the sample's
+    /// namespace, which STJ prints in its polymorphic messages and the
+    /// runtime does not (DECIDED-23 g); every other row compares it as
+    /// written. The JSON path comes back separately, for the rows that pin it.
     /// </summary>
-    private static (string Message, string? Path) NormalizedStjError(Exception error)
+    private static (string Message, string? Path) NormalizedStjError(
+        Exception error,
+        bool namespaceInsensitive
+    )
     {
-        var message = error.Message;
+        var (message, path) = SplitPath(error.Message);
+
+        return (namespaceInsensitive ? message.Replace(SampleNamespace, "") : message, path);
+    }
+
+    private static (string Message, string? Path) SplitPath(string message)
+    {
         var pathStart = message.IndexOf(PathMarker, StringComparison.Ordinal);
 
         if (pathStart < 0)
         {
-            return (message.Replace(SampleNamespace, ""), null);
+            return (message, null);
         }
 
         var location = message[(pathStart + PathMarker.Length)..];
         var positionStart = location.IndexOf(PositionMarker, StringComparison.Ordinal);
         var path = positionStart < 0 ? location.TrimEnd('.') : location[..positionStart];
 
-        return (message[..pathStart].Replace(SampleNamespace, ""), path);
+        return (message[..pathStart], path);
     }
 
     private static void RecordTextUpdate(ConformanceCase row, string text)
@@ -343,6 +360,12 @@ public class StjConformanceFixtureTests
     }
 
     private static StjCaseBuilder WriteOnly(Func<object?> build) => new(build, null);
+
+    /// <summary>A write row whose <c>crossReadable</c> read of the TypeScript text is checked.</summary>
+    private static StjCaseBuilder WriteAndCrossRead(
+        Func<object?> build,
+        Func<object?, Task> assertCrossRead
+    ) => new(build, assertCrossRead);
 
     private static StjCaseBuilder ReadOnly(Func<object?, Task> assertRead) => new(null, assertRead);
 
@@ -827,7 +850,17 @@ public class StjConformanceFixtureTests
             ["WEB6"] = ReadOnly(async value => await Assert.That(value).IsEqualTo(5)),
             // The list and map parameters are non-nullable in C#, but STJ
             // writes the null defaults of WEB7's partial value as null.
-            ["WEB7"] = WriteOnly(() => new Nums(5, 7, 1.10m, 2.5, null!, null!, Color.Red)),
+            ["WEB7"] = WriteAndCrossRead(
+                () => new Nums(5, 7, 1.10m, 2.5, null!, null!, Color.Red),
+                async value =>
+                {
+                    var nums = (Nums)value!;
+
+                    await Assert.That(nums.D).IsEqualTo(1.1m);
+
+                    await Assert.That(nums.X).IsEqualTo(2.5);
+                }
+            ),
             ["NAM1"] = Roundtrip(
                 () => new Stats(1, 2.5, "u"),
                 async value => await Assert.That(((Stats)value!).UserName).IsEqualTo("u")
@@ -960,13 +993,15 @@ public class StjConformanceFixtureTests
     /// An error row's expectation: <c>message</c> when both sides throw the
     /// same normalized text, otherwise <c>stjMessage</c> / <c>tsMessage</c>;
     /// <c>stjPath</c> pins STJ's JSON path where its message names only the
-    /// declaring type.
+    /// declaring type; <c>namespaceInsensitive</c> compares without the
+    /// sample's namespace (DECIDED-23 g).
     /// </summary>
     private sealed record JsonError(
         string Class,
         string? Message,
         string? StjMessage,
         string? TsMessage,
-        string? StjPath
+        string? StjPath,
+        bool? NamespaceInsensitive
     );
 }

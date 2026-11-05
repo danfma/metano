@@ -562,7 +562,16 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   WEB6: { assertRead: (value) => expect(value).toBe(5) },
   // The list and map parameters are non-nullable in C#, but WEB7's partial
   // value leaves them null, as the C# builder does.
-  WEB7: { build: () => new Nums(5, 7, new Decimal("1.10"), 2.5, null!, null!, Color.Red) },
+  WEB7: {
+    build: () => new Nums(5, 7, new Decimal("1.10"), 2.5, null!, null!, Color.Red),
+    // Checks the crossReadable read of STJ's text (`"d":1.10`).
+    assertRead: (value) => {
+      const nums = expectClass(value, Nums);
+
+      expectDecimal(nums.d, "1.1");
+      expect(nums.x).toBe(2.5);
+    },
+  },
   NAM1: {
     build: () => new Stats(1, 2.5, "u"),
     assertRead: (value) => {
