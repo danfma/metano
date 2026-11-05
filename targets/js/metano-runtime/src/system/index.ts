@@ -9,6 +9,8 @@ export * from "./uuid.ts";
 export * from "./delegates.ts";
 export * from "./bind-receiver.ts";
 export * from "./integer-division.ts";
+export * from "./int64.ts";
+export * from "./exceptions/index.ts";
 export * from "./math.ts";
 export * from "./number-parsing.ts";
 export * from "./strings.ts";
