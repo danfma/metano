@@ -84,29 +84,6 @@ public sealed partial class IrExpressionExtractor
         op is IrUnaryOp.Increment ? IrUnaryOp.Decrement : IrUnaryOp.Increment;
 
     /// <summary>
-    /// <c>target op= right</c> on a 64-bit value whose result can overflow:
-    /// <c>target = reduce(target op right)</c> (FR-024).
-    /// </summary>
-    private IrExpression? TryExtractReducedCompoundAssignment(
-        IrExpression target,
-        AssignmentExpressionSyntax assign,
-        IrExpression right
-    )
-    {
-        if (
-            MapCompoundAssignmentOperator(assign) is not { } op
-            || OverflowReductionOf(_semantic.GetOperation(assign)) is not { } reduction
-        )
-            return null;
-
-        return BuildReadModifyWrite(
-            target,
-            assign,
-            readTarget => reduction.Reduce(new IrBinaryExpression(readTarget, op, right))
-        );
-    }
-
-    /// <summary>
     /// The step of an extension property or indexer increment: the 64-bit
     /// <c>1n</c> under the exact lowering, the plain <c>1</c> the shipped
     /// <c>Number</c> mode has always emitted (DECIDED-22).

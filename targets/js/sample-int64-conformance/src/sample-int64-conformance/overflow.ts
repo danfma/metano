@@ -1,4 +1,4 @@
-import { checkedInt64, checkedUInt64 } from "metano-runtime";
+import { checkedInt64, checkedUInt64, remInt64 } from "metano-runtime";
 
 export class Counter {
   private readonly _slots: bigint[];
@@ -37,6 +37,18 @@ export class Counter {
     const previous = ((receiver$temp$0) => BigInt.asIntN(64, (this._slots[receiver$temp$0] = BigInt.asIntN(64, this._slots[receiver$temp$0] + 1n)) - 1n))(this.nextSlot());
 
     return this._slotReads === 1 ? previous : -1n;
+  }
+
+  remainderSlot(divisor: bigint): bigint {
+    ((receiver$temp$0) => this._slots[receiver$temp$0] = remInt64(this._slots[receiver$temp$0], divisor))(this.nextSlot());
+
+    return this._slotReads === 1 ? this._slots[1] : -1n;
+  }
+
+  shiftTotal(count: number): bigint {
+    this.total = BigInt.asIntN(64, this.total << BigInt(count & 63));
+
+    return this.total;
   }
 
   private nextSlot(): number {
@@ -298,6 +310,14 @@ export function elementCompound(a: bigint, b: bigint): bigint {
 
 export function elementPostfix(a: bigint): bigint {
   return new Counter(a).incrementSlot();
+}
+
+export function elementRemainder(a: bigint, b: bigint): bigint {
+  return new Counter(a).remainderSlot(b);
+}
+
+export function propertyShiftLeft(a: bigint, n: number): bigint {
+  return new Counter(a).shiftTotal(n);
 }
 
 export function hashMix(seed: bigint, value: bigint): bigint {

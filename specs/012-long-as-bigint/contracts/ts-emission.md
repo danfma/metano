@@ -97,9 +97,9 @@ Helpers come from `metano-runtime` (contracts/runtime-int64.md) and are imported
 | `l / m`, `l % m` | `divInt64(l, m)`, `remInt64(l, m)` |
 | `u / v`, `u % v` | `divUInt64(u, v)`, `remUInt64(u, v)` |
 | `l / 7`, `l % 7` | `l / 7n`, `l % 7n` |
-| `l / -1`, `l / 0` (constant) | `divInt64(l, -1n)`, `divInt64(l, 0n)` |
+| `l / -1`, `l % -1` (constant) | `divInt64(l, -1n)`, `remInt64(l, -1n)` (a constant `0` divisor is C#'s CS0020, so it never reaches the output) |
 | `l /= m;` | `l = divInt64(l, m);` |
-| `nl / nm` (`long?`) | `divInt64(nl, nm)` (the helper returns `null` for a `null` operand) |
+| `nl / nm` (`long?`) | `nl == null \|\| nm == null ? null : divInt64(nl, nm)` (the lifted lowering every operator shares, as for `intDiv`; the helper also returns `null` for a `null` operand, for hand-written callers) |
 | `l << 3`, `l << 70` | `BigInt.asIntN(64, l << 3n)`, `BigInt.asIntN(64, l << 6n)` |
 | `l << n` | `BigInt.asIntN(64, l << BigInt(n & 63))` |
 | `u << n` | `BigInt.asUintN(64, u << BigInt(n & 63))` |

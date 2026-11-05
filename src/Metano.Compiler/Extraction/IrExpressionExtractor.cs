@@ -551,19 +551,17 @@ public sealed partial class IrExpressionExtractor
         }
         else
         {
-            newValue = ReduceOverflow(
-                _semantic.GetOperation(assign),
-                new IrBinaryExpression(
-                    BuildExtensionHelperCall(
-                        setterLowering.Value.HelperContainer,
-                        getterName,
-                        emittedGetterName,
-                        [new IrArgument(receiver)],
-                        typeArguments: null
-                    ),
-                    compoundOp.Value,
-                    rhs
-                )
+            newValue = CompoundValue(
+                assign,
+                BuildExtensionHelperCall(
+                    setterLowering.Value.HelperContainer,
+                    getterName,
+                    emittedGetterName,
+                    [new IrArgument(receiver)],
+                    typeArguments: null
+                ),
+                compoundOp.Value,
+                rhs
             );
         }
 
@@ -1733,19 +1731,22 @@ public sealed partial class IrExpressionExtractor
             ?? TryExtractStringConcatenation(bin)
             ?? ReduceOverflow(
                 _semantic.GetOperation(bin),
-                BuildBinary(op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false)
+                BuildBinary(bin, op, OperandOf(bin.Left), OperandOf(bin.Right), isLifted: false)
             );
     }
 
     /// <summary>
     /// The ordinary lowering of <c>left op right</c> over already extracted
-    /// operands, whose syntax gives their types. A lifted operator reuses it
+    /// operands, whose syntax gives their types; <paramref name="operation"/>
+    /// (the binary expression or compound assignment) gives the operator a
+    /// numeric node carries. A lifted operator reuses it
     /// for its non-null case: <paramref name="isLifted"/> peels
     /// <c>Nullable&lt;T&gt;</c> from the operand types. It stays false for
     /// an unlifted operator such as <c>a == null</c> on a <c>decimal?</c>,
     /// which is not a Decimal method call.
     /// </summary>
     private IrExpression BuildBinary(
+        ExpressionSyntax operation,
         IrBinaryOp op,
         OperatorOperand left,
         OperatorOperand right,
@@ -1787,7 +1788,7 @@ public sealed partial class IrExpressionExtractor
             return BuildTemporalCompareCall(left.Value, right.Value, op, temporalTypeName);
         }
 
-        return new IrBinaryExpression(left.Value, op, right.Value);
+        return NumericBinary(operation, left.Value, op, right.Value, right.Syntax);
     }
 
     private bool AreDecimalOperands(OperatorOperand left, OperatorOperand right, bool isLifted) =>
@@ -3433,14 +3434,7 @@ public sealed partial class IrExpressionExtractor
                 setterLowering.HelperContainer,
                 setterName,
                 emittedSetterName,
-                [
-                    new IrArgument(
-                        ReduceOverflow(
-                            _semantic.GetOperation(assign),
-                            new IrBinaryExpression(currentValue, compoundOp.Value, rhs)
-                        )
-                    ),
-                ],
+                [new IrArgument(CompoundValue(assign, currentValue, compoundOp.Value, rhs))],
                 typeArguments: null
             );
         }
@@ -3466,19 +3460,17 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             recv =>
-                ReduceOverflow(
-                    _semantic.GetOperation(assign),
-                    new IrBinaryExpression(
-                        BuildExtensionHelperCall(
-                            setterLowering.HelperContainer,
-                            getterName,
-                            emittedGetterName,
-                            [new IrArgument(recv)],
-                            typeArguments: null
-                        ),
-                        compoundOp.Value,
-                        rhs
-                    )
+                CompoundValue(
+                    assign,
+                    BuildExtensionHelperCall(
+                        setterLowering.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        [new IrArgument(recv)],
+                        typeArguments: null
+                    ),
+                    compoundOp.Value,
+                    rhs
                 )
         );
     }
@@ -3650,19 +3642,17 @@ public sealed partial class IrExpressionExtractor
             setterName,
             emittedSetterName,
             (recv, idxRefs) =>
-                ReduceOverflow(
-                    _semantic.GetOperation(assign),
-                    new IrBinaryExpression(
-                        BuildExtensionIndexerHelperCall(
-                            getterLowering.HelperContainer,
-                            getterName,
-                            emittedGetterName,
-                            recv,
-                            idxRefs
-                        ),
-                        compoundOp.Value,
-                        rhs
-                    )
+                CompoundValue(
+                    assign,
+                    BuildExtensionIndexerHelperCall(
+                        getterLowering.HelperContainer,
+                        getterName,
+                        emittedGetterName,
+                        recv,
+                        idxRefs
+                    ),
+                    compoundOp.Value,
+                    rhs
                 )
         );
     }

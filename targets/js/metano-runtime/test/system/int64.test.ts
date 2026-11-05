@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "decimal.js";
-import { OverflowException } from "#/system/exceptions/index.ts";
+import { DivideByZeroException, OverflowException } from "#/system/exceptions/index.ts";
 import {
   INT64_MAX,
   INT64_MIN,
@@ -8,6 +8,8 @@ import {
   checkedInt64,
   checkedNarrow,
   checkedUInt64,
+  divInt64,
+  divUInt64,
   int32FromDouble,
   int32FromDoubleChecked,
   int64FromBigInteger,
@@ -16,6 +18,8 @@ import {
   int64FromDoubleChecked,
   int64ToSingle,
   mapNullable,
+  remInt64,
+  remUInt64,
   uint32FromDouble,
   uint32FromDoubleChecked,
   uint64FromBigInteger,
@@ -327,5 +331,44 @@ describe("BigInteger to 64 bits", () => {
   test.each(rows)("%p converts as C# does", (value, int64, uint64, uint64Message) => {
     expectOutcome(() => int64FromBigInteger(value), int64, INT64_RANGE);
     expectOutcome(() => uint64FromBigInteger(value), uint64, uint64Message);
+  });
+});
+
+describe("division and remainder", () => {
+  const DIVIDE_BY_ZERO = "Attempted to divide by zero.";
+
+  function expectDivideByZero(divide: () => unknown): void {
+    expect(divide).toThrow(DivideByZeroException);
+    expect(divide).toThrow(DIVIDE_BY_ZERO);
+  }
+
+  test("truncate toward zero, and the remainder takes the dividend's sign, like -7L / 2L", () => {
+    expect(divInt64(-7n, 2n)).toBe(-3n);
+    expect(remInt64(-7n, 2n)).toBe(-1n);
+    expect(divInt64(7n, -2n)).toBe(-3n);
+    expect(remInt64(7n, -2n)).toBe(1n);
+    expect(divInt64(INT64_MIN, 1n)).toBe(INT64_MIN);
+    expect(remInt64(INT64_MAX, -1n)).toBe(0n);
+    expect(divUInt64(UINT64_MAX, 2n)).toBe(INT64_MAX);
+    expect(remUInt64(UINT64_MAX, 10n)).toBe(5n);
+  });
+
+  test("throw DivideByZeroException on a zero divisor", () => {
+    expectDivideByZero(() => divInt64(1n, 0n));
+    expectDivideByZero(() => remInt64(INT64_MIN, 0n));
+    expectDivideByZero(() => divUInt64(UINT64_MAX, 0n));
+    expectDivideByZero(() => remUInt64(0n, 0n));
+  });
+
+  test("throw OverflowException for long.MinValue by -1, in every context", () => {
+    expectOverflow(() => divInt64(INT64_MIN, -1n), OVERFLOW);
+    expectOverflow(() => remInt64(INT64_MIN, -1n), OVERFLOW);
+  });
+
+  test("give null for a null or undefined operand, like a lifted long? division", () => {
+    expect(divInt64(null, 0n)).toBeNull();
+    expect(remInt64(5n, undefined)).toBeNull();
+    expect(divUInt64(undefined, 2n)).toBeNull();
+    expect(remUInt64(5n, null)).toBeNull();
   });
 });

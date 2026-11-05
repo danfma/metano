@@ -60,11 +60,7 @@ public sealed partial class IrExpressionExtractor
         if (!PropagatesNullThroughLift(operation, op))
             return null;
 
-        return LiftBinary(
-            OperandOf(bin.Left),
-            OperandOf(bin.Right),
-            LiftedOperatorFor(op, operation)
-        );
+        return LiftBinary(OperandOf(bin.Left), OperandOf(bin.Right), LiftedOperatorFor(op, bin));
     }
 
     /// <summary>
@@ -120,20 +116,26 @@ public sealed partial class IrExpressionExtractor
                         assign.Left
                     ),
                     OperandOf(assign.Right),
-                    LiftedOperatorFor(op, operation)
+                    LiftedOperatorFor(op, assign)
                 )
         );
     }
 
     /// <summary>
     /// The lifted form of <paramref name="op"/>, whose non-null result is
-    /// reduced as <paramref name="operation"/> needs (spec 012 FR-025).
+    /// reduced as <paramref name="operation"/> (the binary expression or
+    /// compound assignment) needs (spec 012 FR-025).
     /// </summary>
-    private LiftedOperator LiftedOperatorFor(IrBinaryOp op, IOperation? operation) =>
-        new(
+    private LiftedOperator LiftedOperatorFor(IrBinaryOp op, ExpressionSyntax operation)
+    {
+        var bound = _semantic.GetOperation(operation);
+
+        return new(
             op.IsRelational(),
-            (left, right) => ReduceOverflow(operation, BuildBinary(op, left, right, isLifted: true))
+            (left, right) =>
+                ReduceOverflow(bound, BuildBinary(operation, op, left, right, isLifted: true))
         );
+    }
 
     /// <summary>
     /// Whether <paramref name="operation"/> is a lifted operator that yields

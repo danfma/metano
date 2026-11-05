@@ -5,8 +5,9 @@ namespace Int64Reference;
 /// <summary>
 /// The operands each parameter type is exercised with (spec 012 FR-064): zero,
 /// one and minus one, the 32-bit limits, 2^53 ± 1 (the edge of exact
-/// doubles), the 64-bit limits and 2^63; a nullable parameter also gets
-/// <c>null</c>.
+/// doubles), the 64-bit limits and 2^63; ±7 for truncating division and the
+/// remainder's sign; shift counts of 32, 63, 64, 70 and −64 (an <c>int</c>
+/// count is masked with 63); a nullable parameter also gets <c>null</c>.
 /// </summary>
 internal static class BoundaryOperands
 {
@@ -22,6 +23,8 @@ internal static class BoundaryOperands
         long.MaxValue,
         long.MinValue,
         1L << 62,
+        7L,
+        -7L,
     ];
 
     private static readonly object?[] UInt64Values =
@@ -36,7 +39,19 @@ internal static class BoundaryOperands
         ulong.MaxValue,
     ];
 
-    private static readonly object?[] Int32Values = [0, 1, -1, int.MaxValue, int.MinValue];
+    private static readonly object?[] Int32Values =
+    [
+        0,
+        1,
+        -1,
+        int.MaxValue,
+        int.MinValue,
+        32,
+        63,
+        64,
+        70,
+        -64,
+    ];
 
     private static readonly object?[] UInt32Values =
     [
