@@ -508,7 +508,8 @@ public static class IrClassExtractor
         return new IrOverloadAnchor(
             MethodOverloadGroups.RefOf(anchor.Root, context.Target),
             anchor.Kind,
-            furtherRoots.Count > 0 ? furtherRoots : null
+            furtherRoots.Count > 0 ? furtherRoots : null,
+            anchor.ReimplementsInherited
         );
     }
 

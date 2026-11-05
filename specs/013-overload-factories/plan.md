@@ -224,9 +224,10 @@ dispatcher for it; DECIDED-29's pinned output still fails `tsgo` (TS2416/TS2385)
 An interface root is always *implemented*: a `new` method, an explicit re-implementation
 (`X3 : X, IR`) or an override of an undispatched base virtual that also implements a root anchors
 on the interface member (`Implementation`), and the claim pass emits it `override` when an emitted
-base already declares that fast path for the same parameter types, forwarders included
-(`TsMethodOverloadNames.OverriddenNames`); a base fast path of that name for other parameter types
-is a different overload the anchored name cannot move from, reported `MS0068` reason 1 — naming.md's
+base already implements the root (the base's interface mapping, recorded as
+`IrOverloadAnchor.ReimplementsInherited`), forwarders included (`TsMethodOverloadNames.OverriddenNames`);
+a base fast path of that name the base does not implement the root with is a different overload the
+anchored name cannot move from, reported `MS0068` reason 1 — naming.md's
 "a `new` method is its own root" holds for class groups only. The interface group is one definition,
 `Frontend/Roslyn/InterfaceOverloadGroup`, shared by the method groups, the multiply-constructed
 interfaces, the interface extractor and the explicit-implementation lowering. `base.M(...)` is bound only into an

@@ -508,7 +508,131 @@ public class OverloadNameClaimTests
                     + "rename the member, or rename the root overload's parameter or pin it "
                     + "with [Name] (spec 013 FR-034)."
             );
+        await Assert.That(files["d4.ts"]).Contains("  rX(x: number): number {");
         await Assert.That(files["d4.ts"]).DoesNotContain("override rX(");
+    }
+
+    /// <summary>
+    /// A re-implementation is recognized through the base's interface
+    /// mapping, not the base's signature text: a generic base implementing
+    /// the root (<c>R(T x)</c> as <c>A&lt;int&gt;</c>) and a hidden generic
+    /// method under another type-parameter name are overridden, with no
+    /// <c>MS0068</c>.
+    /// </summary>
+    [Test]
+    public async Task ReimplementationOfAGenericBase_OverridesWithoutMs0068()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public interface IG<T>
+            {
+                int R(T x);
+
+                int R(string s);
+            }
+
+            [Transpile]
+            public class A<T> : IG<T>
+            {
+                public int R(T x) => 1;
+
+                public int R(string s) => 2;
+            }
+
+            [Transpile]
+            public class D : A<int>, IG<int>
+            {
+                public new int R(int x) => 3;
+            }
+
+            [Transpile]
+            public interface IM
+            {
+                int M<T>(T x);
+
+                int M(string s);
+            }
+
+            [Transpile]
+            public class B : IM
+            {
+                public int M<T>(T x) => 1;
+
+                public int M(string s) => 2;
+            }
+
+            [Transpile]
+            public class E : B, IM
+            {
+                public new int M<U>(U x) => 3;
+            }
+            """
+        );
+
+        await Assert
+            .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked))
+            .IsNull();
+        await Assert.That(files["d.ts"]).Contains("  override rX(x: number): number {");
+        await Assert.That(files["e.ts"]).Contains("  override mX<U>(x: U): number {");
+    }
+
+    /// <summary>
+    /// A base fast path for a type of the same simple name in another
+    /// namespace is another overload, whatever the signature texts print:
+    /// <c>MS0068</c>.
+    /// </summary>
+    [Test]
+    public async Task SameSimpleNameInAnotherNamespace_ReportsMs0068()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace N1
+            {
+                [Transpile]
+                public class Foo { }
+            }
+
+            namespace N2
+            {
+                [Transpile]
+                public class Foo { }
+
+                [Transpile]
+                public interface IA
+                {
+                    int R(Foo x);
+
+                    int R(string s);
+                }
+
+                [Transpile]
+                public class A
+                {
+                    public int R(N1.Foo x) => 1;
+
+                    public int R(bool b) => 2;
+                }
+
+                [Transpile]
+                public class D : A, IA
+                {
+                    public int R(Foo x) => 3;
+
+                    public int R(string s) => 4;
+                }
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Count(diagnostic =>
+                    diagnostic.Code == DiagnosticCodes.OverloadFastPathHijacked
+                )
+            )
+            .IsGreaterThanOrEqualTo(1);
+        await Assert.That(files["n2/d.ts"]).DoesNotContain("override rX(");
     }
 
     /// <summary>
