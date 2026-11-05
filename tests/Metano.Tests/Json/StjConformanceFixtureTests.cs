@@ -1032,6 +1032,25 @@ public class StjConformanceFixtureTests
 
                 await Assert.That(schedule.Moment.Offset).IsEqualTo(new TimeSpan(2, 0, 0));
             }),
+            ["OK1"] = ReadOnly(async value =>
+            {
+                var items = (List<int?>)value!;
+
+                await Assert.That(items.Count).IsEqualTo(2);
+
+                await Assert.That(items[0]).IsEqualTo(1);
+
+                await Assert.That(items[1]).IsNull();
+            }),
+            ["OK2"] = ReadOnly(async value =>
+                await Assert.That(((Dictionary<string, int?>)value!)["a"]).IsNull()
+            ),
+            ["OK3"] = ReadOnly(async value =>
+                await Assert.That(((List<string>)value!).SequenceEqual(["a", null!])).IsTrue()
+            ),
+            ["OK4"] = ReadOnly(async value =>
+                await Assert.That(((HolderChar)value!).C).IsEqualTo('a')
+            ),
         };
 
     private static async Task AssertDecimal(object? value, string text) =>

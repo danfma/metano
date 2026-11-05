@@ -45,7 +45,11 @@ export class JsonContext extends SerializerContext {
         {
           ts: "id",
           json: "id",
-          type: { kind: "branded", create: IssueId.create },
+          type: {
+            kind: "branded",
+            create: IssueId.create,
+            typeName: "SampleIssueTracker.Issues.Domain.IssueId",
+          },
         },
         {
           ts: "title",
@@ -60,24 +64,40 @@ export class JsonContext extends SerializerContext {
         {
           ts: "type",
           json: "type",
-          type: { kind: "enum", values: IssueType },
+          type: {
+            kind: "enum",
+            values: IssueType,
+            typeName: "SampleIssueTracker.Issues.Domain.IssueType",
+          },
         },
         {
           ts: "priority",
           json: "priority",
-          type: { kind: "enum", values: IssuePriority },
+          type: {
+            kind: "enum",
+            values: IssuePriority,
+            typeName: "SampleIssueTracker.Issues.Domain.IssuePriority",
+          },
         },
         {
           ts: "status",
           json: "status",
-          type: { kind: "enum", values: IssueStatus },
+          type: {
+            kind: "enum",
+            values: IssueStatus,
+            typeName: "SampleIssueTracker.Issues.Domain.IssueStatus",
+          },
         },
         {
           ts: "assigneeId",
           json: "assigneeId",
           type: {
             kind: "nullable",
-            inner: { kind: "branded", create: UserId.from },
+            inner: {
+              kind: "branded",
+              create: UserId.from,
+              typeName: "SampleIssueTracker.SharedKernel.UserId",
+            },
           },
           optional: true,
         },
@@ -111,7 +131,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "estimatedHours",
           json: "estimatedHours",
-          type: { kind: "decimal", type: Decimal },
+          type: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
         },
         {
           ts: "comments",
@@ -142,7 +162,11 @@ export class JsonContext extends SerializerContext {
         {
           ts: "authorId",
           json: "authorId",
-          type: { kind: "branded", create: UserId.from },
+          type: {
+            kind: "branded",
+            create: UserId.from,
+            typeName: "SampleIssueTracker.SharedKernel.UserId",
+          },
         },
         {
           ts: "message",
@@ -161,7 +185,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "isSystem",
           json: "isSystem",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", typeName: "System.Boolean" },
         },
       ],
     }));

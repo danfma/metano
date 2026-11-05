@@ -20,12 +20,12 @@ export class SnakeCaseJsonContext extends SerializerContext {
         {
           ts: "count",
           json: "count",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
         {
           ts: "ratio",
           json: "ratio",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "userName",

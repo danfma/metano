@@ -36,7 +36,7 @@ export class OutOfOrderJsonContext extends SerializerContext {
         {
           ts: "seconds",
           json: "Seconds",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
       polymorphism: {

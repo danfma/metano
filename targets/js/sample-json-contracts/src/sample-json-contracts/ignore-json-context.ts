@@ -28,7 +28,7 @@ export class IgnoreJsonContext extends SerializerContext {
         {
           ts: "v",
           json: "V",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -56,7 +56,7 @@ export class IgnoreJsonContext extends SerializerContext {
         {
           ts: "v",
           json: "V",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -82,7 +82,7 @@ export class IgnoreJsonContext extends SerializerContext {
         {
           ts: "w",
           json: "W",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));
@@ -97,7 +97,7 @@ export class IgnoreJsonContext extends SerializerContext {
         {
           ts: "w",
           json: "W",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     }));

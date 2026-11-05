@@ -201,7 +201,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "area",
           json: "Area",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
       polymorphism: {
@@ -230,7 +230,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     });
@@ -244,12 +244,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "y",
           json: "Y",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "z",
           json: "Z",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     });
@@ -263,12 +263,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "w",
           json: "W",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "h",
           json: "H",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     });
@@ -282,7 +282,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "bark",
           json: "Bark",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -296,7 +296,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "bark",
           json: "Bark",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -310,7 +310,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "n",
           json: "N",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -339,12 +339,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "side",
           json: "Side",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "area",
           json: "Area",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     });
@@ -358,12 +358,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "radius",
           json: "Radius",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
         {
           ts: "area",
           json: "Area",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
     });

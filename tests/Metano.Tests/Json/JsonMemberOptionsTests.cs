@@ -175,7 +175,9 @@ public class JsonMemberOptionsTests
 
         await Assert
             .That(PropertyTypeOf(ts, "b"))
-            .IsEqualTo("""{ kind: "array", element: { kind: "primitive" } }""");
+            .IsEqualTo(
+                """{ kind: "array", element: { kind: "primitive", numberType: "System.Byte" } }"""
+            );
 
         await Assert
             .That(PropertyTypeOf(ts, "c"))

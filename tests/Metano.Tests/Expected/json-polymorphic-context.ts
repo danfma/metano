@@ -134,7 +134,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "v",
           json: "V",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -163,7 +163,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "value",
           json: "Value",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -189,7 +189,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "a",
           json: "A",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -219,7 +219,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "v",
           json: "V",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
       polymorphism: {
@@ -246,7 +246,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "seconds",
           json: "Seconds",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
       polymorphism: {
@@ -275,7 +275,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -290,7 +290,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "y",
           json: "Y",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -305,7 +305,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "w",
           json: "W",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -320,7 +320,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "extra",
           json: "Extra",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -337,7 +337,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "m",
           json: "M",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });
@@ -352,7 +352,7 @@ export class JsonContext extends SerializerContext {
         {
           ts: "l",
           json: "L",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
     });

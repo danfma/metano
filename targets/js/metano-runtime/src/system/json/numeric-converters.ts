@@ -42,11 +42,15 @@ const passthroughConverter: ValueConverter = {
   deserialize: (value: unknown) => value,
 };
 
+/** The CLR name of a C# `char`, which reads as a one-code-unit `string`. */
+const CHAR_TYPE_NAME = "System.Char";
+
 /**
  * A `primitive`: values pass through both ways, except that a JSON string
  * for a numeric `numberType` is read by System.Text.Json's grammar when the
  * context reads numbers from strings, and a rejected one throws its
- * conversion error. Writes are unaffected (FR-048 item 5).
+ * conversion error; a `char` reads a one-code-unit `string` only (#471).
+ * Writes are unaffected (FR-048 item 5).
  */
 export function primitiveConverterOf(
   descriptor: PrimitiveDescriptor,
@@ -54,6 +58,10 @@ export function primitiveConverterOf(
   errorTypeName: ErrorTypeName = declaredTypeName,
 ): ValueConverter {
   const { numberType } = descriptor;
+
+  if (descriptor.typeName === CHAR_TYPE_NAME) {
+    return charConverterOf(errorTypeName);
+  }
 
   if (numberType === undefined || !readsNumbersFromStrings(readOptions)) {
     return passthroughConverter;
@@ -132,7 +140,8 @@ export function decimalConverterOf(
       return isDecimalLike(value) ? decimalJsonOf(value) : value;
     },
     deserialize: (value: unknown) => {
-      if (value == null) return null;
+      // A value type: JSON `null` throws, as System.Text.Json throws (#471).
+      if (value == null) throw notADecimal();
 
       if (typeof value === "number") return decimalOfNumber(value);
 
@@ -290,6 +299,26 @@ function roundsAwayDigits(value: number): boolean {
 
 function readsNumbersFromStrings(readOptions: JsonReadOptions | undefined): boolean {
   return readOptions?.numberHandling === "allowReadingFromString";
+}
+
+/**
+ * A `char` (#471, measured on .NET 10): exactly one UTF-16 code unit of a
+ * JSON string — `"ab"` and a surrogate pair are rejected, as are the other
+ * JSON kinds — naming the type of the position in the conversion error.
+ */
+function charConverterOf(errorTypeName: ErrorTypeName): ValueConverter {
+  const notAChar = () => cannotConvert(CHAR_TYPE_NAME, errorTypeName);
+
+  return {
+    serialize: passthroughConverter.serialize,
+    deserialize: (value: unknown) => {
+      if (typeof value !== "string" || value.length !== 1) {
+        throw notAChar();
+      }
+
+      return value;
+    },
+  };
 }
 
 function cannotConvert(clrName: string, errorTypeName: ErrorTypeName): JsonException {

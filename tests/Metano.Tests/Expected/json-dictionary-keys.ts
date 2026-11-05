@@ -95,8 +95,8 @@ export class JsonContext extends SerializerContext {
             key: {
               kind: "numericEnum",
               values: Level,
-              numberType: "System.Int32",
               typeName: "TestApp.Level",
+              numberType: "System.Int32",
             },
             value: { kind: "primitive" },
           },
@@ -109,8 +109,8 @@ export class JsonContext extends SerializerContext {
             key: {
               kind: "numericEnum",
               values: Shade,
-              numberType: "System.Byte",
               typeName: "TestApp.Shade",
+              numberType: "System.Byte",
             },
             value: { kind: "primitive" },
           },
@@ -147,7 +147,7 @@ export class JsonContext extends SerializerContext {
           json: "ByPrice",
           type: {
             kind: "map",
-            key: { kind: "decimal", type: Decimal },
+            key: { kind: "decimal", type: Decimal, typeName: "System.Decimal" },
             value: { kind: "primitive" },
           },
         },
@@ -165,7 +165,7 @@ export class JsonContext extends SerializerContext {
           json: "ByTag",
           type: {
             kind: "map",
-            key: { kind: "branded", create: Tag.create },
+            key: { kind: "branded", create: Tag.create, typeName: "TestApp.Tag" },
             value: { kind: "primitive" },
           },
         },
