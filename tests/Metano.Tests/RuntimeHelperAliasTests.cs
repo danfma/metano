@@ -412,7 +412,7 @@ public class RuntimeHelperAliasTests
     /// <summary>
     /// A user member claiming the unaliasable runtime type: the module would
     /// emit a duplicate identifier with no alias path to repair it, so the
-    /// compiler reports MS0070 pointing at [Name].
+    /// compiler reports MS0071 pointing at [Name].
     /// </summary>
     [Test]
     public async Task UnaliasableHelperCollision_ReportsMs0070()
