@@ -2,8 +2,10 @@
 export class Account {
   name: string = "";
 
+  /** @internal */
   version: number = 0;
 
+  /** @internal */
   id: string = "";
 
   hits: number = 0;
