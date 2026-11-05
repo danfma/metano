@@ -16,21 +16,33 @@ interface ConformanceCase {
   sides?: ("stj" | "ts")[];           // default both
   expectedClass?: string;             // read / roundtrip rows only
   json?: string;                      // exact text (write: produced; read: input)
-  stjJson?: string;                   // divergent rows: what STJ writes when it differs from `json`
-  error?: { class: "JsonException" | "NotSupportedException"; message: string };
-  divergence?: string;                // id of the entry in spec.md "Documented divergences"
+  stjJson?: string;                   // rows with a divergence note: what STJ writes instead of `json`
+  crossReadable?: boolean;            // required with stjJson: each side reads the other's text
+  error?: {
+    class: "JsonException" | "NotSupportedException";
+    message?: string;                 // both sides, normalized (below)
+    stjMessage?: string;              // instead of `message` when the sides' texts differ
+    tsMessage?: string;
+    stjPath?: string;                 // STJ's JSON path, where its message names only the declaring type
+  };
+  divergence?: string;                // the entry in spec.md "Documented divergences"
 }
 ```
 
-- Each side builds values through a **per-id builder** (`StjCaseBuilders` in C#, `builders.ts` in
-  TS). A manifest id with no builder on a side it lists fails that side's test; a builder with no
-  manifest id fails too.
+- Each side builds values through a **per-id builder** (`BuildBuilders` in C#, `builders.ts` in
+  TS). Every row but a read error needs one: a row that needs a builder and has none fails that
+  side's test, and a builder with no manifest id fails too.
 - **write**: build → serialize → compare to `json` byte-for-byte (STJ side: `stjJson ?? json`).
 - **read**: `json` → deserialize → assert `expectedClass` (and field values via the builder's
   expected value); `instanceof` is asserted only for read and roundtrip rows.
 - **roundtrip**: write, then read the written text.
-- **error**: the operation of `direction` throws `error.class` and the message starts with
-  `error.message`.
+- **error**: the operation of `direction` throws `error.class`, and its whole message equals
+  `stjMessage ?? message` (STJ) or `tsMessage ?? message` (TS) after normalization: STJ's
+  `Path: … | LineNumber: … | BytePositionInLine: …` suffix (DECIDED-5) and the sample namespace
+  `SampleJsonContracts.` are removed on both sides. `stjPath`, when present, must equal the path
+  STJ reported.
+- **crossReadable**: the TS side also reads `stjJson`, checks the value and writes `json` back; the
+  STJ side reads `json`. `false` marks a divergence that breaks interop (V11, V12, V14).
 - The .NET side checks every row whose `sides` include `stj`; the Bun side every row whose `sides`
   include `ts`.
 
@@ -62,14 +74,16 @@ interface ConformanceCase {
 | W21 | `feed` (closed generic via property, FR-033) | `Feed(Page([EpisodeSummary("a","b")]))` | `{"Latest":{"Items":[{"Id":"a","Title":"b"}]}}` (S8) | roundtrip | both |
 | W22 | `listClip` | JSON `null` | `null` | roundtrip | both (FR-037) |
 | W22b | `clip` | JSON `null` | `null` | roundtrip | both (FR-037, breaking: was an error on the TS side) |
-| W23 | `iEnumerableClip` | a `Set` / generator of clips (TS) | `[{"kind":"silence","Seconds":2}]` | write | both (FR-038) |
+| W23 | `iEnumerableClip` | a generator of clips (TS) / `Enumerable.Repeat` (STJ) | `[{"kind":"silence","Seconds":2}]` (S8) | write | both (FR-038) |
 | W24 | `shape` (interface base, FR-018) | `Sq(2)` | `{"$type":"sq","Side":2}` | roundtrip | both |
 | W25 | `shapeB` (interface base, `FallBackToBaseType`) | `OtherB(3)` (unregistered) | `{"Area":3}` | write | both |
 | W26 | `plainShape` (`[PlainObject]` variants, FR-019) | `Point(1)` / `{ x: 1 }` | `{"$type":"point","X":1}` | roundtrip (TS reads a plain object) | both |
 | W27 | `plainShape` | `Point3(1,2,3)` / `{ x: 1, y: 2, z: 3 }` | `{"$type":"point3","Y":2,"Z":3,"X":1}` (confirmed in S8) | roundtrip | both (selects `Point3` by `testOrder`) |
 | W28a | `mixedBase` (class and `[PlainObject]` variants on one base) | `MixedClass(2)` | `{"$type":"cls","W":2}` (S8) | roundtrip | both |
 | W28b | `mixedBase` | the plain object `{ x: 5 }` (TS) / `MixedPoint(5)` (STJ) | `{"$type":"pt","X":5}` (S8) | roundtrip | both |
-| V1… | one row per value-root kind: `string`, `int32`, `double`, `nullableInt32`, `guid`, `decimal`, `dateTime`, `dateOnly`, `timeOnly`, `dateTimeOffset`, `timeSpan`, numeric enum, `hashSetString`, `dictionaryStringEpisodeSummary`, `dictionaryInt32String` | fixed values | shipped as rows V1–V19 in S8 (the integer-key dictionary goes through an `IntMapHolder` property: a non-string-key root is `MS0035`) | roundtrip | both, or `divergent` with `stjJson` (spec.md Documented divergences) |
+| W29 | `shape` | `Rect(1, 2)` / `{ w: 1, h: 2 }` | `{"$type":"rect","W":1,"H":2}` (S8) | roundtrip | both |
+| W30 | `iShapeB` | `SqB(4, 2)` (registered) | `{"$type":"sqb","Area":4,"Side":2}` (S8) | roundtrip | both |
+| V1… | one row per value-root kind: `string`, `int32`, `double`, `nullableInt32`, `guid`, `decimal`, `dateTime`, `dateOnly`, `timeOnly`, `dateTimeOffset`, `timeSpan`, numeric enum, `hashSetString`, `dictionaryStringEpisodeSummary`, `dictionaryInt32String` | fixed values | shipped as rows V1–V19 in S8 (the integer-key dictionary goes through an `IntMapHolder` property: a non-string-key root is `MS0035`) | roundtrip | both, or with a `divergence` note and `stjJson` (spec.md Documented divergences) |
 
 Web-context cases (`[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]`, FR-048), both sides
 unless noted, all measured in research.md R8:
@@ -82,7 +96,7 @@ unless noted, all measured in research.md R8:
 | WEB4 | `softNums` | `{"n":"+5"}`, `{"n":"007"}`, `{"n":"-5"}` | `5`, `7`, `-5` | read |
 | WEB5 | `softNums` | `{"x":"1e2"}`, `{"x":"+1.5"}`, `{"x":"NaN"}`, `{"x":"Infinity"}`, `{"x":"-Infinity"}` | `100`, `1.5`, `NaN`, `Infinity`, `-Infinity` | read |
 | WEB6 | `int32` | `"5"` | `5` | read |
-| WEB7 | `nums` | `Nums(n: 5, m: 7, d: 1.10, x: 2.5)` | `{"n":5,"m":7,"d":1.10,"x":2.5,"l":null,"map":null,"c":0}`; `divergent` — Metano writes `"d":1.1` (the decimal scale, DECIDED-23 f) | write |
+| WEB7 | `nums` | `Nums(n: 5, m: 7, d: 1.10, x: 2.5)` | `{"n":5,"m":7,"d":1.10,"x":2.5,"l":null,"map":null,"c":0}`; divergence note — Metano writes `"d":1.1` (the decimal scale, DECIDED-23 f) | write |
 
 Read-only cases (input → value), direction `read`, both sides:
 `{"Path":"a","kind":"image","Seconds":1}` through the `AllowOutOfOrderMetadataProperties` context →
@@ -95,7 +109,7 @@ selects the variant).
 
 ## Error cases
 
-| # | Spec | Input | Direction | Exception | Message prefix |
+| # | Spec | Input | Direction | Exception | Message (normalized) |
 |---|---|---|---|---|---|
 | E1 | `clip` | `{"kind":"video","Seconds":2}` | read | `JsonException` | `Read unrecognized type discriminator id 'video'.` |
 | E2 | `clip` | `{"kind":"Image","Seconds":2}` | read | `JsonException` | `Read unrecognized type discriminator id 'Image'.` |
@@ -109,32 +123,34 @@ selects the variant).
 | E9 | `nBase` | `NLeaf(1,2,3)` (registered only on `NMid`) | write | `NotSupportedException` | `Runtime type 'NLeaf' is not supported by polymorphic type 'NBase'.` |
 | E10 | `int32` | JSON `null` | read | `JsonException` | `The JSON value could not be converted to System.Int32.` (FR-037, measured in S3b, DECIDED-26 d) |
 | E11 | `sPoint` (`record struct`) | JSON `null` | read | `JsonException` | `The JSON value could not be converted to <Namespace>.SPoint.` (FR-037; the full name, DECIDED-26 d) |
-| E12 | `groupClip` | a `Group` that contains itself | write | `JsonException` | `A possible object cycle was detected.` (FR-016) |
+| E12 | `groupClip` | a `Group` that contains itself | write | `JsonException` | `A possible object cycle was detected. This can either be due to a cycle or …` (the whole STJ sentence; FR-016) |
 | E13 | `shape` | `{"Side":2}` | read | `NotSupportedException` | `The JSON payload for polymorphic interface or abstract type 'IShape' must specify a type discriminator.` |
 | E14 | `shape` | `Other()` (unregistered implementation) | write | `NotSupportedException` | `Runtime type 'Other' is not supported by polymorphic type 'IShape'.` |
 | E15 | `plainShape` | a plain object matching no guard (TS only) | write | `NotSupportedException` | `Runtime type 'Object' is not supported by polymorphic type 'Shape'.` (ts only: STJ has no shape-less value) |
 | E16 | web `clip` | `{"Kind":"image","path":"a","seconds":1}` | read | `NotSupportedException` | `The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator.` |
-| E17 | web `softNums` | `{"n":"5.0"}`, `{"n":" 5"}`, `{"n":"5 "}`, `{"n":""}`, `{"n":"1e2"}`, `{"n":"0x10"}` | read | `JsonException` | `The JSON value could not be converted to System.Int32.` |
-| E18 | web `softNums` | `{"x":"nan"}`, `{"x":" 1.5"}`, `{"x":"0x1"}` | read | `JsonException` | `The JSON value could not be converted to ` — STJ names the declaring type `SoftNums`, the runtime `System.Nullable\`1[System.Double]` (measured, pinned in S8; DECIDED-23 c) |
-| E19 | web `softNums` | `{"c":"1"}` (enum) / `{"m":"null"}` (`int?`) | read | `JsonException` | `The JSON value could not be converted to Color.` / `… System.Nullable`1[System.Int32].` |
+| E17 | web `softNums` | `{"n":"5.0"}`, `{"n":" 5"}`, `{"n":"5 "}`, `{"n":""}`, `{"n":"1e2"}`, `{"n":"0x10"}` | read | `JsonException` | STJ: `The JSON value could not be converted to SoftNums.` (`stjPath` `$.n`); TS: `… System.Nullable\`1[System.Int32].` (DECIDED-23 c) |
+| E18 | web `softNums` | `{"x":"nan"}`, `{"x":" 1.5"}`, `{"x":"0x1"}` | read | `JsonException` | STJ: `… converted to SoftNums.` (`stjPath` `$.x`); TS: `… System.Nullable\`1[System.Double].` (DECIDED-23 c) |
+| E19a | web `softNums` | `{"c":"1"}` (numeric enum from a string) | read | `JsonException` | STJ: `… converted to SoftNums.` (`stjPath` `$.c`); TS: `Invalid numeric enum value: "1". Expected one of: 0, 1, 2` (spec.md Documented divergences) |
+| E19c | web `softNums` | `{"n":"null"}` (`int?`) | read | `JsonException` | STJ: `… converted to SoftNums.` (`stjPath` `$.n`); TS: `… System.Nullable\`1[System.Int32].` (DECIDED-23 c) |
 | E20 | web `iBase` | `{"$type":"1","x":5}` | read | `JsonException` | `Read unrecognized type discriminator id '1'.` |
 
 Slice S8 shipped these rows plus: W11c/W22b/R7/R8, the tag-not-first error E22, the
 depth-limit error E23 (33 nested groups through `clip`: the contract itself visits the 65th
-container, pinning DECIDED-15's reader message), the empty-text error E24, the exact-decimal
+container, pinning DECIDED-15's reader message) and its passing neighbor R9 (32 nested groups,
+the innermost with no members: exactly 64 containers read on both sides), the empty-text error E24, the exact-decimal
 reads D2a/D2b and the past-MaxValue error D4, the abstract-entry read error E25 (FR-017,
 DECIDED-12), the null-root rows N1–N10 (FR-037), the naming-policy rows NAM1/NAM2 and the member
-options rows M1–M5. Message rows compare prefixes: STJ appends the `Path` suffix (DECIDED-5) and
-names namespaced types in several messages (measured in S8: the missing-tag, runtime-type,
-abstract-type and nested-group messages carry `SampleJsonContracts.`).
+options rows M1–M5. Message rows compare the whole normalized message: STJ appends the `Path`
+suffix (DECIDED-5) and names namespaced types in several messages (measured in S8: the
+missing-tag, runtime-type and abstract-type messages carry `SampleJsonContracts.`).
 
 Type names inside TS messages are the runtime class names (`constructor.name`), which equal the C#
 simple names unless a `[Name]` override renames the class; fixtures use no overrides. An
 unregistered runtime type has no C# metadata on the TS side, so carrying C# names in the descriptor
 would not make E8 exact anyway.
 
-The TS message is compared as a prefix because STJ appends `Path: … | LineNumber: … |
-BytePositionInLine: …` (DECIDED-5).
+The TS message is compared whole; only STJ appends `Path: … | LineNumber: … |
+BytePositionInLine: …` (DECIDED-5), which the normalization removes.
 
 ## Not covered
 

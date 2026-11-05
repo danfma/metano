@@ -64,6 +64,8 @@ export class StudioJsonContext extends SerializerContext {
 
   private _dictionaryStringClip?: ValueSpec<Map<string, Clip> | null>;
 
+  private _iEnumerableClip?: ValueSpec<Iterable<Clip> | null>;
+
   private _group?: TypeSpec<Group>;
 
   private _hBase?: TypeSpec<HBase>;
@@ -284,6 +286,18 @@ export class StudioJsonContext extends SerializerContext {
         kind: "map",
         key: { kind: "primitive" },
         value: {
+          kind: "ref",
+          spec: () => this.clip,
+        },
+      },
+    }));
+  }
+
+  get iEnumerableClip(): ValueSpec<Iterable<Clip> | null> {
+    return (this._iEnumerableClip ??= this.createValueSpec({
+      descriptor: {
+        kind: "array",
+        element: {
           kind: "ref",
           spec: () => this.clip,
         },

@@ -176,6 +176,13 @@
     "json": "null"
   },
   {
+    "id": "W23",
+    "context": "StudioJsonContext",
+    "getter": "iEnumerableClip",
+    "direction": "write",
+    "json": "[{\"kind\":\"silence\",\"Seconds\":2}]"
+  },
+  {
     "id": "W24",
     "context": "StudioJsonContext",
     "getter": "iShape",
@@ -221,6 +228,22 @@
     "direction": "roundtrip",
     "expectedClass": "MixedPoint",
     "json": "{\"$type\":\"pt\",\"X\":5}"
+  },
+  {
+    "id": "W29",
+    "context": "StudioJsonContext",
+    "getter": "shape",
+    "direction": "roundtrip",
+    "expectedClass": "Rect",
+    "json": "{\"$type\":\"rect\",\"W\":1,\"H\":2}"
+  },
+  {
+    "id": "W30",
+    "context": "StudioJsonContext",
+    "getter": "iShapeB",
+    "direction": "roundtrip",
+    "expectedClass": "SqB",
+    "json": "{\"$type\":\"sqb\",\"Area\":4,\"Side\":2}"
   },
   {
     "id": "R1",
@@ -370,7 +393,8 @@
     "direction": "roundtrip",
     "json": "\"2026-01-02T03:04:05+00:00[UTC]\"",
     "stjJson": "\"2026-01-02T03:04:05+00:00\"",
-    "divergence": "DateTimeOffset offset text (DECIDED-16)"
+    "crossReadable": false,
+    "divergence": "DateTimeOffset text, not mutually readable: STJ writes the offset only and rejects '[UTC]', Temporal.ZonedDateTime writes and requires the zone (DECIDED-16)"
   },
   {
     "id": "V12",
@@ -379,7 +403,8 @@
     "direction": "roundtrip",
     "json": "\"PT1H2M3S\"",
     "stjJson": "\"01:02:03\"",
-    "divergence": "TimeSpan wire text (DECIDED-16)"
+    "crossReadable": false,
+    "divergence": "TimeSpan text, not mutually readable: STJ writes and reads '01:02:03', Temporal.Duration 'PT1H2M3S' (DECIDED-16)"
   },
   {
     "id": "V13",
@@ -395,7 +420,8 @@
     "direction": "roundtrip",
     "json": "\"Sweet\"",
     "stjJson": "0",
-    "divergence": "StringEnum wire type (baseline mapping)"
+    "crossReadable": false,
+    "divergence": "StringEnum wire type (baseline mapping), not mutually readable: STJ writes the number, Metano the name"
   },
   {
     "id": "V15",
@@ -418,7 +444,8 @@
     "direction": "roundtrip",
     "json": "{\"ByKey\":{\"1\":\"a\",\"5\":\"e\"}}",
     "stjJson": "{\"ByKey\":{\"5\":\"e\",\"1\":\"a\"}}",
-    "divergence": "Dictionary<int,…> key order"
+    "crossReadable": true,
+    "divergence": "Dictionary<int, …> key order; mutually readable"
   },
   {
     "id": "V18",
@@ -511,7 +538,7 @@
     "json": "null",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to SampleJsonContracts.Level."
+      "message": "The JSON value could not be converted to Level."
     }
   },
   {
@@ -536,7 +563,7 @@
     "json": "null",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to SampleJsonContracts.Title."
+      "message": "The JSON value could not be converted to Title."
     }
   },
   {
@@ -569,9 +596,9 @@
     "json": "{\"Seconds\":2}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type '"
+      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator."
     },
-    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E4",
@@ -581,9 +608,9 @@
     "json": "{\"Path\":\"a\",\"kind\":\"image\",\"Seconds\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type '"
+      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator."
     },
-    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E5",
@@ -659,9 +686,9 @@
     "json": "{\"k\":\"zzz\",\"V\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type '"
+      "message": "The JSON payload for polymorphic interface or abstract type 'IgnAbs' must specify a type discriminator."
     },
-    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E8",
@@ -670,9 +697,9 @@
     "direction": "write",
     "error": {
       "class": "NotSupportedException",
-      "message": "Runtime type '"
+      "message": "Runtime type 'UFailX' is not supported by polymorphic type 'UFail'."
     },
-    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E9",
@@ -681,9 +708,9 @@
     "direction": "write",
     "error": {
       "class": "NotSupportedException",
-      "message": "Runtime type '"
+      "message": "Runtime type 'NLeaf' is not supported by polymorphic type 'NBase'."
     },
-    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E10",
@@ -704,7 +731,7 @@
     "json": "null",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to SampleJsonContracts.SPoint."
+      "message": "The JSON value could not be converted to SPoint."
     }
   },
   {
@@ -714,7 +741,7 @@
     "direction": "write",
     "error": {
       "class": "JsonException",
-      "message": "A possible object cycle was detected."
+      "message": "A possible object cycle was detected. This can either be due to a cycle or if the object depth is larger than the maximum allowed depth of 64. Consider using ReferenceHandler.Preserve on JsonSerializerOptions to support cycles."
     }
   },
   {
@@ -725,9 +752,9 @@
     "json": "{\"Side\":2}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type '"
+      "message": "The JSON payload for polymorphic interface or abstract type 'IShape' must specify a type discriminator."
     },
-    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E14",
@@ -736,9 +763,9 @@
     "direction": "write",
     "error": {
       "class": "NotSupportedException",
-      "message": "Runtime type '"
+      "message": "Runtime type 'Other' is not supported by polymorphic type 'IShape'."
     },
-    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E15",
@@ -750,9 +777,9 @@
     ],
     "error": {
       "class": "NotSupportedException",
-      "message": "Runtime type '"
+      "message": "Runtime type 'Object' is not supported by polymorphic type 'Shape'."
     },
-    "divergence": "STJ names the runtime type with its namespace (DECIDED-23 g)"
+    "divergence": "ts only: STJ has no shape-less value; Metano names a plain object 'Object' (FR-019)"
   },
   {
     "id": "E16",
@@ -762,9 +789,9 @@
     "json": "{\"Kind\":\"image\",\"path\":\"a\",\"seconds\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "The JSON payload for polymorphic interface or abstract type '"
+      "message": "The JSON payload for polymorphic interface or abstract type 'Clip' must specify a type discriminator."
     },
-    "divergence": "STJ names the type with its namespace in this message (DECIDED-23 g)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   },
   {
     "id": "E17a",
@@ -774,9 +801,11 @@
     "json": "{\"n\":\"5.0\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
+      "stjPath": "$.n"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E17b",
@@ -786,9 +815,11 @@
     "json": "{\"n\":\" 5\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
+      "stjPath": "$.n"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E17c",
@@ -798,9 +829,11 @@
     "json": "{\"n\":\"5 \"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
+      "stjPath": "$.n"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E17d",
@@ -810,9 +843,11 @@
     "json": "{\"n\":\"\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
+      "stjPath": "$.n"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E17e",
@@ -822,9 +857,11 @@
     "json": "{\"n\":\"1e2\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
+      "stjPath": "$.n"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E17f",
@@ -834,9 +871,11 @@
     "json": "{\"n\":\"0x10\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
+      "stjPath": "$.n"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E18a",
@@ -846,9 +885,11 @@
     "json": "{\"x\":\"nan\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Double].",
+      "stjPath": "$.x"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E18b",
@@ -858,9 +899,11 @@
     "json": "{\"x\":\" 1.5\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Double].",
+      "stjPath": "$.x"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E18c",
@@ -870,39 +913,25 @@
     "json": "{\"x\":\"0x1\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Double].",
+      "stjPath": "$.x"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E19a",
     "context": "WebJsonContext",
     "getter": "softNums",
     "direction": "read",
-    "sides": [
-      "stj"
-    ],
     "json": "{\"c\":\"1\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to SampleJsonContracts.SoftNums."
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "Invalid numeric enum value: \"1\". Expected one of: 0, 1, 2",
+      "stjPath": "$.c"
     },
-    "divergence": "Unknown numeric enum value error text (DECIDED-20 c)"
-  },
-  {
-    "id": "E19b",
-    "context": "WebJsonContext",
-    "getter": "softNums",
-    "direction": "read",
-    "sides": [
-      "ts"
-    ],
-    "json": "{\"c\":\"1\"}",
-    "error": {
-      "class": "JsonException",
-      "message": "Invalid numeric enum value: \"1\"."
-    },
-    "divergence": "Unknown numeric enum value error text (DECIDED-20 c)"
+    "divergence": "Numeric enum read from a JSON string (Web): both sides reject it; STJ names the declaring type (stjPath pins the member), Metano the enum's values"
   },
   {
     "id": "E19c",
@@ -912,9 +941,11 @@
     "json": "{\"n\":\"null\"}",
     "error": {
       "class": "JsonException",
-      "message": "The JSON value could not be converted to "
+      "stjMessage": "The JSON value could not be converted to SoftNums.",
+      "tsMessage": "The JSON value could not be converted to System.Nullable`1[System.Int32].",
+      "stjPath": "$.n"
     },
-    "divergence": "STJ names the declaring type for a constructor-bound property, the runtime the numeric type (DECIDED-23 c)"
+    "divergence": "STJ names the declaring type of a constructor-bound property (stjPath pins the member), the runtime the numeric type (DECIDED-23 c)"
   },
   {
     "id": "E20",
@@ -948,6 +979,14 @@
       "class": "JsonException",
       "message": "The maximum configured depth of 64 has been exceeded. Cannot read next JSON object."
     }
+  },
+  {
+    "id": "R9",
+    "context": "StudioJsonContext",
+    "getter": "clip",
+    "direction": "read",
+    "expectedClass": "Group",
+    "json": "{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[{\"kind\":\"group\",\"Name\":\"g\",\"Members\":[],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}],\"Seconds\":0}"
   },
   {
     "id": "E24",
@@ -1100,7 +1139,8 @@
     "direction": "write",
     "json": "{\"n\":5,\"m\":7,\"d\":1.1,\"x\":2.5,\"l\":null,\"map\":null,\"c\":0}",
     "stjJson": "{\"n\":5,\"m\":7,\"d\":1.10,\"x\":2.5,\"l\":null,\"map\":null,\"c\":0}",
-    "divergence": "Decimal trailing zeros (DECIDED-23 f)"
+    "crossReadable": true,
+    "divergence": "Decimal trailing zeros (DECIDED-23 f); mutually readable"
   },
   {
     "id": "NAM1",
@@ -1187,8 +1227,8 @@
     "json": "{\"$type\":\"abs\",\"A\":1}",
     "error": {
       "class": "NotSupportedException",
-      "message": "Deserialization of interface or abstract types is not supported. Type '"
+      "message": "Deserialization of interface or abstract types is not supported. Type 'UNearAbs'."
     },
-    "divergence": "STJ names the abstract type with its namespace (DECIDED-23 g class)"
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
   }
 ]

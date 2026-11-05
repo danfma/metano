@@ -37,7 +37,7 @@
     }
   },
   "files": {
-    "includes": ["targets/js/*/src/**"]
+    "includes": ["targets/js/*/src/**", "targets/js/sample-json-contracts/test/**/*.ts"]
   },
   "overrides": [
     {

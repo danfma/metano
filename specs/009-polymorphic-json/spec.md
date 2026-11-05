@@ -158,7 +158,7 @@ compile, so the whole context file is unusable.
 
 **Independent Test**: Transpile a context with one root of each shape; `tsgo --strict` reports zero
 errors; each getter's name matches the STJ property name camel-cased; one manifest case per
-value-root kind runs on both sides (or is marked divergent, see Documented divergences).
+value-root kind runs on both sides (or carries a `divergence` note, see Documented divergences).
 
 **Acceptance Scenarios**:
 
@@ -1010,7 +1010,8 @@ This spec lists its range under "Reserved codes" in the baseline
 ### Documented divergences
 
 Each item is listed in `docs/serialization.md` and, where a fixture exists, marked in the manifest
-(`sides` restricted, or `divergent` with both texts recorded).
+(`sides` restricted, or a `divergence` note with both texts recorded: `stjJson` with
+`crossReadable`, or `stjMessage` / `tsMessage`).
 
 | Area | STJ | Metano | Status |
 |---|---|---|---|
@@ -1025,7 +1026,7 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | Order in which a read sets the `assignIfPresent` members | the payload's key order (setter side effects show it: `{"V":3,"Log":"j"}` leaves `Log = "j"`) | wire order after construction (`"j:set3"`) | Documented (DECIDED-25 k) |
 | `[JsonExtensionData]` member bound to a constructor parameter | `InvalidOperationException` "… cannot bind with a parameter in the deserialization constructor." (measured) | the factory passes `null`; `MS0037` | DECIDED-25 k |
 | Rejected base64 in a property bound to a constructor parameter | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names `System.Byte[]` | Documented, as DECIDED-23 c for numbers (DECIDED-25 c) |
-| Writing a `decimal` with trailing zeros (its scale) | `1.10m` → `1.10`, `1.0m` → `1.0`, `0.00m` → `0.00` | `1.1`, `1`, `0` (decimal.js normalizes trailing zeros; every other digit is exact, FR-048 item 6) | Documented (DECIDED-23 f, #458); keeping it needs a decimal type that keeps the scale |
+| Writing a `decimal` with trailing zeros (its scale) | `1.10m` → `1.10`, `1.0m` → `1.0`, `0.00m` → `0.00` | `1.1`, `1`, `0` (decimal.js normalizes trailing zeros; every other digit is exact, FR-048 item 6) | Documented (DECIDED-23 f, #458); keeping it needs a decimal type that keeps the scale; cosmetic, mutually readable (row WEB7) |
 | Writing a `decimal` on an engine without `JSON.rawJSON` | its exact digits | `toNumber()` (`7.922816251426434e+28` for `MaxValue`) | Engine-dependent (FR-048 item 6); Node 24 and Bun 1.4.2 have it |
 | JSON number just past `decimal.MaxValue` (`79228162514264337593543950335.5`, `…336`) | `JsonException` | `deserializeText` throws the same; through `deserialize`, `JSON.parse` rounds it to the double of `MaxValue`, accepted | Undetectable after `JSON.parse`; exact through `deserializeText` (DECIDED-23 f, #457) |
 | Reading a `decimal` of more than 15 significant digits (`12345678901234567890.123456789`) | its exact digits, rounded to 28 decimal places | exact through `deserializeText`; `JSON.parse` rounds it to a double before `deserialize` sees it (`12345678901234567000`) | Documented (FR-048 item 7, #457) |
@@ -1035,22 +1036,22 @@ Each item is listed in `docs/serialization.md` and, where a fixture exists, mark
 | A container nested past 64 levels in a member no contract reads | `JsonException` (the reader's limit) | accepted on every path: only the containers the contract reads count | Documented (FR-016) |
 | A text nested past 1 000 levels, read by `deserializeText`'s tokenizer | read up to the limit of 64 | `JsonException` "The JSON text nests containers deeper than 1000 levels, …" (`JSON.parse` reads it) | Documented (FR-016, FR-048 item 7) |
 | An invalid text that ends inside more than 64 open containers | the depth-limit message | the open-container message (`Expected depth to be zero …`) | Documented (FR-048 item 7) |
-| Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows compare the prefix |
+| Numeric string rejected for a constructor-bound property (Web) | `The JSON value could not be converted to <Namespace.Type>.` (declaring type) | names the numeric type (`System.Int32`) | Documented (DECIDED-23 c); manifest rows E17–E18, E19c record both texts and STJ's path |
+| Numeric enum read from a JSON string (Web, `{"c":"1"}`) | `JsonException` `The JSON value could not be converted to <Namespace.Type>.` (declaring type; `AllowReadingFromString` does not cover enums) | `JsonException` `Invalid numeric enum value: "1". Expected one of: 0, 1, 2` (pre-existing message) | Documented; manifest row E19a records both texts |
 | Two properties whose JSON names differ only in case, case-insensitive context | `InvalidOperationException` "The JSON property name for 'Twins.A' collides with another property." at first use | both kept; a key fills the property listed last | Not reported; follow-up with the naming-collision issue (DECIDED-23 e) |
-| Case-insensitive names with characters whose casing differs between the JS engine's and .NET's Unicode version | .NET's tables | the engine's tables (Node 24: U+A7CF, U+A7D3, U+A7D5) | Engine-dependent (DECIDED-23 a) |
-| `TimeSpan` | `"01:02:03"` | `Temporal.Duration` string `PT1H2M3S` | Manifest row `divergent`; follow-up issue (DECIDED-16) |
-| `DateTimeOffset` offset text | `+00:00` | per temporal converter | Manifest row; `divergent` if the bytes differ (DECIDED-16) |
-| `Dictionary<int, …>` key order | insertion order | JS enumerates integer-like keys first | Manifest row `divergent` |
+| Case-insensitive names with characters whose casing differs between the JS engine's and .NET's Unicode version (`OrdinalIgnoreCase` vs `toUpperCase()`) | .NET's tables | the engine's tables (Node 24 differs on U+A7CF, U+A7D3, U+A7D5; Bun 1.4.2's JSC agrees with .NET there, probed in S8) | Engine-dependent (DECIDED-23 a); fixtures use ASCII names |
+| `TimeSpan` | `"01:02:03"` | `Temporal.Duration` string `PT1H2M3S` | Not mutually readable: STJ rejects `PT1H2M3S`, Temporal rejects `01:02:03` (row V12, `crossReadable: false`); follow-up issue (DECIDED-16) |
+| `DateTimeOffset` offset text | `2026-01-02T03:04:05+00:00` | `Temporal.ZonedDateTime` string `2026-01-02T03:04:05+00:00[UTC]` | Not mutually readable: STJ rejects the `[UTC]` annotation, `ZonedDateTime.from` requires it (row V11, `crossReadable: false`); follow-up issue (DECIDED-16) |
+| `Dictionary<int, …>` key order | insertion order | JS enumerates integer-like keys first | Cosmetic: mutually readable (row V17, `crossReadable: true`) |
 | `Stack<T>` root/property | written top-first, read back reversed (STJ pushes in order) | written and read in array order | DECIDED-18 (d); no code |
 | `[Name]` inside a generic member name | `ListUserDto` (CLR name) | `ListUser` (TS name) | DECIDED-18 (a) |
-| `[StringEnum]` root/property | number unless `JsonStringEnumConverter` | string | Pre-existing type-mapping contract, unchanged |
+| `[StringEnum]` root/property | number unless `JsonStringEnumConverter` | string | Pre-existing type-mapping contract, unchanged; not mutually readable (row V14, `crossReadable: false`) |
 | Missing non-required property | default value | `JsonException` | FR-045 |
 | Missing nullable member declared with the C# `required` modifier or `[JsonRequired]` | `JsonException` "… missing required properties including: 'Note'." (measured) | reads `null` | `MS0037` (DECIDED-25 k) |
 | Closed generic registration `[JsonDerivedType(typeof(GenD<int>), "g")]` | accepted (`{"$type":"g","X":1}`, measured) | `MS0032` | Known gap of v1 (FR-012) |
 | Unregistered C# subtype of a `[PlainObject]` hierarchy whose shape satisfies a registered variant's guard | `NotSupportedException` (knows the runtime type) | written as the matching variant | FR-019; plain objects carry no runtime type |
 | Unregistered C# subtype of a concrete `[PlainObject]` base whose shape passes the base's `baseTest` | `NotSupportedException` (measured: `Cat4` through `Animal4`) | written as the base (`{"Name":"c"}`) | FR-019 rule 5, DECIDED-24 b |
 | Runtime type name of a plain object in `Runtime type '…' is not supported` | the C# type name | `Object` | FR-019 |
-| Case-insensitive matching of non-ASCII names | `OrdinalIgnoreCase` | `toUpperCase()` | Fixtures use ASCII names; probed in S8 (Bun 1.4.2's JSC agrees with .NET on U+A7CF, U+A7D3 and U+A7D5; Node 24 does not) | Engine-dependent (DECIDED-23 a) |
 | Read depth limit | the reader counts every container of the document | counts only the containers the contract visits (a deep value under an undeclared key is skipped) | DECIDED-20 (b) |
 | Write depth limit | fast path: 64 containers, `InvalidOperationException` "CurrentDepth (64) is equal to or larger than …" at the 65th; metadata / reflection: `JsonException` "A possible object cycle …", also for a non-null scalar inside the 64th container | 64 containers (scalars never count), `JsonException` "A possible object cycle …" at the 65th: the fast path's boundary with the metadata mode's error | DECIDED-20 (b) |
 | Depth inside a custom converter | `JsonSerializer.Serialize(…)` of a separate root inside a converter starts a fresh writer at depth 0 | the root inherits the outer depth (one process-global counter) | DECIDED-20 (b) |
@@ -1180,7 +1181,7 @@ the former `OPEN-N`.
   and boundary are pinned by manifest row E23 (FR-016, slice S8). S4 measured both on .NET 10 and enforces
   the limit already (DECIDED-20 b).
 - **DECIDED-16 — Value-root wire mismatches** (`byte[]`, `TimeSpan`, `DateTimeOffset`). Recorded as
-  `divergent` manifest rows and documented divergences; `MS0037` for `byte[]`; each converter is
+  manifest rows with a `divergence` note and documented divergences; `MS0037` for `byte[]`; each converter is
   fixed in its own follow-up issue. *`byte[]` was fixed by slice S6b (base64 converter,
   DECIDED-25), so it is no longer reported; `TimeSpan` and `DateTimeOffset` stay as decided.*
 - **DECIDED-17 — Runtime version skew.** The minimum `metano-runtime` version is stated in
@@ -1828,10 +1829,11 @@ until the maintainer decides.
 - **SC-001**: 100% of manifest rows with `sides` including both `stj` and `ts` agree: write and
   roundtrip rows are byte-identical between STJ source-gen output and the generated TypeScript
   serializer, and every read and roundtrip row yields an instance of the expected class on both
-  sides. Rows restricted to one side or marked `divergent` are each traced to an entry under
-  Documented divergences.
-- **SC-002**: 100% of the error rows throw the same exception class name and message prefix on
-  every side they list.
+  sides. Rows restricted to one side or carrying a `divergence` note are each traced to an entry
+  under Documented divergences.
+- **SC-002**: 100% of the error rows throw the same exception class name on every side they list,
+  and the same whole message once STJ's `Path` suffix and the sample namespace are removed, or
+  the per-side `stjMessage` / `tsMessage` of a documented divergence.
 - **SC-003**: A context with one root of each supported shape (≥ 15 roots) compiles under
   `tsgo --strict` with 0 errors (today: the file does not compile), and each value-root kind has a
   manifest row.
@@ -1848,11 +1850,12 @@ until the maintainer decides.
   and rejected number string of FR-048) agrees on both sides.
 - **SC-008**: Interface and `[PlainObject]` hierarchies round-trip on both sides for every variant
   in the sample, and a write of each `[PlainObject]` variant selects that variant (the FR-019
-  order), with 0 misrouted values in the manifest. **Met (S8):** manifest rows W24–W28b (class,
-  interface and `[PlainObject]` variants of `IShape`, `IShapeB`, `Shape` and `MixedBase`),
-  W26/W27/R6 (the FR-019 `testOrder` selects `Point3` before `Point` on write), E13–E15 (missing
-  tag, unregistered implementation, unmatched plain object), with every roundtrip and dispatch row
-  agreeing on both sides.
+  order), with 0 misrouted values in the manifest. **Met (S8):** every registered variant of the
+  sample's interface and `[PlainObject]` hierarchies has a roundtrip row on both sides — `IShape`:
+  `Sq` (W24); `IShapeB`: `SqB` (W30), plus the unregistered `OtherB` written as the base (W25);
+  `Shape`: `Point` (W26), `Point3` (W27), `Rect` (W29); `MixedBase`: `MixedClass` (W28a),
+  `MixedPoint` (W28b). W26/W27/W29/R6 pin the FR-019 `testOrder` on write and read, and E13–E15 the
+  missing tag, the unregistered implementation and the unmatched plain object.
 
 ## Assumptions
 
