@@ -992,7 +992,7 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
        for STJ's messages.
 - **FR-049**: **Breaking change and versioning** (DECIDED-6). FR-034 changes public signatures of
   `metano-runtime/system/json`, so the feature MUST ship as a breaking release: the commit that
-  changes the signatures uses `feat!:` with a `BREAKING CHANGE:` footer. `.releaserc.json` maps a
+  changes the signatures uses `feat!:` with a `BREAKING CHANGE:` footer. `release.config.mjs` maps a
   breaking commit to a `major` release, and one `v${version}` tag versions both the NuGet tools and
   `metano-runtime`, so the whole release moves to the next major version. The maintainer may hold this
   slice so that one major also carries the breaking changes of the C# unions specification (PR
