@@ -507,6 +507,43 @@ public class JsonSerializerContextTests
             .Contains("factory: (p: Record<string, unknown>) => Object.assign(new Stamp(), {");
     }
 
+    [Test]
+    public async Task NonPolymorphicInterfaceMember_NeverReadsAsAnAbstractType()
+    {
+        var ts = TranspileHelper.Transpile(
+            """
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public interface ISensor
+            {
+                int Level { get; }
+            }
+
+            [Transpile]
+            public sealed record Hub(string Title, ISensor Sensor);
+
+            [Transpile]
+            [JsonSerializable(typeof(Hub))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        )["test-app/json-context.ts"];
+
+        // IsAbstract is true for interfaces too. Today no non-polymorphic
+        // interface entry exists for the non-constructible branch to build a
+        // factory from (an interface root is rejected with MS0035, and a ref
+        // to an interface member claims no entry), but the branch must never
+        // label an interface abstract (#489).
+        await Assert.That(ts).DoesNotContain("Cannot construct abstract type 'ISensor'");
+    }
+
     private const string ContextBoilerplate = """
         public partial class JsonContext : JsonSerializerContext
         {
