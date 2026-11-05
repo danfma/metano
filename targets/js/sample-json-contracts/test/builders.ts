@@ -52,6 +52,9 @@ import { UFailX } from "#/sample-json-contracts/u-fail-x";
 import { UNearA } from "#/sample-json-contracts/u-near-a";
 import { UNearB } from "#/sample-json-contracts/u-near-b";
 
+/** The `Guid` key of row V21. */
+const V21_GUID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
 /**
  * Per-id builders for the shared STJ conformance manifest
  * (`fixtures/stj/cases.json`, spec 009 contracts/wire-format.md).
@@ -482,12 +485,11 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     },
   },
   V21: {
-    build: () =>
-      new GuidMapHolder(new Map([[UUID.create("0f8fad5b-d9cb-469f-a165-70867728950e"), "a"]])),
+    build: () => new GuidMapHolder(new Map([[UUID.create(V21_GUID), "a"]])),
     assertRead: (value) => {
       const holder = expectClass(value, GuidMapHolder);
 
-      expect(holder.byId.get(UUID.create("0f8fad5b-d9cb-469f-a165-70867728950e"))).toBe("a");
+      expect(holder.byId.get(UUID.create(V21_GUID))).toBe("a");
     },
   },
   N1: { build: () => null, assertRead: (value) => expect(value).toBeNull() },

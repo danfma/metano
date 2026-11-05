@@ -854,7 +854,12 @@ export class StudioJsonContext extends SerializerContext {
           json: "ByLevel",
           type: {
             kind: "map",
-            key: { kind: "numericEnum", values: Level, typeName: "SampleJsonContracts.Level" },
+            key: {
+              kind: "numericEnum",
+              values: Level,
+              numberType: "System.Int32",
+              typeName: "SampleJsonContracts.Level",
+            },
             value: { kind: "primitive" },
           },
         },

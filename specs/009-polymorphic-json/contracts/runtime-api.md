@@ -64,7 +64,8 @@ interface TypeSpec<T> {
 
 type PrimitiveDescriptor = { readonly kind: "primitive"; readonly numberType?: NumberTypeName; readonly typeName?: string }; // numberType new, optional; typeName (#479) on a bool dictionary key
 // #479: TemporalDescriptor, BrandedDescriptor, EnumDescriptor and NumericEnumDescriptor also take an
-// optional `typeName` (the key's CLR name), set by the generator on dictionary keys only.
+// optional `typeName` (the key's CLR name), and NumericEnumDescriptor an optional
+// `numberType: IntegerTypeName` (the underlying type), set by the generator on dictionary keys only.
 type DecimalDescriptor = { readonly kind: "decimal"; readonly type?: new (value: string | number) => unknown }; // type new, optional (S2b)
 
 abstract class SerializerContext {
@@ -109,10 +110,11 @@ abstract class SerializerContext {
    on the tree and the text paths, whatever the read options (#479): a `numberType` key by the
    FR-048 grammar; a `typeName: "System.Boolean"` key from `true` / `false` in any case (written
    `True` / `False`); a numeric enum key from a member name in any case, a comma-separated list
-   of names or an integer, written as the member name; a `[StringEnum]` key from a member value
+   of names or an integer (optional sign, within the underlying `numberType`, `System.Int32`
+   without it), written as the member name (an aliased value by its first member); a `[StringEnum]` key from a member value
    in any case; a `typeName: "System.Guid"` key from the `D` format, lowercased; a `decimal` key
    by the decimal grammar (written with `toFixed()`); a temporal key through `parse`. A rejected
-   name throws `JsonException` `The JSON value could not be converted to <numberType | typeName>.`
+   name throws `JsonException` `The JSON value could not be converted to <typeName | numberType>.`
    (`Object` without one). A key without a type, a `string` key and a `[Branded]` key keep the
    value converter; a custom converter of the key's kind takes precedence. A `long` / `ulong` key
    reads as a `number` until spec 012 slice 012e.

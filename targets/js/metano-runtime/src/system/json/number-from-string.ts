@@ -1,4 +1,4 @@
-import type { NumberTypeName } from "./types.ts";
+import type { IntegerTypeName, NumberTypeName } from "./types.ts";
 
 /**
  * System.Text.Json's grammar for numbers read from JSON strings
@@ -139,19 +139,42 @@ function fitsSingle(parts: RegExpExecArray, value: number): boolean {
   return isBelow(significandPartsOf(parts), SINGLE_OVERFLOW);
 }
 
+/** The range of each integer type. */
+const INTEGER_RANGES: Readonly<Record<IntegerTypeName, readonly [min: bigint, max: bigint]>> = {
+  "System.Byte": [0n, 255n],
+  "System.SByte": [-128n, 127n],
+  "System.Int16": [-32_768n, 32_767n],
+  "System.UInt16": [0n, 65_535n],
+  "System.Int32": [-2_147_483_648n, 2_147_483_647n],
+  "System.UInt32": [0n, 4_294_967_295n],
+  "System.Int64": [-9_223_372_036_854_775_808n, 9_223_372_036_854_775_807n],
+  "System.UInt64": [0n, 18_446_744_073_709_551_615n],
+};
+
+/** Signed types take an optional sign; unsigned types take digits only. */
+function integerTextReader(numberType: IntegerTypeName, pattern: RegExp): NumberTextReader {
+  const [min, max] = INTEGER_RANGES[numberType];
+
+  return integerReader(pattern, min, max);
+}
+
+/** Every integer type read with an optional sign (`readSignedIntegerText`). */
+const SIGNED_INTEGER_READERS = Object.fromEntries(
+  Object.keys(INTEGER_RANGES).map((numberType) => [
+    numberType,
+    integerTextReader(numberType as IntegerTypeName, SIGNED_INTEGER_PATTERN),
+  ]),
+) as Readonly<Record<IntegerTypeName, NumberTextReader>>;
+
 const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = {
-  "System.Byte": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 255n),
-  "System.SByte": integerReader(SIGNED_INTEGER_PATTERN, -128n, 127n),
-  "System.Int16": integerReader(SIGNED_INTEGER_PATTERN, -32_768n, 32_767n),
-  "System.UInt16": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 65_535n),
-  "System.Int32": integerReader(SIGNED_INTEGER_PATTERN, -2_147_483_648n, 2_147_483_647n),
-  "System.UInt32": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 4_294_967_295n),
-  "System.Int64": integerReader(
-    SIGNED_INTEGER_PATTERN,
-    -9_223_372_036_854_775_808n,
-    9_223_372_036_854_775_807n,
-  ),
-  "System.UInt64": integerReader(UNSIGNED_INTEGER_PATTERN, 0n, 18_446_744_073_709_551_615n),
+  "System.Byte": integerTextReader("System.Byte", UNSIGNED_INTEGER_PATTERN),
+  "System.SByte": integerTextReader("System.SByte", SIGNED_INTEGER_PATTERN),
+  "System.Int16": integerTextReader("System.Int16", SIGNED_INTEGER_PATTERN),
+  "System.UInt16": integerTextReader("System.UInt16", UNSIGNED_INTEGER_PATTERN),
+  "System.Int32": integerTextReader("System.Int32", SIGNED_INTEGER_PATTERN),
+  "System.UInt32": integerTextReader("System.UInt32", UNSIGNED_INTEGER_PATTERN),
+  "System.Int64": integerTextReader("System.Int64", SIGNED_INTEGER_PATTERN),
+  "System.UInt64": integerTextReader("System.UInt64", UNSIGNED_INTEGER_PATTERN),
   "System.Single": floatingPointReader(fitsSingle),
   "System.Double": floatingPointReader(fitsDouble),
 };
@@ -162,6 +185,18 @@ const NUMBER_TEXT_READERS: Readonly<Record<NumberTypeName, NumberTextReader>> = 
  */
 export function readNumberText(text: string, numberType: NumberTypeName): number | undefined {
   return NUMBER_TEXT_READERS[numberType](text);
+}
+
+/**
+ * The integer `text` spells within the range of `numberType`, with an
+ * optional sign whatever the type (`Enum.TryParse` reads an enum key so:
+ * `"+5"` and `"-0"` read for a `byte` enum); `undefined` otherwise.
+ */
+export function readSignedIntegerText(
+  text: string,
+  numberType: IntegerTypeName,
+): number | undefined {
+  return SIGNED_INTEGER_READERS[numberType](text);
 }
 
 /** The digits of a matched number text as `significand × 10^exponent`, without its sign. */

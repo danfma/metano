@@ -1,7 +1,7 @@
 import type {
   DecimalDescriptor,
   EnumDescriptor,
-  NumberTypeName,
+  IntegerTypeName,
   NumericEnumDescriptor,
   PrimitiveDescriptor,
   TemporalDescriptor,
@@ -9,8 +9,8 @@ import type {
 } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
 import { readDecimalText } from "./decimal-text.ts";
-import { JsonException } from "./errors.ts";
-import { readNumberText } from "./number-from-string.ts";
+import { cannotConvertToTypeName } from "./contract-name.ts";
+import { readNumberText, readSignedIntegerText } from "./number-from-string.ts";
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 
@@ -19,9 +19,6 @@ const BOOLEAN_TYPE_NAME = "System.Boolean";
 const GUID_TYPE_NAME = "System.Guid";
 
 const DECIMAL_TYPE_NAME = "System.Decimal";
-
-/** System.Text.Json names a type without a CLR name `Object` (`contract-name.ts`). */
-const UNNAMED_TYPE_NAME = "Object";
 
 const BOOLEAN_KEYS: ReadonlyMap<string, boolean> = new Map([
   [ordinalIgnoreCaseKeyOf("true"), true],
@@ -34,11 +31,8 @@ const GUID_D_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 /** `Enum.TryParse` takes integer text when the name starts like a number. */
 const ENUM_INTEGER_PATTERN = /^[+-]?[0-9]+$/;
 
-/**
- * The range of an enum read from integer text. The descriptor does not name
- * the underlying type, so every enum is checked as an `int`, the C# default.
- */
-const ENUM_INTEGER_TYPE: NumberTypeName = "System.Int32";
+/** The underlying type of an enum key whose descriptor names none, the C# default. */
+const DEFAULT_ENUM_INTEGER_TYPE: IntegerTypeName = "System.Int32";
 
 const ENUM_NAME_SEPARATOR = ",";
 
@@ -65,8 +59,10 @@ const guidKeyConverter = keyConverter(
  * - a `bool` (`typeName: "System.Boolean"`): `true` / `false` in any case,
  *   written `True` / `False`;
  * - a numeric enum: a member name in any case, a comma-separated list of
- *   them (OR-ed), or an integer, with surrounding whitespace ignored;
- *   written as the member name, or as the number when no member has it;
+ *   them (OR-ed), or an integer with an optional sign within the underlying
+ *   `numberType`, with surrounding whitespace ignored; written as the member
+ *   name (an aliased value by its first member), or as the number when no
+ *   member has it;
  * - a `[StringEnum]`: a member value in any case, with surrounding
  *   whitespace ignored;
  * - a `Guid` (`typeName: "System.Guid"`): the `D` format in any case, read
@@ -78,7 +74,7 @@ const guidKeyConverter = keyConverter(
  * A name that does not parse throws `JsonException` `The JSON value could
  * not be converted to <typeName>.`. A `string` key, a key without a type
  * (a hand-written `{ kind: "primitive" }`) and any other descriptor kind
- * keep the converter of their value descriptor (`valueConverterOf`).
+ * keep the converter of their value descriptor (`builtinConverterOf`).
  *
  * TODO(012e): a `long` / `ulong` key reads as a `number` while the bigint
  * staging switch is in Number mode (spec 012 FR-065); slice 012e reads it
@@ -86,23 +82,23 @@ const guidKeyConverter = keyConverter(
  */
 export function dictionaryKeyConverterOf(
   descriptor: TypeDescriptor,
-  valueConverterOf: () => ValueConverter,
+  builtinConverterOf: () => ValueConverter,
 ): ValueConverter {
   switch (descriptor.kind) {
     case "primitive":
-      return primitiveKeyConverterOf(descriptor) ?? valueConverterOf();
+      return primitiveKeyConverterOf(descriptor) ?? builtinConverterOf();
     case "numericEnum":
       return numericEnumKeyConverter(descriptor);
     case "enum":
       return stringEnumKeyConverter(descriptor);
     case "branded":
-      return descriptor.typeName === GUID_TYPE_NAME ? guidKeyConverter : valueConverterOf();
+      return descriptor.typeName === GUID_TYPE_NAME ? guidKeyConverter : builtinConverterOf();
     case "decimal":
       return decimalKeyConverter(descriptor);
     case "temporal":
       return temporalKeyConverter(descriptor);
     default:
-      return valueConverterOf();
+      return builtinConverterOf();
   }
 }
 
@@ -122,37 +118,44 @@ function numericEnumKeyConverter(descriptor: NumericEnumDescriptor): ValueConver
     (member): member is [string, number] => typeof member[1] === "number",
   );
 
-  const nameOf = new Map(members.map(([name, value]) => [value, name]));
+  // An aliased value is written under its first member, as .NET names it.
+  const nameOfValue = new Map(members.toReversed().map(([name, value]) => [value, name]));
   const valueOfName = memberLookupOf(members);
-
-  /** A comma-separated list of names, OR-ed as `Enum.TryParse` does. */
-  const readNames = (text: string): number | undefined => {
-    let combined = 0;
-
-    for (const name of text.split(ENUM_NAME_SEPARATOR)) {
-      const value = valueOfName(name.trim());
-
-      if (value === undefined) {
-        return undefined;
-      }
-
-      combined |= value;
-    }
-
-    return combined;
-  };
+  const integerType = descriptor.numberType ?? DEFAULT_ENUM_INTEGER_TYPE;
 
   return keyConverter(
-    (value) => nameOf.get(value as number) ?? String(value),
-    (name) => {
-      const text = name.trim();
-
-      return ENUM_INTEGER_PATTERN.test(text)
-        ? readNumberText(text, ENUM_INTEGER_TYPE)
-        : readNames(text);
-    },
+    // A numeric enum value is a number: a member's, or one no member declares.
+    (value) => nameOfValue.get(value as number) ?? String(value),
+    (name) => readNumericEnumKey(name.trim(), integerType, valueOfName),
     descriptor.typeName,
   );
+}
+
+/**
+ * An integer within the underlying type (an optional sign whatever the
+ * type), or a comma-separated list of member names, as `Enum.TryParse`
+ * reads them.
+ */
+function readNumericEnumKey(
+  text: string,
+  integerType: IntegerTypeName,
+  valueOfName: (name: string) => number | undefined,
+): number | undefined {
+  return ENUM_INTEGER_PATTERN.test(text)
+    ? readSignedIntegerText(text, integerType)
+    : readEnumNameList(text, valueOfName);
+}
+
+/** The member names of `text`, OR-ed; `undefined` when one is not a member. */
+function readEnumNameList(
+  text: string,
+  valueOfName: (name: string) => number | undefined,
+): number | undefined {
+  const values = text.split(ENUM_NAME_SEPARATOR).map((name) => valueOfName(name.trim()));
+
+  return values.every((value) => value !== undefined)
+    ? values.reduce((combined, value) => combined | value, 0)
+    : undefined;
 }
 
 function stringEnumKeyConverter(descriptor: EnumDescriptor): ValueConverter {
@@ -237,19 +240,14 @@ function keyConverter(
   return {
     serialize: write,
     deserialize: (name) => {
-      const value = read(name as string);
+      // A JSON property name is always a string.
+      const value = read(String(name));
 
       if (value === undefined) {
-        throw cannotConvertKey(typeName);
+        throw cannotConvertToTypeName(typeName);
       }
 
       return value;
     },
   };
-}
-
-function cannotConvertKey(typeName: string | undefined): JsonException {
-  return new JsonException(
-    `The JSON value could not be converted to ${typeName ?? UNNAMED_TYPE_NAME}.`,
-  );
 }

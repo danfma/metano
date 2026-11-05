@@ -338,9 +338,9 @@ context's read options (#479):
 |---|---|---|---|
 | `string` | `{ kind: "primitive" }` | as is | as is |
 | `int`, `long`, `short`, `byte`, `uint`, … | `{ kind: "primitive", numberType: "System.Int32" }` | `String(n)` | the [numbers-from-strings grammar](#web-defaults): `"+5"`, `"007"` and `"-0"` read for a signed type, digits only for an unsigned one; whitespace, `"1.0"`, `"1e2"`, `""` and out-of-range values throw |
-| `float`, `double` | `numberType: "System.Double"` | `String(n)` | the same grammar, `"NaN"` and `"Infinity"` included |
+| `float`, `double` | `numberType: "System.Single"` / `"System.Double"` | `String(n)` | the same grammar, `"NaN"` and `"Infinity"` included |
 | `bool` | `{ kind: "primitive", typeName: "System.Boolean" }` | `True` / `False` | `true` / `false` in any case, no whitespace |
-| numeric enum | `{ kind: "numericEnum", values: Level, typeName: "MyApp.Level" }` | the member name (`High`), or the number when no member has it | a member name in any case, a comma-separated list of names (OR-ed), or an integer (any value, as .NET reads it); surrounding whitespace ignored |
+| numeric enum | `{ kind: "numericEnum", values: Level, numberType: "System.Int32", typeName: "MyApp.Level" }` (`numberType` is the underlying type) | the member name (`High`; an aliased value by its first member), or the number when no member has it | a member name in any case, a comma-separated list of names (OR-ed), or an integer with an optional sign within the underlying type (any value, as .NET reads it); surrounding whitespace ignored |
 | `[StringEnum]` | `{ kind: "enum", values: Mood, typeName: "MyApp.Mood" }` | the value | a member value in any case; surrounding whitespace ignored |
 | `Guid` | `{ kind: "branded", create: UUID.create, typeName: "System.Guid" }` | as is | the `D` format (`8-4-4-4-12`) in any case, read as lowercase; braces, the `N` format and whitespace throw |
 | `decimal` | `{ kind: "decimal", type: Decimal }` | `toFixed()` | the decimal grammar ([Decimals](#decimals)) |
@@ -350,8 +350,10 @@ context's read options (#479):
 A property name the key type rejects throws `JsonException` `The JSON value
 could not be converted to System.Int32.` (the key's CLR name: `System.Guid`,
 `MyApp.Level`), on the tree and the text paths alike. Two names that read as
-the same key (`"1"` and `"01"`) keep the last value, as in .NET. A custom
-converter of the key's kind still takes precedence.
+the same key (`"1"` and `"01"`) keep the value of the one JS enumerates last,
+which puts integer-like names first: `{"01":1,"1":2}` reads `1` (.NET keeps
+the last in the text, `2`). A custom converter of the key's kind still takes
+precedence.
 
 A `long` / `ulong` key reads as a `number` while 64-bit integers are numbers
 (spec 012 slice 012e turns them into `bigint`). A dictionary with a
@@ -905,6 +907,13 @@ writes or accepts, so a payload exchanged with a 2.x build can differ:
 - **JSON `null` for a struct** property, list or set element, or dictionary
   value now throws `The JSON value could not be converted to MyApp.SPoint.`,
   as .NET does ([Null roots](#null-roots)).
+- **Dictionary keys** are parsed into their key type
+  ([Dictionary keys](#dictionary-keys), #479): a `Dictionary<int, …>` reads
+  `Map<number, …>` keys (2.x kept the strings `"1"`), and a name the key type
+  rejects (`"x"` for an `int`) now throws. Numeric enum keys are written as
+  member names (`"High"`, 2.x wrote `"1"`) and `bool` keys as `True` /
+  `False` (2.x: `true` / `false`), as .NET writes them; 2.x payloads still
+  read.
 
 **Other changes.** Spec 009 changed these too; the first, second and fourth
 already shipped in 2.x:
@@ -1457,11 +1466,13 @@ the text are gone:
 - An unknown numeric enum value throws (`7` reads as `(Color)7` in .NET);
   unknown string enum values and numeric enums read from strings throw with
   Metano's own messages.
-- Dictionary keys: an integer numeric enum key is range-checked as an `int`
-  whatever the enum's underlying type; a `[StringEnum]` key does not read its
-  member's number (.NET reads `"1"`); `[JsonStringEnumMemberName]` is not
-  applied to keys; a temporal key reads whatever its `parse` accepts
-  (`Temporal.PlainDate.from` takes `2024-01-02T00:00`, .NET throws).
+- Dictionary keys: a `[StringEnum]` key does not read its member's number
+  (.NET reads `"1"`); enum keys use the TS member names, so a member renamed
+  with `[Name]` or `[JsonStringEnumMemberName]` does not read the name .NET
+  writes; two names that read as one key keep the one JS enumerates last
+  ([Dictionary keys](#dictionary-keys)); a temporal key reads whatever its
+  `parse` accepts (`Temporal.PlainDate.from` takes `2024-01-02T00:00`, .NET
+  throws).
 - `set` members are assigned after construction in wire order, not in the
   payload's order; a constructor parameter bound to an ignored property gets
   `undefined`.

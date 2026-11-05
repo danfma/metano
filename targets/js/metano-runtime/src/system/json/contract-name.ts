@@ -27,7 +27,13 @@ function convertedTypeNameOf(spec: JsonTypeInfo): string {
 
 /** System.Text.Json's error for a JSON value that does not fit the spec. */
 export function cannotConvertTo(spec: JsonTypeInfo): JsonException {
-  return new JsonException(
-    `The JSON value could not be converted to ${convertedTypeNameOf(spec)}.`,
-  );
+  return cannotConvertToTypeName(convertedTypeNameOf(spec));
+}
+
+/**
+ * System.Text.Json's error for a JSON value that does not convert to the CLR
+ * type `typeName` (a dictionary key, #479); `Object` without one.
+ */
+export function cannotConvertToTypeName(typeName: string | undefined): JsonException {
+  return new JsonException(`The JSON value could not be converted to ${typeName ?? "Object"}.`);
 }

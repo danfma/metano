@@ -5,6 +5,7 @@ import { Decimal } from "decimal.js";
 import { Keys } from "./keys";
 import { Level } from "./level";
 import { Mood } from "./mood";
+import { Shade } from "./shade";
 import { Tag } from "./tag";
 
 export class JsonContext extends SerializerContext {
@@ -21,7 +22,7 @@ export class JsonContext extends SerializerContext {
   get keys(): TypeSpec<Keys> {
     return this._keys ??= this.createSpec({
       type: Keys,
-      factory: (p: Record<string, unknown>) => new Keys(p.byInt as Map<number, string>, p.byLong as Map<number, string>, p.byShort as Map<number, string>, p.byByte as Map<number, string>, p.byUInt as Map<number, string>, p.byDouble as Map<number, string>, p.byFlag as Map<boolean, string>, p.byLevel as Map<Level, string>, p.byMood as Map<Mood, string>, p.byId as Map<UUID, string>, p.byDay as Map<Temporal.PlainDate, string>, p.byPrice as Map<Decimal, string>, p.byName as Map<string, string>, p.byTag as Map<Tag, string>),
+      factory: (p: Record<string, unknown>) => new Keys(p.byInt as Map<number, string>, p.byLong as Map<number, string>, p.byShort as Map<number, string>, p.byByte as Map<number, string>, p.byUInt as Map<number, string>, p.byDouble as Map<number, string>, p.byFlag as Map<boolean, string>, p.byLevel as Map<Level, string>, p.byShade as Map<Shade, string>, p.byMood as Map<Mood, string>, p.byId as Map<UUID, string>, p.byDay as Map<Temporal.PlainDate, string>, p.byPrice as Map<Decimal, string>, p.byName as Map<string, string>, p.byTag as Map<Tag, string>),
       properties: [
         {
           ts: "byInt",
@@ -91,7 +92,26 @@ export class JsonContext extends SerializerContext {
           json: "ByLevel",
           type: {
             kind: "map",
-            key: { kind: "numericEnum", values: Level, typeName: "TestApp.Level" },
+            key: {
+              kind: "numericEnum",
+              values: Level,
+              numberType: "System.Int32",
+              typeName: "TestApp.Level",
+            },
+            value: { kind: "primitive" },
+          },
+        },
+        {
+          ts: "byShade",
+          json: "ByShade",
+          type: {
+            kind: "map",
+            key: {
+              kind: "numericEnum",
+              values: Shade,
+              numberType: "System.Byte",
+              typeName: "TestApp.Shade",
+            },
             value: { kind: "primitive" },
           },
         },
