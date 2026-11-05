@@ -149,13 +149,16 @@ public sealed class IrToTsClassEmitter(
     ///     constructor's parameters in C# declaration order (promoted ones
     ///     as parameter properties, the rest as plain parameters).</item>
     /// </list>
+    /// <paramref name="groupAccessibility"/> is the accessibility the caller
+    /// gives the constructor; the dispatcher tags its overload signatures
+    /// against it.
     /// </summary>
     private TsConstructor BuildClassConstructor(
         INamedTypeSymbol type,
         IrClassDeclaration ir,
         IReadOnlyList<TsConstructorParam> ctorParams,
         bool emitsDispatcher,
-        TsAccessibility accessibility,
+        TsAccessibility groupAccessibility,
         TsType? extendsType,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering
@@ -180,7 +183,7 @@ public sealed class IrToTsClassEmitter(
             return TryBuildConstructorDispatcherFromIr(
                     ir,
                     new DispatcherBaseCall(extendsType is not null, keepsBaseMessage),
-                    accessibility,
+                    groupAccessibility,
                     lowering
                 )
                 ?? EmitUnsupportedConstructor(
@@ -798,7 +801,7 @@ public sealed class IrToTsClassEmitter(
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
         IrClassDeclaration owner,
         DispatcherBaseCall baseCall,
-        TsAccessibility accessibility,
+        TsAccessibility groupAccessibility,
         IrToTsBridgeContext lowering
     )
     {
@@ -820,7 +823,7 @@ public sealed class IrToTsClassEmitter(
             baseCall,
             owner.TypeParameters ?? [],
             lowering,
-            TsConstructorModifier.SignatureJSDocOf(owner, accessibility)
+            TsConstructorModifier.SignatureJSDocSelectorFor(owner, groupAccessibility)
         );
     }
 

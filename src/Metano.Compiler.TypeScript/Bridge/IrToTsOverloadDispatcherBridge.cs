@@ -95,7 +95,7 @@ public static class IrToTsOverloadDispatcherBridge
                 Static: isStatic,
                 Async: plan.IsAsync,
                 // The implementation is untagged: each overload signature
-                // carries its own declaration's JSDoc.
+                // carries the JSDoc its group gives it (SignatureJSDocOf).
                 Accessibility: plan.Accessibility,
                 Overloads: plan.Signatures
             )
