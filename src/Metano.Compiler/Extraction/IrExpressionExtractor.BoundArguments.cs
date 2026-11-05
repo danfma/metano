@@ -71,9 +71,10 @@ public sealed partial class IrExpressionExtractor
         };
 
     /// <summary>
-    /// The positions, in parameter order, of the arguments as C# evaluates
-    /// them; <c>null</c> when that is parameter order, or when no argument has
-    /// a side effect to keep in place.
+    /// The parameter-order positions of the arguments, listed in the order C#
+    /// evaluates them (<c>order[k]</c> is the position of the k-th argument
+    /// evaluated); <c>null</c> when that is parameter order, or when no
+    /// argument has a side effect to keep in place.
     /// </summary>
     private static IReadOnlyList<int>? EvaluationOrderOf(
         IReadOnlyList<BoundArgument> inParameterOrder

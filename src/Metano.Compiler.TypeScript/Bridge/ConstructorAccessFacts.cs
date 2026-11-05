@@ -329,6 +329,7 @@ public sealed class ConstructorAccessFacts
             return;
 
         var type = constructor.ContainingType.OriginalDefinition;
+
         if (!calls.TryGetValue(type, out var sites))
         {
             sites = [];
