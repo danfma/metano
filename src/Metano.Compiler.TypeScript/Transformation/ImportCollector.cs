@@ -219,6 +219,7 @@ public sealed class ImportCollector(
 
         var referencesUuid =
             referencedTypes.Contains("UUID")
+            || sink.RuntimeHelperTypeReferences.Contains("UUID")
             || runtimeHelperReferences.Contains("UUID")
             || templateRuntimeHelpers.Contains("UUID");
 
@@ -721,7 +722,9 @@ public sealed class ImportCollector(
     /// module-scope declarations, every parameter / local / destructuring
     /// binding anywhere in the file (a generated call inside that scope would
     /// bind to it), and every imported binding that is not the runtime's own
-    /// helper import. Type-only imports occupy module scope too (a local type
+    /// helper import. The one gap is a catch variable: try/catch prints as
+    /// raw text, so its binding name is not collected (the bodies still are).
+    /// Type-only imports occupy module scope too (a local type
     /// of the same name is a duplicate identifier either way). A name the
     /// runtime claims counts as occupied when it arrives on a USER import
     /// line — the user's binding wins and the runtime one is what gets
