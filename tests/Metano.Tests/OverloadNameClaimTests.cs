@@ -643,6 +643,61 @@ public class OverloadNameClaimTests
     }
 
     /// <summary>
+    /// Two roots that name one fast path are judged together: the base
+    /// implements the second (<c>IB.R(Foo x)</c>), so the shared <c>rX</c>
+    /// overrides it, whatever the order of the interfaces.
+    /// </summary>
+    [Test]
+    [Arguments("IA, IB")]
+    [Arguments("IB, IA")]
+    public async Task RootsSharingAName_AreJudgedTogether(string interfaces)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            [Transpile]
+            public class Foo { }
+
+            [Transpile]
+            public interface IA
+            {
+                int R(Foo x);
+
+                int R(string s);
+            }
+
+            [Transpile]
+            public interface IB
+            {
+                int R(Foo x);
+
+                int R(bool b);
+            }
+
+            [Transpile]
+            public class A : IB
+            {
+                public int R(Foo x) => 1;
+
+                public int R(bool b) => 2;
+            }
+
+            [Transpile]
+            public class D : A, {{interfaces}}
+            {
+                public new int R(Foo x) => 3;
+
+                public int R(string s) => 4;
+            }
+            """
+        );
+
+        await Assert
+            .That(FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked))
+            .IsNull();
+        await Assert.That(files["d.ts"]).Contains("  override rX(x: Foo): number {");
+    }
+
+    /// <summary>
     /// A base fast path for a type of the same simple name in another
     /// namespace is another overload, whatever the signature texts print:
     /// <c>MS0068</c>.
