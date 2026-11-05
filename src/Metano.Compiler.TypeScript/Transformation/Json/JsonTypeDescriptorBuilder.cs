@@ -114,9 +114,45 @@ internal sealed class JsonTypeDescriptorBuilder(
     private TsObjectLiteral BuildMapDescriptor(ITypeSymbol type) =>
         new([
             KindProperty(JsonPropertyKind.Map),
-            new TsObjectProperty("key", Build(JsonTypeClassifier.KeyTypeOf(type))),
+            new TsObjectProperty("key", BuildKeyDescriptor(JsonTypeClassifier.KeyTypeOf(type))),
             new TsObjectProperty("value", Build(JsonTypeClassifier.ValueTypeOf(type))),
         ]);
+
+    /// <summary>
+    /// A dictionary key's descriptor: the value descriptor of its type, plus
+    /// what the runtime needs to parse the JSON property name into it the way
+    /// System.Text.Json does (#479). A numeric key always names its
+    /// <c>numberType</c>, whatever the context's read options; a
+    /// <c>bool</c>, enum, <c>Guid</c> or temporal key names its CLR
+    /// <c>typeName</c> for the error text. A <c>string</c> key and any other
+    /// key keep the value descriptor unchanged.
+    /// </summary>
+    private TsObjectLiteral BuildKeyDescriptor(ITypeSymbol keyType)
+    {
+        var numberType = JsonTypeClassifier.NumberTypeNameOf(keyType);
+
+        if (numberType is not null)
+        {
+            return WithProperty(
+                BuildBareKindDescriptor(JsonPropertyKind.Primitive),
+                "numberType",
+                numberType
+            );
+        }
+
+        var kind = JsonTypeClassifier.Classify(keyType);
+        var descriptor = Build(keyType, kind);
+
+        return JsonTypeClassifier.KeyNamesItsType(keyType, kind)
+            ? WithProperty(descriptor, "typeName", JsonClrTypeName.Of(keyType))
+            : descriptor;
+    }
+
+    private static TsObjectLiteral WithProperty(
+        TsObjectLiteral descriptor,
+        string name,
+        string value
+    ) => new([.. descriptor.Properties, new TsObjectProperty(name, new TsStringLiteral(value))]);
 
     private TsObjectLiteral BuildTemporalDescriptor(ITypeSymbol type)
     {

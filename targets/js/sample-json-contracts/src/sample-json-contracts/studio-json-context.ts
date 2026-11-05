@@ -14,6 +14,7 @@ import { Flavor } from "./flavor";
 import { GBase } from "./g-base";
 import { GDer } from "./g-der";
 import { Group } from "./group";
+import { GuidMapHolder } from "./guid-map-holder";
 import { HBase } from "./h-base";
 import { HLeaf } from "./h-leaf";
 import { HMid } from "./h-mid";
@@ -25,6 +26,7 @@ import { ImageClip } from "./image-clip";
 import { IntMapHolder } from "./int-map-holder";
 import { IS } from "./is";
 import { Level } from "./level";
+import { LevelMapHolder } from "./level-map-holder";
 import { MixedBase } from "./mixed-base";
 import { MixedClass } from "./mixed-class";
 import { isMixedPoint, type MixedPoint } from "./mixed-point";
@@ -111,6 +113,10 @@ export class StudioJsonContext extends SerializerContext {
   private _hashSetString?: ValueSpec<HashSet<string> | null>;
 
   private _intMapHolder?: TypeSpec<IntMapHolder>;
+
+  private _levelMapHolder?: TypeSpec<LevelMapHolder>;
+
+  private _guidMapHolder?: TypeSpec<GuidMapHolder>;
 
   private _listListInt32?: ValueSpec<number[][] | null>;
 
@@ -830,7 +836,43 @@ export class StudioJsonContext extends SerializerContext {
           json: "ByKey",
           type: {
             kind: "map",
-            key: { kind: "primitive" },
+            key: { kind: "primitive", numberType: "System.Int32" },
+            value: { kind: "primitive" },
+          },
+        },
+      ],
+    }));
+  }
+
+  get levelMapHolder(): TypeSpec<LevelMapHolder> {
+    return (this._levelMapHolder ??= this.createSpec({
+      type: LevelMapHolder,
+      factory: (p: Record<string, unknown>) => new LevelMapHolder(p.byLevel as Map<Level, string>),
+      properties: [
+        {
+          ts: "byLevel",
+          json: "ByLevel",
+          type: {
+            kind: "map",
+            key: { kind: "numericEnum", values: Level, typeName: "SampleJsonContracts.Level" },
+            value: { kind: "primitive" },
+          },
+        },
+      ],
+    }));
+  }
+
+  get guidMapHolder(): TypeSpec<GuidMapHolder> {
+    return (this._guidMapHolder ??= this.createSpec({
+      type: GuidMapHolder,
+      factory: (p: Record<string, unknown>) => new GuidMapHolder(p.byId as Map<UUID, string>),
+      properties: [
+        {
+          ts: "byId",
+          json: "ById",
+          type: {
+            kind: "map",
+            key: { kind: "branded", create: UUID.create, typeName: "System.Guid" },
             value: { kind: "primitive" },
           },
         },

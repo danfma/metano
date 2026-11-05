@@ -86,7 +86,7 @@ interface ConformanceCase {
 | W28b | `mixedBase` | the plain object `{ x: 5 }` (TS) / `MixedPoint(5)` (STJ) | `{"$type":"pt","X":5}` (S8) | roundtrip | both |
 | W29 | `shape` | `Rect(1, 2)` / `{ w: 1, h: 2 }` | `{"$type":"rect","W":1,"H":2}` (S8) | roundtrip | both |
 | W30 | `iShapeB` | `SqB(4, 2)` (registered) | `{"$type":"sqb","Area":4,"Side":2}` (S8) | roundtrip | both |
-| V1… | one row per value-root kind: `string`, `int32`, `double`, `nullableInt32`, `guid`, `decimal`, `dateTime`, `dateOnly`, `timeOnly`, `dateTimeOffset`, `timeSpan`, numeric enum, `hashSetString`, `dictionaryStringEpisodeSummary`, `dictionaryInt32String` | fixed values | shipped as rows V1–V19 in S8 (the integer-key dictionary goes through an `IntMapHolder` property: a non-string-key root is `MS0035`) | roundtrip | both, or with a `divergence` note and `stjJson` (spec.md Documented divergences) |
+| V1… | one row per value-root kind: `string`, `int32`, `double`, `nullableInt32`, `guid`, `decimal`, `dateTime`, `dateOnly`, `timeOnly`, `dateTimeOffset`, `timeSpan`, numeric enum, `hashSetString`, `dictionaryStringEpisodeSummary`, `dictionaryInt32String` | fixed values | shipped as rows V1–V19 in S8 (the integer-key dictionary goes through an `IntMapHolder` property: a non-string-key root is `MS0035`); #479 reads V17's keys as numbers and adds V20 (`LevelMapHolder`, enum keys written as member names) and V21 (`GuidMapHolder`) | roundtrip | both, or with a `divergence` note and `stjJson` (spec.md Documented divergences) |
 
 Web-context cases (`[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]`, FR-048), both sides
 unless noted, all measured in research.md R8:
@@ -141,7 +141,8 @@ Slice S8 shipped these rows plus: W11c/W22b/R7/R8, the tag-not-first error E22, 
 depth-limit error E23 (32 nested groups around an image clip: exactly 65 containers, the 65th
 one the contract itself visits, pinning DECIDED-15's reader message) and its passing neighbor R9
 (32 nested groups, the innermost with no members: exactly 64 containers, read on both sides),
-the empty-text error E24, the exact-decimal
+the empty-text error E24, the bad integer dictionary key E26 (`{"ByKey":{"x":"a"}}` →
+`The JSON value could not be converted to System.Int32.`, #479), the exact-decimal
 reads D2a/D2b and the past-MaxValue error D4, the abstract-entry read error E25 (FR-017,
 DECIDED-12), the null-root rows N1–N10 (FR-037), the naming-policy rows NAM1/NAM2 and the member
 options rows M1–M5. Message rows compare the whole message without STJ's `Path` suffix

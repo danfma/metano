@@ -35,6 +35,8 @@ namespace SampleJsonContracts;
 [JsonSerializable(typeof(Dictionary<string, EpisodeSummary>))]
 [JsonSerializable(typeof(HashSet<string>))]
 [JsonSerializable(typeof(IntMapHolder))]
+[JsonSerializable(typeof(LevelMapHolder))]
+[JsonSerializable(typeof(GuidMapHolder))]
 [JsonSerializable(typeof(List<List<int>>))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(int))]

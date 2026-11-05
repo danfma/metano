@@ -462,6 +462,20 @@
     "json": "[[0]]"
   },
   {
+    "id": "V20",
+    "context": "StudioJsonContext",
+    "getter": "levelMapHolder",
+    "direction": "roundtrip",
+    "json": "{\"ByLevel\":{\"High\":\"h\",\"Low\":\"l\"}}"
+  },
+  {
+    "id": "V21",
+    "context": "StudioJsonContext",
+    "getter": "guidMapHolder",
+    "direction": "roundtrip",
+    "json": "{\"ById\":{\"0f8fad5b-d9cb-469f-a165-70867728950e\":\"a\"}}"
+  },
+  {
     "id": "N1",
     "context": "StudioJsonContext",
     "getter": "string",
@@ -1239,5 +1253,16 @@
       "namespaceInsensitive": true
     },
     "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "E26",
+    "context": "StudioJsonContext",
+    "getter": "intMapHolder",
+    "direction": "read",
+    "json": "{\"ByKey\":{\"x\":\"a\"}}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
   }
 ]

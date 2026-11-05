@@ -402,7 +402,10 @@ Rules:
 - JSON names are camelCase because the Web default sets the naming policy; the discriminator
   (`kind`) is unchanged.
 - `numberType` is emitted on numeric `primitive` descriptors only when the context reads numbers
-  from strings; the `decimal` descriptor carries no `numberType` (its converter reads the context
+  from strings, except on a dictionary key, which carries it in every context (#479:
+  `key: { kind: "primitive", numberType: "System.Int32" }`); a `bool`, enum, `Guid` or temporal
+  key adds its CLR `typeName` (`key: { kind: "numericEnum", values: Level, typeName:
+  "MyApp.Level" }`); the `decimal` descriptor carries no `numberType` (its converter reads the context
   option) and, in every context, names its type: `{ kind: "decimal", type: Decimal }` (DECIDED-23 f).
 - `JsonReadOptions` is a type-only import.
 

@@ -31,6 +31,7 @@ import {
   writeContainer,
 } from "./container-depth.ts";
 import { cannotConvertTo } from "./contract-name.ts";
+import { dictionaryKeyConverterOf } from "./dictionary-keys.ts";
 import { readNull } from "./null-reads.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 import { type ConverterSetCache, createConverterSetCache } from "./converter-set-cache.ts";
@@ -171,15 +172,21 @@ function temporalConverter(descriptor: TemporalDescriptor) {
 // ─── Map ─────────────────────────────────────────────────────────────────────
 
 /**
- * Dictionary keys are always JSON strings, so the read options apply to the
- * values only.
+ * Dictionary keys are always JSON strings, parsed into the key type as
+ * System.Text.Json parses them (`dictionary-keys.ts`, #479), so the read
+ * options apply to the values only. A custom converter of the key's kind
+ * still takes precedence.
  */
 function mapConverter(
   descriptor: MapDescriptor,
   plans: SpecPlans,
   readOptions: JsonReadOptions | undefined,
 ) {
-  const keyConv = resolveConverter(descriptor.key, plans);
+  const keyConv = customOrBuiltinConverter(descriptor.key, plans, () =>
+    dictionaryKeyConverterOf(descriptor.key, () =>
+      getBuiltinConverter(descriptor.key, plans, undefined),
+    ),
+  );
   const valueConv = resolveConverter(descriptor.value, plans, readOptions);
 
   return {
