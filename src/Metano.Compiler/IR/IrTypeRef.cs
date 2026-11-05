@@ -229,7 +229,10 @@ public sealed record IrCallableTypeRef(IReadOnlyList<IrFunctionTypeRef> Signatur
 /// Each backend decides the representation (TypeScript: <c>Promise&lt;T&gt;</c>,
 /// Dart: <c>Future&lt;T&gt;</c>, Kotlin: suspend function).
 /// </summary>
-public sealed record IrPromiseTypeRef(IrTypeRef ResultType) : IrTypeRef;
+/// <param name="IsValueType">Whether the C# type is a value type
+/// (<c>ValueTask</c>, <c>ValueTask&lt;T&gt;</c>), whose <c>default</c> is a
+/// completed task rather than <c>null</c>.</param>
+public sealed record IrPromiseTypeRef(IrTypeRef ResultType, bool IsValueType = false) : IrTypeRef;
 
 /// <summary>
 /// A generator/iterator type (C# <c>IEnumerable&lt;T&gt;</c> from <c>yield</c> methods).
