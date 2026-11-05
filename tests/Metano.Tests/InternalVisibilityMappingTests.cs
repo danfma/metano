@@ -314,7 +314,7 @@ public class InternalVisibilityMappingTests
     [Arguments("protected", "}\n\n  add(a: number, b: number): number;\n")]
     public async Task MixedMethodGroup_TagsOnlyTheSignaturesNoOtherPackageReaches(
         string narrowerOverload,
-        string narrowerSignature
+        string expectedSignatures
     )
     {
         // A protected overload of a public group is widened and left untagged:
@@ -336,7 +336,7 @@ public class InternalVisibilityMappingTests
         await Assert
             .That(files["app/engine.ts"])
             .Contains(
-                narrowerSignature
+                expectedSignatures
                     + "  add(a: number): number;\n"
                     + "  add(...args: unknown[]): number {"
             );
@@ -429,7 +429,7 @@ public class InternalVisibilityMappingTests
     [Arguments("protected", "  constructor(value: number);\n  constructor(text: string);\n")]
     public async Task MixedConstructorGroup_TagsOnlyAPrivateNarrowerSignature(
         string narrower,
-        string narrowerSignature
+        string expectedSignatures
     )
     {
         var files = TranspileHelper.Transpile(
@@ -446,7 +446,7 @@ public class InternalVisibilityMappingTests
 
         await Assert
             .That(files["gauge.ts"])
-            .Contains(narrowerSignature + "  constructor(...args: unknown[]) {");
+            .Contains(expectedSignatures + "  constructor(...args: unknown[]) {");
     }
 
     [Test]
@@ -709,9 +709,10 @@ public class InternalVisibilityMappingTests
     [Test]
     public async Task CrossPackageSubclass_UsesProtectedInternalMembersAndConstructor()
     {
-        // tsgo probe (recorded in the commit): the consumer type-checks
-        // against the library's stripInternal .d.ts, which keeps `v()`, `p`
-        // and the `protected internal` constructor signature.
+        // Pins the emitted shape a tsgo probe validated: the library's
+        // stripInternal .d.ts keeps `v()`, `p` and the `protected internal`
+        // constructor signature, so the cross-package subclass type-checks.
+        // The consumer assertions below are a smoke check only.
         var library = """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
@@ -775,9 +776,11 @@ public class InternalVisibilityMappingTests
     [Test]
     public async Task CrossPackageSubclass_CallsProtectedOverloadAndConstructorOfMixedGroups()
     {
-        // tsgo probe (recorded in the commit): the consumer type-checks
-        // against the library's stripInternal .d.ts, which keeps the
-        // protected `q(a: string)` signature and `constructor()`.
+        // Pins the emitted shape a tsgo probe validated: the library's
+        // stripInternal .d.ts keeps the protected `q(a: string)` signature and
+        // `constructor()`, so the cross-package subclass type-checks. The
+        // library assertions catch the regression; the consumer ones are a
+        // smoke check only.
         var library = """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
