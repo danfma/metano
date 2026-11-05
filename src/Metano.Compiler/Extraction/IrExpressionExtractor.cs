@@ -2623,6 +2623,9 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractNullableGetValueOrDefault(inv, symbol) is { } valueOrDefault)
             return valueOrDefault;
 
+        if (TryExtractBaseOverloadCall(inv, symbol) is { } baseOverloadCall)
+            return baseOverloadCall;
+
         // LINQ chain detection (#20 pipe lowering). When this invocation
         // is the OUTERMOST stage of a System.Linq.Enumerable / Queryable
         // call chain whose every step has a pipe-runtime counterpart,
@@ -2714,6 +2717,57 @@ public sealed partial class IrExpressionExtractor
         }
 
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol));
+    }
+
+    /// <summary>
+    /// A <c>base.M(...)</c> call Roslyn resolved into a dispatched method
+    /// group (spec 013 FR-018): bound to its overload, so a target calls the
+    /// overload's fast path (<c>super.addX(x)</c>). The base dispatcher
+    /// branches through <c>this.addX</c>, which an override of the calling
+    /// type would reach again. <c>null</c> for any other call, and on Dart,
+    /// which renders source arguments until it claims names (013g).
+    /// </summary>
+    private IrCallExpression? TryExtractBaseOverloadCall(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol? symbol
+    )
+    {
+        if (IsDartTarget || symbol is null)
+            return null;
+
+        if (inv.Expression is not MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax })
+            return null;
+
+        if (
+            MethodOverloadGroups.GroupOf(symbol.OriginalDefinition, _target)
+            is not { IsDispatched: true }
+        )
+            return null;
+
+        var bound = ExtractBoundCall(
+            _semantic.GetOperation(inv),
+            MethodOverloadGroups.RefOf(symbol, _target)
+        );
+
+        if (bound is null)
+            return null;
+
+        var typeArguments =
+            symbol.TypeArguments.Length > 0
+                ? symbol
+                    .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
+                    .ToList()
+                : null;
+
+        return new IrCallExpression(
+            Extract(inv.Expression),
+            bound.Arguments,
+            typeArguments,
+            BuildOrigin(symbol)
+        )
+        {
+            Overload = bound.Overload,
+        };
     }
 
     /// <summary>

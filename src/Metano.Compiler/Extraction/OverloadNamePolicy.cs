@@ -22,16 +22,21 @@ internal enum OverloadGroupKind
 }
 
 /// <summary>
+/// One parameter as the naming policy sees it: its C# name and the spelling
+/// of its type captured from Roslyn (<see cref="IrParameter.NamingSpelling"/>).
+/// </summary>
+internal sealed record OverloadParameter(string Name, IrNamingSpelling Spelling);
+
+/// <summary>
 /// One overload as the naming policy sees it.
 /// </summary>
-/// <param name="Parameters">Its parameters, each carrying its
-/// <see cref="IrParameter.NamingSpelling"/>.</param>
+/// <param name="Parameters">Its parameters.</param>
 /// <param name="ConversionTarget">A conversion operator's target type, which
 /// C# tells conversions apart by (<c>explicit operator int(Money m)</c> /
 /// <c>explicit operator long(Money m)</c> → <c>MoneyToInt32</c> /
 /// <c>MoneyToInt64</c>); <c>null</c> for any other overload.</param>
 internal sealed record OverloadSignature(
-    IReadOnlyList<IrParameter> Parameters,
+    IReadOnlyList<OverloadParameter> Parameters,
     IrNamingSpelling? ConversionTarget = null
 );
 
@@ -122,14 +127,14 @@ internal static class OverloadNamePolicy
     }
 
     private static bool DeclaresReceiver(
-        IReadOnlyList<IrParameter> parameters,
-        IrParameter receiver
+        IReadOnlyList<OverloadParameter> parameters,
+        OverloadParameter receiver
     ) =>
         parameters.Count > 0
         && parameters[0].Name == receiver.Name
-        && SpellingOf(parameters[0]).SpellsSameTypeAs(SpellingOf(receiver));
+        && parameters[0].Spelling.SpellsSameTypeAs(receiver.Spelling);
 
-    private static string ParameterNameSuffix(IReadOnlyList<IrParameter> parameters) =>
+    private static string ParameterNameSuffix(IReadOnlyList<OverloadParameter> parameters) =>
         parameters.Count == 0
             ? ParameterlessSuffix
             : string.Concat(parameters.Select(parameter => NamingText.Capitalize(parameter.Name)));
@@ -144,7 +149,7 @@ internal static class OverloadNamePolicy
             overload.Parameters.Count == 0
                 ? [new IrNamingComponent(ParameterlessSuffix, [])]
                 : overload
-                    .Parameters.SelectMany(parameter => SpellingOf(parameter).Components)
+                    .Parameters.SelectMany(parameter => parameter.Spelling.Components)
                     .ToList();
 
         if (overload.ConversionTarget is not { } target)
@@ -152,12 +157,6 @@ internal static class OverloadNamePolicy
 
         return [.. parameterParts, new IrNamingComponent("To", []), .. target.Components];
     }
-
-    private static IrNamingSpelling SpellingOf(IrParameter parameter) =>
-        parameter.NamingSpelling
-        ?? throw new InvalidOperationException(
-            $"Parameter '{parameter.Name}' of a dispatched overload group has no naming spelling."
-        );
 
     private static bool AreDistinct(IReadOnlyList<string> suffixes) =>
         suffixes.Distinct(StringComparer.Ordinal).Count() == suffixes.Count;

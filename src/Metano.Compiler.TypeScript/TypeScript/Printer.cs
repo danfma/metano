@@ -821,6 +821,8 @@ public sealed class Printer(string indent = "  ")
                         PrintAccessibility(method.Accessibility);
                         if (method.Static)
                             _sb.Write("static ");
+                        if (method.Override)
+                            _sb.Write("override ");
                         PrintOverloadSignature(method.Name, overload);
                     }
                 }

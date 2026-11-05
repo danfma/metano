@@ -43,11 +43,11 @@ public class IrToTsOverloadDispatcherBridgeTests
         var printed = PrintMembers(members, containingTypeName);
         // Public dispatcher with ...args: unknown[].
         await Assert.That(printed).Contains("sum(...args: unknown[])");
-        // Two private fast paths — one per overload. Fast-path names use the
+        // Two addressable fast paths — one per overload, with its visibility. Fast-path names use the
         // overload's parameter names (legacy shape) so the generated code is
         // human-readable.
-        await Assert.That(printed).Contains("private sumAB(a: number, b: number)");
-        await Assert.That(printed).Contains("private sumA(a: number)");
+        await Assert.That(printed).Contains("sumAB(a: number, b: number)");
+        await Assert.That(printed).Contains("sumA(a: number)");
         // Dispatcher branches on argument count and uses the metano-runtime
         // type-check helpers legacy emits, so same-arity numeric overloads
         // remain distinguishable at runtime.
@@ -352,10 +352,31 @@ public class IrToTsOverloadDispatcherBridgeTests
         return printed[start..end].Trim();
     }
 
-    /// <summary>The fast paths' candidate names, as a class without collisions claims them.</summary>
-    private static Func<IrMethodDeclaration, string> CandidateFastPathNames(
-        IrMethodDeclaration primary
-    ) =>
-        overload =>
-            OverloadFastPathName.Of(TypeScriptNaming.ToCamelCaseMember(primary.Name), overload);
+    /// <summary>The fast paths' names, as a class declaring only the group claims them.</summary>
+    private static TsOverloadClaims CandidateFastPathNames(IrMethodDeclaration primary)
+    {
+        var type = new IrClassDeclaration(
+            "T",
+            IrVisibility.Public,
+            new IrTypeSemantics(),
+            Members: [primary]
+        );
+
+        return TsOverloadClaimPass.Run(
+            new TsClaimPassInput(
+                type,
+                "T",
+                new Dictionary<string, TsClaimedMember>(),
+                new Dictionary<string, TsClaimedMember>(),
+                constructor =>
+                    IrToTsConstructorFactoryBridge.SignatureOf(
+                        type,
+                        constructor,
+                        isWidened: false,
+                        typeOverrides: null
+                    ),
+                _ => null
+            )
+        );
+    }
 }

@@ -81,7 +81,7 @@ export class Issue {
     this.touch(Temporal.Now.zonedDateTimeISO());
   }
 
-  private addCommentAuthorIdMessageCreatedAt(
+  addCommentAuthorIdMessageCreatedAt(
     authorId: UserId,
     message: string,
     createdAt: Temporal.ZonedDateTime,
@@ -90,7 +90,7 @@ export class Issue {
     this.touch(createdAt);
   }
 
-  private addCommentAuthorIdMessage(authorId: UserId, message: string): void {
+  addCommentAuthorIdMessage(authorId: UserId, message: string): void {
     this.addComment(authorId, message, Temporal.Now.zonedDateTimeISO());
   }
 
@@ -121,7 +121,7 @@ export class Issue {
     throw new Error("No matching overload for addComment");
   }
 
-  private transitionToNextStatusActorIdChangedAt(
+  transitionToNextStatusActorIdChangedAt(
     nextStatus: IssueStatus,
     actorId: UserId,
     changedAt: Temporal.ZonedDateTime,
@@ -142,7 +142,7 @@ export class Issue {
     this.touch(changedAt);
   }
 
-  private transitionToNextStatusActorId(nextStatus: IssueStatus, actorId: UserId): void {
+  transitionToNextStatusActorId(nextStatus: IssueStatus, actorId: UserId): void {
     this.transitionTo(nextStatus, actorId, Temporal.Now.zonedDateTimeISO());
   }
 

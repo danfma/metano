@@ -28,8 +28,8 @@ public class Int64OverloadNamingTests
         var output = result["gates.ts"];
 
         await Assert.That(output).Contains("import { isInt64, isUInt64 } from \"metano-runtime\";");
-        await Assert.That(output).Contains("private pickInt64(x: number)");
-        await Assert.That(output).Contains("private pickUInt64(x: number)");
+        await Assert.That(output).Contains("pickInt64(x: number)");
+        await Assert.That(output).Contains("pickUInt64(x: number)");
         await Assert
             .That(output)
             .Contains("isInt64(args[0])) {\n      return this.pickInt64(args[0] as number);");

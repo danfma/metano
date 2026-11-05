@@ -53,11 +53,11 @@ export class Painter {
     return new Painter(Painter.byPainterFlag, flag);
   }
 
-  private dB(b: boolean): string {
+  dB(b: boolean): string {
     return "bool";
   }
 
-  private dC(c: Color = Color.Green): string {
+  dC(c: Color = Color.Green): string {
     return "color:" + c;
   }
 
@@ -75,11 +75,11 @@ export class Painter {
     throw new Error("No matching overload for d");
   }
 
-  private static fS(s: string): string {
+  static fS(s: string): string {
     return "s";
   }
 
-  private static fAD(a: number, d: Decimal = new Decimal("1.5")): string {
+  static fAD(a: number, d: Decimal = new Decimal("1.5")): string {
     return "dec:" + d;
   }
 

@@ -3,11 +3,11 @@ import { isInt32 } from "metano-runtime";
 export class Generic {
   constructor() { }
 
-  private mInt32$1<T>(x: number): number {
+  mInt32$1<T>(x: number): number {
     return 1;
   }
 
-  private mInt32$2(x: number): number {
+  mInt32$2(x: number): number {
     return 2;
   }
 

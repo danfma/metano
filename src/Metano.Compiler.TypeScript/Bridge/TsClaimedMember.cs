@@ -4,8 +4,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// What holds a name in one of a class's claim tables (spec 013 naming.md §
-/// Claim pass): its own static or instance table, or the static side it
-/// inherits (step 8).
+/// Claim pass): its own static or instance table, or the static or instance
+/// side it inherits (steps 7 and 8).
 /// </summary>
 internal enum TsClaimedMemberKind
 {
@@ -32,11 +32,15 @@ internal enum TsClaimedMemberKind
 /// which a diagnostic names when a derived class meets it.</param>
 /// <param name="Factory">A factory's signature; <c>null</c> for any other
 /// kind.</param>
+/// <param name="Declaration">The C# overload a fast path or a factory belongs
+/// to (<c>Add(int x)</c>), which <c>MS0068</c> names; <c>null</c> for any other
+/// kind.</param>
 internal sealed record TsClaimedMember(
     TsClaimedMemberKind Kind,
     string Description,
     string DeclaredBy,
-    TsFactorySignature? Factory = null
+    TsFactorySignature? Factory = null,
+    string? Declaration = null
 );
 
 /// <summary>

@@ -3,11 +3,11 @@ import { isInt32, isString } from "metano-runtime";
 export class Tagger {
   constructor() { }
 
-  private tagCountExtra(count: number, extra: number): string {
+  tagCountExtra(count: number, extra: number): string {
     return "pair";
   }
 
-  private tagLabel(label?: string | null): string {
+  tagLabel(label?: string | null): string {
     return label ?? "none";
   }
 

@@ -757,10 +757,8 @@ public class ConstNamingConsistencyTests
 
         await Assert.That(output).Contains("static f(of_: number, by: number): number;");
         await Assert.That(output).Contains("static f(of_: number): number;");
-        await Assert
-            .That(output)
-            .Contains("private static fOfBy(of_: number, by: number): number {");
-        await Assert.That(output).Contains("private static fOf(of_: number): number {");
+        await Assert.That(output).Contains("static fOfBy(of_: number, by: number): number {");
+        await Assert.That(output).Contains("static fOf(of_: number): number {");
         await Assert.That(output).Contains("return of_ + 1;");
         await Assert.That(output).Contains("return of_ + by;");
     }

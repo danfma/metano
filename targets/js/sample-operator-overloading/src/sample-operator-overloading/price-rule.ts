@@ -58,11 +58,11 @@ export class PriceRule {
     return new PriceRule(PriceRule.byPriceRuleCodeTiers, code, ...tiers);
   }
 
-  private labelUpper(upper: boolean): string {
+  labelUpper(upper: boolean): string {
     return upper ? this.description.toUpperCase() : this.description;
   }
 
-  private labelCurrency(currency: Currency = Currency.Usd): string {
+  labelCurrency(currency: Currency = Currency.Usd): string {
     return currency === Currency.Usd
       ? `${this.description} in dollars`
       : `${this.description} abroad`;
@@ -82,14 +82,11 @@ export class PriceRule {
     throw new Error("No matching overload for label");
   }
 
-  private static thresholdCode(code: string): string {
+  static thresholdCode(code: string): string {
     return `code ${code}`;
   }
 
-  private static thresholdUnitsMinimum(
-    units: number,
-    minimum: Decimal = new Decimal("1.5"),
-  ): string {
+  static thresholdUnitsMinimum(units: number, minimum: Decimal = new Decimal("1.5")): string {
     return `${units} units over ${minimum}`;
   }
 
@@ -112,11 +109,11 @@ export class PriceRule {
     throw new Error("No matching overload for threshold");
   }
 
-  private static sumLabelAmount(label: string, amount: number): number {
+  static sumLabelAmount(label: string, amount: number): number {
     return amount;
   }
 
-  private static sumAmounts(...amounts: number[]): number {
+  static sumAmounts(...amounts: number[]): number {
     let total = 0;
     for (const amount of amounts) {
       total += amount;

@@ -499,7 +499,7 @@ public class ParamsParameterTests
         await Assert.That(output).Contains("static pick(label: string, ...xs: number[]): number;");
         await Assert
             .That(output)
-            .Contains("private static pickLabelXs(label: string, ...xs: number[]): number {");
+            .Contains("static pickLabelXs(label: string, ...xs: number[]): number {");
         await Assert.That(output).DoesNotContain("...xs: number[] | null");
     }
 

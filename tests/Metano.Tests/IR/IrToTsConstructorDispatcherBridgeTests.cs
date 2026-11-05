@@ -152,13 +152,15 @@ public class IrToTsConstructorDispatcherBridgeTests
                 type,
                 "T",
                 new Dictionary<string, TsClaimedMember>(),
+                new Dictionary<string, TsClaimedMember>(),
                 constructor =>
                     IrToTsConstructorFactoryBridge.SignatureOf(
                         type,
                         constructor,
                         isWidened: false,
                         typeOverrides: null
-                    )
+                    ),
+                _ => null
             )
         );
 

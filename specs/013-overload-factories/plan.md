@@ -180,6 +180,51 @@ a derived factory it could have kept. The evaluation-order binding follows
 `IrEvaluationTraits.IsSideEffectFree`, which counts a property read as free, so named arguments
 reading a mutating getter are reordered unbound, as elsewhere in the pipeline.
 
+As landed in 013d: the core groups a type's methods in `MethodOverloadGroups` (`Extraction/`):
+an `override` of a dispatched root (the first declaration of its override chain, declared by an
+emitted class) and an implementation of a member of a dispatched interface group are **anchored**
+(`IrMethodDeclaration.Anchor`: root `IrOverloadRef`, `Override` / `Implementation`, further
+interface roots) and reuse the root's suffix; an override of a single virtual keeps its own group
+(DECIDED-29, the `$override` segregation of #159); every other method is its own root, named over
+the visible group — the inherited dispatcher's overloads the type can see plus the methods it
+declares. Methods now carry `DeclarationOrdinal` (their position among the type's methods of that
+C# name), so method fast paths are keyed by `IrOverloadRef` (`TsOverloadClaims.FastPathNameAt`,
+`TsOverloadClaimsRegistry.RootFastPathOf`), which **013e** resolves call sites through. The primary
+of a group an emitted base already dispatches carries `InheritedOverloads` (the base dispatcher's
+overloads, constructed through the base chain, invisible ones included), and `IrMethodGroup`
+decides the dispatcher once for every consumer (`None` / `Declared` / `OverridesInherited`, and the
+branches the runtime scanner collects type checks for). The TypeScript claim pass gained the
+instance side (`TsOverloadClaims.Instances`, every visibility, inherited included): own fast paths
+claim against it (step 7, `MS0067` reason 3), anchored ones take the root's emitted name
+(`RootFastPathOf`, which reads a metadata-only root's class through the same shape extraction,
+DECIDED-28), and a user instance member meeting an inherited fast path, or an anchored name held by
+a user member, reports `MS0068` reason 1. Interfaces name their groups in `IrInterfaceExtractor` and
+claim fast paths in `TsInterfaceFastPaths` (one table per interface, `MS0067` on a rename);
+`ExplicitImplementationLowering` no longer drops an explicit overload of a dispatched interface group
+beside a class method of another signature (DECIDED-31). Multiply-constructed interfaces are found
+by `MultiplyConstructedInterfaces` (core): the class IR carries `ConstructedRoots`, every
+implementation (an override of a base's included) anchors on the interface root, and
+`IrToTsConstructedRootDispatcherBridge` emits the root-name runtime dispatcher with the bodies inlined
+in its branches; `MS0069` is reported by the class emitter, once, at the type that adds the second
+construction. One call-site shape lands here rather than in 013e: `base.M(...)` resolved into a
+dispatched group is bound (`IrCallExpression.Overload`, Roslyn's bound arguments) and emitted as
+`super.<fastPath>(...)`, because the base dispatcher now branches through `this.<fastPath>` and an
+override calling `base.M` would recurse; this holds for metadata-only bases too (their names come from
+metadata, DECIDED-28), and Dart keeps its source call. Every other call site stays on the dispatcher
+until 013e — so a call through a base-typed receiver to a type with a `new` method still reaches the
+hiding type's dispatcher (spec § Divergences). Known gaps: Roslyn imports no private (or, across
+assemblies, internal) member of a metadata reference (`MetadataImportOptions.Public` by default),
+so DECIDED-28's blind spot covers implementation DLLs as well as reference assemblies — a private
+claimant that renamed the producer's fast path is missed and the consumer's `override` fails with
+TS4117 (pinned by `MetadataBase_MissesAPrivateClaimant`); a group whose base's dispatcher signatures
+all take a `params` rest parameter forwards `...(args as never[])`; an abstract implementation of a
+multiply-constructed root is not branched (no body); a class that implements only part of an
+interface group, the rest inherited from a base that does not implement the interface, gets no
+dispatcher for it; DECIDED-29's pinned output still fails `tsgo` (TS2416/TS2385), as before.
+A multiply-constructed root's name is the one its interface declares (computed on the interface
+definition, `convX`), not a constructed spelling: implementers must match the interface's member
+name, and a constructed spelling differs from it whenever the group needs type spellings.
+
 Deferred / follow-ups: OQ-3 (`[PlainObject]` factories), OQ-4 (dropping the fallback, 4.0),
 OQ-5 (dropped secondary constructors warning); follow-up issues to file: DECIDED-29 (overloading an
 inherited single virtual, today's emission pinned) and DECIDED-30 (full support for

@@ -90,6 +90,7 @@ public static class IrRuntimeRequirementScanner
         if (c.Members is not null)
             foreach (var m in c.Members)
                 ScanMember(m, acc);
+        ScanConstructedRootDispatchers(c, acc);
         if (c.Constructor is not null)
             ScanConstructor(c.Constructor, acc);
         if (c.NestedTypes is not null)
@@ -180,15 +181,35 @@ public static class IrRuntimeRequirementScanner
         // primitive type check per parameter (`isInt32(args[0])`, etc.). The
         // scanner records the requirement up front so the import walker can
         // stop guessing at function names.
-        if (method.Overloads is { Count: > 0 } overloads)
-        {
-            CollectDispatcherTypeChecks(method.Parameters, acc);
-            foreach (var o in overloads)
-            {
-                CollectDispatcherTypeChecks(o.Parameters, acc);
-                ScanMethod(o, acc);
-            }
-        }
+        foreach (var branch in IrMethodGroup.Of(method).Branches)
+            CollectDispatcherTypeChecks(branch.Parameters, acc);
+
+        foreach (var overload in method.Overloads ?? [])
+            ScanMethod(overload, acc);
+    }
+
+    /// <summary>
+    /// A root name of an interface the class implements more than once is a
+    /// runtime dispatcher over the methods anchored on it (spec 013 FR-036),
+    /// whose branches check each implementation's arguments.
+    /// </summary>
+    private static void ScanConstructedRootDispatchers(
+        IrClassDeclaration c,
+        HashSet<IrRuntimeRequirement> acc
+    )
+    {
+        if (c.ConstructedRoots is not { } roots)
+            return;
+
+        var rootRefs = roots.Select(root => root.Root).ToHashSet();
+
+        var implementations = (c.Members ?? [])
+            .OfType<IrMethodDeclaration>()
+            .SelectMany(method => IrMethodGroup.Of(method).Members)
+            .Where(method => method.Anchor?.Root is { } root && rootRefs.Contains(root));
+
+        foreach (var implementation in implementations)
+            CollectDispatcherTypeChecks(implementation.Parameters, acc);
     }
 
     private static void ScanConstructor(

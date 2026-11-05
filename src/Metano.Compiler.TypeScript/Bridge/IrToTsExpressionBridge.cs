@@ -652,6 +652,9 @@ public static partial class IrToTsExpressionBridge
         if (IsBaseIdentityHash(call))
             return new TsLiteral("0");
 
+        if (BaseFastPathCallOf(call, loweredArgs) is { } baseFastPathCall)
+            return baseFastPathCall;
+
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
         // the receiver `recv(args)`. After destructuring, the receiver IS the
         // JS function — the `Invoke` member is erased. Overloaded `Invoke`
@@ -1618,6 +1621,47 @@ public static partial class IrToTsExpressionBridge
             ne,
             args,
             ordered => new TsNewExpression(MapNewTarget(ne.Type), ordered)
+        );
+    }
+
+    /// <summary>
+    /// <c>base.M(...)</c> resolved into a dispatched group (spec 013 FR-018):
+    /// <c>super.addX(x)</c>, the base overload's fast path, with Roslyn's
+    /// bound arguments in C#'s evaluation order. <c>null</c> when the call
+    /// has no resolved overload or its declaring type is not visible.
+    /// </summary>
+    private static TsExpression? BaseFastPathCallOf(
+        IrCallExpression call,
+        IReadOnlyList<TsExpression> loweredArgs
+    )
+    {
+        if (
+            call
+            is not { Overload: { } overload, Target: IrMemberAccess { Target: IrBaseExpression } }
+        )
+            return null;
+
+        if (TsOverloadCallSites.MethodFastPathOf(overload.Target) is not { } fastPath)
+            return null;
+
+        var ordered = TsEvaluationOrder.Bind(
+            WithoutNullRestArray(call.Arguments, loweredArgs),
+            overload.EvaluationOrder,
+            ConstructionArgumentPrefix
+        );
+
+        var superCall = new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier("super"), fastPath),
+            ordered.Arguments
+        );
+
+        if (ordered.Bindings.Count == 0)
+            return superCall;
+
+        return TsImmediateInvocation.Of(
+            ordered.Bindings,
+            [new TsReturnStatement(superCall)],
+            isAsync: false
         );
     }
 

@@ -3,11 +3,11 @@ import { isInt32, isString } from "metano-runtime";
 export class Over {
   constructor() { }
 
-  private fA(a: number): string {
+  fA(a: number): string {
     return "a";
   }
 
-  private fAB(a: number, b: number = 7): string {
+  fAB(a: number, b: number = 7): string {
     return "ab" + b;
   }
 
@@ -25,11 +25,11 @@ export class Over {
     throw new Error("No matching overload for f");
   }
 
-  private manyAB(a: string, b: string): string {
+  manyAB(a: string, b: string): string {
     return "two";
   }
 
-  private manyXs(...xs: string[]): string {
+  manyXs(...xs: string[]): string {
     return "many" + xs.length;
   }
 

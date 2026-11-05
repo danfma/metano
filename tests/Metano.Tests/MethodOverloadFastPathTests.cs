@@ -3,7 +3,7 @@ namespace Metano.Tests;
 public class MethodOverloadFastPathTests
 {
     [Test]
-    public async Task FastPath_GeneratesPrivateSpecializedMethods()
+    public async Task FastPath_GeneratesAddressableSpecializedMethods()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -18,10 +18,8 @@ public class MethodOverloadFastPathTests
 
         var output = result["calculator.ts"];
         // Fast-path methods are private with name + capitalized param names
-        await Assert.That(output).Contains("private addXY(x: number, y: number): number");
-        await Assert
-            .That(output)
-            .Contains("private addXYZ(x: number, y: number, z: number): number");
+        await Assert.That(output).Contains("addXY(x: number, y: number): number");
+        await Assert.That(output).Contains("addXYZ(x: number, y: number, z: number): number");
         // Public dispatcher delegates to fast-paths
         await Assert.That(output).Contains("add(...args: unknown[])");
         await Assert.That(output).Contains("this.addXY(args[0] as number, args[1] as number)");
@@ -70,7 +68,7 @@ public class MethodOverloadFastPathTests
 
         var output = result["math-helper.ts"];
         // Static dispatcher uses ClassName.fastPath instead of this.fastPath
-        await Assert.That(output).Contains("private static addXY");
+        await Assert.That(output).Contains("static addXY");
         await Assert
             .That(output)
             .Contains("MathHelper.addXY(args[0] as number, args[1] as number)");
@@ -91,8 +89,8 @@ public class MethodOverloadFastPathTests
         );
 
         var output = result["logger.ts"];
-        await Assert.That(output).Contains("private logMsg(msg: string): void");
-        await Assert.That(output).Contains("private logMsgLevel(msg: string, level: number): void");
+        await Assert.That(output).Contains("logMsg(msg: string): void");
+        await Assert.That(output).Contains("logMsgLevel(msg: string, level: number): void");
         // Void dispatcher branches: call fast-path then return
         await Assert.That(output).Contains("this.logMsg(args[0] as string)");
         await Assert

@@ -178,11 +178,20 @@ public sealed class IrToTsClassEmitter(
 
     /// <summary>
     /// The class's claim results (spec 013 FR-004), reporting their
-    /// diagnostics: the class's own emission is the one place that does. None
-    /// for a class with no overload group and no emitted base.
+    /// diagnostics and the interfaces the class makes multiply constructed
+    /// (<c>MS0069</c>, FR-036): the class's own emission is the one place that
+    /// does. None for a class with no overload group and no emitted base.
     /// </summary>
     private TsOverloadClaims ClaimAndReport(INamedTypeSymbol type, IrClassDeclaration ir)
     {
+        foreach (
+            var diagnostic in MultiplyConstructedInterfaces.DiagnosticsOf(
+                type,
+                _context.Extraction.Target
+            )
+        )
+            _context.ReportDiagnostic(diagnostic);
+
         if (!TsOverloadClaimsRegistry.AppliesTo(ir))
             return TsOverloadClaims.None;
 
@@ -548,8 +557,10 @@ public sealed class IrToTsClassEmitter(
             foreach (var stmt in body)
                 ReportUnsupportedInBody(stmt, type);
 
-        if (irMethod.Overloads is { Count: > 0 } overloads)
+        if (irMethod.OverloadName is not null)
         {
+            var overloads = irMethod.Overloads ?? [];
+
             if (
                 IrToTsObjectArgsBridge.HasObjectArgs(irMethod.Attributes)
                 || overloads.Any(o => IrToTsObjectArgsBridge.HasObjectArgs(o.Attributes))
@@ -669,7 +680,7 @@ public sealed class IrToTsClassEmitter(
                 perReturns,
                 perParamIrTypes,
                 new TypeCheckScope(ir.TypeParameters ?? [], BclOverrides),
-                overload => claims.FastPathNameOf(isStatic: true, dispatcherName, overload),
+                claims.FastPathNameOf,
                 _context.DeclarativeMappings
             );
         }
@@ -909,25 +920,31 @@ public sealed class IrToTsClassEmitter(
     {
         if (!_context.UseIrBodiesWhenCovered)
             return null;
-        if (primary.Overloads is not { Count: > 0 })
-            return null;
 
-        foreach (var m in new[] { primary }.Concat(primary.Overloads))
+        foreach (var m in IrMethodGroup.Of(primary).Members)
         {
-            if (m.Body is null || !IrBodyCoverageProbe.IsFullyCovered(m.Body))
+            if (!HasCoveredBody(m))
                 return null;
         }
-
-        var dispatcherName = TsClassMemberTable.MethodNameOf(primary);
 
         return IrToTsOverloadDispatcherBridge.BuildMethod(
             primary,
             typeName,
             owner.TypeParameters ?? [],
-            overload => claims.FastPathNameOf(primary.IsStatic, dispatcherName, overload),
-            lowering
+            claims,
+            lowering,
+            owner.ConstructedRoots
         );
     }
+
+    /// <summary>
+    /// Whether the IR models the overload's body: an abstract overload has
+    /// none to model (spec 013 FR-030).
+    /// </summary>
+    private static bool HasCoveredBody(IrMethodDeclaration method) =>
+        method.Body is { } body
+            ? IrBodyCoverageProbe.IsFullyCovered(body)
+            : method.Semantics.IsAbstract;
 
     /// <summary>
     /// Reports MS0001 (UnsupportedFeature) when the IR statement extractor
