@@ -21,7 +21,7 @@ internal static class NumericEndpoints
         if (type is null)
             return null;
 
-        var underlying = UnwrapNullableType(type);
+        var underlying = type.UnwrapNullableValueType();
 
         if (underlying is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType)
             return KindOf(enumType.EnumUnderlyingType) is { } enumKind
@@ -85,17 +85,4 @@ internal static class NumericEndpoints
                 IrNumericKind.BigInteger,
             _ => null,
         };
-
-    /// <summary>
-    /// The <c>Nullable&lt;T&gt;</c> argument of <paramref name="type"/>, or
-    /// <paramref name="type"/> itself when it is not nullable.
-    /// </summary>
-    public static ITypeSymbol UnwrapNullableType(ITypeSymbol type) =>
-        type
-            is INamedTypeSymbol
-            {
-                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
-            } nullable
-            ? nullable.TypeArguments[0]
-            : type;
 }

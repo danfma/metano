@@ -63,7 +63,7 @@ public sealed partial class IrExpressionExtractor
     private IrExpression ValueOrThrowWhenMissing(
         ExpressionSyntax receiverSyntax,
         IrExpression receiver
-    ) => IsProvenNonNull(receiverSyntax) ? receiver : ValueOrThrowWhenMissing(receiver);
+    ) => IsProvenNonNull(receiverSyntax) ? receiver : GuardedValueOrThrow(receiver);
 
     /// <summary>
     /// The value itself, or the .NET throw when it is missing, always
@@ -72,7 +72,7 @@ public sealed partial class IrExpressionExtractor
     /// read into a non-nullable loop variable (issue #488) has no flow
     /// state to consult.
     /// </summary>
-    internal IrExpression ValueOrThrowWhenMissing(IrExpression value) =>
+    internal IrExpression GuardedValueOrThrow(IrExpression value) =>
         new IrBinaryExpression(
             value,
             IrBinaryOp.NullCoalescing,
