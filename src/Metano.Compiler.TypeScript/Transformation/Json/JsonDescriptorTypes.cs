@@ -24,15 +24,23 @@ internal static class JsonDescriptorTypes
         {
             Collect(entry.Type, types);
 
+            // A Ref entry is an object contract: the descriptors of its wire
+            // properties are the members the context emits for it.
             if (entry.Kind == JsonPropertyKind.Ref)
-                foreach (
-                    var property in plan.Properties.WirePropertiesOf((INamedTypeSymbol)entry.Type)
-                )
-                    Collect(property.Type, types);
+                foreach (var propertyType in WirePropertyTypesOf(plan, entry))
+                    Collect(propertyType, types);
         }
 
         return types;
     }
+
+    private static IEnumerable<ITypeSymbol> WirePropertyTypesOf(
+        JsonContextPlan plan,
+        JsonContractEntry entry
+    ) =>
+        plan
+            .Properties.WirePropertiesOf((INamedTypeSymbol)entry.Type)
+            .Select(property => property.Type);
 
     private static void Collect(ITypeSymbol type, HashSet<ITypeSymbol> types)
     {
