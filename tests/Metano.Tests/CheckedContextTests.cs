@@ -379,6 +379,125 @@ public class CheckedContextTests
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
 
+    /// <summary>
+    /// The <c>foreach</c> element conversion checks like .NET under the
+    /// compilation's <c>CheckOverflow</c> option alone (spec 012 DECIDED-4):
+    /// no explicit context surrounds the loop, yet Roslyn reports the
+    /// conversion checked through <see cref="CheckedContexts.IsChecked"/>'s
+    /// compilation-option branch.
+    /// </summary>
+    [Test]
+    public async Task ProjectCheckedOption_ForeachElementsConvertChecked()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithOverflowChecks(
+            """
+            [Transpile]
+            public class Loops
+            {
+                public int Last(double[] doubles)
+                {
+                    var last = 0;
+
+                    foreach (int x in doubles)
+                        last = x;
+
+                    return last;
+                }
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        await Assert
+            .That(files["loops.ts"])
+            .Contains("const x = int32FromDoubleChecked(x$element);");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// The innermost context decides (spec 012 DECIDED-4): a
+    /// <c>foreach</c> inside <c>checked { unchecked { … } }</c> converts
+    /// unchecked, its sibling inside <c>checked</c> alone converts checked.
+    /// </summary>
+    [Test]
+    public async Task NestedCheckedUnchecked_ForeachFollowsTheInnermostContext()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Loops
+            {
+                public int Last(double[] doubles)
+                {
+                    var last = 0;
+
+                    checked
+                    {
+                        unchecked
+                        {
+                            foreach (int x in doubles)
+                                last = x;
+                        }
+                    }
+
+                    checked
+                    {
+                        foreach (int y in doubles)
+                            last = y;
+                    }
+
+                    return last;
+                }
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        var output = files["loops.ts"];
+
+        await Assert.That(output).Contains("const x = int32FromDouble(x$element);");
+        await Assert.That(output).Contains("const y = int32FromDoubleChecked(y$element);");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// A lambda declared inside a <c>checked</c> <c>foreach</c> inherits the
+    /// context, as C# specifies, so its own conversion checks too.
+    /// </summary>
+    [Test]
+    public async Task LambdaInsideCheckedForeach_ConvertsChecked()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Loops
+            {
+                public int Last(double[] doubles)
+                {
+                    var last = 0;
+
+                    checked
+                    {
+                        foreach (double d in doubles)
+                        {
+                            Func<int> read = () => (int)d;
+                            last = read();
+                        }
+                    }
+
+                    return last;
+                }
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        await Assert
+            .That(files["loops.ts"])
+            .Contains("const read = () => int32FromDoubleChecked(d);");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
     private static List<MetanoDiagnostic> UnsupportedFeatures(
         IEnumerable<MetanoDiagnostic> diagnostics
     ) => diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
