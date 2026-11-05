@@ -224,7 +224,7 @@ public static class IrToTsPlainObjectBridge
         string identifierName
     ) => body.Select(s => RewriteThis(s, identifierName)).ToList();
 
-    private static IrExpression RewriteThis(IrExpression expr, string identifierName) =>
+    internal static IrExpression RewriteThis(IrExpression expr, string identifierName) =>
         expr switch
         {
             IrThisExpression => new IrIdentifier(identifierName),

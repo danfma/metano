@@ -2,6 +2,7 @@ using System.Text;
 using Metano.Compiler.Analysis;
 using Metano.Compiler.Dart;
 using Metano.Compiler.Dart.Bridge;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript;
@@ -106,13 +107,79 @@ public class IrIntegerArithmeticNodeTests
     }
 
     [Test]
-    public async Task DartRewriter_DescendsIntoTheOperand()
+    public async Task DartRewriter_KeepsTheWrapperAndRewritesItsOperand()
     {
+        var containerlessRead = new IrMemberAccess(
+            new IrTypeReference("Totals"),
+            "Count",
+            new IrMemberOrigin("Totals", "Count", IsStatic: true, IsDeclaringTypeNoContainer: true)
+        );
         var rewriter = new DartIrRewriter(DeclarativeMappingRegistry.Empty);
 
-        var rewritten = rewriter.Rewrite(ProductOfWrappedSum);
+        var rewritten = rewriter.Rewrite(Wrapped(containerlessRead));
 
-        await Assert.That(rewritten).IsEqualTo(ProductOfWrappedSum);
+        await Assert
+            .That(OperandOf(rewritten))
+            .IsEqualTo(
+                containerlessRead with
+                {
+                    Origin = containerlessRead.Origin! with { IsDeclaringTypeNoContainer = false },
+                }
+            );
+    }
+
+    [Test]
+    public async Task JsxPropRewrite_KeepsTheWrapperAndRewritesItsOperand()
+    {
+        var referenced = new HashSet<string>();
+        var propRead = new IrMemberAccess(new IrThisExpression(), "Count");
+
+        var rewritten = IrToTsJsxComponentBridge.Rewrite(
+            Wrapped(propRead),
+            propNames: ["Count"],
+            referenced
+        );
+
+        await Assert.That(OperandOf(rewritten)).IsEqualTo(new IrIdentifier("props$count"));
+        await Assert.That(referenced).IsEquivalentTo(["Count"]);
+    }
+
+    [Test]
+    public async Task PlainObjectThisRewrite_KeepsTheWrapperAndRewritesItsOperand()
+    {
+        var fieldRead = new IrMemberAccess(new IrThisExpression(), "id");
+
+        var rewritten = IrToTsPlainObjectBridge.RewriteThis(Wrapped(fieldRead), "self");
+
+        await Assert
+            .That(OperandOf(rewritten))
+            .IsEqualTo(new IrMemberAccess(new IrIdentifier("self"), "id"));
+    }
+
+    [Test]
+    public async Task OutArgumentBinding_KeepsTheWrapperAndBindsItsOperand()
+    {
+        var outCall = new IrOutArgumentCall(
+            new IrCallExpression(new IrIdentifier("tryRead"), []),
+            [
+                new IrOutArgument(
+                    0,
+                    "value",
+                    new IrOutLocalDeclaration("value", new IrPrimitiveTypeRef(IrPrimitive.Int32)),
+                    new IrLiteral(0, IrLiteralKind.Int32)
+                ),
+            ],
+            new IrPrimitiveTypeRef(IrPrimitive.Int32)
+        );
+
+        var lowered = new ExpressionVariableLowering().Lower(
+            new IrReturnStatement(Wrapped(outCall))
+        );
+
+        var result = (IrReturnStatement)lowered[^1];
+
+        await Assert.That(lowered.Count).IsGreaterThan(1);
+        await Assert.That(OperandOf(result.Value)).IsNotTypeOf<IrOutArgumentCall>();
     }
 
     [Test]
@@ -157,6 +224,26 @@ public class IrIntegerArithmeticNodeTests
 
         await Assert.That(PrintDart(call)).IsEqualTo("5.toString()");
     }
+
+    private static IrExpression Wrapped(IrExpression operand) =>
+        new IrIntegerOverflow(
+            new IrNumericConversion(
+                operand,
+                new IrNumericEndpoint(IrNumericKind.Int32),
+                new IrNumericEndpoint(IrNumericKind.Int64),
+                IsChecked: false
+            ),
+            IrNumericKind.Int64,
+            IrOverflowMode.Wrap
+        );
+
+    /// <summary>The operand inside <see cref="Wrapped"/>, asserting both wrappers survived.</summary>
+    private static IrExpression OperandOf(IrExpression? expression) =>
+        expression is IrIntegerOverflow { Value: IrNumericConversion conversion }
+            ? conversion.Operand
+            : throw new InvalidOperationException(
+                $"Expected the wrappers to survive, got {expression?.GetType().Name ?? "null"}."
+            );
 
     private static string PrintDart(IrExpression expression)
     {

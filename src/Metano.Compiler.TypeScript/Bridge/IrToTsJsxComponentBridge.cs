@@ -354,7 +354,7 @@ public static class IrToTsJsxComponentBridge
             ),
         };
 
-    private static IrExpression Rewrite(
+    internal static IrExpression Rewrite(
         IrExpression expr,
         HashSet<string> propNames,
         HashSet<string> referenced
