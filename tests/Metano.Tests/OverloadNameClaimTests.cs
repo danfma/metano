@@ -578,6 +578,71 @@ public class OverloadNameClaimTests
     }
 
     /// <summary>
+    /// Re-implementation is judged per root: a further root's forwarder that
+    /// meets a base fast path of another overload reports <c>MS0068</c> even
+    /// when the base implements the first root, and one the base does
+    /// implement overrides even when it does not implement the first.
+    /// </summary>
+    [Test]
+    [Arguments(
+        "public class A : IA { public int R(Foo x) => 1; public int R(string s) => 2; public int R(int y) => 9; }",
+        "public new int R(Foo x) => 3; public int R(bool b) => 4;",
+        true,
+        "  override rX(x: Foo): number {",
+        "override rY("
+    )]
+    [Arguments(
+        "public class A : IB { public int R(Foo y) => 1; public int R(bool b) => 2; }",
+        "public new int R(Foo y) => 3; public int R(string s) => 4;",
+        false,
+        "  override rY(y: Foo): number {",
+        "override rX("
+    )]
+    public async Task FurtherRoots_AreJudgedOneByOne(
+        string baseClass,
+        string derivedMembers,
+        bool reportsHijack,
+        string expectedOverride,
+        string unexpectedOverride
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            [Transpile]
+            public class Foo { }
+
+            [Transpile]
+            public interface IA
+            {
+                int R(Foo x);
+
+                int R(string s);
+            }
+
+            [Transpile]
+            public interface IB
+            {
+                int R(Foo y);
+
+                int R(bool b);
+            }
+
+            [Transpile]
+            {{baseClass}}
+
+            [Transpile]
+            public class D : A, IA, IB { {{derivedMembers}} }
+            """
+        );
+
+        var hijack = FindDiagnostic(diagnostics, DiagnosticCodes.OverloadFastPathHijacked);
+
+        await Assert.That(hijack is not null).IsEqualTo(reportsHijack);
+        await Assert.That(files["d.ts"]).Contains(expectedOverride);
+        await Assert.That(files["d.ts"]).DoesNotContain(unexpectedOverride);
+    }
+
+    /// <summary>
     /// A base fast path for a type of the same simple name in another
     /// namespace is another overload, whatever the signature texts print:
     /// <c>MS0068</c>.

@@ -73,14 +73,16 @@ public sealed record IrMethodDeclaration(
 /// <param name="FurtherRoots">Other interface members the same method
 /// implements, whose names a target emits as forwarding members
 /// (naming.md § Root anchoring); <c>null</c> when there are none.</param>
-/// <param name="ReimplementsInherited">For an implementation, whether an
-/// emitted base class already implements the root: a <c>new</c> method or an
-/// explicit re-implementation, whose root names override the base's.</param>
+/// <param name="ReimplementedRoots">For an implementation, the roots
+/// (<see cref="Root"/> and further ones) an emitted base class already
+/// implements: a <c>new</c> method or an explicit re-implementation, whose
+/// names for those roots override the base's; <c>null</c> when there are
+/// none.</param>
 public sealed record IrOverloadAnchor(
     IrOverloadRef Root,
     IrOverloadAnchorKind Kind,
     IReadOnlyList<IrOverloadRef>? FurtherRoots = null,
-    bool ReimplementsInherited = false
+    IReadOnlyList<IrOverloadRef>? ReimplementedRoots = null
 );
 
 /// <summary>What an anchored overload does to its root.</summary>

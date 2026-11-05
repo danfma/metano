@@ -29,7 +29,7 @@ internal sealed record MethodAnchor(
     IMethodSymbol Root,
     IrOverloadAnchorKind Kind,
     IReadOnlyList<IMethodSymbol> FurtherRoots,
-    bool ReimplementsInherited = false
+    IReadOnlyList<IMethodSymbol>? ReimplementedRoots = null
 );
 
 /// <summary>
@@ -330,7 +330,10 @@ internal static class MethodOverloadGroups
             interfaceRoots[0],
             IrOverloadAnchorKind.Implementation,
             furtherRoots,
-            BaseImplements(type, interfaceRoots[0], target)
+            furtherRoots
+                .Prepend(interfaceRoots[0])
+                .Where(root => BaseImplements(type, root, target))
+                .ToList()
         );
     }
 

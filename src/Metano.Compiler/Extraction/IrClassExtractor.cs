@@ -509,8 +509,20 @@ public static class IrClassExtractor
             MethodOverloadGroups.RefOf(anchor.Root, context.Target),
             anchor.Kind,
             furtherRoots.Count > 0 ? furtherRoots : null,
-            anchor.ReimplementsInherited
+            ReimplementedRootsOf(anchor, context)
         );
+    }
+
+    private static IReadOnlyList<IrOverloadRef>? ReimplementedRootsOf(
+        MethodAnchor anchor,
+        IrExtractionContext context
+    )
+    {
+        var roots = (anchor.ReimplementedRoots ?? [])
+            .Select(root => MethodOverloadGroups.RefOf(root, context.Target))
+            .ToList();
+
+        return roots.Count > 0 ? roots : null;
     }
 
     /// <summary>
