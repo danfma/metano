@@ -66,9 +66,11 @@ public static class IrConstructorExtractor
             .FindIndex(ctor => SymbolEqualityComparer.Default.Equals(ctor, primary));
 
         if (primaryIndex < 0)
+        {
             throw new InvalidOperationException(
                 $"The primary constructor of '{type.Name}' is not one of its declared constructors."
             );
+        }
 
         // Other constructors become overloads (without nested Overloads of their own).
         var overloads = named.Where((_, index) => index != primaryIndex).ToList();

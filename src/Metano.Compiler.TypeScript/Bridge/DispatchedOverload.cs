@@ -12,6 +12,8 @@ internal static class DispatchedOverload
     public static string SuffixOf(IrMethodDeclaration overload) =>
         Required(overload.OverloadName?.Suffix, overload.Name, "an overload name");
 
+    // A dispatched constructor always carries its signature text; the
+    // fallback only labels the error raised when it does not.
     public static string SuffixOf(IrConstructorDeclaration overload) =>
         Required(
             overload.OverloadName?.Suffix,

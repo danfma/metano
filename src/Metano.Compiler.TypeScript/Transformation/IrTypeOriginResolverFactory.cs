@@ -24,17 +24,6 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public static class IrTypeOriginResolverFactory
 {
-    /// <summary>
-    /// The same lookup without side effects: it records neither cross-package
-    /// misses nor version hints, for a pass that reads a type's shape without
-    /// emitting it (spec 013's claim pass).
-    /// </summary>
-    public static IrTypeOriginResolver CreateUnrecorded(TypeMappingContext ctx) =>
-        named => ctx.CrossAssemblyOrigins.GetValueOrDefault(OriginKeyOf(named));
-
-    private static string OriginKeyOf(INamedTypeSymbol named) =>
-        named.OriginalDefinition.GetCrossAssemblyOriginKey();
-
     public static IrTypeOriginResolver Create(TypeMappingContext ctx) =>
         named =>
         {
@@ -73,4 +62,15 @@ public static class IrTypeOriginResolverFactory
 
             return origin;
         };
+
+    /// <summary>
+    /// <see cref="Create"/>'s lookup without side effects: it records neither cross-package
+    /// misses nor version hints, for a pass that reads a type's shape without
+    /// emitting it (spec 013's claim pass).
+    /// </summary>
+    public static IrTypeOriginResolver CreateUnrecorded(TypeMappingContext ctx) =>
+        named => ctx.CrossAssemblyOrigins.GetValueOrDefault(OriginKeyOf(named));
+
+    private static string OriginKeyOf(INamedTypeSymbol named) =>
+        named.OriginalDefinition.GetCrossAssemblyOriginKey();
 }
