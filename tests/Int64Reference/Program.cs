@@ -30,3 +30,5 @@ ReferenceFixture.Write(
     typeof(ConvertCalls),
     typeof(DecimalConvertCalls)
 );
+
+ReferenceFixture.Write(Path.Combine(fixtures, "aggregates.json"), typeof(Aggregates));

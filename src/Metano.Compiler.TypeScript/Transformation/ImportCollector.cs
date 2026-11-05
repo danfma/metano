@@ -1189,6 +1189,9 @@ public sealed class ImportCollector(
                     CollectFromExpression(newExpr.Callee, sink);
                 }
 
+                foreach (var typeArgument in newExpr.TypeArguments ?? [])
+                    CollectFromType(typeArgument, names, crossPackageOrigins);
+
                 foreach (var arg in newExpr.Arguments)
                     CollectFromExpression(arg, sink);
                 break;

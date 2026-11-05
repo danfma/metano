@@ -181,6 +181,7 @@ public sealed class DartIrRewriter
             },
             IrLambdaExpression l => l with { Body = l.Body.Select(RewriteStatement).ToList() },
             IrArrayLiteral a => a with { Elements = a.Elements.Select(RewriteExpression).ToList() },
+            IrArrayCreation c => c with { Length = RewriteExpression(c.Length) },
             IrTupleLiteral t => t with { Elements = t.Elements.Select(RewriteExpression).ToList() },
             IrTupleEqualityExpression te => te with
             {

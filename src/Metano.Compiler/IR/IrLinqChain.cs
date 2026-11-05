@@ -74,15 +74,26 @@ public sealed record IrLinqChain(IrExpression Source, IReadOnlyList<IrLinqStage>
 /// <summary>
 /// Single stage of an <see cref="IrLinqChain"/>. Each stage carries the
 /// operator identity, the lowered argument IR (lambdas, literals, etc),
-/// and an optional <see cref="IrQueryableMeta"/> populated by the
-/// expression-tree walker (Phase B / #31). Phase A leaves
-/// <see cref="Queryable"/> null on every stage.
+/// an optional <see cref="IrQueryableMeta"/> populated by the
+/// expression-tree walker (Phase B / #31; Phase A leaves
+/// <see cref="Queryable"/> null on every stage) and, for a numeric stage
+/// over 64-bit values, their <see cref="IrLinqSixtyFourBitValues"/>.
 /// </summary>
 public sealed record IrLinqStage(
     IrLinqOperator Operator,
     IReadOnlyList<IrExpression> Arguments,
-    IrQueryableMeta? Queryable = null
+    IrQueryableMeta? Queryable = null,
+    IrLinqSixtyFourBitValues? SixtyFourBitValues = null
 );
+
+/// <summary>
+/// The 64-bit values a numeric stage works on (spec 012 FR-036, FR-041):
+/// the values a <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c>
+/// aggregates (<c>long</c>, <c>long?</c>, <c>ulong</c>, …), or the
+/// <c>long</c> count of a <c>LongCount</c>, so a target that represents
+/// them apart from other numbers can pick its terminal.
+/// </summary>
+public sealed record IrLinqSixtyFourBitValues(IrNumericKind Kind, bool IsNullable);
 
 /// <summary>
 /// Compiler-side bundle threaded into a stage's

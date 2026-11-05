@@ -464,6 +464,10 @@ public static class IrToTsJsxComponentBridge
             {
                 Elements = arr.Elements.Select(e => Rewrite(e, propNames, referenced)).ToList(),
             },
+            IrArrayCreation creation => creation with
+            {
+                Length = Rewrite(creation.Length, propNames, referenced),
+            },
             IrTupleLiteral tuple => tuple with
             {
                 Elements = tuple.Elements.Select(e => Rewrite(e, propNames, referenced)).ToList(),

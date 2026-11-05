@@ -589,3 +589,57 @@ describe("ExprTreeVisitor — let/ref (#209)", () => {
     ]);
   });
 });
+
+describe("convert nodes (spec 012 FR-044)", () => {
+  const int64 = { name: "System.Int64" };
+  const uint64 = { name: "System.UInt64" };
+  const count = {
+    kind: "member",
+    target: { kind: "param", name: "x" },
+    member: "count",
+  } as const satisfies ExprTree;
+
+  test("a conversion into System.Int64 makes a bigint, truncated and wrapped", () => {
+    const widened: ExprTree = { kind: "convert", operand: count, type: int64 };
+    const truncated: ExprTree = {
+      kind: "convert",
+      operand: { kind: "literal", value: -3.7 },
+      type: int64,
+    };
+    const wrapped: ExprTree = {
+      kind: "convert",
+      operand: { kind: "literal", value: -1n },
+      type: uint64,
+    };
+    const scope = { paramName: "x", paramValue: { count: 2 }, captures: {} };
+
+    expect(evaluateExprTree(widened, scope)).toBe(2n);
+    expect(evaluateExprTree(truncated, scope)).toBe(-3n);
+    expect(evaluateExprTree(wrapped, scope)).toBe(18446744073709551615n);
+  });
+
+  test("a conversion out of a 64-bit integer makes a number", () => {
+    const narrowed: ExprTree = {
+      kind: "convert",
+      operand: { kind: "literal", value: 5n },
+      type: { name: "number" },
+    };
+
+    expect(evaluateExprTree(narrowed, emptyScope)).toBe(5);
+  });
+
+  test("compileLambdaBody and readParamName see through a convert node", () => {
+    const predicate = compileLambdaBody({
+      tree: {
+        kind: "binary",
+        op: "<",
+        left: { kind: "convert", operand: count, type: int64 },
+        right: { kind: "literal", value: 5n, type: int64 },
+      },
+    });
+
+    expect(readParamName({ kind: "convert", operand: count, type: int64 })).toBe("x");
+    expect(predicate({ count: 4 })).toBe(true);
+    expect(predicate({ count: 6 })).toBe(false);
+  });
+});

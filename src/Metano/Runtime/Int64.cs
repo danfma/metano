@@ -90,3 +90,11 @@ using Metano.Annotations;
     WhenParameterTypes = [typeof(object)],
     WhenInt64IsBigInt = true
 )]
+
+// Array.LongLength (spec 012 FR-036): the `number` length as a `bigint`.
+[assembly: MapProperty(
+    typeof(Array),
+    nameof(Array.LongLength),
+    JsTemplate = "BigInt($this.length)",
+    WhenInt64IsBigInt = true
+)]
