@@ -303,6 +303,10 @@ public static class IrToTsPlainObjectBridge
             {
                 Elements = arr.Elements.Select(e => RewriteThis(e, identifierName)).ToList(),
             },
+            IrArrayCreation creation => creation with
+            {
+                Length = RewriteThis(creation.Length, identifierName),
+            },
             IrTupleLiteral tuple => tuple with
             {
                 Elements = tuple.Elements.Select(e => RewriteThis(e, identifierName)).ToList(),

@@ -110,7 +110,7 @@ public sealed partial class IrExpressionExtractor
 
             var args = current.ArgumentList.Arguments.Select(a => Extract(a.Expression)).ToList();
             var queryable = TryCaptureQueryableMeta(current, sym, memberAccess);
-            stages.Add(new IrLinqStage(op, args, queryable));
+            stages.Add(new IrLinqStage(op, args, queryable, LinqSixtyFourBitValues.Of(sym!, op)));
 
             // A leading `?.Stage(…)` reads the null-conditional receiver,
             // which is already extracted (and bound): the chain starts there.
@@ -191,7 +191,8 @@ public sealed partial class IrExpressionExtractor
                 _originResolver,
                 _target,
                 this,
-                isExplicit
+                isExplicit,
+                _context.ExactInt64Lowering
             );
             var meta = walker.TryExtract(lambda);
             if (meta is not null)
@@ -256,7 +257,8 @@ public sealed partial class IrExpressionExtractor
                 _originResolver,
                 _target,
                 this,
-                isExplicitOptIn: true
+                isExplicitOptIn: true,
+                exactInt64Lowering: _context.ExactInt64Lowering
             );
             walker.TryExtract(lambda);
         }

@@ -122,6 +122,96 @@ public class Int64BclMappingTests
         }
         """;
 
+    private const string CollectionSource = """
+        using System.Collections.Generic;
+        using System.Linq;
+
+        [Transpile]
+        public record Item(long Size, long? Optional, int Count, ulong Flags);
+
+        [Transpile]
+        public class Collections
+        {
+            private int _cursor;
+
+            public long[] Slots = new long[4];
+
+            public int Next() => _cursor++;
+            public int Index(int[] values, long l, ulong u) => values[l] + values[u];
+
+            public void Write(long[] values, long l)
+            {
+                values[l] = 1;
+                values[l] += 2;
+                values[Next()] *= 3;
+                Slots[l]++;
+            }
+
+            public long Length(int[] values) => values.LongLength;
+            public long[] Zeros(int n) => new long[n];
+            public int[] ByLongLength(long n) => new int[n];
+            public string[] Strings(uint n) => new string[n];
+            public bool[] Flags(int n) => new bool[n];
+            public Item[] Items(int n) => new Item[n];
+            public long Count(List<int> xs) => xs.LongCount() + xs.LongCount(x => x > 1);
+            public int IntCount(List<int> xs) => xs.Count();
+            public long Sum(long[] ids, List<Item> items) => ids.Sum() + items.Sum(x => x.Size);
+            public long? NullableSum(List<Item> items) => items.Sum(x => x.Optional);
+
+            public double Average(long[] ids, List<long?> optional, List<Item> items) =>
+                ids.Average() + (optional.Average() ?? 0) + items.Average(x => x.Size);
+
+            public long Extremes(long[] ids, List<Item> items, ulong[] flags) =>
+                ids.Max() + items.Min(x => x.Size) + (items.Max(x => x.Optional) ?? 0)
+                + (long)flags.Min();
+
+            public int IntSum(int[] xs) => xs.Sum();
+        }
+        """;
+
+    private const string TicksSource = """
+        [Transpile]
+        public class Clock
+        {
+            public long Ticks(TimeSpan span, DateTime moment) =>
+                span.Ticks + moment.Ticks + TimeSpan.TicksPerSecond;
+
+            public TimeSpan Span(long ticks) => TimeSpan.FromTicks(ticks);
+            public TimeSpan Constructed(long ticks) => new TimeSpan(ticks);
+            public DateTime Moment(long ticks) => new DateTime(ticks);
+            public DateTime Parts() => new DateTime(2026, 1, 1);
+
+            public void Print(long l, ulong u, int i)
+            {
+                Console.WriteLine(l);
+                Console.WriteLine(u);
+                Console.WriteLine(i);
+            }
+        }
+        """;
+
+    private const string ExpressionTreeSource = """
+        using System.Collections.Generic;
+        using System.Linq;
+
+        [Transpile]
+        public record Row(long Size, int Count, double Weight);
+
+        [Transpile]
+        public class Rows
+        {
+            public List<Row> Filter(IQueryable<Row> rows, long cap, int limit) =>
+                rows.Where(r =>
+                        r.Size > cap
+                        && r.Count < 5L
+                        && (long)r.Count == 2
+                        && r.Weight > cap
+                        && r.Size < limit
+                    )
+                    .ToList();
+        }
+        """;
+
     [Test]
     public async Task BigIntMode_MathStatics_CallTheInt64Helpers()
     {
@@ -252,6 +342,115 @@ public class Int64BclMappingTests
         await Assert.That(text + convert.Files["converts.ts"]).DoesNotContain("formatInt64");
         await Assert.That(text + convert.Files["converts.ts"]).DoesNotContain("convertNarrow");
         await Assert.That(diagnostics.Where(d => d.Code == UnsupportedFormat)).IsEmpty();
+    }
+
+    [Test]
+    public async Task BigIntMode_ArraysAndLinq_IndexByNumberAndCallTheInt64Terminals()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            CollectionSource,
+            Int64Representation.BigInt
+        );
+
+        await Assert
+            .That(files["collections.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("int64-collections.ts"));
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task BigIntMode_TicksAndConsole_CallTheTicksHelpersAndString()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            TicksSource,
+            Int64Representation.BigInt
+        );
+
+        await Assert
+            .That(files["clock.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("int64-ticks-console.ts"));
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    /// <summary>
+    /// A queryable lambda carries <c>bigint</c> literals and captures typed
+    /// <c>System.Int64</c>, and a <c>convert</c> node for every conversion
+    /// across a 64-bit integer, explicit or implicit (FR-044).
+    /// </summary>
+    [Test]
+    public async Task BigIntMode_ExpressionTree_CarriesBigIntLiteralsAndConvertNodes()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            ExpressionTreeSource,
+            Int64Representation.BigInt
+        );
+
+        await Assert
+            .That(files["rows.ts"])
+            .IsEqualTo(TranspileHelper.ReadExpected("int64-expression-tree.ts"));
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity != MetanoDiagnosticSeverity.Info))
+            .IsEmpty();
+    }
+
+    /// <summary>
+    /// The shipped <c>Number</c> mode keeps the 2.x text: plain indices,
+    /// the <c>number</c> LINQ terminals, unsupported sized arrays, unmapped
+    /// ticks and the native <c>console.log</c>.
+    /// </summary>
+    [Test]
+    public async Task NumberMode_CollectionsAndTicks_KeepTheShippedLowering()
+    {
+        var collections = TranspileHelper.TranspileWithDiagnostics(
+            CollectionSource,
+            Int64Representation.Number
+        );
+
+        var clock = TranspileHelper.TranspileWithDiagnostics(
+            TicksSource,
+            Int64Representation.Number
+        );
+
+        var output = collections.Files["collections.ts"];
+
+        await Assert.That(output).Contains("return values[l] + values[u];");
+        await Assert.That(output).Contains("Unsupported expression: ArrayCreationExpression");
+        await Assert.That(output).Contains("linq(ids, sum())");
+        await Assert.That(output).Contains("return values.longLength;");
+        await Assert.That(output).DoesNotContain("Int64Of");
+        await Assert.That(clock.Files["clock.ts"]).Contains("console.log(l);");
+        await Assert.That(clock.Files["clock.ts"]).Contains("return span.ticks");
+        await Assert.That(clock.Files["clock.ts"]).DoesNotContain("durationFromTicks");
+    }
+
+    /// <summary>
+    /// Dart, which always lowers 64-bit integers exactly, fills a sized
+    /// array with the element default; its 64-bit <c>int</c> takes a
+    /// <c>long</c> length as is.
+    /// </summary>
+    [Test]
+    public async Task Dart_SizedArray_FillsTheElementDefault()
+    {
+        var (files, _) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+
+            [Transpile]
+            public class Buffers
+            {
+                public long[] Zeros(long n) => new long[n];
+                public bool[] Flags(int n) => new bool[n];
+            }
+            """
+        );
+
+        var output = files["buffers.dart"];
+
+        await Assert.That(output).Contains("List<int>.filled(n, 0)");
+        await Assert.That(output).Contains("List<bool>.filled(n, false)");
     }
 
     private static List<MetanoDiagnostic> UnsupportedFeatures(

@@ -41,6 +41,7 @@ public static class IrNodeChildren
             IrAwaitExpression awaited => [awaited.Expression],
             IrYieldExpression { Value: { } yielded } => [yielded],
             IrArrayLiteral array => array.Elements,
+            IrArrayCreation creation => [creation.Length, creation.ElementDefault],
             IrTupleLiteral tuple => tuple.Elements,
             IrTupleEqualityExpression tupleEquality => [tupleEquality.Left, tupleEquality.Right],
             IrObjectLiteral obj => obj.Properties.Select(p => p.Value),

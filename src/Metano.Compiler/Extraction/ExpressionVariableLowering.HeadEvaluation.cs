@@ -72,6 +72,9 @@ internal sealed partial class ExpressionVariableLowering
                 case IrArrayLiteral array:
                     return array with { Elements = array.Elements.Select(Bind).ToList() };
 
+                case IrArrayCreation creation:
+                    return creation with { Length = Bind(creation.Length) };
+
                 case IrTupleLiteral tuple:
                     return tuple with { Elements = tuple.Elements.Select(Bind).ToList() };
 

@@ -60,7 +60,7 @@ namespace Metano.Compiler.Extraction;
 /// references something else stay as runtime captures.
 /// </para>
 /// </summary>
-internal sealed class IrExpressionTreeExtractor
+internal sealed partial class IrExpressionTreeExtractor
 {
     /// <summary>
     /// Human-readable list of node kinds the walker covers. Kept as
@@ -76,6 +76,7 @@ internal sealed class IrExpressionTreeExtractor
     private readonly Metano.Annotations.TargetLanguage? _target;
     private readonly IrExpressionExtractor _valueExtractor;
     private readonly bool _isExplicitOptIn;
+    private readonly bool _exactInt64Lowering;
 
     private readonly HashSet<ISymbol> _lambdaParams = new(SymbolEqualityComparer.Default);
     private readonly Dictionary<ISymbol, IrQueryableCapture> _captures = new(
@@ -89,7 +90,8 @@ internal sealed class IrExpressionTreeExtractor
         IrTypeOriginResolver? originResolver,
         Metano.Annotations.TargetLanguage? target,
         IrExpressionExtractor valueExtractor,
-        bool isExplicitOptIn = false
+        bool isExplicitOptIn = false,
+        bool exactInt64Lowering = false
     )
     {
         _semantic = semanticModel;
@@ -97,6 +99,7 @@ internal sealed class IrExpressionTreeExtractor
         _target = target;
         _valueExtractor = valueExtractor;
         _isExplicitOptIn = isExplicitOptIn;
+        _exactInt64Lowering = exactInt64Lowering;
     }
 
     /// <summary>
@@ -136,7 +139,10 @@ internal sealed class IrExpressionTreeExtractor
             _ => Enumerable.Empty<ParameterSyntax>(),
         };
 
-    private IrExprTreeNode? Walk(ExpressionSyntax node)
+    private IrExprTreeNode? Walk(ExpressionSyntax node) =>
+        WithImplicitSixtyFourBitConversion(node, WalkUnconverted(node));
+
+    private IrExprTreeNode? WalkUnconverted(ExpressionSyntax node)
     {
         if (_failed)
             return null;
@@ -172,6 +178,9 @@ internal sealed class IrExpressionTreeExtractor
 
             case LambdaExpressionSyntax nestedLambda:
                 return WalkNestedLambda(nestedLambda);
+
+            case CastExpressionSyntax cast when IsSixtyFourBitConversion(cast):
+                return WalkSixtyFourBitCast(cast);
 
             default:
                 Bail(node, node.Kind().ToString());
@@ -778,7 +787,7 @@ internal sealed class IrExpressionTreeExtractor
         if (!_captures.TryGetValue(key, out var existing))
         {
             var typeRef = MapType(syntax);
-            var value = _valueExtractor.Extract(syntax);
+            var value = WithoutSixtyFourBitConversion(_valueExtractor.Extract(syntax));
             existing = new IrQueryableCapture(symbol.Name, value, typeRef);
             _captures[key] = existing;
             _captureOrder.Add(existing);
@@ -791,12 +800,14 @@ internal sealed class IrExpressionTreeExtractor
     /// Prefers <c>ConvertedType</c> so contextual conversions (e.g.
     /// <c>1</c> binding to a <c>long</c> parameter) keep the actual
     /// expression type the provider sees, falling back to the static
-    /// <c>Type</c> when no conversion is in play.
+    /// <c>Type</c> when no conversion is in play. A conversion across a
+    /// 64-bit integer is a <see cref="IrExprConvert"/> node of its own under
+    /// the exact 64-bit lowering, so the operand keeps its own type there.
     /// </summary>
     private IrTypeRef? MapType(ExpressionSyntax expr)
     {
         var info = _semantic.GetTypeInfo(expr);
-        var t = info.ConvertedType ?? info.Type;
+        var t = ConvertsAcrossSixtyFourBits(info) ? info.Type : info.ConvertedType ?? info.Type;
         return t is null ? null : IrTypeRefMapper.Map(t, _originResolver, _target);
     }
 

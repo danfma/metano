@@ -407,6 +407,14 @@ public static class IrBodyPrinter
                 }
                 sb.Append(']');
                 break;
+            case IrArrayCreation creation:
+                // Dart's `int` is 64-bit, so a `long` length needs no conversion.
+                sb.Append("List<").Append(FormatType(creation.ElementType)).Append(">.filled(");
+                PrintExpression(sb, creation.Length);
+                sb.Append(", ");
+                PrintExpression(sb, creation.ElementDefault);
+                sb.Append(')');
+                break;
             case IrTemplateExpression tpl:
                 // `[Emit("…")]` templates are defined against JavaScript
                 // syntax. Dart can't reproduce them, so we emit a TODO

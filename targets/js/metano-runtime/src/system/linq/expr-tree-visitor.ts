@@ -29,6 +29,7 @@ import type {
   ExprCall,
   ExprCapture,
   ExprConditional,
+  ExprConvert,
   ExprLambda,
   ExprLet,
   ExprLiteral,
@@ -63,6 +64,10 @@ export interface ExprTreeScope {
 /** Default fallback name used when a meta tree has no `param` node. */
 const DEFAULT_PARAM_NAME = "x";
 
+/** The 64-bit integer types a `convert` node targets, by their emitted type name. */
+const INT64_TYPE_NAME = "System.Int64";
+const UINT64_TYPE_NAME = "System.UInt64";
+
 /**
  * Recursive scan for the first {@link ExprParam} node bound at the
  * *current* lambda level. Visits every child of every node kind so a
@@ -95,6 +100,7 @@ export function readParamName(tree: ExprTree): string | null {
     case "binary":
       return readParamName(tree.left) ?? readParamName(tree.right);
     case "unary":
+    case "convert":
       return readParamName(tree.operand);
     case "conditional":
       return (
@@ -163,6 +169,8 @@ export function evaluateExprTree(tree: ExprTree, scope: ExprTreeScope): unknown 
       return evaluateBinary(tree, scope);
     case "unary":
       return evaluateUnary(tree, scope);
+    case "convert":
+      return evaluateConvert(tree, scope);
     case "conditional":
       return evaluateExprTree(tree.condition, scope)
         ? evaluateExprTree(tree.whenTrue, scope)
@@ -333,6 +341,30 @@ function evaluateRef(node: ExprRef, scope: ExprTreeScope): unknown {
   return refs[node.name];
 }
 
+/**
+ * Evaluates a `convert` node in memory: into `System.Int64` / `System.UInt64`
+ * the value becomes a `bigint` (a fraction truncated, wrapped to 64 bits as
+ * an unchecked cast does); into any other type a `bigint` becomes a
+ * `number`. Narrowing below 64 bits is not wrapped (the documented
+ * divergence of in-memory evaluation; providers translate the tree).
+ */
+function evaluateConvert(node: ExprConvert, scope: ExprTreeScope): unknown {
+  const value = evaluateExprTree(node.operand, scope);
+
+  switch (node.type.name) {
+    case INT64_TYPE_NAME:
+      return BigInt.asIntN(64, toBigInt(value));
+    case UINT64_TYPE_NAME:
+      return BigInt.asUintN(64, toBigInt(value));
+    default:
+      return typeof value === "bigint" ? Number(value) : value;
+  }
+}
+
+function toBigInt(value: unknown): bigint {
+  return typeof value === "bigint" ? value : BigInt(Math.trunc(Number(value)));
+}
+
 function evaluateUnary(node: ExprUnary, scope: ExprTreeScope): unknown {
   const operand = evaluateExprTree(node.operand, scope);
   switch (node.op) {
@@ -401,6 +433,8 @@ export abstract class ExprTreeVisitor<R> {
         return this.visitBinary(tree);
       case "unary":
         return this.visitUnary(tree);
+      case "convert":
+        return this.visitConvert(tree);
       case "conditional":
         return this.visitConditional(tree);
       case "lambda":
@@ -463,6 +497,10 @@ export abstract class ExprTreeVisitor<R> {
   }
 
   protected visitUnary(node: ExprUnary): R {
+    return this.combine([this.visit(node.operand)]);
+  }
+
+  protected visitConvert(node: ExprConvert): R {
     return this.combine([this.visit(node.operand)]);
   }
 

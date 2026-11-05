@@ -5,6 +5,7 @@
  * specifiers.
  */
 
+import * as aggregates from "../src/sample-int64-conformance/aggregates.ts";
 import * as convertCalls from "../src/sample-int64-conformance/convert-calls.ts";
 import { DecimalConvertCalls } from "../src/sample-int64-conformance/convert-calls.ts";
 import * as conversions from "../src/sample-int64-conformance/conversions.ts";
@@ -27,6 +28,7 @@ export const FIXTURE_RUNS: readonly FixtureRun[] = [
   { name: "operators.json", twin: [overflow, division, shifts] },
   { name: "conversions.json", twin: [conversions, DecimalConversions] },
   { name: "math.json", twin: [mathStatics] },
+  { name: "aggregates.json", twin: [aggregates] },
   {
     name: "formatting.json",
     twin: [formatting, parsing, convertCalls, DecimalConvertCalls],

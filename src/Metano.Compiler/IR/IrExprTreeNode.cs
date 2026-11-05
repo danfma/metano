@@ -46,6 +46,13 @@ public sealed record IrExprCall(
 public sealed record IrExprBinary(string Op, IrExprTreeNode Left, IrExprTreeNode Right)
     : IrExprTreeNode;
 
+/// <summary>
+/// A numeric conversion into or out of a 64-bit integer (spec 012 FR-044):
+/// an explicit cast (<c>(long)x.Count</c>) or an implicit widening Roslyn
+/// reports (<c>x.Count &lt; 5L</c>). <see cref="Type"/> is the target.
+/// </summary>
+public sealed record IrExprConvert(IrExprTreeNode Operand, IrTypeRef Type) : IrExprTreeNode;
+
 /// <summary>Unary op: <c>op operand</c>.</summary>
 public sealed record IrExprUnary(string Op, IrExprTreeNode Operand) : IrExprTreeNode;
 

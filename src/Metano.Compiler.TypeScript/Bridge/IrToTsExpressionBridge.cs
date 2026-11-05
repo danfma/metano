@@ -104,6 +104,7 @@ public static partial class IrToTsExpressionBridge
             IrIsPatternExpression isPattern => MapIsPattern(isPattern, context),
             IrSwitchExpression sw => MapSwitchExpression(sw, context),
             IrWithExpression w => MapWithExpression(w, context),
+            IrArrayCreation creation => MapArrayCreation(creation, context),
             IrArrayLiteral arr => new TsArrayLiteral(
                 arr.Elements.Select(e => Map(e, context)).ToList()
             ),
@@ -415,11 +416,51 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression MapElementAccess(IrElementAccess ea, IrToTsBridgeContext context)
     {
         var target = MapNullTolerant(ea.Target, context);
-        var index = Map(ea.Index, context);
+        var index = AsArrayIndex(Map(ea.Index, context), ea.IndexKind);
         if (ea.TargetType is IrMapTypeRef)
             return new TsCallExpression(new TsPropertyAccess(target, "get"), [index]);
         return new TsElementAccess(target, index);
     }
+
+    /// <summary>
+    /// <c>new Array&lt;T&gt;(length).fill(default)</c> for <c>new T[length]</c>;
+    /// every slot shares the default, which the core keeps to literals and
+    /// immutable values. A <c>null</c> default drops the type argument: C#
+    /// types the slots as <c>T</c>, which a strict <c>Array&lt;T&gt;</c> filled
+    /// with <c>null</c> would reject.
+    /// </summary>
+    private static TsExpression MapArrayCreation(
+        IrArrayCreation creation,
+        IrToTsBridgeContext context
+    )
+    {
+        IReadOnlyList<TsType>? elementType = creation.ElementDefault
+            is IrLiteral { Kind: IrLiteralKind.Null }
+            ? null
+            : [IrToTsTypeMapper.Map(creation.ElementType)];
+
+        var array = new TsNewExpression(
+            new TsIdentifier("Array"),
+            [AsArrayIndex(Map(creation.Length, context), creation.LengthKind)],
+            elementType
+        );
+
+        return new TsCallExpression(
+            new TsPropertyAccess(array, "fill"),
+            [Map(creation.ElementDefault, context)]
+        );
+    }
+
+    /// <summary>
+    /// An array index or length as the <c>number</c> JS arrays take:
+    /// <c>Number(l)</c> for a 64-bit one, which is a <c>bigint</c> (spec 012
+    /// FR-036); any other value as is.
+    /// </summary>
+    private static TsExpression AsArrayIndex(TsExpression value, IrNumericKind? kind) =>
+        // STAGING(012k): every mode once the switch is gone.
+        Int64RepresentationScope.IsBigInt && kind is not null
+            ? Int64TsExpressions.Number(value)
+            : value;
 
     /// <summary>
     /// <c>target.slice(start, end)</c> — the same half-open copy for JS arrays
@@ -894,7 +935,7 @@ public static partial class IrToTsExpressionBridge
 
         foreach (var stage in chain.Stages)
         {
-            var emittedName = IrLinqMapping.EmittedName(stage.Operator);
+            var emittedName = Int64LinqTerminals.EmittedName(stage);
             importedHelpers.Add(emittedName);
             var stageArgs = stage.Arguments.Select(a => Map(a, context)).ToList();
             if (stage.Queryable is { } queryable)
@@ -915,7 +956,9 @@ public static partial class IrToTsExpressionBridge
             );
         }
 
-        return new TsLinqCall(args, importedHelpers);
+        var call = new TsLinqCall(args, importedHelpers);
+
+        return Int64LinqTerminals.CountsInInt64(chain) ? Int64TsExpressions.BigInt(call) : call;
     }
 
     /// <summary>
@@ -998,6 +1041,11 @@ public static partial class IrToTsExpressionBridge
                 "unary",
                 ("op", new TsStringLiteral(un.Op)),
                 ("operand", MapExprTree(un.Operand))
+            ),
+            IrExprConvert convert => TreeNode(
+                "convert",
+                ("operand", MapExprTree(convert.Operand)),
+                ("type", MapOptionalType(convert.Type))
             ),
             IrExprConditional cond => TreeNode(
                 "conditional",
@@ -1146,6 +1194,13 @@ public static partial class IrToTsExpressionBridge
         type switch
         {
             IrNullableTypeRef nullable => ResolveStructuredType(nullable.Inner),
+            // STAGING(012k): every mode once the switch is gone. A `bigint`
+            // is named by its .NET type, so a provider tells `long` from
+            // `ulong` (spec 012 FR-044).
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.Int64 }
+                when Int64RepresentationScope.IsBigInt => new("System.Int64", null),
+            IrPrimitiveTypeRef { Primitive: IrPrimitive.UInt64 }
+                when Int64RepresentationScope.IsBigInt => new("System.UInt64", null),
             IrNamedTypeRef named => new(named.Name, named.Origin?.PackageId),
             _ => new(Printer.RenderType(IrToTsTypeMapper.Map(type)), null),
         };
@@ -1171,6 +1226,10 @@ public static partial class IrToTsExpressionBridge
         value switch
         {
             null => new TsLiteral("null"),
+            // STAGING(012k): every mode once the switch is gone.
+            long or ulong when Int64RepresentationScope.IsBigInt => new TsLiteral(
+                string.Create(CultureInfo.InvariantCulture, $"{value}n")
+            ),
             bool b => new TsLiteral(b ? "true" : "false"),
             string s => new TsStringLiteral(s),
             char c => new TsStringLiteral(c.ToString()),
