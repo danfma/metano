@@ -364,7 +364,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // The barrel-scope claims of the module-function fast paths (spec 013
         // FR-032) run once per transform, before the export registry, so the
         // registry, the emission and every call site spell the same names.
-        var moduleFunctionClaims = TsModuleFunctionClaims.Compute(compilation, _currentAssembly);
+        // The claims read shape-only extracted IR, whose type mapping stages
+        // no cross-package dependency.
+        var moduleFunctionClaims = TsModuleFunctionClaims.Compute(
+            compilation,
+            _currentAssembly,
+            IrTypeOriginResolverFactory.CreateUnrecorded(typeMappingContext)
+        );
 
         foreach (var finding in moduleFunctionClaims.Findings)
             ReportDiagnostic(finding);
@@ -2523,7 +2529,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
             foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
             {
-                if (!SymbolHelper.IsExportedModuleFunction(member))
+                if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
                     continue;
 
                 var fnName = ResolveNoContainerFunctionName(member);
@@ -2725,7 +2731,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 );
                 foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
                 {
-                    if (!SymbolHelper.IsExportedModuleFunction(member))
+                    if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
                         continue;
                     var fnName = ResolveNoContainerFunctionName(member);
                     // First-wins: own-assembly entries already registered take priority.

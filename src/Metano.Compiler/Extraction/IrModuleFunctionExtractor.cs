@@ -42,41 +42,11 @@ public static class IrModuleFunctionExtractor
                 continue;
 
             // Plain static methods (and classic `this T` extensions, which
-            // Roslyn exposes the same way).
-            if (
-                member is IMethodSymbol method
-                && method.MethodKind == MethodKind.Ordinary
-                && method.DeclaredAccessibility == Accessibility.Public
-            )
+            // Roslyn exposes the same way) — the one exported-module-function
+            // predicate the claim pass and the export registry share decides
+            // what this branch emits, so every consumer walks the same set.
+            if (member is IMethodSymbol method && method.IsEmittedModuleFunction(target))
             {
-                if (SymbolHelper.HasEmit(method))
-                    continue;
-                if (SymbolHelper.GetImport(method) is not null)
-                    continue;
-                if (SymbolHelper.IsInlineMember(method))
-                    continue;
-                // Roslyn surfaces C# 14 `extension(R r) { … }` members both
-                // lifted onto the static class and as members of a synthetic
-                // empty-name nested type; the syntax pass below picks them up
-                // — skip the lifted view to avoid duplicate emission.
-                if (IsDeclaredInsideExtensionBlock(method))
-                    continue;
-                // Skip property accessors. Classic-style extension properties
-                // come through as methods whose AssociatedSymbol is the
-                // property; they're emitted separately via
-                // ConvertClassicExtensionProperty. C# 14 `extension(R r)`
-                // blocks surface their property getters as plain methods
-                // (`get_Prop`) without an associated symbol — the real
-                // property is rendered via ExtractFromExtensionBlock, so we
-                // also skip the bare `get_*` / `set_*` form here to avoid
-                // emitting duplicate empty-body functions.
-                if (method.AssociatedSymbol is IPropertySymbol)
-                    continue;
-                if (
-                    method.Name.StartsWith("get_", StringComparison.Ordinal)
-                    || method.Name.StartsWith("set_", StringComparison.Ordinal)
-                )
-                    continue;
                 functions.Add(ConvertMethod(method, context));
                 continue;
             }
@@ -800,19 +770,6 @@ public static class IrModuleFunctionExtractor
             OverloadName = claim?.Name,
             SignatureText = claim?.SignatureText,
         };
-    }
-
-    private static bool IsDeclaredInsideExtensionBlock(IMethodSymbol method)
-    {
-        foreach (var syntaxRef in method.DeclaringSyntaxReferences)
-        {
-            for (var node = syntaxRef.GetSyntax().Parent; node is not null; node = node.Parent)
-            {
-                if (node.Kind().ToString() == "ExtensionBlockDeclaration")
-                    return true;
-            }
-        }
-        return false;
     }
 
     private static bool DetectYield(IMethodSymbol method)
