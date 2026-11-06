@@ -241,6 +241,15 @@ public static class IrToTsPlainObjectBridge
                     .Arguments.Select(a => a with { Value = RewriteThis(a.Value, identifierName) })
                     .ToList(),
             },
+            // An object-default base call has no `this` receiver, but its
+            // arguments can hold one (`base.Equals(this.x)`) — descend so a
+            // literal `this` never leaks into the lowered `self` function.
+            IrBaseObjectMemberCall baseCall => baseCall with
+            {
+                Arguments = baseCall
+                    .Arguments.Select(a => a with { Value = RewriteThis(a.Value, identifierName) })
+                    .ToList(),
+            },
             IrBinaryExpression bin => bin with
             {
                 Left = RewriteThis(bin.Left, identifierName),
