@@ -414,6 +414,77 @@ public static class TranspileHelper
     }
 
     /// <summary>
+    /// Transpiles every C# file of <paramref name="directory"/> and its
+    /// subdirectories as one assembly named after it, the way MSBuild builds a
+    /// sample project: with the SDK's implicit usings, the System.Text.Json
+    /// source generator run over the compilation, and namespace barrels. The
+    /// sample drift tests whose committed output must run in the staging
+    /// <see cref="Int64Representation.BigInt"/> mode use it (spec 012
+    /// DECIDED-22: the staging switch has no MSBuild surface, so the samples
+    /// cannot transpile through the build).
+    /// </summary>
+    internal static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileProjectDirectory(
+        string directory,
+        Int64Representation int64Representation,
+        bool namespaceBarrels = true
+    )
+    {
+        var trees = Directory
+            .GetFiles(directory, "*.cs", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
+            .Select(path =>
+                CSharpSyntaxTree.ParseText(
+                    File.ReadAllText(path),
+                    new CSharpParseOptions(LanguageVersion.Preview),
+                    path
+                )
+            )
+            .Prepend(ImplicitUsingsTree());
+
+        var compilation = CSharpCompilation.Create(
+            Path.GetFileName(directory),
+            trees,
+            BaseReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        // The JSON context's abstract members only exist once the generator
+        // ran, so the error check happens on the updated compilation.
+        var (updated, generatedTrees) = RunJsonSourceGenerator(compilation);
+
+        ThrowOnErrors(updated.GetDiagnostics(), $"C# compilation ({directory})");
+
+        return TranspileCore(
+            updated,
+            namespaceBarrels: namespaceBarrels,
+            generatedTrees: generatedTrees,
+            int64Representation: int64Representation
+        );
+    }
+
+    /// <summary>
+    /// The SDK's implicit usings for a net10.0 library (<c>ImplicitUsings</c>
+    /// enabled), which MSBuild injects and a directory transpile has to
+    /// reproduce for samples whose sources rely on them.
+    /// </summary>
+    private static SyntaxTree ImplicitUsingsTree() =>
+        CSharpSyntaxTree.ParseText(
+            """
+            global using System;
+            global using System.Collections.Generic;
+            global using System.IO;
+            global using System.Linq;
+            global using System.Net.Http;
+            global using System.Threading;
+            global using System.Threading.Tasks;
+            """,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
+
+    /// <summary>
     /// Like <see cref="TranspileWithDiagnostics(string, Int64Representation)"/>
     /// for a project compiled with <c>CheckForOverflowUnderflow</c>
     /// (Roslyn's <c>CheckOverflow</c> option), so every operation outside an

@@ -19,6 +19,9 @@ namespace SampleIssueTracker;
 ///   <item>array of nested refs (<see cref="Comment"/>[])</item>
 ///   <item>a collection root (<c>IReadOnlyList&lt;Comment&gt;</c>), emitted as a
 ///   <c>ValueSpec</c> (#270)</item>
+///   <item>64-bit values (spec 012 FR-068): the branded <see cref="SharedKernel.SnowflakeId"/>,
+///   the <c>long</c> ticks of <see cref="IssueActivity"/>, and the <c>long</c>-keyed
+///   dictionary of <see cref="ActivityFeed"/>, whose JSON keys read back as <c>bigint</c></item>
 /// </list>
 /// </para>
 /// </summary>
@@ -26,4 +29,7 @@ namespace SampleIssueTracker;
 [JsonSerializable(typeof(IssueSnapshot))]
 [JsonSerializable(typeof(Comment))]
 [JsonSerializable(typeof(IReadOnlyList<Comment>))]
+[JsonSerializable(typeof(IssueActivity))]
+[JsonSerializable(typeof(IssueActivity[]))]
+[JsonSerializable(typeof(ActivityFeed))]
 public partial class JsonContext : JsonSerializerContext;

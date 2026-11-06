@@ -82,7 +82,7 @@ internal static class ReferenceFixture
             return new FixtureResult(
                 method.Name,
                 argumentTexts,
-                ValueText.Of(method.Invoke(null, arguments))
+                ValueText.Of(method.Invoke(null, Unboxed(arguments)))
             );
         }
         catch (TargetInvocationException invocation) when (invocation.InnerException is { } thrown)
@@ -95,6 +95,18 @@ internal static class ReferenceFixture
             );
         }
     }
+
+    /// <summary>
+    /// The arguments as the twin receives them: a boxed operand is invoked as
+    /// the value it wraps, so <c>Equals(object)</c> sees the boxed value, not
+    /// the operand record.
+    /// </summary>
+    private static object?[] Unboxed(object?[] arguments) =>
+        arguments
+            .Select(argument =>
+                argument is BoundaryOperands.BoxedValue boxed ? boxed.Value : argument
+            )
+            .ToArray();
 
     /// <summary>Every combination of the boundary operands of the method's parameters, in order.</summary>
     private static IEnumerable<object?[]> ArgumentsOf(MethodInfo method) =>

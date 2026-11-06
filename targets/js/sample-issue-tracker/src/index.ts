@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+/** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import * as $SampleIssueTracker from "./sample-issue-tracker";
 import * as $SampleIssueTracker_Issues_Application from "./sample-issue-tracker/issues/application";
 import * as $SampleIssueTracker_Issues_Domain from "./sample-issue-tracker/issues/domain";

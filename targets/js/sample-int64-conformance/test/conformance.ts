@@ -137,7 +137,8 @@ function invoke(
 
 /**
  * A fixture argument as the twin receives it: a `bigint`, a `number`, a
- * one-character string, a `Decimal`, a `string` or a `boolean`.
+ * one-character string, a `Decimal`, a `string`, a `boolean`, an array of
+ * them, or a boxed value named by its .NET type (`Int64:5`, `Int32:5`, …).
  */
 function argumentOf(text: string | null, type: string): unknown {
   if (text === null) {
@@ -145,6 +146,14 @@ function argumentOf(text: string | null, type: string): unknown {
   }
 
   const baseType = baseTypeOf(type);
+
+  if (baseType.endsWith("[]")) {
+    return arrayOf(text, baseType.slice(0, -2));
+  }
+
+  if (baseType === "Object") {
+    return boxedValueOf(text);
+  }
 
   if (BIGINT_TYPES.has(baseType)) {
     return BigInt(text);
@@ -169,6 +178,45 @@ function argumentOf(text: string | null, type: string): unknown {
   return Number(text);
 }
 
+/** A `[5,-6,…]` fixture text as the array of elements its type names. */
+function arrayOf(text: string, elementType: string): readonly unknown[] {
+  const inner = text.slice(1, -1);
+
+  if (inner === "") {
+    return [];
+  }
+
+  return inner.split(",").map((element) => scalarArgumentOf(element, elementType));
+}
+
+/** A `Type:value` boxed text as the JS value the twin's `object` slot holds. */
+function boxedValueOf(text: string): unknown {
+  const separator = text.indexOf(":");
+
+  if (separator < 0) {
+    return null;
+  }
+
+  return scalarArgumentOf(text.slice(separator + 1), text.slice(0, separator));
+}
+
+/** One scalar element by its .NET type name, as `argumentOf` reads a parameter. */
+function scalarArgumentOf(text: string, type: string): unknown {
+  if (BIGINT_TYPES.has(type)) {
+    return BigInt(text);
+  }
+
+  if (type === "String") {
+    return text;
+  }
+
+  if (type === "Boolean") {
+    return text === "true";
+  }
+
+  return Number(text);
+}
+
 function matches(row: FixtureCase, returns: string, outcome: Outcome): boolean {
   if (row.throws !== undefined) {
     return (
@@ -186,6 +234,12 @@ function returnsExpected(value: unknown, expected: string | null, type: string):
   }
 
   const baseType = baseTypeOf(type);
+
+  if (baseType.endsWith("[]")) {
+    return (
+      Array.isArray(value) && arrayTextOf(value, baseType.slice(0, -2)) === expected.slice(1, -1)
+    );
+  }
 
   if (BIGINT_TYPES.has(baseType)) {
     return typeof value === "bigint" && value.toString() === expected;
@@ -230,4 +284,17 @@ function describeOutcome(outcome: Outcome): string {
 
 function mismatch(row: FixtureCase, expected: string, actual: string): Mismatch {
   return { case: row.case, args: row.args, expected, actual };
+}
+
+/** A returned array as the comma-joined element texts the fixture compares. */
+function arrayTextOf(value: readonly unknown[], elementType: string): string {
+  return value
+    .map((element) => {
+      if (BIGINT_TYPES.has(elementType)) {
+        return typeof element === "bigint" ? element.toString() : String(element);
+      }
+
+      return String(element);
+    })
+    .join(",");
 }

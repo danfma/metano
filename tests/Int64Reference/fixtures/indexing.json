@@ -1,0 +1,30 @@
+{
+  "signatures": {
+    "ElementAt": {"parameters":["Int64[]","Int64"],"returns":"Int64"},
+    "IntElementAt": {"parameters":["Int32[]","Int64"],"returns":"Int32"},
+    "LongLengthOf": {"parameters":["Int64[]"],"returns":"Int64"},
+    "SizedLongs": {"parameters":["Int64"],"returns":"Int64[]"},
+    "SizedInts": {"parameters":["Int32"],"returns":"Int32[]"}
+  },
+  "cases": [
+    {"case":"ElementAt","args":["[5,-6,9007199254740993]","0"],"result":"5"},
+    {"case":"ElementAt","args":["[5,-6,9007199254740993]","1"],"result":"-6"},
+    {"case":"ElementAt","args":["[5,-6,9007199254740993]","2"],"result":"9007199254740993"},
+    {"case":"ElementAt","args":["[0,0,-9223372036854775808]","0"],"result":"0"},
+    {"case":"ElementAt","args":["[0,0,-9223372036854775808]","1"],"result":"0"},
+    {"case":"ElementAt","args":["[0,0,-9223372036854775808]","2"],"result":"-9223372036854775808"},
+    {"case":"IntElementAt","args":["[7,-8,2147483647]","0"],"result":"7"},
+    {"case":"IntElementAt","args":["[7,-8,2147483647]","1"],"result":"-8"},
+    {"case":"IntElementAt","args":["[7,-8,2147483647]","2"],"result":"2147483647"},
+    {"case":"LongLengthOf","args":["[5,-6,9007199254740993]"],"result":"3"},
+    {"case":"LongLengthOf","args":["[0,0,-9223372036854775808]"],"result":"3"},
+    {"case":"SizedLongs","args":["0"],"result":"[]"},
+    {"case":"SizedLongs","args":["1"],"result":"[0]"},
+    {"case":"SizedLongs","args":["3"],"result":"[0,0,0]"},
+    {"case":"SizedLongs","args":["10"],"result":"[0,0,0,0,0,0,0,0,0,0]"},
+    {"case":"SizedInts","args":["0"],"result":"[]"},
+    {"case":"SizedInts","args":["1"],"result":"[0]"},
+    {"case":"SizedInts","args":["3"],"result":"[0,0,0]"},
+    {"case":"SizedInts","args":["10"],"result":"[0,0,0,0,0,0,0,0,0,0]"}
+  ]
+}

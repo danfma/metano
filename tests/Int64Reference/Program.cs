@@ -34,3 +34,7 @@ ReferenceFixture.Write(
 );
 
 ReferenceFixture.Write(Path.Combine(fixtures, "aggregates.json"), typeof(Aggregates));
+
+ReferenceFixture.Write(Path.Combine(fixtures, "comparisons.json"), typeof(Comparisons));
+
+ReferenceFixture.Write(Path.Combine(fixtures, "indexing.json"), typeof(Indexing));

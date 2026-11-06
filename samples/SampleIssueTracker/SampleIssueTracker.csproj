@@ -1,24 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The sample carries 64-bit values (spec 012 FR-068: the SnowflakeId ids
+    and the tick math of the issue activity feed), whose generated output
+    must run in the compiler-internal BigInt mode of the staging switch
+    (DECIDED-22). The mode has no MSBuild surface on purpose, so the sample
+    has no Metano transpile step: tests/Metano.Tests/Int64IssueTrackerSampleTests.cs
+    transpiles it into targets/js/sample-issue-tracker/src (formatting it
+    with the same Biome pass the build target used to run) and fails on
+    drift. METANO_UPDATE_INT64_ISSUE_TRACKER=1 rewrites the committed output.
+  -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <MetanoOutputDir>../../targets/js/sample-issue-tracker/src</MetanoOutputDir>
-    <MetanoClean>true</MetanoClean>
-    <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
-    <!--
-      Opt into the root namespace barrel (ADR-0006 follow-up, issue #22)
-      so consumers can import `{ Issues, Planning, SharedKernel }` from
-      the package root in addition to the existing leaf barrels. The
-      aggregation shape stays tree-shakable under current bundlers.
-    -->
-    <MetanoNamespaceBarrels>true</MetanoNamespaceBarrels>
-    <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
-    <MetanoPostBuildCommand>bunx biome check --write &quot;$(MetanoOutputDir)&quot;</MetanoPostBuildCommand>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
   </ItemGroup>
-
-  <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
 </Project>

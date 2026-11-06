@@ -33,7 +33,8 @@
   "scripts": {
     "build": "tsgo -b .",
     "test": "bun test",
-    "bench:json": "bun bench/json/run.ts"
+    "bench:json": "bun bench/json/run.ts",
+    "bench:int64": "bun bench/int64/run.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.11",
