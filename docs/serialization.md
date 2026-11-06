@@ -356,9 +356,9 @@ the last in the text, `2`). A custom converter of the key's kind still takes
 precedence.
 
 A `long` / `ulong` key reads as a `number` while 64-bit integers are numbers
-(spec 012 slice 012e turns them into `bigint`). A dictionary with a
-non-`string` key can be a property but not yet a `[JsonSerializable]` root
-(`MS0035`, [Roots](#roots)).
+(spec 012 turns them into `bigint`; [64-bit numbers](#64-bit-numbers)). A
+dictionary with a non-`string` key can be a property but not yet a
+`[JsonSerializable]` root (`MS0035`, [Roots](#roots)).
 
 ## Validating branded types
 
@@ -837,6 +837,71 @@ order.total.toFixed(); // "12345678901234567890.123456789"
   path read the text ([Errors and limits](#errors-and-limits)). The tokenizer
   itself stops at 1 000 levels, short of the stack, where `JSON.parse` reads on.
 
+## 64-bit numbers
+
+From spec 012 (3.0.0), every `long` / `ulong` (and `nint` / `nuint`) property,
+element, dictionary value or root carries an `int64` descriptor instead of a
+`primitive` one, whatever the read options — including a `[Branded]` type over
+a 64-bit integer, whose descriptor keeps the branded companion factory and CLR
+`typeName` and applies them after the exact read:
+
+```typescript
+{
+  ts: "id",
+  json: "id",
+  type: {
+    kind: "int64",
+    numberType: "System.Int64",
+    typeName: "MyApp.SharedKernel.SnowflakeId",
+    create: SnowflakeId.from,
+  },
+}
+```
+
+**Writes.** The converter writes a `bigint` through the shared exact-number
+writer (`writeExactNumber`), so `JSON.stringify` prints the exact digits,
+unquoted, byte-identical to System.Text.Json. A `rawJSON` leaf and a safe
+integer write the same way; a JS `number` beyond `Number.MAX_SAFE_INTEGER`
+throws `JsonException` (the digits are already gone), and so does a
+non-integer `number`.
+
+**Reads from a tree.** The converter accepts, in order: a `bigint` within the
+type's range; a `rawJSON` leaf whose text is an integer token
+(`1.0` / `1e3` are rejected, `-0` reads as `0n`); a safe integer `number`
+(read as `BigInt(n)`); and — when the context reads numbers from strings — a
+string in the [numbers-from-strings](#web-defaults) grammar, which now comes
+back as a `bigint`. A `number` beyond the safe integers throws
+`JsonException` naming `deserializeText`, because `JSON.parse` already lost
+the digits (spec 012 OQ-3). Anything else throws
+`The JSON value could not be converted to System.Int64.` (`` …
+System.Nullable`1[System.Int64].`` for a nullable slot; `System.UInt64` for a
+`ulong`).
+
+**Reads from text.** A root whose closure contains a 64-bit member reads
+exactly through `deserializeText` — the same forward-looking tokenizer the
+decimals use — so ids above 2^53 arrive with every digit. The tree path is
+exact only for `bigint` and `rawJSON` values; see the sample round trip in
+[`targets/js/sample-issue-tracker/test/json-int64.test.ts`](../targets/js/sample-issue-tracker/test/json-int64.test.ts).
+
+**Dictionary keys.** A 64-bit dictionary key is written as its digits
+(`"1152921504606846977"`), as System.Text.Json writes the property name, and
+read back as a `bigint` key — never a rounded `number`. A `long`-keyed
+dictionary can be a property but not a `[JsonSerializable]` root (`MS0035`);
+wrap it in a record to put it on the wire.
+
+**The `JSON.stringify` hazard.** A transpiled object holding a raw `bigint`
+throws under plain `JSON.stringify` (`Do not know how to serialize a BigInt`);
+the runtime does not patch `BigInt.prototype.toJSON` (no global side effects).
+The generated context is the supported writer — see [When to use
+`[PlainObject]`](#when-to-use-plainobject-vs-jsonserializercontext) for the
+plain-object rule of thumb.
+
+**Migration.** The 3.0 items — the type change, the tree leaf, the hazard,
+the interop warnings (`MS0065`) and the renamed staging helpers
+(`isInt64Value` / `isUInt64Value`, `tryParseInt64Value`, `hashInt64`) — are
+listed in [Migrating to 3.0](#migrating-to-30) and the spec's own migration
+section.
+
 ## Migrating to 3.0
 
 **Null roots (#268, FR-037).** `deserialize` and `deserializeText` through a
@@ -915,6 +980,43 @@ writes or accepts, so a payload exchanged with a 2.x build can differ:
   member names (`"High"`, 2.x wrote `"1"`) and `bool` keys as `True` /
   `False` (2.x: `true` / `false`), as .NET writes them; 2.x payloads still
   read.
+
+**64-bit integers (spec 012).** `long` / `ulong` (and `nint` / `nuint`) are
+`bigint` now, and the JSON tree changes shape around them
+([64-bit numbers](#64-bit-numbers)):
+
+- Generated types say `bigint` where 2.x said `number` (`ticks?: bigint`).
+  Hand-written TS that passes `number`s fails `tsc` (TS2322 / TS2365): pass
+  `5n` / `BigInt(n)`, convert with `Number(x)`.
+- `serialize` returns `rawJSON` leaves for 64-bit values (as for decimals);
+  `JSON.stringify` prints them unquoted. `structuredClone` of such a tree
+  throws `DataCloneError`; stringify the tree first.
+- Reads beyond 2^53 are exact only through the exact path: a tree the caller
+  parsed with `JSON.parse` already lost the digits, and a `number` leaf beyond
+  the safe integers throws pointing at `deserializeText`.
+- A 64-bit dictionary key is written as its digits and read back as a
+  `bigint` key (2.x read the strings).
+- `JSON.stringify` on a transpiled object with a 64-bit field throws; the
+  generated context is the writer (`c.json(dto)` in Hono needs
+  `JSON.stringify(serializer.serialize(dto, spec))`).
+- Interop declarations (`[Import]`, `[Emit]`, `[External]`, user
+  `[MapMethod]` / `[MapProperty]` templates) exchange `bigint` with
+  JavaScript now; the compiler warns `MS0065` at each one.
+- Overflow wraps and `checked` throws like C# (`long.MaxValue + 1` is
+  `long.MinValue`); `/` by zero throws `DivideByZeroException` for `long` too.
+- Runtime staging names, renamed again by the 3.0 flip: the `bigint` type
+  checks ship as `isInt64Value` / `isUInt64Value` (2.x `isInt64` /
+  `isUInt64` stay the `number` range checks until the flip replaces them),
+  the signed `TryParse` helper as `tryParseInt64Value` (2.x `tryParseInt64`
+  stays the `number` parser), and every `bigint` hash — `HashCode.add`,
+  `valueHashCode`, `hashInt64` — is the .NET word fold, so `BigInteger` hash
+  values computed in 2.x no longer match.
+- Overload dispatch decides `M(int)` vs `M(long)` by `typeof` now (2.x
+  decided by range), and `object o = 5UL; o is long` is `true` where C# says
+  `false` (a raw `bigint` reads its range; see
+  [bcl-mappings](bcl-mappings.md#runtime-type-tests-and-dispatch)).
+- `(int)someDouble` truncates now — floating-point casts were erased in 2.x
+  (`(int)3.7` was `3.7`) and saturate like .NET today.
 
 **Other changes.** Spec 009 changed these too; the first, second and fourth
 already shipped in 2.x:

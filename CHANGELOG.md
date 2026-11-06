@@ -4,6 +4,44 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased (3.0.0 migration notes)
+
+Pre-release notes for the 3.0.0 breaking changes that are already merged
+behind the compiler-internal staging switch; the release regenerates the
+released sections, and these notes carry forward the migration list.
+
+### ⚠ 64-bit integers become `bigint` (spec 012)
+
+- `long` / `ulong` (and `nint` / `nuint`) map to TypeScript `bigint` instead
+  of `number`; hand-written TS that passes `number`s fails `tsc` (pass `5n` /
+  `BigInt(n)`, convert with `Number(x)`). TypeScript `target` ES2020+ is
+  required for `bigint` literals.
+- Overflow now wraps (or throws under `checked`) exactly where C# does;
+  `/` by zero throws `DivideByZeroException` for `long` too.
+- JSON: 64-bit values serialize through the generated context as exact
+  digits (`rawJSON` leaves in the tree); plain `JSON.stringify` on a
+  transpiled object with a 64-bit field throws. A tree holding a `number`
+  beyond the safe integers throws and points at `deserializeText`; 64-bit
+  dictionary keys read back as `bigint` keys.
+- Runtime helpers, staged names until the flip renames them: `hashInt64`
+  (the .NET word fold every `bigint` hash goes through — `BigInteger` hash
+  values computed in 2.x no longer match), `isInt64Value` /
+  `isUInt64Value` (the `bigint` type checks that replace the `number`
+  range checks named `isInt64` / `isUInt64`), and `tryParseInt64Value` (the
+  signed `TryParse` that replaces the `number` parser named
+  `tryParseInt64`).
+- Interop declarations (`[Import]`, `[Emit]`, `[External]`, user
+  `[MapMethod]` / `[MapProperty]` templates) exchange `bigint` with
+  JavaScript; the compiler warns `MS0065` at each one.
+- Overload dispatch decides `M(int)` vs `M(long)` by `typeof`; `object o =
+  5UL; o is long` is now `true` (a raw `bigint` reads its range).
+- `uint op int` promotes to `long` in C#, so those expressions produce
+  `bigint` intermediates even in code that never names `long`; and
+  floating-point → integer casts truncate now instead of being erased
+  (`(int)3.7` is `3`).
+- The cost is documented and benchmarked (`bun run bench:int64`); code that
+  does not need 64-bit range should keep `int` or `double`.
+
 ## 2.10.1
 
 _2026-11-03_
