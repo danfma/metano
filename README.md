@@ -128,6 +128,9 @@ export class TodoItem {
   `[Optional]`, and `[Import]`.
 - BCL mappings for collections, LINQ, `decimal`, `Guid`, temporal types,
   `BigInteger`, tasks, strings, math, and console output.
+- Exact 64-bit integers in the TypeScript target: `long` / `ulong` hold
+  `bigint` (3.0.0), so ids and tick counts past 2^53 keep every digit, and
+  overflow wraps (or throws under `checked`) exactly where C# does.
 - Cross-project package generation with `[EmitPackage]`, generated barrels,
   npm dependency updates, and package-aware imports.
 - `System.Text.Json` source-generation metadata emitted as a TypeScript

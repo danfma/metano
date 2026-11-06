@@ -11,7 +11,8 @@ This page lists every mapping the transpiler knows about out of the box.
 |----|----|
 | `string` | `string` |
 | `bool` | `boolean` |
-| `int`, `long`, `short`, `byte`, `sbyte`, `uint`, `ulong`, `ushort`, `float`, `double` | `number` |
+| `int`, `short`, `byte`, `sbyte`, `uint`, `ushort`, `float`, `double` | `number` |
+| `long`, `ulong`, `nint`, `nuint` | `bigint` (3.0.0; [64-bit integers](#64-bit-integers-long--ulong); 2.x output keeps `number`) |
 | `decimal` | `Decimal` (from [`decimal.js`](https://mikemcl.github.io/decimal.js/)) |
 | `BigInteger` | `bigint` |
 | `char` | `string` (length 1) |
@@ -214,7 +215,7 @@ delegates, constructors and null-conditional calls, report MS0001 and pass by va
 | C# | TypeScript |
 |----|----|
 | `int.TryParse(s, out var n)` | `tryParseInt32(s)` |
-| `long.TryParse(s, out var n)` | `tryParseInt64(s)` |
+| `long.TryParse(s, out var n)` | `tryParseInt64Value(s)` (until the 3.0 flip; then `tryParseInt64`, which returns a `bigint`) |
 | `double.TryParse` / `float.TryParse` | `tryParseFloat64(s)` |
 | `bool.TryParse(s, out var b)` | `tryParseBoolean(s)` |
 
@@ -425,6 +426,114 @@ Not mapped: `IsNormal`/`IsSubnormal`; method groups such as
 `Func<double, bool> f = double.IsNaN` (templates apply to calls only); and generic
 math calls such as `T.IsNaN(v)` with `T : INumber<T>`, which bind to the generic
 interface rather than to `double`/`float`.
+
+## 64-bit integers (`long` / `ulong`)
+
+From spec 012 (3.0.0), `long`, `ulong`, `nint` and `nuint` hold `bigint`, so no digit
+is lost past 2^53 (Snowflake ids, database keys, tick counts, hashes). Until the 3.0
+flip the shipped output keeps 2.x `number` behavior behind a compiler-internal staging
+switch; everything below describes the `bigint` output, which every test and the
+conformance sample run in. The full contract is
+[`specs/012-long-as-bigint/`](../specs/012-long-as-bigint/spec.md); the JSON side is in
+[docs/serialization.md](serialization.md#64-bit-numbers).
+
+### Arithmetic, overflow, and `checked`
+
+Every C# arithmetic result is reduced back into the 64-bit domain the way C# reduces
+it: an unchecked context wraps with the native `BigInt.asIntN(64, …)` /
+`BigInt.asUintN(64, …)`, a checked context calls the runtime
+`checkedInt64(…)` / `checkedUInt64(…)`, which throw `OverflowException` with .NET's
+message. The context comes from Roslyn (`checked { }`, `unchecked { }`, or the
+`CheckForOverflowUnderflow` project option). Division and remainder go through
+`divInt64` / `remInt64` / `divUInt64` / `remUInt64` (`DivideByZeroException` on a zero
+divisor, `OverflowException` for `long.MinValue / -1` in both contexts); a constant
+divisor that cannot throw stays inline (`a / 7n`). Shift counts are masked
+(`x << 70` → `x << 6n`; a variable count becomes `BigInt(n & 63)`), `>>>` on `long`
+re-wraps through `BigInt.asUintN`, and `/` by zero throws for `long` too.
+
+### Conversions
+
+Every conversion across a 64-bit integer is explicit, from Roslyn's semantic model:
+
+| C# | TypeScript |
+|----|----|
+| `long x = i;` (`int i`) | `BigInt(i)` |
+| `(int)l` | `Number(BigInt.asIntN(32, l))` (checked: `Number(checkedNarrow(l, 32, true))`) |
+| `(long)d` (`double d`) | `int64FromDouble(d)` (truncate, saturate, NaN → `0n`; checked variant throws) |
+| `(double)l` | `Number(l)` |
+| `(float)l` | `int64ToSingle(l)` (one rounding, like C#) |
+| `(long)m` (`decimal m`) | `int64FromDecimal(m)` (always checked, like C#) |
+| `(long)b` (`BigInteger b`) | `int64FromBigInteger(b)` |
+| `(int)d` | `int32FromDouble(d)` (3.0.0: floating-point casts truncate now instead of being erased — `(int)3.7` is `3`) |
+| `l == 5`, `l < i` | `l === 5n`, `l < i` (a `bigint` and an integer `number` compare exactly) |
+
+`uint op int` promotes to `long` in C#, so `ui + i`, `ui * i` and `-ui` produce
+`bigint` expressions even in code that never names `long` (relational `ui < i` stays
+`number`).
+
+### `Math` and the 64-bit statics
+
+| C# | TypeScript |
+|----|----|
+| `Math.Abs(l)` / `long.Abs(l)` | `absInt64(l)` (`long.MinValue` throws) |
+| `Math.Max(a, b)` / `Math.Min` | `maxInt64(a, b)` / `minInt64(a, b)` (and `…UInt64`) |
+| `Math.Sign(l)` | `signInt64(l)` |
+| `Math.Clamp(v, lo, hi)` | `clampInt64(v, lo, hi)` |
+| `Math.DivRem(a, b)` | `divRemInt64(a, b)` (a mutable `[quotient, remainder]`) |
+| `Math.BigMul(a, b, out var low)` | `const [high, low] = bigMulInt64(a, b)` |
+| `arr[l]`, `arr.LongLength`, `new int[l]` | `arr[Number(l)]`, `BigInt(arr.length)`, `new Array<number>(Number(l)).fill(0)` |
+
+### Formatting, parsing, `Convert`, LINQ
+
+| C# | TypeScript |
+|----|----|
+| `l.ToString("N0")`, `$"{l,8}"`, `$"{l:X}"` | `formatInt64(l, "N0")`, `formatInt64(l, null, 8)`, `formatInt64(l, "X")` (`G D N F X R` in the invariant culture; a custom format reports `MS0066` and throws) |
+| `long.Parse(s)` / `ulong.Parse(s, NumberStyles.HexNumber)` | `parseInt64(s)` / `parseUInt64(s, 515)` |
+| `long.TryParse(s, out var x)` | `const [ok, x] = tryParseInt64Value(s)` (`tryParseInt64` after the 3.0 flip) |
+| `Convert.ToInt64(d)` / `(s)` / `(s, 16)` | `convertDoubleToInt64(d)` / `convertStringToInt64(s)` / `convertStringToInt64(s, 16)` |
+| `Convert.ToInt32(l)` | `Number(convertNarrow(l, "Int32"))` |
+| `l.CompareTo(m)` / `l.Equals(m)` / `l.GetHashCode()` | `compareInt64(l, m)`, `l === m`, `valueHashCode(l)` (the .NET word fold) |
+| `ids.Sum()` / `ids.Average()` / `ids.Max()` | `linq(ids, sumInt64())` / `averageInt64()` / `maxInt64Of()` (the checked 64-bit terminals) |
+| `ts.Ticks` / `TimeSpan.FromTicks(l)` / `dt.Ticks` | `durationTicks(ts)` / `durationFromTicks(l)` / `plainDateTimeTicks(dt)` |
+| `Console.WriteLine(l)` | `console.log(String(l))` |
+
+### Runtime type tests and dispatch
+
+`isInt64` / `isUInt64` test `typeof v === "bigint"` plus the range (DECIDED-14), so
+overload dispatch distinguishes `M(int)` from `M(long)` by the runtime type. Same-arity
+overloads that differ only among `long`, `ulong` and `BigInteger` are tried in that
+order. One divergence from C#, recorded by the spec's Edge Cases table and true for any
+value that reaches an `object` slot: the raw `bigint` carries no static type, so the
+test reads the range — `object o = 5UL; o is long` is `true` in TypeScript where C#
+says `false` (the analogue of 011's number-box divergence). A `bigint` outside the
+`long` range also answers `o is long` with `false` and `o is ulong` with `true`, but the
+test is a range check, not a stored box.
+
+### Performance
+
+`bigint` arithmetic costs more than `number` in tight loops; the cost is documented,
+not hidden (NFR-006). The benchmark harness is
+`targets/js/metano-runtime/bench/int64/` (`bun run bench:int64`), median of 10 runs
+after 3 warm-ups, one fresh process per runtime. Recorded 2026-11-06 on
+Apple M1 Pro, 16 GB, macOS arm64 (Darwin 25.6.0), Node v24.11.0, Bun 1.4.2 —
+a review artifact, not a CI gate:
+
+| Case | Bun bigint | Bun number | ratio | Node bigint | Node number | ratio |
+|----|----|----|----|----|----|----|
+| sum 1e6 (wrap vs plain) | 15.73 ms | 1.20 ms | 13.1× | 8.40 ms | 6.03 ms | 1.4× |
+| FNV-1a hash mix 1e5 strings | 87.44 ms | 2.71 ms | 32.3× | 12.86 ms | 8.92 ms | 1.4× |
+| division 1e6 (helper + constant vs number) | 1.19 ms | 0.04 ms | ~1× per op | 0.52 ms | 0.01 ms | ~1× per op |
+| `formatInt64("N0")` 1e5 vs `toLocaleString` | 15.44 ms | 1537.14 ms | 0.01× | 22.60 ms | 1633.36 ms | 0.01× |
+| `parseInt64` 1e5 vs `Number` | 23.20 ms | 1.81 ms | 12.8× | 26.95 ms | 5.27 ms | 5.1× |
+| JSON round-trip 1e5 records | 72.56 ms | 26.51 ms | 2.7× | 103.84 ms | 48.80 ms | 2.1× |
+
+Readings: the wrap is cheap where V8 (Node) lowers `BigInt.asIntN` to native 64-bit
+arithmetic (sum 1.4×), while JavaScriptCore (Bun) pays ~13×; hash mixing pays the
+multiply path (32× on JSC, 1.4× on V8); `divInt64` and inline `bigint` division run at
+about the `number` cost on V8; `formatInt64` beats `Intl` by two orders of magnitude on
+both runtimes; the exact JSON path costs 2–3× the `number` round trip. The division row
+compares one helper call plus one inline division per element against one `number`
+division per element, so the ratio reads per-operation, not per-case.
 
 ## Console
 
