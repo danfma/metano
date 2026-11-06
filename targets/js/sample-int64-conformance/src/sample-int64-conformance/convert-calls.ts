@@ -1,5 +1,5 @@
 import { convertDecimalToInt64, convertDecimalToUInt64, convertDoubleToInt64, convertDoubleToUInt64, convertNarrow, convertStringToInt64, convertStringToUInt64, int64ToSingle } from "metano-runtime";
-import { Decimal } from "decimal.js";
+import type { Decimal } from "decimal.js";
 
 export function convertFromDouble(value: number): bigint {
   return convertDoubleToInt64(value);
