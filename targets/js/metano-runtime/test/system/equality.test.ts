@@ -324,6 +324,16 @@ describe("64-bit integers (bigint)", () => {
     expect(hashCode(BigInt("-1"))).toBe(hashCode(-1n));
     expect(hashCode(-1n)).not.toBe(hashCode(5n));
   });
+
+  // A 64-bit value hashes as .NET's GetHashCode does — the raw 32-bit fold,
+  // not the accumulator mix (FR-046): 5, 0, 1 and 0 for 5L, -1L, 1L << 32
+  // and ulong.MaxValue.
+  test("valueHashCode hashes a bigint like long.GetHashCode", () => {
+    expect(valueHashCode(5n)).toBe(5);
+    expect(valueHashCode(-1n)).toBe(0);
+    expect(valueHashCode(1n << 32n)).toBe(1);
+    expect(valueHashCode(18446744073709551615n)).toBe(0);
+  });
 });
 
 describe("objectEquals / tupleEquals (C# object.Equals and ValueTuple.Equals)", () => {

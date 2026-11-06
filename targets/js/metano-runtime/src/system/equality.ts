@@ -12,6 +12,7 @@
  * {@link valueHashCode} (#254).
  */
 import { HashCode } from "./hash-code.ts";
+import { hashInt64 } from "./int64.ts";
 
 /**
  * Returns true when `a` and `b` are deeply equal. Comparison rules, in order:
@@ -167,6 +168,10 @@ export function hashCode(value: unknown): number {
     }
     return hc.toHashCode();
   }
+
+  // A 64-bit integer (or BigInteger) hashes as .NET's GetHashCode does —
+  // the raw 32-bit fold of its two words (FR-046), not the accumulator mix.
+  if (typeof value === "bigint") return hashInt64(value);
 
   // Primitives.
   return HashCode.combine(value);
