@@ -1,6 +1,7 @@
 export type {
   TypeDescriptor,
   PrimitiveDescriptor,
+  Int64Descriptor,
   RefDescriptor,
   TemporalDescriptor,
   DecimalDescriptor,

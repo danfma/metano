@@ -13,6 +13,7 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 internal enum JsonPropertyKind
 {
     Primitive,
+    Int64,
     Nullable,
     Branded,
     Decimal,

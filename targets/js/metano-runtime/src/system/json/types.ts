@@ -1,8 +1,11 @@
 // ─── Type Descriptors ────────────────────────────────────────────────────────
 
 /**
- * The CLR name of a C# numeric type that maps to a TS `number`, as
- * System.Text.Json names it in conversion errors.
+ * The CLR name of a C# numeric type, as System.Text.Json names it in
+ * conversion errors. The 64-bit integers (`System.Int64`, `System.UInt64`)
+ * map to `bigint` and carry an `int64` descriptor (spec 012 FR-050); the
+ * rest map to a TS `number` and carry this name as a `primitive` descriptor's
+ * `numberType`.
  */
 export type NumberTypeName =
   | "System.Byte"
@@ -42,6 +45,17 @@ type WithClrTypeName = {
 export type PrimitiveDescriptor = WithClrTypeName & {
   readonly kind: "primitive";
   readonly numberType?: NumberTypeName;
+};
+
+/**
+ * `long` / `ulong` (and `nint` / `nuint`) — exact digits on write, integer
+ * tokens on read, as a TS `bigint` (spec 012 FR-050). The `numberType` names
+ * the 64-bit type in the conversion errors and decides the signedness of the
+ * integer grammars.
+ */
+export type Int64Descriptor = {
+  readonly kind: "int64";
+  readonly numberType: "System.Int64" | "System.UInt64";
 };
 
 /** Another spec — recursive serialize/deserialize */
@@ -156,6 +170,7 @@ export type NullableDescriptor = {
 
 export type TypeDescriptor =
   | PrimitiveDescriptor
+  | Int64Descriptor
   | RefDescriptor
   | TemporalDescriptor
   | DecimalDescriptor

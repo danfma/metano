@@ -24,6 +24,7 @@ import { IA } from "#/sample-json-contracts/ia";
 import { IgnBase } from "#/sample-json-contracts/ign-base";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
+import { Int64Box } from "#/sample-json-contracts/int64-box";
 import { IntMapHolder } from "#/sample-json-contracts/int-map-holder";
 import { IS } from "#/sample-json-contracts/is";
 import { Level } from "#/sample-json-contracts/level";
@@ -755,6 +756,22 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   },
   OK4: {
     assertRead: (value) => expect((value as { c: string }).c).toBe("a"),
+  },
+  // The 64-bit rows of spec 012 (slice 012e) run on the System.Text.Json
+  // side only, but I2 is wire-compatible within the safe integers: the
+  // generated fields are numbers until the bigint flip (012k) turns them
+  // into bigint, so the builder passes numbers today.
+  I2: {
+    build: () => new Int64Box(42, 7, null),
+    assertRead: (value) => {
+      const box = expectClass(value, Int64Box);
+
+      expect(box.id).toBe(42);
+
+      expect(box.mask).toBe(7);
+
+      expect(box.parent).toBeNull();
+    },
   },
 };
 

@@ -674,6 +674,34 @@ public static class TranspileHelper
         return File.ReadAllText(path);
     }
 
+    /// <summary>
+    /// Writes an expected .ts file into the source tree's
+    /// <c>tests/Metano.Tests/Expected/</c> — the local regeneration path of
+    /// the golden tests that expose an environment variable for it (CI never
+    /// sets one). The copy in the output directory is build output.
+    /// </summary>
+    public static void WriteExpected(string filename, string content)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (
+            current is not null
+            && !Directory.Exists(
+                Path.Combine(current.FullName, "tests", "Metano.Tests", "Expected")
+            )
+        )
+            current = current.Parent;
+
+        if (current is null)
+            throw new InvalidOperationException(
+                "tests/Metano.Tests/Expected not found above the test output directory"
+            );
+
+        var path = Path.Combine(current.FullName, "tests", "Metano.Tests", "Expected", filename);
+
+        File.WriteAllText(path, content.EndsWith('\n') ? content : content + "\n");
+    }
+
     public static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics

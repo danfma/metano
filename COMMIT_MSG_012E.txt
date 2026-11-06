@@ -1,0 +1,50 @@
+feat: read and write 64-bit JSON values as exact bigint trees (#450)
+
+Part of #450 (spec 012, slice 012e). In the staging BigInt mode the JSON
+context emits the `int64` descriptor and the runtime converts `bigint`s
+through it; Number mode keeps the 2.x `primitive` descriptors byte for
+byte (NFR-001, pinned by a Number-mode golden of the same source).
+
+- FR-050: `{ kind: "int64", numberType: "System.Int64" | "System.UInt64" }`
+  for every 64-bit property, element, dictionary key / value and root,
+  and for a `[Branded]` type over one (`JsonPropertyKind.Int64`,
+  `JsonTypeClassifier`, `JsonTypeDescriptorBuilder`); the runtime gains
+  `Int64Descriptor`.
+- FR-051: the `int64` converter writes a `bigint` through
+  `writeExactNumber(value.toString(), ...)`; `null` writes `null`; a safe
+  integer writes its digits and any other value throws `JsonException`.
+- FR-052: tree reads accept a `bigint` in range, a `rawJSON` leaf whose
+  text is a JSON integer token (`readIntegerToken`: `-0` reads `0n`,
+  `1.0` / `1e3` rejected), a safe-integer `number` (`BigInt(n)`), a
+  number beyond the safe integers throwing with the exact read path
+  (OQ-3 d), and a string per FR-054; anything else throws STJ's message
+  naming the position (root and element name the 64-bit type, nullable
+  names `System.Nullable`1[...]`, a property the declaring contract).
+- FR-054: `readNumberText` answers the `bigint` for `System.Int64` /
+  `System.UInt64` (reader type `number | bigint`); `primitive`
+  descriptors and their keys keep reading a `number`
+  (`readNumberValue`), so Number-mode output behaves as before.
+- FR-055: 64-bit dictionary keys write `key.toString()` and read the
+  FR-048 integer grammar into the `bigint`, whatever the read options
+  (`dictionary-keys.ts`); a rejected key names the key type.
+- FR-056: a `bigint` reaching any passthrough converter (object slots,
+  branded and enum values) writes an exact number leaf
+  (`exactBigIntLeafOf`), never `JSON.stringify` on a `bigint`.
+- FR-057: `serialize` returns `rawJSON` leaves that `deserialize` reads
+  back, so a tree round-trips without text; the `NumberTypeName`
+  documentation no longer says the 64-bit types map to a TS `number`.
+
+FR-053 (exact reads through #457) stays out: the reads-from-text path is
+exact only up to 2^53 until slice 012h routes int64 roots through the
+exact path.
+
+Tests: runtime bun suite `test/system/json/int64.test.ts` for every
+accepted/rejected shape (probe-measured on .NET 10, 2026-11-06); TUnit
+goldens `int64-json-context.ts` (BigInt) and `int64-json-context-number.ts`
+(Number, unchanged 2.x descriptors); manifest rows I1-I12 in
+`targets/js/sample-json-contracts/test/fixtures/stj/cases.json` pin the
+System.Text.Json side (I2 also round-trips on the TypeScript side, wire
+compatible within the safe integers until 012k).
+
+Co-Authored-By: GLM 5.3 (Z.AI) <noreply@z.ai>
+Claude-Session: https://claude.ai/code/session_01A5yn3TMbBfnuvmaiR5PwuA

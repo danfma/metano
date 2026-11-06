@@ -1,6 +1,7 @@
 import type {
   DecimalDescriptor,
   EnumDescriptor,
+  Int64Descriptor,
   IntegerTypeName,
   NumericEnumDescriptor,
   PrimitiveDescriptor,
@@ -10,7 +11,7 @@ import type {
 import type { ValueConverter } from "./value-converter.ts";
 import { readDecimalText } from "./decimal-text.ts";
 import { cannotConvertToTypeName } from "./contract-name.ts";
-import { readNumberText, readEnumIntegerText } from "./number-from-string.ts";
+import { readEnumIntegerText, readNumberText, readNumberValue } from "./number-from-string.ts";
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 import { readTemporalText } from "./temporal-reads.ts";
@@ -73,10 +74,6 @@ const guidKeyConverter = keyConverter(
  * not be converted to <typeName>.`. A `string` key, a key without a type
  * (a hand-written `{ kind: "primitive" }`) and any other descriptor kind
  * keep the converter of their value descriptor (`builtinConverterOf`).
- *
- * TODO(012e): a `long` / `ulong` key reads as a `number` while the bigint
- * staging switch is in Number mode (spec 012 FR-065); slice 012e reads it
- * as a `bigint`.
  */
 export function dictionaryKeyConverterOf(
   descriptor: TypeDescriptor,
@@ -85,6 +82,8 @@ export function dictionaryKeyConverterOf(
   switch (descriptor.kind) {
     case "primitive":
       return primitiveKeyConverterOf(descriptor) ?? builtinConverterOf();
+    case "int64":
+      return int64KeyConverter(descriptor);
     case "numericEnum":
       return numericEnumKeyConverter(descriptor);
     case "enum":
@@ -105,10 +104,24 @@ function primitiveKeyConverterOf(descriptor: PrimitiveDescriptor): ValueConverte
   const { numberType } = descriptor;
 
   if (numberType !== undefined) {
-    return keyConverter(String, (name) => readNumberText(name, numberType), numberType);
+    return keyConverter(String, (name) => readNumberValue(name, numberType), numberType);
   }
 
   return descriptor.typeName === BOOLEAN_TYPE_NAME ? booleanKeyConverter : undefined;
+}
+
+/**
+ * A 64-bit key (spec 012 FR-055): written as `key.toString()`, read with the
+ * FR-048 integer grammar into the `bigint` in range — `"+5"` and `"05"`
+ * read for a signed key, `"05"` alone for an unsigned one, whatever the
+ * read options, because System.Text.Json always reads such a key from the
+ * property name (measured: `"-0"` reads `0` for a `long` key and throws for
+ * a `ulong` key).
+ */
+function int64KeyConverter(descriptor: Int64Descriptor): ValueConverter {
+  const { numberType } = descriptor;
+
+  return keyConverter(String, (name) => readNumberText(name, numberType), numberType);
 }
 
 function numericEnumKeyConverter(descriptor: NumericEnumDescriptor): ValueConverter {

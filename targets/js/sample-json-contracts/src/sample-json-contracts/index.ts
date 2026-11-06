@@ -32,6 +32,8 @@ export { IgnoreJsonContext } from "./ignore-json-context";
 export { ImageClip } from "./image-clip";
 export { InitRec } from "./init-rec";
 export { IntMapHolder } from "./int-map-holder";
+export { Int64Box } from "./int64-box";
+export { Int64Containers } from "./int64-containers";
 export { IS } from "./is";
 export { KebabCaseJsonContext } from "./kebab-case-json-context";
 export { LevelMapHolder } from "./level-map-holder";
