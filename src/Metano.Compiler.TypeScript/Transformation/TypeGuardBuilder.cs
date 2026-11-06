@@ -766,6 +766,15 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 GuardTestKind.Object
             ),
 
+            // A BCL-exported class (decimal → decimal.js `Decimal`) is a
+            // runtime constructor the compilation imports, not a project type
+            // with its own guard: test the constructor. A bare presence check
+            // would accept plain JS numbers no C# decimal ever produces.
+            TsNamedType { Name: var n } when IsBclExportedClass(n) => Required(
+                InstanceofCheck(fieldAccess, n),
+                GuardTestKind.Object
+            ),
+
             // Transpilable named type with its own guard → call it. The guard
             // may test an enum value or an object, so its kind is presence only.
             TsNamedType { Name: var n } when HasGuard(n) => Required(
@@ -821,6 +830,15 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
     /// presence check instead of a call to a function that does not exist.
     /// </summary>
     private bool HasGuard(string tsName) => _context.TryResolveGuardImport($"is{tsName}", out _);
+
+    /// <summary>
+    /// Whether <paramref name="tsName"/> names a class an
+    /// <c>[ExportFromBcl]</c> mapping binds a BCL type to (decimal → decimal.js
+    /// <c>Decimal</c>): a runtime constructor value the generated file imports,
+    /// testable with <c>instanceof</c>.
+    /// </summary>
+    private bool IsBclExportedClass(string tsName) =>
+        _context.BclExportMap.Values.Any(e => e.ExportedName == tsName);
 
     private static GuardFieldTest Required(TsExpression check, GuardTestKind kind) =>
         new(check, kind, AcceptsAbsent: false);

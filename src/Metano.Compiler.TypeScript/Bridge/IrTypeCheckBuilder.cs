@@ -248,6 +248,15 @@ internal static class IrTypeCheckBuilder
         );
 
     /// <summary>
+    /// The runtime test for a <c>decimal</c> value: an <c>instanceof Decimal</c>
+    /// against the decimal.js class the type lowers to. Every other numeric
+    /// check (<c>typeof === "number"</c>) would match plain JS numbers no C#
+    /// decimal ever produces and reject every real decimal.
+    /// </summary>
+    internal static TsExpression DecimalInstanceof(TsExpression value) =>
+        new TsBinaryExpression(value, "instanceof", new TsIdentifier("Decimal"));
+
+    /// <summary>
     /// Maps a semantic <see cref="IrPrimitive"/> to the same <c>metano-runtime</c>
     /// helper the legacy dispatcher uses, so same-arity numeric overloads
     /// (e.g. <c>M(int)</c> vs <c>M(double)</c>) remain distinguishable at
@@ -267,11 +276,14 @@ internal static class IrTypeCheckBuilder
             IrPrimitive.Float32 => RuntimeIs("isFloat32", value),
             IrPrimitive.Float64 => RuntimeIs("isFloat64", value),
             IrPrimitive.Boolean => RuntimeIs("isBool", value),
-            // Decimal surfaces as `Decimal` under its [ExportFromBcl] override,
-            // checked by Generate before reaching here; without one it maps to
-            // `number`, checked with a plain typeof so no runtime helper is
-            // imported for a value the override would make a class.
-            IrPrimitive.Decimal => TypeofTest(value, "number"),
+            // Decimal always lowers to a decimal.js `Decimal` instance (the
+            // shipped [ExportFromBcl] mapping in Metano.Runtime), so the
+            // runtime test is instanceof — the one check that distinguishes a
+            // decimal overload from a same-arity int one (a boxed decimal is
+            // not an int in C#). Generate resolves the [ExportFromBcl]
+            // override to the same test when the scope carries it; scopes
+            // without one (companion namespaces) reach this arm.
+            IrPrimitive.Decimal => DecimalInstanceof(value),
             IrPrimitive.BigInteger => RuntimeIs("isBigInt", value),
             IrPrimitive.Guid => RuntimeIs("isString", value),
             // DateTime/DateTimeOffset/DateOnly/TimeOnly/TimeSpan surface in TS as
