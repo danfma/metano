@@ -54,7 +54,8 @@ export type PrimitiveDescriptor = WithClrTypeName & {
  * A `[Branded]` type over a 64-bit integer adds its companion `create`
  * factory (the valid `[JsonFactory]` member when one exists) and `typeName`,
  * which the read applies after the exact digit, as the branded descriptor
- * does — the factory case FR-050 does not describe.
+ * does. FR-050 does not describe that factory case; the review of slice
+ * 012e (#450) added it.
  */
 export type Int64Descriptor = {
   readonly kind: "int64";

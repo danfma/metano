@@ -108,8 +108,9 @@ export function primitiveConverterOf(
  *   prints the digits unquoted (`{"id":1152921504606846977}`). The write
  *   range-checks: a safe-integer `number` from untyped code writes its
  *   digits too, and any value outside the 64-bit range — a negative one for
- *   a `ulong`, `-0` included — or of any other kind throws `JsonException`
- *   (FR-051).
+ *   a `ulong` — or of any other kind throws `JsonException` (FR-051). A
+ *   bigint has no negative zero (`-0n === 0n`), so a `-0` write puts `0`
+ *   into the slot.
  * - Read as a `bigint` in range from: a `bigint`; a `rawJSON` leaf or
  *   `JsonNumberText` whose text is a JSON integer token (`-0` reads `0`,
  *   `1.0` / `1e3` are not tokens, R7 — the exact text the
@@ -119,8 +120,8 @@ export function primitiveConverterOf(
  *   read path (OQ-3 d): the parsed tree has already lost its digits.
  *   Anything else throws System.Text.Json's conversion error (FR-052).
  * - The descriptor's `create` — a `[Branded]` type's companion factory —
- *   builds the read value, as the branded converter does; the factory case
- *   FR-050 does not describe.
+ *   builds the read value, as the branded converter does. FR-050 does not
+ *   describe that factory case; the review of slice 012e (#450) added it.
  */
 export function int64ConverterOf(
   descriptor: Int64Descriptor,

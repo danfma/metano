@@ -28,11 +28,13 @@ import { cannotConvertMessage, expectJsonException } from "./json-exception-asse
  * - Root reads: `-0` reads `0`; `1.0` and `1e3` throw; out of range throws
  *   the same conversion error; `null` throws for the value type and reads
  *   `null` through the nullable wrapper.
- * - Divergences from the STJ probe, all of them tree-shaped: `1.0` and
- *   `1e3` throw only as rawJSON leaves or through `deserializeText` — a
+ * - Divergences from the STJ probe (divergence I5 of the manifest test):
+ *   `1.0` and `1e3` throw only as rawJSON leaves. `deserializeText` reads
+ *   them: a text of at most 15 significant digits goes through
+ *   `JSON.parse`, which folds `1.0` into `1n` and `1e3` into `1000n`. A
  *   parsed tree cannot tell `1.0` from `1`, and `JSON.parse` of a 19-digit
  *   integer has already lost the digits (the beyond-safe-integer error,
- *   OQ-3 d). `deserializeText` reads the exact digits, so its errors match
+ *   OQ-3 d). Only 16+-digit texts take the exact path, whose errors match
  *   STJ's.
  * - Errors name the position: a root or an element names the 64-bit type
  *   (`System.Int64`, `System.UInt64`), a nullable root or element names
@@ -81,6 +83,11 @@ describe("int64 — writes (FR-051)", () => {
     expect(writtenText(ULONG_MAX, "System.UInt64")).toBe("18446744073709551615");
     expect(writtenText(0n, "System.Int64")).toBe("0");
     expect(writtenText(-0n, "System.Int64")).toBe("0");
+    expect(writtenText(0n, "System.UInt64")).toBe("0");
+
+    // A bigint has no negative zero (`-0n === 0n`), so writing `-0` into a
+    // ulong slot writes `0` instead of throwing (#545).
+    expect(writtenText(-0n, "System.UInt64")).toBe("0");
   });
 
   test("the write is a rawJSON leaf, so a tree round-trips without text (FR-057)", () => {
@@ -601,6 +608,8 @@ describe("int64 — exact reads through deserializeText (review round 1)", () =>
   test("a short-text fraction or exponent reads as JSON.parse folded it", () => {
     expect(JsonSerializer.deserializeText("1.0", int64Root("System.Int64"))).toBe(1n);
     expect(JsonSerializer.deserializeText("1e3", int64Root("System.Int64"))).toBe(1000n);
+    expect(JsonSerializer.deserializeText("1.0", int64Root("System.UInt64"))).toBe(1n);
+    expect(JsonSerializer.deserializeText("1e3", int64Root("System.UInt64"))).toBe(1000n);
   });
 
   test("a contract property reads its exact digits too", () => {
