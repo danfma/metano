@@ -404,6 +404,19 @@ public static class IrToTsJsxComponentBridge
                     )
                     .ToList(),
             },
+            // The object-default base call carries no receiver `this`, but
+            // its arguments can hold one (`base.Equals(this.x)`) — descend.
+            IrBaseObjectMemberCall baseCall => baseCall with
+            {
+                Arguments = baseCall
+                    .Arguments.Select(a =>
+                        a with
+                        {
+                            Value = Rewrite(a.Value, propNames, referenced),
+                        }
+                    )
+                    .ToList(),
+            },
             IrNewExpression ne => ne with
             {
                 Arguments = ne
