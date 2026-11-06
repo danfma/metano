@@ -128,3 +128,18 @@ export class Both implements IA, IB {
     throw new Error("No matching overload for g");
   }
 }
+
+import type { IShape } from "./i-shape";
+import type { IA } from "./ia";
+
+export class Use {
+  constructor() { }
+
+  throughInterface(shape: IShape): number {
+    return shape.areaS(2);
+  }
+
+  throughBoth(g: IA): number {
+    return g.gS("ab");
+  }
+}

@@ -265,8 +265,12 @@ containers — claiming dispatchers and module variables first and reporting `MS
 `$`-rename; `IrToTsModuleBridge.ConvertDispatchedGroup` emits the exported fast paths plus the
 exported dispatcher (its own branch builder over `IrModuleFunction`s, until the deferred
 `TsDispatcherShape` unification), the export registry registers the dispatcher with its fast
-paths (replacing MS0020 for same-class overloads), and call sites — static or extension syntax —
-import and call the claimed names. Direct calls stay target-side: Dart renders source calls and
+paths (replacing MS0020 for same-class overloads), and own-assembly call sites — static or
+extension syntax — import and call the claimed names. A module-function group declared by a
+project-referenced producer keeps the dispatcher: the barrel claims enumerate the current
+assembly only, so the consumer cannot re-run the producer's claim pass — the dispatcher name is
+stable and always exported, so the fallback stays loud; the producer-pipeline barrel claims that
+would close it are a follow-up issue for the orchestrator. Direct calls stay target-side: Dart renders source calls and
 arguments until it claims names (013g), and a C# 14 extension block's member, whose synthetic
 type the groups do not cover, keeps the dispatcher. Regenerated in this slice: the
 `overload-virtual` and `overload-abstract-methods` goldens (bodies calling dispatched groups now

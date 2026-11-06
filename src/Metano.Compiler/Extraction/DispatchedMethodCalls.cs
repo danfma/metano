@@ -80,8 +80,10 @@ internal static class DispatchedMethodCalls
     /// <summary>
     /// Whether <paramref name="type"/> — the declaring type of a candidate
     /// direct call — emits the member the call site needs: a transpilable
-    /// class, or a transpiled interface, neither <c>[External]</c> nor a
-    /// branded companion, whose functions live in a companion namespace.
+    /// class, or a transpiled interface, none of the keep-today's-emission
+    /// shapes (<c>[External]</c>, a branded companion, <c>[PlainObject]</c>,
+    /// <c>[JsCallable]</c> — DECIDED-10), whose functions live in a
+    /// companion namespace.
     /// </summary>
     private static bool IsEmittedContainingType(INamedTypeSymbol type, TargetLanguage? target)
     {
@@ -92,7 +94,8 @@ internal static class DispatchedMethodCalls
             && IrTypeRefMapper.IsTranspilableType(type, target)
             && !SymbolHelper.HasExternal(type)
             && !SymbolHelper.HasBranded(type)
-            && !SymbolHelper.HasPlainObject(type);
+            && !SymbolHelper.HasPlainObject(type)
+            && !SymbolHelper.HasJsCallable(type);
     }
 
     /// <summary>
