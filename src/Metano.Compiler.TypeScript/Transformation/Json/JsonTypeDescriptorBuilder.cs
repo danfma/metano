@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
