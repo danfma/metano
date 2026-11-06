@@ -158,6 +158,90 @@ using Metano.Annotations;
     WhenParameterTypes = [typeof(ulong), typeof(ulong), typeof(ulong)],
     WhenInt64IsBigInt = true
 )]
+// The `nint` / `nuint` overloads (DECIDED-2: nint follows every rule of the
+// spec) bind the `IntPtr` / `UIntPtr` statics, whose stable type names never
+// match the `long` / `ulong` templates above — without these the call falls
+// through to the JS renames, which throw on a `bigint`.
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Abs),
+    JsTemplate = "absInt64($0)",
+    RuntimeImports = "absInt64",
+    WhenParameterTypes = [typeof(IntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Max),
+    JsTemplate = "maxInt64($0, $1)",
+    RuntimeImports = "maxInt64",
+    WhenParameterTypes = [typeof(IntPtr), typeof(IntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Max),
+    JsTemplate = "maxUInt64($0, $1)",
+    RuntimeImports = "maxUInt64",
+    WhenParameterTypes = [typeof(UIntPtr), typeof(UIntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Min),
+    JsTemplate = "minInt64($0, $1)",
+    RuntimeImports = "minInt64",
+    WhenParameterTypes = [typeof(IntPtr), typeof(IntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Min),
+    JsTemplate = "minUInt64($0, $1)",
+    RuntimeImports = "minUInt64",
+    WhenParameterTypes = [typeof(UIntPtr), typeof(UIntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Sign),
+    JsTemplate = "signInt64($0)",
+    RuntimeImports = "signInt64",
+    WhenParameterTypes = [typeof(IntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Clamp),
+    JsTemplate = "clampInt64($0, $1, $2)",
+    RuntimeImports = "clampInt64",
+    WhenParameterTypes = [typeof(IntPtr), typeof(IntPtr), typeof(IntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Clamp),
+    JsTemplate = "clampUInt64($0, $1, $2)",
+    RuntimeImports = "clampUInt64",
+    WhenParameterTypes = [typeof(UIntPtr), typeof(UIntPtr), typeof(UIntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.DivRem),
+    JsTemplate = "divRemInt64($0, $1)",
+    RuntimeImports = "divRemInt64",
+    WhenParameterTypes = [typeof(IntPtr), typeof(IntPtr)],
+    WhenInt64IsBigInt = true
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.DivRem),
+    JsTemplate = "divRemUInt64($0, $1)",
+    RuntimeImports = "divRemUInt64",
+    WhenParameterTypes = [typeof(UIntPtr), typeof(UIntPtr)],
+    WhenInt64IsBigInt = true
+)]
 [assembly: MapMethod(
     typeof(long),
     nameof(long.Abs),

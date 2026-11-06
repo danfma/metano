@@ -3151,17 +3151,36 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
-    /// The kind of a 64-bit index into an array (<c>arr[l]</c>, spec 012
-    /// FR-036); <c>null</c> for any other index or receiver.
+    /// The kind of a 64-bit index into a receiver whose TypeScript
+    /// representation is an indexable array — a real array (<c>arr[l]</c>),
+    /// a collection-like shape that maps to one (<c>list[l]</c>, spec 012
+    /// FR-036) or a <c>string</c> (<c>s[l]</c>); <c>null</c> for any other
+    /// index or receiver (a dictionary's key conversion happens at its
+    /// indexer).
     /// </summary>
     private IrNumericKind? ArrayIndexKind(
         ExpressionSyntax receiverSyntax,
         BracketedArgumentListSyntax arguments
     ) =>
-        _semantic.GetTypeInfo(receiverSyntax).Type is IArrayTypeSymbol
+        IndexableReceiver(_semantic.GetTypeInfo(receiverSyntax).Type)
         && arguments.Arguments is [var index]
             ? SixtyFourBitKindOf(index.Expression)
             : null;
+
+    /// <summary>
+    /// Whether this receiver emits as an indexable array: a real array, a
+    /// collection-like named type (the shapes <see cref="IrTypeRefMapper"/>
+    /// maps to <c>IrArrayTypeRef</c> with an element argument), or
+    /// <c>string</c>.
+    /// </summary>
+    private static bool IndexableReceiver(ITypeSymbol? type) =>
+        type is IArrayTypeSymbol
+        || type?.SpecialType == SpecialType.System_String
+        || (
+            type is INamedTypeSymbol named
+            && named.IsCollectionLike()
+            && named.TypeArguments.Length > 0
+        );
 
     /// <summary>
     /// The IR type of a receiver expression. A <c>?[index]</c> receiver is
