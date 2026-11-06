@@ -94,6 +94,7 @@ public sealed class TypeScriptTransformContext(
             foreach (var member in type.GetMembers())
                 RegisterStaticClassMember(
                     member,
+                    type,
                     ownerRef,
                     map,
                     firstClaim,
@@ -107,6 +108,7 @@ public sealed class TypeScriptTransformContext(
 
     private static void RegisterStaticClassMember(
         ISymbol member,
+        INamedTypeSymbol ownerType,
         IrTranspilableTypeRef ownerRef,
         Dictionary<string, IrTranspilableTypeRef> map,
         Dictionary<string, ISymbol> firstClaim,
@@ -117,9 +119,7 @@ public sealed class TypeScriptTransformContext(
         switch (member)
         {
             case IMethodSymbol method
-                when method.IsExtensionMethod
-                    && method.MethodKind is MethodKind.Ordinary
-                    && method.DeclaredAccessibility == Accessibility.Public:
+                when method.IsExtensionMethod && SymbolHelper.IsExportedModuleFunction(method):
                 Register(
                     ResolveMethodHelperName(method),
                     method,
@@ -132,11 +132,12 @@ public sealed class TypeScriptTransformContext(
                 // A dispatched extension group also exports one claimed fast
                 // path per overload (spec 013 FR-032); a call site lowers to
                 // the bare fast-path name, so the import collector must
-                // resolve it to the declaring file like the dispatcher.
+                // resolve it to the declaring file like the dispatcher. The
+                // barrel claim pass already decided which names it claimed.
                 if (
-                    DispatchedMethodCalls.RefOf(method, TargetLanguage.TypeScript)
-                        is { } overloadRef
-                    && moduleFunctionClaims.ClaimOf(overloadRef) is { } claim
+                    moduleFunctionClaims
+                        .ClaimedNamesOf(ownerType)
+                        .TryGetValue(method, out var claim)
                 )
                 {
                     Register(claim.FastPath, method, ownerRef, map, firstClaim, reportDiagnostic);
