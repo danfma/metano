@@ -2014,7 +2014,7 @@
       "message": "The JSON value could not be converted to Int64Box.",
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
-    "divergence": "spec 012 012e: the TypeScript side names the property in the error only once its descriptor reads strings (012k flip)"
+    "divergence": "spec 012 012e: the TypeScript side names the property in the error; the shipped Number-mode context has no int64 descriptor yet, so it passes such a payload through untouched until 012k (012k flip)"
   },
   {
     "id": "I5",

@@ -2,6 +2,7 @@ import { HashSet } from "metano-runtime";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { Boxes } from "./boxes";
 import { EntityId } from "./entity-id";
+import { Quota } from "./quota";
 import { Snowflake } from "./snowflake";
 import { TokenId } from "./token-id";
 
@@ -13,6 +14,8 @@ export class JsonContext extends SerializerContext {
   private _boxes?: TypeSpec<Boxes>;
 
   private _entityId?: ValueSpec<EntityId>;
+
+  private _quota?: ValueSpec<Quota>;
 
   private _tokenId?: ValueSpec<TokenId>;
 
@@ -161,6 +164,19 @@ export class JsonContext extends SerializerContext {
       },
       valueType: true,
       typeName: "TestApp.EntityId",
+    });
+  }
+
+  get quota(): ValueSpec<Quota> {
+    return this._quota ??= this.createValueSpec({
+      descriptor: {
+        kind: "int64",
+        numberType: "System.Int64",
+        typeName: "TestApp.Quota",
+        create: Quota.create,
+      },
+      valueType: true,
+      typeName: "TestApp.Quota",
     });
   }
 

@@ -314,6 +314,41 @@ describe("int64 — numbers from strings (FR-054)", () => {
   });
 });
 
+describe("int64 — dictionary values (FR-065)", () => {
+  const stringKeysLongValues: TypeDescriptor = {
+    kind: "map",
+    key: { kind: "primitive" },
+    value: { kind: "int64", numberType: "System.Int64" },
+  };
+
+  test("a 64-bit dictionary value writes an exact leaf and round-trips it (FR-057)", () => {
+    const tree = JsonSerializer.serialize(new Map([["a", LONG_MAX]]), {
+      descriptor: stringKeysLongValues,
+    });
+
+    expect(JSON.stringify(tree)).toBe('{"a":9223372036854775807}');
+    expect(JsonSerializer.deserialize(tree, { descriptor: stringKeysLongValues })).toEqual(
+      new Map([["a", LONG_MAX]]),
+    );
+  });
+
+  test("a parsed 16-digit value is beyond what a number holds — the documented throw", () => {
+    expect(() =>
+      JsonSerializer.deserialize(JSON.parse('{"a":9223372036854775807}'), {
+        descriptor: stringKeysLongValues,
+      }),
+    ).toThrow();
+  });
+
+  test("a 64-bit dictionary value rejects what the property path rejects", () => {
+    expect(() =>
+      JsonSerializer.deserialize(JSON.parse('{"a":1.5}'), {
+        descriptor: stringKeysLongValues,
+      }),
+    ).toThrow();
+  });
+});
+
 describe("int64 — dictionary keys (FR-055)", () => {
   const longKeys: TypeDescriptor = {
     kind: "map",

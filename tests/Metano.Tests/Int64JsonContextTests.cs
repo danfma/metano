@@ -9,7 +9,7 @@ namespace Metano.Tests;
 /// <c>int64</c> descriptor <c>{ kind: "int64", numberType: … }</c> — a
 /// <c>[Branded]</c> type over one included — instead of the 2.x
 /// <c>primitive</c> descriptor with a <c>numberType</c>, whatever the read
-/// options (FR-057). A branded type keeps its companion factory
+/// options (FR-050). A branded type keeps its companion factory
 /// (<c>create</c>, the valid <c>[JsonFactory]</c> member) and its CLR
 /// <c>typeName</c> on the descriptor, which the runtime applies after the
 /// exact read — the factory case FR-050 does not describe.
@@ -60,6 +60,9 @@ public class Int64JsonContextTests
         [Transpile, Branded]
         public readonly record struct EntityId(long Value);
 
+        [Transpile, InlineWrapper]
+        public readonly record struct Quota(long Value);
+
         [Transpile, Branded]
         public readonly record struct TokenId(long Value)
         {
@@ -71,6 +74,7 @@ public class Int64JsonContextTests
         [JsonSerializable(typeof(Snowflake))]
         [JsonSerializable(typeof(Boxes))]
         [JsonSerializable(typeof(EntityId))]
+        [JsonSerializable(typeof(Quota))]
         [JsonSerializable(typeof(TokenId))]
         [JsonSerializable(typeof(long))]
         [JsonSerializable(typeof(ulong?))]
