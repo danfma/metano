@@ -573,7 +573,12 @@ public static class IrToTsOverloadDispatcherBridge
 
             var delegateCall = new TsCallExpression(
                 FastPathCallee(receiver, fastPathNames[i]),
-                DelegatedArguments(method, arguments, classScope.TypeOverrides)
+                DelegatedArguments(
+                    method.Parameters,
+                    method.TypeParameters,
+                    arguments,
+                    classScope.TypeOverrides
+                )
             );
 
             body.Add(
@@ -657,19 +662,23 @@ public static class IrToTsOverloadDispatcherBridge
     /// The fast path's arguments: each <c>args[i]</c> cast to its parameter
     /// type, and the trailing arguments of a <c>params</c> parameter spread
     /// back into its rest parameter (<c>...(args.slice(i) as T[])</c>).
+    /// Shared by the class and the module dispatcher bodies, so a generic
+    /// overload's arguments cast to <c>any</c> the same way at either call
+    /// site.
     /// </summary>
-    private static List<TsExpression> DelegatedArguments(
-        IrMethodDeclaration method,
+    internal static List<TsExpression> DelegatedArguments(
+        IReadOnlyList<IrParameter> parameters,
+        IReadOnlyList<IrTypeParameter>? typeParameters,
         OverloadArgumentShape arguments,
         IrToTsTypeOverrides? typeOverrides
     ) =>
-        method
-            .Parameters.Select(
+        parameters
+            .Select(
                 (parameter, index) =>
                 {
                     var value = new TsCastExpression(
                         arguments.ValueOf(index),
-                        DispatchArgumentType(method, parameter, typeOverrides)
+                        DispatchArgumentType(typeParameters, parameter, typeOverrides)
                     );
 
                     return parameter.IsParams ? new TsSpreadExpression(value) : (TsExpression)value;
@@ -685,11 +694,11 @@ public static class IrToTsOverloadDispatcherBridge
     /// <c>null</c>, since its arguments are spread.
     /// </summary>
     private static TsType DispatchArgumentType(
-        IrMethodDeclaration method,
+        IReadOnlyList<IrTypeParameter>? typeParameters,
         IrParameter parameter,
         IrToTsTypeOverrides? typeOverrides
     ) =>
-        IsGeneric(method)
+        typeParameters is { Count: > 0 }
             ? new TsAnyType()
             : IrToTsTypeMapper.MapParameterType(parameter, typeOverrides);
 

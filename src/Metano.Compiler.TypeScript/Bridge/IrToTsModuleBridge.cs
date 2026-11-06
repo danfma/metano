@@ -124,10 +124,12 @@ public static class IrToTsModuleBridge
     /// branching to the fast paths. The old shape for the same C# — two
     /// <c>export function twice</c> — was TS2393 at every import.
     /// <para>
-    /// The group plans and dispatches through its own copy of the
-    /// dispatcher's branch builder, over <see cref="IrModuleFunction"/>s,
-    /// until the deferred <c>TsDispatcherShape</c> unification folds the two
-    /// bridges into one.
+    /// The group plans through its own copy of the dispatcher's branch loop,
+    /// over <see cref="IrModuleFunction"/>s, but delegates its arguments to
+    /// the shared <see cref="IrToTsOverloadDispatcherBridge.DelegatedArguments"/>
+    /// so both dispatchers cast generic overloads identically, until the
+    /// deferred <c>TsDispatcherShape</c> unification folds the two bridges
+    /// into one.
     /// </para>
     /// </summary>
     public static void ConvertDispatchedGroup(
@@ -250,7 +252,13 @@ public static class IrToTsModuleBridge
     {
         var argumentShape = new OverloadArgumentShape(fn.Parameters);
 
-        var delegated = DelegatedArguments(fn, argumentShape);
+        var delegated = IrToTsOverloadDispatcherBridge.DelegatedArguments(
+            fn.Parameters,
+            fn.TypeParameters,
+            argumentShape,
+            null
+        );
+
         var delegateCall = new TsCallExpression(new TsIdentifier(fastPathName), delegated);
 
         var branchStatements = fn.ReturnType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void }
@@ -262,29 +270,6 @@ public static class IrToTsModuleBridge
             branchStatements
         );
     }
-
-    /// <summary>
-    /// The fast path's arguments: each <c>args[i]</c> cast to its parameter
-    /// type, and the trailing arguments of a <c>params</c> parameter spread
-    /// back into its rest parameter.
-    /// </summary>
-    private static List<TsExpression> DelegatedArguments(
-        IrModuleFunction fn,
-        OverloadArgumentShape argumentShape
-    ) =>
-        fn
-            .Parameters.Select(
-                (parameter, index) =>
-                {
-                    var value = new TsCastExpression(
-                        argumentShape.ValueOf(index),
-                        IrToTsTypeMapper.MapParameterType(parameter)
-                    );
-
-                    return parameter.IsParams ? new TsSpreadExpression(value) : (TsExpression)value;
-                }
-            )
-            .ToList();
 
     private sealed record ModuleFunctionGroupPlan(
         IReadOnlyList<IrModuleFunction> Sorted,
