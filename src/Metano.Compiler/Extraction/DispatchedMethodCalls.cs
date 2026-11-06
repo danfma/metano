@@ -29,6 +29,9 @@ internal static class DispatchedMethodCalls
     /// </summary>
     public static IrOverloadRef? RefOf(IMethodSymbol? method, TargetLanguage? target)
     {
+        // Dart claims no fast-path names yet (013g), so every call keeps its
+        // dispatcher there. The gate is core-side only for that reason.
+        // #549
         if (method is null || target == TargetLanguage.Dart)
             return null;
 
@@ -62,35 +65,29 @@ internal static class DispatchedMethodCalls
     /// The dispatched overload of an exported module function (spec 013
     /// FR-032): the ref an emission records plus the fast-path name (<see
     /// cref="IrOverloadName"/>) and C# signature its group gave it, the
-    /// facts a target's barrel claim pass and diagnostics need. <c>null</c>
-    /// under the same gate <see cref="RefOf"/> applies — the dispatcher
-    /// stays — and for an interface member, which no module function
-    /// declares.
+    /// facts a barrel claim pass and diagnostics need. <c>null</c> under
+    /// the same gate <see cref="RefOf"/> applies — the dispatcher stays —
+    /// and for an interface member, which no module function declares.
     /// </summary>
     public static (IrOverloadRef Ref, IrOverloadName Name, string SignatureText)? ClaimOf(
         IMethodSymbol? method,
         TargetLanguage? target
     )
     {
-        if (
-            RefOf(method, target) is not { } reference
-            || method!.OriginalDefinition.ContainingType
-                is not { TypeKind: not TypeKind.Interface } type
-        )
+        if (RefOf(method, target) is not { } reference)
             return null;
 
-        var definition = method.OriginalDefinition;
-        var group = MethodOverloadGroups.GroupOf(definition, target)!;
+        var definition = method!.OriginalDefinition;
+        var type = definition.ContainingType;
 
-        return (
-            reference,
-            new IrOverloadName(
-                MethodOverloadGroups.SuffixesOf(type, group, target)[
-                    group.MemberOf(definition)!.Symbol
-                ]
-            ),
-            OverloadSignatureText.Of(definition)
-        );
+        if (type.TypeKind == TypeKind.Interface)
+            return null;
+
+        var group = MethodOverloadGroups.GroupOf(definition, target)!;
+        var member = group.MemberOf(definition)!;
+        var suffix = MethodOverloadGroups.SuffixesOf(type, group, target)[member.Symbol];
+
+        return (reference, new IrOverloadName(suffix), OverloadSignatureText.Of(definition));
     }
 
     /// <summary>
@@ -141,10 +138,7 @@ internal static class DispatchedMethodCalls
     /// <c>[Emit]</c> template, an <c>[Import]</c> facade or an inlined one —
     /// each lowers at the call site by its own rule (DECIDED-11).
     /// </summary>
-    private static bool IsExcludedMember(IMethodSymbol method) =>
-        SymbolHelper.HasEmit(method)
-        || SymbolHelper.GetImport(method) is not null
-        || SymbolHelper.IsInlinedAtCallSite(method);
+    private static bool IsExcludedMember(IMethodSymbol method) => method.IsInlinedAtCallSite();
 
     /// <summary>
     /// A declaring type with syntax: declared in this compilation or in a

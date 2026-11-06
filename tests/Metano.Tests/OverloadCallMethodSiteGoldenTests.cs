@@ -383,7 +383,9 @@ public class OverloadCallMethodSiteGoldenTests
     /// fast paths exactly like the classic extensions beside it. Both
     /// halves judge the declaration (a reduced call-site form resolves
     /// through the same declaration keys), and a non-public overload never
-    /// joins the barrel (spec 013 FR-032).
+    /// joins the barrel: the private <c>Fold(long)</c> shapes the group's
+    /// suffixes but emits no function and claims no fast path (spec 013
+    /// FR-032).
     /// </summary>
     [Test]
     public async Task ExtensionContainer_DispatchedPlainStatics_ClaimFastPathsToo()
@@ -398,6 +400,8 @@ public class OverloadCallMethodSiteGoldenTests
                 public static int Fold(int x) => x + 1;
 
                 public static int Fold(string s) => s.Length + 1;
+
+                private static int Fold(long big) => (int)big;
             }
             """
         );
@@ -406,13 +410,186 @@ public class OverloadCallMethodSiteGoldenTests
 
         // The plain statics dispatch like the extension beside them: one
         // fast path per overload, named off the parameter spellings, under
-        // one dispatcher.
-        await Assert.That(module).Contains("export function foldX(");
-        await Assert.That(module).Contains("export function foldS(");
-        await Assert.That(module).Contains("export function fold(");
+        // one dispatcher whose first signature names the group.
+        await Assert.That(module).Contains("export function foldX(x: number)");
+        await Assert.That(module).Contains("export function foldS(s: string)");
+        await Assert.That(module).Contains("export function fold(x: number): number;");
 
         // The single extension stays a plain module function of its own.
         await Assert.That(module).Contains("export function twice(");
+
+        // The private overload shapes the spellings but never joins: no
+        // function, no claimed fast path.
+        await Assert.That(module).DoesNotContain("foldBig");
+    }
+
+    /// <summary>
+    /// The MS0067 shadow report travels the extension-container path too: a
+    /// fast path whose candidate name a sibling type's dispatcher took is
+    /// renamed with a warning at the member, and the module emits the
+    /// renamed function (spec 013 FR-032).
+    /// </summary>
+    [Test]
+    public async Task ExtensionContainer_FastPathClash_ReportsTheShadowAndRenames()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Real
+            {
+                public static int FoldX(int x) => x;
+            }
+
+            [Transpile, NoContainer]
+            public static class Mixed
+            {
+                public static int Fold(int x) => x + 1;
+
+                public static int Fold(string s) => s.Length + 1;
+            }
+
+            [Transpile]
+            public class UseMixed
+            {
+                public int One() => Mixed.Fold(1);
+
+                public int Two() => Mixed.Fold("ab");
+            }
+            """
+        );
+
+        var shadows = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.OverloadNameShadowed)
+            .ToList();
+
+        await Assert.That(shadows.Count).IsEqualTo(1);
+        await Assert.That(shadows[0].Message).Contains("'Mixed.foldX'");
+        await Assert.That(shadows[0].Location).IsNotNull();
+
+        var module = result["mixed.ts"];
+
+        await Assert.That(module).Contains("export function foldX$(x: number)");
+        await Assert.That(module).DoesNotContain("export function foldX(x: number)");
+        await Assert.That(result["use-mixed.ts"]).Contains("foldX$(1)");
+        await Assert.That(result["use-mixed.ts"]).Contains("foldS(\"ab\")");
+    }
+
+    /// <summary>
+    /// The barrel claims fast paths group by group, in the groups'
+    /// first-declaration order, so the clean name of a cross-group collision
+    /// goes to the group declared first — exactly the names the barrel has
+    /// always handed out (spec 013 FR-032). <c>Get</c> is declared before
+    /// <c>GetAll</c>, so <c>Get(int allX)</c> keeps <c>getAllX</c> and the
+    /// first <c>GetAll</c> overload is renamed to <c>getAllX$</c>, with
+    /// MS0067 raised at the <c>GetAll</c> member and every call site calling
+    /// the claimed name of the overload Roslyn resolved.
+    /// </summary>
+    [Test]
+    public async Task ModuleGroup_ClaimsGroupByGroup_PinningTheBarrelNames()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            [NoContainer]
+            public static class Clash
+            {
+                public static int Get(int a, int b) => a;
+
+                public static int GetAll(int x) => x;
+
+                public static int Get(int allX) => allX;
+
+                public static int GetAll(int x, int y) => x;
+            }
+
+            [Transpile]
+            public class UseClash
+            {
+                public int Ab() => Clash.Get(1, 2);
+
+                public int One() => Clash.GetAll(1);
+
+                public int Two() => Clash.Get(5);
+
+                public int Both() => Clash.GetAll(1, 2);
+            }
+            """
+        );
+
+        // The clean name belongs to Get(int allX), the first group's second
+        // overload; GetAll(int x) — the second group — is renamed. The
+        // callers call the claimed name of the overload Roslyn resolved.
+        var module = result["clash.ts"];
+        await Assert.That(module).Contains("export function getAB(a: number, b: number)");
+        await Assert.That(module).Contains("export function getAllX(allX: number)");
+        await Assert.That(module).Contains("export function getAllX$(x: number)");
+        await Assert.That(module).Contains("export function getAllXY(x: number, y: number)");
+
+        var shadows = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.OverloadNameShadowed)
+            .ToList();
+
+        await Assert.That(shadows.Count).IsEqualTo(1);
+        await Assert.That(shadows[0].Message).Contains("'Clash.getAllX'");
+        await Assert.That(shadows[0].Message).Contains("of 'GetAll'");
+        await Assert.That(shadows[0].Location).IsNotNull();
+
+        // The call sites call the claimed name of the overload Roslyn
+        // resolved — the renamed GetAll(int x) included.
+        var calls = result["use-clash.ts"];
+        await Assert.That(calls).Contains("getAB(1, 2)");
+        await Assert.That(calls).Contains("getAllX(5)");
+        await Assert.That(calls).Contains("getAllX$(1)");
+        await Assert.That(calls).Contains("getAllXY(1, 2)");
+    }
+
+    /// <summary>
+    /// A dispatched group on an ambient (<c>[NoContainer, External]</c>)
+    /// class emits no fast path — <see cref="Metano.Compiler.IR.IrOverloadRef"/>
+    /// stays null for a type nothing is emitted for — so the barrel reports
+    /// no MS0067 even when its would-be fast path collides with a sibling's
+    /// dispatcher name. The name reservation stays: pass 1 still takes the
+    /// ambient dispatchers into the barrel table.
+    /// </summary>
+    [Test]
+    public async Task ExternalContainer_ClaimsNoFastPath_EmitsNoShadowDiagnostic()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+
+            [assembly: TranspileAssembly]
+
+            [NoContainer, External]
+            public static class Ambient
+            {
+                public static int Qux(int x) => x;
+
+                public static int Qux(string s) => s.Length;
+            }
+
+            [NoContainer]
+            public static class Real
+            {
+                public static int QuxX(int x) => x;
+            }
+            """
+        );
+
+        var shadows = diagnostics
+            .Where(diagnostic => diagnostic.Code == DiagnosticCodes.OverloadNameShadowed)
+            .ToList();
+
+        await Assert.That(shadows).IsEmpty();
+
+        var outputs = string.Join("\n", result.Values);
+
+        await Assert.That(outputs).DoesNotContain("quxX$");
+        await Assert.That(result["real.ts"]).Contains("export function quxX(");
     }
 
     /// <summary>

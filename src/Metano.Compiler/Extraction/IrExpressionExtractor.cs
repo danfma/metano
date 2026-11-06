@@ -2567,6 +2567,8 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression WithDispatchedFastPath(IMethodSymbol method, IrExpression reference)
     {
+        // Dart claims no fast-path names yet (013g) and renders source member
+        // names, so a method group keeps its plain access there. #549
         if (reference is not IrMemberAccess access || IsDartTarget)
             return reference;
 
@@ -2957,6 +2959,9 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol? symbol
     )
     {
+        // Dart opts out through DispatchedMethodCalls.RefOf, which claims no
+        // fast-path names on that target (013g) — every call keeps its
+        // dispatcher. #549
         if (symbol is null or { MethodKind: MethodKind.ReducedExtension })
             return null;
 
