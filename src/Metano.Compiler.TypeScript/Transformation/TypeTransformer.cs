@@ -413,6 +413,19 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ReportDiagnostic
         ).Validate();
 
+        // STAGING(012k): the interop warning describes the BigInt-mode emission,
+        // whose types the boundary exchanges, and runs in every mode once the
+        // switch is gone. Runs before the per-group cache is consulted so a
+        // cache hit still reports.
+        if (Int64Representation is Int64Representation.BigInt)
+        {
+            new Int64InteropBoundaries(
+                compilation,
+                _assemblyWideTranspile,
+                ReportDiagnostic
+            ).Report();
+        }
+
         var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
         var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);
 
