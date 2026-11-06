@@ -11,7 +11,11 @@ import type {
 import type { ValueConverter } from "./value-converter.ts";
 import { readDecimalText } from "./decimal-text.ts";
 import { cannotConvertToTypeName } from "./contract-name.ts";
-import { readEnumIntegerText, readNumberText, readNumberValue } from "./number-from-string.ts";
+import {
+  readEnumIntegerText,
+  readExactNumberText,
+  readNumberTextAsNumber,
+} from "./number-from-string.ts";
 import { ordinalIgnoreCaseKeyOf } from "./ordinal-ignore-case.ts";
 import { temporalTextOf } from "./temporal-text.ts";
 import { readTemporalText } from "./temporal-reads.ts";
@@ -104,7 +108,7 @@ function primitiveKeyConverterOf(descriptor: PrimitiveDescriptor): ValueConverte
   const { numberType } = descriptor;
 
   if (numberType !== undefined) {
-    return keyConverter(String, (name) => readNumberValue(name, numberType), numberType);
+    return keyConverter(String, (name) => readNumberTextAsNumber(name, numberType), numberType);
   }
 
   return descriptor.typeName === BOOLEAN_TYPE_NAME ? booleanKeyConverter : undefined;
@@ -116,12 +120,23 @@ function primitiveKeyConverterOf(descriptor: PrimitiveDescriptor): ValueConverte
  * read for a signed key, `"05"` alone for an unsigned one, whatever the
  * read options, because System.Text.Json always reads such a key from the
  * property name (measured: `"-0"` reads `0` for a `long` key and throws for
- * a `ulong` key).
+ * a `ulong` key). The descriptor's `create` — a `[Branded]` key's companion
+ * factory — builds the key, as the branded key converter does.
  */
 function int64KeyConverter(descriptor: Int64Descriptor): ValueConverter {
-  const { numberType } = descriptor;
+  const { numberType, create } = descriptor;
 
-  return keyConverter(String, (name) => readNumberText(name, numberType), numberType);
+  return keyConverter(
+    String,
+    (name) => {
+      const read = readExactNumberText(name, numberType);
+
+      if (read === undefined || typeof read === "number") return read;
+
+      return create ? create(read) : read;
+    },
+    numberType,
+  );
 }
 
 function numericEnumKeyConverter(descriptor: NumericEnumDescriptor): ValueConverter {

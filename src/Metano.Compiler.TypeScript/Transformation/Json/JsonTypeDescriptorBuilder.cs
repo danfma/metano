@@ -155,30 +155,49 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// <see cref="JsonPropertyKind.Int64"/>, so the shipped
     /// <c>primitive</c> descriptors stay.
     /// </summary>
-    private static TsObjectLiteral BuildInt64Descriptor(ITypeSymbol type) =>
-        WithStringProperty(
+    private TsObjectLiteral BuildInt64Descriptor(ITypeSymbol type)
+    {
+        var descriptor = WithStringProperty(
             BuildBareKindDescriptor(JsonPropertyKind.Int64),
             "numberType",
-            SixtyFourBitTypeNameOf(type)
+            JsonTypeClassifier.NumberTypeNameOf(JsonTypeClassifier.UnwrapBranded(type))
+                ?? "System.Int64"
         );
 
+        // A [Branded] type keeps its companion factory (the valid
+        // [JsonFactory] member when one exists) and its CLR typeName on the
+        // int64 descriptor: the runtime calls create after the exact read,
+        // as the branded converter does, so MS0034's honored factory stays
+        // honored. The factory case FR-050 does not describe.
+        if (type is INamedTypeSymbol branded && SymbolHelper.HasBranded(branded))
+        {
+            var (factoryTypeName, member) = BrandedFactoryTarget(branded);
+
+            descriptor = WithStringProperty(descriptor, "typeName", ClrTypeName.Of(type));
+            descriptor = WithProperty(
+                descriptor,
+                "create",
+                FactoryReferenceOf(factoryTypeName, member)
+            );
+        }
+
+        return descriptor;
+    }
+
     /// <summary>
-    /// <c>System.UInt64</c> for a <c>ulong</c> — branded over one included —
-    /// and <c>System.Int64</c> for any other 64-bit type this builder classifies.
+    /// The companion factory as an expression: the Guid factory points at the
+    /// runtime's <c>UUID</c> class — a helper reference, so the printer
+    /// aliases it together with the import when a user declaration claims the
+    /// name (#484); any other companion is an emitted module member reached
+    /// by its plain name.
     /// </summary>
-    private static string SixtyFourBitTypeNameOf(ITypeSymbol type)
+    private static TsExpression FactoryReferenceOf(string typeName, string member)
     {
-        if (type.SpecialType == SpecialType.System_UInt64)
-            return "System.UInt64";
+        TsExpression factoryTarget = typeName is "UUID"
+            ? new TsRuntimeHelperReference("UUID")
+            : QualifiedReference(typeName);
 
-        if (
-            type.SpecialType is not (SpecialType.System_Int64 or SpecialType.System_UInt64)
-            && type is INamedTypeSymbol branded
-            && SymbolHelper.GetBrandedValueType(branded) is { } wrapped
-        )
-            return SixtyFourBitTypeNameOf(wrapped);
-
-        return "System.Int64";
+        return new TsPropertyAccess(factoryTarget, member);
     }
 
     /// <summary>
@@ -214,17 +233,9 @@ internal sealed class JsonTypeDescriptorBuilder(
     {
         var (typeName, member) = BrandedFactoryTarget((INamedTypeSymbol)type);
 
-        // The Guid factory points at the runtime's `UUID` class — a helper
-        // reference, so the printer aliases it together with the import when
-        // a user declaration claims the name (#484); any other companion is
-        // an emitted module member reached by its plain name.
-        TsExpression factoryTarget = typeName is "UUID"
-            ? new TsRuntimeHelperReference("UUID")
-            : QualifiedReference(typeName);
-
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Branded),
-            new TsObjectProperty("create", new TsPropertyAccess(factoryTarget, member)),
+            new TsObjectProperty("create", FactoryReferenceOf(typeName, member)),
             new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(type))),
         ]);
     }
@@ -379,4 +390,11 @@ internal sealed class JsonTypeDescriptorBuilder(
         string name,
         string value
     ) => new([.. descriptor.Properties, new TsObjectProperty(name, new TsStringLiteral(value))]);
+
+    /// <summary><paramref name="descriptor"/> with one more expression-valued property.</summary>
+    private static TsObjectLiteral WithProperty(
+        TsObjectLiteral descriptor,
+        string name,
+        TsExpression value
+    ) => new([.. descriptor.Properties, new TsObjectProperty(name, value)]);
 }

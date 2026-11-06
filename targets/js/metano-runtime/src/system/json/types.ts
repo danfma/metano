@@ -48,14 +48,19 @@ export type PrimitiveDescriptor = WithClrTypeName & {
 };
 
 /**
- * `long` / `ulong` (and `nint` / `nuint`) — exact digits on write, integer
- * tokens on read, as a TS `bigint` (spec 012 FR-050). The `numberType` names
- * the 64-bit type in the conversion errors and decides the signedness of the
- * integer grammars.
+ * `long` / `ulong` — exact digits on write, integer tokens on read, as a TS
+ * `bigint` (spec 012 FR-050). The `numberType` names the 64-bit type in the
+ * conversion errors and decides the signedness of the integer grammars.
+ * A `[Branded]` type over a 64-bit integer adds its companion `create`
+ * factory (the valid `[JsonFactory]` member when one exists) and `typeName`,
+ * which the read applies after the exact digit, as the branded descriptor
+ * does — the factory case FR-050 does not describe.
  */
 export type Int64Descriptor = {
   readonly kind: "int64";
   readonly numberType: "System.Int64" | "System.UInt64";
+  readonly create?: (value: any) => unknown;
+  readonly typeName?: string;
 };
 
 /** Another spec — recursive serialize/deserialize */

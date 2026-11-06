@@ -342,7 +342,7 @@ function enumConverter(descriptor: EnumDescriptor) {
   const validValues = new Set(Object.values(descriptor.values));
 
   return {
-    serialize: exactBigIntLeafOf, // already a string
+    serialize: (value: unknown) => value, // already a string
     deserialize: (value: unknown) => {
       // An enum is a value type: JSON `null` throws its conversion error,
       // as System.Text.Json throws (#471), before the enum-value error.
@@ -369,7 +369,7 @@ function numericEnumConverter(descriptor: NumericEnumDescriptor) {
   );
 
   return {
-    serialize: exactBigIntLeafOf, // already a number
+    serialize: (value: unknown) => value, // already a number
     deserialize: (value: unknown) => {
       // A value type: JSON `null` throws its conversion error (#471).
       if (value === null) {

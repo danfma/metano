@@ -21,7 +21,10 @@ internal static class JsonTypeClassifier
         if (IsNullable(type))
             return JsonPropertyKind.Nullable;
 
-        if (Is64BitInteger(type))
+        // A long / ulong in the staging BigInt mode (spec 012 DECIDED-22,
+        // STAGING(012k)): its descriptor is int64 (FR-050). Number mode
+        // classifies it as a primitive with a numberType, the 2.x shape.
+        if (Int64RepresentationScope.IsBigInt && Is64BitIntegerType(type))
             return JsonPropertyKind.Int64;
 
         if (IsPrimitive(type))
@@ -126,14 +129,27 @@ internal static class JsonTypeClassifier
                 or SpecialType.System_Char;
 
     /// <summary>
-    /// A <c>long</c> / <c>ulong</c> in the staging <c>BigInt</c> mode (spec 012
-    /// DECIDED-22, <c>STAGING(012k)</c>): its descriptor is <c>int64</c>
-    /// (FR-050). <c>Number</c> mode classifies it as a <c>primitive</c> with a
-    /// <c>numberType</c>, the shipped 2.x shape.
+    /// The exact 64-bit integers, <c>System.Int64</c> and
+    /// <c>System.UInt64</c>; <c>false</c> for any other type.
     /// </summary>
-    private static bool Is64BitInteger(ITypeSymbol type) =>
-        Int64RepresentationScope.IsBigInt
-        && type.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64;
+    public static bool Is64BitIntegerType(ITypeSymbol type) =>
+        type.SpecialType is (SpecialType.System_Int64 or SpecialType.System_UInt64);
+
+    /// <summary>
+    /// The 64-bit integer a <c>[Branded]</c> type wraps, or the type itself —
+    /// the one wrapper accessor, shared by the classification and the
+    /// descriptor builder (spec 012 FR-050's branded case).
+    /// </summary>
+    public static ITypeSymbol UnwrapBranded(ITypeSymbol type)
+    {
+        if (
+            type is INamedTypeSymbol branded
+            && SymbolHelper.GetBrandedValueType(branded) is { } wrapped
+        )
+            return wrapped;
+
+        return type;
+    }
 
     /// <summary>The C# numeric types that map to a TS <c>number</c>.</summary>
     private static bool IsNumber(ITypeSymbol type) =>
@@ -183,23 +199,16 @@ internal static class JsonTypeClassifier
                 : JsonPropertyKind.NumericEnum;
 
         // [Branded] (and its predecessor [InlineWrapper]) over a 64-bit
-        // integer unwraps to the int64 descriptor (FR-050); any other branded
-        // type keeps the branded descriptor.
+        // integer unwraps to the int64 descriptor in the staging BigInt mode
+        // (FR-050, STAGING(012k)); any other branded type keeps the branded
+        // descriptor, the 2.x shape Number mode ships.
         if (SymbolHelper.HasBranded(named))
-            return Wraps64BitInteger(named) ? JsonPropertyKind.Int64 : JsonPropertyKind.Branded;
+            return Int64RepresentationScope.IsBigInt && Is64BitIntegerType(UnwrapBranded(named))
+                ? JsonPropertyKind.Int64
+                : JsonPropertyKind.Branded;
 
         return JsonPropertyKind.Ref;
     }
-
-    /// <summary>
-    /// Whether a <c>[Branded]</c> type's wrapped value is a <c>long</c> /
-    /// <c>ulong</c> in the staging <c>BigInt</c> mode, so its descriptor is
-    /// <c>int64</c> (FR-050).
-    /// </summary>
-    private static bool Wraps64BitInteger(INamedTypeSymbol type) =>
-        Int64RepresentationScope.IsBigInt
-        && SymbolHelper.GetBrandedValueType(type) is { } wrapped
-        && wrapped.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64;
 
     private static bool IsTemporal(string fullName) =>
         fullName

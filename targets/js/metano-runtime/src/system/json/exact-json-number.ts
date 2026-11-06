@@ -60,9 +60,14 @@ export function rawJsonTextOf(value: unknown): string | undefined {
 /**
  * `value` as the exact JSON number leaf when it is a `bigint`, else the
  * value itself (spec 012 FR-056): a `bigint` that reaches a passthrough
- * converter — an `object` slot, a branded or enum value — must not reach
+ * converter — an `object` slot, a branded value — must not reach
  * `JSON.stringify`, which throws on one (R4). An engine without
  * `JSON.rawJSON` writes the approximate double, as `writeExactNumber` does.
+ *
+ * The check is the value itself, not a walk: a `bigint` nested one level
+ * down — inside an `object`-typed member's value — still reaches
+ * `JSON.stringify` (FR-056's documented limit; a `[PlainObject]` or record
+ * goes through its contract's converters, which convert every property).
  */
 export function exactBigIntLeafOf(value: unknown): unknown {
   return typeof value === "bigint"
