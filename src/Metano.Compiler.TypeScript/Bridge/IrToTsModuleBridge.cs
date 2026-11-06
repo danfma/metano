@@ -256,7 +256,7 @@ public static class IrToTsModuleBridge
             fn.Parameters,
             fn.TypeParameters,
             argumentShape,
-            null
+            typeOverrides: null
         );
 
         var delegateCall = new TsCallExpression(new TsIdentifier(fastPathName), delegated);

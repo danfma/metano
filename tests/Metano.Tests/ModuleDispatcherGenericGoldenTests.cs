@@ -7,10 +7,11 @@ namespace Metano.Tests;
 /// generic branch. The module bridge now lowers its arguments through the
 /// same shared computation as the class dispatcher, which casts a generic
 /// overload's arguments to <c>any</c> and lets the fast path infer its own.
-/// Pinned as goldens that compile under
-/// <c>tsgo --strict --noImplicitOverride</c>: a plain generic group, a
-/// generic classic-extension group, and a group whose type parameter is
-/// constrained.
+/// The goldens pin the emitted shape — every branch casts to <c>any</c> and
+/// none names a type parameter — and each golden file was checked by hand
+/// under <c>tsgo --strict --noImplicitOverride</c> (scratch tsconfig); CI
+/// compares the text only. Three shapes: a plain generic group, a generic
+/// classic-extension group, and a group whose type parameter is constrained.
 /// </summary>
 public class ModuleDispatcherGenericGoldenTests
 {
@@ -47,6 +48,10 @@ public class ModuleDispatcherGenericGoldenTests
             result["index.ts"]
         );
 
+        await Assert.That(outputs).Contains("as any");
+
+        await Assert.That(outputs).DoesNotContain("as T");
+
         await Assert
             .That(outputs)
             .IsEqualTo(TranspileHelper.ReadExpected("module-dispatch-generic-group.ts"));
@@ -80,6 +85,10 @@ public class ModuleDispatcherGenericGoldenTests
 
         var outputs = string.Join("\n", result["seqs.ts"], result["caller.ts"], result["index.ts"]);
 
+        await Assert.That(outputs).Contains("as any");
+
+        await Assert.That(outputs).DoesNotContain("as T");
+
         await Assert
             .That(outputs)
             .IsEqualTo(TranspileHelper.ReadExpected("module-dispatch-generic-extension.ts"));
@@ -93,6 +102,8 @@ public class ModuleDispatcherGenericGoldenTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
+            // No [Transpile] needed: the assembly attribute already transpiles
+            // every public type of the compilation, `Ranked` included.
             public interface Ranked
             {
                 int Rank { get; }
@@ -123,6 +134,10 @@ public class ModuleDispatcherGenericGoldenTests
             result["caller.ts"],
             result["index.ts"]
         );
+
+        await Assert.That(outputs).Contains("as any");
+
+        await Assert.That(outputs).DoesNotContain("as T");
 
         await Assert
             .That(outputs)
