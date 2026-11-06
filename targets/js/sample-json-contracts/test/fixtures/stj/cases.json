@@ -391,20 +391,46 @@
     "context": "StudioJsonContext",
     "getter": "dateTimeOffset",
     "direction": "roundtrip",
+    "sides": [
+      "stj"
+    ],
     "json": "\"2026-01-02T03:04:05+00:00[UTC]\"",
     "stjJson": "\"2026-01-02T03:04:05+00:00\"",
     "crossReadable": false,
-    "divergence": "DateTimeOffset text, not mutually readable: STJ writes the offset only and rejects '[UTC]', Temporal.ZonedDateTime writes and requires the zone (DECIDED-16)"
+    "divergence": "DateTimeOffset text, not mutually readable: STJ writes the offset only and rejects '[UTC]', Temporal.ZonedDateTime writes and requires the zone (DECIDED-16); the TypeScript read keeps both texts readable, STJ's plain-offset one included, so only the reverse direction breaks"
   },
   {
     "id": "V12",
     "context": "StudioJsonContext",
     "getter": "timeSpan",
     "direction": "roundtrip",
+    "sides": [
+      "stj"
+    ],
     "json": "\"PT1H2M3S\"",
     "stjJson": "\"01:02:03\"",
     "crossReadable": false,
-    "divergence": "TimeSpan text, not mutually readable: STJ writes and reads '01:02:03', Temporal.Duration 'PT1H2M3S' (DECIDED-16)"
+    "divergence": "TimeSpan text, not mutually readable: STJ writes and reads '01:02:03', Temporal.Duration 'PT1H2M3S' (DECIDED-16); the TypeScript read keeps both texts readable, STJ's '01:02:03' included, so only the reverse direction breaks"
+  },
+  {
+    "id": "V11b",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "write",
+    "sides": [
+      "ts"
+    ],
+    "json": "\"2026-01-02T03:04:05+00:00[UTC]\""
+  },
+  {
+    "id": "V12b",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "write",
+    "sides": [
+      "ts"
+    ],
+    "json": "\"PT1H2M3S\""
   },
   {
     "id": "V13",
@@ -1264,5 +1290,689 @@
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.Int32."
     }
+  },
+  {
+    "id": "T1",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"3:04:05\""
+  },
+  {
+    "id": "T2",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"03:04:5\""
+  },
+  {
+    "id": "T3",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"00:00\""
+  },
+  {
+    "id": "T4",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"03:04:05.1234567\""
+  },
+  {
+    "id": "T5",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"03:04:60\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T6",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"T03:04:05\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T7",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"03:04:05.12345678\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T8",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"24:00:00\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T9",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\" 03:04:05\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T10",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T11",
+    "context": "StudioJsonContext",
+    "getter": "dateOnly",
+    "direction": "read",
+    "json": "\"2024-1-31\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateOnly."
+    }
+  },
+  {
+    "id": "T12",
+    "context": "StudioJsonContext",
+    "getter": "dateOnly",
+    "direction": "read",
+    "json": "\"2024-02-29\""
+  },
+  {
+    "id": "T13",
+    "context": "StudioJsonContext",
+    "getter": "dateOnly",
+    "direction": "read",
+    "json": "\"2024-02-30\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateOnly."
+    }
+  },
+  {
+    "id": "T14",
+    "context": "StudioJsonContext",
+    "getter": "dateOnly",
+    "direction": "read",
+    "json": "\"0000-01-01\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateOnly."
+    }
+  },
+  {
+    "id": "T15",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31\""
+  },
+  {
+    "id": "T16",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20\""
+  },
+  {
+    "id": "T17",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30Z\""
+  },
+  {
+    "id": "T18",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.123456789\""
+  },
+  {
+    "id": "T19",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31 10:20:30\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "T20",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31t10:20:30z\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "T21",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-13-01T00:00:00\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "T22",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+02:00\""
+  },
+  {
+    "id": "T24",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+0200\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTimeOffset."
+    }
+  },
+  {
+    "id": "T25",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"10:20\""
+  },
+  {
+    "id": "T26",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"10\""
+  },
+  {
+    "id": "T27",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"1.10:20\""
+  },
+  {
+    "id": "T28",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"-10675199.02:48:05.4775808\""
+  },
+  {
+    "id": "T29",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"10:20:30:40\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeSpan."
+    }
+  },
+  {
+    "id": "T30",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"+10:20:30\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeSpan."
+    }
+  },
+  {
+    "id": "T31",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"10:20:30.12345678\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeSpan."
+    }
+  },
+  {
+    "id": "T32",
+    "context": "StudioJsonContext",
+    "getter": "timeSpan",
+    "direction": "read",
+    "json": "\"10675200.00:00:00\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeSpan."
+    }
+  },
+  {
+    "id": "T33",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"3:04:5\",\"Day\":\"2024-02-29\",\"Duration\":\"1.10:20:30.5\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}"
+  },
+  {
+    "id": "T34",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:60\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "T35",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-13-01T00:00:00\",\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "T36",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":\"2024-1-31\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "T37",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30:40\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "T38",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+0200\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "T39",
+    "context": "StudioJsonContext",
+    "getter": "listTimeOnly",
+    "direction": "read",
+    "json": "[\"03:04:60\"]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T40",
+    "context": "StudioJsonContext",
+    "getter": "dictionaryStringTimeOnly",
+    "direction": "read",
+    "json": "{\"k\":\"03:04:60\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.TimeOnly."
+    }
+  },
+  {
+    "id": "T41",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.9999999999999999\""
+  },
+  {
+    "id": "T42",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.99999999999999999\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "T43",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+14:00\""
+  },
+  {
+    "id": "T44",
+    "context": "StudioJsonContext",
+    "getter": "dateTime",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+14:01\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "T45",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+14:00\""
+  },
+  {
+    "id": "T46",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30+99:00\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTimeOffset."
+    }
+  },
+  {
+    "id": "T47",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.9999999999999999+02:00\""
+  },
+  {
+    "id": "T48",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30.99999999999999999+02:00\"",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTimeOffset."
+    }
+  },
+  {
+    "id": "NU1",
+    "context": "StudioJsonContext",
+    "getter": "holderInt",
+    "direction": "read",
+    "json": "{\"N\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderInt.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU2",
+    "context": "StudioJsonContext",
+    "getter": "holderLevel",
+    "direction": "read",
+    "json": "{\"Level\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderLevel.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU3",
+    "context": "StudioJsonContext",
+    "getter": "holderChar",
+    "direction": "read",
+    "json": "{\"C\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderChar.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU4",
+    "context": "StudioJsonContext",
+    "getter": "holderChar",
+    "direction": "read",
+    "json": "{\"C\":\"ab\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to HolderChar.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU5",
+    "context": "StudioJsonContext",
+    "getter": "holderSPoint",
+    "direction": "read",
+    "json": "{\"S\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.SPoint."
+    }
+  },
+  {
+    "id": "NU6",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":null,\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU7",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":null,\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU8",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":null,\"Duration\":\"10:20:30\",\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU9",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":null,\"Moment\":\"2024-01-31T10:20:30+02:00\"}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU10",
+    "context": "StudioJsonContext",
+    "getter": "schedule",
+    "direction": "read",
+    "json": "{\"At\":\"2024-01-31T10:20\",\"Starts\":\"03:04:05\",\"Day\":\"2024-02-29\",\"Duration\":\"10:20:30\",\"Moment\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to Schedule.",
+      "namespaceInsensitive": true
+    },
+    "divergence": "STJ qualifies the type with its namespace; both sides compare the message without it (DECIDED-23 g)"
+  },
+  {
+    "id": "NU11",
+    "context": "StudioJsonContext",
+    "getter": "listInt32",
+    "direction": "read",
+    "json": "[1,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "NU12",
+    "context": "StudioJsonContext",
+    "getter": "listLevel",
+    "direction": "read",
+    "json": "[0,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Level."
+    }
+  },
+  {
+    "id": "NU13",
+    "context": "StudioJsonContext",
+    "getter": "listGuid",
+    "direction": "read",
+    "json": "[\"0f8fad5b-d9cb-469f-a165-70867728950e\",null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Guid."
+    }
+  },
+  {
+    "id": "NU14",
+    "context": "StudioJsonContext",
+    "getter": "listDateTime",
+    "direction": "read",
+    "json": "[\"2024-01-31T10:20:30\",null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.DateTime."
+    }
+  },
+  {
+    "id": "NU15",
+    "context": "StudioJsonContext",
+    "getter": "hashSetInt32",
+    "direction": "read",
+    "json": "[1,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "NU16",
+    "context": "StudioJsonContext",
+    "getter": "dictionaryStringInt32",
+    "direction": "read",
+    "json": "{\"a\":1,\"b\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "NU17",
+    "context": "StudioJsonContext",
+    "getter": "int32Array",
+    "direction": "read",
+    "json": "[1,null]",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to System.Int32."
+    }
+  },
+  {
+    "id": "OK1",
+    "context": "StudioJsonContext",
+    "getter": "listNullableInt32",
+    "direction": "read",
+    "json": "[1,null]"
+  },
+  {
+    "id": "OK2",
+    "context": "StudioJsonContext",
+    "getter": "dictionaryStringNullableInt32",
+    "direction": "read",
+    "json": "{\"a\":null}"
+  },
+  {
+    "id": "OK3",
+    "context": "StudioJsonContext",
+    "getter": "listString",
+    "direction": "read",
+    "json": "[\"a\",null]"
+  },
+  {
+    "id": "OK4",
+    "context": "StudioJsonContext",
+    "getter": "holderChar",
+    "direction": "read",
+    "json": "{\"C\":\"a\"}"
   }
 ]

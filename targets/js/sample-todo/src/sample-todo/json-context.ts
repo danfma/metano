@@ -26,12 +26,12 @@ export class JsonContext extends SerializerContext {
         {
           ts: "completed",
           json: "completed",
-          type: { kind: "primitive" },
+          type: { kind: "primitive", typeName: "System.Boolean" },
         },
         {
           ts: "priority",
           json: "priority",
-          type: { kind: "enum", values: Priority },
+          type: { kind: "enum", values: Priority, typeName: "SampleTodo.Priority" },
         },
       ],
     }));

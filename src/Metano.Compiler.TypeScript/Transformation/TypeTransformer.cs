@@ -1058,11 +1058,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // imported canonical name.
             var primaryType = group.Types[0];
             var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
-            var imports = new ImportCollector(Context, irRequirements).Collect(
+            var collected = new ImportCollector(Context, irRequirements).Collect(
                 primaryType,
                 statements
             );
-            statements.InsertRange(0, imports);
+            statements.InsertRange(0, collected.Imports);
 
             var isJsx = ContainsJsx(statements);
             var relativePath = Context.PathNaming.GetRelativePath(
@@ -1070,7 +1070,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 group.FileName,
                 isJsx
             );
-            return new TsSourceFile(relativePath, statements, group.Namespace);
+            return new TsSourceFile(relativePath, statements, group.Namespace)
+            {
+                RuntimeHelperAliases = collected.RuntimeHelperAliases,
+            };
         }
         finally
         {

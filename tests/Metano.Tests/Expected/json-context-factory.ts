@@ -28,24 +28,24 @@ export class JsonContext extends SerializerContext {
         {
           ts: "title",
           json: "title",
-          type: { kind: "branded", create: Title.from },
+          type: { kind: "branded", create: Title.from, typeName: "TestApp.Title" },
         },
         {
           ts: "slug",
           json: "slug",
-          type: { kind: "branded", create: Slug.parse },
+          type: { kind: "branded", create: Slug.parse, typeName: "TestApp.Slug" },
         },
         {
           ts: "note",
           json: "note",
-          type: { kind: "branded", create: Plain.create },
+          type: { kind: "branded", create: Plain.create, typeName: "TestApp.Plain" },
         },
         {
           ts: "subtitle",
           json: "subtitle",
           type: {
             kind: "nullable",
-            inner: { kind: "branded", create: Title.from },
+            inner: { kind: "branded", create: Title.from, typeName: "TestApp.Title" },
           },
           optional: true,
         },
@@ -54,7 +54,7 @@ export class JsonContext extends SerializerContext {
           json: "aliases",
           type: {
             kind: "array",
-            element: { kind: "branded", create: Title.from },
+            element: { kind: "branded", create: Title.from, typeName: "TestApp.Title" },
           },
         },
         {
@@ -62,8 +62,8 @@ export class JsonContext extends SerializerContext {
           json: "codes",
           type: {
             kind: "map",
-            key: { kind: "branded", create: Title.from },
-            value: { kind: "branded", create: Episode.Code.from },
+            key: { kind: "branded", create: Title.from, typeName: "TestApp.Title" },
+            value: { kind: "branded", create: Episode.Code.from, typeName: "TestApp.Episode+Code" },
           },
         },
       ],
@@ -72,7 +72,7 @@ export class JsonContext extends SerializerContext {
 
   get title(): ValueSpec<Title> {
     return this._title ??= this.createValueSpec({
-      descriptor: { kind: "branded", create: Title.from },
+      descriptor: { kind: "branded", create: Title.from, typeName: "TestApp.Title" },
       valueType: true,
       typeName: "TestApp.Title",
     });
@@ -82,14 +82,14 @@ export class JsonContext extends SerializerContext {
     return this._listSlug ??= this.createValueSpec({
       descriptor: {
         kind: "array",
-        element: { kind: "branded", create: Slug.parse },
+        element: { kind: "branded", create: Slug.parse, typeName: "TestApp.Slug" },
       },
     });
   }
 
   get code(): ValueSpec<Episode.Code> {
     return this._code ??= this.createValueSpec({
-      descriptor: { kind: "branded", create: Episode.Code.from },
+      descriptor: { kind: "branded", create: Episode.Code.from, typeName: "TestApp.Episode+Code" },
       valueType: true,
       typeName: "TestApp.Episode+Code",
     });

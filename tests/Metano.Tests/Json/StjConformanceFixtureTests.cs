@@ -965,6 +965,129 @@ public class StjConformanceFixtureTests
                     await Assert.That(set.Count).IsEqualTo(5);
                 }
             ),
+            ["T1"] = ReadOnly(async value =>
+                await Assert.That((TimeOnly)value!).IsEqualTo(new TimeOnly(3, 4, 5))
+            ),
+            ["T2"] = ReadOnly(async value =>
+                await Assert.That((TimeOnly)value!).IsEqualTo(new TimeOnly(3, 4, 5))
+            ),
+            ["T3"] = ReadOnly(async value =>
+                await Assert.That((TimeOnly)value!).IsEqualTo(new TimeOnly(0, 0))
+            ),
+            ["T4"] = ReadOnly(async value =>
+                await Assert
+                    .That((TimeOnly)value!)
+                    .IsEqualTo(new TimeOnly(3, 4, 5).Add(TimeSpan.FromTicks(1234567)))
+            ),
+            ["T12"] = ReadOnly(async value =>
+                await Assert.That((DateOnly)value!).IsEqualTo(new DateOnly(2024, 2, 29))
+            ),
+            ["T15"] = ReadOnly(async value =>
+                await Assert.That((DateTime)value!).IsEqualTo(new DateTime(2024, 1, 31))
+            ),
+            ["T16"] = ReadOnly(async value =>
+                await Assert.That((DateTime)value!).IsEqualTo(new DateTime(2024, 1, 31, 10, 20, 0))
+            ),
+            ["T17"] = ReadOnly(async value =>
+            {
+                var instant = (DateTime)value!;
+
+                await Assert.That(instant.Kind).IsEqualTo(DateTimeKind.Utc);
+
+                await Assert
+                    .That(instant)
+                    .IsEqualTo(new DateTime(2024, 1, 31, 10, 20, 30, DateTimeKind.Utc));
+            }),
+            ["T18"] = ReadOnly(async value =>
+                await Assert
+                    .That((DateTime)value!)
+                    .IsEqualTo(new DateTime(2024, 1, 31, 10, 20, 30).AddTicks(1234567))
+            ),
+            ["T22"] = ReadOnly(async value =>
+                await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(2, 0, 0))
+            ),
+            ["T41"] = ReadOnly(async value =>
+                await Assert
+                    .That((DateTime)value!)
+                    .IsEqualTo(new DateTime(2024, 1, 31, 10, 20, 30).AddTicks(9999999))
+            ),
+            ["T43"] = ReadOnly(async value =>
+                await Assert
+                    .That((DateTime)value!)
+                    .IsEqualTo(
+                        new DateTimeOffset(
+                            2024,
+                            1,
+                            31,
+                            10,
+                            20,
+                            30,
+                            new TimeSpan(14, 0, 0)
+                        ).LocalDateTime
+                    )
+            ),
+            ["T45"] = ReadOnly(async value =>
+                await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(14, 0, 0))
+            ),
+            ["T47"] = ReadOnly(async value =>
+            {
+                var moment = (DateTimeOffset)value!;
+
+                await Assert.That(moment.Offset).IsEqualTo(new TimeSpan(2, 0, 0));
+
+                await Assert
+                    .That(moment)
+                    .IsEqualTo(
+                        new DateTimeOffset(2024, 1, 31, 10, 20, 30, new TimeSpan(2, 0, 0)).AddTicks(
+                            9999999
+                        )
+                    );
+            }),
+            ["T25"] = ReadOnly(async value =>
+                await Assert.That((TimeSpan)value!).IsEqualTo(new TimeSpan(10, 20, 0))
+            ),
+            ["T26"] = ReadOnly(async value =>
+                await Assert.That((TimeSpan)value!).IsEqualTo(TimeSpan.FromDays(10))
+            ),
+            ["T27"] = ReadOnly(async value =>
+                await Assert.That((TimeSpan)value!).IsEqualTo(new TimeSpan(1, 10, 20, 0))
+            ),
+            ["T28"] = ReadOnly(async value =>
+                await Assert.That((TimeSpan)value!).IsEqualTo(TimeSpan.MinValue)
+            ),
+            ["T33"] = ReadOnly(async value =>
+            {
+                var schedule = (Schedule)value!;
+
+                await Assert.That(schedule.At).IsEqualTo(new DateTime(2024, 1, 31, 10, 20, 0));
+
+                await Assert.That(schedule.Starts).IsEqualTo(new TimeOnly(3, 4, 5));
+
+                await Assert.That(schedule.Day).IsEqualTo(new DateOnly(2024, 2, 29));
+
+                await Assert.That(schedule.Duration).IsEqualTo(new TimeSpan(1, 10, 20, 30, 500));
+
+                await Assert.That(schedule.Moment.Offset).IsEqualTo(new TimeSpan(2, 0, 0));
+            }),
+            ["OK1"] = ReadOnly(async value =>
+            {
+                var items = (List<int?>)value!;
+
+                await Assert.That(items.Count).IsEqualTo(2);
+
+                await Assert.That(items[0]).IsEqualTo(1);
+
+                await Assert.That(items[1]).IsNull();
+            }),
+            ["OK2"] = ReadOnly(async value =>
+                await Assert.That(((Dictionary<string, int?>)value!)["a"]).IsNull()
+            ),
+            ["OK3"] = ReadOnly(async value =>
+                await Assert.That(((List<string>)value!).SequenceEqual(["a", null!])).IsTrue()
+            ),
+            ["OK4"] = ReadOnly(async value =>
+                await Assert.That(((HolderChar)value!).C).IsEqualTo('a')
+            ),
         };
 
     private static async Task AssertDecimal(object? value, string text) =>

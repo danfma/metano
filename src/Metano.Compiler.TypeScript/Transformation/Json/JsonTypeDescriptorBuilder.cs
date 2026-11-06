@@ -123,10 +123,10 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// what the runtime needs to parse the JSON property name into it the way
     /// System.Text.Json does (#479). A numeric key always names its
     /// <c>numberType</c>, whatever the context's read options, and so does a
-    /// numeric enum key for its underlying type. A <c>bool</c>, enum,
-    /// <c>Guid</c> or temporal key names its CLR <c>typeName</c> for the error
-    /// text. A <c>string</c> key and any other key keep the value descriptor
-    /// unchanged.
+    /// numeric enum key for its underlying type. The value descriptor names
+    /// its CLR <c>typeName</c> itself (#471), which a rejected key name
+    /// reports. A <c>string</c> key and any other key keep the value
+    /// descriptor unchanged.
     /// </summary>
     private TsObjectLiteral BuildKeyDescriptor(ITypeSymbol keyType)
     {
@@ -136,13 +136,16 @@ internal sealed class JsonTypeDescriptorBuilder(
             return BuildNumberDescriptor(numberType);
 
         var kind = JsonTypeClassifier.Classify(keyType);
-        var descriptor = WithEnumUnderlyingType(Build(keyType, kind), keyType, kind);
 
-        return KeyDescriptorCarriesTypeName(keyType, kind)
-            ? WithStringProperty(descriptor, "typeName", JsonClrTypeName.Of(keyType))
-            : descriptor;
+        return WithEnumUnderlyingType(Build(keyType, kind), keyType, kind);
     }
 
+    /// <summary>
+    /// A temporal descriptor parses through its mapped <c>Temporal</c> type
+    /// (a hand-written spec's path) and names its CLR <c>typeName</c>, which
+    /// tells the runtime to read with System.Text.Json's own grammar and to
+    /// report its conversion errors (#485).
+    /// </summary>
     private TsObjectLiteral BuildTemporalDescriptor(ITypeSymbol type)
     {
         var typeName = JsonTsTypes.Map(_context, type) is TsNamedType namedTs
@@ -152,6 +155,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Temporal),
             new TsObjectProperty("parse", new TsPropertyAccess(new TsIdentifier(typeName), "from")),
+            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
         ]);
     }
 
@@ -161,18 +165,26 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// their TS type reference (qualified when nested). <c>create</c> is the
     /// companion's non-validating factory unless the type declares a valid
     /// <c>[JsonFactory]</c>, whose companion member the descriptor names
-    /// instead (FR-021).
+    /// instead (FR-021). The descriptor names its CLR <c>typeName</c>, which
+    /// the runtime's conversion errors and JSON `null` rule report (#471,
+    /// and the dictionary keys of #479).
     /// </summary>
     private TsObjectLiteral BuildBrandedDescriptor(ITypeSymbol type)
     {
         var (typeName, member) = BrandedFactoryTarget((INamedTypeSymbol)type);
 
+        // The Guid factory points at the runtime's `UUID` class — a helper
+        // reference, so the printer aliases it together with the import when
+        // a user declaration claims the name (#484); any other companion is
+        // an emitted module member reached by its plain name.
+        TsExpression factoryTarget = typeName is "UUID"
+            ? new TsRuntimeHelperReference("UUID")
+            : QualifiedReference(typeName);
+
         return new TsObjectLiteral([
             KindProperty(JsonPropertyKind.Branded),
-            new TsObjectProperty(
-                "create",
-                new TsPropertyAccess(QualifiedReference(typeName), member)
-            ),
+            new TsObjectProperty("create", new TsPropertyAccess(factoryTarget, member)),
+            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
         ]);
     }
 
@@ -220,6 +232,12 @@ internal sealed class JsonTypeDescriptorBuilder(
             );
     }
 
+    /// <summary>
+    /// An enum descriptor: its TS enum object for the member values, plus the
+    /// CLR <c>typeName</c> the runtime's conversion errors and JSON `null`
+    /// rule name (#471, and the dictionary keys of #479). A key descriptor
+    /// does not repeat it (<see cref="KeyDescriptorCarriesTypeName"/>).
+    /// </summary>
     private TsObjectLiteral BuildEnumValuesDescriptor(ITypeSymbol type, JsonPropertyKind kind)
     {
         var tsTypeName = _context.ResolveTsName((INamedTypeSymbol)type);
@@ -227,6 +245,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         return new TsObjectLiteral([
             KindProperty(kind),
             new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
+            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
         ]);
     }
 
@@ -239,28 +258,40 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// <summary>
     /// <c>{ kind: "decimal", type: Decimal }</c>: the runtime builds the mapped
     /// decimal type (decimal.js <c>Decimal</c>) from the JSON number or text, as
-    /// a temporal descriptor parses through its type.
+    /// a temporal descriptor parses through its type. It names the CLR
+    /// <c>typeName</c> for the conversion errors and the JSON `null` rule
+    /// (#471).
     /// </summary>
     private TsObjectLiteral BuildDecimalDescriptor(INamedTypeSymbol type) =>
         new([
             KindProperty(JsonPropertyKind.Decimal),
             new TsObjectProperty("type", QualifiedReference(TypeReferenceName(type))),
+            new TsObjectProperty("typeName", new TsStringLiteral(JsonClrTypeName.Of(type))),
         ]);
 
     /// <summary>
-    /// <c>{ kind: "primitive" }</c>, plus <c>numberType: "System.Int32"</c>
-    /// for a numeric type when the context reads numbers from strings: the
-    /// runtime needs the type for the grammar and the error text.
+    /// <c>{ kind: "primitive" }</c>, plus what the runtime needs to read the
+    /// type as System.Text.Json does (#471): <c>numberType</c> for a numeric
+    /// type, whatever the context's read options (the grammar it names only
+    /// applies when the context reads numbers from strings), and the CLR
+    /// <c>typeName</c> for a <c>bool</c> or a <c>char</c>. A <c>string</c>
+    /// (and a <c>Uri</c>, which maps to one) stays bare: a reference type
+    /// reads <c>null</c>.
     /// </summary>
     private TsObjectLiteral BuildPrimitiveDescriptor(ITypeSymbol type)
     {
-        var numberType = _readOptions.ReadsNumbersFromStrings
-            ? JsonTypeClassifier.NumberTypeNameOf(type)
-            : null;
+        var numberType = JsonTypeClassifier.NumberTypeNameOf(type);
 
-        return numberType is null
-            ? BuildBareKindDescriptor(JsonPropertyKind.Primitive)
-            : BuildNumberDescriptor(numberType);
+        if (numberType is not null)
+            return BuildNumberDescriptor(numberType);
+
+        return type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Char
+            ? WithStringProperty(
+                BuildBareKindDescriptor(JsonPropertyKind.Primitive),
+                "typeName",
+                JsonClrTypeName.Of(type)
+            )
+            : BuildBareKindDescriptor(JsonPropertyKind.Primitive);
     }
 
     /// <summary><c>{ kind: "primitive", numberType: "System.Int32" }</c>.</summary>
@@ -279,23 +310,6 @@ internal sealed class JsonTypeDescriptorBuilder(
     /// </summary>
     private static TsObjectLiteral BuildBareKindDescriptor(JsonPropertyKind kind) =>
         new([KindProperty(kind)]);
-
-    /// <summary>
-    /// Whether a dictionary key of <paramref name="type"/> carries its CLR
-    /// <c>typeName</c> (#479): the non-numeric keys whose JSON property name
-    /// the runtime parses (a <c>bool</c>, an enum, a <c>Guid</c> or a
-    /// temporal type), so a rejected name reports the type as
-    /// System.Text.Json does.
-    /// </summary>
-    private static bool KeyDescriptorCarriesTypeName(ITypeSymbol type, JsonPropertyKind kind) =>
-        kind switch
-        {
-            JsonPropertyKind.Primitive => type.SpecialType == SpecialType.System_Boolean,
-            JsonPropertyKind.Enum or JsonPropertyKind.NumericEnum or JsonPropertyKind.Temporal =>
-                true,
-            JsonPropertyKind.Branded => JsonTypeClassifier.IsGuid(type),
-            _ => false,
-        };
 
     /// <summary>
     /// A numeric enum key also names its underlying type

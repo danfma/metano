@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Parenthesization;
 using Metano.Compiler.TypeScript.Parenthesization.Templates;
@@ -12,7 +13,29 @@ public sealed class Printer(string indent = "  ")
 {
     private readonly IndentedStringBuilder _sb = new(indent);
 
+    /// <summary>
+    /// Prints a whole module: rendering keeps every runtime helper name in
+    /// its deferred form (<see cref="DeferredHelperNames"/>) and this pass
+    /// resolves each wrap to the file's alias — the local binding the import
+    /// line emitted for a colliding helper (issue #484) — or back to the
+    /// plain name. Resolving here (not during rendering) is what lets one
+    /// instance print many files without per-file state.
+    /// </summary>
     public string Print(TsSourceFile file)
+    {
+        var rendered = PrintWithDeferredHelperNames(file);
+
+        return DeferredHelperNames.Resolve(rendered, file.RuntimeHelperAliases);
+    }
+
+    /// <summary>
+    /// Renders the file with every runtime helper name still in its deferred
+    /// form. The fragment bakers (<c>IrToTsStatementBridge.WrapLoop</c>
+    /// headers, raw statement bodies) call it so the deferred names survive
+    /// into the raw statement text and <see cref="Print"/> — which knows the
+    /// file's aliases — resolves them.
+    /// </summary>
+    internal string PrintWithDeferredHelperNames(TsSourceFile file)
     {
         _sb.Clear();
         for (var i = 0; i < file.Statements.Count; i++)
@@ -31,9 +54,19 @@ public sealed class Printer(string indent = "  ")
     }
 
     /// <summary>
+    /// How a runtime helper call prints: always deferred —
+    /// <see cref="Print"/> resolves the wrap to the file's alias when the
+    /// name collided (issue #484), or back to the plain name otherwise.
+    /// </summary>
+    private static string HelperName(string name) => DeferredHelperNames.Wrap(name);
+
+    /// <summary>
     /// Renders a single <see cref="TsType"/> to text. Used by bridges
     /// that need to embed a type fragment inside a synthesized raw
     /// statement (e.g., the <c>[ObjectArgs]</c> destructuring header).
+    /// Helper-bound type names come out in their deferred form
+    /// (<see cref="DeferredHelperNames"/>) — the caller must embed the text
+    /// in a statement that reaches <see cref="Print"/>, which resolves them.
     /// </summary>
     public string PrintType(string indent, TsType type)
     {
@@ -45,7 +78,11 @@ public sealed class Printer(string indent = "  ")
     /// <summary>
     /// Renders a single <see cref="TsExpression"/> to text. Used by
     /// bridges that need to embed an expression fragment inside a
-    /// synthesized raw statement.
+    /// synthesized raw statement. Runtime helper names come out in their
+    /// deferred form (<see cref="DeferredHelperNames"/>) — the caller must
+    /// embed the text in a statement that reaches <see cref="Print"/>, which
+    /// resolves them; resolving manually would need
+    /// <c>DeferredHelperNames.Resolve(text, null)</c>.
     /// </summary>
     public string PrintExpressionFragment(TsExpression expression)
     {
@@ -53,11 +90,6 @@ public sealed class Printer(string indent = "  ")
         PrintExpression(expression);
         return _sb.GetRawString();
     }
-
-    public static string RenderType(TsType type) => new Printer().PrintTypeOnce(type);
-
-    public static string RenderExpression(TsExpression expression) =>
-        new Printer().PrintExpressionFragment(expression);
 
     private string PrintTypeOnce(TsType type)
     {
@@ -912,6 +944,22 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(query.EntityName);
                 break;
 
+            case TsNamedType named when named.RuntimeHelperBinding is { } binding:
+                // A class-shaped runtime helper used as a type (HashSet<T>,
+                // UUID, Grouping<K, V>): the root binding prints deferred so
+                // it agrees with the aliased import; the rest of a dotted
+                // name (Temporal.PlainDate) stays compiler-authored.
+                var typeRest = named.Name[binding.Length..];
+                _sb.Write(HelperName(binding) + typeRest);
+                if (named.TypeArguments is { Count: > 0 })
+                {
+                    _sb.Write("<");
+                    _sb.WriteList(named.TypeArguments, PrintType);
+                    _sb.Write(">");
+                }
+
+                break;
+
             case TsNamedType named:
                 _sb.Write(named.Name);
                 if (named.TypeArguments is { Count: > 0 })
@@ -1281,7 +1329,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsRuntimeHelperReference helper:
-                _sb.Write(helper.Name);
+                _sb.Write(HelperName(helper.Name));
                 break;
 
             case TsLiteral lit:
@@ -1343,7 +1391,8 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsLinqCall linq:
-                _sb.Write("linq(");
+                _sb.Write(HelperName("linq"));
+                _sb.Write("(");
                 _sb.WriteList(linq.Args, PrintListElement);
                 _sb.Write(")");
                 break;
@@ -1608,15 +1657,38 @@ public sealed class Printer(string indent = "  ")
 
             if (dollar < 0)
             {
-                _sb.Write(text[i..]);
+                WriteTemplateLiteral(text[i..], template.RuntimeImports);
                 break;
             }
 
             if (dollar > i)
-                _sb.Write(text[i..dollar]);
+                WriteTemplateLiteral(text[i..dollar], template.RuntimeImports);
 
             i = PrintPlaceholderAt(template, shape, dollar);
         }
+    }
+
+    /// <summary>
+    /// Writes a template's literal chunk with the helper names it declares in
+    /// <c>RuntimeImports</c> deferred (<see cref="DeferredHelperNames"/>) so
+    /// the file-level pass resolves each to the alias or the plain name. Only
+    /// declared names are touched — the rest of the chunk is compiler-authored
+    /// text — and the boundaries never accept a name arriving through a
+    /// property access, so an <c>a.intDiv</c> member never rewrites.
+    /// </summary>
+    private void WriteTemplateLiteral(string chunk, IReadOnlyList<string> runtimeImports)
+    {
+        var deferred = runtimeImports.Aggregate(
+            chunk,
+            (current, helper) =>
+                Regex.Replace(
+                    current,
+                    $@"(?<![\w$.]){Regex.Escape(helper)}(?![\w$])",
+                    _ => DeferredHelperNames.Wrap(helper)
+                )
+        );
+
+        _sb.Write(deferred);
     }
 
     /// <summary>
@@ -1785,4 +1857,9 @@ public sealed class Printer(string indent = "  ")
     {
         _sb.WriteBlock(() => PrintStatementList(body));
     }
+
+    public static string RenderType(TsType type) => new Printer().PrintTypeOnce(type);
+
+    public static string RenderExpression(TsExpression expression) =>
+        new Printer().PrintExpressionFragment(expression);
 }

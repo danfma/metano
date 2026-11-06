@@ -117,7 +117,10 @@ internal static class JsonTypeClassifier
 
     private static bool IsPrimitive(ITypeSymbol type) =>
         IsNumber(type)
-        || type.SpecialType is SpecialType.System_String or SpecialType.System_Boolean;
+        || type.SpecialType
+            is SpecialType.System_String
+                or SpecialType.System_Boolean
+                or SpecialType.System_Char;
 
     /// <summary>The C# numeric types that map to a TS <c>number</c>.</summary>
     private static bool IsNumber(ITypeSymbol type) =>

@@ -288,32 +288,43 @@ public class Int64ConversionTests
     }
 
     /// <summary>
-    /// A user function named like a conversion helper is not mistaken for it:
-    /// only the helpers the bridge emits import from <c>metano-runtime</c>.
+    /// A user function named like a conversion helper the module actually
+    /// imports does not steal it: the runtime import comes in aliased
+    /// (<c>int64FromDouble as int64FromDouble$rt</c>) and the generated cast
+    /// calls bind through the alias, while the user function keeps its name
+    /// (#488 bullet 4, #484).
     /// </summary>
     [Test]
-    public async Task BigIntMode_UserFunctionNamedLikeAHelper_IsNotImported()
+    public async Task BigIntMode_UserFunctionNamedLikeAHelper_AliasesTheRuntimeImport()
     {
         const string source = """
             [Transpile, ExportedAsModule]
             public static class Helpers
             {
-                public static int MapNullable(int x) => x;
-                public static int Int32FromDouble(int x) => MapNullable(x);
+                public static long Int64FromDouble(double d) => (long)d;
+
                 public static long Truncate(double d) => (long)d;
             }
             """;
 
-        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             source,
             Int64Representation.BigInt
         );
 
         var output = files["helpers.ts"];
 
-        await Assert.That(output).Contains("export function mapNullable(x: number): number");
-        await Assert.That(output).Contains("import { int64FromDouble } from \"metano-runtime\";");
+        await Assert
+            .That(output)
+            .Contains(@"import { int64FromDouble as int64FromDouble$rt } from ""metano-runtime"";");
+        await Assert.That(output).Contains("export function int64FromDouble(d: number): bigint");
+        await Assert.That(output).Contains("int64FromDouble$rt(d)");
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
     }
+
+    private static List<MetanoDiagnostic> UnsupportedFeatures(
+        IEnumerable<MetanoDiagnostic> diagnostics
+    ) => diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
 
     private const string ForEachSource = """
         [Transpile]

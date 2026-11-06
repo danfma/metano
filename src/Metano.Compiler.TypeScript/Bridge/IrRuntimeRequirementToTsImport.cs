@@ -50,6 +50,13 @@ public static class IrRuntimeRequirementToTsImport
     }
 
     /// <summary>
+    /// Whether the requirement maps to a concrete import site at all;
+    /// <see cref="ImportedNameOf"/> throws for the ones that don't.
+    /// </summary>
+    internal static bool HasMappedImport(IrRuntimeRequirement requirement) =>
+        Map(requirement) is not null;
+
+    /// <summary>
     /// The name a runtime helper is imported under in the TS target (e.g.
     /// <c>"RecordCopy"</c> → <c>copyRecordWith</c>), for the import walker's
     /// bypass lists to stay in sync with this table.
@@ -64,8 +71,8 @@ public static class IrRuntimeRequirementToTsImport
 
     /// <summary>
     /// Maps a semantic runtime helper to its concrete import site in the TypeScript
-    /// target. Returning <c>null</c> means "no import needed" (e.g., `Temporal` is
-    /// already imported elsewhere in the current implementation).
+    /// target. Returning <c>null</c> means "no import needed" (an unmapped
+    /// helper; <c>Temporal</c> maps to the polyfill package).
     /// </summary>
     private static (string ModuleName, string Name, bool TypeOnly)? Map(IrRuntimeRequirement req) =>
         req.HelperName switch

@@ -272,10 +272,10 @@ describe("read options — polymorphic payloads", () => {
     );
   });
 
-  test("a number that fails the grammar names the numeric type", () => {
+  test("a number that fails the grammar names the declaring contract", () => {
     expectJsonException(
       () => read('{"kind":"image","path":"a","seconds":"x"}', clip),
-      cannotConvertMessage("System.Double"),
+      cannotConvertMessage("ImageClip"),
     );
   });
 

@@ -180,14 +180,14 @@ public class JsonReadOptionsTests
         await Assert.That(NumberTypesOf(ts)).IsEquivalentTo(expected);
     }
 
-    // The decimal descriptor carries no numberType: its converter reads the
-    // context option and builds the value through its type.
+    // The value types name their CLR type for the JSON null rule (#471); the
+    // string stays bare, a reference type that reads null.
     [Test]
-    [Arguments("m", "{ kind: \"decimal\", type: Decimal }")]
+    [Arguments("m", "{ kind: \"decimal\", type: Decimal, typeName: \"System.Decimal\" }")]
     [Arguments("text", "{ kind: \"primitive\" }")]
-    [Arguments("flag", "{ kind: \"primitive\" }")]
-    [Arguments("level", "{ kind: \"numericEnum\", values: Level }")]
-    [Arguments("id", "{ kind: \"branded\", create: UUID.create }")]
+    [Arguments("flag", "{ kind: \"primitive\", typeName: \"System.Boolean\" }")]
+    [Arguments("level", "{ kind: \"numericEnum\", values: Level, typeName: \"TestApp.Level\" }")]
+    [Arguments("id", "{ kind: \"branded\", create: UUID.create, typeName: \"System.Guid\" }")]
     public async Task NumbersFromStrings_NameNoNonNumericType(string tsName, string expected)
     {
         var descriptor = DescriptorOf(TranspileContext("JsonSerializerDefaults.Web"), tsName);
@@ -201,16 +201,16 @@ public class JsonReadOptionsTests
     [Arguments("JsonSerializerDefaults.General")]
     [Arguments("JsonSerializerDefaults.Web, NumberHandling = JsonNumberHandling.Strict")]
     [Arguments("PropertyNameCaseInsensitive = true")]
-    public async Task StrictNumberHandling_EmitsNoNumberType_ExceptOnDictionaryKeys(string options)
+    public async Task StrictNumberHandling_StillNamesEveryNumericType(string options)
     {
         var ts = TranspileContext(options);
         var dictionaryKey = """key: { kind: "primitive", numberType: "System.Int32" },""";
 
-        await Assert.That(ts.Replace(dictionaryKey, "")).DoesNotContain("numberType");
-
         await Assert.That(ts).Contains(dictionaryKey);
 
-        await Assert.That(DescriptorOf(ts, "i")).IsEqualTo("{ kind: \"primitive\" }");
+        await Assert
+            .That(DescriptorOf(ts, "i"))
+            .IsEqualTo("{ kind: \"primitive\", numberType: \"System.Int32\" }");
     }
 
     [Test]

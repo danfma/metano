@@ -312,7 +312,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             new TsVariableDeclaration(
                 "guard",
                 new TsCallExpression(
-                    new TsIdentifier("getUnionGuard"),
+                    new TsRuntimeHelperReference("getUnionGuard"),
                     [new TsPropertyAccess(new TsIdentifier("v"), discriminatorTsName)]
                 )
             )
@@ -363,7 +363,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         // the discriminator-value vocabulary, and the variant's emitted
         // discriminator literal is its TS name.
         var call = new TsCallExpression(
-            new TsIdentifier("registerUnionGuard"),
+            new TsRuntimeHelperReference("registerUnionGuard"),
             [new TsStringLiteral(variantTsName), new TsIdentifier(guardName)]
         );
 
