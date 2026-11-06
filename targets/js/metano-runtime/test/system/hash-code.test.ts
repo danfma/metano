@@ -107,10 +107,14 @@ describe("bigint hashing", () => {
     expect(hc.toHashCode()).toBe(HashCode.combine(5n));
   });
 
-  test("hashCode and valueHashCode hash a bigint through hashInt64", () => {
-    expect(hashCode(5n)).toBe(HashCode.combine(5n));
-    expect(valueHashCode(1n << 32n)).toBe(hashCode(1n << 32n));
-    // 5 and -1 enter the accumulator with the distinct .NET word hashes.
+  // A bare bigint reaching hashCode / valueHashCode answers .NET's
+  // long.GetHashCode() — the raw word fold (FR-040, FR-046) — while inside
+  // HashCode.add the same fold enters the accumulator mix.
+  test("hashCode and valueHashCode hash a bigint like long.GetHashCode", () => {
+    expect(hashCode(5n)).toBe(5);
+    expect(hashCode(-1n)).toBe(0);
+    expect(valueHashCode(1n << 32n)).toBe(1);
+    // 5 and -1 keep .NET's distinct word hashes.
     expect(hashCode(-1n)).not.toBe(hashCode(5n));
   });
 });
