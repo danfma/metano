@@ -227,30 +227,4 @@ describe("Overload differentiation", () => {
     expect(isInt32(3.14)).toBe(false);
     expect(isFloat64(3.14)).toBe(true);
   });
-
-  // The dispatcher order of spec 012 FR-048 (OQ-6): same-arity overloads that
-  // differ only among long, ulong and BigInteger try long, then ulong, then
-  // BigInteger, so a bigint argument picks the first kind that holds it.
-  test("the bigint checks dispatch 5n, 2n**63n and 2n**100n in the OQ-6 order", () => {
-    const pick64 = (value: unknown): string => {
-      if (isInt64Value(value)) {
-        return "long";
-      }
-
-      if (isUInt64Value(value)) {
-        return "ulong";
-      }
-
-      if (isBigInt(value)) {
-        return "BigInteger";
-      }
-
-      throw new Error("No matching overload");
-    };
-
-    expect(pick64(5n)).toBe("long");
-    expect(pick64(9223372036854775808n)).toBe("ulong");
-    expect(pick64(2n ** 100n)).toBe("BigInteger");
-    expect(() => pick64(5)).toThrow("No matching overload");
-  });
 });

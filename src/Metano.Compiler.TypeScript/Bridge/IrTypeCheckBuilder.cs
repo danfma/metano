@@ -219,11 +219,14 @@ internal static class IrTypeCheckBuilder
     /// The <c>typeof</c> result of the JS value a primitive that
     /// <see cref="IrRuntimeTypeTest.Typeof"/> classifies lowers to. Numeric
     /// kinds all share <c>"number"</c>, so a <c>typeof</c> test cannot tell
-    /// <c>int</c> from <c>double</c> — except the 64-bit kinds in the staging
-    /// BigInt mode (spec 012 DECIDED-22, FR-048): there they lower to
-    /// <c>bigint</c>, so <c>o is long</c> tests <c>typeof o === "bigint"</c>
-    /// and answers a raw <c>bigint</c> where <c>Number</c> mode answers a
-    /// number.
+    /// <c>int</c> from <c>double</c> — and it cannot range a <c>bigint</c>
+    /// either, which is why the type patterns (<c>o is long</c>,
+    /// <see cref="IrToTsExpressionBridge"/> pattern lowering) route the 64-bit
+    /// kinds to the runtime range checks in the staging BigInt mode instead of
+    /// here; a <c>typeof</c> answer survives only for the dispatcher's branded
+    /// check (<see cref="BrandedCheck"/>), where the guard builder's
+    /// <c>typeof</c> spelling of FR-049 is the shipped contract, and for the
+    /// Number mode's <c>number</c> spelling.
     /// </summary>
     internal static string TypeofKind(IrPrimitive primitive) =>
         primitive switch

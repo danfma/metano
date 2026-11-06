@@ -318,10 +318,10 @@ describe("64-bit integers (bigint)", () => {
   });
 
   test("hashCode is consistent with value equality", () => {
-    expect(hashCode(5n)).toBe(hashCode(5n));
-    // The full System.HashCode mixing differs from the raw .NET GetHashCode
-    // value; the .NET pins live on hashInt64 (hash-code.test.ts).
-    expect(hashCode(5n)).not.toBe(5);
+    // Two separately built but equal bigints, one beyond 2^53 so the
+    // constructor path is exercised too.
+    expect(hashCode(BigInt("9007199254740993"))).toBe(hashCode(9007199254740993n));
+    expect(hashCode(BigInt("-1"))).toBe(hashCode(-1n));
     expect(hashCode(-1n)).not.toBe(hashCode(5n));
   });
 });

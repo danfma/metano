@@ -6,10 +6,14 @@ namespace Metano.Tests;
 /// The 64-bit dispatch and guard surface of spec 012 slice 012f (FR-048,
 /// FR-049) in the staging <see cref="Int64Representation.BigInt"/> mode: the
 /// dispatcher checks a 64-bit argument with the <c>bigint</c> range checks and
-/// tries <c>long</c>, <c>ulong</c>, <c>BigInteger</c> in that order (OQ-6),
-/// and the synthesized guards test a 64-bit member with
-/// <c>typeof === "bigint"</c>. The Number mode keeps the shipped output
-/// (pinned by <see cref="Int64OverloadNamingTests"/> and
+/// orders the sibling sets that differ only among <c>long</c>,
+/// <c>ulong</c> and <c>BigInteger</c> long, ulong, BigInteger (OQ-6) —
+/// including the multi-parameter, operator and constructor shapes — while
+/// overloads that name a non-64-bit parameter where a neighbor names a 64-bit
+/// one keep the declaration order. The synthesized guards and the type
+/// patterns (<c>o is long</c>, a <c>switch</c> over the 64-bit kinds) test a
+/// 64-bit value with the runtime range checks. The Number mode keeps the
+/// shipped output (pinned by <see cref="Int64OverloadNamingTests"/> and
 /// <see cref="Int64StagingSwitchTests"/>).
 /// </summary>
 public class Int64DispatchGuardTests
@@ -31,6 +35,75 @@ public class Int64DispatchGuardTests
             public string Pick(long x) => "long";
             public string Pick(ulong x) => "ulong";
             public string Pick(BigInteger x) => "bigInteger";
+        }
+        """;
+
+    /// <summary>
+    /// The sibling-set shapes of the OQ-6 reorder: multi-parameter overloads
+    /// (a <c>string</c> first parameter shared), nullable 64-bit siblings, a
+    /// branded value where a neighbor names a 64-bit integer (which must keep
+    /// the declaration order), an operator group (the static and <c>$</c>
+    /// instance dispatchers share the order) and a constructor group.
+    /// </summary>
+    private const string SiblingSource = """
+        using System.Numerics;
+
+        [Transpile]
+        public class Shapes
+        {
+            public string F(string label, ulong u) => "ulong";
+            public string F(string label, long l) => "long";
+            public string H(BigInteger? b) => "bigInteger?";
+            public string H(long? l) => "long?";
+        }
+
+        [Transpile, Branded]
+        public readonly record struct UId(long Value);
+
+        [Transpile]
+        public class Mixed
+        {
+            public string H(long l) => "long";
+            public string H(UId u) => "uid";
+        }
+
+        [Transpile]
+        public class Money
+        {
+            public static Money operator +(Money m, ulong u) => m;
+            public static Money operator +(Money m, long l) => m;
+        }
+
+        [Transpile]
+        public class Stamp
+        {
+            public Stamp(ulong ticks) { }
+            public Stamp(long ticks) { }
+        }
+        """;
+
+    /// <summary>
+    /// The type patterns over a boxed value: <c>o is long</c> /
+    /// <c>o is ulong</c> read the runtime range checks (DECIDED-14), and a
+    /// <c>switch</c> over <c>long</c> / <c>ulong</c> / <c>BigInteger</c> emits
+    /// three distinct tests instead of three identical <c>typeof</c> arms.
+    /// </summary>
+    private const string PatternSource = """
+        using System.Numerics;
+
+        [Transpile]
+        public class Names
+        {
+            public string Kind(object o) => o switch
+            {
+                long l => "long",
+                ulong u => "ulong",
+                BigInteger b => "bigInteger",
+                _ => "other",
+            };
+
+            public bool IsLong(object o) => o is long;
+            public bool IsULong(object o) => o is ulong;
         }
         """;
 
@@ -81,6 +154,141 @@ public class Int64DispatchGuardTests
         await Assert.That(bigIntegerBranch).IsGreaterThan(ulongBranch);
     }
 
+    /// <summary>
+    /// Multi-parameter siblings reorder on the 64-bit position only
+    /// (<c>F(string, long)</c> before <c>F(string, ulong)</c>, declared the
+    /// other way around), and nullable siblings do the same
+    /// (<c>H(long?)</c> before <c>H(BigInteger?)</c>, declared the other way
+    /// around).
+    /// </summary>
+    [Test]
+    public async Task Siblings_BigIntMode_ReorderOnTheSixtyFourBitPositions()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            SiblingSource,
+            Int64Representation.BigInt
+        );
+
+        var output = files["shapes.ts"];
+
+        var fLong = output.IndexOf("isInt64Value(args[1])", StringComparison.Ordinal);
+        var fUlong = output.IndexOf("isUInt64Value(args[1])", StringComparison.Ordinal);
+
+        await Assert.That(fLong).IsGreaterThan(-1);
+        await Assert.That(fUlong).IsGreaterThan(fLong);
+
+        var hLong = output.IndexOf("isInt64Value(args[0])", StringComparison.Ordinal);
+        var hBigInteger = output.IndexOf("isBigInt(args[0])", StringComparison.Ordinal);
+
+        await Assert.That(hLong).IsGreaterThan(-1);
+        await Assert.That(hBigInteger).IsGreaterThan(hLong);
+    }
+
+    /// <summary>
+    /// An overload that names a non-64-bit parameter where the neighbor names
+    /// a 64-bit one is not a sibling: <c>Mixed.H(long)</c> is declared before
+    /// <c>Mixed.H(UId)</c> and keeps its slot, so the branded arm (a
+    /// <c>typeof</c> test) never captures the plain <c>long</c> call.
+    /// </summary>
+    [Test]
+    public async Task Siblings_BigIntMode_BrandedNeighborKeepsDeclarationOrder()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            SiblingSource,
+            Int64Representation.BigInt
+        );
+
+        var output = files["mixed.ts"];
+
+        var longBranch = output.IndexOf("isInt64Value(args[0])", StringComparison.Ordinal);
+        var brandedBranch = output.IndexOf(
+            "typeof args[0] === \"bigint\"",
+            StringComparison.Ordinal
+        );
+
+        await Assert.That(longBranch).IsGreaterThan(-1);
+        await Assert.That(brandedBranch).IsGreaterThan(longBranch);
+    }
+
+    /// <summary>
+    /// The operator group's two dispatchers (the static <c>__add</c> and the
+    /// instance <c>$add</c>) share the sorted order: the <c>long</c> fast path
+    /// is tried before the <c>ulong</c> one although it is declared after.
+    /// </summary>
+    [Test]
+    public async Task Operators_BigIntMode_TryLongBeforeUlong()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            SiblingSource,
+            Int64Representation.BigInt
+        );
+
+        var output = files["money.ts"];
+
+        await Assert.That(output).Contains("__addMoneyInt64(");
+        await Assert.That(output).Contains("__addMoneyUInt64(");
+
+        var longBranch = output.IndexOf("isInt64Value(args", StringComparison.Ordinal);
+        var ulongBranch = output.IndexOf("isUInt64Value(args", StringComparison.Ordinal);
+
+        await Assert.That(longBranch).IsGreaterThan(-1);
+        await Assert.That(ulongBranch).IsGreaterThan(longBranch);
+    }
+
+    /// <summary>
+    /// The constructor dispatcher orders its branches the same way:
+    /// <c>new Stamp(long)</c> is declared after <c>new Stamp(ulong)</c> but
+    /// tried first.
+    /// </summary>
+    [Test]
+    public async Task Constructors_BigIntMode_TryLongBeforeUlong()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            SiblingSource,
+            Int64Representation.BigInt
+        );
+
+        var output = files["stamp.ts"];
+
+        var longBranch = output.IndexOf("isInt64Value(args", StringComparison.Ordinal);
+        var ulongBranch = output.IndexOf("isUInt64Value(args", StringComparison.Ordinal);
+
+        await Assert.That(longBranch).IsGreaterThan(-1);
+        await Assert.That(ulongBranch).IsGreaterThan(longBranch);
+    }
+
+    /// <summary>
+    /// The type patterns read the range checks in the staging BigInt mode:
+    /// the import ships the three 64-bit helpers, <c>o is long</c> and
+    /// <c>o is ulong</c> call them, and the switch arms over
+    /// <c>long</c> / <c>ulong</c> / <c>BigInteger</c> are three distinct
+    /// tests, not three identical <c>typeof</c> arms.
+    /// </summary>
+    [Test]
+    public async Task Patterns_BigIntMode_RangeCheckTheBoxedValue()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            PatternSource,
+            Int64Representation.BigInt
+        );
+
+        var output = files["names.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("import { isInt64Value, isUInt64Value } from \"metano-runtime\";");
+        await Assert.That(output).Contains("isInt64Value(");
+        await Assert.That(output).Contains("isUInt64Value(");
+
+        var longTest = output.IndexOf("isInt64Value(", StringComparison.Ordinal);
+        var ulongTest = output.IndexOf("isUInt64Value(", StringComparison.Ordinal);
+        var bigIntegerTest = output.IndexOf("=== \"bigint\"", StringComparison.Ordinal);
+
+        await Assert.That(longTest).IsGreaterThan(-1);
+        await Assert.That(ulongTest).IsGreaterThan(longTest);
+        await Assert.That(bigIntegerTest).IsGreaterThan(ulongTest);
+    }
+
     [Test]
     public async Task Guard_BigIntMode_TestsBigintMembers()
     {
@@ -93,6 +301,7 @@ public class Int64DispatchGuardTests
 
         await Assert.That(output).Contains("typeof v.id === \"bigint\"");
         await Assert.That(output).Contains("typeof v.mask === \"bigint\"");
+
         // A nullable member admits null before the bigint test.
         await Assert.That(output).Contains("v.parent == null || typeof v.parent === \"bigint\"");
     }
@@ -108,6 +317,7 @@ public class Int64DispatchGuardTests
             DispatchSource,
             Int64Representation.Number
         );
+
         var (guardFiles, _) = TranspileHelper.TranspileWithDiagnostics(
             GuardSource,
             Int64Representation.Number
@@ -119,5 +329,24 @@ public class Int64DispatchGuardTests
         await Assert.That(dispatchFiles["gates.ts"]).DoesNotContain("isInt64Value");
         await Assert.That(guardFiles["snowflake.ts"]).Contains("typeof v.id === \"number\"");
         await Assert.That(guardFiles["snowflake.ts"]).DoesNotContain("\"bigint\"");
+    }
+
+    /// <summary>
+    /// The Number mode keeps the shipped <c>typeof</c> type patterns for the
+    /// 64-bit kinds, so the range checks never leak into the shipped output.
+    /// </summary>
+    [Test]
+    public async Task Patterns_NumberMode_KeepsTheTypeofTests()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            PatternSource,
+            Int64Representation.Number
+        );
+
+        var output = files["names.ts"];
+
+        await Assert.That(output).DoesNotContain("isInt64Value");
+        await Assert.That(output).DoesNotContain("isUInt64Value");
+        await Assert.That(output).Contains("=== \"number\"");
     }
 }
