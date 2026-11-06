@@ -2457,7 +2457,7 @@ public sealed partial class IrExpressionExtractor
         if (symbol is not IMethodSymbol method)
             return reference;
 
-        reference = WithDispatchedFastPath(method, reference);
+        var dispatched = WithDispatchedFastPath(method, reference);
 
         if (
             _semantic.GetTypeInfo(expression).ConvertedType
@@ -2467,16 +2467,16 @@ public sealed partial class IrExpressionExtractor
                 DelegateInvokeMethod: IMethodSymbol invoke,
             }
         )
-            return reference;
+            return dispatched;
 
         if (IsDartTarget)
-            return reference;
+            return dispatched;
 
         var hasThisDelegate = Invocation.InvocationLoweringHelpers.HasThisParameter(invoke);
 
-        var boundReference = ShouldBindInstanceReceiver(method, reference, out var instanceAccess)
+        var boundReference = ShouldBindInstanceReceiver(method, dispatched, out var instanceAccess)
             ? BuildBoundReference(instanceAccess)
-            : reference;
+            : dispatched;
 
         return hasThisDelegate
             ? new IrCallExpression(

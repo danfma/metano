@@ -139,9 +139,22 @@ public static class IrToTsModuleBridge
     {
         var plan = PlanModuleFunctionGroup(overloads);
 
-        var dispatcherName = claims.DispatcherNameOf(overloads[0].OverloadRef!)!;
+        var dispatcherName =
+            claims.ClaimOf(overloads[0].OverloadRef!)?.Dispatcher
+            ?? throw new InvalidOperationException(
+                $"The barrel claim pass named no dispatcher for "
+                    + $"'{overloads[0].OverloadRef!.MemberName}'."
+            );
 
-        var fastPathNames = plan.Sorted.Select(fn => claims.FastPathOf(fn.OverloadRef!)!).ToList();
+        var fastPathNames = plan
+            .Sorted.Select(fn =>
+                claims.ClaimOf(fn.OverloadRef!)?.FastPath
+                ?? throw new InvalidOperationException(
+                    $"The barrel claim pass named no fast path for "
+                        + $"'{fn.OverloadRef!.MemberName}'."
+                )
+            )
+            .ToList();
 
         foreach (var (fn, fastPathName) in plan.Sorted.Zip(fastPathNames))
             statements.Add(ConvertFunction(fn, bclRegistry, fastPathName));
@@ -150,19 +163,13 @@ public static class IrToTsModuleBridge
             new TsFunction(
                 dispatcherName,
                 IrToTsOverloadDispatcherBridge.DispatcherParameters(),
-                CommonReturnOf(plan.Sorted),
+                plan.CommonReturn,
                 BuildModuleDispatcherBody(plan.Sorted, fastPathNames),
                 Async: plan.IsAsync,
                 Overloads: plan.Signatures
             )
         );
     }
-
-    private sealed record ModuleFunctionGroupPlan(
-        IReadOnlyList<IrModuleFunction> Sorted,
-        bool IsAsync,
-        IReadOnlyList<TsMethodOverload> Signatures
-    );
 
     /// <summary>The group in dispatch order with one signature per overload.</summary>
     private static ModuleFunctionGroupPlan PlanModuleFunctionGroup(
@@ -180,7 +187,7 @@ public static class IrToTsModuleBridge
             ))
             .ToList();
 
-        return new(sorted, isAsync, signatures);
+        return new(sorted, isAsync, signatures, CommonReturnTypeOf(sorted, isAsync));
     }
 
     /// <summary>
@@ -202,9 +209,8 @@ public static class IrToTsModuleBridge
     /// when they agree and none is generic, else <c>unknown</c> (or a
     /// <c>Promise</c> for an async group), mirroring the class dispatchers.
     /// </summary>
-    private static TsType CommonReturnOf(IReadOnlyList<IrModuleFunction> sorted)
+    private static TsType CommonReturnTypeOf(IReadOnlyList<IrModuleFunction> sorted, bool isAsync)
     {
-        var isAsync = sorted.Any(fn => fn.Semantics.IsAsync);
         var returns = sorted.Select(fn => IrToTsTypeMapper.Map(fn.ReturnType)).ToList();
         var isGeneric = sorted.Any(fn => fn.TypeParameters is { Count: > 0 });
 
@@ -228,37 +234,7 @@ public static class IrToTsModuleBridge
         var body = new List<TsStatement>();
 
         for (var i = 0; i < sorted.Count; i++)
-        {
-            var fn = sorted[i];
-            var argumentShape = new OverloadArgumentShape(fn.Parameters);
-
-            var scope = new TypeCheckScope(fn.TypeParameters ?? [], null);
-
-            var delegated = fn
-                .Parameters.Select(
-                    (parameter, index) =>
-                    {
-                        var value = new TsCastExpression(
-                            argumentShape.ValueOf(index),
-                            IrToTsTypeMapper.MapParameterType(parameter)
-                        );
-
-                        return parameter.IsParams
-                            ? new TsSpreadExpression(value)
-                            : (TsExpression)value;
-                    }
-                )
-                .ToList();
-
-            var delegateCall = new TsCallExpression(new TsIdentifier(fastPathNames[i]), delegated);
-
-            var branchStatements = fn.ReturnType
-                is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void }
-                ? [new TsExpressionStatement(delegateCall), new TsReturnStatement()]
-                : new List<TsStatement> { new TsReturnStatement(delegateCall) };
-
-            body.Add(new TsIfStatement(argumentShape.Guard(scope), branchStatements));
-        }
+            body.Add(BranchFor(sorted[i], fastPathNames[i]));
 
         body.Add(
             IrToTsOverloadDispatcherBridge.NoMatchingOverload(
@@ -268,6 +244,54 @@ public static class IrToTsModuleBridge
 
         return body;
     }
+
+    /// <summary>One dispatcher branch: the overload's guard delegating to its fast path.</summary>
+    private static TsIfStatement BranchFor(IrModuleFunction fn, string fastPathName)
+    {
+        var argumentShape = new OverloadArgumentShape(fn.Parameters);
+
+        var delegated = DelegatedArguments(fn, argumentShape);
+        var delegateCall = new TsCallExpression(new TsIdentifier(fastPathName), delegated);
+
+        var branchStatements = fn.ReturnType is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void }
+            ? [new TsExpressionStatement(delegateCall), new TsReturnStatement()]
+            : new List<TsStatement> { new TsReturnStatement(delegateCall) };
+
+        return new TsIfStatement(
+            argumentShape.Guard(new TypeCheckScope(fn.TypeParameters ?? [], null)),
+            branchStatements
+        );
+    }
+
+    /// <summary>
+    /// The fast path's arguments: each <c>args[i]</c> cast to its parameter
+    /// type, and the trailing arguments of a <c>params</c> parameter spread
+    /// back into its rest parameter.
+    /// </summary>
+    private static List<TsExpression> DelegatedArguments(
+        IrModuleFunction fn,
+        OverloadArgumentShape argumentShape
+    ) =>
+        fn
+            .Parameters.Select(
+                (parameter, index) =>
+                {
+                    var value = new TsCastExpression(
+                        argumentShape.ValueOf(index),
+                        IrToTsTypeMapper.MapParameterType(parameter)
+                    );
+
+                    return parameter.IsParams ? new TsSpreadExpression(value) : (TsExpression)value;
+                }
+            )
+            .ToList();
+
+    private sealed record ModuleFunctionGroupPlan(
+        IReadOnlyList<IrModuleFunction> Sorted,
+        bool IsAsync,
+        IReadOnlyList<TsMethodOverload> Signatures,
+        TsType CommonReturn
+    );
 
     private static TsFunction ConvertFunction(
         IrModuleFunction fn,

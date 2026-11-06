@@ -364,7 +364,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // The barrel-scope claims of the module-function fast paths (spec 013
         // FR-032) run once per transform, before the export registry, so the
         // registry, the emission and every call site spell the same names.
-        var moduleFunctionClaims = new TsModuleFunctionClaims(compilation, _currentAssembly);
+        var moduleFunctionClaims = TsModuleFunctionClaims.Compute(compilation, _currentAssembly);
 
         foreach (var finding in moduleFunctionClaims.Findings)
             ReportDiagnostic(finding);
@@ -2061,7 +2061,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// exported fast path per overload, and the single functions today's
     /// shape. The group key is the overload identity the extractor recorded
     /// on every member (<see cref="IrOverloadRef"/>), so the group and its
-    /// claimed names are decided once for the whole module.
+    /// claimed names are decided once for the whole module. A member whose
+    /// barrel claim is missing — a type the barrel enumeration does not
+    /// cover — stays single and reports MS0001, since a dispatcher without
+    /// claimed fast paths could not branch.
     /// </summary>
     private void EmitModuleFunctions(
         IReadOnlyList<IrModuleFunction> functions,
@@ -2074,8 +2077,25 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var fn in functions)
         {
-            if (fn.OverloadRef is not { } overload)
+            if (
+                fn.OverloadRef is not { } overload
+                || Context.ModuleFunctionClaims.ClaimOf(overload) is null
+            )
             {
+                if (fn.OverloadRef is { } unresolved)
+                {
+                    Context.ReportDiagnostic(
+                        new MetanoDiagnostic(
+                            MetanoDiagnosticSeverity.Warning,
+                            DiagnosticCodes.UnsupportedFeature,
+                            $"The dispatched module group '{unresolved.MemberName}' of "
+                                + $"'{unresolved.DeclaringType.MetadataName}' has no barrel claim; the "
+                                + "overloads are emitted as separate exports and calls keep the "
+                                + "runtime dispatcher (spec 013 FR-032)."
+                        )
+                    );
+                }
+
                 singles.Add(fn);
                 continue;
             }
@@ -2083,7 +2103,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var key = (overload.DeclaringType, overload.MemberName);
 
             if (!groups.TryGetValue(key, out var group))
-                groups[key] = group = [];
+            {
+                group = [];
+                groups[key] = group;
+            }
 
             group.Add(fn);
         }
@@ -2517,20 +2540,52 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
                 // A dispatched group's members share the dispatcher name, so
                 // the registry exports it once with every claimed fast path
-                // (spec 013 FR-032); a same-name member of another type still
-                // reports MS0020.
-                var overloadRef = DispatchedMethodCalls.RefOf(member, TargetLanguage.TypeScript);
-
-                if (overloadRef is { } reference)
+                // (spec 013 FR-032). Each claimed name goes through the same
+                // cross-type clash report as a single function's, so a
+                // same-name member of another type still reports MS0020; a
+                // name the type itself already claimed (the second overload
+                // of the group) just adds nothing.
+                if (DispatchedMethodCalls.RefOf(member, TargetLanguage.TypeScript) is { } reference)
                 {
-                    var dispatcherName = moduleFunctionClaims.DispatcherNameOf(reference) ?? fnName;
+                    if (moduleFunctionClaims.ClaimOf(reference) is not { } claim)
+                        continue;
 
-                    exports.TryAdd(dispatcherName, new NoContainerExport(typeRef));
+                    var claimedNames =
+                        claim.FastPath == claim.Dispatcher
+                            ? [claim.Dispatcher]
+                            : new[] { claim.Dispatcher, claim.FastPath };
 
-                    var fastPath = moduleFunctionClaims.FastPathOf(reference);
+                    // The second overload of a group re-enters with the names
+                    // the first one claimed — same owner, so no clash. A name
+                    // another type claimed reports MS0020 and skips the
+                    // export, exactly as a single-function clash does.
+                    var clash = claimedNames.FirstOrDefault(name =>
+                        claimedFactoryNames.TryGetValue(name, out var prior)
+                        && !SymbolEqualityComparer.Default.Equals(
+                            prior.ContainingType,
+                            member.ContainingType
+                        )
+                    );
 
-                    if (fastPath is not null && fastPath != dispatcherName)
-                        exports.TryAdd(fastPath, new NoContainerExport(typeRef));
+                    if (clash is not null)
+                    {
+                        TryReportFactoryCollision(
+                            member,
+                            clash,
+                            claimedFactoryNames,
+                            reportDiagnostic
+                        );
+                        continue;
+                    }
+
+                    foreach (var claimedName in claimedNames)
+                    {
+                        if (claimedFactoryNames.ContainsKey(claimedName))
+                            continue;
+
+                        exports.Add(claimedName, new NoContainerExport(typeRef));
+                        claimedFactoryNames.Add(claimedName, member);
+                    }
 
                     continue;
                 }

@@ -27,7 +27,10 @@ public sealed partial class IrExpressionExtractor
     /// A user-defined operator application bound to <paramref name="target"/>:
     /// its operands one value per parameter, in parameter order (spec 013
     /// FR-018). <c>null</c> when <paramref name="call"/> is no operator
-    /// application of that overload, so the caller keeps today's lowering.
+    /// application of that overload, or the application is a lifted one —
+    /// a nullable operand that C# null-propagates, whose lowering keeps the
+    /// lifted guard (<see cref="IrExpressionExtractor.TryExtractLiftedBinary"/>
+    /// and the nullable-equality paths) — so the caller keeps today's shape.
     /// </summary>
     internal BoundOverloadCall? ExtractBoundOperatorCall(
         IOperation? call,
@@ -37,10 +40,10 @@ public sealed partial class IrExpressionExtractor
     {
         IReadOnlyList<IOperation>? operands = call switch
         {
-            IBinaryOperation binary
+            IBinaryOperation { IsLifted: false } binary
                 when SymbolEqualityComparer.Default.Equals(binary.OperatorMethod, operatorMethod) =>
                 [binary.LeftOperand, binary.RightOperand],
-            IUnaryOperation unary
+            IUnaryOperation { IsLifted: false } unary
                 when SymbolEqualityComparer.Default.Equals(unary.OperatorMethod, operatorMethod) =>
             [
                 unary.Operand,
@@ -145,31 +148,29 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// An argument the source passes, positional now: a <c>params</c> slot
     /// passed explicitly is the normal form, so the array spreads into the
-    /// rest parameter.
+    /// rest parameter. Every explicit argument binds an
+    /// <see cref="ArgumentSyntax"/>; the one shape that hands over a bare
+    /// expression instead is a reduced extension call's receiver, bound as
+    /// the group's first argument, so the value read substitutes for the
+    /// argument extraction.
     /// </summary>
     private IrArgument ExplicitBoundArgumentOf(IArgumentOperation argument)
     {
-        // An extension call's receiver binds as the first argument and hands
-        // over the receiver expression, not an argument syntax node.
-        SyntaxNode syntax = argument.Syntax switch
+        var (extracted, argumentExpression) = argument.Syntax switch
         {
-            ArgumentSyntax argumentSyntax => argumentSyntax,
-            ExpressionSyntax expression => expression,
+            ArgumentSyntax argumentSyntax => (
+                ExtractArgument(argumentSyntax) with
+                {
+                    Name = null,
+                },
+                argumentSyntax.Expression
+            ),
+            ExpressionSyntax expression => (new IrArgument(Extract(expression)), expression),
             _ => throw new InvalidCastException(
                 $"An explicit argument has unexpected syntax '{argument.Syntax?.Kind()}'."
             ),
         };
-        var extracted = syntax switch
-        {
-            ArgumentSyntax argumentSyntax => ExtractArgument(argumentSyntax) with { Name = null },
-            _ => new IrArgument(Extract((ExpressionSyntax)syntax)),
-        };
         var parameter = argument.Parameter!;
-        var argumentExpression = syntax switch
-        {
-            ArgumentSyntax argumentSyntax => argumentSyntax.Expression,
-            _ => (ExpressionSyntax)syntax,
-        };
 
         if (!parameter.IsParams)
             return extracted;

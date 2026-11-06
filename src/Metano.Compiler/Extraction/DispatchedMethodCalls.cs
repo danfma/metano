@@ -47,10 +47,24 @@ internal static class DispatchedMethodCalls
         if (SymbolHelper.IsContainerless(containingType) && !IsModuleExportable(definition))
             return null;
 
+        if (HasUnresolvedTypeArguments(definition))
+            return null;
+
         return IsDispatchedGroupMethod(definition, target)
             ? MethodOverloadGroups.RefOf(definition, target)
             : null;
     }
+
+    /// <summary>
+    /// A generic call whose type arguments carry no type the backend can
+    /// spell — an error type from unresolved code, or an anonymous one, which
+    /// no emitted declaration names — keeps the dispatcher (spec 013 FR-018).
+    /// </summary>
+    private static bool HasUnresolvedTypeArguments(IMethodSymbol method) =>
+        method.TypeArguments.Any(type =>
+            type.TypeKind == TypeKind.Error
+            || (type is INamedTypeSymbol named && named.IsAnonymousType)
+        );
 
     /// <summary>
     /// Whether the static method of a containerless class is a module

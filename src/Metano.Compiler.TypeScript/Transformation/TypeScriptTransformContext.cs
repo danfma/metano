@@ -92,7 +92,14 @@ public sealed class TypeScriptTransformContext(
                 continue;
 
             foreach (var member in type.GetMembers())
-                RegisterStaticClassMember(member, ownerRef, map, firstClaim, ReportDiagnostic);
+                RegisterStaticClassMember(
+                    member,
+                    ownerRef,
+                    map,
+                    firstClaim,
+                    ModuleFunctionClaims,
+                    ReportDiagnostic
+                );
         }
 
         return map;
@@ -103,6 +110,7 @@ public sealed class TypeScriptTransformContext(
         IrTranspilableTypeRef ownerRef,
         Dictionary<string, IrTranspilableTypeRef> map,
         Dictionary<string, ISymbol> firstClaim,
+        TsModuleFunctionClaims moduleFunctionClaims,
         Action<MetanoDiagnostic> reportDiagnostic
     )
     {
@@ -120,6 +128,20 @@ public sealed class TypeScriptTransformContext(
                     firstClaim,
                     reportDiagnostic
                 );
+
+                // A dispatched extension group also exports one claimed fast
+                // path per overload (spec 013 FR-032); a call site lowers to
+                // the bare fast-path name, so the import collector must
+                // resolve it to the declaring file like the dispatcher.
+                if (
+                    DispatchedMethodCalls.RefOf(method, TargetLanguage.TypeScript)
+                        is { } overloadRef
+                    && moduleFunctionClaims.ClaimOf(overloadRef) is { } claim
+                )
+                {
+                    Register(claim.FastPath, method, ownerRef, map, firstClaim, reportDiagnostic);
+                }
+
                 break;
 
             // Classic extension property: Roslyn surfaces it as an
@@ -399,7 +421,7 @@ public sealed class TypeScriptTransformContext(
     /// emission, the export registry and the call sites, so a dispatched
     /// module group spells the same names everywhere.
     /// </summary>
-    public Bridge.TsModuleFunctionClaims ModuleFunctionClaims { get; init; } = null!;
+    public required Bridge.TsModuleFunctionClaims ModuleFunctionClaims { get; init; }
 
     /// <summary>
     /// Recognizes a referenced identifier as the TypeScript guard
