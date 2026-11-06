@@ -117,6 +117,72 @@ public class Int64InteropDiagnosticsTests
         }
         """;
 
+    /// <summary>
+    /// A constructor with a 64-bit parameter is on the surface (FR-059
+    /// "member or type"): wherever Metano emits \`new ImportedType(seed)\`,
+    /// a bigint crosses into JS-written code. The short name is \`Lib()\`.
+    /// </summary>
+    [Test]
+    public async Task ImportedConstructor_ReportsTheParameter()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Import(name: "Lib", from: "lib")]
+            public class Lib
+            {
+                public Lib(long seed) { }
+
+                public long Count() => throw new NotSupportedException();
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        var reports = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
+            .ToList();
+
+        await Assert.That(reports).Count().IsEqualTo(2);
+
+        await Assert.That(reports.Any(d => d.Message.Contains("'Lib()'"))).IsTrue();
+
+        await Assert
+            .That(reports.All(d => d.Severity == MetanoDiagnosticSeverity.Warning))
+            .IsTrue();
+    }
+
+    /// <summary>
+    /// The pointer-width forms (DECIDED-2: nint follows every rule of the
+    /// spec) report like their 64-bit namesakes.
+    /// </summary>
+    [Test]
+    public async Task NativeIntegerForms_Report()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            using Metano.Annotations.TypeScript;
+
+            [Import(name: "Alloc", from: "alloc")]
+            public static class Alloc
+            {
+                public static extern nint Reserve(long bytes);
+
+                public static nuint Size => (nuint)8;
+            }
+            """,
+            Int64Representation.BigInt
+        );
+
+        var reports = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.BigIntAtInteropBoundary)
+            .ToList();
+
+        await Assert.That(reports).Count().IsEqualTo(2);
+    }
+
     [Test]
     public async Task ImportMember_ReportsEachDeclarationOnce()
     {
